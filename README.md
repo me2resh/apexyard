@@ -163,7 +163,7 @@ Skip step 4 entirely — there's no registry. The same skills scope to the curre
 
 ## Roles
 
-ApexStack includes 20 software development roles across 5 departments:
+ApexStack includes 19 software development roles across 5 departments:
 
 ### Engineering (7 roles)
 - **Head of Engineering** -- Technical strategy, architecture standards, quality

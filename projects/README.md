@@ -6,7 +6,7 @@ This directory holds **ApexStack-managed documentation** for each project ApexSt
 - Belong to the operating model rather than the codebase
 - Need to exist before the project even has its own repo (e.g. handover assessments)
 
-In **single-project mode** (the default), this directory is optional — you can keep your roadmap, ideas, and notes at the project root instead. In **multi-project mode**, this directory is the canonical place for per-project ApexStack docs in the ops repo.
+In **multi-project mode** (the default), this directory is the canonical place for per-project ApexStack docs in the ops repo. In **single-project mode** (opt-in), this directory is optional — you can keep your roadmap, ideas, and notes at the project root instead.
 
 ## Layout
 

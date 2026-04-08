@@ -26,32 +26,10 @@ grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
 
 | Value | Behaviour |
 |-------|-----------|
-| `mode: single-project` (or missing — this is the default) | Show only the current repo |
-| `mode: multi-project` | Read `apexstack.projects.yaml` and show every project listed |
+| `mode: multi-project` (or missing — this is the default) | Read `apexstack.projects.yaml` and show every project listed |
+| `mode: single-project` | Show only the current repo |
 
-## Single-project mode (the default)
-
-In single-project mode, there's only one project — the repo Claude Code is running in. Output:
-
-```
-Project: {repo name from `git remote get-url origin`}
-Branch:  {git rev-parse --abbrev-ref HEAD}
-Status:  active
-Open PRs:    {gh pr list --state open --json number | jq length}
-Open Issues: {gh issue list --state open --json number | jq length}
-Last commit: {git log -1 --format='%h %ai %s'}
-Uncommitted: {git status --porcelain | wc -l} files
-```
-
-If the user wants the full registry view, suggest:
-
-```
-You're in single-project mode. To manage multiple projects, set
-`apexstack.mode: multi-project` in onboarding.yaml and create
-apexstack.projects.yaml at the root.
-```
-
-## Multi-project mode
+## Multi-project mode (the default)
 
 In multi-project mode, read `apexstack.projects.yaml`:
 
@@ -83,6 +61,29 @@ fi
 # Always go to GitHub for PRs / issues (project of record)
 PRS=$(gh -R {repo} pr list --state open --json number --jq 'length')
 ISSUES=$(gh -R {repo} issue list --state open --json number --jq 'length')
+```
+
+## Single-project mode (opt-in)
+
+In single-project mode, there's only one project — the repo Claude Code is running in. Output:
+
+```
+Project: {repo name from `git remote get-url origin`}
+Branch:  {git rev-parse --abbrev-ref HEAD}
+Status:  active
+Open PRs:    {gh pr list --state open --json number | jq length}
+Open Issues: {gh issue list --state open --json number | jq length}
+Last commit: {git log -1 --format='%h %ai %s'}
+Uncommitted: {git status --porcelain | wc -l} files
+```
+
+If the user wants the full registry view, suggest:
+
+```
+You're in single-project mode (opt-in). To manage multiple projects,
+remove the `apexstack.mode: single-project` line from onboarding.yaml
+to switch back to the default multi-project mode, and create
+apexstack.projects.yaml at the root.
 ```
 
 ## Output format (multi-project)

@@ -1,6 +1,6 @@
 # `workspace/` — Live Project Clones
 
-This directory holds **live working copies** of projects that ApexStack manages. It only matters in **multi-project mode** — in single-project mode (the default) you can ignore it.
+This directory holds **live working copies** of projects that ApexStack manages. It's part of the default layout. In single-project mode (the opt-in for one-repo teams) you can ignore it.
 
 ## The two modes
 
@@ -8,13 +8,24 @@ ApexStack supports two operating modes, set in `onboarding.yaml`:
 
 ```yaml
 apexstack:
-  mode: single-project   # default
-  # mode: multi-project  # opt-in
+  mode: multi-project    # default
+  # mode: single-project # opt-in
 ```
 
-### Single-project mode (default)
+### Multi-project mode (the default)
 
-ApexStack is checked out into your project's repo (or kept globally at `~/.apexstack/`), and the rules and skills apply to that one repo. There is no `workspace/` directory you need to care about. Your code is just... your code, in its own repo. This is the right choice for solo developers and teams managing one product.
+When you manage **multiple repos as one organisation** (e.g. a CTO running an ops repo across 3–10 products), ApexStack aggregates across all of them. Skills like `/projects`, `/inbox`, `/status`, and `/tasks` iterate over a registry instead of looking at one repo. Most engineering orgs have more than one repo, so this is the right default — even a "single product" team usually has an app + infra + a marketing site.
+
+How the default works:
+
+1. `apexstack.mode` is read from `onboarding.yaml`; missing or `multi-project` → multi-project mode
+2. `apexstack.projects.yaml` at the root of your **ops repo** holds the registry (see `apexstack.projects.yaml.example` for the schema)
+3. Optionally clone each managed repo into `workspace/<name>/` (live working copies)
+4. Add per-project docs under `projects/<name>/`
+
+### Single-project mode (opt-in)
+
+ApexStack is checked out into your project's repo (or kept globally at `~/.apexstack/`), and the rules and skills apply to that one repo. There is no `workspace/` directory you need to care about. Your code is just... your code, in its own repo. This is the right choice for solo developers and teams with exactly one product.
 
 ```
 your-app/
@@ -25,16 +36,7 @@ your-app/
 └── ROADMAP.md              ← single-project roadmap lives at the root
 ```
 
-### Multi-project mode (opt-in)
-
-When you manage **multiple repos as one organisation** (e.g. a CTO running an ops repo across 3–10 products), ApexStack can aggregate across all of them. Skills like `/projects`, `/inbox`, `/status`, and `/tasks` then iterate over a registry instead of looking at one repo.
-
-To turn it on:
-
-1. Set `apexstack.mode: multi-project` in `onboarding.yaml`
-2. Create `apexstack.projects.yaml` at the root of your **ops repo** (the one Claude Code is running in) — see `apexstack.projects.yaml.example` for the schema
-3. Optionally clone each managed repo into `workspace/<name>/` (live working copies)
-4. Add per-project docs under `projects/<name>/`
+To opt in: set `apexstack.mode: single-project` in `onboarding.yaml`.
 
 ## Directory layout under multi-project mode
 

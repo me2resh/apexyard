@@ -90,7 +90,7 @@ jobs:
           fi
 
   # =============================================
-  # SENTINEL — Security Scanning
+  # SHIELD — Security Scanning
   # =============================================
   security:
     name: "🛡️ Shield: Security"
