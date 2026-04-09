@@ -1066,7 +1066,6 @@ footer.foot {
       <span class="titlebar__path">~/<b>apexstack</b> <span class="dim">— main · v0.1</span></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
-      <a href="#lifecycle">lifecycle</a>
       <a href="#tree">tree</a>
       <a href="#layers">layers</a>
       <a href="#examples">examples</a>
@@ -1105,28 +1104,71 @@ footer.foot {
       <a href="#install" class="cta cta--ghost">or install it now ↓</a>
     </div>
 
-    <div class="shell-demo rise rise-4" id="shell-demo" aria-label="Demo of the /idea slash command running in Claude Code">
+    <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexstack, from inbox pickup to QA sign-off">
       <div class="shell-demo__chrome" aria-hidden="true">
         <span class="shell-demo__dots">
           <span class="shell-demo__dot"></span>
           <span class="shell-demo__dot"></span>
           <span class="shell-demo__dot is-warn"></span>
         </span>
-        <span class="shell-demo__title">claude code — apexstack — /idea</span>
-        <button type="button" class="shell-demo__replay" id="shell-demo-replay" aria-label="Replay the demo">replay ↻</button>
+        <span class="shell-demo__title">claude code — apexstack — one ticket, start to finish</span>
+        <button type="button" class="shell-demo__replay" id="shell-lifecycle-replay" aria-label="Replay the lifecycle demo">replay ↻</button>
       </div>
-      <div class="shell-demo__body" id="shell-demo-body">
-        <div class="line cmd"><span class="prompt">$ </span>/idea Swift menu-bar app for photo library dedup</div>
-        <div class="line sys">Category? (1) New Product (2) Feature (3) Internal Tool (4) Process</div>
-        <div class="line you"><span class="prompt">&gt; </span>1</div>
-        <div class="line sys">Description? (one line)</div>
-        <div class="line you"><span class="prompt">&gt; </span>Native macOS menu-bar utility that finds duplicates in huge photo libraries</div>
-        <div class="line sys">Create a tracking issue? (y/n)</div>
+      <div class="shell-demo__body" id="shell-lifecycle-body">
+        <div class="line cmd"><span class="prompt">$ </span>/inbox</div>
+        <div class="line sys">Your attention on:</div>
+        <div class="line muted">&nbsp;&nbsp;#58 · Add CSV export to reports · P1 · your-org/billing-api</div>
+        <div class="line">&nbsp;</div>
+        <div class="line cmd"><span class="prompt">$ </span>git checkout -b feature/GH-58-csv-export</div>
+        <div class="line muted">&nbsp;&nbsp;Tech Lead role active — planning</div>
+        <div class="line">&nbsp;</div>
+        <div class="line sys">Planning #58:</div>
+        <div class="line muted">&nbsp;&nbsp;1. CsvExporter service (domain layer)</div>
+        <div class="line muted">&nbsp;&nbsp;2. GET /reports/:id/export endpoint</div>
+        <div class="line muted">&nbsp;&nbsp;3. 12 unit + 1 integration test</div>
+        <div class="line sys">Approve plan? (y/n)</div>
         <div class="line you"><span class="prompt">&gt; </span>y</div>
-        <div class="line ok">✓ Captured: IDEA-025 — Swift menu-bar app for photo library dedup</div>
-        <div class="line muted">&nbsp;&nbsp;Backlog:&nbsp;&nbsp;projects/ideas-backlog.md</div>
-        <div class="line muted">&nbsp;&nbsp;Tracking: your-org/ops#17</div>
-        <div class="line muted">&nbsp;&nbsp;Next:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triage, then /write-spec</div>
+        <div class="line">&nbsp;</div>
+        <div class="line muted">Backend Engineer role active — implementing...</div>
+        <div class="line ok">&nbsp;&nbsp;✓ src/domain/csv-exporter.ts</div>
+        <div class="line ok">&nbsp;&nbsp;✓ src/handlers/export-report.handler.ts</div>
+        <div class="line ok">&nbsp;&nbsp;✓ tests pass locally</div>
+        <div class="line">&nbsp;</div>
+        <div class="line cmd"><span class="prompt">$ </span>/decide "papaparse vs csv-stringify"</div>
+        <div class="line muted">&nbsp;&nbsp;Created AgDR-0014 · chose csv-stringify (zero deps)</div>
+        <div class="line">&nbsp;</div>
+        <div class="line cmd"><span class="prompt">$ </span>npm run lint &amp;&amp; typecheck &amp;&amp; test &amp;&amp; build</div>
+        <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ types&nbsp;&nbsp;✓ 147 tests&nbsp;&nbsp;✓ 1.2mb build</div>
+        <div class="line">&nbsp;</div>
+        <div class="line cmd"><span class="prompt">$ </span>gh pr create</div>
+        <div class="line muted">&nbsp;&nbsp;Opened PR #84 · feat(#58): add CSV export</div>
+        <div class="line">&nbsp;</div>
+        <div class="line cmd"><span class="prompt">$ </span>/code-review 84</div>
+        <div class="line sys">Rex reviewing commit a3f9c21...</div>
+        <div class="line muted">&nbsp;&nbsp;Architecture · PASS (domain clean)</div>
+        <div class="line muted">&nbsp;&nbsp;Tests&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· 94% coverage</div>
+        <div class="line muted">&nbsp;&nbsp;AgDR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· AgDR-0014 linked</div>
+        <div class="line muted">&nbsp;&nbsp;Glossary&nbsp;&nbsp;&nbsp;&nbsp;· 5 terms</div>
+        <div class="line ok">&nbsp;&nbsp;Verdict&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· APPROVE — deferring to CEO</div>
+        <div class="line">&nbsp;</div>
+        <div class="line sys">[waiting for CEO 👍]</div>
+        <div class="line">&nbsp;</div>
+        <div class="line ok">CEO 👍</div>
+        <div class="line ok">&nbsp;&nbsp;✓ squashed as 8b2f4c1</div>
+        <div class="line ok">&nbsp;&nbsp;✓ branch deleted</div>
+        <div class="line ok">&nbsp;&nbsp;✓ #58 → QA state (not Done yet)</div>
+        <div class="line">&nbsp;</div>
+        <div class="line sys">Pipeline on main:</div>
+        <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ test&nbsp;&nbsp;✓ build&nbsp;&nbsp;✓ deploy-staging</div>
+        <div class="line">&nbsp;</div>
+        <div class="line muted">QA Engineer role active — verifying on staging...</div>
+        <div class="line ok">&nbsp;&nbsp;✓ AC1 · export button renders</div>
+        <div class="line ok">&nbsp;&nbsp;✓ AC2 · CSV columns + escaping correct</div>
+        <div class="line ok">&nbsp;&nbsp;✓ AC3 · 10k rows in &lt;5s</div>
+        <div class="line ok">&nbsp;&nbsp;✓ regression clean</div>
+        <div class="line ok">QA sign-off: #58 ready for Done</div>
+        <div class="line">&nbsp;</div>
+        <div class="line ok">Done · #58 · 14m 32s dev + 3m 10s QA</div>
       </div>
     </div>
 
@@ -1164,89 +1206,6 @@ footer.foot {
     </p>
 
   </div>
-</section>
-
-<!-- ============================================================
-     SECTION 00 — one ticket, start to finish (lifecycle demo)
-     ============================================================ -->
-<section class="section" id="lifecycle">
-
-  <div class="section__head">
-    <span class="section__num">00 / LIFECYCLE</span>
-    <h2 class="section__title">One ticket, start to finish.</h2>
-    <p class="section__lede">
-      What actually happens when you pick up a ticket in apexstack. From inbox to QA sign-off, end-to-end, no edits. Roles activate automatically, decisions get logged as AgDRs, Rex reviews every commit, and nothing merges without two reviews and a green pipeline.
-    </p>
-  </div>
-
-  <div class="shell-demo shell-demo--tall" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexstack, from inbox pickup to QA sign-off">
-    <div class="shell-demo__chrome" aria-hidden="true">
-      <span class="shell-demo__dots">
-        <span class="shell-demo__dot"></span>
-        <span class="shell-demo__dot"></span>
-        <span class="shell-demo__dot is-warn"></span>
-      </span>
-      <span class="shell-demo__title">claude code — apexstack — full ticket lifecycle</span>
-      <button type="button" class="shell-demo__replay" id="shell-lifecycle-replay" aria-label="Replay the lifecycle demo">replay ↻</button>
-    </div>
-    <div class="shell-demo__body" id="shell-lifecycle-body">
-      <div class="line cmd"><span class="prompt">$ </span>/inbox</div>
-      <div class="line sys">Your attention on:</div>
-      <div class="line muted">&nbsp;&nbsp;#58 · Add CSV export to reports · P1 · your-org/billing-api</div>
-      <div class="line">&nbsp;</div>
-      <div class="line cmd"><span class="prompt">$ </span>git checkout -b feature/GH-58-csv-export</div>
-      <div class="line muted">&nbsp;&nbsp;Tech Lead role active — planning</div>
-      <div class="line">&nbsp;</div>
-      <div class="line sys">Planning #58:</div>
-      <div class="line muted">&nbsp;&nbsp;1. CsvExporter service (domain layer)</div>
-      <div class="line muted">&nbsp;&nbsp;2. GET /reports/:id/export endpoint</div>
-      <div class="line muted">&nbsp;&nbsp;3. 12 unit + 1 integration test</div>
-      <div class="line sys">Approve plan? (y/n)</div>
-      <div class="line you"><span class="prompt">&gt; </span>y</div>
-      <div class="line">&nbsp;</div>
-      <div class="line muted">Backend Engineer role active — implementing...</div>
-      <div class="line ok">&nbsp;&nbsp;✓ src/domain/csv-exporter.ts</div>
-      <div class="line ok">&nbsp;&nbsp;✓ src/handlers/export-report.handler.ts</div>
-      <div class="line ok">&nbsp;&nbsp;✓ tests pass locally</div>
-      <div class="line">&nbsp;</div>
-      <div class="line cmd"><span class="prompt">$ </span>/decide "papaparse vs csv-stringify"</div>
-      <div class="line muted">&nbsp;&nbsp;Created AgDR-0014 · chose csv-stringify (zero deps)</div>
-      <div class="line">&nbsp;</div>
-      <div class="line cmd"><span class="prompt">$ </span>npm run lint &amp;&amp; typecheck &amp;&amp; test &amp;&amp; build</div>
-      <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ types&nbsp;&nbsp;✓ 147 tests&nbsp;&nbsp;✓ 1.2mb build</div>
-      <div class="line">&nbsp;</div>
-      <div class="line cmd"><span class="prompt">$ </span>gh pr create</div>
-      <div class="line muted">&nbsp;&nbsp;Opened PR #84 · feat(#58): add CSV export</div>
-      <div class="line">&nbsp;</div>
-      <div class="line cmd"><span class="prompt">$ </span>/code-review 84</div>
-      <div class="line sys">Rex reviewing commit a3f9c21...</div>
-      <div class="line muted">&nbsp;&nbsp;Architecture · PASS (domain clean)</div>
-      <div class="line muted">&nbsp;&nbsp;Tests&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· 94% coverage</div>
-      <div class="line muted">&nbsp;&nbsp;AgDR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· AgDR-0014 linked</div>
-      <div class="line muted">&nbsp;&nbsp;Glossary&nbsp;&nbsp;&nbsp;&nbsp;· 5 terms</div>
-      <div class="line ok">&nbsp;&nbsp;Verdict&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· APPROVE — deferring to CEO</div>
-      <div class="line">&nbsp;</div>
-      <div class="line sys">[waiting for CEO 👍]</div>
-      <div class="line">&nbsp;</div>
-      <div class="line ok">CEO 👍</div>
-      <div class="line ok">&nbsp;&nbsp;✓ squashed as 8b2f4c1</div>
-      <div class="line ok">&nbsp;&nbsp;✓ branch deleted</div>
-      <div class="line ok">&nbsp;&nbsp;✓ #58 → QA state (not Done yet)</div>
-      <div class="line">&nbsp;</div>
-      <div class="line sys">Pipeline on main:</div>
-      <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ test&nbsp;&nbsp;✓ build&nbsp;&nbsp;✓ deploy-staging</div>
-      <div class="line">&nbsp;</div>
-      <div class="line muted">QA Engineer role active — verifying on staging...</div>
-      <div class="line ok">&nbsp;&nbsp;✓ AC1 · export button renders</div>
-      <div class="line ok">&nbsp;&nbsp;✓ AC2 · CSV columns + escaping correct</div>
-      <div class="line ok">&nbsp;&nbsp;✓ AC3 · 10k rows in &lt;5s</div>
-      <div class="line ok">&nbsp;&nbsp;✓ regression clean</div>
-      <div class="line ok">QA sign-off: #58 ready for Done</div>
-      <div class="line">&nbsp;</div>
-      <div class="line ok">Done · #58 · 14m 32s dev + 3m 10s QA</div>
-    </div>
-  </div>
-
 </section>
 
 <!-- ============================================================
@@ -1835,112 +1794,13 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
   }
 })();
 
-// ---- /idea shell animation ----
-(function () {
-  var body = document.getElementById('shell-demo-body');
-  var replay = document.getElementById('shell-demo-replay');
-  if (!body) return;
-
-  // Respect prefers-reduced-motion: keep the pre-rendered static demo, skip the typewriter
-  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    return;
-  }
-
-  // Script: [type, text, delayAfterMs, typeSpeedMs (0 = instant)]
-  var script = [
-    ['cmd',   '/idea Swift menu-bar app for photo library dedup',                    900, 38],
-    ['sys',   'Category? (1) New Product (2) Feature (3) Internal Tool (4) Process', 420, 0],
-    ['you',   '1',                                                                   650, 140],
-    ['sys',   'Description? (one line)',                                             420, 0],
-    ['you',   'Native macOS menu-bar utility that finds duplicates in huge photo libraries', 900, 30],
-    ['sys',   'Create a tracking issue? (y/n)',                                      420, 0],
-    ['you',   'y',                                                                   700, 180],
-    ['ok',    '\u2713 Captured: IDEA-025 — Swift menu-bar app for photo library dedup', 360, 0],
-    ['muted', '  Backlog:  projects/ideas-backlog.md',                               360, 0],
-    ['muted', '  Tracking: your-org/ops#17',                                         360, 0],
-    ['muted', '  Next:     triage, then /write-spec',                                  0, 0]
-  ];
-
-  var timeouts = [];
-
-  function clearTimeouts() {
-    timeouts.forEach(function (t) { clearTimeout(t); });
-    timeouts = [];
-  }
-
-  function typeInto(target, text, speed, done) {
-    if (speed === 0) {
-      target.textContent = text;
-      done();
-      return;
-    }
-    var i = 0;
-    function step() {
-      if (i <= text.length) {
-        target.textContent = text.slice(0, i);
-        i++;
-        timeouts.push(setTimeout(step, speed + (Math.random() * 30 - 15)));
-      } else {
-        done();
-      }
-    }
-    step();
-  }
-
-  function play() {
-    clearTimeouts();
-    body.innerHTML = '';
-    var i = 0;
-
-    function next() {
-      if (i >= script.length) return;
-      var entry = script[i];
-      var type = entry[0];
-      var text = entry[1];
-      var delayAfter = entry[2];
-      var speed = entry[3];
-
-      var line = document.createElement('div');
-      line.className = 'line ' + type;
-      body.appendChild(line);
-
-      if (type === 'cmd' || type === 'you') {
-        var prompt = document.createElement('span');
-        prompt.className = 'prompt';
-        prompt.textContent = type === 'cmd' ? '$ ' : '> ';
-        line.appendChild(prompt);
-        var inner = document.createElement('span');
-        line.appendChild(inner);
-        typeInto(inner, text, speed, function () {
-          i++;
-          timeouts.push(setTimeout(next, delayAfter));
-        });
-      } else {
-        line.textContent = text;
-        i++;
-        timeouts.push(setTimeout(next, delayAfter));
-      }
-    }
-
-    next();
-  }
-
-  // Reveal the replay button (hidden by default so no-JS users don't see a dead button)
-  if (replay) {
-    replay.style.display = 'inline-block';
-    replay.addEventListener('click', function () {
-      play();
-    });
-  }
-
-  // Start after a short beat so the rise-4 fade-in has time to breathe
-  timeouts.push(setTimeout(play, 900));
-})();
-
-// ---- full lifecycle shell animation (section 00) ----
-// Scroll-triggered: plays once when the demo scrolls into view via
-// IntersectionObserver. Falls back to delayed auto-play if IO is missing.
-// Respects prefers-reduced-motion — static content stays, no animation.
+// ---- full lifecycle shell animation (hero) ----
+// The demo lives in the hero so it's visible on load — IntersectionObserver
+// still used so the play trigger stays consistent, and the hasPlayed gate
+// ensures it only auto-plays once. Falls back to delayed auto-play if IO is
+// missing. Respects prefers-reduced-motion — static content stays, no
+// animation. The small 17rem shell-demo--tall viewport scrolls to the
+// bottom on each new line so old lines push up and out, like a terminal.
 (function () {
   var body = document.getElementById('shell-lifecycle-body');
   var replay = document.getElementById('shell-lifecycle-replay');
