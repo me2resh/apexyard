@@ -44,7 +44,20 @@ Role definitions live in `roles/`. Each role defines:
 | Security | Head of Security, Security Auditor, Pen Tester | `roles/security/` |
 | Data | Head of Data, Data Analyst, Data Engineer | `roles/data/` |
 
-When asked to act as a role, read the corresponding role file and follow its guidelines.
+### Activation — roles are first-class participants, not reference docs
+
+Roles activate **on specific conditions**. The full trigger table lives in `@.claude/rules/role-triggers.md` (imported below). The short version:
+
+- **Auto-activation** — certain signals fire a role automatically. Examples: ticket moves to `qa` label → QA Engineer; PR diff touches `**/auth/**` → Security Auditor; production incident → SRE; new PRD drafted → Product Manager.
+- **Prompted activation** — the user can explicitly activate any role: *"act as the QA Engineer for ticket #42"*, *"put on your Tech Lead hat"*, etc.
+
+When a role activates:
+1. Read the file at `roles/{department}/{role}.md`
+2. Adopt the role's identity, responsibilities, CAN / CANNOT boundaries
+3. Follow the handoff rules in the role file — who you receive from, who you deliver to
+4. Stay in the role until the task completes or a different trigger activates a different role
+
+Full trigger table and handoff artefacts: @.claude/rules/role-triggers.md
 
 ---
 

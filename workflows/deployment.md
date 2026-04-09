@@ -2,6 +2,19 @@
 
 How code moves from development to production.
 
+## Roles
+
+Deployment is a **role-activated** workflow. Roles activate automatically per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+
+| Stage | Primary role | Trigger |
+|-------|--------------|---------|
+| CI/CD pipeline design and maintenance | [Platform Engineer](../roles/engineering/platform-engineer.md) | CI/CD config changes, pipeline failures, golden-path updates |
+| Staging deployment | [Platform Engineer](../roles/engineering/platform-engineer.md) | Push to `main` auto-triggers |
+| Production promotion gate | [Platform Engineer](../roles/engineering/platform-engineer.md) + [Head of Engineering](../roles/engineering/head-of-engineering.md) sign-off for risky changes | Manual after QA sign-off |
+| Incident response / rollback | [SRE](../roles/engineering/sre.md) | SLO breach, error-rate spike, P1 incident |
+| Post-deploy monitoring (first 24-48h) | [SRE](../roles/engineering/sre.md) | Production deploy completed |
+| Security review gate (if required) | [Security Auditor](../roles/security/security-auditor.md) | Auth / crypto / secrets / PII in the diff |
+
 ---
 
 ## Deployment Flow

@@ -9,6 +9,14 @@ argument-hint: "<what you're deciding>"
 
 Forces structured decision-making and creates an auditable Agent Decision Record (AgDR).
 
+## Activated role
+
+When `/decide` runs, activate the **[Tech Lead](../../../roles/engineering/tech-lead.md)** role — they own technical decisions within their domain. For decisions that cross the architecture-review threshold (new service, new tech stack, new external integration, major data model change), escalate to the **[Head of Engineering](../../../roles/engineering/head-of-engineering.md)** before creating the AgDR.
+
+If the decision touches auth / crypto / secrets / PII, also involve the **[Security Auditor](../../../roles/security/security-auditor.md)** for sign-off on the security implications before finalising the choice.
+
+See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+
 ## Process
 
 ### 1. Parse the Decision Topic

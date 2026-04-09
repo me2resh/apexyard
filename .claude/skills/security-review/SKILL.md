@@ -10,6 +10,17 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Review a pull request specifically for security vulnerabilities and best practices.
 
+## Activated agent + role
+
+When `/security-review` runs:
+
+1. **Primary reviewer**: the **Security Reviewer agent (Shield)** at [`.claude/agents/security-reviewer.md`](../../agents/security-reviewer.md) — runs the automated security checklist.
+2. **Human approval gate**: the **[Security Auditor](../../../roles/security/security-auditor.md)** role — activates on any PR that touches auth / crypto / secrets / user data / PII, or when `/security-review` is explicitly invoked.
+3. **Escalation for strategic calls**: the **[Head of Security](../../../roles/security/head-of-security.md)** — threat modelling, compliance decisions, or novel attack surfaces.
+4. **For active testing**: the **[Penetration Tester](../../../roles/security/penetration-tester.md)** — exploit discovery, API security review, pre-release security sign-off.
+
+See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+
 ## Usage
 
 ```

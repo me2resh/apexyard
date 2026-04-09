@@ -10,6 +10,17 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Review a pull request for quality, security, and adherence to standards.
 
+## Activated agent + role
+
+When `/code-review` runs:
+
+1. **Primary reviewer**: the **Code Reviewer agent (Rex)** at [`.claude/agents/code-reviewer.md`](../../agents/code-reviewer.md) — runs on every commit, owns the automated first-pass review.
+2. **Human approval gate**: the **[Tech Lead](../../../roles/engineering/tech-lead.md)** — activates to sign off on architecture, design patterns, and team conventions that Rex can't judge from code alone.
+3. **Conditional Security Auditor**: if the diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar, the **[Security Auditor](../../../roles/security/security-auditor.md)** also activates and must sign off before merge. Consider chaining `/security-review` for the deeper pass.
+4. **Conditional UI Designer**: if the diff touches visible UI, the **[UI Designer](../../../roles/design/ui-designer.md)** activates for design review.
+
+See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+
 ## Usage
 
 ```

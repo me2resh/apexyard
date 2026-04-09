@@ -9,6 +9,12 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 Manage the product roadmap as a single durable file. The skill is intentionally low-ceremony: a roadmap is a markdown file with milestones, each containing a table of items. `/roadmap` reads it, edits it, and renders it.
 
+## Activated role
+
+When `/roadmap` runs, activate the **[Head of Product](../../../roles/product/head-of-product.md)** role — they own roadmap prioritisation, strategic sequencing, and milestone decisions. For adding a specific item with a PRD, chain to `/write-spec` which activates the [Product Manager](../../../roles/product/product-manager.md) instead. For items that require data-driven reprioritisation, involve the [Product Analyst](../../../roles/product/product-analyst.md).
+
+See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the full activation protocol.
+
 ## Usage
 
 ```

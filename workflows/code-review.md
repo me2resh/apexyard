@@ -6,11 +6,16 @@ Ensure code quality, share knowledge, and catch issues before they reach product
 
 ## Roles
 
-| Role | Responsibility |
-|------|----------------|
-| **Author** | Creates PR, responds to feedback |
-| **Reviewer** | Reviews code, provides feedback |
-| **Approver** | Tech Lead or Senior who gives final approval |
+Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+
+| Role | Responsibility | Role file |
+|------|----------------|-----------|
+| **Author** | Creates PR, responds to feedback. The engineer who wrote the code: [Backend Engineer](../roles/engineering/backend-engineer.md) or [Frontend Engineer](../roles/engineering/frontend-engineer.md). | `roles/engineering/{backend,frontend}-engineer.md` |
+| **Code Reviewer agent (Rex)** | Automated first-pass review on every commit. Checks architecture, tests, security, AgDR, glossary. | `.claude/agents/code-reviewer.md` |
+| **Tech Lead reviewer** | Human approval gate. Signs off on architecture, design patterns, team conventions. | [`roles/engineering/tech-lead.md`](../roles/engineering/tech-lead.md) |
+| **Security Auditor** (conditional) | Activates when the PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar. | [`roles/security/security-auditor.md`](../roles/security/security-auditor.md) |
+| **UI Designer** (conditional) | Activates when the PR diff touches UI components, design tokens, or visible layout. | [`roles/design/ui-designer.md`](../roles/design/ui-designer.md) |
+| **QA Engineer** | Not a reviewer — takes over at the QA phase after merge to verify acceptance criteria. | [`roles/engineering/qa-engineer.md`](../roles/engineering/qa-engineer.md) |
 
 ---
 

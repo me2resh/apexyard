@@ -14,6 +14,10 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 ## Phase 1: Planning
 
+> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md), [Head of Engineering](../roles/engineering/head-of-engineering.md) · **Trigger**: new feature enters the sprint with an approved PRD
+>
+> Read the Tech Lead role file and adopt it before starting this phase. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) for the full activation protocol.
+
 ### Entry Criteria
 - Approved PRD from Product
 - Design review complete (if UI involved)
@@ -37,6 +41,8 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ---
 
 ## Phase 2: Technical Design
+
+> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) (architecture review) · **Supporting**: [UX Designer](../roles/design/ux-designer.md), [UI Designer](../roles/design/ui-designer.md) (if UI involved)
 
 ### Entry Criteria
 - Feature in sprint
@@ -66,6 +72,10 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ---
 
 ## Phase 3: Build
+
+> **Primary roles**: [Backend Engineer](../roles/engineering/backend-engineer.md), [Frontend Engineer](../roles/engineering/frontend-engineer.md) · **Coordinator**: [Tech Lead](../roles/engineering/tech-lead.md) · **Trigger**: technical design approved, tasks assigned
+>
+> The engineer implementing the task activates the matching role. Cross-stack tickets may chain Backend → Frontend (or vice-versa) via an explicit handoff.
 
 ### Entry Criteria
 - Technical design approved
@@ -132,6 +142,10 @@ RIGHT:
 
 ## Phase 4: Code Review
 
+> **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Automated reviewer**: Code Reviewer agent (Rex) via `/code-review` · **Security gate** (if PR touches auth / crypto / secrets / user data): [Security Auditor](../roles/security/security-auditor.md) · **Design gate** (if PR touches UI): [UI Designer](../roles/design/ui-designer.md)
+>
+> Rex reviews every commit automatically. Human reviewers (Tech Lead, Security Auditor, UI Designer) activate on the triggers above. All reviews must match the commit SHA being merged.
+
 ### Entry Criteria
 - PR submitted
 - CI checks passing
@@ -162,6 +176,10 @@ RIGHT:
 ---
 
 ## Phase 5: QA Verification (MANDATORY)
+
+> **Primary role**: [QA Engineer](../roles/engineering/qa-engineer.md) · **Trigger**: merged PR → ticket moves to `qa` label (NOT auto-closed) · **Handoff from**: [Backend](../roles/engineering/backend-engineer.md) / [Frontend Engineer](../roles/engineering/frontend-engineer.md) (testable build on staging) · **Handoff to**: [Product Manager](../roles/product/product-manager.md) (AC sign-off) → Done
+>
+> This is the **mandatory gate** — merged code is never Done until the QA Engineer has verified every acceptance criterion. Auto-closing via `Closes #XX` is intentionally overridden with `Refs #XX` + the `qa` label when QA verification is required.
 
 ### Entry Criteria
 - PR approved and merged
@@ -198,6 +216,8 @@ In Progress --> In Review --> QA --> Done
 
 ## Phase 6: Deploy
 
+> **Primary role**: [Platform Engineer](../roles/engineering/platform-engineer.md) · **Support**: [SRE](../roles/engineering/sre.md) (runbook + rollback plan) · **Trigger**: QA sign-off complete, staging validated
+
 ### Entry Criteria
 - Tests passed
 - QA sign-off
@@ -218,6 +238,8 @@ In Progress --> In Review --> QA --> Done
 ---
 
 ## Phase 7: Monitor
+
+> **Primary role**: [SRE](../roles/engineering/sre.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) on sustained incident · **Trigger**: deployment to production, first 24-48h watch window
 
 ### Entry Criteria
 - Deployed to production
@@ -243,12 +265,14 @@ In Progress --> In Review --> QA --> Done
 
 ## Roles Summary
 
-| Phase | Primary | Support |
-|-------|---------|---------|
-| Planning | Tech Lead | Product, Engineers |
-| Design | Tech Lead | Head of Engineering |
-| Build | Engineers | Tech Lead |
-| Review | Tech Lead | Peers, Design |
-| QA | QA Engineer | Engineers |
-| Deploy | Platform/CI | Tech Lead |
-| Monitor | SRE | Engineers |
+Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+
+| Phase | Primary role | Supporting roles |
+|-------|--------------|------------------|
+| Planning | [Tech Lead](../roles/engineering/tech-lead.md) | [Product Manager](../roles/product/product-manager.md), Engineers |
+| Technical Design | [Tech Lead](../roles/engineering/tech-lead.md) | [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation), [UX Designer](../roles/design/ux-designer.md) / [UI Designer](../roles/design/ui-designer.md) |
+| Build | [Backend Engineer](../roles/engineering/backend-engineer.md) / [Frontend Engineer](../roles/engineering/frontend-engineer.md) | [Tech Lead](../roles/engineering/tech-lead.md) |
+| Code Review | [Tech Lead](../roles/engineering/tech-lead.md) + Rex | [Security Auditor](../roles/security/security-auditor.md) (if auth), [UI Designer](../roles/design/ui-designer.md) (if UI) |
+| QA | [QA Engineer](../roles/engineering/qa-engineer.md) | Engineers (bug fixes) |
+| Deploy | [Platform Engineer](../roles/engineering/platform-engineer.md) | [SRE](../roles/engineering/sre.md) |
+| Monitor | [SRE](../roles/engineering/sre.md) | [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation) |
