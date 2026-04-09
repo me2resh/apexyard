@@ -1,10 +1,14 @@
 # ApexStack
 
-**A complete AI-native software development stack for Claude Code.**
+**Where projects get forged.**
 
-ApexStack packages a production-tested development workflow into a reusable stack that any team can adopt. It provides role definitions, workflow processes, document templates, and Claude Code configuration that turns your AI assistant into a structured Chief of Staff for your engineering org.
+A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders and technical leads running 2–5 products at once.
 
-Inspired by [gstacks.org](https://gstacks.org/) -- but purpose-built for software teams using Claude Code.
+You don't *add* apexstack to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
+
+Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+
+Inspired by [gstacks.org](https://gstacks.org/) — but purpose-built for software teams running more than one product at a time.
 
 ## What's Inside
 
@@ -144,6 +148,23 @@ echo "@.apexstack/CLAUDE.md" >> CLAUDE.md
 ```
 
 Skip step 4 entirely — there's no registry. The same skills scope to the current repo. Roadmap lives at `ROADMAP.md`, ideas at `IDEAS.md`. See [`docs/multi-project.md`](docs/multi-project.md) for the full comparison.
+
+### Global install (alternative)
+
+If you run **several** ops repos (a founder with a couple of orgs, a consultant with multiple clients), clone apexstack **once** globally and reference it from every ops repo instead of cloning into each. One place to upgrade, one place to patch.
+
+```bash
+# one time, globally
+git clone https://github.com/me2resh/apexstack.git ~/.apexstack
+
+# in each ops repo (replaces steps 1 and 2 of the default flow)
+ln -s ~/.apexstack/.claude .claude
+echo '@~/.apexstack/CLAUDE.md' >> CLAUDE.md
+
+# steps 3, 4, 5, 6 are the same as the default flow
+```
+
+**Tradeoff**: the symlinks point at an absolute path in your home directory, so moving `~/.apexstack/` breaks the link. Not a good fit if you sync dotfiles across machines with different home paths.
 
 ## Why ApexStack?
 

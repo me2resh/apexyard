@@ -301,6 +301,47 @@ a:hover { color: var(--accent); }
   margin-bottom: 2.5rem;
 }
 
+.hero__cta {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.cta {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.85rem 1.5rem;
+  border: 1px solid var(--rule);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.cta--primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 700;
+}
+.cta--primary:hover {
+  background: var(--accent);
+  color: var(--paper);
+  border-color: var(--accent);
+}
+.cta--ghost {
+  color: var(--ink-soft);
+  border: none;
+  padding: 0.85rem 0.25rem;
+}
+.cta--ghost:hover {
+  color: var(--accent);
+}
+.cta__sep {
+  color: var(--ink-ghost);
+  user-select: none;
+}
+
 .hero__metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -891,27 +932,33 @@ footer.foot {
 
     <div class="hero__eyebrow rise rise-1">
       <span class="pill">apexstack v0.1</span>
-      <span>open source · MIT · plain markdown · zero dependencies</span>
+      <span>open source · MIT · for founders forging multiple products</span>
     </div>
 
-    <h1 class="hero__title rise rise-2">apexstack</h1>
+    <h1 class="hero__title rise rise-2">Where projects get forged.</h1>
 
     <p class="hero__tagline rise rise-3">
-      An opinionated stack for <span class="uline">Claude Code</span>. Roles, workflows, hooks, agents, slash commands, and CI pipelines — packaged so your AI can act like a structured chief of staff for your engineering org.
+      The multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC.
     </p>
 
     <p class="hero__sub rise rise-3">
-      Drop into any project. Configure with one YAML file. Get a Code Reviewer agent that enforces glossaries, hooks that block <code>git add -A</code>, slash commands like <code>/decide</code> and <code>/code-review</code>, and CI workflows ready to copy into <code>.github/workflows/</code>. No SaaS. No lock-in. Just markdown and shell scripts.
+      You don't <em>add</em> apexstack to a project — projects get forged <em>inside</em> it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs. Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge.
     </p>
+
+    <div class="hero__cta rise rise-4">
+      <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <span class="cta__sep" aria-hidden="true">·</span>
+      <a href="#install" class="cta cta--ghost">or install it now ↓</a>
+    </div>
 
     <div class="install rise rise-4" id="install-block">
       <span class="install__prompt">$</span>
-      <code class="install__cmd" id="install-cmd">git clone https://github.com/me2resh/apexstack.git ~/.apexstack</code>
+      <code class="install__cmd" id="install-cmd">git clone https://github.com/me2resh/apexstack.git .apexstack</code>
       <button type="button" class="install__copy" id="install-copy" aria-label="Copy install command">copy</button>
     </div>
 
     <p class="install__caveat rise rise-4">
-      Then symlink <code>~/.apexstack/.claude</code> to your project root, point your <code>CLAUDE.md</code> at <code>@~/.apexstack/CLAUDE.md</code>, and you're done. Full steps in <a href="#install" class="uline">install</a> below.
+      Run from your ops repo — the one you'll use to govern every product. Five more steps in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Prefer a single global copy shared across every ops repo? <a href="#install-global" class="uline">That's also supported</a>.
     </p>
 
     <div class="hero__metrics rise rise-5" aria-label="What you get">
@@ -1378,6 +1425,21 @@ $EDITOR apexstack.projects.yaml  <span class="cm"># list your repos</span></pre>
       <pre class="step__code"><span class="cm"># in onboarding.yaml</span>
 apexstack:
   mode: <span class="acc">single-project</span></pre>
+    </article>
+
+    <article class="step" id="install-global" style="grid-column: 1 / -1;">
+      <div class="step__num">alternative — global install</div>
+      <h3 class="step__title">If you run several ops repos</h3>
+      <p class="step__desc">The six-step default clones apexstack into each ops repo at <code>.apexstack/</code>. That's the right call for most people — upgrades are per-repo, nothing is shared across machines. If you run <em>several</em> ops repos (a founder with a couple of orgs, a consultant with multiple clients), clone apexstack <em>once</em> globally and reference it from every ops repo. One place to upgrade, one place to patch.</p>
+      <p class="step__desc"><strong>Tradeoff</strong>: the symlinks point at an absolute path in your home directory, so moving <code>~/.apexstack/</code> breaks the link. Not a good fit if you sync dotfiles across machines with different home paths.</p>
+      <pre class="step__code"><span class="cm"># one time, globally</span>
+git clone https://github.com/me2resh/apexstack.git ~/.apexstack
+
+<span class="cm"># in each ops repo (replaces steps 01 and 02 of the default flow)</span>
+ln -s ~/.apexstack/.claude .claude
+echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
+
+<span class="cm"># steps 03, 04, 05, 06 are the same as the default flow</span></pre>
     </article>
 
   </div>
