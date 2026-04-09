@@ -445,16 +445,40 @@ a:hover { color: var(--accent); }
   color: var(--ink-faint);
 }
 
-/* tall variant for the full-lifecycle demo — reserves enough vertical space
-   so the body doesn't collapse while the JS rebuilds it line by line */
+/* tall variant for the full-lifecycle demo — fixed 10-line viewport that
+   scrolls like a real terminal as new lines stream in. Old lines push up
+   and out of view. Users with JS disabled can still scroll manually. */
 .shell-demo--tall .shell-demo__body {
-  min-height: 52rem;
+  height: 17rem;
+  min-height: 0;
   font-size: 12px;
   line-height: 1.55;
+  overflow-y: auto;
+  scroll-behavior: auto;        /* instant snap — matches terminal feel */
+  scrollbar-width: none;        /* Firefox */
+}
+.shell-demo--tall .shell-demo__body::-webkit-scrollbar {
+  display: none;                /* WebKit */
+}
+/* Soft fade at the top so the scrolled-out-of-view content implies depth
+   without adding chrome */
+.shell-demo--tall {
+  position: relative;
+}
+.shell-demo--tall::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 2.15rem;                 /* sits just under the chrome bar */
+  height: 1.2rem;
+  background: linear-gradient(to bottom, var(--paper-2), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 @media (max-width: 720px) {
   .shell-demo--tall .shell-demo__body {
-    min-height: 58rem;
+    height: 18rem;
     font-size: 11px;
   }
 }
@@ -2014,9 +2038,16 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
     step();
   }
 
+  function scrollToBottom() {
+    // Snap to the bottom after a new line lands. Using scrollHeight
+    // directly keeps it cheap and matches real-terminal behaviour.
+    body.scrollTop = body.scrollHeight;
+  }
+
   function play() {
     clearTimeouts();
     body.innerHTML = '';
+    body.scrollTop = 0;
     var i = 0;
 
     function next() {
@@ -2030,9 +2061,11 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
       var line = document.createElement('div');
       line.className = type === 'blank' ? 'line' : 'line ' + type;
       body.appendChild(line);
+      scrollToBottom();
 
       if (type === 'blank') {
         line.innerHTML = '&nbsp;';
+        scrollToBottom();
         i++;
         timeouts.push(setTimeout(next, delayAfter));
         return;
@@ -2046,11 +2079,13 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
         var inner = document.createElement('span');
         line.appendChild(inner);
         typeInto(inner, text, speed, function () {
+          scrollToBottom();
           i++;
           timeouts.push(setTimeout(next, delayAfter));
         });
       } else {
         line.textContent = text;
+        scrollToBottom();
         i++;
         timeouts.push(setTimeout(next, delayAfter));
       }
