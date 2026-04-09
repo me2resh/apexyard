@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ApexStack — an opinionated stack for Claude Code</title>
-<meta name="description" content="ApexStack packages roles, workflows, hooks, agents, slash commands, and CI pipelines into one drop-in stack for Claude Code. Open source. Plain markdown. No lock-in.">
+<title>ApexStack — where projects get forged</title>
+<meta name="description" content="ApexStack is a multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders running 2–5 products at once. Open source. Claude Code native, but plain markdown underneath.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
@@ -340,6 +340,9 @@ a:hover { color: var(--accent); }
 .cta__sep {
   color: var(--ink-ghost);
   user-select: none;
+}
+@media (max-width: 520px) {
+  .cta__sep { display: none; }
 }
 
 .hero__metrics {
@@ -958,7 +961,7 @@ footer.foot {
     </div>
 
     <p class="install__caveat rise rise-4">
-      Run from your ops repo — the one you'll use to govern every product. Five more steps in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Prefer a single global copy shared across every ops repo? <a href="#install-global" class="uline">That's also supported</a>.
+      Run from your ops repo — the one you'll use to govern every product. Full walkthrough in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Prefer a single global copy shared across every ops repo? <a href="#install-global" class="uline">That's also supported</a>.
     </p>
 
     <div class="hero__metrics rise rise-5" aria-label="What you get">
