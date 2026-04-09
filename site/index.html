@@ -1115,43 +1115,44 @@ footer.foot {
         <button type="button" class="shell-demo__replay" id="shell-lifecycle-replay" aria-label="Replay the lifecycle demo">replay ↻</button>
       </div>
       <div class="shell-demo__body" id="shell-lifecycle-body">
-        <div class="line cmd"><span class="prompt">$ </span>/inbox</div>
-        <div class="line sys">Your attention on:</div>
+        <div class="line sys">Inbox:</div>
         <div class="line muted">&nbsp;&nbsp;#58 · Add CSV export to reports · P1 · your-org/billing-api</div>
         <div class="line">&nbsp;</div>
-        <div class="line cmd"><span class="prompt">$ </span>git checkout -b feature/GH-58-csv-export</div>
-        <div class="line muted">&nbsp;&nbsp;Tech Lead role active — planning</div>
+        <div class="line sys">Picking up #58...</div>
+        <div class="line ok">&nbsp;&nbsp;✓ branch feature/GH-58-csv-export</div>
+        <div class="line muted">&nbsp;&nbsp;Tech Lead role: planning</div>
         <div class="line">&nbsp;</div>
-        <div class="line sys">Planning #58:</div>
+        <div class="line sys">Plan for #58:</div>
         <div class="line muted">&nbsp;&nbsp;1. CsvExporter service (domain layer)</div>
         <div class="line muted">&nbsp;&nbsp;2. GET /reports/:id/export endpoint</div>
         <div class="line muted">&nbsp;&nbsp;3. 12 unit + 1 integration test</div>
         <div class="line sys">Approve plan? (y/n)</div>
         <div class="line you"><span class="prompt">&gt; </span>y</div>
         <div class="line">&nbsp;</div>
-        <div class="line muted">Backend Engineer role active — implementing...</div>
+        <div class="line muted">Backend Engineer role: implementing</div>
         <div class="line ok">&nbsp;&nbsp;✓ src/domain/csv-exporter.ts</div>
         <div class="line ok">&nbsp;&nbsp;✓ src/handlers/export-report.handler.ts</div>
         <div class="line ok">&nbsp;&nbsp;✓ tests pass locally</div>
         <div class="line">&nbsp;</div>
-        <div class="line cmd"><span class="prompt">$ </span>/decide "papaparse vs csv-stringify"</div>
-        <div class="line muted">&nbsp;&nbsp;Created AgDR-0014 · chose csv-stringify (zero deps)</div>
+        <div class="line sys">Detected decision: papaparse vs csv-stringify</div>
+        <div class="line muted">&nbsp;&nbsp;AgDR-0014 · chose csv-stringify (zero deps)</div>
         <div class="line">&nbsp;</div>
-        <div class="line cmd"><span class="prompt">$ </span>npm run lint &amp;&amp; typecheck &amp;&amp; test &amp;&amp; build</div>
+        <div class="line sys">Local checks:</div>
         <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ types&nbsp;&nbsp;✓ 147 tests&nbsp;&nbsp;✓ 1.2mb build</div>
         <div class="line">&nbsp;</div>
-        <div class="line cmd"><span class="prompt">$ </span>gh pr create</div>
-        <div class="line muted">&nbsp;&nbsp;Opened PR #84 · feat(#58): add CSV export</div>
+        <div class="line sys">Ready to push PR #84?</div>
+        <div class="line you"><span class="prompt">&gt; </span>y</div>
         <div class="line">&nbsp;</div>
-        <div class="line cmd"><span class="prompt">$ </span>/code-review 84</div>
-        <div class="line sys">Rex reviewing commit a3f9c21...</div>
+        <div class="line ok">Pushed · Opened PR #84 · feat(#58): add CSV export</div>
+        <div class="line">&nbsp;</div>
+        <div class="line sys">Rex reviewing a3f9c21...</div>
         <div class="line muted">&nbsp;&nbsp;Architecture · PASS (domain clean)</div>
         <div class="line muted">&nbsp;&nbsp;Tests&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· 94% coverage</div>
         <div class="line muted">&nbsp;&nbsp;AgDR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· AgDR-0014 linked</div>
         <div class="line muted">&nbsp;&nbsp;Glossary&nbsp;&nbsp;&nbsp;&nbsp;· 5 terms</div>
         <div class="line ok">&nbsp;&nbsp;Verdict&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· APPROVE — deferring to CEO</div>
         <div class="line">&nbsp;</div>
-        <div class="line sys">[waiting for CEO 👍]</div>
+        <div class="line sys">Waiting for CEO 👍</div>
         <div class="line">&nbsp;</div>
         <div class="line ok">CEO 👍</div>
         <div class="line ok">&nbsp;&nbsp;✓ squashed as 8b2f4c1</div>
@@ -1161,7 +1162,7 @@ footer.foot {
         <div class="line sys">Pipeline on main:</div>
         <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ test&nbsp;&nbsp;✓ build&nbsp;&nbsp;✓ deploy-staging</div>
         <div class="line">&nbsp;</div>
-        <div class="line muted">QA Engineer role active — verifying on staging...</div>
+        <div class="line muted">QA Engineer role: verifying on staging</div>
         <div class="line ok">&nbsp;&nbsp;✓ AC1 · export button renders</div>
         <div class="line ok">&nbsp;&nbsp;✓ AC2 · CSV columns + escaping correct</div>
         <div class="line ok">&nbsp;&nbsp;✓ AC3 · 10k rows in &lt;5s</div>
@@ -1812,46 +1813,49 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
   }
 
   // Script: [type, text, delayAfterMs, typeSpeedMs (0 = instant)]
-  // Types: cmd (typed command), sys (system output), you (user input),
-  //        ok (success line), muted (dim output), blank (empty spacer)
+  // Types: sys (narrated agent action / header), you (human input, typed),
+  //        ok (success line), muted (dim detail), blank (empty spacer).
+  // Autonomous by default — the ONLY human touchpoints are the two `you`
+  // responses (plan approval + push approval) and the CEO 👍 wait/marker.
   var script = [
-    ['cmd',   '/inbox',                                                                    700, 80],
-    ['sys',   'Your attention on:',                                                        200, 0],
+    ['sys',   'Inbox:',                                                                    200, 0],
     ['muted', '  #58 · Add CSV export to reports · P1 · your-org/billing-api',             800, 0],
     ['blank', '',                                                                          200, 0],
-    ['cmd',   'git checkout -b feature/GH-58-csv-export',                                  600, 28],
-    ['muted', '  Tech Lead role active — planning',                                        800, 0],
+    ['sys',   'Picking up #58...',                                                         400, 0],
+    ['ok',    '  ✓ branch feature/GH-58-csv-export',                                       300, 0],
+    ['muted', '  Tech Lead role: planning',                                                800, 0],
     ['blank', '',                                                                          200, 0],
-    ['sys',   'Planning #58:',                                                             350, 0],
+    ['sys',   'Plan for #58:',                                                             350, 0],
     ['muted', '  1. CsvExporter service (domain layer)',                                   250, 0],
     ['muted', '  2. GET /reports/:id/export endpoint',                                     250, 0],
     ['muted', '  3. 12 unit + 1 integration test',                                         450, 0],
     ['sys',   'Approve plan? (y/n)',                                                       500, 0],
     ['you',   'y',                                                                         700, 200],
     ['blank', '',                                                                          200, 0],
-    ['muted', 'Backend Engineer role active — implementing...',                            600, 0],
+    ['muted', 'Backend Engineer role: implementing',                                       500, 0],
     ['ok',    '  ✓ src/domain/csv-exporter.ts',                                            300, 0],
     ['ok',    '  ✓ src/handlers/export-report.handler.ts',                                 300, 0],
     ['ok',    '  ✓ tests pass locally',                                                    700, 0],
     ['blank', '',                                                                          200, 0],
-    ['cmd',   '/decide "papaparse vs csv-stringify"',                                      700, 32],
-    ['muted', '  Created AgDR-0014 · chose csv-stringify (zero deps)',                     800, 0],
+    ['sys',   'Detected decision: papaparse vs csv-stringify',                             400, 0],
+    ['muted', '  AgDR-0014 · chose csv-stringify (zero deps)',                             800, 0],
     ['blank', '',                                                                          200, 0],
-    ['cmd',   'npm run lint && typecheck && test && build',                                700, 28],
+    ['sys',   'Local checks:',                                                             350, 0],
     ['ok',    '  ✓ lint  ✓ types  ✓ 147 tests  ✓ 1.2mb build',                             800, 0],
     ['blank', '',                                                                          200, 0],
-    ['cmd',   'gh pr create',                                                              500, 40],
-    ['muted', '  Opened PR #84 · feat(#58): add CSV export',                               800, 0],
+    ['sys',   'Ready to push PR #84?',                                                     500, 0],
+    ['you',   'y',                                                                         700, 200],
     ['blank', '',                                                                          200, 0],
-    ['cmd',   '/code-review 84',                                                           500, 40],
-    ['sys',   'Rex reviewing commit a3f9c21...',                                           500, 0],
+    ['ok',    'Pushed · Opened PR #84 · feat(#58): add CSV export',                        800, 0],
+    ['blank', '',                                                                          200, 0],
+    ['sys',   'Rex reviewing a3f9c21...',                                                  500, 0],
     ['muted', '  Architecture · PASS (domain clean)',                                      250, 0],
     ['muted', '  Tests        · 94% coverage',                                             250, 0],
     ['muted', '  AgDR         · AgDR-0014 linked',                                         250, 0],
     ['muted', '  Glossary     · 5 terms',                                                  300, 0],
     ['ok',    '  Verdict      · APPROVE — deferring to CEO',                               800, 0],
     ['blank', '',                                                                          200, 0],
-    ['sys',   '[waiting for CEO 👍]',                                                     1400, 0],
+    ['sys',   'Waiting for CEO 👍',                                                       1500, 0],
     ['blank', '',                                                                          200, 0],
     ['ok',    'CEO 👍',                                                                    500, 0],
     ['ok',    '  ✓ squashed as 8b2f4c1',                                                   250, 0],
@@ -1861,7 +1865,7 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
     ['sys',   'Pipeline on main:',                                                         350, 0],
     ['ok',    '  ✓ lint  ✓ test  ✓ build  ✓ deploy-staging',                               900, 0],
     ['blank', '',                                                                          200, 0],
-    ['muted', 'QA Engineer role active — verifying on staging...',                         700, 0],
+    ['muted', 'QA Engineer role: verifying on staging',                                    500, 0],
     ['ok',    '  ✓ AC1 · export button renders',                                           250, 0],
     ['ok',    '  ✓ AC2 · CSV columns + escaping correct',                                  250, 0],
     ['ok',    '  ✓ AC3 · 10k rows in <5s',                                                 250, 0],
@@ -1931,10 +1935,11 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
         return;
       }
 
-      if (type === 'cmd' || type === 'you') {
+      if (type === 'you') {
+        // The ONLY type with a prompt — human input marker
         var prompt = document.createElement('span');
         prompt.className = 'prompt';
-        prompt.textContent = type === 'cmd' ? '$ ' : '> ';
+        prompt.textContent = '> ';
         line.appendChild(prompt);
         var inner = document.createElement('span');
         line.appendChild(inner);
@@ -1944,6 +1949,8 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
           timeouts.push(setTimeout(next, delayAfter));
         });
       } else {
+        // sys / ok / muted / (any other) — autonomous agent output,
+        // rendered as plain text with the type class driving colour
         line.textContent = text;
         scrollToBottom();
         i++;
