@@ -346,6 +346,105 @@ a:hover { color: var(--accent); }
   .cta__sep { display: none; }
 }
 
+/* ============================================================
+   shell demo — animated /idea walkthrough in the hero
+   ============================================================ */
+
+.shell-demo {
+  max-width: 780px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  margin: 0 0 2rem 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  position: relative;
+  overflow: hidden;
+}
+.shell-demo__chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-3);
+}
+.shell-demo__dots {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+.shell-demo__dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 1px solid var(--ink-faint);
+}
+.shell-demo__dot.is-warn {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.shell-demo__title {
+  font-size: 11px;
+  color: var(--ink-faint);
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+}
+.shell-demo__replay {
+  display: none;
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--rule-faint);
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.shell-demo__replay:hover,
+.shell-demo__replay:focus-visible {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.shell-demo__body {
+  padding: 1rem 1.25rem 1.15rem;
+  min-height: 15.5rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+.shell-demo__body .line {
+  display: block;
+  min-height: 1.6em;
+  white-space: pre-wrap;
+}
+.shell-demo__body .prompt {
+  color: var(--ink-faint);
+  user-select: none;
+}
+.shell-demo__body .cmd {
+  color: var(--ink);
+  font-weight: 600;
+}
+.shell-demo__body .cmd .prompt {
+  color: var(--accent);
+}
+.shell-demo__body .sys {
+  color: var(--ink-soft);
+}
+.shell-demo__body .you {
+  color: var(--ink);
+}
+.shell-demo__body .ok {
+  color: var(--accent);
+  font-weight: 600;
+  margin-top: 0.45rem;
+}
+.shell-demo__body .muted {
+  color: var(--ink-faint);
+}
+
 .hero__metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -953,6 +1052,31 @@ footer.foot {
       <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star on GitHub</a>
       <span class="cta__sep" aria-hidden="true">·</span>
       <a href="#install" class="cta cta--ghost">or install it now ↓</a>
+    </div>
+
+    <div class="shell-demo rise rise-4" id="shell-demo" aria-label="Demo of the /idea slash command running in Claude Code">
+      <div class="shell-demo__chrome" aria-hidden="true">
+        <span class="shell-demo__dots">
+          <span class="shell-demo__dot"></span>
+          <span class="shell-demo__dot"></span>
+          <span class="shell-demo__dot is-warn"></span>
+        </span>
+        <span class="shell-demo__title">claude code — apexstack — /idea</span>
+        <button type="button" class="shell-demo__replay" id="shell-demo-replay" aria-label="Replay the demo">replay ↻</button>
+      </div>
+      <div class="shell-demo__body" id="shell-demo-body">
+        <div class="line cmd"><span class="prompt">$ </span>/idea Usage-based pricing for creators</div>
+        <div class="line sys">Category? (1) New Product (2) Feature (3) Internal Tool (4) Process</div>
+        <div class="line you"><span class="prompt">&gt; </span>2</div>
+        <div class="line sys">Description? (one line)</div>
+        <div class="line you"><span class="prompt">&gt; </span>Let creators tier paid access by usage instead of seat count</div>
+        <div class="line sys">Create GitHub Issue in your-org/example-app? (y/n)</div>
+        <div class="line you"><span class="prompt">&gt; </span>y</div>
+        <div class="line ok">✓ Captured: IDEA-025 — Usage-based pricing for creators</div>
+        <div class="line muted">&nbsp;&nbsp;Backlog:&nbsp;&nbsp;projects/ideas-backlog.md</div>
+        <div class="line muted">&nbsp;&nbsp;Tracking: your-org/example-app#31</div>
+        <div class="line muted">&nbsp;&nbsp;Next:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;triage, then /write-spec</div>
+      </div>
     </div>
 
     <div class="install rise rise-4" id="install-block">
@@ -1571,6 +1695,108 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
       btn.textContent = prev;
     }, 1600);
   }
+})();
+
+// ---- /idea shell animation ----
+(function () {
+  var body = document.getElementById('shell-demo-body');
+  var replay = document.getElementById('shell-demo-replay');
+  if (!body) return;
+
+  // Respect prefers-reduced-motion: keep the pre-rendered static demo, skip the typewriter
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  // Script: [type, text, delayAfterMs, typeSpeedMs (0 = instant)]
+  var script = [
+    ['cmd',   '/idea Usage-based pricing for creators',                             900, 40],
+    ['sys',   'Category? (1) New Product (2) Feature (3) Internal Tool (4) Process', 420, 0],
+    ['you',   '2',                                                                   650, 140],
+    ['sys',   'Description? (one line)',                                             420, 0],
+    ['you',   'Let creators tier paid access by usage instead of seat count',        900, 32],
+    ['sys',   'Create GitHub Issue in your-org/example-app? (y/n)',                  420, 0],
+    ['you',   'y',                                                                   700, 180],
+    ['ok',    '\u2713 Captured: IDEA-025 — Usage-based pricing for creators',        360, 0],
+    ['muted', '  Backlog:  projects/ideas-backlog.md',                               360, 0],
+    ['muted', '  Tracking: your-org/example-app#31',                                 360, 0],
+    ['muted', '  Next:     triage, then /write-spec',                                  0, 0]
+  ];
+
+  var timeouts = [];
+
+  function clearTimeouts() {
+    timeouts.forEach(function (t) { clearTimeout(t); });
+    timeouts = [];
+  }
+
+  function typeInto(target, text, speed, done) {
+    if (speed === 0) {
+      target.textContent = text;
+      done();
+      return;
+    }
+    var i = 0;
+    function step() {
+      if (i <= text.length) {
+        target.textContent = text.slice(0, i);
+        i++;
+        timeouts.push(setTimeout(step, speed + (Math.random() * 30 - 15)));
+      } else {
+        done();
+      }
+    }
+    step();
+  }
+
+  function play() {
+    clearTimeouts();
+    body.innerHTML = '';
+    var i = 0;
+
+    function next() {
+      if (i >= script.length) return;
+      var entry = script[i];
+      var type = entry[0];
+      var text = entry[1];
+      var delayAfter = entry[2];
+      var speed = entry[3];
+
+      var line = document.createElement('div');
+      line.className = 'line ' + type;
+      body.appendChild(line);
+
+      if (type === 'cmd' || type === 'you') {
+        var prompt = document.createElement('span');
+        prompt.className = 'prompt';
+        prompt.textContent = type === 'cmd' ? '$ ' : '> ';
+        line.appendChild(prompt);
+        var inner = document.createElement('span');
+        line.appendChild(inner);
+        typeInto(inner, text, speed, function () {
+          i++;
+          timeouts.push(setTimeout(next, delayAfter));
+        });
+      } else {
+        line.textContent = text;
+        i++;
+        timeouts.push(setTimeout(next, delayAfter));
+      }
+    }
+
+    next();
+  }
+
+  // Reveal the replay button (hidden by default so no-JS users don't see a dead button)
+  if (replay) {
+    replay.style.display = 'inline-block';
+    replay.addEventListener('click', function () {
+      play();
+    });
+  }
+
+  // Start after a short beat so the rise-4 fade-in has time to breathe
+  timeouts.push(setTimeout(play, 900));
 })();
 </script>
 
