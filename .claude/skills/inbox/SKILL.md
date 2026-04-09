@@ -16,16 +16,9 @@ Aggregates everything that's currently waiting on **you** across the projects Ap
 /inbox --since 24h
 ```
 
-## Mode detection
+## Scope
 
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Mode | Scope |
-|------|-------|
-| `multi-project` (default) | Every project in `apexstack.projects.yaml` |
-| `single-project` | Current repo only |
+`/inbox` iterates every project in `apexstack.projects.yaml` at the root of your ops repo (your fork of apexstack). If the registry doesn't exist, print a clear error pointing at `docs/multi-project.md`.
 
 ## What goes in the inbox
 
@@ -40,7 +33,7 @@ gh pr list \
   --limit 50
 ```
 
-In multi-project mode, run this per `repo:` from the registry (or use `--search "user:your-org"` if you have an org).
+Run this per `repo:` from the registry (or use `--search "user:your-org"` if you have an org).
 
 ### 2. PRs you authored that have changes requested
 
@@ -104,11 +97,11 @@ gh issue list --label blocked --state open \
   --json number,title,url,labels
 ```
 
-(Per project in multi-project mode.)
+(Run per project from the registry.)
 
 ## Output format
 
-Group everything under headings, project-prefixed in multi-project mode:
+Group everything under headings, project-prefixed:
 
 ```
 INBOX — 2026-04-06 09:14

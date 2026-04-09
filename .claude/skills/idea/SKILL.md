@@ -19,16 +19,9 @@ Capture a new product, feature, or internal-tool idea so it lands somewhere dura
 
 ## Where the entry goes
 
-ApexStack supports two modes (configured in `onboarding.yaml` under `apexstack.mode`):
+Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (your fork of apexstack). One shared backlog for every project — triage decides which project ends up owning a given idea.
 
-| Mode | Backlog file |
-|------|--------------|
-| **multi-project mode** (default) | `projects/ideas-backlog.md` at the ops repo root |
-| **single-project mode** | `IDEAS.md` at the project root |
-
-In multi-project mode (the default), the idea sits at the ops-repo level so it can later be assigned to whichever project ends up owning it. In single-project mode, the idea is local to the one repo.
-
-If neither file exists yet, create it with a header and a table.
+If the file doesn't exist yet, create it with a header and a table.
 
 ## Process
 
@@ -40,17 +33,7 @@ Take the title from `$ARGUMENTS`. If empty, ask:
 What's the idea? Give me a short title (1 line).
 ```
 
-### 2. Detect the mode
-
-```bash
-# Check onboarding.yaml for mode
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-If `mode: single-project` -> use `IDEAS.md`.
-Otherwise (default, missing key, or `mode: multi-project`) -> use `projects/ideas-backlog.md`.
-
-### 3. Gather metadata
+### 2. Gather metadata
 
 Ask conversationally (one question at a time, don't batch):
 

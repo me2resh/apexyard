@@ -17,16 +17,9 @@ A single ordered list of "things to click on right now". Where `/inbox` groups i
 /tasks --markdown
 ```
 
-## Mode detection
+## Scope
 
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Mode | Scope |
-|------|-------|
-| `multi-project` (default) | Every project in `apexstack.projects.yaml` |
-| `single-project` | Current repo only |
+Iterates every project in `apexstack.projects.yaml` (the registry at the root of your ops repo).
 
 ## Where tasks come from
 

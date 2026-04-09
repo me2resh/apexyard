@@ -16,16 +16,9 @@ A focused "where am I" view. Where `/inbox` shows what's waiting on you and `/pr
 /status --verbose
 ```
 
-## Mode detection
+## Scope
 
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Mode | Behaviour |
-|------|-----------|
-| `multi-project` (default) | Show every project in `apexstack.projects.yaml`, or one if `--project` is given |
-| `single-project` | Show the current repo only |
+Iterates every project in `apexstack.projects.yaml` (the registry at the root of your ops repo), or a single project if `--project <name>` is passed.
 
 ## What it shows
 

@@ -1,25 +1,19 @@
 # =============================================================================
-# ApexStack Multi-Project Registry
+# ApexStack Portfolio Registry
 # =============================================================================
 #
-# Place this file at the root of your **ops repo** (the repo where you run
-# Claude Code from to manage multiple projects as one organisation). Rename
-# it from `.example` to `apexstack.projects.yaml` once you've filled it in.
+# Place this file at the root of your **ops repo** — the fork of apexstack
+# you cloned to govern your portfolio of projects. Rename this file from
+# `.example` to `apexstack.projects.yaml` once you've filled it in.
 #
-# This file is the registry for ApexStack's default mode: MULTI-PROJECT MODE.
 # Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
 # aggregate across every project listed below. Most engineering orgs have
-# more than one repo, so this is the right default — even a "single product"
-# team usually has an app repo + infra + a marketing site.
+# more than one repo — even a "single product" team usually has an app repo
+# + infra + a marketing site.
 #
-# Multi-project mode is enabled by default in `onboarding.yaml`:
-#
-#     apexstack:
-#       mode: multi-project   # default
-#
-# Single-project mode is the opt-in for the simple "I have one repo" case.
-# Set `apexstack.mode: single-project` in `onboarding.yaml` to disable the
-# registry and treat the current directory as a single managed project.
+# If you have exactly one repo, register it here as your single entry and
+# every skill still works. There is no single-project fallback mode; the
+# registry is the source of truth for what ApexStack manages.
 #
 
 # Schema version. Bump if breaking changes are introduced.

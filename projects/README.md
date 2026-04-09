@@ -6,7 +6,7 @@ This directory holds **ApexStack-managed documentation** for each project ApexSt
 - Belong to the operating model rather than the codebase
 - Need to exist before the project even has its own repo (e.g. handover assessments)
 
-In **multi-project mode** (the default), this directory is the canonical place for per-project ApexStack docs in the ops repo. In **single-project mode** (opt-in), this directory is optional — you can keep your roadmap, ideas, and notes at the project root instead.
+This directory is the canonical place for per-project ApexStack docs in your ops repo. Your ops repo is a fork of `me2resh/apexstack` — see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup guide.
 
 ## Layout
 
@@ -100,29 +100,14 @@ Every `projects/<name>/README.md` should answer:
 | Project paused | Don't delete the folder — flip `status: paused` in the registry and the README |
 | Project archived | Move to `projects/_archive/<name>/` and update the registry |
 
-## Single-project mode
-
-In single-project mode, this directory typically isn't used. Your project's docs live at the **root of the project repo**:
-
-```
-your-app/
-├── ROADMAP.md
-├── IDEAS.md
-├── docs/
-│   └── agdr/
-└── ...
-```
-
-You only need `projects/` when you flip to multi-project mode and want a clean separation between project code and ops-level docs.
-
 ## Skills that read or write here
 
 | Skill | Behaviour |
 |-------|-----------|
 | `/handover` | Creates `projects/<name>/handover-assessment.md` and seeds the README |
-| `/roadmap` | Reads/writes `projects/<name>/roadmap.md` (multi-project) or `ROADMAP.md` (single) |
-| `/idea` | Appends to `projects/ideas-backlog.md` (multi) or `IDEAS.md` (single) |
-| `/stakeholder-update` | Writes to `projects/<name>/updates/` (multi) or `updates/` (single) |
+| `/roadmap` | Reads/writes `projects/<name>/roadmap.md` |
+| `/idea` | Appends to `projects/ideas-backlog.md` — one shared backlog for every project |
+| `/stakeholder-update` | Writes to `projects/<name>/updates/` |
 | `/projects` | Reads each project README for the table view |
 | `/status` | Reads roadmap and updates folder for context |
 
