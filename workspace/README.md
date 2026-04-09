@@ -1,50 +1,21 @@
 # `workspace/` — Live Project Clones
 
-This directory holds **live working copies** of projects that ApexStack manages. It's part of the default layout. In single-project mode (the opt-in for one-repo teams) you can ignore it.
+This directory holds **live working copies** of projects that ApexStack manages. It's where code work happens: branches, commits, PRs, CI. Everything under `workspace/*/` is gitignored — each managed project has its own remote and is cloned into this folder independently.
 
-## The two modes
+## How it works
 
-ApexStack supports two operating modes, set in `onboarding.yaml`:
+1. Your ops repo is a fork of `me2resh/apexstack` (see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup)
+2. `apexstack.projects.yaml` at the root of your fork lists every project under management
+3. For each project you want a local working copy of, `git clone` it into `workspace/<name>/` — the name should match the registry entry
+4. ApexStack skills that need local git data (e.g. `/status` showing dirty files) will look here
 
-```yaml
-apexstack:
-  mode: multi-project    # default
-  # mode: single-project # opt-in
-```
-
-### Multi-project mode (the default)
-
-When you manage **multiple repos as one organisation** (e.g. a CTO running an ops repo across 3–10 products), ApexStack aggregates across all of them. Skills like `/projects`, `/inbox`, `/status`, and `/tasks` iterate over a registry instead of looking at one repo. Most engineering orgs have more than one repo, so this is the right default — even a "single product" team usually has an app + infra + a marketing site.
-
-How the default works:
-
-1. `apexstack.mode` is read from `onboarding.yaml`; missing or `multi-project` → multi-project mode
-2. `apexstack.projects.yaml` at the root of your **ops repo** holds the registry (see `apexstack.projects.yaml.example` for the schema)
-3. Optionally clone each managed repo into `workspace/<name>/` (live working copies)
-4. Add per-project docs under `projects/<name>/`
-
-### Single-project mode (opt-in)
-
-ApexStack is checked out into your project's repo (or kept globally at `~/.apexstack/`), and the rules and skills apply to that one repo. There is no `workspace/` directory you need to care about. Your code is just... your code, in its own repo. This is the right choice for solo developers and teams with exactly one product.
+## Directory layout
 
 ```
-your-app/
-├── .claude/                ← rules, skills, hooks (from ApexStack)
-├── src/
-├── tests/
-├── package.json
-└── ROADMAP.md              ← single-project roadmap lives at the root
-```
-
-To opt in: set `apexstack.mode: single-project` in `onboarding.yaml`.
-
-## Directory layout under multi-project mode
-
-```
-my-ops-repo/
+your-org/apexstack/                ← your fork of apexstack, cloned locally (the "ops repo")
 ├── .claude/                       ← shared rules, skills, hooks
 ├── apexstack.projects.yaml        ← the registry (which projects ApexStack manages)
-├── onboarding.yaml                ← apexstack.mode: multi-project
+├── onboarding.yaml                ← company, team, tech stack
 │
 ├── workspace/                     ← LIVE WORKING COPIES (this directory)
 │   ├── README.md                  ← you are here
@@ -65,7 +36,7 @@ my-ops-repo/
 │       └── ...
 │
 └── docs/
-    └── multi-project.md           ← in-depth guide
+    └── multi-project.md           ← full setup guide
 ```
 
 ## Why two parallel directories?
@@ -92,7 +63,7 @@ workspace/*/
 
 ## Running skills against the workspace
 
-Most skills auto-detect mode and iterate the registry:
+Portfolio skills iterate the registry; project-specific ones use the current working directory.
 
 ```
 /projects                  # all managed projects
@@ -108,16 +79,4 @@ Most skills auto-detect mode and iterate the registry:
 /stakeholder-update weekly --project example-app
 ```
 
-To work on a specific project's code, `cd workspace/<name>` first — that puts your shell inside the real repo where branches, PRs, and CI live.
-
-## Migrating from single → multi
-
-See `docs/multi-project.md` for the full guide. The short version:
-
-1. Set `apexstack.mode: multi-project`
-2. Create `apexstack.projects.yaml`
-3. Move your existing roadmap from `ROADMAP.md` to `projects/<current-project>/roadmap.md`
-4. Move ideas from `IDEAS.md` to `projects/ideas-backlog.md`
-5. (Optional) Clone other repos into `workspace/`
-
-You can always go back: just remove the registry and flip `mode` back to `single-project`.
+To work on a specific project's code, `cd workspace/<name>` first — that puts your shell inside the real repo where branches, PRs, and CI live. Skills like `/decide`, `/code-review`, and `/security-review` operate on whatever working directory you're in.

@@ -18,25 +18,25 @@ Reusable GitHub Actions workflows that integrate ApexStack's automated agents in
 
 ## Quick Start
 
+These pipelines live inside your fork of apexstack (the ops repo) at `golden-paths/pipelines/`. To use them in a managed project, copy them into that project's own `.github/workflows/` directory.
+
 ### Option 1: Copy individual pipelines
 
-Copy only the pipelines you need to your project:
-
 ```bash
-# From your project root
+# From your managed project's root (e.g. inside workspace/example-app/)
 mkdir -p .github/workflows
 
-# Copy specific pipelines
-cp .apexstack/golden-paths/pipelines/security.yml .github/workflows/
-cp .apexstack/golden-paths/pipelines/code-quality.yml .github/workflows/
+# Copy specific pipelines from your ops repo
+cp ~/apexstack/golden-paths/pipelines/security.yml .github/workflows/
+cp ~/apexstack/golden-paths/pipelines/code-quality.yml .github/workflows/
 ```
+
+(Adjust `~/apexstack` to wherever you cloned your fork.)
 
 ### Option 2: Use the combined pipeline
 
-Copy the all-in-one CI pipeline:
-
 ```bash
-cp .apexstack/golden-paths/pipelines/ci.yml .github/workflows/
+cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 ```
 
 ---

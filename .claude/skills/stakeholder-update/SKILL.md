@@ -18,16 +18,9 @@ Synthesises recent activity into a stakeholder-facing update. The skill is audie
 /stakeholder-update weekly --project example-app
 ```
 
-## Mode detection
+## Scope
 
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Mode | Scope |
-|------|-------|
-| `multi-project` (default) | Aggregated across all projects in the registry, unless `--project` is given |
-| `single-project` | Current repo |
+Aggregated across every project in `apexstack.projects.yaml` (the registry at the root of your ops repo), unless `--project <name>` is passed to scope to one.
 
 ## Inputs
 
@@ -38,10 +31,10 @@ The skill pulls from:
 | `gh pr list --state merged --search "merged:>=<since>"` | What shipped |
 | `gh issue list --state closed --search "closed:>=<since>"` | What got resolved |
 | `git log --since=<since> --oneline` | Commit volume / themes |
-| `docs/agdr/AgDR-*.md` (in this period) | Decisions made |
-| `ROADMAP.md` or `projects/<name>/roadmap.md` | Strategic direction |
+| `docs/agdr/AgDR-*.md` (in this period, inside each project) | Decisions made |
+| `projects/<name>/roadmap.md` | Strategic direction |
 | `gh pr list --state open` | What's in flight |
-| `IDEAS.md` or `projects/ideas-backlog.md` | Ideas captured |
+| `projects/ideas-backlog.md` | Ideas captured |
 
 `<since>` is computed from the update type:
 
@@ -194,15 +187,15 @@ The skill pulls from:
 
 1. Parse the update type from `$ARGUMENTS` (default: `weekly`)
 2. Compute `<since>` based on type
-3. Detect mode and decide the project scope
+3. Read the registry; resolve `--project` if passed, otherwise iterate all projects
 4. Pull all inputs in parallel
 5. Synthesise the update using the matching template
-6. Print to stdout, **and** offer to write it to `projects/<name>/updates/{type}-{YYYY-MM-DD}.md` (or `updates/{type}-{YYYY-MM-DD}.md` in single-project mode)
+6. Print to stdout, **and** offer to write it to `projects/<name>/updates/{type}-{YYYY-MM-DD}.md`
 7. Offer to post to the team's communication channel (Slack/Discord) — only as a follow-up suggestion, never automatic
 
-## Multi-project rollup
+## Portfolio rollup
 
-In multi-project mode without `--project`, generate one section per project, prefixed with the project name and bounded by separators. Add a portfolio summary at the top:
+Without `--project`, generate one section per project, prefixed with the project name and bounded by separators. Add a portfolio summary at the top:
 
 ```
 PORTFOLIO ROLLUP — Week of 2026-04-06
@@ -233,7 +226,7 @@ marketing-site — Weekly
 4. **Use real PR/issue numbers** — every claim links to evidence
 5. **AgDRs are first-class** — decisions belong in updates, not just code
 6. **Don't auto-publish** — write the file, suggest the channel, but never post on the user's behalf
-7. **Mode-aware** — single-project = one section, multi-project = portfolio rollup
+7. **Scope-aware** — one section per project, portfolio rollup when no `--project` flag
 8. **Tone matches type** — terse (weekly), narrative (monthly), celebratory (launch)
 
 ## Related skills

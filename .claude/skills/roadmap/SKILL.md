@@ -27,12 +27,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## File location
 
-| Mode | File |
-|------|------|
-| **multi-project mode** (default) | `projects/<name>/roadmap.md`, where `<name>` is either passed via `--project` or the current working directory |
-| **single-project mode** | `ROADMAP.md` at the project root |
-
-In multi-project mode (the default), without `--project`, the skill asks which project's roadmap to operate on, listing the registry.
+Every roadmap lives at `projects/<name>/roadmap.md` inside your ops repo, where `<name>` matches an entry in `apexstack.projects.yaml`. Without `--project`, the skill asks which project's roadmap to operate on, listing the registry.
 
 ## File format
 
@@ -183,7 +178,7 @@ Owner: @octocat
 3. **Done is append-only** — items move to Done, never out of it
 4. **Update `Last updated`** on every write
 5. **Confirm destructive ops** — `remove`, `reorder` ask first
-6. **Mode-aware** — write to `ROADMAP.md` (single) or `projects/<name>/roadmap.md` (multi)
+6. **One roadmap per project** — always write to `projects/<name>/roadmap.md` in the ops repo
 7. **Don't auto-create issues unless asked** — `--with-issues` is opt-in
 8. **Preserve markdown formatting** — don't reflow rows or change column widths unnecessarily
 

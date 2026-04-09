@@ -10,34 +10,20 @@
 #
 
 # -----------------------------------------------------------------------------
-# ApexStack Mode
+# ApexStack Setup
 # -----------------------------------------------------------------------------
-# ApexStack supports two operating modes:
+# ApexStack governs a PORTFOLIO of repos as one organisation. The repo this
+# file lives in is your "ops repo" — ApexStack itself, forked from
+# me2resh/apexstack. A registry file (apexstack.projects.yaml) lists every
+# managed project. Skills like /projects, /inbox, /status, /tasks aggregate
+# across the registry. Per-project docs live in projects/<name>/, and live
+# working copies (optional) live in workspace/<name>/.
 #
-#   multi-project (DEFAULT)
-#     ApexStack governs MULTIPLE repos as one organisation. The current repo
-#     is treated as the "ops repo" and a registry file
-#     (apexstack.projects.yaml) lists every managed project. Skills like
-#     /projects, /inbox, /status, /tasks aggregate across the registry by
-#     default. Per-project docs live in projects/<name>/, and live working
-#     copies (optional) live in workspace/<name>/.
-#     Best for CTOs, engineering leads, and Chief-of-Staff roles managing a
-#     portfolio of repos. This is the default because most teams have more
-#     than one repo to look after, and ApexStack is designed for that case.
+# Built for CTOs, engineering leads, and Chief-of-Staff roles managing a
+# portfolio of 2+ repos. If you have exactly one repo, you can still fork
+# apexstack and register a single project — the skills work the same way.
 #
-#   single-project
-#     ApexStack governs ONE repo — the one this file lives in. Skills like
-#     /projects, /status, and /inbox scope to the current repo only. The
-#     roadmap lives at ROADMAP.md, ideas at IDEAS.md, and there is no
-#     workspace/ or projects/ directory. Best for solo developers and teams
-#     with exactly one product. Set explicitly to opt out of multi-project.
-#
-# See docs/multi-project.md for the full guide. To switch from one mode to
-# the other, edit the value below — no migration tool needed, the skills
-# detect the mode at invocation.
-#
-apexstack:
-  mode: multi-project   # or: single-project
+# See docs/setup.md for the full guide.
 
 # -----------------------------------------------------------------------------
 # Company Information

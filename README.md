@@ -44,8 +44,8 @@ apexstack/
 │   ├── agents/            # Sub-agents: Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
 │   └── skills/            # 13 slash commands: /decide, /code-review, /security-review, /audit-deps, /write-spec, /idea, /handover, /projects, /inbox, /status, /tasks, /roadmap, /stakeholder-update
 │
-├── workspace/             # Live local clones (multi-project mode) — gitignored
-├── projects/              # Per-project committed docs (multi-project mode)
+├── workspace/             # Live local clones of managed projects — gitignored
+├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
 ├── apexstack.projects.yaml.example  # Portfolio registry template
 │
 ├── golden-paths/          # Reusable infra & ops templates
@@ -53,76 +53,69 @@ apexstack/
 │
 ├── docs/                  # Documentation
 │   ├── getting-started.md # Setup guide
-│   └── multi-project.md   # Full guide to multi-project mode
+│   └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
 │
 └── site/                  # Landing page
     └── index.html
 ```
 
-## Operating modes
+## Quick Start — fork and go
 
-ApexStack supports two modes, set in `onboarding.yaml`:
+ApexStack governs a **portfolio of repos** as one organisation. You fork apexstack, clone the fork, treat it as your "ops repo", and register every project you want under management. No `.apexstack/` symlinks, no nested installs — the fork IS the ops repo.
 
-| Mode | Default? | Use when |
-|------|:---:|------|
-| **`multi-project`** | ✅ default | You manage two or more repos as one organisation. ApexStack lives in an "ops repo" with a portfolio registry (`apexstack.projects.yaml`). Skills like `/projects`, `/inbox`, `/status`, `/tasks` aggregate across the registry. |
-| `single-project` | opt-in | You manage exactly one repo and don't see that changing. ApexStack lives inside that one repo. The same skills scope to the current repo. |
+### 1. Star + Fork on GitHub
 
-Full guide: [`docs/multi-project.md`](docs/multi-project.md).
+Visit [`github.com/me2resh/apexstack`](https://github.com/me2resh/apexstack), **Star** it, then **Fork** it into your org. You can keep the fork named `apexstack` or rename to something that fits your naming convention (`your-org/ops`, `your-org/apex`, etc.).
 
-## Quick Start (multi-project — the default)
-
-### 1. Clone ApexStack into your ops repo
-
-The "ops repo" is the repo where you'll run Claude Code from to manage your portfolio. Common choices: a dedicated `your-org/ops` repo, or an existing internal-tools / playbook repo.
+### 2. Clone your fork locally
 
 ```bash
-# from your ops repo
-git clone https://github.com/me2resh/apexstack.git .apexstack
+gh repo clone your-org/apexstack
+cd apexstack
 ```
 
-### 2. Symlink the runnable layer
-
-Claude Code only looks for hooks, agents, skills, and `settings.json` at `.claude/`. Symlink so apexstack updates stay in sync:
+Or with plain git:
 
 ```bash
-# in your ops repo root
-ln -s .apexstack/.claude .claude
+git clone https://github.com/your-org/apexstack.git
+cd apexstack
 ```
 
-### 3. Configure
-
-Edit `.apexstack/onboarding.yaml`:
-
-```yaml
-apexstack:
-  mode: multi-project   # default — leave as is
-
-company:
-  name: "Your Company"
-  mission: "What you're building and why"
-
-team:
-  - name: "Alice"
-    role: "tech-lead"
-```
-
-### 4. List your projects
+### 3. Add `upstream` for future updates
 
 ```bash
-# in your ops repo root
-cp .apexstack/apexstack.projects.yaml.example apexstack.projects.yaml
+git remote add upstream https://github.com/me2resh/apexstack.git
+```
+
+Later, `git fetch upstream && git merge upstream/main` pulls the latest apexstack improvements into your fork.
+
+### 4. Fill in `onboarding.yaml`
+
+```bash
+$EDITOR onboarding.yaml
+```
+
+Set company, team, tech stack, quality bar. Defaults are sensible — change what matters for your team.
+
+### 5. Create the portfolio registry
+
+```bash
+cp apexstack.projects.yaml.example apexstack.projects.yaml
 $EDITOR apexstack.projects.yaml   # list every repo you manage
 ```
 
-### 5. Wire CLAUDE.md
+The minimal entry is:
 
-In your ops repo's `CLAUDE.md`:
-
-```markdown
-# Development Stack
-@.apexstack/CLAUDE.md
+```yaml
+version: 1
+projects:
+  - name: example-app
+    repo: your-org/example-app
+    docs: projects/example-app
+    status: active
 ```
+
+Even if you have just one repo, register it — the skills are happier with one registered project than with a dangling "assume the current directory" fallback.
 
 ### 6. Start working
 
@@ -133,40 +126,9 @@ In your ops repo's `CLAUDE.md`:
 /decide            # make a technical decision (creates an AgDR)
 ```
 
-The hooks fire on every `git` / `gh` command, the cross-project skills aggregate across the registry, and the Code Reviewer agent can be invoked with `/code-review <pr>`.
+The hooks fire on every `git` / `gh` command, the portfolio skills aggregate across the registry, and the Code Reviewer agent can be invoked with `/code-review <pr>`.
 
----
-
-### Single-project install (opt-out)
-
-If you only have one repo, install directly into it instead of an ops repo:
-
-```bash
-# in your one project repo
-git clone https://github.com/me2resh/apexstack.git .apexstack
-ln -s .apexstack/.claude .claude
-$EDITOR .apexstack/onboarding.yaml   # set apexstack.mode: single-project
-echo "@.apexstack/CLAUDE.md" >> CLAUDE.md
-```
-
-Skip step 4 entirely — there's no registry. The same skills scope to the current repo. Roadmap lives at `ROADMAP.md`, ideas at `IDEAS.md`. See [`docs/multi-project.md`](docs/multi-project.md) for the full comparison.
-
-### Global install (alternative)
-
-If you run **several** ops repos (a founder with a couple of orgs, a consultant with multiple clients), clone apexstack **once** globally and reference it from every ops repo instead of cloning into each. One place to upgrade, one place to patch.
-
-```bash
-# one time, globally
-git clone https://github.com/me2resh/apexstack.git ~/.apexstack
-
-# in each ops repo (replaces steps 1 and 2 of the default flow)
-ln -s ~/.apexstack/.claude .claude
-echo '@~/.apexstack/CLAUDE.md' >> CLAUDE.md
-
-# steps 3, 4, 5, 6 are the same as the default flow
-```
-
-**Tradeoff**: the symlinks point at an absolute path in your home directory, so moving `~/.apexstack/` breaks the link. Not a good fit if you sync dotfiles across machines with different home paths.
+Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-project.md`](docs/multi-project.md).
 
 ## Why ApexStack?
 

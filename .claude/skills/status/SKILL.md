@@ -16,16 +16,9 @@ A focused "where am I" view. Where `/inbox` shows what's waiting on you and `/pr
 /status --verbose
 ```
 
-## Mode detection
+## Scope
 
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Mode | Behaviour |
-|------|-----------|
-| `multi-project` (default) | Show every project in `apexstack.projects.yaml`, or one if `--project` is given |
-| `single-project` | Show the current repo only |
+Iterates every project in `apexstack.projects.yaml` (the registry at the root of your ops repo), or a single project if `--project <name>` is passed.
 
 ## What it shows
 
@@ -131,9 +124,9 @@ Surface anything unusual:
 - More than 20 dirty files (probably forgot to commit)
 - Branch is more than 5 commits behind `origin/main` (rebase recommended)
 
-## Multi-project mode
+## Portfolio output
 
-In multi-project mode, run sections A–D for each project in the registry. Use a per-project header:
+Run sections A–D for each project in the registry. Use a per-project header:
 
 ```
 ═══════════════════════════════════════
@@ -167,9 +160,7 @@ If a project's workspace isn't cloned locally, show GitHub data only and mark gi
 - All AgDRs from the last 30 days
 - CI run history for the current branch
 
-## Output format
-
-Single-project mode default:
+## Output format (one-project view with `--project <name>`)
 
 ```
 STATUS — example-app — 2026-04-06 09:14

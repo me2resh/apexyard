@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /projects — List Managed Projects
 
-Show every project ApexStack is managing, with a one-line health snapshot. The behaviour depends on which mode you're in.
+Show every project ApexStack is managing, with a one-line health snapshot. Reads `apexstack.projects.yaml` at the root of the ops repo (your fork of apexstack) and iterates the registry.
 
 ## Usage
 
@@ -16,22 +16,9 @@ Show every project ApexStack is managing, with a one-line health snapshot. The b
 /projects --json
 ```
 
-## Mode detection
+## Behaviour
 
-ApexStack reads `onboarding.yaml` to decide:
-
-```bash
-grep -E '^\s*mode:\s*' onboarding.yaml 2>/dev/null | head -1
-```
-
-| Value | Behaviour |
-|-------|-----------|
-| `mode: multi-project` (or missing — this is the default) | Read `apexstack.projects.yaml` and show every project listed |
-| `mode: single-project` | Show only the current repo |
-
-## Multi-project mode (the default)
-
-In multi-project mode, read `apexstack.projects.yaml`:
+Read `apexstack.projects.yaml`:
 
 ```yaml
 version: 1
@@ -63,30 +50,9 @@ PRS=$(gh -R {repo} pr list --state open --json number --jq 'length')
 ISSUES=$(gh -R {repo} issue list --state open --json number --jq 'length')
 ```
 
-## Single-project mode (opt-in)
+If `apexstack.projects.yaml` doesn't exist at the ops-repo root, print a clear error pointing the user at `apexstack.projects.yaml.example` and `docs/multi-project.md` for the setup guide.
 
-In single-project mode, there's only one project — the repo Claude Code is running in. Output:
-
-```
-Project: {repo name from `git remote get-url origin`}
-Branch:  {git rev-parse --abbrev-ref HEAD}
-Status:  active
-Open PRs:    {gh pr list --state open --json number | jq length}
-Open Issues: {gh issue list --state open --json number | jq length}
-Last commit: {git log -1 --format='%h %ai %s'}
-Uncommitted: {git status --porcelain | wc -l} files
-```
-
-If the user wants the full registry view, suggest:
-
-```
-You're in single-project mode (opt-in). To manage multiple projects,
-remove the `apexstack.mode: single-project` line from onboarding.yaml
-to switch back to the default multi-project mode, and create
-apexstack.projects.yaml at the root.
-```
-
-## Output format (multi-project)
+## Output format
 
 A markdown table:
 
@@ -125,14 +91,14 @@ And, if relevant, flag rows that need attention:
 
 | Condition | Behaviour |
 |-----------|-----------|
-| Multi-project mode but no `apexstack.projects.yaml` | Print a clear error and a sample registry to copy |
+| No `apexstack.projects.yaml` at the ops-repo root | Print a clear error and a sample registry to copy |
 | Project listed but workspace path missing | Show row with `(not cloned)` — don't fail |
 | `gh` not authenticated | Show row with `?` for PRs/issues — don't fail |
 | `repo` field looks invalid | Skip with a warning, continue with the rest |
 
 ## Rules
 
-1. **Mode-aware** — single-project shows one row, multi-project shows N
+1. **Registry-driven** — the registry is the source of truth; no discovery fallback
 2. **Source of truth for PRs/issues = GitHub** — never read from a stale local file
 3. **Source of truth for branch state = local workspace** — `gh` doesn't know about your dirty files
 4. **Don't silently fail on a missing project** — show the row, mark the gap
@@ -142,6 +108,6 @@ And, if relevant, flag rows that need attention:
 ## Related skills
 
 - `/inbox` — same registry, but filtered to "needs your attention"
-- `/status` — single-project deep dive (current branch, recent commits)
+- `/status` — per-project deep dive (current branch, recent commits)
 - `/tasks` — actionable list with URLs
 - `/handover` — onboard a new repo into the registry

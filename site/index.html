@@ -707,6 +707,40 @@ a:hover { color: var(--accent); }
   font-weight: 600;
 }
 
+/* wide variant — 2-column internal layout so the card fills the grid row
+   it spans (used for layer 05 since it's the only full-width card) */
+.layer--wide {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  column-gap: 3rem;
+  row-gap: 0.75rem;
+  align-items: start;
+}
+.layer--wide .layer__num { grid-column: 1 / -1; }
+.layer--wide .layer__title { grid-column: 1; grid-row: 2; }
+.layer--wide .layer__desc {
+  grid-column: 1;
+  grid-row: 3;
+  max-width: none;
+  margin-bottom: 0;
+}
+.layer--wide .layer__list {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  align-self: start;
+}
+.layer--wide .layer__list li {
+  grid-template-columns: 24ch 1fr;
+}
+@media (max-width: 900px) {
+  .layer--wide {
+    grid-template-columns: 1fr;
+  }
+  .layer--wide .layer__title { grid-row: auto; }
+  .layer--wide .layer__desc { grid-row: auto; }
+  .layer--wide .layer__list { grid-column: 1; grid-row: auto; margin-top: 1.25rem; }
+}
+
 /* ============================================================
    show, don't tell — example demos
    ============================================================ */
@@ -1099,9 +1133,9 @@ footer.foot {
     </p>
 
     <div class="hero__cta rise rise-4">
-      <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star &nbsp;·&nbsp; ⑂ Fork on GitHub</a>
       <span class="cta__sep" aria-hidden="true">·</span>
-      <a href="#install" class="cta cta--ghost">or install it now ↓</a>
+      <a href="#install" class="cta cta--ghost">or see the install steps ↓</a>
     </div>
 
     <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexstack, from inbox pickup to QA sign-off">
@@ -1175,12 +1209,12 @@ footer.foot {
 
     <div class="install rise rise-4" id="install-block">
       <span class="install__prompt">$</span>
-      <code class="install__cmd" id="install-cmd">git clone https://github.com/me2resh/apexstack.git .apexstack</code>
+      <code class="install__cmd" id="install-cmd">gh repo fork me2resh/apexstack --clone</code>
       <button type="button" class="install__copy" id="install-copy" aria-label="Copy install command">copy</button>
     </div>
 
     <p class="install__caveat rise rise-4">
-      Run from your ops repo — the one you'll use to govern every product. Full walkthrough in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Prefer a single global copy shared across every ops repo? <a href="#install-global" class="uline">That's also supported</a>.
+      One command forks apexstack into your org and clones the fork locally. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks. Full walkthrough in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Rename the fork to <code>your-org/ops</code> if you prefer — GitHub handles the rename cleanly.
     </p>
 
     <div class="hero__metrics rise rise-5" aria-label="What you get">
@@ -1197,8 +1231,8 @@ footer.foot {
         <span>CI pipelines</span>
       </div>
       <div class="hero__metric">
-        <strong>2</strong>
-        <span>Operating modes (single &amp; multi-project)</span>
+        <strong>1</strong>
+        <span>Fork · your ops repo in one command</span>
       </div>
     </div>
 
@@ -1289,10 +1323,10 @@ footer.foot {
 <span class="branch">│       ├──</span> <span class="lf">roadmap/SKILL.md</span>         <span class="nf"># /roadmap — update or create the product roadmap</span>
 <span class="branch">│       └──</span> <span class="lf">stakeholder-update/SKILL.md</span> <span class="nf"># /stakeholder-update — weekly/monthly/launch</span>
 <span class="branch">│</span>
-<span class="branch">├──</span> <span class="dir new">workspace/</span>             <span class="nf"># <span class="new">[NEW]</span> Live local clones (gitignored) — multi-project mode</span>
+<span class="branch">├──</span> <span class="dir new">workspace/</span>             <span class="nf"># <span class="new">[NEW]</span> Live local clones of managed projects (gitignored)</span>
 <span class="branch">│   └──</span> <span class="lf">README.md</span>          <span class="nf"># Convention: workspace/&lt;name&gt;/ holds each repo's working copy</span>
 <span class="branch">│</span>
-<span class="branch">├──</span> <span class="dir new">projects/</span>              <span class="nf"># <span class="new">[NEW]</span> Per-project committed docs — multi-project mode</span>
+<span class="branch">├──</span> <span class="dir new">projects/</span>              <span class="nf"># <span class="new">[NEW]</span> Per-project committed docs (README, roadmap, AgDRs, updates)</span>
 <span class="branch">│   ├──</span> <span class="lf">README.md</span>          <span class="nf"># Convention: projects/&lt;name&gt;/ holds README, roadmap, AgDRs, handover</span>
 <span class="branch">│   └──</span> <span class="lf">ideas-backlog.md</span>   <span class="nf"># Shared idea backlog (created by /idea on first use)</span>
 <span class="branch">│</span>
@@ -1311,7 +1345,7 @@ footer.foot {
 <span class="branch">│</span>
 <span class="branch">├──</span> <span class="dir">docs/</span>
 <span class="branch">│   ├──</span> <span class="lf">getting-started.md</span>
-<span class="branch">│   └──</span> <span class="lf new">multi-project.md</span>     <span class="nf"># <span class="new">[NEW]</span> Full guide to multi-project mode</span>
+<span class="branch">│   └──</span> <span class="lf new">multi-project.md</span>     <span class="nf"># <span class="new">[NEW]</span> Full setup guide — fork flow, daily workflow, FAQ</span>
 <span class="branch">│</span>
 <span class="branch">└──</span> <span class="dir">site/</span>                  <span class="nf"># this page</span>
     <span class="branch">└──</span> <span class="lf">index.html</span>
@@ -1330,7 +1364,7 @@ footer.foot {
     <span class="section__num">02 / LAYERS</span>
     <h2 class="section__title">Five layers, one stack</h2>
     <p class="section__lede">
-      ApexStack is built around managing a <em>portfolio</em> of projects, not a single repo. Five layers stack together: roles, workflows + templates, hooks + rules, agents + skills, and the workspace itself — a registry of every repo under your org's care. Single-project mode still works for the simple case, but the default is multi-project.
+      ApexStack is built around managing a <em>portfolio</em> of projects, not a single repo. Five layers stack together: roles, workflows + templates, hooks + rules, agents + skills, and the workspace itself — a registry of every repo under your org's care. There's no single-project fallback; even if you only have one repo to manage, you register it and every layer works the same.
     </p>
   </div>
 
@@ -1392,18 +1426,17 @@ footer.foot {
       </ul>
     </article>
 
-    <article class="layer" style="grid-column: 1 / -1;">
-      <div class="layer__num">05 — workspace · multi-project by default <span class="new">NEW</span></div>
+    <article class="layer layer--wide" style="grid-column: 1 / -1;">
+      <div class="layer__num">05 — workspace · portfolio registry <span class="new">NEW</span></div>
       <h3 class="layer__title">A portfolio, not a single repo</h3>
       <p class="layer__desc">
-        ApexStack treats your engineering org as a portfolio of projects, not a single codebase. The default install creates an <strong>ops repo</strong> with an <code>apexstack.projects.yaml</code> registry listing every repo you manage — and every skill that operates on tickets, PRs, issues, status, or roadmap (<code>/projects</code>, <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>, <code>/handover</code>) aggregates across the registry by default. If you only have one repo, ApexStack still works — set <code>mode: single-project</code> in <code>onboarding.yaml</code> and the same skills scope to the current repo. <code>workspace/&lt;name&gt;/</code> holds live local clones; <code>projects/&lt;name&gt;/</code> holds the long-lived committed docs.
+        Your ops repo is a <strong>fork of apexstack</strong>. At its root sits <code>apexstack.projects.yaml</code> — the registry that lists every project under management. Every portfolio skill (<code>/projects</code>, <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>, <code>/handover</code>, <code>/stakeholder-update</code>) aggregates across the registry. <code>projects/&lt;name&gt;/</code> holds committed per-project docs; <code>workspace/&lt;name&gt;/</code> (gitignored) holds live local clones.
       </p>
-      <ul class="layer__list" style="grid-template-columns: 22ch 1fr;">
-        <li><code>onboarding.yaml</code><span><code>apexstack.mode: multi-project</code> (default) or <code>single-project</code></span></li>
-        <li><code>apexstack.projects.yaml</code><span>the portfolio registry — name, repo, workspace path, docs path, status, applicable roles</span></li>
-        <li><code>workspace/&lt;name&gt;/</code><span>live local clones, gitignored — your daily working copies</span></li>
-        <li><code>projects/&lt;name&gt;/</code><span>committed per-project docs (README, roadmap, AgDRs, handover assessments, stakeholder updates)</span></li>
-        <li><code>docs/multi-project.md</code><span>full guide — registry schema, daily workflow, migration from single-project</span></li>
+      <ul class="layer__list">
+        <li><code>apexstack.projects.yaml</code><span>registry — name, repo, workspace path, docs path, status, roles</span></li>
+        <li><code>projects/&lt;name&gt;/</code><span>committed docs per project (README, roadmap, AgDRs, updates)</span></li>
+        <li><code>workspace/&lt;name&gt;/</code><span>gitignored local clones — your daily working copies</span></li>
+        <li><code>docs/multi-project.md</code><span>full setup guide — fork flow, daily workflow, FAQ</span></li>
       </ul>
     </article>
 
@@ -1582,90 +1615,62 @@ Branch: feature/GH-42-add-csv-export
 
   <div class="section__head">
     <span class="section__num">05 / INSTALL</span>
-    <h2 class="section__title">Set up your portfolio in six steps</h2>
+    <h2 class="section__title">Fork, clone, register — five steps</h2>
     <p class="section__lede">
-      ApexStack defaults to multi-project mode — one ops repo, one registry, every managed project listed inside it. Single-project mode (one repo only) is a one-line opt-out at the end if that's what you actually need.
+      Your ops repo is a fork of apexstack. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks, no separate folder to maintain. Star + fork on GitHub, clone the fork, fill in the registry, start working.
     </p>
   </div>
 
   <div class="steps">
 
     <article class="step">
-      <div class="step__num">01 — clone</div>
-      <h3 class="step__title">Clone ApexStack into your ops repo</h3>
-      <p class="step__desc">The <em>ops repo</em> is where ApexStack lives — typically a dedicated repo like <code>your-org/ops</code>, or an existing internal-tools repo. ApexStack itself sits at <code>.apexstack/</code> inside it.</p>
-      <pre class="step__code"><span class="cm"># in your ops repo (or create one)</span>
-git clone https://github.com/me2resh/apexstack.git \
-  .apexstack</pre>
+      <div class="step__num">01 — star + fork</div>
+      <h3 class="step__title">Fork apexstack on GitHub</h3>
+      <p class="step__desc">Visit <a href="https://github.com/me2resh/apexstack" class="uline" target="_blank" rel="noopener">github.com/me2resh/apexstack</a>, click <strong>Star</strong>, then <strong>Fork</strong>. Rename the fork if you want — <code>your-org/ops</code> or <code>your-org/apex</code> both work. GitHub handles the rename cleanly.</p>
+      <pre class="step__code"><span class="cm"># one command via the GitHub CLI — forks and clones in one step</span>
+gh repo fork me2resh/apexstack --clone
+cd apexstack</pre>
     </article>
 
     <article class="step">
-      <div class="step__num">02 — expose .claude/</div>
-      <h3 class="step__title">Symlink the runnable layer</h3>
-      <p class="step__desc">Claude Code looks for hooks, agents, skills, and <code>settings.json</code> at <code>.claude/</code>. Symlink so updates in apexstack stay in sync.</p>
-      <pre class="step__code"><span class="cm"># in your ops repo root</span>
-ln -s <span class="acc">.apexstack/.claude</span> .claude</pre>
+      <div class="step__num">02 — upstream remote</div>
+      <h3 class="step__title">Track upstream for updates</h3>
+      <p class="step__desc">Add the upstream remote so you can pull future apexstack improvements into your fork with a normal git merge. No proprietary upgrade tool.</p>
+      <pre class="step__code"><span class="cm"># in your fork</span>
+git remote add upstream \
+  https://github.com/me2resh/apexstack.git
+
+<span class="cm"># later, to pull updates:</span>
+git fetch upstream &amp;&amp; git merge upstream/main</pre>
     </article>
 
     <article class="step">
       <div class="step__num">03 — configure</div>
       <h3 class="step__title">Fill in onboarding.yaml</h3>
-      <p class="step__desc">Tell ApexStack about your team — roles, tech stack, quality bar. The default mode is <code>multi-project</code>; leave it as is unless you only have one repo.</p>
-      <pre class="step__code"><span class="cm"># defaults are sane — edit in place</span>
-$EDITOR .apexstack/onboarding.yaml</pre>
+      <p class="step__desc">Tell ApexStack about your team — company, roles, tech stack, quality bar. Defaults are sensible; edit what matters.</p>
+      <pre class="step__code"><span class="cm"># in your fork root</span>
+$EDITOR onboarding.yaml</pre>
     </article>
 
     <article class="step">
       <div class="step__num">04 — list your projects</div>
-      <h3 class="step__title">Create the registry</h3>
-      <p class="step__desc">Copy the example registry and list every repo you want under ApexStack management. One YAML entry per project — name, repo, status, applicable roles. The cross-project skills (<code>/projects</code>, <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>) read from this file.</p>
-      <pre class="step__code"><span class="cm"># in your ops repo root</span>
-cp .apexstack/apexstack.projects.yaml.example \
+      <h3 class="step__title">Create the portfolio registry</h3>
+      <p class="step__desc">Copy the example registry and list every repo you want under ApexStack management. Even one project counts — the skills work the same whether you have 1 or 20. Add more as you bring them under management.</p>
+      <pre class="step__code"><span class="cm"># in your fork root</span>
+cp apexstack.projects.yaml.example \
    apexstack.projects.yaml
 $EDITOR apexstack.projects.yaml  <span class="cm"># list your repos</span></pre>
     </article>
 
     <article class="step">
-      <div class="step__num">05 — wire CLAUDE.md</div>
-      <h3 class="step__title">Point your CLAUDE.md at the stack</h3>
-      <p class="step__desc">A single <code>@-import</code> line in your ops repo's <code>CLAUDE.md</code> pulls in the entire stack — rules, role definitions, workflows, templates, and the multi-project skill set.</p>
-      <pre class="step__code"><span class="cm"># in your ops repo CLAUDE.md</span>
-<span class="acc">@.apexstack/CLAUDE.md</span></pre>
-    </article>
-
-    <article class="step">
-      <div class="step__num">06 — start working</div>
+      <div class="step__num">05 — start working</div>
       <h3 class="step__title">Try a portfolio command</h3>
-      <p class="step__desc">In any Claude Code session inside the ops repo, the cross-project skills are immediately available. Hooks fire on every Bash call. Done.</p>
-      <pre class="step__code"><span class="cm"># in claude code, from the ops repo</span>
+      <p class="step__desc">Open Claude Code in your fork. The portfolio skills, hooks, agents, and rules are all loaded automatically — no symlinks, no wiring. The <code>CLAUDE.md</code> at the fork root is the entry point Claude Code reads first.</p>
+      <pre class="step__code"><span class="cm"># in claude code, from the fork root</span>
 <span class="acc">/projects</span>          <span class="cm"># list every managed project + status</span>
 <span class="acc">/inbox</span>             <span class="cm"># PRs, issues, comments needing your eyes</span>
 <span class="acc">/status</span>            <span class="cm"># git + CI snapshot per project</span>
 <span class="acc">/decide</span> migrate billing to Stripe</pre>
-    </article>
-
-    <article class="step" style="grid-column: 1 / -1;">
-      <div class="step__num">opt-out — single-project mode</div>
-      <h3 class="step__title">If you actually have just one repo</h3>
-      <p class="step__desc">Skip step 04 entirely (no registry needed) and set <code>apexstack.mode: single-project</code> in <code>onboarding.yaml</code>. ApexStack lives directly inside that one repo, not a separate ops repo. The same skills scope to the current repo, the roadmap lives at <code>ROADMAP.md</code>, ideas at <code>IDEAS.md</code>. Everything else is identical.</p>
-      <pre class="step__code"><span class="cm"># in onboarding.yaml</span>
-apexstack:
-  mode: <span class="acc">single-project</span></pre>
-    </article>
-
-    <article class="step" id="install-global" style="grid-column: 1 / -1;">
-      <div class="step__num">alternative — global install</div>
-      <h3 class="step__title">If you run several ops repos</h3>
-      <p class="step__desc">The six-step default clones apexstack into each ops repo at <code>.apexstack/</code>. That's the right call for most people — upgrades are per-repo, nothing is shared across machines. If you run <em>several</em> ops repos (a founder with a couple of orgs, a consultant with multiple clients), clone apexstack <em>once</em> globally and reference it from every ops repo. One place to upgrade, one place to patch.</p>
-      <p class="step__desc"><strong>Tradeoff</strong>: the symlinks point at an absolute path in your home directory, so moving <code>~/.apexstack/</code> breaks the link. Not a good fit if you sync dotfiles across machines with different home paths.</p>
-      <pre class="step__code"><span class="cm"># one time, globally</span>
-git clone https://github.com/me2resh/apexstack.git ~/.apexstack
-
-<span class="cm"># in each ops repo (replaces steps 01 and 02 of the default flow)</span>
-ln -s ~/.apexstack/.claude .claude
-echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
-
-<span class="cm"># steps 03, 04, 05, 06 are the same as the default flow</span></pre>
     </article>
 
   </div>
@@ -1724,7 +1729,7 @@ echo '@~/.apexstack/CLAUDE.md' &gt;&gt; CLAUDE.md
     <div>
       <h2>Stop reinventing<br>the same <span class="acc">processes</span>.</h2>
       <p>
-        ApexStack is one git clone, one symlink, and one config file away.
+        ApexStack is one fork, one clone, and one config file away.
         It's MIT licensed, plain markdown, and edits are encouraged.
         If you change your mind, you delete the directory and you're back where you started.
       </p>

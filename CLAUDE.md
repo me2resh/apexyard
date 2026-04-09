@@ -7,21 +7,17 @@ You are the **Chief of Staff** running a portfolio of projects inside apexstack.
 ## SETUP
 
 1. Read `onboarding.yaml` for company-specific configuration
-2. Read `apexstack.mode` — **multi-project is the default**; the value is `multi-project` unless explicitly set to `single-project`
-3. In **multi-project mode**, also read `apexstack.projects.yaml` (the portfolio registry) so you know which repos are under management
-4. Understand the team structure and roles
-5. Apply the workflows and standards defined in this stack
+2. Read `apexstack.projects.yaml` — the portfolio registry listing every repo under management
+3. Understand the team structure and roles
+4. Apply the workflows and standards defined in this stack
 
-## OPERATING MODE
+## PORTFOLIO MODEL
 
-ApexStack supports two modes set in `onboarding.yaml`:
+ApexStack governs a portfolio of repos as one organisation. The repo this `CLAUDE.md` lives in is your **ops repo** — a fork of `me2resh/apexstack` cloned into your organisation (optionally renamed to `your-org/ops` or similar). The registry file `apexstack.projects.yaml` at the ops-repo root lists every project under management. Per-project docs live in `projects/<name>/`; optional live working copies of each managed repo live in `workspace/<name>/` (gitignored).
 
-| Mode | Behaviour |
-|------|-----------|
-| **`multi-project`** (default) | ApexStack lives in an "ops repo" and governs a portfolio of repos via `apexstack.projects.yaml`. Skills like `/projects`, `/inbox`, `/status`, `/tasks` aggregate across the registry. |
-| `single-project` | ApexStack governs the one repo it lives in. Same skills scope to the current repo only. Use this only when you genuinely have one repo. |
+Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Even if you only have one repo to govern, you still fork apexstack and register that single repo — the skills work the same way, and future projects plug into the same registry.
 
-Full guide: @docs/multi-project.md
+Full setup guide: @docs/multi-project.md
 
 ---
 
@@ -181,7 +177,7 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexStack management |
-| `/projects` | List all managed projects with status (multi-project) or current repo (single-project) |
+| `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
 | `/status` | Current snapshot — git, CI, in-progress work |
 | `/tasks` | Actionable task list with direct URLs, prioritised |
@@ -215,7 +211,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | What | Where |
 |------|-------|
 | Company Config | `onboarding.yaml` |
-| **Project registry** (multi-project) | `apexstack.projects.yaml` |
+| **Portfolio registry** | `apexstack.projects.yaml` |
 | Role Definitions | `roles/` |
 | Workflows | `workflows/` |
 | Templates | `templates/` |
@@ -224,11 +220,11 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Agents | `.claude/agents/` |
 | Skills (13 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
-| **Per-project docs** (multi-project) | `projects/<name>/` |
-| **Live working copies** (multi-project) | `workspace/<name>/` |
+| **Per-project docs** | `projects/<name>/` |
+| **Live working copies** (gitignored) | `workspace/<name>/` |
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting Started | `docs/getting-started.md` |
-| Multi-project guide | `docs/multi-project.md` |
+| Full setup guide | `docs/multi-project.md` |
 
 ---
 

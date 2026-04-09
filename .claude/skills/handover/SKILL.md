@@ -27,7 +27,7 @@ The assessment is always written to:
 projects/<name>/handover-assessment.md
 ```
 
-In multi-project mode (the default), this folder lives in the ops repo, alongside the rest of `projects/`. In single-project mode, it lives inside the current repo.
+The folder lives in the ops repo (your fork of apexstack), alongside the rest of `projects/`.
 
 If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing — see `projects/README.md` for the convention.
 
