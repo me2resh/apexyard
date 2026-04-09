@@ -123,7 +123,7 @@ Next: triage with the team, then `/write-spec` if it survives.
 2. **Always assign an ID** — `IDEA-NNN`, zero-padded to 3 digits.
 3. **One row per idea** — never edit existing rows from this skill; new ideas always append.
 4. **Status starts at NEW** — triage changes it later.
-5. **Mode-aware** — detect `apexstack.mode` and write to the right file.
+5. **Single backlog** — every idea goes into `projects/ideas-backlog.md` at the root of the ops repo; triage assigns it to a project later.
 6. **Don't create the issue silently** — always ask first.
 7. **Never delete** — superseded ideas get status `SUPERSEDED`, not removal.
 

@@ -155,7 +155,7 @@ If everything is empty:
 
 1. **Read-only** — never close, comment, or assign anything from this skill
 2. **Always sort by recency within each section** — newest updates first
-3. **Multi-project mode iterates the registry** — never shell out to "all repos in the org"; only managed ones count
+3. **Registry-scoped** — only projects listed in `apexstack.projects.yaml` count; never shell out to "all repos in the org"
 4. **Skip empty sections** — don't print headers with `(0)`
 5. **Never error on a single project** — if one repo is unreachable, mark it `?` and continue
 6. **Always include URLs** — every row needs a clickable link

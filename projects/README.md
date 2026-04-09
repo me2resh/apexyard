@@ -15,7 +15,7 @@ Each managed project gets its own subdirectory:
 ```
 projects/
 ├── README.md                       ← you are here
-├── ideas-backlog.md                ← shared ideas backlog (multi-project mode)
+├── ideas-backlog.md                ← shared ideas backlog
 │
 ├── example-app/
 │   ├── README.md                   ← project overview, owners, links

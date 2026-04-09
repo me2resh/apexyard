@@ -211,7 +211,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | What | Where |
 |------|-------|
 | Company Config | `onboarding.yaml` |
-| **Project registry** (multi-project) | `apexstack.projects.yaml` |
+| **Portfolio registry** | `apexstack.projects.yaml` |
 | Role Definitions | `roles/` |
 | Workflows | `workflows/` |
 | Templates | `templates/` |
@@ -220,11 +220,11 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Agents | `.claude/agents/` |
 | Skills (13 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
-| **Per-project docs** (multi-project) | `projects/<name>/` |
-| **Live working copies** (multi-project) | `workspace/<name>/` |
+| **Per-project docs** | `projects/<name>/` |
+| **Live working copies** (gitignored) | `workspace/<name>/` |
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting Started | `docs/getting-started.md` |
-| Multi-project guide | `docs/multi-project.md` |
+| Full setup guide | `docs/multi-project.md` |
 
 ---
 

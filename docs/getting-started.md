@@ -1,37 +1,45 @@
 # Getting Started with ApexStack
 
-This guide walks you through adopting ApexStack for your team.
+Short version of the setup flow. For the full walkthrough (directory layout, daily workflow, upgrade path, FAQ) see [`multi-project.md`](multi-project.md).
 
 ---
 
 ## Prerequisites
 
-- A GitHub repository for your project
+- A GitHub account and an org you can fork into
 - [Claude Code](https://claude.com/claude-code) installed
-- Basic familiarity with Claude Code's CLAUDE.md system
+- [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
+- Basic familiarity with Claude Code's `CLAUDE.md` system
 
 ---
 
-## Step 1: Add ApexStack to Your Project
+## Step 1: Fork apexstack on GitHub
 
-### Option A: Copy into your repo
+Your ops repo **is** a fork of apexstack. One repo, no nested installs.
 
-```bash
-# Clone ApexStack
-git clone https://github.com/me2resh/apexstack.git /tmp/apexstack
+Visit [`github.com/me2resh/apexstack`](https://github.com/me2resh/apexstack), **Star** it, then **Fork** it into your org. Rename the fork if you want (`your-org/ops`, `your-org/apex`, or keep it as `apexstack` — GitHub handles the rename cleanly).
 
-# Copy into your project (as a hidden directory)
-cp -r /tmp/apexstack your-project/.apexstack/
-
-# Or copy into a visible directory
-cp -r /tmp/apexstack your-project/apexstack/
-```
-
-### Option B: Git submodule
+Then clone your fork locally:
 
 ```bash
-git submodule add https://github.com/me2resh/apexstack.git .apexstack
+gh repo fork me2resh/apexstack --clone
+cd apexstack
 ```
+
+Or with plain git:
+
+```bash
+git clone https://github.com/your-org/apexstack.git
+cd apexstack
+```
+
+Add the upstream remote so you can pull future updates:
+
+```bash
+git remote add upstream https://github.com/me2resh/apexstack.git
+```
+
+Later, `git fetch upstream && git merge upstream/main` pulls the latest apexstack improvements into your fork.
 
 ---
 
@@ -64,21 +72,29 @@ tech_stack:
 
 ---
 
-## Step 3: Connect to Claude Code
+## Step 3: Create the portfolio registry
 
-Add a reference to ApexStack in your project's `CLAUDE.md`:
+Copy the example registry and list every repo you want under management:
 
-```markdown
-# My Project
-
-## Development Stack
-@.apexstack/CLAUDE.md
-
-## Project-Specific Rules
-[Your additional rules here]
+```bash
+cp apexstack.projects.yaml.example apexstack.projects.yaml
+$EDITOR apexstack.projects.yaml
 ```
 
-This tells Claude Code to read the ApexStack configuration alongside your project rules.
+The minimal entry is:
+
+```yaml
+version: 1
+projects:
+  - name: example-app
+    repo: your-org/example-app
+    docs: projects/example-app
+    status: active
+```
+
+Even if you have just one repo, register it — the skills work the same whether you have 1 or 20.
+
+The `CLAUDE.md` at the root of your fork is the stack entry point. Claude Code reads it automatically when you start a session inside the fork — no additional wiring needed.
 
 ---
 
@@ -178,10 +194,7 @@ After setup, Claude Code will:
 
 ### Claude Code doesn't seem to know about the stack
 
-Make sure your `CLAUDE.md` references the stack:
-```markdown
-@.apexstack/CLAUDE.md
-```
+Make sure you're running Claude Code from inside your fork of apexstack (the ops repo). Claude Code reads `CLAUDE.md` automatically from the working directory's root — if you're one level deep (e.g. inside `workspace/<project>/`) it picks up the project's own `CLAUDE.md` instead.
 
 ### Roles aren't being applied correctly
 

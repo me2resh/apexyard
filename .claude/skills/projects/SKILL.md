@@ -91,7 +91,7 @@ And, if relevant, flag rows that need attention:
 
 | Condition | Behaviour |
 |-----------|-----------|
-| Multi-project mode but no `apexstack.projects.yaml` | Print a clear error and a sample registry to copy |
+| No `apexstack.projects.yaml` at the ops-repo root | Print a clear error and a sample registry to copy |
 | Project listed but workspace path missing | Show row with `(not cloned)` — don't fail |
 | `gh` not authenticated | Show row with `?` for PRs/issues — don't fail |
 | `repo` field looks invalid | Skip with a warning, continue with the rest |

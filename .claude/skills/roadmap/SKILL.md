@@ -178,7 +178,7 @@ Owner: @octocat
 3. **Done is append-only** — items move to Done, never out of it
 4. **Update `Last updated`** on every write
 5. **Confirm destructive ops** — `remove`, `reorder` ask first
-6. **Mode-aware** — write to `ROADMAP.md` (single) or `projects/<name>/roadmap.md` (multi)
+6. **One roadmap per project** — always write to `projects/<name>/roadmap.md` in the ops repo
 7. **Don't auto-create issues unless asked** — `--with-issues` is opt-in
 8. **Preserve markdown formatting** — don't reflow rows or change column widths unnecessarily
 
