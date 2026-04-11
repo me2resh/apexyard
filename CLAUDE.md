@@ -92,6 +92,7 @@ Work on ONE ticket at a time. Complete fully before starting next. Each PR = one
 - **Tests required** -- >80% coverage for domain logic
 - **Lint, typecheck, test, build** must pass before pushing
 - **Code review required** before merge
+- **Explicit per-PR CEO approval required for every merge** -- plan-level "go" / "continue" / "ship it" does NOT authorize any `gh pr merge`. Stop before each merge and ask for a per-PR explicit nod. Mechanically enforced by `block-unreviewed-merge.sh` + the `/approve-merge` skill. Full rationale and examples: @.claude/rules/pr-workflow.md
 - **No hardcoded secrets** -- use environment variables
 
 ### Code Review

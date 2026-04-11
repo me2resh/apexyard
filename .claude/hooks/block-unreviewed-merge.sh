@@ -1,15 +1,32 @@
 #!/bin/bash
-# PreToolUse hook on `gh pr merge`: blocks merging a PR that has no recorded
-# Rex (code-reviewer) approval.
+# PreToolUse hook on `gh pr merge`: blocks merging a PR that does not have
+# BOTH required approval markers in place.
 #
 # Enforces workflow-gates rule #5 ("2 reviews — agent + human, CI green,
-# commit SHA matches review") at the merge boundary, mechanically. An approval
-# is a file at .claude/session/reviews/<pr>-rex.approved whose contents are
-# the SHA Rex reviewed. If Rex requests changes, no file is written and merge
-# stays blocked until a follow-up review passes.
+# commit SHA matches review") at the merge boundary, mechanically. Two
+# markers are required:
 #
-# Human approver sign-off is still required in addition to this check — the
-# hook just guarantees you can't merge without the agent review.
+#   .claude/session/reviews/<pr>-rex.approved
+#     Written by the code-reviewer agent (Rex) after a successful review.
+#     Contents: the commit SHA Rex reviewed.
+#
+#   .claude/session/reviews/<pr>-ceo.approved
+#     Written ONLY by the /approve-merge <pr> skill on explicit user
+#     invocation. Contents: the commit SHA the CEO approved.
+#
+# Both markers must exist, and both SHAs must match the live HEAD. Any
+# commits pushed after approval invalidate both — re-review and re-approve.
+#
+# The CEO marker is the mechanical enforcement of the "plan-level 'go' is
+# NOT merge approval" rule in .claude/rules/pr-workflow.md. An umbrella
+# "go" on a plan does not produce this file — only the /approve-merge
+# skill does, and the skill is defined to run only on explicit user
+# invocation that names the PR.
+#
+# Claude can technically forge either marker by running `touch` or `echo`
+# directly. Doing so is a visible, auditable, grep-able rule violation
+# and is itself a hard stop. The point of mechanical enforcement is to
+# turn invisible inference failures into visible rule violations.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -36,40 +53,79 @@ if [ -z "$PR_NUMBER" ]; then
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-APPROVAL="${REPO_ROOT:-.}/.claude/session/reviews/${PR_NUMBER}-rex.approved"
+REVIEWS_DIR="${REPO_ROOT:-.}/.claude/session/reviews"
+REX_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-rex.approved"
+CEO_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-ceo.approved"
+CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
 
-if [ ! -f "$APPROVAL" ]; then
+# --- Rex marker check ---
+if [ ! -f "$REX_APPROVAL" ]; then
   cat >&2 <<MSG
 BLOCKED: PR #${PR_NUMBER} has no recorded code-reviewer (Rex) approval.
 
 ApexStack requires two reviews before merge (workflow-gates rule #5):
   1. Code Reviewer agent (Rex) — automated, recorded in .claude/session/reviews/
-  2. Human approver (Tech Lead / CEO / project owner) — recorded on the PR
+  2. Human approver (CEO) — recorded by the /approve-merge skill
 
-Expected approval file does not exist:
-  ${APPROVAL}
+Missing file:
+  ${REX_APPROVAL}
 
 To unblock:
   1. Invoke the code-reviewer agent on this PR
-  2. When Rex returns "approved", record it:
-       mkdir -p .claude/session/reviews
-       echo "<commit-sha>" > .claude/session/reviews/${PR_NUMBER}-rex.approved
-  3. Retry the merge
+  2. When Rex returns "approved", it records the approval automatically
+  3. Then run /approve-merge ${PR_NUMBER} for the CEO approval
+  4. Retry the merge
 
-Never skip this check — even for typo fixes. See workflow-gates rule #5.
+Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
 MSG
   exit 2
 fi
 
-# Commit SHA consistency: make sure the approved SHA matches current HEAD.
-# A review is bound to a specific commit — new commits after review invalidate it.
-APPROVED_SHA=$(tr -d '[:space:]' < "$APPROVAL")
-CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
-if [ -n "$APPROVED_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$APPROVED_SHA" != "$CURRENT_SHA" ]; then
+REX_SHA=$(tr -d '[:space:]' < "$REX_APPROVAL")
+if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG
-BLOCKED: Code-reviewer approved commit ${APPROVED_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
+BLOCKED: Code-reviewer approved commit ${REX_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
 
-New commits were pushed after review. Re-invoke Rex on the latest HEAD before merging.
+New commits were pushed after the Rex review. Re-invoke Rex on the latest
+HEAD before merging.
+MSG
+  exit 2
+fi
+
+# --- CEO marker check ---
+if [ ! -f "$CEO_APPROVAL" ]; then
+  cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} has Rex approval but no CEO approval marker.
+
+Plan-level "go" / "continue" / "ship it" does NOT authorize a merge. Each
+merge requires an explicit per-PR, per-merge CEO approval that names the
+PR. See .claude/rules/pr-workflow.md § "Plan-level 'go' is NOT merge
+approval" for the full rationale.
+
+Missing file:
+  ${CEO_APPROVAL}
+
+To unblock:
+  1. Stop and ask the CEO explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
+  2. When the CEO says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
+     invoke the /approve-merge skill:
+       /approve-merge ${PR_NUMBER}
+  3. The skill writes ${CEO_APPROVAL} with the current HEAD SHA
+  4. Retry the merge
+
+NEVER create this marker yourself from an umbrella "go" on a plan.
+EVER. This is the exact failure this hook exists to prevent.
+MSG
+  exit 2
+fi
+
+CEO_SHA=$(tr -d '[:space:]' < "$CEO_APPROVAL")
+if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ]; then
+  cat >&2 <<MSG
+BLOCKED: CEO approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
+
+New commits were pushed after the CEO approval. Re-request CEO approval
+via /approve-merge ${PR_NUMBER} on the new HEAD before merging.
 MSG
   exit 2
 fi

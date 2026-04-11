@@ -46,11 +46,24 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **Event:** `PreToolUse` on `Bash(gh pr merge *)`.
 
-**What it does:** blocks the merge unless `.claude/session/reviews/<pr>-rex.approved` exists. Also checks the approved commit SHA matches `HEAD` — new commits after review invalidate the approval. Rex writes the approval file as its final step when it signs off; human approver sign-off is still enforced by the 2-reviews rule in `workflows/code-review.md`.
+**What it does:** blocks the merge unless **both** approval markers exist for the PR number being merged, and both contain a SHA that matches the current HEAD. New commits after either approval invalidate it.
 
-**Trust model:** the approval file is **local session state**, not a remote trust boundary. It's gitignored and lives on the user's machine, so in principle the local user could forge it by hand. That's fine — the goal is to prevent Claude (an automated agent running in the same session) from merging without the review step, not to protect against a malicious user who owns the machine. For adversarial trust, rely on branch protection rules on the remote (GitHub required reviews, CODEOWNERS) — this hook complements those, it does not replace them.
+| Marker | Path | Written by | Semantics |
+|--------|------|------------|-----------|
+| Rex | `.claude/session/reviews/<pr>-rex.approved` | `code-reviewer` agent after a successful review | "Code reviewed, no blocking issues" |
+| CEO | `.claude/session/reviews/<pr>-ceo.approved` | `/approve-merge <pr>` skill, **only** on explicit user invocation | "The human approver has looked at this specific PR and said ship it" |
 
-**Enforces:** `workflow-gates.md` rule #5 — "2 reviews, CI green, commit SHA matches review."
+Both files contain exactly one line: the 40-character HEAD SHA at the time of approval. The hook reads each, compares with `git rev-parse HEAD`, and blocks on any mismatch.
+
+**Why two markers:** The Rex marker alone isn't enough because it would only enforce the "code review happened" half of the 2-reviews rule. The CEO marker is the mechanical enforcement of **"plan-level 'go' is NOT merge approval"** from `.claude/rules/pr-workflow.md`. A plan-level authorization does not produce the CEO marker — only the `/approve-merge` skill does, and the skill is defined to run only on explicit per-PR user invocation. This closes the failure mode where Claude infers merge approval from an umbrella "go" on a broader plan.
+
+**Trust model:** the approval files are **local session state**, not a remote trust boundary. They're gitignored and live on the user's machine. Claude can technically `rm` or `touch` them directly, and a malicious local user could forge them too. That's fine — the goal is to prevent Claude (an automated agent in the same session) from merging without the discrete review-and-approve moments, not to protect against an adversary who owns the machine. The failure mode the hook closes is **invisible inference** ("Claude decided 'go' meant 'merge'"); it converts that into **visible rule violation** ("Claude `touch`ed the marker without being asked"). The latter is grep-able and auditable; the former is not.
+
+For adversarial trust, rely on remote branch-protection rules (GitHub required reviews, CODEOWNERS, required status checks). This hook complements those, it does not replace them.
+
+**Enforces:** `workflow-gates.md` rule #5 ("2 reviews, CI green, commit SHA matches review") AND `pr-workflow.md` § "Plan-level 'go' is NOT merge approval".
+
+**Companion skill:** `/approve-merge <pr>` (in `.claude/skills/approve-merge/`) is the only supported way to write the CEO marker. The skill definition includes explicit anti-patterns describing the wrong invocation triggers; read it before using.
 
 ### 4. Onboarding — `onboarding-check.sh`
 
@@ -80,7 +93,8 @@ These were already in place before the enforcement layer and remain unchanged. T
 ├── onboarded                     # created by /onboard, read by onboarding-check
 ├── current-ticket                # created by /start-ticket, read by require-active-ticket
 ├── pending-reviews/<pr>          # created by auto-code-review, tracks PRs awaiting Rex
-└── reviews/<pr>-rex.approved     # created by code-reviewer agent, read by merge-gate
+├── reviews/<pr>-rex.approved     # created by code-reviewer agent, read by merge-gate
+└── reviews/<pr>-ceo.approved     # created by /approve-merge, read by merge-gate
 ```
 
 If a marker gets stale, delete the file and re-run the corresponding skill.
