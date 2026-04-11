@@ -3,6 +3,9 @@
 # - PR title matches format: type(TICKET): description
 # - PR body contains a Glossary section
 # - Branch has a ticket ID
+# - The ticket referenced in the title actually exists in the tracker repo
+#   (backstop for the ticket-vocabulary rule — catches fabricated #N that
+#   slipped through prose into a PR title)
 #
 # Customize the ticket pattern below if your team uses a different scheme.
 
@@ -30,9 +33,51 @@ fi
 # Accepts: type(<UPPERCASE-PREFIX 2-10 chars>-<digits>): … or type(#<digits>): …
 # Note: this pattern is intentionally aligned with the pr-title-check.yml
 # CI workflow regex so anything that passes this hook also passes CI.
+TICKET_REF=""
 if [ -n "$TITLE" ]; then
   if ! echo "$TITLE" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\):'; then
     ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
+  else
+    # Extract the ticket reference so we can verify it exists
+    TICKET_REF=$(echo "$TITLE" | sed -nE 's/^[a-z]+\(([^)]+)\):.*/\1/p')
+  fi
+fi
+
+# Verify the ticket in the title actually exists in the tracker repo
+# (backstop for ticket-vocabulary.md — catches fabricated #N in PR titles)
+if [ -n "$TICKET_REF" ]; then
+  # Extract digits from the ref (works for both #N and PREFIX-N)
+  TICKET_NUM=$(echo "$TICKET_REF" | grep -oE '[0-9]+$')
+
+  # Resolve tracker repo: prefer .claude/project-config.json, fall back to origin
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+  TRACKER_REPO=""
+  if [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+    TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  fi
+  if [ -z "$TRACKER_REPO" ]; then
+    # Parse owner/repo from origin remote
+    ORIGIN_URL=$(git remote get-url origin 2>/dev/null)
+    TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
+  fi
+
+  if [ -n "$TICKET_NUM" ] && [ -n "$TRACKER_REPO" ]; then
+    if ! gh issue view "$TICKET_NUM" --repo "$TRACKER_REPO" --json state >/dev/null 2>&1; then
+      cat >&2 <<MSG
+BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} does not
+exist in ${TRACKER_REPO}.
+
+This is the failure mode the ticket-vocabulary rule exists to prevent — do NOT
+use tracker notation (#N) for plan items that have no real issue behind them.
+See .claude/rules/ticket-vocabulary.md § "The rule".
+
+If you intended to create the PR for a real ticket, verify the number.
+If you were about to file work that has no ticket yet, create one first:
+  gh issue create --repo ${TRACKER_REPO} --title "..."
+and use the returned number in your PR title.
+MSG
+      exit 2
+    fi
   fi
 fi
 

@@ -46,6 +46,11 @@
           },
           {
             "type": "command",
+            "if": "Bash(git commit *)",
+            "command": ".claude/hooks/verify-commit-refs.sh"
+          },
+          {
+            "type": "command",
             "if": "Bash(git push *)",
             "command": ".claude/hooks/pre-push-gate.sh"
           },

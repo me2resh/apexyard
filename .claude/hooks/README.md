@@ -71,9 +71,47 @@ For adversarial trust, rely on remote branch-protection rules (GitHub required r
 
 **What it does:** on every new session, if `.claude/session/onboarded` is missing, injects a reminder telling Claude to run `/onboard` with the user before doing work. The `/onboard` skill asks the day-one discovery questions (project identity, tracker, required checks, reviewers, UI, deploy targets, sensitive topics) and writes the marker plus `.claude/project-config.json`.
 
+## The Ticket-Vocabulary Backstops
+
+These two hooks are the mechanical backstop for the rule in `.claude/rules/ticket-vocabulary.md` — "`Ticket`, `#N`, and dependency notation refer ONLY to real GitHub issues". The rule itself is self-discipline; these hooks catch the downstream symptom (a fabricated `#N` that slipped into a durable artifact).
+
+### 5. PR-title issue verification — `validate-pr-create.sh` (extended)
+
+**Event:** `PreToolUse` on `Bash(gh pr create *)`.
+
+**What it does:** after the existing title-format / glossary / branch-ID checks, extracts the issue number from the PR title (e.g. `14` from `feat(#14): …`) and runs `gh issue view <N> --repo <tracker>` to verify it exists. Blocks PR creation with a clear message if the issue is missing.
+
+**Tracker repo resolution:**
+1. First tries `.tracker_repo` in `.claude/project-config.json` if present
+2. Falls back to parsing the `origin` remote (`owner/repo` from SSH or HTTPS URL)
+
+**Why:** catches the case where Claude built a plan using `Ticket N` vocabulary, forgot to create the real issue, and then went straight to `gh pr create --title "feat(#N): …"`. The title is the moment the fabrication becomes durable. This hook refuses to let that happen.
+
+### 6. Commit-message ref verification — `verify-commit-refs.sh` (new)
+
+**Event:** `PreToolUse` on `Bash(git commit *)`.
+
+**What it does:** parses the commit message from `-m "..."`, `-m '...'`, or `-F <file>` args and scans for issue references matching any of:
+
+- `Closes #N` / `Close #N` / `Closed #N`
+- `Fixes #N` / `Fix #N` / `Fixed #N`
+- `Resolves #N` / `Resolve #N` / `Resolved #N`
+- `Refs #N` / `Ref #N` / `References #N`
+- `Related to #N`
+
+Each referenced number is verified against the tracker repo via `gh issue view`. Blocks the commit if any reference doesn't resolve.
+
+**Limitation:** interactive commits (no `-m` / `-F`) are skipped. Parsing `.git/COMMIT_EDITMSG` before git's own validation would race, and Claude rarely uses the interactive path anyway. Accepted gap — in practice Claude almost always uses `-m` with a HEREDOC.
+
+**Why:** same root as validate-pr-create.sh — commit messages are the other main path where a fabricated `#N` becomes durable. `git log` + `git blame` + GitHub's auto-linking all lean on these references, so wrong ones pollute the permanent record.
+
+### Both hooks are backstops, not primary fixes
+
+The primary fix for the vocabulary-collision failure mode is the **rule** in `.claude/rules/ticket-vocabulary.md`. Read it. The hooks catch downstream symptoms at the moment of durable commitment (PR title, commit message). They cannot see prose output — so the vocabulary rule has to come first, and these hooks are the grep-able artifact trail when the rule fails.
+
 ## Pre-existing Hooks
 
-These were already in place before the enforcement layer and remain unchanged. The ticket-first + merge-gate + auto-review hooks layer on top; nothing below is regressed.
+These were already in place before the enforcement layer and remain unchanged (except `validate-pr-create.sh` which was extended in GH-14 — see above). The newer hooks layer on top; nothing below is regressed.
 
 | Hook | Event | Purpose |
 |------|-------|---------|
@@ -82,7 +120,7 @@ These were already in place before the enforcement layer and remain unchanged. T
 | `validate-branch-name.sh` | PreToolUse / Bash | Warns on non-conforming branch names before push |
 | `check-secrets.sh` | PreToolUse / Bash | Scans commits for hardcoded secrets |
 | `pre-push-gate.sh` | PreToolUse / Bash | Reminds to run lint / typecheck / test / build |
-| `validate-pr-create.sh` | PreToolUse / Bash | Checks PR title format, glossary, branch ID |
+| `validate-pr-create.sh` | PreToolUse / Bash | Checks PR title format, glossary, branch ID, **and verifies the title's issue number exists (extended in GH-14)** |
 
 ## Session State Directory
 
