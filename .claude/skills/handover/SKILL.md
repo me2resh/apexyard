@@ -235,7 +235,9 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 - [ ] Run `/audit-deps {name}` monthly for the next 3 months
 
 ## Open Questions
+
 - {anything you couldn't determine from a static read}
+
 ```
 
 ### 6. Append to the portfolio registry
@@ -243,8 +245,10 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 **Don't just print the snippet** — offer to append it automatically:
 
 ```
+
 Ready to add {name} to apexstack.projects.yaml? (y/n)
 > y
+
 ```
 
 If yes:

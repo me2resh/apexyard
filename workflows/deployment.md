@@ -62,25 +62,30 @@ Verify and monitor
 ## CI/CD Pipeline Stages
 
 ### 1. Build
+
 - Install dependencies
 - Compile/transpile code
 - Lint check
 
 ### 2. Test
+
 - Unit tests
 - Integration tests
 - Coverage report (must be >80%)
 
 ### 3. Security
+
 - Dependency audit
 - Static analysis scan
 
 ### 4. Deploy to Staging
+
 - Apply infrastructure changes
 - Deploy application
 - Run E2E tests
 
 ### 5. Deploy to Production (Manual Gate)
+
 - Apply infrastructure changes
 - Deploy application
 - Run smoke tests
@@ -186,12 +191,14 @@ Before promoting to production:
 ## Monitoring Post-Deploy
 
 ### First 30 Minutes
+
 - Watch error rates
 - Check response times
 - Verify key user flows
 - Monitor resource utilization
 
 ### First 24 Hours
+
 - Compare metrics to pre-deploy baseline
 - Check for gradual degradation
 - Review user feedback channels

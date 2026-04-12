@@ -19,6 +19,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 > Read the Tech Lead role file and adopt it before starting this phase. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) for the full activation protocol.
 
 ### Entry Criteria
+
 - Approved PRD from Product
 - Design review complete (if UI involved)
 - Priority assigned
@@ -33,6 +34,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 | Sprint planning | Tech Lead | Tasks assigned |
 
 ### Exit Criteria
+
 - Requirements understood
 - Estimate provided to Product
 - Tickets created and prioritized
@@ -45,6 +47,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 > **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) (architecture review) · **Supporting**: [UX Designer](../roles/design/ux-designer.md), [UI Designer](../roles/design/ui-designer.md) (if UI involved)
 
 ### Entry Criteria
+
 - Feature in sprint
 - Requirements clear
 
@@ -58,11 +61,13 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 | Identify risks | Tech Lead | Risk register |
 
 ### Exit Criteria
+
 - Technical design approved
 - Tasks created and assigned
 - Risks documented
 
 ### When Architecture Review Required
+
 - New service or bounded context
 - New external integration
 - New technology
@@ -78,6 +83,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 > The engineer implementing the task activates the matching role. Cross-stack tickets may chain Backend → Frontend (or vice-versa) via an explicit handoff.
 
 ### Entry Criteria
+
 - Technical design approved
 - Tasks assigned
 - Environment ready
@@ -134,6 +140,7 @@ RIGHT:
 ```
 
 ### Exit Criteria
+
 - Code complete
 - Tests written and passing
 - PR created
@@ -147,6 +154,7 @@ RIGHT:
 > Rex reviews every commit automatically. Human reviewers (Tech Lead, Security Auditor, UI Designer) activate on the triggers above. All reviews must match the commit SHA being merged.
 
 ### Entry Criteria
+
 - PR submitted
 - CI checks passing
 - Self-review done
@@ -161,6 +169,7 @@ RIGHT:
 | Approve PR | Reviewer | Merge ready |
 
 ### Review Checklist
+
 - [ ] Follows architecture principles
 - [ ] Follows coding conventions
 - [ ] Tests adequate and passing
@@ -169,6 +178,7 @@ RIGHT:
 - [ ] Documentation updated
 
 ### Exit Criteria
+
 - Code review approved
 - Design review passed (if applicable)
 - All CI checks green
@@ -182,6 +192,7 @@ RIGHT:
 > This is the **mandatory gate** — merged code is never Done until the QA Engineer has verified every acceptance criterion. Auto-closing via `Closes #XX` is intentionally overridden with `Refs #XX` + the `qa` label when QA verification is required.
 
 ### Entry Criteria
+
 - PR approved and merged
 - Feature deployed to staging (or runnable locally)
 
@@ -206,6 +217,7 @@ In Progress --> In Review --> QA --> Done
 | Sign-off | QA Engineer | Approval to close |
 
 ### If QA Finds Issues
+
 1. QA creates bug ticket linked to original
 2. Original ticket stays in QA state
 3. Engineer fixes bug in new PR
@@ -219,11 +231,13 @@ In Progress --> In Review --> QA --> Done
 > **Primary role**: [Platform Engineer](../roles/engineering/platform-engineer.md) · **Support**: [SRE](../roles/engineering/sre.md) (runbook + rollback plan) · **Trigger**: QA sign-off complete, staging validated
 
 ### Entry Criteria
+
 - Tests passed
 - QA sign-off
 - Security review (if required)
 
 ### Deployment Checklist
+
 - [ ] Staging tested
 - [ ] Feature flags configured (if applicable)
 - [ ] Rollback plan ready
@@ -231,6 +245,7 @@ In Progress --> In Review --> QA --> Done
 - [ ] Team aware
 
 ### Exit Criteria
+
 - Successfully deployed to production
 - Smoke tests passing
 - No errors in monitoring
@@ -242,9 +257,11 @@ In Progress --> In Review --> QA --> Done
 > **Primary role**: [SRE](../roles/engineering/sre.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) on sustained incident · **Trigger**: deployment to production, first 24-48h watch window
 
 ### Entry Criteria
+
 - Deployed to production
 
 ### Post-Launch
+
 - Monitor for 24-48 hours
 - Gradual rollout if feature-flagged
 - Collect metrics for success criteria

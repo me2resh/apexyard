@@ -33,6 +33,7 @@ The valid invocation triggers look like this:
 ### 1. Parse the PR number
 
 Extract from `$ARGUMENTS`. If no argument is given, try to infer from:
+
 - The current branch's open PR via `gh pr view --json number --jq '.number'`
 - The user's most recent message, if it named a PR explicitly
 

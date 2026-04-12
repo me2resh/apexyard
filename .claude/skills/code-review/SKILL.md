@@ -40,27 +40,32 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 ## Review Checklist
 
 ### Architecture
+
 - Domain layer has no external dependencies
 - Application layer doesn't import infrastructure
 - Proper separation of commands vs queries
 
 ### Code Quality
+
 - Type-safety enforced
 - No unjustified `any` types
 - Proper error handling
 - Clear naming conventions
 
 ### Testing
+
 - Unit tests for domain logic
 - Tests test behavior, not implementation
 - Edge cases covered
 
 ### Security
+
 - No secrets in code
 - Input validation present
 - No injection vulnerabilities
 
 ### PR Description
+
 - Links to the ticket
 - **Has a Glossary section** (REQUIRED — request changes if missing)
 - AgDR links if decisions were made

@@ -17,6 +17,7 @@ This is the mechanical enforcement of the Pre-Build Gate in `.claude/rules/workf
 ### 1. Parse Arguments
 
 Expected forms:
+
 - `42` — plain number, resolves against the current repo. Read `git remote get-url origin` and extract `<owner>/<repo>`. If there's no origin, stop and ask for a fully-qualified reference.
 - `me2resh/flat-mate#128` — fully-qualified reference.
 - `apexstack#42` — owner defaults to the current org (parsed from the origin URL).

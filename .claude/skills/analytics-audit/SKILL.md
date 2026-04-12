@@ -15,6 +15,7 @@ Deep-dive analytics analysis. Checks that tracking is configured, events follow 
 ### Step 1: SDK detection
 
 Grep for analytics SDK initialization:
+
 - Google Analytics / GA4: `gtag`, `G-`, `UA-`, `analytics.js`, `@google-analytics`
 - Mixpanel: `mixpanel.init`, `@mixpanel`
 - Amplitude: `amplitude.init`, `@amplitude`
@@ -26,6 +27,7 @@ Grep for analytics SDK initialization:
 ### Step 2: Event inventory
 
 Find all tracking calls in the codebase and list them:
+
 - Event name
 - Where it fires (file + component/handler)
 - Properties sent with the event

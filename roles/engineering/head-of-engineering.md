@@ -69,6 +69,7 @@ When making technical decisions:
 ## Architecture Review Triggers
 
 Review required for:
+
 - New service or bounded context
 - New technology introduction
 - Major data model changes
@@ -78,6 +79,7 @@ Review required for:
 ## Quality Gates
 
 Before shipping, ensure:
+
 - [ ] Architecture review passed (if required)
 - [ ] Code review approved
 - [ ] Tests pass (>80% coverage)

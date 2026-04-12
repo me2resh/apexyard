@@ -10,17 +10,21 @@
 ## Overview
 
 ### Problem Statement
+
 [What problem are we solving? Why does it matter?]
 
 ### Target User
+
 **Primary**: [User type and description]
 **Secondary**: [User type and description] (if applicable)
 
 ### Goals
+
 1. [Goal 1 -- measurable]
 2. [Goal 2 -- measurable]
 
 ### Non-Goals (Out of Scope)
+
 - [What we are explicitly NOT doing]
 - [Feature/scope we're deferring]
 
@@ -36,9 +40,11 @@
 ## User Stories
 
 ### US-1: [Title]
+>
 > As a [user type], I want to [action], so that [benefit].
 
 **Acceptance Criteria**:
+
 - [ ] [Criterion 1]
 - [ ] [Criterion 2]
 - [ ] [Criterion 3]
@@ -46,9 +52,11 @@
 ---
 
 ### US-2: [Title]
+>
 > As a [user type], I want to [action], so that [benefit].
 
 **Acceptance Criteria**:
+
 - [ ] [Criterion 1]
 - [ ] [Criterion 2]
 
@@ -104,6 +112,7 @@
 ```
 
 ### Wireframes / Mockups
+
 [Attach images or link to design files]
 
 ---
@@ -117,6 +126,7 @@
 | [Dependency 1] | Internal/External | Ready/Blocked | [Team] |
 
 ### Technical Constraints
+
 - [Constraint 1]
 - [Constraint 2]
 
@@ -125,6 +135,7 @@
 ## Launch Plan
 
 ### Rollout Strategy
+
 - [ ] All users at once
 - [ ] Phased rollout
 - [ ] Beta program first

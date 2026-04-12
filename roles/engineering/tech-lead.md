@@ -104,6 +104,7 @@ Decisions still needed.
 ## Code Review Standards
 
 **Must check**:
+
 - [ ] Follows architecture principles
 - [ ] Uses standard stack correctly
 - [ ] Follows coding conventions
@@ -113,6 +114,7 @@ Decisions still needed.
 - [ ] Performance is acceptable
 
 **Feedback style**:
+
 - Be specific and constructive
 - Explain *why*, not just *what*
 - Distinguish blocking vs suggestions

@@ -16,25 +16,30 @@
 ## Consequences
 
 ### Positive
+
 - [Benefit 1]
 - [Benefit 2]
 
 ### Negative
+
 - [Drawback 1]
 - [Drawback 2]
 
 ### Neutral
+
 - [Side effect 1]
 
 ## Alternatives Considered
 
 ### Option 1: [Name]
+
 **Description**: [What this option involves]
 **Pros**: [Benefits]
 **Cons**: [Drawbacks]
 **Why rejected**: [Reason]
 
 ### Option 2: [Name]
+
 **Description**: [What this option involves]
 **Pros**: [Benefits]
 **Cons**: [Drawbacks]

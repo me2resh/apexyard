@@ -74,6 +74,7 @@ Warnings (non-blocking, address before next launch):
 ### 1. Security
 
 **What to check:**
+
 - Run `npm audit` / `pip audit` / equivalent for dependency vulnerabilities
 - Grep for hardcoded secrets, API keys, tokens (same patterns as `check-secrets.sh` but against the full codebase, not just staged files)
 - Check auth flow: is there authentication? Is it using a reputable provider (Cognito, Auth0, Firebase Auth)? Are tokens stored securely (httpOnly cookies, not localStorage)?
@@ -87,6 +88,7 @@ Warnings (non-blocking, address before next launch):
 ### 2. Accessibility
 
 **What to check:**
+
 - Grep for `<img` tags without `alt` attributes
 - Check for semantic HTML: `<main>`, `<nav>`, `<header>`, `<footer>`, heading hierarchy (h1 → h2 → h3)
 - Check for `aria-label` on interactive elements without visible text
@@ -101,6 +103,7 @@ Warnings (non-blocking, address before next launch):
 ### 3. Compliance
 
 **What to check:**
+
 - Cookie consent: grep for cookie-consent libraries (cookieconsent, react-cookie-consent, etc.) or a consent banner component
 - Privacy policy: check for a `/privacy` route or `privacy-policy` page
 - Terms of service: check for a `/terms` route
@@ -114,6 +117,7 @@ Warnings (non-blocking, address before next launch):
 ### 4. Analytics
 
 **What to check:**
+
 - Grep for analytics SDK initialization (Google Analytics/GA4, Mixpanel, Amplitude, PostHog, Plausible)
 - Check for event tracking calls (gtag, track, capture, etc.)
 - Check for a config file or environment variable pointing to an analytics dashboard
@@ -126,6 +130,7 @@ Warnings (non-blocking, address before next launch):
 ### 5. SEO
 
 **What to check:**
+
 - Check for `<title>` and `<meta name="description">` on key pages
 - Check for `<meta property="og:title">`, `og:description`, `og:image` (Open Graph)
 - Check for `sitemap.xml` at the expected location
@@ -140,6 +145,7 @@ Warnings (non-blocking, address before next launch):
 ### 6. Performance
 
 **What to check:**
+
 - If there's a build output: check bundle size (look for `dist/`, `build/`, `.next/`)
 - Check for image optimization: are images served as WebP/AVIF? Are there large unoptimized images (> 500KB)?
 - Check for lazy loading on below-the-fold images (`loading="lazy"`)
@@ -153,6 +159,7 @@ Warnings (non-blocking, address before next launch):
 ### 7. Monitoring
 
 **What to check:**
+
 - Grep for error tracking SDK (Sentry, Datadog, Bugsnag, LogRocket)
 - Check for a health check endpoint (`/health`, `/healthz`, `/api/health`)
 - Check for alerting configuration (PagerDuty, OpsGenie, CloudWatch Alarms, or alerting rules in code)
@@ -166,6 +173,7 @@ Warnings (non-blocking, address before next launch):
 ### 8. Documentation
 
 **What to check:**
+
 - README.md exists and is not the default template
 - README has: project description, setup instructions, how to run locally, how to deploy
 - API documentation: if there's an API, is it documented? (OpenAPI spec, Swagger, or doc comments)
@@ -186,6 +194,7 @@ If invoked with an argument, use that path. Otherwise, use the current working d
 ### Step 2: Quick scan
 
 Read the project's structure to determine what checks apply:
+
 - Is it a web app? (has `index.html`, React/Vue/Svelte/Next.js markers) → all 8 dimensions
 - Is it an API only? (has routes/endpoints but no frontend) → skip accessibility, SEO, performance (auto-PASS)
 - Is it a CLI/library? → skip accessibility, compliance, analytics, SEO, performance (auto-PASS on those)
@@ -194,6 +203,7 @@ Read the project's structure to determine what checks apply:
 ### Step 3: Run each applicable dimension
 
 Go through each dimension in order. For each:
+
 1. Run the checks listed above (grep, file existence, SDK detection)
 2. Classify as PASS / WARN / FAIL based on the criteria
 3. Write a one-line finding for the table

@@ -26,6 +26,7 @@ Deep-dive security analysis using the STRIDE framework. Produces a prioritized t
 ### Step 1: Map the attack surface
 
 Read the codebase and identify:
+
 - **Entry points**: API routes, form handlers, WebSocket endpoints, file upload handlers
 - **Data stores**: databases, caches, file systems, environment variables
 - **External integrations**: third-party APIs, payment processors, email services, auth providers
@@ -67,6 +68,7 @@ Recommended priority:
 ### Step 4: Check common OWASP patterns
 
 After the STRIDE sweep, explicitly check for:
+
 - SQL/NoSQL injection (parameterized queries? ORM used consistently?)
 - XSS (dangerouslySetInnerHTML, v-html, template literals in HTML?)
 - Insecure deserialization (JSON.parse on untrusted input without validation?)

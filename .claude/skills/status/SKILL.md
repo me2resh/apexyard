@@ -59,6 +59,7 @@ For each PR, show:
 ```
 
 CI status maps:
+
 - All checks `SUCCESS` → `✅ CI green`
 - Any `FAILURE` → `❌ CI failed`
 - Any `PENDING` → `🟡 CI pending`

@@ -150,6 +150,7 @@ What actually happens.
 ## Quality Gates
 
 Before release:
+
 - [ ] All acceptance criteria verified
 - [ ] Unit test coverage > 80%
 - [ ] Integration tests pass

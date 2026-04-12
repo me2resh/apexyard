@@ -47,6 +47,7 @@ Fixes #[ticket-id]
 ```
 
 **Why a Glossary?** Every PR is a learning opportunity. Explaining concepts helps:
+
 - Junior devs learn from senior work
 - Seniors articulate their thinking
 - Future readers understand decisions
@@ -75,6 +76,7 @@ Fixes #[ticket-id]
 ### Giving Feedback
 
 **Be constructive**:
+
 ```
 BAD:  "This is wrong"
 GOOD: "This might throw a null error if user is undefined.
@@ -82,6 +84,7 @@ GOOD: "This might throw a null error if user is undefined.
 ```
 
 **Be specific**:
+
 ```
 BAD:  "Improve this function"
 GOOD: "This function has multiple responsibilities. Consider extracting
@@ -89,6 +92,7 @@ GOOD: "This function has multiple responsibilities. Consider extracting
 ```
 
 **Distinguish severity**:
+
 ```
 BLOCKING:  "This exposes user passwords in logs. Must fix."
 SUGGESTION: "NIT: Could rename this to `calculateTotal` for clarity"
@@ -108,12 +112,14 @@ QUESTION:   "Why did you choose Map over Object here?"
 ## Review Checklist
 
 ### Architecture
+
 - [ ] Follows architecture principles
 - [ ] Dependencies point inward (clean architecture)
 - [ ] Domain logic in domain layer
 - [ ] No business logic in infrastructure
 
 ### Code Quality
+
 - [ ] Follows naming conventions
 - [ ] Functions are small and focused
 - [ ] No code duplication
@@ -121,6 +127,7 @@ QUESTION:   "Why did you choose Map over Object here?"
 - [ ] Comments explain why, not what
 
 ### Security
+
 - [ ] Input validated at boundaries
 - [ ] No injection vulnerabilities
 - [ ] No XSS vulnerabilities
@@ -128,12 +135,14 @@ QUESTION:   "Why did you choose Map over Object here?"
 - [ ] Auth/authz checked
 
 ### Testing
+
 - [ ] Unit tests for domain logic
 - [ ] Integration tests for use cases
 - [ ] Edge cases covered
 - [ ] Tests are readable
 
 ### Performance
+
 - [ ] No N+1 queries
 - [ ] No unnecessary database calls
 - [ ] Async operations where appropriate
@@ -175,6 +184,7 @@ QUESTION:   "Why did you choose Map over Object here?"
 ## Metrics
 
 Track these to improve:
+
 - PR size (aim for < 400 lines)
 - Review time (aim for < 24h)
 - Review cycles (aim for < 3)

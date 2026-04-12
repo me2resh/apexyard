@@ -59,6 +59,7 @@ From the user's description, extract:
 | `team` | Team size / roles mentioned | Minimal default (1 tech lead) |
 
 Also infer non-obvious settings:
+
 - If they mention "SAM" → `tech_stack.iac: "AWS SAM"` and add `sam validate --lint` to implied checks
 - If they mention "Terraform" → `tech_stack.iac: "Terraform"` and add `terraform validate`
 - If they mention "no frontend" or don't mention a framework → `workflows.require_design_review: false` (no UI = no design gate)

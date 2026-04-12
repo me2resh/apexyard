@@ -39,24 +39,28 @@ Invoked when a PR needs security review, especially for:
 ## Security Review Checklist
 
 ### 1. Secrets and Credentials
+
 - [ ] No hardcoded secrets, API keys, or passwords
 - [ ] No credentials in configuration files
 - [ ] Environment variables used for sensitive data
 - [ ] No secrets in logs or error messages
 
 ### 2. Injection Prevention
+
 - [ ] No SQL/NoSQL injection vectors (parameterised queries used)
 - [ ] No command injection (user input not passed to a shell)
 - [ ] No LDAP injection
 - [ ] No template injection
 
 ### 3. Cross-Site Scripting (XSS)
+
 - [ ] User input is sanitised before rendering
 - [ ] No unsafe `dangerouslySetInnerHTML` without sanitisation
 - [ ] No `eval()` or `new Function()` with user input
 - [ ] Content Security Policy headers considered
 
 ### 4. Authentication and Authorisation
+
 - [ ] Proper authentication checks on protected routes
 - [ ] Authorisation verified before data access
 - [ ] Session management is secure
@@ -64,12 +68,14 @@ Invoked when a PR needs security review, especially for:
 - [ ] No privilege escalation vectors
 
 ### 5. Data Protection
+
 - [ ] Sensitive data encrypted at rest and in transit
 - [ ] PII handled according to policy
 - [ ] No sensitive data in URLs or query strings
 - [ ] Proper data validation and sanitisation
 
 ### 6. API Security
+
 - [ ] Rate limiting considered
 - [ ] Input validation on all endpoints
 - [ ] Proper error handling (no stack traces exposed)

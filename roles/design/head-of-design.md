@@ -60,6 +60,7 @@ When reviewing UI implementations:
 5. **Assess visual consistency**
 
 **Feedback format**:
+
 - Be specific (not "looks off" but "increase padding to 16px")
 - Reference design system tokens
 - Prioritize (must-fix vs nice-to-have)
