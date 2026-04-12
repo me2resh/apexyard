@@ -227,6 +227,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting Started | `docs/getting-started.md` |
 | Full setup guide | `docs/multi-project.md` |
+| Rule audit (every MUST → hook / advisory / deferred) | `docs/rule-audit.md` |
 
 ---
 
