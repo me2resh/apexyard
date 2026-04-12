@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/onboarding-check.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/onboarding-check.sh\"'"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/require-active-ticket.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
           }
         ]
       },
@@ -27,62 +27,62 @@
           {
             "type": "command",
             "if": "Bash(git add *)",
-            "command": ".claude/hooks/block-git-add-all.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-git-add-all.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": ".claude/hooks/block-main-push.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-main-push.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": ".claude/hooks/validate-branch-name.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-branch-name.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": ".claude/hooks/check-secrets.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-secrets.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": ".claude/hooks/verify-commit-refs.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/verify-commit-refs.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": ".claude/hooks/validate-commit-format.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-commit-format.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": ".claude/hooks/require-agdr-for-arch-changes.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-agdr-for-arch-changes.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": ".claude/hooks/pre-push-gate.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/pre-push-gate.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": ".claude/hooks/validate-pr-create.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-pr-create.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": ".claude/hooks/block-unreviewed-merge.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": ".claude/hooks/require-design-review-for-ui.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": ".claude/hooks/block-merge-on-red-ci.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
           }
         ]
       }
@@ -94,7 +94,7 @@
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": ".claude/hooks/auto-code-review.sh"
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/auto-code-review.sh\"'"
           }
         ]
       }

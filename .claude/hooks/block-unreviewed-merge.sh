@@ -40,11 +40,18 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
   exit 0
 fi
 
+# Parse --repo from the command for cross-repo merge operations
+CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+REPO_FLAG=""
+if [ -n "$CMD_REPO" ]; then
+  REPO_FLAG="--repo $CMD_REPO"
+fi
+
 # Extract PR number: either from the command args or from the current branch's PR.
 # Handles both `gh pr merge 42` and flag-first forms like `gh pr merge --auto 42`.
 PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
 if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
+  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
 fi
 
 if [ -z "$PR_NUMBER" ]; then

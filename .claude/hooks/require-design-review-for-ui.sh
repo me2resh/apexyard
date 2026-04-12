@@ -36,10 +36,17 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
   exit 0
 fi
 
+# Parse --repo from the command for cross-repo merge operations
+CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+REPO_FLAG=""
+if [ -n "$CMD_REPO" ]; then
+  REPO_FLAG="--repo $CMD_REPO"
+fi
+
 # Extract PR number (same approach as block-unreviewed-merge.sh)
 PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
 if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
+  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
 fi
 
 if [ -z "$PR_NUMBER" ]; then
@@ -71,7 +78,7 @@ if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; the
 fi
 
 # Get the PR's changed files
-CHANGED=$(gh pr diff "$PR_NUMBER" --name-only 2>/dev/null)
+CHANGED=$(gh pr diff "$PR_NUMBER" $REPO_FLAG --name-only 2>/dev/null)
 if [ -z "$CHANGED" ]; then
   # Couldn't determine files — skip rather than false-positive
   exit 0

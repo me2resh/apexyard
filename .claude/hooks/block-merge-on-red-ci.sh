@@ -35,10 +35,17 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
   exit 0
 fi
 
+# Parse --repo from the command for cross-repo merge operations
+CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+REPO_FLAG=""
+if [ -n "$CMD_REPO" ]; then
+  REPO_FLAG="--repo $CMD_REPO"
+fi
+
 # Extract PR number (same approach as the other merge-gate hooks)
 PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
 if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
+  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
 fi
 
 if [ -z "$PR_NUMBER" ]; then
@@ -49,7 +56,7 @@ fi
 # Query checks. gh pr checks returns text output; we check both the exit code
 # and a "no checks reported" substring — the latter is how gh reports the
 # genuinely-unchecked case regardless of exit code version.
-CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" 2>&1)
+CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" $REPO_FLAG 2>&1)
 CHECKS_RC=$?
 
 # "no checks reported on the 'X' branch" — legitimate no-CI state. Allow.

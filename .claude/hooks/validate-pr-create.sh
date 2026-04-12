@@ -16,6 +16,9 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+# Parse --repo from the gh command for cross-repo PR creation
+CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+
 # Only check on gh pr create
 if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
   exit 0
@@ -50,10 +53,12 @@ if [ -n "$TICKET_REF" ]; then
   # Extract digits from the ref (works for both #N and PREFIX-N)
   TICKET_NUM=$(echo "$TICKET_REF" | grep -oE '[0-9]+$')
 
-  # Resolve tracker repo: prefer .claude/project-config.json, fall back to origin
+  # Resolve tracker repo: prefer --repo flag, then project-config.json, then origin
   REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
   TRACKER_REPO=""
-  if [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+  if [ -n "$CMD_REPO" ]; then
+    TRACKER_REPO="$CMD_REPO"
+  elif [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
     TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
   fi
   if [ -z "$TRACKER_REPO" ]; then
