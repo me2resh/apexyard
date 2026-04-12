@@ -10,13 +10,16 @@
 ## Overview
 
 ### Summary
+
 [1-2 sentences: What are we building and why?]
 
 ### Goals
+
 - [Goal 1]
 - [Goal 2]
 
 ### Non-Goals
+
 - [What we're explicitly not doing]
 
 ---
@@ -79,6 +82,7 @@
 **POST /api/resource**
 
 Request:
+
 ```json
 {
   "field1": "value",
@@ -87,6 +91,7 @@ Request:
 ```
 
 Response:
+
 ```json
 {
   "id": "resource_123",

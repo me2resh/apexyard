@@ -42,31 +42,37 @@ Invoke for PRs that touch:
 ## Security Checklist
 
 ### Secrets & Credentials
+
 - No hardcoded secrets, API keys, or passwords
 - Environment variables for sensitive data
 - No secrets in logs or error messages
 
 ### Injection Prevention
+
 - Parameterised queries (no SQL injection)
 - No command injection
 - No template injection
 
 ### XSS Prevention
+
 - User input sanitised before rendering
 - No unsafe `dangerouslySetInnerHTML`
 - No `eval()` with user input
 
 ### Authentication & Authorisation
+
 - Auth checks on protected routes
 - Authorisation verified before data access
 - Secure session management
 
 ### Data Protection
+
 - Sensitive data encrypted
 - No PII in URLs or query strings
 - Proper validation and sanitisation
 
 ### API Security
+
 - Rate limiting considered
 - Input validation on endpoints
 - No stack traces exposed

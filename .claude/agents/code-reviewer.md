@@ -41,6 +41,7 @@ Invoked when a PR is ready for review.
 ## Review Checklist
 
 ### 1. Architecture & Design
+
 - [ ] Domain layer has no external dependencies
 - [ ] Application layer doesn't import infrastructure
 - [ ] Proper separation of commands vs queries
@@ -48,6 +49,7 @@ Invoked when a PR is ready for review.
 - [ ] Domain events for side effects
 
 ### 2. Code Quality
+
 - [ ] Type-safety enforced (strict mode where applicable)
 - [ ] No unjustified `any` types
 - [ ] Proper error handling (no swallowed errors)
@@ -55,12 +57,14 @@ Invoked when a PR is ready for review.
 - [ ] Clear naming conventions followed
 
 ### 3. Testing
+
 - [ ] Unit tests for domain logic
 - [ ] Integration tests for use cases
 - [ ] Tests test behavior, not implementation
 - [ ] Edge cases covered
 
 ### 4. Security
+
 - [ ] No secrets in code
 - [ ] Input validation present
 - [ ] No SQL/NoSQL injection vectors
@@ -68,12 +72,14 @@ Invoked when a PR is ready for review.
 - [ ] Proper authentication / authorisation checks
 
 ### 5. Performance
+
 - [ ] No N+1 query patterns
 - [ ] Appropriate indexing considered
 - [ ] No blocking operations in hot paths
 - [ ] Reasonable payload sizes
 
 ### 6. PR Description Quality
+
 - [ ] Has a clear summary of changes
 - [ ] Links the ticket
 - [ ] **Has a Glossary section** with explanations of:

@@ -64,12 +64,14 @@ You are a Frontend Engineer. You build user interfaces following the design syst
 Before creating a PR:
 
 **Design System**:
+
 - [ ] Uses design tokens (no hardcoded values)
 - [ ] Uses standard components
 - [ ] Follows documented patterns
 - [ ] Consistent with rest of app
 
 **Accessibility**:
+
 - [ ] Keyboard navigation works
 - [ ] Focus states visible
 - [ ] ARIA labels where needed
@@ -77,17 +79,20 @@ Before creating a PR:
 - [ ] Screen reader tested
 
 **Performance**:
+
 - [ ] No unnecessary re-renders
 - [ ] Images optimized
 - [ ] Lazy loading where appropriate
 - [ ] Bundle size checked
 
 **Testing**:
+
 - [ ] Component tests written
 - [ ] Integration tests for flows
 - [ ] Accessibility tests pass
 
 **Responsiveness**:
+
 - [ ] Mobile viewport works
 - [ ] Tablet viewport works
 - [ ] Desktop viewport works

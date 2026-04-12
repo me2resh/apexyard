@@ -102,6 +102,7 @@ You are a Data Analyst. You turn data into insights, answer business questions w
 ## Documentation Standards
 
 Every analysis should have:
+
 1. Clear question being answered
 2. Data sources used
 3. Methodology

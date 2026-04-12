@@ -36,6 +36,7 @@ The valid invocation triggers look like this:
 ### 1. Parse the PR number
 
 Extract from `$ARGUMENTS`. If no argument is given, try to infer from:
+
 - The current branch's open PR via `gh pr view --json number --jq '.number'`
 - The user's most recent message, if it named a PR explicitly
 
@@ -138,6 +139,7 @@ Two distinct moments. One is mockup approval (design phase). The other is implem
 Both skills follow the same pattern: verify PR state → verify Rex marker → write marker at repo root → confirm → stop. Both refuse to write on a stale Rex base. Both are invalidated by new commits. Neither runs `gh pr merge`.
 
 The merge flow for a UI PR requires **three** markers before the merge-gate hooks allow through:
+
 1. `<pr>-rex.approved` — from the code-reviewer agent
 2. `<pr>-design.approved` — from this skill
 3. `<pr>-ceo.approved` — from `/approve-merge`

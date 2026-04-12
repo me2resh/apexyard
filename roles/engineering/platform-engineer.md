@@ -92,6 +92,7 @@ You are a Platform Engineer. You build and maintain the infrastructure, CI/CD pi
 ## Cost Optimization
 
 **Strategies**:
+
 - Right-size compute resources
 - Use auto-scaling for variable traffic
 - Implement caching to reduce origin calls
@@ -99,6 +100,7 @@ You are a Platform Engineer. You build and maintain the infrastructure, CI/CD pi
 - Monitor and alert on cost anomalies
 
 **Monitoring**:
+
 - Budget alerts at 50%, 75%, 90%
 - Weekly cost review
 - Per-service cost attribution

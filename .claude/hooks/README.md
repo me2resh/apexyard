@@ -82,6 +82,7 @@ These two hooks are the mechanical backstop for the rule in `.claude/rules/ticke
 **What it does:** after the existing title-format / glossary / branch-ID checks, extracts the issue number from the PR title (e.g. `14` from `feat(#14): …`) and runs `gh issue view <N> --repo <tracker>` to verify it exists. Blocks PR creation with a clear message if the issue is missing.
 
 **Tracker repo resolution:**
+
 1. First tries `.tracker_repo` in `.claude/project-config.json` if present
 2. Falls back to parsing the `origin` remote (`owner/repo` from SSH or HTTPS URL)
 
@@ -212,12 +213,14 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 The new hooks are registered in `.claude/settings.json` alongside the existing ones on the same `Bash(git commit *)` / `Bash(gh pr merge *)` matchers. The Claude Code harness runs all matching hooks sequentially, and **any exit-2 blocks the tool call**. Order of registration within a matcher block is execution order. Current order (GH-13 additions shown in **bold**):
 
 **On `git commit`:**
+
 1. `check-secrets.sh`
 2. `verify-commit-refs.sh`
 3. **`validate-commit-format.sh`**
 4. **`require-agdr-for-arch-changes.sh`**
 
 **On `gh pr merge`:**
+
 1. `block-unreviewed-merge.sh` (Rex + CEO markers)
 2. **`require-design-review-for-ui.sh`**
 3. **`block-merge-on-red-ci.sh`**

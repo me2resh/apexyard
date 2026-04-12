@@ -71,6 +71,7 @@ The default milestones are **Now / Next / Later / Done** (Now-Next-Later format)
 1. Read the roadmap file
 2. Render each non-empty milestone as a table
 3. Print a footer summary:
+
    ```
    12 items · 5 in Now · 4 in Next · 3 in Later · 8 Done
    ```

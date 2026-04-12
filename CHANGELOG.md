@@ -57,6 +57,7 @@ ApexStack's SDLC rules are no longer advisory prose — they're mechanically enf
 ### CI dogfooding
 
 ApexStack now runs its own CI:
+
 - `pr-title-check.yml` — enforces ticket ID in PR titles
 - `markdown-lint.yml` — lints all markdown files
 - `shellcheck.yml` — static analysis on all hook scripts

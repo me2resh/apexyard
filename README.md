@@ -151,6 +151,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 ApexStack includes 19 software development roles across 5 departments:
 
 ### Engineering (7 roles)
+
 - **Head of Engineering** -- Technical strategy, architecture standards, quality
 - **Tech Lead** -- Feature design, code review, team coordination
 - **Backend Engineer** -- Domain logic, APIs, infrastructure
@@ -160,21 +161,25 @@ ApexStack includes 19 software development roles across 5 departments:
 - **Site Reliability Engineer** -- Monitoring, incidents, SLOs
 
 ### Product (3 roles)
+
 - **Head of Product** -- Roadmap, prioritization, feasibility
 - **Product Manager** -- PRDs, user stories, acceptance criteria
 - **Product Analyst** -- Market research, metrics, competitive analysis
 
 ### Design (3 roles)
+
 - **Head of Design** -- Design system, UX principles, visual standards
 - **UI Designer** -- Visual design tokens, component specifications
 - **UX Designer** -- User flows, information architecture, usability
 
 ### Security (3 roles)
+
 - **Head of Security** -- Security strategy, threat modeling, compliance
 - **Security Auditor** -- Static analysis, vulnerability detection, OWASP
 - **Penetration Tester** -- Active testing, exploit discovery, API security
 
 ### Data (3 roles)
+
 - **Head of Data** -- Analytics strategy, data governance, reporting
 - **Data Analyst** -- SQL, dashboards, A/B testing, metrics
 - **Data Engineer** -- ETL pipelines, data modeling, data quality
@@ -192,6 +197,7 @@ Each phase has entry criteria, activities, exit criteria, and quality gates.
 ### Code Review Process
 
 Structured review with:
+
 - Author responsibilities and PR description format
 - Reviewer checklist (architecture, security, testing, performance)
 - Feedback severity levels (blocking, suggestion, question)

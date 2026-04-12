@@ -24,6 +24,7 @@ Full setup guide: @docs/multi-project.md
 ## ROLES
 
 Role definitions live in `roles/`. Each role defines:
+
 - Identity and responsibilities
 - What the role CAN and CANNOT do
 - Interfaces with other roles (who they work with)
@@ -48,6 +49,7 @@ Roles activate **on specific conditions**. The full trigger table lives in `@.cl
 - **Prompted activation** — the user can explicitly activate any role: *"act as the QA Engineer for ticket #42"*, *"put on your Tech Lead hat"*, etc.
 
 When a role activates:
+
 1. Read the file at `roles/{department}/{role}.md`
 2. Adopt the role's identity, responsibilities, CAN / CANNOT boundaries
 3. Follow the handoff rules in the role file — who you receive from, who you deliver to
@@ -102,6 +104,7 @@ Work on ONE ticket at a time. Complete fully before starting next. Each PR = one
 Full process: @workflows/code-review.md
 
 Every PR must include:
+
 - Clear description of what changed and why
 - Link to the ticket/issue
 - Testing instructions

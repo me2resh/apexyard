@@ -48,13 +48,16 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Purpose**: Governance — enforce ticket tracking.
 
 **Checks performed**:
+
 - Validates that the PR title contains a ticket ID
 - Pattern: `[A-Z]{2,5}-\d+` (project tracker) or `#\d+` (GitHub Issues)
 
 **Fail conditions**:
+
 - No ticket ID found in PR title
 
 **Valid title formats**:
+
 - `feat(ABC-123): add new feature`
 - `fix(#58): correct encryption claim`
 - `ABC-123: Add new feature`
@@ -66,6 +69,7 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Agent**: Shield (Security Scanner)
 
 **Checks performed**:
+
 - Semgrep SAST (OWASP Top 10, security-audit rules)
 - npm audit (vulnerability scanning)
 - TruffleHog (secrets detection)
@@ -73,10 +77,12 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 - ESLint security plugin
 
 **Fail conditions**:
+
 - Critical or high severity vulnerabilities
 - Exposed secrets detected
 
 **Required secrets**:
+
 - `SEMGREP_APP_TOKEN` (optional, for Semgrep Cloud)
 
 ---
@@ -86,15 +92,18 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Agent**: Guardian (Dependency Auditor)
 
 **Checks performed**:
+
 - npm audit (vulnerabilities by severity)
 - npm outdated (major / minor / patch versions behind)
 - license-checker (GPL, LGPL, unknown licenses)
 
 **Automated actions**:
+
 - Creates a GitHub issue for critical / high vulnerabilities
 - Weekly scheduled audit (Monday 9 AM UTC)
 
 **Fail conditions**:
+
 - Critical vulnerabilities found
 
 ---
@@ -104,6 +113,7 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Agent**: Rex (Code Reviewer)
 
 **Checks performed**:
+
 - TypeScript type checking (`npm run typecheck`)
 - ESLint (`npm run lint`)
 - Prettier formatting
@@ -111,6 +121,7 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 - Build verification
 
 **Fail conditions**:
+
 - TypeScript errors
 - ESLint errors (warnings allowed)
 - Test failures
@@ -125,10 +136,12 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Purpose**: prevent merging code that was pushed *after* Rex's last review.
 
 **Checks performed**:
+
 - Verifies that Rex has reviewed the latest commit on the PR
 - Compares commit SHAs from Rex's review against the current HEAD
 
 **Fail conditions**:
+
 - No Rex review found
 - Rex's last review SHA does not match the current HEAD
 
@@ -139,6 +152,7 @@ cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
 **Pipeline**: SEO Check (no agent — pure CI workflow)
 
 **Checks performed**:
+
 - H1 title presence and uniqueness
 - Meta description in frontmatter
 - Content length (1000+ words recommended)

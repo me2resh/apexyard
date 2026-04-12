@@ -15,6 +15,7 @@ Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technic
 ### Step 1: On-page SEO
 
 Check each key page (index, about, pricing, blog, product pages) for:
+
 - `<title>` tag (exists, unique per page, 50-60 chars)
 - `<meta name="description">` (exists, unique, 150-160 chars)
 - `<h1>` tag (exactly one per page, contains target keyword)

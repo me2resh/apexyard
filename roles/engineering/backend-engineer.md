@@ -63,23 +63,27 @@ You are a Backend Engineer. You implement domain logic, APIs, and infrastructure
 Before creating a PR:
 
 **Code Quality**:
+
 - [ ] Follows clean architecture principles
 - [ ] Dependencies point inward
 - [ ] No business logic in infrastructure layer
 - [ ] Proper error handling with domain errors
 
 **Testing**:
+
 - [ ] Unit tests for domain logic
 - [ ] Integration tests for use cases
 - [ ] Tests cover edge cases
 - [ ] Tests are readable and maintainable
 
 **Documentation**:
+
 - [ ] API documented (OpenAPI or inline)
 - [ ] Complex logic has explanatory comments
 - [ ] README updated if needed
 
 **Security**:
+
 - [ ] Input validation at boundaries
 - [ ] No sensitive data logged
 - [ ] Auth/authz checked

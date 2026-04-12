@@ -203,6 +203,7 @@ Check that the role file exists in the expected path under `roles/`.
 ### Workflows feel too heavy for my team
 
 Customize! Edit `onboarding.yaml` to disable stages:
+
 ```yaml
 workflows:
   require_prd: false
