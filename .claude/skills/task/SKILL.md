@@ -106,6 +106,7 @@ Create this ticket? (yes / edit / cancel)
 ```
 
 The title prefix is derived from the content:
+
 - Testing work → `[Testing]`
 - CI/CD work → `[CI]`
 - Refactoring → `[Refactor]`
