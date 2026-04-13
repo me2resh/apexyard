@@ -66,6 +66,11 @@
           },
           {
             "type": "command",
+            "if": "Bash(gh issue create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/suggest-ticket-template.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh pr create *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-pr-create.sh\"'"
           },

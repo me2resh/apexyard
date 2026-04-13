@@ -172,7 +172,7 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | Skills | `.claude/skills/` | 27 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (27)
+### Available skills (30)
 
 | Skill | Purpose |
 |-------|---------|
@@ -194,6 +194,9 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | `/security-review` | Invoke the Security Reviewer agent (Shield) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
+| `/feature` | Create a structured feature request ticket (user story + ACs) |
+| `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
+| `/task` | Create a structured technical task ticket (driver + scope + ACs) |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexStack management (includes per-project discovery) |
 | `/projects` | List all managed projects from the registry with status |
