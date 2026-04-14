@@ -55,10 +55,6 @@ CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1
 if [ -z "$CMD_REPO" ]; then
   CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
 fi
-REPO_FLAG=""
-if [ -n "$CMD_REPO" ]; then
-  REPO_FLAG="--repo $CMD_REPO"
-fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
 
