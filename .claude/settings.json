@@ -81,12 +81,27 @@
           },
           {
             "type": "command",
+            "if": "Bash(gh api *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh pr merge *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
           },
           {
             "type": "command",
+            "if": "Bash(gh api *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh pr merge *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh api *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
           }
         ]

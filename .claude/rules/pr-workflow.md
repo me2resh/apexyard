@@ -91,7 +91,7 @@ This also applies to other destructive / externally-visible / hard-to-reverse ac
 
 ### Mechanical enforcement
 
-The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It requires **two** approval markers in `.claude/session/reviews/` before letting any `gh pr merge` command through:
+The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It requires **two** approval markers in `.claude/session/reviews/` before letting any merge command through:
 
 | Marker | Written by | Semantics |
 |--------|------------|-----------|
@@ -101,6 +101,19 @@ The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It r
 Both markers must contain the current HEAD SHA, and both SHAs must match the live HEAD. New commits after approval invalidate both — you must re-review and re-approve.
 
 Claude can technically `rm` or `touch` these files by hand. Doing so is a visible, auditable, grep-able rule violation — and the whole point of recording the rule mechanically is so that the failure mode is "Claude ignored a hook" (visible) instead of "Claude inferred approval from something vague" (invisible).
+
+### Both merge shapes are gated (#47)
+
+All three merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`) fire on **both** the `gh` subcommand shape and the raw REST-API shape:
+
+| Shape | Example |
+|-------|---------|
+| `gh pr merge` | `gh pr merge 123 --squash` |
+| `gh api .../pulls/<N>/merge` | `gh api repos/owner/repo/pulls/123/merge -X PUT` |
+
+Historically only the first shape was matched. In April 2026 (incident: `me2resh/curios-dog#190` was merged via `gh api` while CI was still running), the second shape was discovered as a silent bypass and closed in [#47](https://github.com/me2resh/apexstack/issues/47). Both the matcher entries in `.claude/settings.json` and the PR-number extraction in each hook (`.claude/hooks/_lib-extract-pr.sh`) now recognise both shapes. Invoking either triggers the gate — there is no supported merge path that skips the two-reviews rule.
+
+Using `gh api .../merge` as a workaround for other issues (e.g. cross-repo resolution, hook flakiness) is itself a rule violation on par with forging an approval marker. If a gate is mis-firing, fix the gate.
 
 ## After Pushing Commits to an Open PR
 

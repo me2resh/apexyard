@@ -1,6 +1,9 @@
 #!/bin/bash
-# PreToolUse hook on `gh pr merge`: blocks merging a PR that does not have
-# BOTH required approval markers in place.
+# PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: blocks
+# merging a PR that does not have BOTH required approval markers in place.
+#
+# Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
+# #47 for why the API-shape bypass was a gap worth closing.
 #
 # Enforces workflow-gates rule #5 ("2 reviews — agent + human, CI green,
 # commit SHA matches review") at the merge boundary, mechanically. Two
@@ -35,24 +38,29 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Only check on gh pr merge
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
+# Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
+# Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+. "$(dirname "$0")/_lib-extract-pr.sh"
+
+if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo from the command for cross-repo merge operations
+# Parse --repo (for `gh pr merge --repo owner/repo`). The API-shape encodes
+# the repo in its URL path so we don't need the flag there — downstream
+# `gh pr view` / `gh pr checks` calls still benefit when the flag was passed.
 CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+# If the command uses the API shape, recover owner/repo from the URL path
+# so other gh calls below can still be scoped correctly.
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+fi
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"
 fi
 
-# Extract PR number: either from the command args or from the current branch's PR.
-# Handles both `gh pr merge 42` and flag-first forms like `gh pr merge --auto 42`.
-PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
-if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
-fi
+PR_NUMBER=$(extract_pr_number "$COMMAND")
 
 if [ -z "$PR_NUMBER" ]; then
   echo "BLOCKED: Could not determine PR number for merge. Run from a PR branch or pass an explicit PR number." >&2

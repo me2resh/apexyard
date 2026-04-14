@@ -1,6 +1,9 @@
 #!/bin/bash
-# PreToolUse hook on `gh pr merge`: blocks the merge if any required CI
-# check is failing, pending, or cancelled.
+# PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: blocks the
+# merge if any required CI check is failing, pending, or cancelled.
+#
+# Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
+# #47 for why the API-shape bypass was a gap worth closing.
 #
 # Enforces .claude/rules/pr-quality.md § "No Red CI Before Merge" —
 # "Never merge with red CI - even if the failure is pre-existing or
@@ -31,22 +34,27 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
+# Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
+# Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+. "$(dirname "$0")/_lib-extract-pr.sh"
+
+if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo from the command for cross-repo merge operations
+# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
+# the `gh api .../pulls/<N>/merge` URL path so `gh pr checks` below is still
+# scoped correctly.
 CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+fi
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"
 fi
 
-# Extract PR number (same approach as the other merge-gate hooks)
-PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
-if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
-fi
+PR_NUMBER=$(extract_pr_number "$COMMAND")
 
 if [ -z "$PR_NUMBER" ]; then
   # Another hook will handle "no PR number" — skip

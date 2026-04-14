@@ -225,6 +225,8 @@ The new hooks are registered in `.claude/settings.json` alongside the existing o
 2. **`require-design-review-for-ui.sh`**
 3. **`block-merge-on-red-ci.sh`**
 
+All three merge-gate hooks are **also** registered on `Bash(gh api *)` so the REST-API merge shape (`gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT`) can't silently bypass them. The merge-shape detection and PR-number extraction live in the shared sourced helper `_lib-extract-pr.sh` — any future change to PR-number parsing should be made there, not in the individual hooks. Context: [#47](https://github.com/me2resh/apexstack/issues/47).
+
 The ordering is deliberate: cheap local checks first, expensive remote checks (`gh pr checks`) last, so that a merge already blocked by Rex/CEO/design markers doesn't pay the network cost.
 
 ## Pre-existing Hooks

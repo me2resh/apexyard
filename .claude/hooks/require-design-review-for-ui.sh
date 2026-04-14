@@ -1,7 +1,11 @@
 #!/bin/bash
-# PreToolUse hook on `gh pr merge`: when the PR's diff touches UI files,
-# require a design approval marker at .claude/session/reviews/<pr>-design.approved
-# (with a matching HEAD SHA) before letting the merge through.
+# PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: when the
+# PR's diff touches UI files, require a design approval marker at
+# .claude/session/reviews/<pr>-design.approved (with a matching HEAD SHA) before
+# letting the merge through.
+#
+# Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
+# #47 for why the API-shape bypass was a gap worth closing.
 #
 # Enforces .claude/rules/pr-quality.md § "Design Review" and
 # workflows/code-review.md § "UI Designer (conditional)" — which were
@@ -32,22 +36,27 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then
+# Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
+# Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+. "$(dirname "$0")/_lib-extract-pr.sh"
+
+if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo from the command for cross-repo merge operations
+# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
+# the `gh api .../pulls/<N>/merge` URL path so downstream `gh pr diff` calls
+# still know which repo to talk to.
 CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+fi
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"
 fi
 
-# Extract PR number (same approach as block-unreviewed-merge.sh)
-PR_NUMBER=$(echo "$COMMAND" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*' | grep -oE '[0-9]+' | head -1)
-if [ -z "$PR_NUMBER" ]; then
-  PR_NUMBER=$(gh pr view $REPO_FLAG --json number --jq '.number' 2>/dev/null)
-fi
+PR_NUMBER=$(extract_pr_number "$COMMAND")
 
 if [ -z "$PR_NUMBER" ]; then
   # Let block-unreviewed-merge.sh handle the "no PR number" error — we skip
