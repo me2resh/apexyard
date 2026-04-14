@@ -68,7 +68,10 @@ if [ -n "$TICKET_REF" ]; then
   fi
 
   if [ -n "$TICKET_NUM" ] && [ -n "$TRACKER_REPO" ]; then
-    if ! gh issue view "$TICKET_NUM" --repo "$TRACKER_REPO" --json state >/dev/null 2>&1; then
+    # Fetch both number and state in one call so we can distinguish
+    # "does not exist" from "exists but CLOSED". Both are blocking.
+    ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
+    if [ -z "$ISSUE_JSON" ]; then
       cat >&2 <<MSG
 BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} does not
 exist in ${TRACKER_REPO}.
@@ -81,6 +84,31 @@ If you intended to create the PR for a real ticket, verify the number.
 If you were about to file work that has no ticket yet, create one first:
   gh issue create --repo ${TRACKER_REPO} --title "..."
 and use the returned number in your PR title.
+MSG
+      exit 2
+    fi
+
+    ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
+    if [ "$ISSUE_STATE" = "CLOSED" ]; then
+      cat >&2 <<MSG
+BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} in
+${TRACKER_REPO} is CLOSED.
+
+Every PR needs its own OPEN ticket. Referencing a closed issue means the PR
+has no live acceptance criteria, no QA handoff, and no tracker row to move
+through the SDLC states — the ticket is already Done.
+
+Common causes:
+  - The work is a follow-up to the closed issue → create a NEW ticket that
+    describes the follow-up, link back to the closed one in the body, and
+    use the new number in the PR title.
+  - The closed issue was auto-closed by a prior PR that didn't fully finish
+    the work → re-open it (gh issue reopen ${TICKET_NUM} --repo ${TRACKER_REPO})
+    or create a new ticket for the remaining work.
+  - The number is a typo → fix the PR title.
+
+See .claude/rules/ticket-vocabulary.md and the "every PR needs its own open
+ticket" feedback in memory.
 MSG
       exit 2
     fi

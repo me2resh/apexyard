@@ -99,12 +99,25 @@ if [ -z "$TRACKER_REPO" ]; then
   exit 0
 fi
 
-# Verify each referenced issue exists
+# Verify each referenced issue exists. Fabricated #N (issue not found) is
+# BLOCKING — that's the failure mode the ticket-vocabulary rule targets.
+# References to CLOSED issues are WARNED (not blocked) because a commit may
+# legitimately reference the closed issue it just finished (e.g. a revert or
+# a follow-up clarification commit after the closing PR already shipped).
+# The PR-level hook (validate-pr-create.sh) is the right place to enforce
+# "every PR needs its own OPEN ticket".
 MISSING=""
+CLOSED=""
 for REF in $REFS; do
   NUM=$(echo "$REF" | tr -d '#')
-  if ! gh issue view "$NUM" --repo "$TRACKER_REPO" --json state >/dev/null 2>&1; then
+  ISSUE_JSON=$(gh issue view "$NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
+  if [ -z "$ISSUE_JSON" ]; then
     MISSING="${MISSING}${REF} "
+    continue
+  fi
+  ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
+  if [ "$ISSUE_STATE" = "CLOSED" ]; then
+    CLOSED="${CLOSED}${REF} "
   fi
 done
 
@@ -126,6 +139,17 @@ If the reference is truly informational (cross-repo link that can't be verified
 with \`gh issue view\`), write it as a plain URL instead of #N notation.
 MSG
   exit 2
+fi
+
+if [ -n "$CLOSED" ]; then
+  cat >&2 <<MSG
+WARN: Commit message references CLOSED issue(s) in ${TRACKER_REPO}:
+  ${CLOSED}
+This commit is allowed through — a commit may legitimately reference the
+issue it just closed. But at PR-create time the stricter rule applies: every
+PR needs its own OPEN ticket. If this commit will end up in a PR that points
+at the closed issue as its primary ticket, create a new open ticket first.
+MSG
 fi
 
 exit 0
