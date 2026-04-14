@@ -146,9 +146,15 @@ MSG
   exit 2
 fi
 
-# SHA consistency check
+# SHA consistency check — resolve the PR's real HEAD via GitHub rather than
+# local HEAD (see #55). Falls back to local HEAD with a warning if the
+# gh call fails (network, auth).
 APPROVED_SHA=$(tr -d '[:space:]' < "$APPROVAL")
-CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+CURRENT_SHA=$(resolve_pr_head "$PR_NUMBER" "$CMD_REPO")
+if [ -z "$CURRENT_SHA" ]; then
+  echo "WARN: Could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD. If this merge fails, run 'gh pr checkout ${PR_NUMBER}' first or re-authenticate gh." >&2
+  CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+fi
 if [ -n "$APPROVED_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$APPROVED_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG
 BLOCKED: Design review approved commit ${APPROVED_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.

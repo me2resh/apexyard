@@ -67,7 +67,19 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 REVIEWS_DIR="${REPO_ROOT:-.}/.claude/session/reviews"
 REX_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-rex.approved"
 CEO_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-ceo.approved"
-CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+
+# Resolve the PR's real HEAD via GitHub, not local git (see #55). The local
+# HEAD is rarely the PR's HEAD — usually main or an unrelated feature
+# branch. Asking gh directly removes the need for `gh pr checkout <N>`
+# before every `gh pr merge <N>`.
+#
+# Fallback to local HEAD if the gh call fails, with a visible warning, so
+# a transient network / auth issue doesn't brick merges entirely.
+CURRENT_SHA=$(resolve_pr_head "$PR_NUMBER" "$CMD_REPO")
+if [ -z "$CURRENT_SHA" ]; then
+  echo "WARN: Could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD. If this merge fails, run 'gh pr checkout ${PR_NUMBER}' first or re-authenticate gh." >&2
+  CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+fi
 
 # --- Rex marker check ---
 if [ ! -f "$REX_APPROVAL" ]; then

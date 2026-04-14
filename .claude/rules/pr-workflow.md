@@ -98,7 +98,9 @@ The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It r
 | `<pr>-rex.approved` | the `code-reviewer` agent after a successful review | Code reviewed, no blocking issues |
 | `<pr>-ceo.approved` | the `/approve-merge <pr>` skill, **only** on explicit user invocation | CEO has looked at this specific PR and said ship it |
 
-Both markers must contain the current HEAD SHA, and both SHAs must match the live HEAD. New commits after approval invalidate both — you must re-review and re-approve.
+Both markers must contain the current HEAD SHA, and both SHAs must match the PR's HEAD as reported by GitHub (`gh pr view <N> --json headRefOid`). New commits after approval invalidate both — you must re-review and re-approve.
+
+**Note on "HEAD":** the merge gates compare marker SHAs against the PR's real HEAD on GitHub, not the local working tree's HEAD. Earlier versions of the hooks used `git rev-parse HEAD`, which forced a `gh pr checkout <N>` dance before every `gh pr merge <N>` (local was rarely the PR branch, and any mismatch blocked the merge). After #55, the hooks resolve the PR HEAD via `gh pr view` and fall back to local HEAD with a visible warning only when the gh call fails (network / auth).
 
 Claude can technically `rm` or `touch` these files by hand. Doing so is a visible, auditable, grep-able rule violation — and the whole point of recording the rule mechanically is so that the failure mode is "Claude ignored a hook" (visible) instead of "Claude inferred approval from something vague" (invisible).
 

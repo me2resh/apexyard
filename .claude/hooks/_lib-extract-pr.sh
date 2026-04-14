@@ -70,3 +70,46 @@ extract_pr_number() {
 
   echo "$pr"
 }
+
+# Echoes the PR's HEAD SHA as reported by GitHub, or empty on failure.
+#
+# Why this exists (see #55): merge-gate hooks previously compared approval
+# markers against `git rev-parse HEAD` (local HEAD). But `gh pr merge <N>`
+# merges the PR's branch on GitHub's side, which is almost never equal to
+# the local HEAD (local is usually `main` or a different feature branch).
+# That meant every merge required a `gh pr checkout <N> && gh pr merge <N>`
+# dance. Tedious and error-prone.
+#
+# This helper asks GitHub directly for the PR's HEAD via `gh pr view`.
+# Works for both the `gh pr merge` and `gh api .../pulls/<N>/merge` shapes.
+#
+# Usage:
+#   PR_HEAD=$(resolve_pr_head "$PR_NUMBER" "$CMD_REPO")
+#   # Compare PR_HEAD against marker SHAs instead of git rev-parse HEAD.
+#
+# Failure modes (returns empty, caller should fall back):
+#   - Network error / rate limit / gh auth expired
+#   - PR doesn't exist (wrong number, closed, or wrong repo)
+#   - GitHub API transient failure
+#
+# On failure the caller should fall back to `git rev-parse HEAD` with a
+# visible warning — better to block a valid merge that the user can retry
+# than silently allow a merge on the wrong SHA.
+resolve_pr_head() {
+  local pr_number="$1"
+  local cmd_repo="$2"
+  local sha=""
+
+  if [ -z "$pr_number" ]; then
+    echo ""
+    return
+  fi
+
+  if [ -n "$cmd_repo" ]; then
+    sha=$(gh pr view "$pr_number" --repo "$cmd_repo" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+  else
+    sha=$(gh pr view "$pr_number" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+  fi
+
+  echo "$sha"
+}
