@@ -68,6 +68,6 @@ Expect to update this every few releases of significant architectural work. If i
 
 ## References
 
-- [C4 Model — Level 2](https://c4model.com/#ContainerDiagram)
+- [C4 Model — Level 2](https://c4model.com/diagrams/container)
 - [Mermaid C4 syntax](https://mermaid.js.org/syntax/c4.html)
 - ApexStack's own L2 for reference: `docs/architecture/apexstack-container.md`

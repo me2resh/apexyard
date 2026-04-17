@@ -49,6 +49,7 @@ C4Context
 ## Maintenance
 
 Should change only when a major new external dependency enters or leaves. Candidates:
+
 - If ApexStack ever gains a first-class Linear / Jira integration → add those as external systems
 - If the managed-project model is replaced or extended (unlikely) → re-draw the boundary
 - If upstream naming / sync model changes — edit accordingly

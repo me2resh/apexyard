@@ -51,6 +51,6 @@ The L1 diagram should change maybe once or twice a year — only when the system
 
 ## References
 
-- [C4 Model — Level 1](https://c4model.com/#SystemContextDiagram)
+- [C4 Model — Level 1](https://c4model.com/diagrams/system-context)
 - [Mermaid C4 syntax](https://mermaid.js.org/syntax/c4.html)
 - ApexStack's own L1 for reference: `docs/architecture/apexstack-context.md`

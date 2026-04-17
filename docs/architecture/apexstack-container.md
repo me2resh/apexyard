@@ -73,6 +73,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## Maintenance
 
 Updates when:
+
 - A new top-level directory is added or removed (e.g. if `.claude/skills/` were renamed)
 - A new "container" type joins the architecture (e.g. a `templates/` folder were promoted to first-class)
 - The Claude Code integration model changes (new event type, new agent shape)
