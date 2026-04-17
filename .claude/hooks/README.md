@@ -28,11 +28,27 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **Event:** `PreToolUse` on `Edit | Write | MultiEdit`.
 
-**What it does:** blocks edits to any code path unless `.claude/session/current-ticket` exists. Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
+**What it does:** blocks edits to any code path unless a session marker exists. Resolution is two-tier (#41): per-project marker at `<ops_root>/.claude/session/tickets/<project>` when `FILE_PATH` is under `<ops_root>/workspace/<project>/`, otherwise falls back to `<ops_root>/.claude/session/current-ticket`. Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
 
 **Enforces:** the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists, has acceptance criteria, and is broken into tasks."
 
-**Unblock:** run `/start-ticket <issue>`. The skill verifies the issue via `gh issue view` and writes the marker.
+**Unblock:** run `/start-ticket <issue>`. The skill verifies the issue via `gh issue view`, resolves the project from the ticket's tracker repo via the portfolio registry, and writes either the per-project or fallback marker.
+
+### 1a. Migration ticket-first — `require-migration-ticket.sh`
+
+**Event:** `PreToolUse` on `Edit | Write | MultiEdit`. Runs **before** `require-active-ticket.sh` so migration-specific messages surface first.
+
+**What it does:** if `FILE_PATH` matches a migration-path pattern (`migrate-*.{ts,js,py,sql}`, `**/migrations/**`, `prisma/schema.prisma` + `prisma/migrations/**`, `src/migrations/*.{ts,js}` for TypeORM, `alembic/versions/*.py`, `db/migrate/*.rb`), verifies three gates:
+
+1. Active ticket marker exists (same resolution as hook #1)
+2. The referenced tracker issue is OPEN and carries the `migration` label (default; overridable per project via `.claude/project-config.json` → `migration_label`)
+3. The issue body references a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`
+
+If any gate fails, blocks with a message pointing at the `/migration` skill. If `FILE_PATH` doesn't match a migration pattern, exits silently (hook #1 handles the normal ticket check).
+
+**Enforces:** gate 3a in `.claude/rules/workflow-gates.md` — "any edit to migration paths requires a labelled migration ticket + linked AgDR".
+
+**Unblock:** run `/migration` to create a labelled ticket + migration AgDR in one flow, then `/start-ticket` the new ticket.
 
 ### 2. Auto code review — `auto-code-review.sh`
 

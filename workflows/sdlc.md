@@ -145,6 +145,37 @@ RIGHT:
 - Tests written and passing
 - PR created
 
+### Sub-Workflow: Database Migrations
+
+> **Primary role**: [Data Engineer](../roles/data/data-engineer.md) / [Backend Engineer](../roles/engineering/backend-engineer.md) · **Supporting**: [Tech Lead](../roles/engineering/tech-lead.md) (approve blast-radius), [SRE](../roles/engineering/sre.md) (rollback + observability) · **Gate hook**: `require-migration-ticket.sh` · **Skill**: `/migration`
+
+Database migrations (schema / data / SQL / ORM-generated) are a distinct class of Build-phase work. High blast radius — data loss, downtime, lock contention, cross-service coordination — so they get a dedicated ticket + AgDR pair, and edits to migration files are gated until both exist.
+
+Flow:
+
+```
+/migration  →  creates labelled ticket + migration AgDR
+   │
+   └─► /start-ticket <new-ticket>  → activates the migration ticket for this session
+          │
+          └─► Edit migration files  → require-migration-ticket.sh verifies:
+                                        - active ticket has `migration` label
+                                        - ticket body references the AgDR
+                                        - issue is OPEN
+                 │
+                 └─► Dev smoke     (local command / test case)
+                         │
+                         └─► Staging verify  (apply + assert + rollback-tested)
+                                 │
+                                 └─► Prod apply  (rollback runbook ready, dashboards armed)
+                                         │
+                                         └─► QA / Monitor phases (per the main SDLC)
+```
+
+Rollback readiness is checked at the migration-ticket-creation stage, not at PR review — the AgDR forces the author to articulate rollback steps + a tested-against environment before the feature work begins. A migration that only articulates rollback post-hoc during PR review is already too late.
+
+See `.claude/rules/workflow-gates.md` § "Migration Gate (3a)" for the mechanical check, and `.claude/skills/migration/SKILL.md` for the skill's process.
+
 ---
 
 ## Phase 4: Code Review

@@ -126,6 +126,7 @@ Template: @templates/agdr.md
 | Technical Design | Planning implementation | `templates/technical-design.md` |
 | ADR | Recording architecture decisions | `templates/adr.md` |
 | AgDR | Recording AI agent decisions | `templates/agdr.md` |
+| Migration AgDR | Recording migration decisions (rollback, downtime, consumers, observability) | `templates/agdr-migration.md` |
 | C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
 | C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
 
@@ -168,13 +169,13 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 16 shell scripts that mechanically enforce SDLC rules — ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
+| Hooks | `.claude/hooks/` | 17 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 31 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 32 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (31)
+### Available skills (32)
 
 | Skill | Purpose |
 |-------|---------|
@@ -199,6 +200,7 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | `/feature` | Create a structured feature request ticket (user story + ACs) |
 | `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
+| `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexStack management (includes per-project discovery) |
 | `/update` | Sync the ops fork with upstream me2resh/apexstack — preview, merge-or-rebase, leaves a sync branch ready to push |
