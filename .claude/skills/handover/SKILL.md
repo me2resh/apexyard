@@ -97,7 +97,7 @@ If yes and it's a Node project: `npm install --ignore-scripts && npm run build` 
 
 Write `projects/<name>/handover-assessment.md`:
 
-```markdown
+````markdown
 # {name} — Handover Assessment
 
 **Date**: YYYY-MM-DD
@@ -241,7 +241,7 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 
 - {anything you couldn't determine from a static read}
 
-```
+````
 
 ### 6. Write the L2 container diagram stub (if missing)
 
