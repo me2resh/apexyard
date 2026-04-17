@@ -85,12 +85,15 @@ BEHIND=$(git rev-list --count main..upstream/main)
 Then report. Examples:
 
 **Up-to-date:**
+
 ```
 Fork is up to date with upstream/main. Nothing to sync.
 ```
+
 Exit 0.
 
 **Behind only:**
+
 ```
 Fork is 12 commits behind upstream/main.
 
@@ -104,6 +107,7 @@ Proceed with merge? [y/N]
 ```
 
 **Ahead and behind (typical fork):**
+
 ```
 Fork has 5 local commits not in upstream, and is 12 commits behind.
 
@@ -152,11 +156,13 @@ git checkout -b "$BRANCH"
 ### 6. Do the sync
 
 **Merge path:**
+
 ```bash
 git merge upstream/main --no-edit
 ```
 
 **Rebase path:**
+
 ```bash
 git rebase upstream/main
 ```
@@ -186,6 +192,7 @@ For each conflict file, get the user's choice. Default to (3) since auto-resolut
 After each file: `git add <file>` to mark resolved.
 
 When all conflicts are resolved:
+
 ```bash
 # merge path
 git commit --no-edit
@@ -195,6 +202,7 @@ git rebase --continue
 ```
 
 If at any point the user wants to bail:
+
 ```bash
 git merge --abort    # or: git rebase --abort
 git checkout main
@@ -282,6 +290,7 @@ Forks typically have genuine customisation commits (`onboarding.yaml`, `apexstac
 ### Why the skill does not run Rex or `/approve-merge`
 
 Two reasons:
+
 1. The skill's job ends at "sync branch ready to push." Running Rex would couple two unrelated concerns (upstream sync + code review).
 2. Rex + CEO approval is meant to be a discrete, per-PR moment. The skill could call them, but doing so automatically blurs the boundary the approval markers are designed to preserve. User runs Rex + `/approve-merge` themselves on the PR the skill prepared.
 
