@@ -31,11 +31,20 @@ if [ -n "$REPO_ROOT" ]; then
   esac
 fi
 
-# Exempt paths
+# Exempt paths.
+#
+# Each path-prefix exemption is matched in both REL_PATH (repo-relative)
+# and absolute (*/path/*) forms. Absolute-path fallthrough happens when
+# FILE_PATH points outside REPO_ROOT (e.g. agent worktrees whose
+# git-toplevel differs from the outer apexstack tree); in that case the
+# strip on lines 29-31 is a no-op and REL_PATH stays absolute. The
+# existing `*.md` pattern already crosses `/`, so absolute-match via a
+# `*/…` prefix is a known-good shape — #56 extends the same trick to the
+# path-prefix exemptions.
 case "$REL_PATH" in
-  .claude/*|.claude) exit 0 ;;
-  docs/*|docs) exit 0 ;;
-  projects/*/docs/*) exit 0 ;;
+  .claude/*|.claude|*/.claude/*|*/.claude) exit 0 ;;
+  docs/*|docs|*/docs/*|*/docs) exit 0 ;;
+  projects/*/docs/*|*/projects/*/docs/*) exit 0 ;;
   TODO.md|README.md|MEMORY.md|CLAUDE.md) exit 0 ;;
 esac
 case "$REL_PATH" in
