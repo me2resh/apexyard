@@ -225,7 +225,17 @@ A typical morning as a CTO / Chief of Staff using apexstack:
 
 ## Upgrades — pulling from upstream
 
-Every few weeks, pull the latest apexstack improvements into your fork:
+Every few weeks, pull the latest apexstack improvements into your fork. The easy path is the `/update` skill:
+
+```
+/update              # preview + merge-based sync on a sync branch (default)
+/update --rebase     # rebase-based sync (cleaner linear history)
+/update --dry-run    # preview only, no state change
+```
+
+`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
+
+If you prefer the raw commands:
 
 ```bash
 cd ~/apexstack
@@ -236,12 +246,14 @@ git fetch upstream
 # See what's new
 git log --oneline HEAD..upstream/main
 
-# Merge them in
+# On a sync branch (direct-push-to-main is blocked by block-main-push.sh)
+git checkout -b chore/sync-upstream
 git merge upstream/main
 
 # Resolve any conflicts (usually in files you haven't customised — role files, workflow files, CLAUDE.md imports)
-# Commit the merge
-git push origin main
+# Then push and open a PR
+git push -u origin chore/sync-upstream
+gh pr create --title "chore: sync ops fork with upstream apexstack"
 ```
 
 Files you're most likely to customise:
