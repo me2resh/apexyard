@@ -71,6 +71,22 @@ For adversarial trust, rely on remote branch-protection rules (GitHub required r
 
 **What it does:** on every new session, if `.claude/session/onboarded` is missing, injects a reminder telling Claude to run `/onboard` with the user before doing work. The `/onboard` skill asks the day-one discovery questions (project identity, tracker, required checks, reviewers, UI, deploy targets, sensitive topics) and writes the marker plus `.claude/project-config.json`.
 
+### 4a. Upstream drift — `check-upstream-drift.sh`
+
+**Event:** `SessionStart`.
+
+**What it does:** if the repo has an `upstream` remote, runs `git fetch upstream --quiet` (cached to once per 10 minutes via `.claude/session/last-upstream-fetch`) and prints a one-line banner when the local default branch is behind `upstream/<default-branch>`:
+
+```
+ApexStack: 12 commits behind upstream/main. Run /update to sync.
+```
+
+Silent if: no `upstream` remote (upstream repo itself, or fork that hasn't configured it), fetch fails (offline / hosting down), or up-to-date.
+
+**Runtime:** < 200ms on cache hit, 1-3s on cache miss (depends on fetch latency). `timeout 5 git fetch` caps the worst case.
+
+**Companion skill:** `/update` performs the actual sync.
+
 ## The Ticket-Vocabulary Backstops
 
 These two hooks are the mechanical backstop for the rule in `.claude/rules/ticket-vocabulary.md` — "`Ticket`, `#N`, and dependency notation refer ONLY to real GitHub issues". The rule itself is self-discipline; these hooks catch the downstream symptom (a fabricated `#N` that slipped into a durable artifact).

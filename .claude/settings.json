@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/onboarding-check.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-upstream-drift.sh\"'"
           }
         ]
       }
