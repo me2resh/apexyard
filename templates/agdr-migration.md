@@ -43,6 +43,7 @@ Every service that reads or writes the affected tables/entities must be coordina
 - **none** — {if truly none, say so; this makes review easier}
 
 Deploy-order constraint (if any):
+
 - {e.g. "backend must deploy before the ETL job picks up the new column"}
 
 ## Testing Plan

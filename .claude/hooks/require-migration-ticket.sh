@@ -47,9 +47,11 @@ fi
 # These never need a migration ticket regardless of path, so short-circuit
 # before doing any network calls.
 case "$FILE_PATH" in
-  */.claude/*|*/.claude|*/docs/*|*/docs|*/projects/*/docs/*) exit 0 ;;
+  */.claude/*|*/.claude|*/docs/*|*/docs) exit 0 ;;
   *.md|*.example) exit 0 ;;
 esac
+# Note: `*/projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
+# crosses `/`), so no separate arm is needed.
 
 # --------- Discover ops root ---------
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -89,6 +91,9 @@ is_migration_path() {
   if [ -n "$CUSTOM_PATHS" ]; then
     while IFS= read -r pat; do
       [ -z "$pat" ] && continue
+      # SC2254: unquoted expansion is intentional — the project-configured
+      # pattern should be interpreted as a glob, not compared literally.
+      # shellcheck disable=SC2254
       case "$path" in
         $pat) return 0 ;;
       esac
@@ -98,10 +103,12 @@ is_migration_path() {
     return 1
   fi
 
-  # Default patterns
+  # Default patterns.
+  # Note: shell case `*` crosses `/`, so `*/migrations/*.sql` already covers
+  # nested paths like `*/migrations/<sub>/file.sql` — no separate arm needed.
   case "$path" in
-    # SQL migrations in any `migrations/` directory
-    */migrations/*.sql|*/migrations/*/*.sql) return 0 ;;
+    # SQL migrations anywhere under a `migrations/` directory
+    */migrations/*.sql) return 0 ;;
     # `migrate-*.ts` / `.js` / `.py` / `.sql` anywhere
     */migrate-*.ts|*/migrate-*.js|*/migrate-*.py|*/migrate-*.sql) return 0 ;;
     # Prisma
