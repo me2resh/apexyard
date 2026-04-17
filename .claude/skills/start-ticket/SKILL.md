@@ -87,13 +87,23 @@ Given the ticket's `owner/repo` (from step 1), grep `apexstack.projects.yaml` fo
 if command -v yq >/dev/null 2>&1; then
   project=$(yq eval ".projects[] | select(.repo == \"${OWNER_REPO}\") | .name" "$ops_root/apexstack.projects.yaml")
 else
-  # Greppy fallback: find the `name:` whose sibling `repo:` matches
+  # Greppy fallback: find the `name:` whose sibling `repo:` matches.
+  # Strips surrounding quotes from both `name:` and `repo:` values so the
+  # comparison works whether the registry uses bare scalars
+  # (`repo: me2resh/curios-dog`) or quoted scalars (`repo: "me2resh/…"`).
   project=$(awk -v r="$OWNER_REPO" '
-    /^[[:space:]]*- name:/ { name=$3 }
-    /^[[:space:]]*repo:/   { if ($2 == r) { print name; exit } }
+    function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
+    /^[[:space:]]*- name:/ { name = unquote($3) }
+    /^[[:space:]]*repo:/   { if (unquote($2) == r) { print name; exit } }
   ' "$ops_root/apexstack.projects.yaml")
 fi
 ```
+
+Notes on the fallback:
+
+- Handles both `repo: me2resh/curios-dog` and `repo: "me2resh/curios-dog"` (and single-quoted).
+- Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexstack.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
+- Leading whitespace is tolerated via `^[[:space:]]*` — nested entries under `projects:` parse fine at any indent level, so long as the indent is consistent within the entry.
 
 `$project` is now either a registered project name (e.g. `curios-dog`, `sharppick`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).
 
