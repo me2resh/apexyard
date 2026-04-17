@@ -1135,7 +1135,7 @@ footer.foot {
     </p>
 
     <p class="hero__sub rise rise-3">
-      The multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. You don't <em>add</em> apexstack to a project — projects get forged <em>inside</em> it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs. Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge.
+      SDLC-as-code for founders who ship alone. One ops-repo fork governs <em>all</em> your products. Rules that can't be argued with — they're shell hooks, not PDFs. 19 roles, 32 skills, 18 mechanical gates, one inbox across the whole portfolio. Claude Code is the default driver; the rules, hooks, agents, and skills are plain markdown and shell — swap the AI, keep the forge.
     </p>
 
     <div class="hero__cta rise rise-4">
@@ -1226,15 +1226,15 @@ footer.foot {
     <div class="hero__metrics rise rise-5" aria-label="What you get">
       <div class="hero__metric">
         <strong>19</strong>
-        <span>Role definitions</span>
+        <span>Role definitions across 5 departments</span>
       </div>
       <div class="hero__metric">
-        <strong>30</strong>
-        <span>Hooks · rules · agents · skills</span>
+        <strong>32</strong>
+        <span>Skills (slash commands)</span>
       </div>
       <div class="hero__metric">
-        <strong>7</strong>
-        <span>CI pipelines</span>
+        <strong>18</strong>
+        <span>Mechanical gates (shell hooks)</span>
       </div>
       <div class="hero__metric">
         <strong>1</strong>
@@ -1286,47 +1286,83 @@ footer.foot {
 <span class="branch">│   ├──</span> <span class="lf">code-review.md</span>
 <span class="branch">│   └──</span> <span class="lf">deployment.md</span>
 <span class="branch">│</span>
-<span class="branch">├──</span> <span class="dir">templates/</span>             <span class="nf"># 4 document templates</span>
+<span class="branch">├──</span> <span class="dir">templates/</span>             <span class="nf"># 7 document templates</span>
 <span class="branch">│   ├──</span> <span class="lf">prd.md</span>
 <span class="branch">│   ├──</span> <span class="lf">technical-design.md</span>
 <span class="branch">│   ├──</span> <span class="lf">adr.md</span>
-<span class="branch">│   └──</span> <span class="lf">agdr.md</span>           <span class="nf"># Agent Decision Record — AI-specific</span>
+<span class="branch">│   ├──</span> <span class="lf">agdr.md</span>           <span class="nf"># Agent Decision Record — AI-specific</span>
+<span class="branch">│   ├──</span> <span class="lf">agdr-migration.md</span> <span class="nf"># Migration AgDR — rollback + downtime + consumers + observability</span>
+<span class="branch">│   └──</span> <span class="dir">architecture/</span>     <span class="nf"># C4 Mermaid diagram templates</span>
+<span class="branch">│       ├──</span> <span class="lf">c4-context.md</span>         <span class="nf"># Level 1 — system + external actors</span>
+<span class="branch">│       └──</span> <span class="lf">c4-container.md</span>       <span class="nf"># Level 2 — deployable units</span>
 <span class="branch">│</span>
 <span class="branch">├──</span> <span class="dir new">.claude/</span>               <span class="nf"># <span class="new">[NEW]</span> Claude Code primitives — the runnable layer</span>
 <span class="branch">│   ├──</span> <span class="lf">settings.json</span>     <span class="nf"># Wires hooks to PreToolUse events</span>
-<span class="branch">│   ├──</span> <span class="dir">hooks/</span>            <span class="nf"># 15 enforcement hooks (ticket-first, merge gates, CI checks…)</span>
-<span class="branch">│   │   ├──</span> <span class="lf">block-git-add-all.sh</span>     <span class="nf"># refuses git add -A / .</span>
-<span class="branch">│   │   ├──</span> <span class="lf">block-main-push.sh</span>       <span class="nf"># refuses push to main</span>
-<span class="branch">│   │   ├──</span> <span class="lf">check-secrets.sh</span>         <span class="nf"># scans staged files for credentials</span>
-<span class="branch">│   │   ├──</span> <span class="lf">pre-push-gate.sh</span>         <span class="nf"># reminds to lint+typecheck+test+build</span>
-<span class="branch">│   │   ├──</span> <span class="lf">validate-branch-name.sh</span>  <span class="nf"># enforces feature/&lt;TICKET&gt;-… format</span>
-<span class="branch">│   │   └──</span> <span class="lf">validate-pr-create.sh</span>    <span class="nf"># enforces PR title + glossary</span>
-<span class="branch">│   ├──</span> <span class="dir">rules/</span>            <span class="nf"># 6 modular rule files imported via @-imports</span>
+<span class="branch">│   ├──</span> <span class="dir">hooks/</span>            <span class="nf"># 18 enforcement hooks (ticket-first, migration gate, merge gates, CI, secrets, drift banner…)</span>
+<span class="branch">│   │   ├──</span> <span class="lf">require-active-ticket.sh</span>        <span class="nf"># no edits without an active ticket</span>
+<span class="branch">│   │   ├──</span> <span class="lf">require-migration-ticket.sh</span>     <span class="nf"># migration files need labelled ticket + AgDR</span>
+<span class="branch">│   │   ├──</span> <span class="lf">block-unreviewed-merge.sh</span>       <span class="nf"># Rex + CEO approval markers required</span>
+<span class="branch">│   │   ├──</span> <span class="lf">require-design-review-for-ui.sh</span> <span class="nf"># UI PRs need design-review marker</span>
+<span class="branch">│   │   ├──</span> <span class="lf">block-merge-on-red-ci.sh</span>        <span class="nf"># refuses merge with red CI</span>
+<span class="branch">│   │   ├──</span> <span class="lf">require-agdr-for-arch-changes.sh</span><span class="nf"># arch-path edits need a linked AgDR</span>
+<span class="branch">│   │   ├──</span> <span class="lf">validate-commit-format.sh</span>       <span class="nf"># enforces Conventional Commits</span>
+<span class="branch">│   │   ├──</span> <span class="lf">verify-commit-refs.sh</span>           <span class="nf"># issue refs in commit messages must exist</span>
+<span class="branch">│   │   ├──</span> <span class="lf">validate-pr-create.sh</span>           <span class="nf"># enforces PR title + glossary + ticket</span>
+<span class="branch">│   │   ├──</span> <span class="lf">validate-branch-name.sh</span>         <span class="nf"># enforces feature/&lt;TICKET&gt;-… format</span>
+<span class="branch">│   │   ├──</span> <span class="lf">block-main-push.sh</span>              <span class="nf"># refuses push to main</span>
+<span class="branch">│   │   ├──</span> <span class="lf">block-git-add-all.sh</span>            <span class="nf"># refuses git add -A / .</span>
+<span class="branch">│   │   ├──</span> <span class="lf">check-secrets.sh</span>                <span class="nf"># scans staged files for credentials</span>
+<span class="branch">│   │   ├──</span> <span class="lf">pre-push-gate.sh</span>                <span class="nf"># reminds to lint+typecheck+test+build</span>
+<span class="branch">│   │   ├──</span> <span class="lf">auto-code-review.sh</span>             <span class="nf"># post-PR: prompt to invoke Rex</span>
+<span class="branch">│   │   ├──</span> <span class="lf">suggest-ticket-template.sh</span>      <span class="nf"># gh issue create → suggest /feature, /bug, /task</span>
+<span class="branch">│   │   ├──</span> <span class="lf">check-upstream-drift.sh</span>         <span class="nf"># session-start banner when fork is behind</span>
+<span class="branch">│   │   └──</span> <span class="lf">onboarding-check.sh</span>             <span class="nf"># prompt /setup on a fresh clone</span>
+<span class="branch">│   ├──</span> <span class="dir">rules/</span>            <span class="nf"># 8 modular rule files imported via @-imports</span>
+<span class="branch">│   │   ├──</span> <span class="lf">workflow-gates.md</span>        <span class="nf"># 6-gate model PRD → Done + migration sub-gate</span>
+<span class="branch">│   │   ├──</span> <span class="lf">pr-workflow.md</span>           <span class="nf"># hard stops before push/PR/merge</span>
+<span class="branch">│   │   ├──</span> <span class="lf">pr-quality.md</span>            <span class="nf"># glossary required, SHA verify, design review</span>
+<span class="branch">│   │   ├──</span> <span class="lf">git-conventions.md</span>       <span class="nf"># branch + PR title + commit format</span>
 <span class="branch">│   │   ├──</span> <span class="lf">agdr-decisions.md</span>        <span class="nf"># when to /decide</span>
 <span class="branch">│   │   ├──</span> <span class="lf">code-standards.md</span>        <span class="nf"># TS, DDD, naming, testing</span>
-<span class="branch">│   │   ├──</span> <span class="lf">git-conventions.md</span>       <span class="nf"># branch + PR title format</span>
-<span class="branch">│   │   ├──</span> <span class="lf">pr-quality.md</span>            <span class="nf"># glossary required, SHA verify</span>
-<span class="branch">│   │   ├──</span> <span class="lf">pr-workflow.md</span>           <span class="nf"># hard stops before push/PR/merge</span>
-<span class="branch">│   │   └──</span> <span class="lf">workflow-gates.md</span>        <span class="nf"># 6-gate model PRD → Done</span>
+<span class="branch">│   │   ├──</span> <span class="lf">ticket-vocabulary.md</span>     <span class="nf"># #N reserved for real tracker issues</span>
+<span class="branch">│   │   └──</span> <span class="lf">role-triggers.md</span>        <span class="nf"># which role activates on which signal</span>
 <span class="branch">│   ├──</span> <span class="dir">agents/</span>           <span class="nf"># 5 sub-agents</span>
 <span class="branch">│   │   ├──</span> <span class="lf">code-reviewer.md</span>         <span class="nf"># Rex — reviews PRs against the standards</span>
 <span class="branch">│   │   ├──</span> <span class="lf">security-reviewer.md</span>     <span class="nf"># Shield — OWASP, injection, auth</span>
 <span class="branch">│   │   ├──</span> <span class="lf">dependency-auditor.md</span>    <span class="nf"># Guardian — vulns, outdated, licenses</span>
 <span class="branch">│   │   ├──</span> <span class="lf">pr-manager.md</span>            <span class="nf"># 2-review workflow + SHA verification</span>
 <span class="branch">│   │   └──</span> <span class="lf">ticket-manager.md</span>        <span class="nf"># GitHub Issues per project</span>
-<span class="branch">│   └──</span> <span class="dir">skills/</span>           <span class="nf"># 27 slash commands (/setup, /launch-check, /threat-model, /seo-audit…)</span>
-<span class="branch">│       ├──</span> <span class="lf">decide/SKILL.md</span>          <span class="nf"># /decide — creates an AgDR</span>
-<span class="branch">│       ├──</span> <span class="lf">code-review/SKILL.md</span>     <span class="nf"># /code-review</span>
-<span class="branch">│       ├──</span> <span class="lf">security-review/SKILL.md</span> <span class="nf"># /security-review</span>
-<span class="branch">│       ├──</span> <span class="lf">audit-deps/SKILL.md</span>      <span class="nf"># /audit-deps</span>
+<span class="branch">│   └──</span> <span class="dir">skills/</span>           <span class="nf"># 32 slash commands — see the full list in CLAUDE.md</span>
+<span class="branch">│       ├──</span> <span class="lf">setup/SKILL.md</span>           <span class="nf"># /setup — first-run bootstrap for onboarding.yaml</span>
+<span class="branch">│       ├──</span> <span class="lf">handover/SKILL.md</span>        <span class="nf"># /handover — adopt an external repo + stub L2 C4</span>
+<span class="branch">│       ├──</span> <span class="lf">update/SKILL.md</span>          <span class="nf"># /update — sync ops fork with upstream apexstack</span>
+<span class="branch">│       ├──</span> <span class="lf">start-ticket/SKILL.md</span>    <span class="nf"># /start-ticket — activate ticket for this session</span>
+<span class="branch">│       ├──</span> <span class="lf">approve-merge/SKILL.md</span>   <span class="nf"># /approve-merge — per-PR CEO approval</span>
+<span class="branch">│       ├──</span> <span class="lf">approve-design/SKILL.md</span>  <span class="nf"># /approve-design — per-PR UI approval</span>
+<span class="branch">│       ├──</span> <span class="lf">migration/SKILL.md</span>       <span class="nf"># /migration — labelled ticket + migration AgDR</span>
+<span class="branch">│       ├──</span> <span class="lf">decide/SKILL.md</span>          <span class="nf"># /decide — create an AgDR for a technical decision</span>
+<span class="branch">│       ├──</span> <span class="lf">feature/SKILL.md</span>         <span class="nf"># /feature — structured feature ticket</span>
+<span class="branch">│       ├──</span> <span class="lf">bug/SKILL.md</span>             <span class="nf"># /bug — structured bug ticket</span>
+<span class="branch">│       ├──</span> <span class="lf">task/SKILL.md</span>            <span class="nf"># /task — structured technical-task ticket</span>
 <span class="branch">│       ├──</span> <span class="lf">write-spec/SKILL.md</span>      <span class="nf"># /write-spec — generate a PRD</span>
 <span class="branch">│       ├──</span> <span class="lf">idea/SKILL.md</span>            <span class="nf"># /idea — capture a new idea to the backlog</span>
-<span class="branch">│       ├──</span> <span class="lf">handover/SKILL.md</span>        <span class="nf"># /handover — onboard an external repo</span>
+<span class="branch">│       ├──</span> <span class="lf">code-review/SKILL.md</span>     <span class="nf"># /code-review — invoke Rex</span>
+<span class="branch">│       ├──</span> <span class="lf">security-review/SKILL.md</span> <span class="nf"># /security-review — invoke Shield</span>
+<span class="branch">│       ├──</span> <span class="lf">audit-deps/SKILL.md</span>      <span class="nf"># /audit-deps — Guardian vuln + license scan</span>
+<span class="branch">│       ├──</span> <span class="lf">launch-check/SKILL.md</span>    <span class="nf"># /launch-check — 8-dimension production-readiness audit</span>
+<span class="branch">│       ├──</span> <span class="lf">threat-model/SKILL.md</span>    <span class="nf"># /threat-model — STRIDE deep-dive</span>
+<span class="branch">│       ├──</span> <span class="lf">accessibility-audit/SKILL.md</span> <span class="nf"># /accessibility-audit — WCAG 2.1 AA</span>
+<span class="branch">│       ├──</span> <span class="lf">compliance-check/SKILL.md</span> <span class="nf"># /compliance-check — GDPR + ePrivacy</span>
+<span class="branch">│       ├──</span> <span class="lf">analytics-audit/SKILL.md</span>  <span class="nf"># /analytics-audit — event taxonomy</span>
+<span class="branch">│       ├──</span> <span class="lf">seo-audit/SKILL.md</span>        <span class="nf"># /seo-audit — meta, sitemap, structured data</span>
+<span class="branch">│       ├──</span> <span class="lf">performance-audit/SKILL.md</span> <span class="nf"># /performance-audit — bundle + Core Web Vitals</span>
+<span class="branch">│       ├──</span> <span class="lf">monitoring-audit/SKILL.md</span> <span class="nf"># /monitoring-audit — error tracking + runbooks</span>
+<span class="branch">│       ├──</span> <span class="lf">docs-audit/SKILL.md</span>      <span class="nf"># /docs-audit — Diataxis completeness</span>
 <span class="branch">│       ├──</span> <span class="lf">projects/SKILL.md</span>        <span class="nf"># /projects — list managed projects + status</span>
-<span class="branch">│       ├──</span> <span class="lf">inbox/SKILL.md</span>           <span class="nf"># /inbox — PRs/issues needing your attention</span>
 <span class="branch">│       ├──</span> <span class="lf">status/SKILL.md</span>          <span class="nf"># /status — git + CI snapshot per project</span>
-<span class="branch">│       ├──</span> <span class="lf">tasks/SKILL.md</span>           <span class="nf"># /tasks — actionable task list with URLs</span>
-<span class="branch">│       ├──</span> <span class="lf">roadmap/SKILL.md</span>         <span class="nf"># /roadmap — update or create the product roadmap</span>
+<span class="branch">│       ├──</span> <span class="lf">inbox/SKILL.md</span>           <span class="nf"># /inbox — PRs/issues needing attention across portfolio</span>
+<span class="branch">│       ├──</span> <span class="lf">tasks/SKILL.md</span>           <span class="nf"># /tasks — prioritised task list with URLs</span>
+<span class="branch">│       ├──</span> <span class="lf">roadmap/SKILL.md</span>         <span class="nf"># /roadmap — per-project milestones</span>
 <span class="branch">│       └──</span> <span class="lf">stakeholder-update/SKILL.md</span> <span class="nf"># /stakeholder-update — weekly/monthly/launch</span>
 <span class="branch">│</span>
 <span class="branch">├──</span> <span class="dir new">workspace/</span>             <span class="nf"># <span class="new">[NEW]</span> Live local clones of managed projects (gitignored)</span>
@@ -1395,40 +1431,43 @@ footer.foot {
       <div class="layer__num">02 — passive · markdown</div>
       <h3 class="layer__title">Workflows + templates</h3>
       <p class="layer__desc">
-        Three workflow processes (full SDLC, code review, deployment) and four document templates. Drop them into your <code>docs/</code>, ship faster.
+        Three workflow processes (full SDLC, code review, deployment) and seven document templates including C4 Mermaid diagrams and the migration AgDR. Drop them into your <code>docs/</code>, ship faster.
       </p>
       <ul class="layer__list">
-        <li><code>sdlc.md</code><span>7-phase lifecycle with quality gates</span></li>
+        <li><code>sdlc.md</code><span>7-phase lifecycle with quality gates + migration sub-flow</span></li>
         <li><code>code-review.md</code><span>structured author + reviewer process</span></li>
         <li><code>deployment.md</code><span>staging → prod with rollback</span></li>
-        <li><code>prd.md</code><span>product requirements doc</span></li>
-        <li><code>agdr.md</code><span>Agent Decision Record (AI-specific)</span></li>
+        <li><code>prd.md</code> · <code>adr.md</code> · <code>agdr.md</code><span>PRD, architecture + agent decision records</span></li>
+        <li><code>agdr-migration.md</code><span>migration-specific AgDR — rollback, downtime, consumers</span></li>
+        <li><code>architecture/c4-*.md</code><span>L1 context + L2 container Mermaid diagrams</span></li>
       </ul>
     </article>
 
     <article class="layer">
-      <div class="layer__num">03 — runnable · executable <span class="new">NEW</span></div>
+      <div class="layer__num">03 — runnable · executable</div>
       <h3 class="layer__title">Hooks + rules</h3>
       <p class="layer__desc">
-        15 shell hooks mechanically enforce the SDLC on every tool call — ticket-first gates, auto code review, two-marker merge gates (Rex + CEO), design review for UI, red-CI blocking, commit format validation, and AgDR requirements for architecture changes. Nine modular rule files import via <code>@-imports</code>. A <code>/launch-check</code> skill runs an 8-dimension production-readiness audit at milestone boundaries.
+        18 shell hooks mechanically enforce the SDLC on every tool call — ticket-first gates (generic + migration-specific), auto code review, two-marker merge gates (Rex + CEO), design review for UI, red-CI blocking, commit format validation, AgDR requirements for architecture changes, and a session-start drift banner when the fork is behind upstream. Eight modular rule files import via <code>@-imports</code>. A <code>/launch-check</code> skill runs an 8-dimension production-readiness audit at milestone boundaries.
       </p>
       <ul class="layer__list">
-        <li><code>hooks/</code><span>git add -A · main push · secrets · branch / PR format</span></li>
-        <li><code>rules/</code><span>AgDR triggers, code standards, PR quality, gates</span></li>
-        <li><code>settings.json</code><span>wires hooks to PreToolUse events</span></li>
+        <li><code>hooks/</code><span>ticket-first · migration gate · merge gates · secrets · drift banner</span></li>
+        <li><code>rules/</code><span>AgDR triggers, code standards, PR quality, gates, ticket vocabulary</span></li>
+        <li><code>settings.json</code><span>wires hooks to PreToolUse / PostToolUse / SessionStart events</span></li>
       </ul>
     </article>
 
     <article class="layer">
-      <div class="layer__num">04 — runnable · invokable <span class="new">NEW</span></div>
+      <div class="layer__num">04 — runnable · invokable</div>
       <h3 class="layer__title">Agents + skills</h3>
       <p class="layer__desc">
-        Five sub-agents with their own model, prompt, and tool access. Thirteen slash commands users type into Claude Code. Both designed to be invoked from any conversation in any of your projects.
+        Five sub-agents with their own model, prompt, and tool access. 32 slash commands users type into Claude Code — covering the full SDLC (/idea → /write-spec → /decide → /start-ticket → /code-review → /approve-merge), portfolio rollups (/inbox, /status, /tasks), adoption (/handover with stub L2 C4), and 8 deep-dive audits triggered by /launch-check.
       </p>
       <ul class="layer__list">
         <li><code>agents/</code><span>Rex · Shield · Guardian · PR Manager · Ticket Manager</span></li>
-        <li><code>skills/</code><span>/decide · /code-review · /security-review · /audit-deps · /write-spec</span></li>
-        <li><code>skills/</code><span>/idea · /handover · /projects · /inbox · /status · /tasks · /roadmap · /stakeholder-update</span></li>
+        <li><code>skills/</code> · SDLC<span>/idea · /write-spec · /decide · /start-ticket · /approve-merge · /approve-design · /code-review · /security-review · /audit-deps</span></li>
+        <li><code>skills/</code> · portfolio<span>/projects · /inbox · /status · /tasks · /roadmap · /stakeholder-update · /handover · /update</span></li>
+        <li><code>skills/</code> · audits<span>/launch-check · /threat-model · /accessibility-audit · /compliance-check · /analytics-audit · /seo-audit · /performance-audit · /monitoring-audit · /docs-audit</span></li>
+        <li><code>skills/</code> · tickets<span>/feature · /bug · /task · /migration</span></li>
       </ul>
     </article>
 
@@ -1456,10 +1495,10 @@ footer.foot {
 <section class="section" id="examples">
 
   <div class="section__head">
-    <span class="section__num">03 / EXAMPLES</span>
+    <span class="section__num">03 / WALKTHROUGHS</span>
     <h2 class="section__title">What it actually feels like to use</h2>
     <p class="section__lede">
-      Four interactions a developer has with ApexStack on a typical day. Real terminal output, not marketing copy.
+      Three flows that span the framework — one for a feature, one for the portfolio, one for a risky change. Each starts with the pain a solo CTO actually feels, then shows the exact sequence of skills, hooks, and agents that remove it. Composite examples drawn from real sessions.
     </p>
   </div>
 
@@ -1467,84 +1506,144 @@ footer.foot {
 
     <article class="demo">
       <div class="demo__head">
-        <span><span class="label">/decide</span> — slash command</span>
-        <span>skill</span>
+        <span><span class="label">01 — FEATURE</span> from idea to production</span>
+        <span>SDLC pipeline</span>
       </div>
-      <pre class="demo__body"><span class="you">› /decide use react-query vs swr for the new dashboard</span>
+      <pre class="demo__body"><span class="muted"># "I have an idea. I want it shipped without forgetting any step."</span>
 
-<span class="ai">Decision: react-query (TanStack Query)
-because: better TypeScript inference, infinite query
-support is critical for the activity feed,
-and matches the team's existing experience.
+<span class="you">› /idea personal-dashboard feed of user's own trending answers</span>
+<span class="ok">  ✓ appended to projects/ideas-backlog.md</span>
 
-Created: docs/agdr/AgDR-0008-dashboard-data-fetching.md
-Proceeding with: install @tanstack/react-query
-</span></pre>
-      <div class="demo__caption">/decide forces a structured decision and leaves an auditable AgDR file. Never lose "why we picked X over Y" again.</div>
+<span class="you">› /write-spec trending-answers-feed</span>
+<span class="ai">  Created docs/prds/PRD-0012-trending-answers-feed.md
+  (problem, target user, goals, non-goals, success metrics)</span>
+
+<span class="you">› /decide react-query vs swr for the feed</span>
+<span class="ai">  Decision: react-query (better TS inference, infinite-query,
+            team experience)
+  Created docs/agdr/AgDR-0021-dashboard-data-fetching.md</span>
+
+<span class="you">› gh issue create --title "[Feature] trending-answers feed"
+  ...  → #178</span>
+<span class="you">› /start-ticket 178</span>
+<span class="ok">  ✓ Active ticket: your-org/curios-dog#178
+  ✓ marker: .claude/session/tickets/curios-dog</span>
+
+<span class="muted"># code, tests, push …</span>
+
+<span class="you">› gh pr create --title "feat(#178): trending-answers feed"</span>
+<span class="ag">  PostToolUse: auto-code-review.sh reminds:
+    "Rex REQUIRED before any merge"</span>
+
+<span class="you">› invoke the code-reviewer agent on PR #178</span>
+<span class="ag">  Rex reviewing c8b736f…
+    ✓ architecture clean · 94% coverage
+    ✓ AgDR-0021 linked · glossary 5 terms
+  Verdict: <span class="ok">APPROVED</span> — marker written at c8b736f</span>
+
+<span class="you">› <span class="muted">(CEO looks at diff)</span> /approve-merge 178</span>
+<span class="ok">  CEO marker recorded at c8b736f.
+  Run: gh pr merge 178</span>
+
+<span class="you">› gh pr merge 178 --squash --delete-branch</span>
+<span class="ok">  ✓ merged · #178 → QA state (NOT Done)
+  ✓ QA Engineer role activated on `qa` label</span></pre>
+      <div class="demo__caption"><strong>Hit:</strong> 8 skills · 2 agents · 4 hooks · 1 AgDR · 1 PRD. The entry point is <code>/idea</code>; the exit is a PR merged with two independent approvals (Rex + CEO) both SHA-bound. Nothing can short-circuit — the marker-based merge gate is a shell hook, not a social convention.</div>
     </article>
 
     <article class="demo">
       <div class="demo__head">
-        <span><span class="label">git add -A</span> — hook</span>
-        <span>blocked</span>
+        <span><span class="label">02 — PORTFOLIO</span> running 5 products from one inbox</span>
+        <span>cross-project</span>
       </div>
-      <pre class="demo__body"><span class="you">› git add -A</span>
-<span class="blk">BLOCKED:</span> Never use 'git add -A', 'git add --all',
-or 'git add .' — always add specific files to
-avoid committing unrelated changes.
-<span class="ag">  hook: .claude/hooks/block-git-add-all.sh
-  exit: 2</span>
+      <pre class="demo__body"><span class="muted"># "I run 4 products + 1 side project. Where do I look first on Monday?"</span>
 
-<span class="you">› git add src/handlers/api/get-trending-questions.ts</span>
-<span class="ok">  ✓ staged 1 file</span></pre>
-      <div class="demo__caption">Six hooks like this fire on every git / gh / Bash call. Block first, allow second. Configurable per project.</div>
+<span class="you">› cd ~/apexstack     <span class="muted">(the ops fork)</span></span>
+<span class="ag">  SessionStart: check-upstream-drift.sh
+    ApexStack: 3 commits behind upstream/main.
+               Run /update to sync.</span>
+
+<span class="you">› /inbox</span>
+<span class="ai">  curios-dog        · 2 PRs awaiting Rex, 1 design review
+  billing-api       · 1 CEO approval pending · #203
+  sharppick         · stale PR #89 (14 days)
+  marketing-site    · all clear
+  internal-tools    · 1 P1 bug · #42, unassigned</span>
+
+<span class="you">› /status</span>
+<span class="ai">  curios-dog        · main · CI green · 2 PRs, 8 open issues
+  billing-api       · main · CI RED (test regression)
+  sharppick         · feature/search · CI pending · 1 PR
+  marketing-site    · main · CI green · 0 PRs
+  internal-tools    · main · CI green · 5 open issues</span>
+
+<span class="you">› /start-ticket me2resh/billing-api#203</span>
+<span class="you">› cd workspace/billing-api    <span class="muted">(editing the red-CI branch)</span></span>
+<span class="muted"># fix the regression, re-push, green …</span>
+
+<span class="you">› /approve-merge 203</span>
+<span class="ok">  CEO marker at a0b3c1d.  Run: gh pr merge 203</span>
+
+<span class="muted"># Friday afternoon …</span>
+
+<span class="you">› /stakeholder-update weekly</span>
+<span class="ai">  Drafted projects/updates/2026-04-17-weekly.md
+    curios-dog   → 3 PRs merged, 1 launched feature
+    billing-api  → stabilisation week, 4 bugfix PRs
+    sharppick    → paused pending design review
+    marketing-site → no activity (intentional)
+  Ready to send?</span></pre>
+      <div class="demo__caption"><strong>Hit:</strong> 6 skills · 1 hook · 1 registry (<code>apexstack.projects.yaml</code>) · 5 products surfaced from one prompt. The portfolio isn't a view on top of separate repos — it's the registry. Every rollup skill reads from it. Switching projects is a <code>cd</code>; the per-project ticket marker remembers where you were.</div>
     </article>
 
     <article class="demo">
       <div class="demo__head">
-        <span><span class="label">/code-review 178</span> — agent invocation</span>
-        <span>Rex</span>
+        <span><span class="label">03 — TRUST</span> when something risky comes up</span>
+        <span>migration gate</span>
       </div>
-      <pre class="demo__body"><span class="you">› /code-review 178</span>
+      <pre class="demo__body"><span class="muted"># "I just want to drop a column. It's Friday 5pm."</span>
 
-<span class="ag">→ Invoking Code Reviewer Agent (Rex)
-→ Fetching PR #178 from your-org/your-repo
-→ Reading 7 changed files
-→ Running checklist…
-</span>
-<span class="ai">## Code Review: PR #178
-Commit: 3c8b736
+<span class="you">› edit prisma/schema.prisma     <span class="muted">(remove `deprecatedField`)</span></span>
+<span class="blk">BLOCKED:</span> No active ticket set — and this file
+looks like a database migration.
+<span class="ag">  hook: .claude/hooks/require-migration-ticket.sh
+  path matched: prisma/schema.prisma</span>
 
-Architecture & DDD:    ✓ Pass
-Code Quality:          ✓ Pass
-Testing:               ✓ Pass (15 new tests)
-Glossary:              ✓ 5 entries
-AgDR linked:           ✓ AgDR-0008
-Verdict: <span class="ok">APPROVED</span>
-</span></pre>
-      <div class="demo__caption">Rex enforces glossary, scans for missing AgDRs, and verifies the latest commit SHA was reviewed. Posted to GitHub via gh pr review.</div>
-    </article>
+Migrations need a dedicated labelled ticket + AgDR,
+not just any ticket. Run:
 
-    <article class="demo">
-      <div class="demo__head">
-        <span><span class="label">gh issue create</span> — ticket-manager agent</span>
-        <span>tracking</span>
-      </div>
-      <pre class="demo__body"><span class="you">› create issue: add CSV export
-  in your-org/your-project</span>
+  /migration curios-dog
 
-<span class="ag">→ Invoking Ticket Manager Agent
-→ Determined repo: your-org/your-project
-→ Determined priority: P1
-</span>
-<span class="ai">✓ Created GitHub Issue: your-org/your-project#42
-  Title: [P1] Add CSV export to dashboard
-  Labels: P1, enhancement
-  URL: github.com/your-org/your-project/issues/42
+<span class="you">› /migration curios-dog</span>
+<span class="ai">  Migration type?          schema
+  Affected tables?         user_profiles
+  Rollback plan?           <span class="muted">(required — not empty)</span></span>
+<span class="you">  ADD COLUMN deprecatedField on rollback,
+  backfill from user_profiles_archive.field</span>
+<span class="ai">  Rollback tested against? staging
+  Estimated downtime?      none (nullable column)
+  Cross-service consumers? analytics ETL (reads user_profiles nightly)
+  Data volume?             ~12M rows
+  Observability?           p99 query latency · row-count delta</span>
 
-Branch: feature/GH-42-add-csv-export
-</span></pre>
-      <div class="demo__caption">Each project's tickets live in that project's own GitHub repo. No central tracker. Co-located with the code.</div>
+<span class="ok">  ✓ AgDR-0047-migration-drop-deprecated-field.md
+  ✓ Issue #214 created with labels: migration, P2
+  ✓ Body references the AgDR — gate 3 satisfied
+
+Next: /start-ticket me2resh/curios-dog#214,
+      then edit the schema.</span>
+
+<span class="you">› /start-ticket me2resh/curios-dog#214</span>
+<span class="you">› edit prisma/schema.prisma     <span class="muted">(retry)</span></span>
+<span class="ok">  ✓ gate 1: active ticket marker exists
+  ✓ gate 2: ticket OPEN + label `migration`
+  ✓ gate 3: body references AgDR-0047
+  ✓ edit allowed</span>
+
+<span class="ag">Rex on the PR: "rollback plan references analytics ETL.
+Confirm ETL can skip the missing column safely — flag for
+review before merge."  CEO: defer to Monday morning.</span></pre>
+      <div class="demo__caption"><strong>Hit:</strong> 3 hooks (migration gate, marker check, Rex-required) · 2 skills · 1 AgDR · 1 ticket — all before a single schema byte was written. The point isn't to slow you down. It's that the questions that would otherwise surface at 2am during a rollback are forced upfront, when your team is awake and rollback is cheap.</div>
     </article>
 
   </div>
@@ -1641,13 +1740,13 @@ cd apexstack</pre>
     <article class="step">
       <div class="step__num">02 — upstream remote</div>
       <h3 class="step__title">Track upstream for updates</h3>
-      <p class="step__desc">Add the upstream remote so you can pull future apexstack improvements into your fork with a normal git merge. No proprietary upgrade tool.</p>
+      <p class="step__desc">Add the upstream remote once. The session-start drift banner then tells you when you're behind, and <code>/update</code> does the sync-branch-and-PR dance for you. No proprietary upgrade tool.</p>
       <pre class="step__code"><span class="cm"># in your fork</span>
 git remote add upstream \
   https://github.com/me2resh/apexstack.git
 
-<span class="cm"># later, to pull updates:</span>
-git fetch upstream &amp;&amp; git merge upstream/main</pre>
+<span class="cm"># later, when the drift banner says you're behind:</span>
+<span class="acc">/update</span>              <span class="cm"># preview + sync branch + PR body, all in one</span></pre>
     </article>
 
     <article class="step">
@@ -1676,7 +1775,8 @@ $EDITOR apexstack.projects.yaml  <span class="cm"># list your repos</span></pre>
 <span class="acc">/projects</span>          <span class="cm"># list every managed project + status</span>
 <span class="acc">/inbox</span>             <span class="cm"># PRs, issues, comments needing your eyes</span>
 <span class="acc">/status</span>            <span class="cm"># git + CI snapshot per project</span>
-<span class="acc">/decide</span> migrate billing to Stripe</pre>
+<span class="acc">/handover</span> acquired-repo   <span class="cm"># adopt an external repo + stub L2 C4</span>
+<span class="acc">/launch-check</span>     <span class="cm"># 8-dimension production-readiness audit</span></pre>
     </article>
 
   </div>
@@ -1701,25 +1801,28 @@ $EDITOR apexstack.projects.yaml  <span class="cm"># list your repos</span></pre>
       <div class="antifeatures__col is-do">
         <h3 class="is-yes">+ what apexstack does</h3>
         <ul>
-          <li>Enforces ticket-first development via GitHub Issues per project</li>
-          <li>Forces structured decisions via /decide → AgDR audit trail</li>
-          <li>Blocks dangerous git operations (add -A, push to main, secrets in commits)</li>
-          <li>Ships an opinionated 6-gate workflow from PRD to QA</li>
+          <li>Enforces ticket-first development via GitHub Issues per project — with a stricter migration-gate variant on schema / migration-path edits</li>
+          <li>Requires explicit per-PR CEO approval before any merge — marker is SHA-bound, invalidates on every new commit</li>
+          <li>Blocks dangerous git operations (add -A, push to main, secrets in commits, red CI, unreviewed merges via either <code>gh pr merge</code> or raw <code>gh api</code>)</li>
+          <li>Forces structured decisions via /decide → AgDR audit trail (plus a dedicated migration AgDR with rollback / downtime / consumers / observability)</li>
+          <li>Ships an opinionated 6-gate workflow from PRD to QA + a migration sub-workflow</li>
+          <li>Aggregates a whole portfolio into one inbox — /inbox, /status, /tasks read a single registry file</li>
+          <li>Tells you when the fork is behind upstream (session-start drift banner), then syncs it in one skill invocation</li>
           <li>Mandates a glossary in every PR — knowledge stays in the team</li>
-          <li>Defaults to TypeScript, DDD, vitest, GitHub Actions — but stays editable</li>
-          <li>Treats hooks, agents, and slash commands as a single coherent surface</li>
+          <li>Defaults to TypeScript, DDD, vitest, GitHub Actions — but stays editable per project via <code>.claude/project-config.json</code></li>
         </ul>
       </div>
       <div class="antifeatures__col is-dont">
         <h3>× what apexstack does NOT do</h3>
         <ul>
           <li>Replace your team — humans still write code, ship product, talk to customers</li>
-          <li>Lock you into a SaaS — every file is markdown or shell, fork freely</li>
-          <li>Hide its opinions — read the rules, disagree, edit them</li>
-          <li>Pretend to be language-agnostic — TypeScript-leaning by default</li>
+          <li>Lock you into a SaaS — every file is markdown or shell, fork freely, diff any decision in git</li>
+          <li>Hide its opinions — read the rules, disagree, edit them (and file a PR upstream if you want them changed for everyone)</li>
+          <li>Auto-run merges when you say "go" on a plan — per-PR approval is discrete by design</li>
+          <li>Impose a central tracker — issues live in each project's own GitHub repo, not in apexstack</li>
+          <li>Pretend to be language-agnostic — TypeScript-leaning by default; path patterns and templates are swappable</li>
           <li>Ship a UI — this is a stack of files, not an app</li>
-          <li>Impose a central tracker — issues live in each project's own GitHub repo</li>
-          <li>Compete with Claude Code's built-ins — it extends them</li>
+          <li>Compete with Claude Code's built-ins — it extends them via hooks, skills, and sub-agent definitions</li>
         </ul>
       </div>
     </div>
