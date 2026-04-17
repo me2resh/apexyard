@@ -210,6 +210,29 @@ Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/
 
 ---
 
+## Architecture diagrams
+
+Every managed project should have at least a **C4 Level 1 (System Context)** diagram, and ideally a **Level 2 (Container)** one. Diagrams are written as Mermaid inside Markdown files — GitHub renders them inline, zero build step.
+
+Templates:
+
+- `templates/architecture/c4-context.md` — L1, system + external actors
+- `templates/architecture/c4-container.md` — L2, deployable units inside the system boundary
+
+Where to put the diagrams (same split as every other kind of doc — "would this follow the code if the project spun out?"):
+
+| Scope | Location |
+|-------|----------|
+| Framework-wide (ApexStack itself) | `docs/architecture/` in the ops fork |
+| ApexStack's view of a managed project | `projects/<name>/architecture/` in the ops fork |
+| Internal to a project's own repo | `docs/architecture/` in that project's repo (via `workspace/<name>/docs/architecture/`) |
+
+ApexStack dogfoods its own convention — see `docs/architecture/apexstack-context.md` and `apexstack-container.md` for a worked example.
+
+Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML / D2): [`docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`](agdr/AgDR-0003-mermaid-c4-for-diagrams.md).
+
+---
+
 ## Daily workflow
 
 A typical morning as a CTO / Chief of Staff using apexstack:
