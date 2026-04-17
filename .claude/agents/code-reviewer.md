@@ -153,9 +153,77 @@ This PR cannot be merged until technical decisions are documented.
 
    OR if approved:
    gh pr review {number} --approve --body "LGTM"
+
+5. On APPROVED verdict only: write the approval marker (see below)
 ```
 
 **CRITICAL**: Always include the commit SHA in your review. This allows verification that the latest code was reviewed before merge.
+
+## ⛔ Approval marker — EXACT FORMAT REQUIRED
+
+When your verdict is APPROVED, and ONLY then, write the approval marker file so the `block-unreviewed-merge.sh` hook can let the merge through.
+
+### The command
+
+Use exactly one of these forms. Nothing else:
+
+```bash
+# Option A — from the local HEAD of the PR branch
+git rev-parse HEAD > .claude/session/reviews/{number}-rex.approved
+
+# Option B — from the PR's HEAD on GitHub (preferred for cross-repo / detached HEAD)
+gh pr view {number} --json headRefOid --jq .headRefOid > .claude/session/reviews/{number}-rex.approved
+
+# Option C — literal SHA write (when you've already captured the SHA in a variable)
+printf '%s\n' "$SHA" > .claude/session/reviews/{number}-rex.approved
+```
+
+Where `{number}` is the PR number and the file path is repo-relative from the repo root.
+
+### Content — MUST be bare SHA + newline
+
+The hook reads the marker, strips whitespace, and compares to the PR's HEAD SHA. **Any content that is not exactly the 40-char HEAD SHA followed by a single newline breaks the merge gate.**
+
+#### CORRECT
+
+```
+2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
+```
+
+41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c .claude/session/reviews/{number}-rex.approved | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
+
+#### WRONG — do NOT write any of these
+
+```
+PR: 42
+SHA: 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
+```
+
+```json
+{"pr": 42, "sha": "2933a06e28a1e98aee8cdef18a0dcaaa0f610b08"}
+```
+
+```
+2933a06e28a1e98aee8cdef18a0dcaaa0f610b08 (reviewed 2026-04-17)
+```
+
+```
+APPROVED at 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
+```
+
+All of these fail the hook's whitespace-strip-then-compare check. The merge gate blocks the PR; the only way forward is hand-editing the marker, which is itself a rule violation per `.claude/rules/pr-workflow.md` § "Mechanical enforcement". Don't create that situation.
+
+### Where to write
+
+`.claude/session/reviews/` at the repo root. If running in a nested worktree, write to the worktree's reviews dir — that's where the merge-gate hook looks.
+
+### On REQUEST CHANGES or COMMENT verdicts
+
+Do NOT write the marker. The marker's existence is the signal "this PR is ready to merge from the code-review side"; writing it on a non-approved verdict is a lie.
+
+### If the marker can't be written (sandbox / permission error)
+
+Report the failure in plain text with the exact command the caller needs to run. Do NOT describe the approval as complete when the marker isn't in place — the hook will still block the merge.
 
 ## Output Format
 
@@ -203,6 +271,7 @@ This PR cannot be merged until technical decisions are documented.
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
    - The PR author must run `/decide` and link the AgDR before re-review
+8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `.claude/session/reviews/{pr}-rex.approved` containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
 
 ## Example Invocation
 
