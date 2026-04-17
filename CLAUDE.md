@@ -126,6 +126,8 @@ Template: @templates/agdr.md
 | Technical Design | Planning implementation | `templates/technical-design.md` |
 | ADR | Recording architecture decisions | `templates/adr.md` |
 | AgDR | Recording AI agent decisions | `templates/agdr.md` |
+| C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
+| C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
 
 ---
 
