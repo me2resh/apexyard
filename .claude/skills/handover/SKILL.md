@@ -21,15 +21,18 @@ This is the bridge between "we just inherited this codebase" and "this codebase 
 
 ## Output location
 
-The assessment is always written to:
+The skill writes two files under `projects/<name>/`:
 
 ```
-projects/<name>/handover-assessment.md
+projects/<name>/handover-assessment.md         ← always (re)written
+projects/<name>/architecture/container.md      ← only if missing — stub L2 C4 diagram
 ```
 
 The folder lives in the ops repo (your fork of apexstack), alongside the rest of `projects/`.
 
 If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing — see `projects/README.md` for the convention.
+
+The architecture stub is **written once** and never overwritten — it's a starting point, not a generated artefact. After the first handover, any edits the team makes to refine the diagram survive re-runs of the skill.
 
 ## Process
 
@@ -175,7 +178,7 @@ Write `projects/<name>/handover-assessment.md`:
 
 ### Registry entry
 
-The entry that will be appended to `apexstack.projects.yaml` at the root of the ops repo (see step 6 — the skill does this append for you, with confirmation):
+The entry that will be appended to `apexstack.projects.yaml` at the root of the ops repo (see step 7 — the skill does this append for you, with confirmation):
 
 ```yaml
 - name: {name}
@@ -240,7 +243,164 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 
 ```
 
-### 6. Append to the portfolio registry
+### 6. Write the L2 container diagram stub (if missing)
+
+**Skip condition**: if `projects/<name>/architecture/container.md` already exists, skip this entire step and note it in the final summary (`architecture/container.md: preserved`). Never overwrite.
+
+If missing: emit a stub Mermaid C4 container diagram derived from the repo signals gathered in step 3. The goal is a file the user can render on GitHub immediately and then refine — correctness beats completeness.
+
+#### Container-detection signals
+
+Scan the repo for these, in order. Stop at the first match per slot where it makes sense (only one `web`, only one primary `db`), but accumulate for multi-service slots (workers, caches, queues can coexist).
+
+**Slot: `web` (frontend / SPA)**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| `package.json` has `next` or `@next/*` | Web App | `Next.js` |
+| `package.json` has `react-scripts` | Web App | `React / CRA` |
+| `package.json` has `vite` + React dep | Web App | `React / Vite` |
+| `package.json` has `@remix-run/*` | Web App | `Remix` |
+| `package.json` has `svelte` / `@sveltejs/kit` | Web App | `SvelteKit` |
+| `package.json` has `nuxt` | Web App | `Nuxt` |
+| `package.json` has `@angular/core` | Web App | `Angular` |
+| `src/components/` or `src/pages/` exists | Web App | (infer from `package.json`) |
+
+If none match → omit the web container. Not all projects have a frontend.
+
+**Slot: `api` (HTTP backend)**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| `package.json` has `express` | API | `Node.js / Express` |
+| `package.json` has `fastify` | API | `Node.js / Fastify` |
+| `package.json` has `hono` | API | `Node.js / Hono` |
+| `package.json` has `@nestjs/core` | API | `NestJS` |
+| `package.json` has `koa` | API | `Node.js / Koa` |
+| Next.js project with `app/api/` or `pages/api/` | API | `Next.js API routes` (same container as web, or split if clearly separate service) |
+| `go.mod` has `net/http` handlers / `gin` / `echo` / `chi` / `fiber` | API | `Go / <framework>` |
+| `pyproject.toml` has `fastapi` / `django` / `flask` | API | `Python / <framework>` |
+| `Gemfile` has `rails` / `sinatra` | API | `Ruby / <framework>` |
+| `Cargo.toml` has `axum` / `actix-web` / `rocket` | API | `Rust / <framework>` |
+
+If the project is a monolith Next.js app with API routes, collapse `web` + `api` into one container labelled `Web App + API` with tech `Next.js` — don't fabricate a split the code doesn't have.
+
+**Slot: `worker` (async / background jobs)**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| `package.json` has `bullmq` / `bee-queue` / `agenda` | Background Worker | `Node.js / <lib>` |
+| `package.json` has `@inngest/*` | Background Worker | `Inngest` |
+| `workers/` directory with job handlers | Background Worker | (infer) |
+| `pyproject.toml` has `celery` | Background Worker | `Python / Celery` |
+
+If none → omit.
+
+**Slot: `db` (primary relational / document store)**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| `prisma/schema.prisma` with `datasource db { provider = "postgresql" }` | Primary Database | `PostgreSQL (Prisma)` |
+| Same, provider = `mysql` / `sqlite` / `mongodb` / etc. | Primary Database | `<Provider> (Prisma)` |
+| `drizzle.config.ts` or `drizzle.config.js` | Primary Database | `<driver> (Drizzle)` |
+| `knexfile.{js,ts}` | Primary Database | `<client from config> (Knex)` |
+| `DATABASE_URL` in `.env.example` with `postgres://` / `mysql://` / `mongodb://` | Primary Database | `<Protocol-derived>` |
+| `supabase/config.toml` | Primary Database | `Supabase (PostgreSQL)` |
+| `firebase.json` with firestore config | Primary Database | `Firestore` |
+
+Use `ContainerDb(db, ...)` (the `Db` suffix changes the icon in Mermaid C4).
+
+**Slot: `cache`**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| `package.json` has `ioredis` / `redis` / `@upstash/redis` | Cache | `Redis` |
+| `REDIS_URL` / `UPSTASH_REDIS_URL` in `.env.example` | Cache | `Redis` |
+| `package.json` has `memcached` / `memjs` | Cache | `Memcached` |
+
+Use `ContainerDb(cache, ...)`.
+
+**Slot: `queue` (if distinct from `worker`)**
+
+| Signal | Label | Tech label |
+|--------|-------|-----------|
+| AWS SDK with SQS usage (grep for `@aws-sdk/client-sqs`) | Queue | `AWS SQS` |
+| `package.json` has `kafkajs` | Queue | `Kafka` |
+| `package.json` has `amqplib` / `@cloudamqp/*` | Queue | `RabbitMQ` |
+
+Only include a separate queue container if it's clearly distinct from worker infrastructure — otherwise fold into the worker's tech label.
+
+**Slot: external systems (from `System_Ext`)**
+
+Infer from:
+
+- Auth SDKs: `@auth0/*` / `@clerk/*` / `next-auth` / `@supabase/auth-*` → `Auth Provider`, tech `Auth0` / `Clerk` / etc.
+- Payments: `stripe` / `@paddle/*` → `Payment Processor`
+- Email: `postmark` / `@sendgrid/*` / `resend` / `@aws-sdk/client-ses` → `Email Provider`
+- Storage: `@aws-sdk/client-s3` / `@vercel/blob` / `@cloudflare/r2` → `Object Storage`
+- LLM: `openai` / `@anthropic-ai/sdk` / `@google-ai/*` → `LLM API`
+
+Include only the externals you find evidence for. Don't fabricate a Stripe dependency.
+
+**docker-compose.yml override**
+
+If `docker-compose.yml` exists at the repo root, it's a stronger signal than `package.json` for container composition — the compose services ARE the containers. For each service:
+
+- Map `image: postgres:*` or `image: mysql:*` → `ContainerDb(db, ...)`
+- Map `image: redis:*` → `ContainerDb(cache, "Cache", "Redis", ...)`
+- Map `image: node:*` / `image: python:*` / `image: ruby:*` with a `build:` context → generic `Container(...)`, use the build context path as a hint
+- Map named application services (from `build: ./api`, `build: ./web`) to `api` / `web` slots
+
+When compose and `package.json` conflict, trust compose — it describes the deployment shape the project actually runs in.
+
+**Dockerfile-only**
+
+If there's a `Dockerfile` at repo root but no `docker-compose.yml`: one container, tech = the `FROM` base image (e.g. `node:20-alpine`). Pair it with whatever `package.json` says is the runtime. Don't invent a database container without signal.
+
+#### Assembling the file
+
+Start from `templates/architecture/c4-container.md` (the template shipped in #50). Replace:
+
+- `{Project Name}` → the project's real name (from the handover)
+- The sample `System_Boundary` contents → the containers you detected
+- The sample `Rel(...)` edges → a reasonable first pass:
+  - `user → web` (HTTPS) if there's a `web`
+  - `web → api` (HTTPS / JSON) if there's both
+  - `api → db` (SQL or driver-specific) if there's a `db`
+  - `api → cache` (TCP) if there's a `cache`
+  - `api → worker` (enqueue) if there's a `worker`
+  - `worker → <external>` (API) for each external the worker plausibly calls
+  - `api → <external>` for each external the API plausibly calls
+
+Also replace the bottom-of-file guidance section with a brief **"Handover-generated — refine me"** note so the user knows this was machine-drafted:
+
+```markdown
+> **Note**: this diagram was auto-generated by `/handover` on YYYY-MM-DD from repo signals (`package.json`, `docker-compose.yml`, `Dockerfile`, Prisma schema, `.env.example`). It is a **starting point** — review and refine. Specifically look at:
+>
+> - Container labels and tech strings — the detector may have picked a framework version wrong
+> - Inferred relationships — `user → web` assumes HTTPS; adjust if your stack uses something else
+> - External systems — anything your team uses that isn't in `package.json` (e.g. infra-only dependencies, direct cloud APIs called via HTTP) won't have been detected
+>
+> Update the "Maintenance" section below once the diagram is stable.
+
+## Maintenance
+
+(From the template — update when L2 containers change.)
+```
+
+#### Write path
+
+```
+projects/<name>/architecture/container.md
+```
+
+Create `projects/<name>/architecture/` if missing.
+
+#### If there's nothing meaningful to draw
+
+If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected — add manually from templates/architecture/c4-container.md when ready)`. Better to write nothing than fabricate a wrong diagram.
+
+### 7. Append to the portfolio registry
 
 **Don't just print the snippet** — offer to append it automatically:
 
@@ -294,7 +454,7 @@ If yes:
      roles: {the derived list}
    ```
 
-If the user says `n` at the prompt, print the snippet they'd need to copy manually and continue to step 7 without writing anything:
+If the user says `n` at the prompt, print the snippet they'd need to copy manually and continue to step 8 without writing anything:
 
 ```
 Skipping the auto-append. If you want to add it later, copy this into apexstack.projects.yaml:
@@ -307,11 +467,12 @@ Skipping the auto-append. If you want to add it later, copy this into apexstack.
     roles: {derived list}
 ```
 
-### 7. Return a summary
+### 8. Return a summary
 
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
-Registry updated: apexstack.projects.yaml ({added | skipped})
+Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
+Registry updated:            apexstack.projects.yaml ({added | skipped})
 
 Tech stack: {one-liner}
 Build: {ok / failed}
@@ -335,6 +496,8 @@ Top 3 next steps:
 8. **Never store secrets** — if `.env` is found, list its presence but never read its contents.
 9. **Status starts at `handover`** — moves to `active` only after the integration plan is executed.
 10. **Never break the registry** — if the YAML append breaks the file, restore the previous version and ask the user to edit manually.
+11. **Never overwrite the architecture stub** — `projects/<name>/architecture/container.md` is written once on first handover, then owned by the team. Re-runs of `/handover` (e.g. if the tech stack changed) must preserve any manual refinements. If you want to regenerate, the user deletes the file first.
+12. **Architecture stubs are starting points, not truths** — the auto-generated note at the top of the file explicitly tells the user to review and refine. Never claim the detector is authoritative.
 
 ## When to use this
 
