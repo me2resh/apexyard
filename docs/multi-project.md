@@ -225,6 +225,18 @@ A typical morning as a CTO / Chief of Staff using apexstack:
 
 ## Upgrades — pulling from upstream
 
+### How you know it's time
+
+On every Claude Code session start, the `check-upstream-drift.sh` hook runs `git fetch upstream` (cached to once per 10 minutes) and prints a one-line banner if your fork is behind:
+
+```
+ApexStack: 12 commits behind upstream/main. Run /update to sync.
+```
+
+Silent if up-to-date, silent on network failure, silent if no `upstream` remote is configured. No extra startup cost when there's nothing to say.
+
+### Syncing
+
 Every few weeks, pull the latest apexstack improvements into your fork. The easy path is the `/update` skill:
 
 ```

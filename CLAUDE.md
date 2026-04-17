@@ -166,7 +166,7 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 15 shell scripts that mechanically enforce SDLC rules — ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning |
+| Hooks | `.claude/hooks/` | 16 shell scripts that mechanically enforce SDLC rules — ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
 | Skills | `.claude/skills/` | 31 slash commands — see the full list below |
