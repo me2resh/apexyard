@@ -44,9 +44,11 @@ fi
 case "$REL_PATH" in
   .claude/*|.claude|*/.claude/*|*/.claude) exit 0 ;;
   docs/*|docs|*/docs/*|*/docs) exit 0 ;;
-  projects/*/docs/*|*/projects/*/docs/*) exit 0 ;;
   TODO.md|README.md|MEMORY.md|CLAUDE.md) exit 0 ;;
 esac
+# Note: `projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
+# crosses `/`), so no separate arm needed. Per-project apexstack docs are
+# matched by the generic docs-in-any-subtree pattern.
 case "$REL_PATH" in
   *.md) exit 0 ;;
 esac
