@@ -689,7 +689,8 @@ a:hover { color: var(--accent); }
   position: relative;
 }
 .layer:nth-child(2n) { border-right: none; }
-.layer:nth-last-child(-n+2) { border-bottom: none; }
+.layer:last-child { border-bottom: none; }
+.layer:last-child.layer--wide { border-right: none; }
 @media (max-width: 720px) {
   .layer { border-right: none; }
   .layer:not(:last-child) { border-bottom: 1px solid var(--rule-faint); }
@@ -1618,7 +1619,27 @@ confirm it skips the missing column before merge."</span></pre>
     var u = a.getAttribute('data-u') || '';
     var d = a.getAttribute('data-d') || '';
     if (!u || !d) return;
-    a.setAttribute('href', 'mail' + 'to:' + u + '\u0040' + d + '?subject=' + encodeURIComponent('ApexStack - professional setup enquiry'));
+    var subject = 'ApexStack - professional setup enquiry';
+    var body = [
+      'Hi Ahmed,',
+      '',
+      "I'd like to set up apexstack for my team. A few quick details so you can scope the work:",
+      '',
+      '- Company / org:',
+      '- Team size:',
+      '- Stack (languages / frameworks):',
+      '- Number of repos to bring under management:',
+      "- What you're trying to solve (engineering consistency, portfolio visibility, onboarding speed, something else):",
+      '- Timeline / urgency:',
+      '',
+      'Thanks,',
+      ''
+    ].join('\n');
+    a.setAttribute('href',
+      'mail' + 'to:' + u + '\u0040' + d +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body)
+    );
     assembled = true;
   }
   ['mouseenter', 'focus', 'touchstart'].forEach(function (ev) {
