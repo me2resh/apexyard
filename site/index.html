@@ -1198,7 +1198,7 @@ footer.foot {
     <div class="hero__cta rise rise-4">
       <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star &nbsp;·&nbsp; ⑂ Fork on GitHub</a>
       <span class="cta__sep" aria-hidden="true">·</span>
-      <a href="#quickstart" class="cta cta--ghost">or see the 4-step quickstart ↓</a>
+      <a href="#quickstart" class="cta cta--ghost">or see the 3-step quickstart ↓</a>
     </div>
 
     <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexstack, from inbox pickup to QA sign-off">
@@ -1321,41 +1321,35 @@ footer.foot {
 
   <div class="section__head">
     <span class="section__num">01 / QUICKSTART</span>
-    <h2 class="section__title">Get started in four steps</h2>
+    <h2 class="section__title">Get started in three steps</h2>
     <p class="section__lede">
-      From invite to first command. Works the same whether you were added to someone's org or are starting your own fork.
+      From fork to first command. Everything is public; no invite needed.
     </p>
   </div>
 
   <div class="steps">
 
     <article class="step">
-      <div class="step__num">01 - invite (or fork yourself)</div>
-      <h3 class="step__title">Get access</h3>
-      <p class="step__desc">Either someone in an apexstack-managed org invites you as a collaborator, or you fork upstream. Same result either way - you land with a repo that already has apexstack's <code>.claude/</code>, <code>CLAUDE.md</code>, and <code>apexstack.projects.yaml</code> inside.</p>
-    </article>
-
-    <article class="step">
-      <div class="step__num">02 - star, fork, clone</div>
+      <div class="step__num">01 - star, fork, clone</div>
       <h3 class="step__title">Pull it to your machine</h3>
-      <p class="step__desc">One command via the GitHub CLI. Rename to <code>your-org/ops</code> if you prefer - GitHub handles the rename cleanly.</p>
+      <p class="step__desc">One command via the GitHub CLI. Rename to <code>your-org/ops</code> if you prefer - GitHub handles the rename cleanly. Adding <code>upstream</code> lets you sync later via <code>/update</code>.</p>
       <pre class="step__code">gh repo fork me2resh/apexstack --clone
 cd apexstack
 git remote add upstream \
   https://github.com/me2resh/apexstack.git</pre>
     </article>
 
-    <article class="step step--wide" style="grid-column: 1 / -1;">
-      <div class="step__num">03 - claude, /setup</div>
+    <article class="step">
+      <div class="step__num">02 - claude, /setup</div>
       <h3 class="step__title">Open Claude Code and run <code>/setup</code></h3>
-      <p class="step__desc">Everything loads automatically from <code>CLAUDE.md</code>. On first run, a session-start hook checks upstream drift. Then run <code>/setup</code> once - it walks you through company, team, and tech stack in three exchanges and writes <code>onboarding.yaml</code>.</p>
+      <p class="step__desc">Everything loads automatically from <code>CLAUDE.md</code>. On first run, a session-start hook checks upstream drift. Then run <code>/setup</code> once - three exchanges to configure company, team, and tech stack.</p>
       <pre class="step__code">claude
 <span class="acc">/setup</span>
 <span class="cm"># three questions → onboarding.yaml is configured</span></pre>
     </article>
 
     <article class="step step--wide" style="grid-column: 1 / -1;">
-      <div class="step__num">04 - bring a project in, or capture an idea</div>
+      <div class="step__num">03 - bring a project in, or capture an idea</div>
       <h3 class="step__title">Adopt, or originate</h3>
       <p class="step__desc">Two entry points depending on what you walked in with. <code>/handover</code> takes an existing repo and generates an assessment + C4 L2 stub + registry entry. <code>/idea</code> captures a new product concept to the shared backlog so it doesn't evaporate.</p>
       <pre class="step__code"><span class="acc">/handover</span> &lt;repo-url&gt;   <span class="cm"># existing project → assessment + registry + architecture stub</span>
