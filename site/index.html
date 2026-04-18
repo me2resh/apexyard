@@ -1100,10 +1100,9 @@ footer.foot {
       <span class="titlebar__path">~/<b>apexstack</b> <span class="dim">— main · v0.3</span></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
-      <a href="#layers">layers</a>
+      <a href="#quickstart">quickstart</a>
       <a href="#examples">walkthroughs</a>
-      <a href="#pipelines">pipelines</a>
-      <a href="#install">install</a>
+      <a href="#in-the-box">what's in the box</a>
       <a href="https://github.com/me2resh/apexstack" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
   </div>
@@ -1141,7 +1140,7 @@ footer.foot {
     <div class="hero__cta rise rise-4">
       <a href="https://github.com/me2resh/apexstack" class="cta cta--primary" target="_blank" rel="noopener">★ Star &nbsp;·&nbsp; ⑂ Fork on GitHub</a>
       <span class="cta__sep" aria-hidden="true">·</span>
-      <a href="#install" class="cta cta--ghost">or see the install steps ↓</a>
+      <a href="#quickstart" class="cta cta--ghost">or see the 4-step quickstart ↓</a>
     </div>
 
     <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexstack, from inbox pickup to QA sign-off">
@@ -1220,7 +1219,7 @@ footer.foot {
     </div>
 
     <p class="install__caveat rise rise-4">
-      One command forks apexstack into your org and clones the fork locally. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks. Full walkthrough in <a href="#install" class="uline">install</a> below. No magic. No build. No SaaS. Rename the fork to <code>your-org/ops</code> if you prefer — GitHub handles the rename cleanly.
+      One command forks apexstack into your org and clones the fork locally. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks. Full walkthrough in the <a href="#quickstart" class="uline">quickstart</a> below. Rename the fork to <code>your-org/ops</code> if you prefer — GitHub handles the rename cleanly.
     </p>
 
     <div class="hero__metrics rise rise-5" aria-label="What you get">
@@ -1250,58 +1249,51 @@ footer.foot {
 </section>
 
 <!-- ============================================================
-     SECTION 01 — the five layers
+     SECTION 01 — quickstart
      ============================================================ -->
-<section class="section section--alt" id="layers">
+<section class="section section--alt" id="quickstart">
 
   <div class="section__head">
-    <span class="section__num">01 / LAYERS</span>
-    <h2 class="section__title">Five layers, one stack</h2>
+    <span class="section__num">01 / QUICKSTART</span>
+    <h2 class="section__title">Get started in four steps</h2>
     <p class="section__lede">
-      Five layers stack together: roles, workflows, hooks, skills, and the portfolio registry itself. Even with one repo, every layer works the same.
+      From invite to first command. Works the same whether you were added to someone's org or are starting your own fork.
     </p>
   </div>
 
-  <div class="layers">
+  <div class="steps">
 
-    <article class="layer">
-      <div class="layer__num">01 — roles</div>
-      <h3 class="layer__title">Roles</h3>
-      <p class="layer__desc">
-        19 role definitions across 5 departments. Activation-triggered with CAN / CANNOT boundaries. "Act as the QA Engineer" picks up the full mental model.
-      </p>
+    <article class="step">
+      <div class="step__num">01 — invite (or fork yourself)</div>
+      <h3 class="step__title">Get access</h3>
+      <p class="step__desc">Either someone in an apexstack-managed org invites you as a collaborator, or you fork upstream. Same result either way — you land with a repo that already has apexstack's <code>.claude/</code>, <code>CLAUDE.md</code>, and <code>apexstack.projects.yaml</code> inside.</p>
     </article>
 
-    <article class="layer">
-      <div class="layer__num">02 — workflows + templates</div>
-      <h3 class="layer__title">Workflows + templates</h3>
-      <p class="layer__desc">
-        7-phase SDLC, code review, deployment. Seven templates — PRD, tech design, ADR, AgDR, migration AgDR, C4 L1 + L2.
-      </p>
+    <article class="step">
+      <div class="step__num">02 — star, fork, clone</div>
+      <h3 class="step__title">Pull it to your machine</h3>
+      <p class="step__desc">One command via the GitHub CLI. Rename to <code>your-org/ops</code> if you prefer — GitHub handles the rename cleanly.</p>
+      <pre class="step__code">gh repo fork me2resh/apexstack --clone
+cd apexstack
+git remote add upstream \
+  https://github.com/me2resh/apexstack.git</pre>
     </article>
 
-    <article class="layer">
-      <div class="layer__num">03 — hooks + rules</div>
-      <h3 class="layer__title">Hooks + rules</h3>
-      <p class="layer__desc">
-        18 shell hooks enforce the SDLC mechanically: ticket-first, migration gate, two-marker merge gates (Rex + CEO), design review, red-CI block, upstream drift banner. Eight modular rule files.
-      </p>
+    <article class="step">
+      <div class="step__num">03 — claude, hi</div>
+      <h3 class="step__title">Open Claude Code and say hi</h3>
+      <p class="step__desc">Everything loads automatically from <code>CLAUDE.md</code>. On first run, a session-start hook checks upstream drift and asks you to run <code>/setup</code> once to fill in <code>onboarding.yaml</code> — company, team, stack.</p>
+      <pre class="step__code">claude
+<span class="acc">hi</span>
+<span class="cm"># first-time: /setup runs through company + stack config</span></pre>
     </article>
 
-    <article class="layer">
-      <div class="layer__num">04 — agents + skills</div>
-      <h3 class="layer__title">Agents + skills</h3>
-      <p class="layer__desc">
-        Five sub-agents (Rex, Shield, Guardian, PR Manager, Ticket Manager). 32 slash commands covering SDLC, portfolio rollups, adoption, and an 8-dimension <code>/launch-check</code>.
-      </p>
-    </article>
-
-    <article class="layer layer--wide" style="grid-column: 1 / -1;">
-      <div class="layer__num">05 — portfolio</div>
-      <h3 class="layer__title">A portfolio, not a single repo</h3>
-      <p class="layer__desc">
-        Your ops repo is a <strong>fork of apexstack</strong>. <code>apexstack.projects.yaml</code> at the root is the registry. Every portfolio skill — <code>/projects</code>, <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>, <code>/stakeholder-update</code> — aggregates across it. One fork, N products, one inbox.
-      </p>
+    <article class="step step--wide" style="grid-column: 1 / -1;">
+      <div class="step__num">04 — bring a project in, or capture an idea</div>
+      <h3 class="step__title">Adopt, or originate</h3>
+      <p class="step__desc">Two entry points depending on what you walked in with. <code>/handover</code> takes an existing repo and generates an assessment + C4 L2 stub + registry entry. <code>/idea</code> captures a new product concept to the shared backlog so it doesn't evaporate.</p>
+      <pre class="step__code"><span class="acc">/handover</span> &lt;repo-url&gt;   <span class="cm"># existing project → assessment + registry + architecture stub</span>
+<span class="acc">/idea</span>                  <span class="cm"># new concept → ideas-backlog.md, optional GitHub issue</span></pre>
     </article>
 
   </div>
@@ -1406,158 +1398,70 @@ confirm it skips the missing column before merge."</span></pre>
 
 </section>
 
+
 <!-- ============================================================
-     SECTION 03 — pipelines
+     SECTION 04 — what's in the box
      ============================================================ -->
-<section class="section section--alt" id="pipelines">
+<section class="section" id="in-the-box">
 
   <div class="section__head">
-    <span class="section__num">03 / PIPELINES</span>
-    <h2 class="section__title">Drop-in CI workflows</h2>
+    <span class="section__num">04 / WHAT'S IN THE BOX</span>
+    <h2 class="section__title">What you can actually do</h2>
     <p class="section__lede">
-      Seven GitHub Actions workflows live at <code>golden-paths/pipelines/</code>. Copy whichever you want into your project's <code>.github/workflows/</code> — no boilerplate to write, no configuration to wrestle with.
+      Everything below is already wired in your fork. Nothing to install, nothing to configure beyond <code>/setup</code>.
     </p>
   </div>
 
-  <div class="pipelines">
-    <div class="pipelines__inner">
+  <div class="layers">
 
-      <div class="pipeline">
-        <div class="pipeline__file">ci.yml</div>
-        <div class="pipeline__desc">Combined pipeline — code quality + security + dependencies in one file. Start here.</div>
-        <div class="pipeline__agent">Rex · Shield · Guardian</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">code-quality.yml</div>
-        <div class="pipeline__desc">TypeScript check, ESLint, Prettier, tests with coverage, build verification. Posts a summary comment on every PR.</div>
-        <div class="pipeline__agent">Rex</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">security.yml</div>
-        <div class="pipeline__desc">Semgrep SAST (OWASP Top 10), npm audit, TruffleHog secrets detection, optional CodeQL. Fails on critical or high severity.</div>
-        <div class="pipeline__agent">Shield</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">dependency-audit.yml</div>
-        <div class="pipeline__desc">Weekly vulnerability scan (Mondays 09:00 UTC) plus on every package.json change. Auto-creates a security issue when something critical lands.</div>
-        <div class="pipeline__agent">Guardian</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">pr-title-check.yml</div>
-        <div class="pipeline__desc">Enforces a ticket ID in every PR title. Default: GitHub Issues (#58). Also accepts any uppercase tracker prefix.</div>
-        <div class="pipeline__agent">governance</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">review-check.yml</div>
-        <div class="pipeline__desc">Blocks merge if Rex hasn't reviewed the latest commit on the PR. Compares review SHAs against HEAD.</div>
-        <div class="pipeline__agent">Rex (verification)</div>
-      </div>
-
-      <div class="pipeline">
-        <div class="pipeline__file">seo-check.yml</div>
-        <div class="pipeline__desc">SEO scoring for content files — H1, meta description, length, headings, alt text, internal links. For docs and blog sites.</div>
-        <div class="pipeline__agent">no agent</div>
-      </div>
-
-    </div>
-  </div>
-
-</section>
-
-<!-- ============================================================
-     SECTION 04 — install
-     ============================================================ -->
-<section class="section" id="install">
-
-  <div class="section__head">
-    <span class="section__num">04 / INSTALL</span>
-    <h2 class="section__title">Fork, track upstream, start working</h2>
-    <p class="section__lede">
-      Three steps. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks. Config (<code>onboarding.yaml</code>) and the registry (<code>apexstack.projects.yaml</code>) are handled by <code>/setup</code> and <code>/handover</code> from inside Claude Code — you never open them by hand.
-    </p>
-  </div>
-
-  <div class="steps">
-
-    <article class="step">
-      <div class="step__num">01 — fork + clone</div>
-      <h3 class="step__title">Fork apexstack on GitHub</h3>
-      <p class="step__desc">Star + fork on GitHub, or one-command via the GitHub CLI. Rename the fork to <code>your-org/ops</code> if you prefer — GitHub handles the rename cleanly.</p>
-      <pre class="step__code">gh repo fork me2resh/apexstack --clone
-cd apexstack</pre>
+    <article class="layer">
+      <div class="layer__num">roles · 19</div>
+      <h3 class="layer__title">Activate by trigger</h3>
+      <p class="layer__desc">
+        PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. Migration edit → Data Engineer + migration AgDR. Each role has CAN / CANNOT lists — it won't step outside its lane.
+      </p>
     </article>
 
-    <article class="step">
-      <div class="step__num">02 — track upstream</div>
-      <h3 class="step__title">Add the upstream remote</h3>
-      <p class="step__desc">Once. The session-start drift banner tells you when you're behind; <code>/update</code> does the sync-branch-and-PR dance for you.</p>
-      <pre class="step__code">git remote add upstream \
-  https://github.com/me2resh/apexstack.git</pre>
+    <article class="layer">
+      <div class="layer__num">skills · 33 slash commands</div>
+      <h3 class="layer__title">One prompt, one thing</h3>
+      <p class="layer__desc">
+        <code>/handover</code> adopts a project. <code>/idea</code> captures a concept. <code>/inbox</code>, <code>/status</code>, <code>/tasks</code> triage the portfolio. <code>/decide</code> records a technical call as an AgDR. <code>/launch-check</code> runs an 8-dimension readiness audit. <code>/c4</code> generates L1 + L2 architecture diagrams from a codebase.
+      </p>
     </article>
 
-    <article class="step">
-      <div class="step__num">03 — start working</div>
-      <h3 class="step__title">Open Claude Code in the fork</h3>
-      <p class="step__desc">Everything loads automatically — <code>CLAUDE.md</code> is the entry point. Run <code>/setup</code> once to configure your company + stack, <code>/handover &lt;repo&gt;</code> to bring each project under management, then reach for the portfolio skills.</p>
-      <pre class="step__code"><span class="acc">/setup</span>             <span class="cm"># one-time — company + tech stack → onboarding.yaml</span>
-<span class="acc">/handover</span> &lt;repo&gt;   <span class="cm"># adopt a project → registry + stub L2 C4 diagram</span>
-<span class="acc">/inbox</span>             <span class="cm"># PRs, issues, comments needing your eyes</span>
-<span class="acc">/status</span>            <span class="cm"># git + CI snapshot per project</span>
-<span class="acc">/launch-check</span>      <span class="cm"># 8-dimension production-readiness audit</span></pre>
+    <article class="layer">
+      <div class="layer__num">hooks · 18 shell scripts</div>
+      <h3 class="layer__title">Rules that fire themselves</h3>
+      <p class="layer__desc">
+        Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.
+      </p>
     </article>
 
-  </div>
+    <article class="layer">
+      <div class="layer__num">agents · 5 sub-agents</div>
+      <h3 class="layer__title">Reviewers that don't rubber-stamp</h3>
+      <p class="layer__desc">
+        Rex (code review) checks architecture + tests + AgDR links + glossary. Shield (security) flags auth / crypto / secrets. Guardian (deps) scans vulnerabilities + licences. PR Manager + Ticket Manager handle the orchestration.
+      </p>
+    </article>
 
-</section>
+    <article class="layer">
+      <div class="layer__num">CI · 7 golden-path workflows</div>
+      <h3 class="layer__title">Drop-in GitHub Actions</h3>
+      <p class="layer__desc">
+        At <code>golden-paths/pipelines/</code>: <code>ci.yml</code> (combined), <code>code-quality.yml</code>, <code>security.yml</code> (Semgrep + npm audit + TruffleHog), <code>dependency-audit.yml</code> (weekly), <code>pr-title-check.yml</code>, <code>review-check.yml</code> (blocks merge until Rex has reviewed HEAD), <code>seo-check.yml</code>. Copy what you need into each project's <code>.github/workflows/</code>.
+      </p>
+    </article>
 
-<!-- ============================================================
-     SECTION 05 — what apexstack is and isn't
-     ============================================================ -->
-<section class="section section--alt">
+    <article class="layer layer--wide" style="grid-column: 1 / -1;">
+      <div class="layer__num">portfolio · one fork, N products</div>
+      <h3 class="layer__title">One inbox across everything</h3>
+      <p class="layer__desc">
+        <code>apexstack.projects.yaml</code> at your fork root lists every repo you manage. Skills like <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>, <code>/stakeholder-update</code> aggregate across it. Add a project with <code>/handover</code>; sync with upstream via <code>/update</code>.
+      </p>
+    </article>
 
-  <div class="section__head">
-    <span class="section__num">05 / SCOPE</span>
-    <h2 class="section__title">Opinionated by design</h2>
-    <p class="section__lede">
-      Every reusable framework has to draw a line between "this is what we do" and "this is yours to figure out". ApexStack draws the line where it makes the most difference for engineering teams.
-    </p>
-  </div>
-
-  <div class="antifeatures">
-    <div class="antifeatures__inner">
-      <div class="antifeatures__col is-do">
-        <h3 class="is-yes">+ what apexstack does</h3>
-        <ul>
-          <li>Enforces ticket-first development via GitHub Issues per project — with a stricter migration-gate variant on schema / migration-path edits</li>
-          <li>Requires explicit per-PR CEO approval before any merge — marker is SHA-bound, invalidates on every new commit</li>
-          <li>Blocks dangerous git operations (add -A, push to main, secrets in commits, red CI, unreviewed merges via either <code>gh pr merge</code> or raw <code>gh api</code>)</li>
-          <li>Forces structured decisions via /decide → AgDR audit trail (plus a dedicated migration AgDR with rollback / downtime / consumers / observability)</li>
-          <li>Ships an opinionated 6-gate workflow from PRD to QA + a migration sub-workflow</li>
-          <li>Aggregates a whole portfolio into one inbox — /inbox, /status, /tasks read a single registry file</li>
-          <li>Tells you when the fork is behind upstream (session-start drift banner), then syncs it in one skill invocation</li>
-          <li>Mandates a glossary in every PR — knowledge stays in the team</li>
-          <li>Defaults to TypeScript, DDD, vitest, GitHub Actions — but stays editable per project via <code>.claude/project-config.json</code></li>
-        </ul>
-      </div>
-      <div class="antifeatures__col is-dont">
-        <h3>× what apexstack does NOT do</h3>
-        <ul>
-          <li>Replace your team — humans still write code, ship product, talk to customers</li>
-          <li>Lock you into a SaaS — every file is markdown or shell, fork freely, diff any decision in git</li>
-          <li>Hide its opinions — read the rules, disagree, edit them (and file a PR upstream if you want them changed for everyone)</li>
-          <li>Auto-run merges when you say "go" on a plan — per-PR approval is discrete by design</li>
-          <li>Impose a central tracker — issues live in each project's own GitHub repo, not in apexstack</li>
-          <li>Pretend to be language-agnostic — TypeScript-leaning by default; path patterns and templates are swappable</li>
-          <li>Ship a UI — this is a stack of files, not an app</li>
-          <li>Compete with Claude Code's built-ins — it extends them via hooks, skills, and sub-agent definitions</li>
-        </ul>
-      </div>
-    </div>
   </div>
 
 </section>
@@ -1568,11 +1472,9 @@ cd apexstack</pre>
 <section class="final">
   <div class="final__inner">
     <div>
-      <h2>Stop reinventing<br>the same <span class="acc">processes</span>.</h2>
+      <h2>Fork it, clone it,<br>run <span class="acc">claude</span>.</h2>
       <p>
-        ApexStack is one fork, one clone, and one config file away.
-        It's MIT licensed, plain markdown, and edits are encouraged.
-        If you change your mind, you delete the directory and you're back where you started.
+        MIT. Plain markdown and shell. Delete the directory and you're back where you started.
       </p>
     </div>
     <div class="final__actions">
@@ -1580,8 +1482,8 @@ cd apexstack</pre>
         <span>view on github</span>
         <span class="arrow">→</span>
       </a>
-      <a href="#install" class="final__btn">
-        <span>back to install</span>
+      <a href="#quickstart" class="final__btn">
+        <span>back to quickstart</span>
         <span class="arrow">↑</span>
       </a>
       <a href="https://github.com/me2resh/apexstack/issues" class="final__btn" target="_blank" rel="noopener">
