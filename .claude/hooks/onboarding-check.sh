@@ -1,5 +1,5 @@
 #!/bin/bash
-# SessionStart hook: checks whether this ApexStack fork has been configured.
+# SessionStart hook: checks whether this ApexYard fork has been configured.
 #
 # Detection: reads onboarding.yaml and checks if company.name is still the
 # placeholder value "Your Company Name". If so, the fork hasn't been set up
@@ -12,7 +12,7 @@
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 CONFIG="${REPO_ROOT:-.}/onboarding.yaml"
 
-# No onboarding.yaml at all — not an apexstack fork, skip silently
+# No onboarding.yaml at all — not an apexyard fork, skip silently
 if [ ! -f "$CONFIG" ]; then
   exit 0
 fi
@@ -20,7 +20,7 @@ fi
 # Check if the placeholder is still present
 if grep -q '"Your Company Name"' "$CONFIG" 2>/dev/null; then
   cat <<MSG
-APEXSTACK SETUP NOT RUN
+APEXYARD SETUP NOT RUN
 
 This fork hasn't been configured yet. onboarding.yaml still has
 placeholder values ("Your Company Name").

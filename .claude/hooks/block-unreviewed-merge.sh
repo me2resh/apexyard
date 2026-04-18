@@ -86,7 +86,7 @@ if [ ! -f "$REX_APPROVAL" ]; then
   cat >&2 <<MSG
 BLOCKED: PR #${PR_NUMBER} has no recorded code-reviewer (Rex) approval.
 
-ApexStack requires two reviews before merge (workflow-gates rule #5):
+ApexYard requires two reviews before merge (workflow-gates rule #5):
   1. Code Reviewer agent (Rex) — automated, recorded in .claude/session/reviews/
   2. Human approver (CEO) — recorded by the /approve-merge skill
 

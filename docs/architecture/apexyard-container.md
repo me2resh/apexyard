@@ -1,18 +1,18 @@
-# Container Diagram — ApexStack
+# Container Diagram — ApexYard
 
-> **C4 Level 2** — the functional subsystems inside the ApexStack fork. Non-traditional: ApexStack has no runtime of its own. Each "container" is a folder-scoped set of files interpreted by an external system (Claude Code CLI, the user, or GitHub's rendering).
+> **C4 Level 2** — the functional subsystems inside the ApexYard fork. Non-traditional: ApexYard has no runtime of its own. Each "container" is a folder-scoped set of files interpreted by an external system (Claude Code CLI, the user, or GitHub's rendering).
 
 ## Diagram
 
 ```mermaid
 C4Container
-    title Container Diagram for ApexStack
+    title Container Diagram for ApexYard
 
     Person(ops, "CEO / CoS / Tech Lead")
     System_Ext(claude, "Claude Code CLI")
     System_Ext(github, "GitHub")
 
-    System_Boundary(apex, "ApexStack (ops fork)") {
+    System_Boundary(apex, "ApexYard (ops fork)") {
         Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code reads this first. Imports rules and role-triggers.")
         Container(rules, ".claude/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
         Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart events.")
@@ -20,9 +20,9 @@ C4Container
         Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Shield), dependency-auditor, pr-manager, ticket-manager.")
         Container(roles, "roles/", "Markdown role files", "19 role definitions across engineering / product / design / security / data. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
-        Container(registry, "apexstack.projects.yaml", "YAML", "Portfolio registry. Lists every managed project. Skills iterate this to aggregate across projects.")
+        Container(registry, "apexyard.projects.yaml", "YAML", "Portfolio registry. Lists every managed project. Skills iterate this to aggregate across projects.")
         Container(onboarding, "onboarding.yaml", "YAML", "Per-fork configuration — company, team, tech stack, quality bar.")
-        Container(projectdocs, "projects/", "Per-project Markdown", "ApexStack docs about each managed project — handover assessments, per-project roadmaps, stakeholder updates.")
+        Container(projectdocs, "projects/", "Per-project Markdown", "ApexYard docs about each managed project — handover assessments, per-project roadmaps, stakeholder updates.")
         Container(goldens, "golden-paths/", "YAML + Markdown", "Reusable GitHub Actions workflow templates — CI, security, dependency audit, PR title check, review check.")
     }
 
@@ -42,7 +42,7 @@ C4Container
 
 ## How to read this
 
-ApexStack is unusual in C4 terms: there is **no running process that IS ApexStack**. Every "container" above is a folder of files. The "runtime" is either:
+ApexYard is unusual in C4 terms: there is **no running process that IS ApexYard**. Every "container" above is a folder of files. The "runtime" is either:
 
 - **Claude Code CLI** — reads `CLAUDE.md`, executes hooks, invokes skills, spawns sub-agents
 - **The user** — reads role files, workflow docs, and the portfolio registry manually
@@ -53,7 +53,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## Key relationships
 
 - **CLAUDE.md → rules** is the single most important arrow. Every rule file is imported via `@.claude/rules/*.md` from `CLAUDE.md`, and Claude Code applies them. Without that import chain, rules are orphaned prose.
-- **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexStack's mechanical enforcement reaches the remote tracker state.
+- **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
 
@@ -62,11 +62,11 @@ The diagram captures which "container" does what *when interpreted by the right 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
 - The full list of 31 skills — see CLAUDE.md § "Available skills".
 - The full list of 19 roles — see `.claude/rules/role-triggers.md`.
-- The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexStack boundary (they belong to the managed project, not to ApexStack).
+- The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
 ## Related diagrams
 
-- L1 system context: [`apexstack-context.md`](./apexstack-context.md)
+- L1 system context: [`apexyard-context.md`](./apexyard-context.md)
 - SDLC sequence (how a feature flows phase by phase): `workflows/sdlc.md`
 - Rule audit (every MUST → hook / advisory / deferred): `docs/rule-audit.md`
 

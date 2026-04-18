@@ -1,14 +1,14 @@
 ---
 name: setup
-description: First-run framework bootstrap for a new ApexStack fork. Three exchanges — "describe your stack", "here are the defaults", "accept or customize?" — and the fork is configured. Run once after forking; re-run anytime to update.
+description: First-run framework bootstrap for a new ApexYard fork. Three exchanges — "describe your stack", "here are the defaults", "accept or customize?" — and the fork is configured. Run once after forking; re-run anytime to update.
 disable-model-invocation: false
 argument-hint: "[--reset]"
 effort: medium
 ---
 
-# /setup — ApexStack First-Run Bootstrap
+# /setup — ApexYard First-Run Bootstrap
 
-Configures `onboarding.yaml` for a new ApexStack fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.
+Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.
 
 ## When this runs
 
@@ -112,7 +112,7 @@ Stage but do NOT commit — let the user review the diff and commit when ready. 
 
 ```
 onboarding.yaml updated and staged. Review with `git diff --cached` and
-commit when you're happy: git commit -m "chore: configure apexstack for <company>"
+commit when you're happy: git commit -m "chore: configure apexyard for <company>"
 ```
 
 ### Step 7: Optionally seed the project registry
@@ -121,11 +121,11 @@ If the user mentioned a specific project in their description, offer to add it:
 
 ```
 You mentioned a property management SaaS. Want me to register it as
-your first managed project in apexstack.projects.yaml?
+your first managed project in apexyard.projects.yaml?
 I'll need: repo name (owner/repo) and a short project name.
 ```
 
-If yes → append to `apexstack.projects.yaml`, stage alongside `onboarding.yaml`.
+If yes → append to `apexyard.projects.yaml`, stage alongside `onboarding.yaml`.
 If no → skip. They can add projects later with `/handover`.
 
 ## Rules

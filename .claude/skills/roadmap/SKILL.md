@@ -27,7 +27,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## File location
 
-Every roadmap lives at `projects/<name>/roadmap.md` inside your ops repo, where `<name>` matches an entry in `apexstack.projects.yaml`. Without `--project`, the skill asks which project's roadmap to operate on, listing the registry.
+Every roadmap lives at `projects/<name>/roadmap.md` inside your ops repo, where `<name>` matches an entry in `apexyard.projects.yaml`. Without `--project`, the skill asks which project's roadmap to operate on, listing the registry.
 
 ## File format
 

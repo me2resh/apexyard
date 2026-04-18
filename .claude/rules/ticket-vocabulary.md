@@ -49,7 +49,7 @@ The cost of asking the user "do you want me to create these as real issues first
 
 ## Anti-pattern (2026-04-11 incident)
 
-This is the exact output shape that triggered this rule. A friend of the CEO ran ApexStack on an email-processor backlog and saw:
+This is the exact output shape that triggered this rule. A friend of the CEO ran ApexYard on an email-processor backlog and saw:
 
 ```
 Ticket 1: Test Infrastructure Setup

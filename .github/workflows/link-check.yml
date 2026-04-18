@@ -1,4 +1,4 @@
-# Link Check — dogfood apexstack itself
+# Link Check — dogfood apexyard itself
 #
 # Uses lychee to find broken links in site/index.html and all *.md files.
 # Private / loopback addresses are allowed because some docs reference

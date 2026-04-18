@@ -1,12 +1,12 @@
 ---
 name: projects
-description: List all active projects under ApexStack management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.
+description: List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
 # /projects — List Managed Projects
 
-Show every project ApexStack is managing, with a one-line health snapshot. Reads `apexstack.projects.yaml` at the root of the ops repo (your fork of apexstack) and iterates the registry.
+Show every project ApexYard is managing, with a one-line health snapshot. Reads `apexyard.projects.yaml` at the root of the ops repo (your fork of apexyard) and iterates the registry.
 
 ## Usage
 
@@ -18,7 +18,7 @@ Show every project ApexStack is managing, with a one-line health snapshot. Reads
 
 ## Behaviour
 
-Read `apexstack.projects.yaml`:
+Read `apexyard.projects.yaml`:
 
 ```yaml
 version: 1
@@ -50,7 +50,7 @@ PRS=$(gh -R {repo} pr list --state open --json number --jq 'length')
 ISSUES=$(gh -R {repo} issue list --state open --json number --jq 'length')
 ```
 
-If `apexstack.projects.yaml` doesn't exist at the ops-repo root, print a clear error pointing the user at `apexstack.projects.yaml.example` and `docs/multi-project.md` for the setup guide.
+If `apexyard.projects.yaml` doesn't exist at the ops-repo root, print a clear error pointing the user at `apexyard.projects.yaml.example` and `docs/multi-project.md` for the setup guide.
 
 ## Output format
 
@@ -91,7 +91,7 @@ And, if relevant, flag rows that need attention:
 
 | Condition | Behaviour |
 |-----------|-----------|
-| No `apexstack.projects.yaml` at the ops-repo root | Print a clear error and a sample registry to copy |
+| No `apexyard.projects.yaml` at the ops-repo root | Print a clear error and a sample registry to copy |
 | Project listed but workspace path missing | Show row with `(not cloned)` — don't fail |
 | `gh` not authenticated | Show row with `?` for PRs/issues — don't fail |
 | `repo` field looks invalid | Skip with a warning, continue with the rest |

@@ -1,8 +1,8 @@
 # =============================================================================
-# ApexStack Onboarding Configuration
+# ApexYard Onboarding Configuration
 # =============================================================================
 #
-# Fill in this file to customize ApexStack for your team.
+# Fill in this file to customize ApexYard for your team.
 # Claude Code reads this file to understand your company context.
 #
 # After editing, commit this file to your repo. Claude Code will use it
@@ -10,18 +10,18 @@
 #
 
 # -----------------------------------------------------------------------------
-# ApexStack Setup
+# ApexYard Setup
 # -----------------------------------------------------------------------------
-# ApexStack governs a PORTFOLIO of repos as one organisation. The repo this
-# file lives in is your "ops repo" — ApexStack itself, forked from
-# me2resh/apexstack. A registry file (apexstack.projects.yaml) lists every
+# ApexYard governs a PORTFOLIO of repos as one organisation. The repo this
+# file lives in is your "ops repo" — ApexYard itself, forked from
+# me2resh/apexyard. A registry file (apexyard.projects.yaml) lists every
 # managed project. Skills like /projects, /inbox, /status, /tasks aggregate
 # across the registry. Per-project docs live in projects/<name>/, and live
 # working copies (optional) live in workspace/<name>/.
 #
 # Built for CTOs, engineering leads, and Chief-of-Staff roles managing a
 # portfolio of 2+ repos. If you have exactly one repo, you can still fork
-# apexstack and register a single project — the skills work the same way.
+# apexyard and register a single project — the skills work the same way.
 #
 # See docs/setup.md for the full guide.
 

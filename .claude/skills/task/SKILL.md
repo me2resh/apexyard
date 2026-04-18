@@ -21,7 +21,7 @@ Creates a structured GitHub Issue for a technical task with driver (why), scope 
 
 ### 1. Resolve the target repo
 
-Read `.claude/session/current-ticket` to determine which repo we're working in. If no active ticket, check `apexstack.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
+Read `.claude/session/current-ticket` to determine which repo we're working in. If no active ticket, check `apexyard.projects.yaml` for managed projects. If only one project, use it. If multiple, ask:
 
 ```
 Which project is this task for?

@@ -1,13 +1,13 @@
 ---
 name: update
-description: Sync the ApexStack fork (ops repo) with upstream me2resh/apexstack. Fetches upstream, previews pending commits, merges (or rebases) on a sync branch, handles conflicts, and leaves a branch ready to push as a PR. Use when the SessionStart drift banner says the fork is behind, or periodically as fork maintenance.
+description: Sync the ApexYard fork (ops repo) with upstream me2resh/apexyard. Fetches upstream, previews pending commits, merges (or rebases) on a sync branch, handles conflicts, and leaves a branch ready to push as a PR. Use when the SessionStart drift banner says the fork is behind, or periodically as fork maintenance.
 argument-hint: "[--dry-run] [--rebase]"
 allowed-tools: Bash, Read, Write, Edit
 ---
 
-# /update — Sync ApexStack Fork from Upstream
+# /update — Sync ApexYard Fork from Upstream
 
-Single-command replacement for the manual "fetch → branch → merge → push → PR" dance that fork maintainers do to pull upstream apexstack changes into their ops fork.
+Single-command replacement for the manual "fetch → branch → merge → push → PR" dance that fork maintainers do to pull upstream apexyard changes into their ops fork.
 
 ## Usage
 
@@ -19,7 +19,7 @@ Single-command replacement for the manual "fetch → branch → merge → push �
 
 ## Output
 
-On success: one sync branch ready to push (e.g. `chore/#N-sync-upstream-apexstack`), with an auto-generated PR body listing the commits pulled in, plus the exact next commands to run.
+On success: one sync branch ready to push (e.g. `chore/#N-sync-upstream-apexyard`), with an auto-generated PR body listing the commits pulled in, plus the exact next commands to run.
 
 On conflict: paused at the conflict point with per-file options (keep mine / accept upstream / open editor).
 
@@ -44,7 +44,7 @@ git remote | grep -qx upstream || {
   ORIGIN=$(git remote get-url origin)
   echo "No 'upstream' remote configured."
   echo "Add it with:"
-  echo "  git remote add upstream https://github.com/me2resh/apexstack.git"
+  echo "  git remote add upstream https://github.com/me2resh/apexyard.git"
   echo "Then re-run /update."
   exit 1
 }
@@ -143,13 +143,13 @@ Default is merge. Record the choice.
 
 ### 5. Create a sync branch
 
-Rationale for diverging from the `#58` AC wording ("leaves updated local main"): apexstack's own `block-main-push.sh` hook blocks direct pushes to `main` and also blocks commits made while on `main`. A merge with conflicts requires a `git commit` to finalise, which would be blocked. A sync branch sidesteps both issues and is the same shape the project uses for all other changes.
+Rationale for diverging from the `#58` AC wording ("leaves updated local main"): apexyard's own `block-main-push.sh` hook blocks direct pushes to `main` and also blocks commits made while on `main`. A merge with conflicts requires a `git commit` to finalise, which would be blocked. A sync branch sidesteps both issues and is the same shape the project uses for all other changes.
 
 ```bash
 # Find or create a tracking issue. If a recent "sync" issue is open, reuse its number.
 # Otherwise prompt the user to create one (or offer to create it via `gh issue create`).
 
-BRANCH="chore/#${TICKET}-sync-upstream-apexstack"
+BRANCH="chore/#${TICKET}-sync-upstream-apexyard"
 git checkout -b "$BRANCH"
 ```
 
@@ -227,11 +227,11 @@ Next steps (the skill does NOT push — per #58 AC):
 
   2. Push and open the PR:
        git push -u origin <BRANCH>
-       gh pr create --title 'chore(#<TICKET>): sync ops fork with upstream apexstack' \\
+       gh pr create --title 'chore(#<TICKET>): sync ops fork with upstream apexyard' \\
          --body "$(cat <<'BODY'
 ## Summary
 
-Sync with upstream me2resh/apexstack — N commits.
+Sync with upstream me2resh/apexyard — N commits.
 
 ## Commits pulled in
 
@@ -246,8 +246,8 @@ Sync with upstream me2resh/apexstack — N commits.
 
 | Term | Definition |
 |------|------------|
-| ops fork | User's fork of me2resh/apexstack used as Chief-of-Staff ops repo |
-| upstream sync | Routine maintenance pull of new framework commits from me2resh/apexstack into the fork |
+| ops fork | User's fork of me2resh/apexyard used as Chief-of-Staff ops repo |
+| upstream sync | Routine maintenance pull of new framework commits from me2resh/apexyard into the fork |
 
 Closes #<TICKET>
 BODY
@@ -285,7 +285,7 @@ Creating a sync branch is the same shape the project uses for every other change
 
 ### Why merge is the default, not rebase
 
-Forks typically have genuine customisation commits (`onboarding.yaml`, `apexstack.projects.yaml`, `projects/<name>/` additions). Rebasing rewrites those SHAs, which is fine for a solo user but surprising in a team setting. Merge preserves history. Users who prefer a linear log can pass `--rebase`.
+Forks typically have genuine customisation commits (`onboarding.yaml`, `apexyard.projects.yaml`, `projects/<name>/` additions). Rebasing rewrites those SHAs, which is fine for a solo user but surprising in a team setting. Merge preserves history. Users who prefer a linear log can pass `--rebase`.
 
 ### Why the skill does not run Rex or `/approve-merge`
 

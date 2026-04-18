@@ -19,7 +19,7 @@ if ! echo "$COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then
 fi
 
 cat >&2 <<MSG
-NOTE: ApexStack has structured ticket templates. Consider using:
+NOTE: ApexYard has structured ticket templates. Consider using:
 
   /feature  — for user-facing features (includes user story + ACs)
   /bug      — for bug reports (includes Given/When/Then + repro steps)

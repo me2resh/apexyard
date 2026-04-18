@@ -5,16 +5,16 @@ agent: atlas
 model: claude-opus-4-7
 trigger: user-prompt
 status: executed
-ticket: me2resh/apexstack#50
+ticket: me2resh/apexyard#50
 ---
 
-# Mermaid C4 as the diagramming format for ApexStack-managed projects
+# Mermaid C4 as the diagramming format for ApexYard-managed projects
 
-> In the context of adding architecture-diagram support to ApexStack per #50, facing the choice between Mermaid C4, Structurizr DSL, PlantUML C4, and D2, I decided to ship **Mermaid C4 only** for v1 (L1 context + L2 container templates), accepting that L3+ precision and "proper" Structurizr-style modelling are deferred until a real project actually needs them.
+> In the context of adding architecture-diagram support to ApexYard per #50, facing the choice between Mermaid C4, Structurizr DSL, PlantUML C4, and D2, I decided to ship **Mermaid C4 only** for v1 (L1 context + L2 container templates), accepting that L3+ precision and "proper" Structurizr-style modelling are deferred until a real project actually needs them.
 
 ## Context
 
-Per issue #50, ApexStack-managed projects should include architecture diagrams in their documentation, with the C4 model (Context, Container, Component, Code) as the target. The CEO prefers C4 and is open to the choice of tool.
+Per issue #50, ApexYard-managed projects should include architecture diagrams in their documentation, with the C4 model (Context, Container, Component, Code) as the target. The CEO prefers C4 and is open to the choice of tool.
 
 The v1 target is L1 (system + external actors) and L2 (containers: frontend, backend, database, CDN) — enough to communicate "how this project fits together" to a new engineer or external reader. L3 (component-level) and L4 (code-level) are explicitly out of scope for this AgDR — the issue itself flags them as rare / auto-generated.
 
@@ -52,14 +52,14 @@ Concretely:
 
 - Templates at `templates/architecture/c4-context.md` (L1) and `templates/architecture/c4-container.md` (L2) — both Markdown with a Mermaid C4 block inside.
 - Rendered-in-place: users view diagrams by opening the `.md` file on GitHub; no separate PNG commit, no render step.
-- Directory convention: framework-level diagrams in `docs/architecture/`, per-managed-project apexstack docs in `projects/<name>/architecture/`, project-internal code-level diagrams in that project's own `docs/architecture/` (follows the split already documented in `docs/multi-project.md`).
+- Directory convention: framework-level diagrams in `docs/architecture/`, per-managed-project apexyard docs in `projects/<name>/architecture/`, project-internal code-level diagrams in that project's own `docs/architecture/` (follows the split already documented in `docs/multi-project.md`).
 
 ## Consequences
 
 ### Immediate (shipped with this AgDR)
 
 - Two templates in `templates/architecture/` that any project / `/handover` output can copy and fill in.
-- ApexStack dogfoods: `docs/architecture/apexstack-context.md` (L1) and `docs/architecture/apexstack-container.md` (L2) show the framework's own C4 diagrams. Meta, but demonstrates the convention.
+- ApexYard dogfoods: `docs/architecture/apexyard-context.md` (L1) and `docs/architecture/apexyard-container.md` (L2) show the framework's own C4 diagrams. Meta, but demonstrates the convention.
 - `docs/multi-project.md` updated with a "Architecture diagrams" subsection pointing at the convention.
 
 ### Deferred (follow-up issues filed with this PR)
@@ -74,13 +74,13 @@ Low. If a project later needs L3 precision, Structurizr can be added without dep
 
 ### Costs if we're right but wait
 
-Higher. Without diagrams, new engineers onboard more slowly on each managed project. Handover docs feel incomplete. The gap grows as the portfolio grows. Shipping Mermaid now is low-risk and makes the ApexStack-managed-project experience noticeably better.
+Higher. Without diagrams, new engineers onboard more slowly on each managed project. Handover docs feel incomplete. The gap grows as the portfolio grows. Shipping Mermaid now is low-risk and makes the ApexYard-managed-project experience noticeably better.
 
 ## Artifacts
 
 - Templates: `templates/architecture/c4-context.md`, `templates/architecture/c4-container.md`
-- Dogfood examples: `docs/architecture/apexstack-context.md`, `docs/architecture/apexstack-container.md`
+- Dogfood examples: `docs/architecture/apexyard-context.md`, `docs/architecture/apexyard-container.md`
 - Documentation: `docs/multi-project.md` § "Architecture diagrams"
 - Follow-up issues (filed with the PR): `/handover` auto-generation, Structurizr DSL support, L3+ templates
-- Ticket: [#50](https://github.com/me2resh/apexstack/issues/50)
+- Ticket: [#50](https://github.com/me2resh/apexyard/issues/50)
 - PR: (filled at merge time)

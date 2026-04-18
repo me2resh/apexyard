@@ -19,7 +19,7 @@ A single ordered list of "things to click on right now". Where `/inbox` groups i
 
 ## Scope
 
-Iterates every project in `apexstack.projects.yaml` (the registry at the root of your ops repo).
+Iterates every project in `apexyard.projects.yaml` (the registry at the root of your ops repo).
 
 ## Where tasks come from
 

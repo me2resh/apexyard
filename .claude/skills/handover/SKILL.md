@@ -1,13 +1,13 @@
 ---
 name: handover
-description: Onboard an external repo into ApexStack management by generating a structured handover assessment. Use when adopting a project that wasn't built under ApexStack.
+description: Onboard an external repo into ApexYard management by generating a structured handover assessment. Use when adopting a project that wasn't built under ApexYard.
 argument-hint: "<project name> [path or url]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
 # /handover — External Repo Handover Assessment
 
-Adopt an external repo into ApexStack management. The skill reads the target repo, synthesises a structured handover document, and tells you which ApexStack roles, workflows, and hooks should kick in.
+Adopt an external repo into ApexYard management. The skill reads the target repo, synthesises a structured handover document, and tells you which ApexYard roles, workflows, and hooks should kick in.
 
 This is the bridge between "we just inherited this codebase" and "this codebase is now governed by our normal SDLC".
 
@@ -28,7 +28,7 @@ projects/<name>/handover-assessment.md         ← always (re)written
 projects/<name>/architecture/container.md      ← only if missing — stub L2 C4 diagram
 ```
 
-The folder lives in the ops repo (your fork of apexstack), alongside the rest of `projects/`.
+The folder lives in the ops repo (your fork of apexyard), alongside the rest of `projects/`.
 
 If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing — see `projects/README.md` for the convention.
 
@@ -178,7 +178,7 @@ Write `projects/<name>/handover-assessment.md`:
 
 ### Registry entry
 
-The entry that will be appended to `apexstack.projects.yaml` at the root of the ops repo (see step 7 — the skill does this append for you, with confirmation):
+The entry that will be appended to `apexyard.projects.yaml` at the root of the ops repo (see step 7 — the skill does this append for you, with confirmation):
 
 ```yaml
 - name: {name}
@@ -400,24 +400,24 @@ If after scanning you find zero signals (no `package.json`, no `pyproject.toml`,
 
 ```
 
-Ready to add {name} to apexstack.projects.yaml? (y/n)
+Ready to add {name} to apexyard.projects.yaml? (y/n)
 > y
 
 ```
 
 If yes:
 
-1. **Locate the registry**: `apexstack.projects.yaml` at the root of the ops repo. If missing, first copy from `apexstack.projects.yaml.example` and show the user a warning: `⚠ Registry didn't exist — created from .example. You may need to fill in other projects.`
+1. **Locate the registry**: `apexyard.projects.yaml` at the root of the ops repo. If missing, first copy from `apexyard.projects.yaml.example` and show the user a warning: `⚠ Registry didn't exist — created from .example. You may need to fill in other projects.`
 
 2. **Append the entry**. Use `yq` if available for a safe YAML edit, otherwise append as plain text with careful indentation:
 
    ```bash
    # Prefer yq for correctness
    if command -v yq >/dev/null 2>&1; then
-     yq eval -i '.projects += [{"name": "{name}", "repo": "{owner/name}", "workspace": "workspace/{name}", "docs": "projects/{name}", "status": "handover", "roles": [{roles}]}]' apexstack.projects.yaml
+     yq eval -i '.projects += [{"name": "{name}", "repo": "{owner/name}", "workspace": "workspace/{name}", "docs": "projects/{name}", "status": "handover", "roles": [{roles}]}]' apexyard.projects.yaml
    else
      # Fallback: plain text append
-     cat >> apexstack.projects.yaml <<'YAML'
+     cat >> apexyard.projects.yaml <<'YAML'
      - name: {name}
        repo: {owner/name}
        workspace: workspace/{name}
@@ -433,9 +433,9 @@ If yes:
 3. **Validate the result**:
 
    ```bash
-   # Prefer yq or python -c 'import yaml; yaml.safe_load(open("apexstack.projects.yaml"))'
-   yq eval '.' apexstack.projects.yaml >/dev/null 2>&1 \
-     || python3 -c 'import sys, yaml; yaml.safe_load(open("apexstack.projects.yaml"))' 2>&1
+   # Prefer yq or python -c 'import yaml; yaml.safe_load(open("apexyard.projects.yaml"))'
+   yq eval '.' apexyard.projects.yaml >/dev/null 2>&1 \
+     || python3 -c 'import sys, yaml; yaml.safe_load(open("apexyard.projects.yaml"))' 2>&1
    ```
 
    If validation fails: **restore the previous version** from a backup made before the write, print the parse error, and tell the user to fix it manually. Never leave the registry in a broken state.
@@ -443,7 +443,7 @@ If yes:
 4. **Confirm to the user**:
 
    ```
-   ✓ Added {name} to apexstack.projects.yaml
+   ✓ Added {name} to apexyard.projects.yaml
      status: handover
      roles: {the derived list}
    ```
@@ -451,7 +451,7 @@ If yes:
 If the user says `n` at the prompt, print the snippet they'd need to copy manually and continue to step 8 without writing anything:
 
 ```
-Skipping the auto-append. If you want to add it later, copy this into apexstack.projects.yaml:
+Skipping the auto-append. If you want to add it later, copy this into apexyard.projects.yaml:
 
   - name: {name}
     repo: {owner/name}
@@ -466,7 +466,7 @@ Skipping the auto-append. If you want to add it later, copy this into apexstack.
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
-Registry updated:            apexstack.projects.yaml ({added | skipped})
+Registry updated:            apexyard.projects.yaml ({added | skipped})
 
 Tech stack: {one-liner}
 Build: {ok / failed}

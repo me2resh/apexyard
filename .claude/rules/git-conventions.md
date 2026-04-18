@@ -12,7 +12,7 @@ Examples:
 
 **Types**: `feature`, `fix`, `refactor`, `chore`, `docs`, `test`, `spike`, `ci`, `build`, `perf`
 
-The `TICKET-ID` should reference an issue in the project's own GitHub repo. Default format: `#58` or `GH-58`. The validators in `.claude/hooks/` also accept any uppercase tracker prefix (e.g. `ABC-123`) for teams using Linear, Jira, or similar — but the ApexStack default is per-project GitHub Issues, with one repo's issues never crossing into another repo's PRs.
+The `TICKET-ID` should reference an issue in the project's own GitHub repo. Default format: `#58` or `GH-58`. The validators in `.claude/hooks/` also accept any uppercase tracker prefix (e.g. `ABC-123`) for teams using Linear, Jira, or similar — but the ApexYard default is per-project GitHub Issues, with one repo's issues never crossing into another repo's PRs.
 
 ## PR Title Format
 

@@ -9,7 +9,7 @@ model: inherit
 
 You are an automated ticket manager. Your job is to create and manage **GitHub Issues** in the project's own GitHub repo for all work.
 
-ApexStack's default work-tracking model is **per-project GitHub Issues**: each project owns its own issue list, co-located with its code, branches, and PRs. There is no central / cross-project tracker. If a project is in `org/foo`, its tickets live at `github.com/org/foo/issues` only.
+ApexYard's default work-tracking model is **per-project GitHub Issues**: each project owns its own issue list, co-located with its code, branches, and PRs. There is no central / cross-project tracker. If a project is in `org/foo`, its tickets live at `github.com/org/foo/issues` only.
 
 Teams that prefer a different tracker (Linear, Jira, etc.) can substitute the equivalent commands — but adopt this only as a deliberate deviation from the default.
 
@@ -108,7 +108,7 @@ GitHub Issues are open or closed; richer states can be modelled with labels or a
 
 ### 6. Cross-Project Tracking
 
-ApexStack does **not** use a central tracker that spans projects. If a piece of work involves two projects, create one issue in each project's repo and cross-link them in the bodies. Each PR closes only the issue in its own repo.
+ApexYard does **not** use a central tracker that spans projects. If a piece of work involves two projects, create one issue in each project's repo and cross-link them in the bodies. Each PR closes only the issue in its own repo.
 
 ## Process: Create an Issue for a New Task
 
@@ -154,7 +154,7 @@ Branch: feature/GH-58-add-appointment-cancellation
 
 ## Note for Teams Using a Different Tracker
 
-If your team has chosen Linear, Jira, or another tracker as a deliberate deviation from the ApexStack default:
+If your team has chosen Linear, Jira, or another tracker as a deliberate deviation from the ApexYard default:
 
 - Replace `gh issue create` with the equivalent (`linear issue create`, `jira issue create`, etc.)
 - Update the branch name pattern in `.claude/hooks/validate-branch-name.sh` and `validate-pr-create.sh` to accept your prefix

@@ -1,10 +1,10 @@
-# ApexStack
+# ApexYard
 
 **Where projects get forged.**
 
 A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders and technical leads running 2–5 products at once.
 
-You don't *add* apexstack to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
+You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
 Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
 
@@ -15,7 +15,7 @@ Inspired by [gstacks.org](https://gstacks.org/) — but purpose-built for softwa
 ## What's Inside
 
 ```
-apexstack/
+apexyard/
 ├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
 ├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
 │
@@ -46,7 +46,7 @@ apexstack/
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
-├── apexstack.projects.yaml.example  # Portfolio registry template
+├── apexyard.projects.yaml.example  # Portfolio registry template
 │
 ├── golden-paths/          # Reusable infra & ops templates
 │   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, security, dependency audit, PR title check, review check, SEO check)
@@ -61,33 +61,33 @@ apexstack/
 
 ## Quick Start — fork and go
 
-ApexStack governs a **portfolio of repos** as one organisation. You fork apexstack, clone the fork, treat it as your "ops repo", and register every project you want under management. No `.apexstack/` symlinks, no nested installs — the fork IS the ops repo.
+ApexYard governs a **portfolio of repos** as one organisation. You fork apexyard, clone the fork, treat it as your "ops repo", and register every project you want under management. No `.apexyard/` symlinks, no nested installs — the fork IS the ops repo.
 
 ### 1. Star + Fork on GitHub
 
-Visit [`github.com/me2resh/apexstack`](https://github.com/me2resh/apexstack), **Star** it, then **Fork** it into your org. You can keep the fork named `apexstack` or rename to something that fits your naming convention (`your-org/ops`, `your-org/apex`, etc.).
+Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard), **Star** it, then **Fork** it into your org. You can keep the fork named `apexyard` or rename to something that fits your naming convention (`your-org/ops`, `your-org/apex`, etc.).
 
 ### 2. Clone your fork locally
 
 ```bash
-gh repo clone your-org/apexstack
-cd apexstack
+gh repo clone your-org/apexyard
+cd apexyard
 ```
 
 Or with plain git:
 
 ```bash
-git clone https://github.com/your-org/apexstack.git
-cd apexstack
+git clone https://github.com/your-org/apexyard.git
+cd apexyard
 ```
 
 ### 3. Add `upstream` for future updates
 
 ```bash
-git remote add upstream https://github.com/me2resh/apexstack.git
+git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, `git fetch upstream && git merge upstream/main` pulls the latest apexstack improvements into your fork.
+Later, `git fetch upstream && git merge upstream/main` pulls the latest apexyard improvements into your fork.
 
 ### 4. Fill in `onboarding.yaml`
 
@@ -100,8 +100,8 @@ Set company, team, tech stack, quality bar. Defaults are sensible — change wha
 ### 5. Create the portfolio registry
 
 ```bash
-cp apexstack.projects.yaml.example apexstack.projects.yaml
-$EDITOR apexstack.projects.yaml   # list every repo you manage
+cp apexyard.projects.yaml.example apexyard.projects.yaml
+$EDITOR apexyard.projects.yaml   # list every repo you manage
 ```
 
 The minimal entry is:
@@ -130,15 +130,15 @@ The hooks fire on every `git` / `gh` command, the portfolio skills aggregate acr
 
 Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-project.md`](docs/multi-project.md).
 
-## Why ApexStack?
+## Why ApexYard?
 
 **The problem**: Claude Code is powerful, but without structure it produces inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
 
-**The solution**: ApexStack provides that structure as a reusable, open-source stack. One config file to customize, 20+ role definitions to use, battle-tested workflows to follow.
+**The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 20+ role definitions to use, battle-tested workflows to follow.
 
 ### What makes it different
 
-| Feature | Without ApexStack | With ApexStack |
+| Feature | Without ApexYard | With ApexYard |
 |---------|-------------------|----------------|
 | Code reviews | Ad-hoc prompts | Structured checklist with role-based review |
 | Technical decisions | Lost in chat history | Documented as Agent Decision Records |
@@ -148,7 +148,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 ## Roles
 
-ApexStack includes 19 software development roles across 5 departments:
+ApexYard includes 19 software development roles across 5 departments:
 
 ### Engineering (7 roles)
 
@@ -221,7 +221,7 @@ Structured review with:
 
 ## Customization
 
-ApexStack is designed to be customized. Every role, workflow, and template can be modified to fit your team:
+ApexYard is designed to be customized. Every role, workflow, and template can be modified to fit your team:
 
 1. **Add roles**: Create new `.md` files in `roles/your-department/`
 2. **Modify workflows**: Edit files in `workflows/`

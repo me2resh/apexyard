@@ -10,7 +10,7 @@ effort: low
 
 Writes a session marker so the `require-active-ticket.sh` PreToolUse hook permits Edit/Write on code paths. Without it, the hook blocks edits to anything outside `.claude/`, `docs/`, `projects/*/docs/`, and `*.md`.
 
-Marker layout (apexstack#41):
+Marker layout (apexyard#41):
 
 | Path | When the hook uses it |
 |------|----------------------|
@@ -29,11 +29,11 @@ Expected forms:
 
 - `42` — plain number, resolves against the current repo. Read `git remote get-url origin` and extract `<owner>/<repo>`. If there's no origin, stop and ask for a fully-qualified reference.
 - `me2resh/flat-mate#128` — fully-qualified reference.
-- `apexstack#42` — owner defaults to the current org (parsed from the origin URL).
+- `apexyard#42` — owner defaults to the current org (parsed from the origin URL).
 
 If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
 
-**Cross-repo note:** ApexStack governs a portfolio of repos. If the user is in the ops repo (the apexstack fork) but the ticket lives in a managed project's own repo, they should pass the fully-qualified form so the marker records the correct tracker. Each managed project's tickets live in that project's own GitHub repo — tickets do not cross project boundaries.
+**Cross-repo note:** ApexYard governs a portfolio of repos. If the user is in the ops repo (the apexyard fork) but the ticket lives in a managed project's own repo, they should pass the fully-qualified form so the marker records the correct tracker. Each managed project's tickets live in that project's own GitHub repo — tickets do not cross project boundaries.
 
 ### 2. Verify the Issue Exists
 
@@ -52,24 +52,24 @@ If the issue does not exist, stop and report the error — do not write the mark
 From the issue title and number, generate: `<type>/<TICKET-ID>-<slug>` where:
 
 - `<type>` guessed from title prefix: `[Feat]` → `feature`, `[Fix]` → `fix`, `[Docs]` → `docs`, `[Chore]` → `chore`, default `feature`
-- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or matches the project's configured `ticket_prefix` from `apexstack.projects.yaml` if set
+- `<TICKET-ID>` is `GH-<number>` for GitHub Issues, or matches the project's configured `ticket_prefix` from `apexyard.projects.yaml` if set
 - `<slug>` = lowercase title, kebab-case, max 40 chars, stopwords trimmed from the edges
 
 Match the convention in `.claude/rules/git-conventions.md`.
 
 ### 4. Resolve the target marker
 
-Per apexstack#41, the marker path depends on whether the ticket's tracker repo matches a registered managed project.
+Per apexyard#41, the marker path depends on whether the ticket's tracker repo matches a registered managed project.
 
 #### 4a. Locate the ops root
 
-The ops root is the apexstack fork root — the directory containing BOTH `onboarding.yaml` and `apexstack.projects.yaml`. Walk up from CWD / the nearest git toplevel until you find it:
+The ops root is the apexyard fork root — the directory containing BOTH `onboarding.yaml` and `apexyard.projects.yaml`. Walk up from CWD / the nearest git toplevel until you find it:
 
 ```bash
 ops_root=""
 r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 while [ -n "$r" ] && [ "$r" != "/" ]; do
-  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexstack.projects.yaml" ]; then
+  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
     ops_root="$r"
     break
   fi
@@ -77,15 +77,15 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
 done
 ```
 
-If not found (user is outside an apexstack fork), tell the user and stop. Starting a ticket without the fork doesn't make sense.
+If not found (user is outside an apexyard fork), tell the user and stop. Starting a ticket without the fork doesn't make sense.
 
 #### 4b. Look the tracker repo up in the registry
 
-Given the ticket's `owner/repo` (from step 1), grep `apexstack.projects.yaml` for a project whose `repo:` field matches. One registry-safe way (uses `yq` when available, falls back to a greppy read):
+Given the ticket's `owner/repo` (from step 1), grep `apexyard.projects.yaml` for a project whose `repo:` field matches. One registry-safe way (uses `yq` when available, falls back to a greppy read):
 
 ```bash
 if command -v yq >/dev/null 2>&1; then
-  project=$(yq eval ".projects[] | select(.repo == \"${OWNER_REPO}\") | .name" "$ops_root/apexstack.projects.yaml")
+  project=$(yq eval ".projects[] | select(.repo == \"${OWNER_REPO}\") | .name" "$ops_root/apexyard.projects.yaml")
 else
   # Greppy fallback: find the `name:` whose sibling `repo:` matches.
   # Strips surrounding quotes from both `name:` and `repo:` values so the
@@ -95,14 +95,14 @@ else
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
     /^[[:space:]]*- name:/ { name = unquote($3) }
     /^[[:space:]]*repo:/   { if (unquote($2) == r) { print name; exit } }
-  ' "$ops_root/apexstack.projects.yaml")
+  ' "$ops_root/apexyard.projects.yaml")
 fi
 ```
 
 Notes on the fallback:
 
 - Handles both `repo: me2resh/curios-dog` and `repo: "me2resh/curios-dog"` (and single-quoted).
-- Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexstack.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
+- Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexyard.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
 - Leading whitespace is tolerated via `^[[:space:]]*` — nested entries under `projects:` parse fine at any indent level, so long as the indent is consistent within the entry.
 
 `$project` is now either a registered project name (e.g. `curios-dog`, `sharppick`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).

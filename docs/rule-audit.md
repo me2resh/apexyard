@@ -1,10 +1,10 @@
-# ApexStack Rule Audit
+# ApexYard Rule Audit
 
 Every **MUST / NEVER / HARD-STOP** rule from `CLAUDE.md`, `.claude/rules/*.md`, and `workflows/*.md`, mapped to its enforcement mechanism (hook, agent, prose) and labelled with whether it is mechanized, advisory, or deferred to a follow-up ticket.
 
 ## How to use this doc
 
-This audit is the **single view** of the governance surface ApexStack ships with. For each rule it answers three questions: *where is it written down*, *who enforces it*, and *is it a hard block or a piece of self-discipline*. When you fork apexstack and start tuning the rules to your team, start here — the rows flagged `advisory` are the ones you most likely want to promote to CI checks or linter rules in your own stack, because the shell-harness can't reach them.
+This audit is the **single view** of the governance surface ApexYard ships with. For each rule it answers three questions: *where is it written down*, *who enforces it*, and *is it a hard block or a piece of self-discipline*. When you fork apexyard and start tuning the rules to your team, start here — the rows flagged `advisory` are the ones you most likely want to promote to CI checks or linter rules in your own stack, because the shell-harness can't reach them.
 
 **When to update**: any time a rule is added, removed, tightened, or loosened in a rule file, workflow, or `CLAUDE.md`; any time a hook is added or its matcher changes; any time a deferred ticket (listed below) is closed and the rule moves from `deferred` to `mechanized`. The rule files themselves are the source of truth for the prose — this doc is the *index* and should not try to restate them.
 
@@ -140,7 +140,7 @@ Columns:
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
 |------|--------|-------------|---------------|---------------------------------|
 | New session without `.claude/session/onboarded` → run `/onboard` | — | `onboarding-check.sh` (SessionStart) | yes | mechanized |
-| `.claude/` duplication between ops-repo and apexstack upstream | — | — | deferred | [#15][15] |
+| `.claude/` duplication between ops-repo and apexyard upstream | — | — | deferred | [#15][15] |
 
 ---
 
@@ -155,7 +155,7 @@ Columns:
 | **total rows** | **73** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
-The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexstack upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
+The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
 
 The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius rules** (git add, main push, secrets, merge gate, ticket-first, commit format, arch-change AgDR, red-CI, UI design review) are hooks. The **per-project concerns** (coverage, type strictness, import-graph purity, testing pyramid) stay advisory because a framework-level shell harness can't reach them without false-positive spam. The **self-discipline rules** (`/decide` trigger phrases, `Ticket N` vocabulary in chat, role adoption) stay advisory by design — the rule files are primary and the hooks catch only the durable-artefact symptoms.
 
@@ -175,9 +175,9 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 
 [^future-hook]: Candidate for a future PostToolUse reminder hook on `Bash(gh pr create *)` — if the diff touches sensitive paths, emit a reminder telling Claude to invoke the Security Reviewer. Not written yet; track as a follow-up if the trigger fires often enough to justify a hook.
 
-[15]: https://github.com/me2resh/apexstack/issues/15
-[20]: https://github.com/me2resh/apexstack/issues/20
-[21]: https://github.com/me2resh/apexstack/issues/21
-[22]: https://github.com/me2resh/apexstack/issues/22
-[23]: https://github.com/me2resh/apexstack/issues/23
-[25]: https://github.com/me2resh/apexstack/issues/25
+[15]: https://github.com/me2resh/apexyard/issues/15
+[20]: https://github.com/me2resh/apexyard/issues/20
+[21]: https://github.com/me2resh/apexyard/issues/21
+[22]: https://github.com/me2resh/apexyard/issues/22
+[23]: https://github.com/me2resh/apexyard/issues/23
+[25]: https://github.com/me2resh/apexyard/issues/25

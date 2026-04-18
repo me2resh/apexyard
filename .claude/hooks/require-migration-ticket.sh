@@ -59,7 +59,7 @@ OPS_ROOT=""
 if [ -n "$REPO_ROOT" ]; then
   r="$REPO_ROOT"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
-    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexstack.projects.yaml" ]; then
+    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
       OPS_ROOT="$r"
       break
     fi

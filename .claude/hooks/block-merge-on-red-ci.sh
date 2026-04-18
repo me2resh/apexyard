@@ -89,7 +89,7 @@ BLOCKED: PR #${PR_NUMBER} has red CI. Cannot merge.
 
 $(echo "$CHECKS_OUTPUT" | head -30 | sed 's/^/  /')
 
-ApexStack rule (.claude/rules/pr-quality.md § "No Red CI Before Merge"):
+ApexYard rule (.claude/rules/pr-quality.md § "No Red CI Before Merge"):
 
   "Never merge with red CI — even if the failure is pre-existing or
   unrelated. Fix the pre-existing issue first (separate commit), rebase

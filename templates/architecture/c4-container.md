@@ -32,7 +32,7 @@ C4Container
 
 ## How to use this template
 
-1. Copy this file to `docs/architecture/container.md` (inside a project repo) or `projects/{name}/architecture/container.md` (in the ApexStack portfolio docs).
+1. Copy this file to `docs/architecture/container.md` (inside a project repo) or `projects/{name}/architecture/container.md` (in the ApexYard portfolio docs).
 2. Replace `{Project Name}` and every placeholder inside the `C4Container` block with your real containers.
 3. A "container" in C4 terms is a **deployable / runnable unit**: a web app, a mobile app, an API, a database, a queue, a worker. It is NOT a Docker container (confusing but standard). Use the tech label to name the runtime (`Next.js`, `PostgreSQL`, `Redis`, etc.).
 4. Keep it to **5–9 containers max**. More than that and you're probably drawing L3 detail inside an L2.
@@ -70,4 +70,4 @@ Expect to update this every few releases of significant architectural work. If i
 
 - [C4 Model — Level 2](https://c4model.com/diagrams/container)
 - [Mermaid C4 syntax](https://mermaid.js.org/syntax/c4.html)
-- ApexStack's own L2 for reference: `docs/architecture/apexstack-container.md`
+- ApexYard's own L2 for reference: `docs/architecture/apexyard-container.md`

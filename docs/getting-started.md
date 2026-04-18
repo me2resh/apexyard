@@ -1,4 +1,4 @@
-# Getting Started with ApexStack
+# Getting Started with ApexYard
 
 Short version of the setup flow. For the full walkthrough (directory layout, daily workflow, upgrade path, FAQ) see [`multi-project.md`](multi-project.md).
 
@@ -13,33 +13,33 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 
 ---
 
-## Step 1: Fork apexstack on GitHub
+## Step 1: Fork apexyard on GitHub
 
-Your ops repo **is** a fork of apexstack. One repo, no nested installs.
+Your ops repo **is** a fork of apexyard. One repo, no nested installs.
 
-Visit [`github.com/me2resh/apexstack`](https://github.com/me2resh/apexstack), **Star** it, then **Fork** it into your org. Rename the fork if you want (`your-org/ops`, `your-org/apex`, or keep it as `apexstack` — GitHub handles the rename cleanly).
+Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard), **Star** it, then **Fork** it into your org. Rename the fork if you want (`your-org/ops`, `your-org/apex`, or keep it as `apexyard` — GitHub handles the rename cleanly).
 
 Then clone your fork locally:
 
 ```bash
-gh repo fork me2resh/apexstack --clone
-cd apexstack
+gh repo fork me2resh/apexyard --clone
+cd apexyard
 ```
 
 Or with plain git:
 
 ```bash
-git clone https://github.com/your-org/apexstack.git
-cd apexstack
+git clone https://github.com/your-org/apexyard.git
+cd apexyard
 ```
 
 Add the upstream remote so you can pull future updates:
 
 ```bash
-git remote add upstream https://github.com/me2resh/apexstack.git
+git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, `git fetch upstream && git merge upstream/main` pulls the latest apexstack improvements into your fork.
+Later, `git fetch upstream && git merge upstream/main` pulls the latest apexyard improvements into your fork.
 
 ---
 
@@ -77,8 +77,8 @@ tech_stack:
 Copy the example registry and list every repo you want under management:
 
 ```bash
-cp apexstack.projects.yaml.example apexstack.projects.yaml
-$EDITOR apexstack.projects.yaml
+cp apexyard.projects.yaml.example apexyard.projects.yaml
+$EDITOR apexyard.projects.yaml
 ```
 
 The minimal entry is:
@@ -194,7 +194,7 @@ After setup, Claude Code will:
 
 ### Claude Code doesn't seem to know about the stack
 
-Make sure you're running Claude Code from inside your fork of apexstack (the ops repo). Claude Code reads `CLAUDE.md` automatically from the working directory's root — if you're one level deep (e.g. inside `workspace/<project>/`) it picks up the project's own `CLAUDE.md` instead.
+Make sure you're running Claude Code from inside your fork of apexyard (the ops repo). Claude Code reads `CLAUDE.md` automatically from the working directory's root — if you're one level deep (e.g. inside `workspace/<project>/`) it picks up the project's own `CLAUDE.md` instead.
 
 ### Roles aren't being applied correctly
 
@@ -218,4 +218,4 @@ workflows:
 - Browse the [roles](../roles/) to see all available role definitions
 - Read the [workflows](../workflows/) to understand the development process
 - Check the [templates](../templates/) for document formats
-- Star the [GitHub repo](https://github.com/me2resh/apexstack) for updates
+- Star the [GitHub repo](https://github.com/me2resh/apexyard) for updates

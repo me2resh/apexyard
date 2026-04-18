@@ -4,7 +4,7 @@
 # in CLAUDE.md, workflows/sdlc.md, or .claude/rules/workflow-gates.md.
 #
 # Active tickets are declared by the /start-ticket skill. The marker
-# layout is two-tier (apexstack#41):
+# layout is two-tier (apexyard#41):
 #
 #   ops_root/.claude/session/tickets/<project>    ← per-project, preferred
 #   ops_root/.claude/session/current-ticket       ← ops-repo / fallback
@@ -16,8 +16,8 @@
 #      exempt.
 #   3. Otherwise, block with instructions.
 #
-# Ops root is the apexstack fork root (has both onboarding.yaml and
-# apexstack.projects.yaml at the top level). It's discovered by walking
+# Ops root is the apexyard fork root (has both onboarding.yaml and
+# apexyard.projects.yaml at the top level). It's discovered by walking
 # up from the nearest git toplevel; this handles the case where an agent
 # worktree or a cloned managed project lives inside the ops tree and
 # would otherwise report a nested git root.
@@ -26,7 +26,7 @@
 #   - anything under .claude/
 #   - any *.md file (READMEs, CLAUDE.md, rule docs, AgDRs)
 #   - anything under docs/
-#   - anything under projects/*/docs/ (per-project apexstack docs)
+#   - anything under projects/*/docs/ (per-project apexyard docs)
 #
 # Everything else (source code, config, infra) requires a ticket marker.
 
@@ -51,7 +51,7 @@ fi
 # Each path-prefix exemption is matched in both REL_PATH (repo-relative)
 # and absolute (*/path/*) forms. Absolute-path fallthrough happens when
 # FILE_PATH points outside REPO_ROOT (e.g. agent worktrees whose
-# git-toplevel differs from the outer apexstack tree); in that case the
+# git-toplevel differs from the outer apexyard tree); in that case the
 # strip on lines 43-45 is a no-op and REL_PATH stays absolute. The
 # existing `*.md` pattern already crosses `/`, so absolute-match via a
 # `*/…` prefix is a known-good shape — #56 extends the same trick to the
@@ -62,21 +62,21 @@ case "$REL_PATH" in
   TODO.md|README.md|MEMORY.md|CLAUDE.md) exit 0 ;;
 esac
 # Note: `projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
-# crosses `/`), so no separate arm needed. Per-project apexstack docs are
+# crosses `/`), so no separate arm needed. Per-project apexyard docs are
 # matched by the generic docs-in-any-subtree pattern.
 case "$REL_PATH" in
   *.md) exit 0 ;;
 esac
 
 # Discover the ops root. Walk up from REPO_ROOT until we find a directory
-# with both onboarding.yaml AND apexstack.projects.yaml (a configured ops
+# with both onboarding.yaml AND apexyard.projects.yaml (a configured ops
 # fork). Stop at /. If not found, OPS_ROOT stays empty and we treat the
 # REPO_ROOT itself as the marker home (pre-#41 behaviour).
 OPS_ROOT=""
 if [ -n "$REPO_ROOT" ]; then
   r="$REPO_ROOT"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
-    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexstack.projects.yaml" ]; then
+    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
       OPS_ROOT="$r"
       break
     fi
@@ -87,7 +87,7 @@ fi
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 MARKER_HOME="${MARKER_HOME:-.}"
 
-# Per-project resolution (apexstack#41): if FILE_PATH points under
+# Per-project resolution (apexyard#41): if FILE_PATH points under
 # <ops_root>/workspace/<project>/, we look for a per-project marker at
 # .claude/session/tickets/<project>. This keeps per-project session state
 # keyed by the managed-project name and localised in the ops fork
@@ -123,7 +123,7 @@ fi
 cat >&2 <<MSG
 BLOCKED: No active ticket set for this session.
 
-ApexStack requires a ticket BEFORE any code changes (workflow-gates rule #3,
+ApexYard requires a ticket BEFORE any code changes (workflow-gates rule #3,
 pre-build gate, "one ticket at a time"). To proceed:
 
   1. Create or find the ticket (GitHub Issue in the project's own repo):

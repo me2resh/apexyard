@@ -84,4 +84,4 @@ Documentation readiness: PARTIAL (1 fail, 2 warnings)
 1. **README is the minimum.** Every project needs a README with at least: description, quick start, and how to deploy. Everything else is a "should have."
 2. **Check for staleness, not just existence.** A README that exists but describes the wrong stack is worse than no README.
 3. **Diataxis is a lens, not a checklist.** Don't fail a project for missing all four quadrants — most projects start with tutorials + reference and add the rest over time.
-4. **Auto-PASS for the ops repo itself.** ApexStack's own docs are governed by its own process — this skill is for managed projects.
+4. **Auto-PASS for the ops repo itself.** ApexYard's own docs are governed by its own process — this skill is for managed projects.

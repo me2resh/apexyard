@@ -20,7 +20,7 @@ Synthesises recent activity into a stakeholder-facing update. The skill is audie
 
 ## Scope
 
-Aggregated across every project in `apexstack.projects.yaml` (the registry at the root of your ops repo), unless `--project <name>` is passed to scope to one.
+Aggregated across every project in `apexyard.projects.yaml` (the registry at the root of your ops repo), unless `--project <name>` is passed to scope to one.
 
 ## Inputs
 

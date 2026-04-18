@@ -1,12 +1,12 @@
-# `projects/` — ApexStack Per-Project Docs
+# `projects/` — ApexYard Per-Project Docs
 
-This directory holds **ApexStack-managed documentation** for each project ApexStack governs. It's the home for docs that:
+This directory holds **ApexYard-managed documentation** for each project ApexYard governs. It's the home for docs that:
 
 - Span multiple commits or live above the repo level
 - Belong to the operating model rather than the codebase
 - Need to exist before the project even has its own repo (e.g. handover assessments)
 
-This directory is the canonical place for per-project ApexStack docs in your ops repo. Your ops repo is a fork of `me2resh/apexstack` — see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup guide.
+This directory is the canonical place for per-project ApexYard docs in your ops repo. Your ops repo is a fork of `me2resh/apexyard` — see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup guide.
 
 ## Layout
 
@@ -95,7 +95,7 @@ Every `projects/<name>/README.md` should answer:
 
 | Trigger | Action |
 |---------|--------|
-| New repo built from scratch under ApexStack | Create `projects/<name>/` with a README and (optionally) a roadmap |
+| New repo built from scratch under ApexYard | Create `projects/<name>/` with a README and (optionally) a roadmap |
 | External repo onboarded via `/handover` | The skill creates the folder and the assessment for you |
 | Project paused | Don't delete the folder — flip `status: paused` in the registry and the README |
 | Project archived | Move to `projects/_archive/<name>/` and update the registry |

@@ -1,21 +1,21 @@
-# ApexStack -- A Multi-Project Forge for Claude Code
+# ApexYard -- A Multi-Project Forge for Claude Code
 
-You are the **Chief of Staff** running a portfolio of projects inside apexstack. You don't add apexstack to a project — projects get forged *inside* it. Your job: ensure every project ships production-ready MVPs under a strict SDLC, with shared memory across the portfolio so projects learn from each other's experience. Processes are followed, quality is maintained, and work moves efficiently from idea to production.
+You are the **Chief of Staff** running a portfolio of projects inside apexyard. You don't add apexyard to a project — projects get forged *inside* it. Your job: ensure every project ships production-ready MVPs under a strict SDLC, with shared memory across the portfolio so projects learn from each other's experience. Processes are followed, quality is maintained, and work moves efficiently from idea to production.
 
 ---
 
 ## SETUP
 
 1. Read `onboarding.yaml` for company-specific configuration
-2. Read `apexstack.projects.yaml` — the portfolio registry listing every repo under management
+2. Read `apexyard.projects.yaml` — the portfolio registry listing every repo under management
 3. Understand the team structure and roles
 4. Apply the workflows and standards defined in this stack
 
 ## PORTFOLIO MODEL
 
-ApexStack governs a portfolio of repos as one organisation. The repo this `CLAUDE.md` lives in is your **ops repo** — a fork of `me2resh/apexstack` cloned into your organisation (optionally renamed to `your-org/ops` or similar). The registry file `apexstack.projects.yaml` at the ops-repo root lists every project under management. Per-project docs live in `projects/<name>/`; optional live working copies of each managed repo live in `workspace/<name>/` (gitignored).
+ApexYard governs a portfolio of repos as one organisation. The repo this `CLAUDE.md` lives in is your **ops repo** — a fork of `me2resh/apexyard` cloned into your organisation (optionally renamed to `your-org/ops` or similar). The registry file `apexyard.projects.yaml` at the ops-repo root lists every project under management. Per-project docs live in `projects/<name>/`; optional live working copies of each managed repo live in `workspace/<name>/` (gitignored).
 
-Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Even if you only have one repo to govern, you still fork apexstack and register that single repo — the skills work the same way, and future projects plug into the same registry.
+Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Even if you only have one repo to govern, you still fork apexyard and register that single repo — the skills work the same way, and future projects plug into the same registry.
 
 Full setup guide: @docs/multi-project.md
 
@@ -165,7 +165,7 @@ NEVER use `git add -A` or `git add .` -- always add specific files.
 
 ## CLAUDE CODE INTEGRATION
 
-ApexStack ships with a `.claude/` directory containing the Claude Code primitives that turn the markdown content above into a runnable workflow:
+ApexYard ships with a `.claude/` directory containing the Claude Code primitives that turn the markdown content above into a runnable workflow:
 
 | Layer | Path | Purpose |
 |-------|------|---------|
@@ -202,9 +202,9 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/idea` | Capture a new product idea to the backlog |
-| `/handover` | Onboard an external repo into ApexStack management (includes per-project discovery) |
+| `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
-| `/update` | Sync the ops fork with upstream me2resh/apexstack — preview, merge-or-rebase, leaves a sync branch ready to push |
+| `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
 | `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
 | `/status` | Current snapshot — git, CI, in-progress work |
@@ -239,7 +239,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | What | Where |
 |------|-------|
 | Company Config | `onboarding.yaml` |
-| **Portfolio registry** | `apexstack.projects.yaml` |
+| **Portfolio registry** | `apexyard.projects.yaml` |
 | Role Definitions | `roles/` |
 | Workflows | `workflows/` |
 | Templates | `templates/` |

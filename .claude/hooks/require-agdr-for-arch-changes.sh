@@ -137,7 +137,7 @@ BLOCKED: Commit touches architecture files but has no AgDR reference.
 Architecture files in this commit:
 $(echo "$TOUCHED_ARCH" | tr ' ' '\n' | sed 's/^/  /' | grep -v '^  $')
 
-ApexStack requires an Agent Decision Record (AgDR) for architectural
+ApexYard requires an Agent Decision Record (AgDR) for architectural
 changes — see .claude/rules/agdr-decisions.md § Enforcement. Every
 decision that has trade-offs (infrastructure layout, CI/CD design,
 deployment strategy, container topology) must be recorded so future

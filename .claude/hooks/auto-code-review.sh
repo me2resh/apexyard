@@ -49,7 +49,7 @@ fi
 cat >&2 <<MSG
 AUTO CODE REVIEW REQUIRED
 
-You just created ${PR_REF}. ApexStack requires the code-reviewer agent (Rex)
+You just created ${PR_REF}. ApexYard requires the code-reviewer agent (Rex)
 to run on every PR before it can be merged — see workflows/code-review.md
 and .claude/rules/pr-workflow.md. Invoke Rex NOW using the Agent tool:
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SessionStart hook: shows a one-line banner when the fork is behind upstream
-# me2resh/apexstack, so the user knows to run /update.
+# me2resh/apexyard, so the user knows to run /update.
 #
 # Silent exit paths (no output, no error):
 #   - Not a git repo
@@ -74,7 +74,7 @@ else
 fi
 
 cat <<MSG
-ApexStack: ${BEHIND} ${SUFFIX} behind upstream/${DEFAULT_BRANCH}. Run /update to sync.
+ApexYard: ${BEHIND} ${SUFFIX} behind upstream/${DEFAULT_BRANCH}. Run /update to sync.
 MSG
 
 exit 0

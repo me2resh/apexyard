@@ -1,10 +1,10 @@
 # =============================================================================
-# ApexStack Portfolio Registry
+# ApexYard Portfolio Registry
 # =============================================================================
 #
-# Place this file at the root of your **ops repo** — the fork of apexstack
+# Place this file at the root of your **ops repo** — the fork of apexyard
 # you cloned to govern your portfolio of projects. Rename this file from
-# `.example` to `apexstack.projects.yaml` once you've filled it in.
+# `.example` to `apexyard.projects.yaml` once you've filled it in.
 #
 # Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
 # aggregate across every project listed below. Most engineering orgs have
@@ -13,7 +13,7 @@
 #
 # If you have exactly one repo, register it here as your single entry and
 # every skill still works. There is no single-project fallback mode; the
-# registry is the source of truth for what ApexStack manages.
+# registry is the source of truth for what ApexYard manages.
 #
 
 # Schema version. Bump if breaking changes are introduced.
@@ -22,7 +22,7 @@ version: 1
 # -----------------------------------------------------------------------------
 # Projects
 # -----------------------------------------------------------------------------
-# Each entry registers one repo as ApexStack-managed.
+# Each entry registers one repo as ApexYard-managed.
 #
 # Required fields:
 #   name        Short identifier. Lowercase, kebab-case. Must be unique.
@@ -33,7 +33,7 @@ version: 1
 #               Use `workspace/<name>` by convention. Optional — if you
 #               haven't cloned it locally yet, leave this off and skills
 #               will gracefully degrade to GitHub-only data.
-#   docs        Path to per-project ApexStack docs in the ops repo,
+#   docs        Path to per-project ApexYard docs in the ops repo,
 #               relative to the ops repo root. Convention: `projects/<name>`.
 #   status      One of: active | paused | archived | handover
 #                 active   = under normal management
@@ -42,7 +42,7 @@ version: 1
 #                 handover = mid-onboarding, /handover assessment in progress
 #
 # Optional fields:
-#   roles       Which ApexStack roles apply to this project. Drives which
+#   roles       Which ApexYard roles apply to this project. Drives which
 #               agents and review checklists kick in. See roles/ for the
 #               full list.
 #   tier        P0 | P1 | P2 — how strategic the project is. Used by /tasks

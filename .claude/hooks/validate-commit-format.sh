@@ -16,7 +16,7 @@
 # (same pattern as verify-commit-refs.sh). Interactive commits (no -m / -F)
 # are skipped.
 #
-# ApexStack also accepts the scoped form `type(scope): subject` as a valid
+# ApexYard also accepts the scoped form `type(scope): subject` as a valid
 # superset — if a project wants to use scopes in commits, that's fine, but
 # the scope is not required.
 

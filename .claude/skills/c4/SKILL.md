@@ -1,6 +1,6 @@
 ---
 name: c4
-description: Generate C4 Level 1 (System Context) and Level 2 (Container) architecture diagrams for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexstack templates.
+description: Generate C4 Level 1 (System Context) and Level 2 (Container) architecture diagrams for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexyard templates.
 argument-hint: "[project-name] [--level=1|2|both] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
@@ -244,5 +244,5 @@ Re-run /c4 <project> --force when the architecture changes.
 - **L3 (Component)** and **L4 (Code)** — premature for typical use; teams that need them know they need them
 - **Auto-diff against existing diagrams** — `--force` is the v1 escape hatch; smarter merging is a separate skill if it proves needed
 - **Multi-system canvases** — single-system per invocation
-- **Auto-PR creation** — the skill writes files; the user commits via the normal PR flow (apexstack hooks ensure that)
+- **Auto-PR creation** — the skill writes files; the user commits via the normal PR flow (apexyard hooks ensure that)
 - **Sequence / deployment / data-flow diagrams** — different DSLs, different audiences, different skills if needed

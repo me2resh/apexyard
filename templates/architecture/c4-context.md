@@ -26,7 +26,7 @@ C4Context
 
 ## How to use this template
 
-1. Copy this file to `docs/architecture/context.md` (for code-level diagrams inside a repo) or `projects/{name}/architecture/context.md` (for portfolio-level ApexStack docs).
+1. Copy this file to `docs/architecture/context.md` (for code-level diagrams inside a repo) or `projects/{name}/architecture/context.md` (for portfolio-level ApexYard docs).
 2. Replace every `{Project Name}` and every placeholder in the `C4Context` block with your real system.
 3. Remove external systems you don't use, add the ones you do.
 4. Keep the diagram **one screen tall on GitHub**. If it doesn't fit, you're probably trying to show L2 detail in an L1 diagram — create the container diagram instead (see `c4-container.md`).
@@ -53,4 +53,4 @@ The L1 diagram should change maybe once or twice a year — only when the system
 
 - [C4 Model — Level 1](https://c4model.com/diagrams/system-context)
 - [Mermaid C4 syntax](https://mermaid.js.org/syntax/c4.html)
-- ApexStack's own L1 for reference: `docs/architecture/apexstack-context.md`
+- ApexYard's own L1 for reference: `docs/architecture/apexyard-context.md`

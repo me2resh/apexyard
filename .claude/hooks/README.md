@@ -1,4 +1,4 @@
-# ApexStack Hooks
+# ApexYard Hooks
 
 Hooks are shell scripts the Claude Code harness runs **before or after tool calls**. They are the only reliable way to make process rules stick — anything written only in `CLAUDE.md`, `.claude/rules/*.md`, or `workflows/*.md` is advice the model may drop under pressure. Anything in this directory is mechanically enforced.
 
@@ -94,7 +94,7 @@ For adversarial trust, rely on remote branch-protection rules (GitHub required r
 **What it does:** if the repo has an `upstream` remote, runs `git fetch upstream --quiet` (cached to once per 10 minutes via `.claude/session/last-upstream-fetch`) and prints a one-line banner when the local default branch is behind `upstream/<default-branch>`:
 
 ```
-ApexStack: 12 commits behind upstream/main. Run /update to sync.
+ApexYard: 12 commits behind upstream/main. Run /update to sync.
 ```
 
 Silent if: no `upstream` remote (upstream repo itself, or fork that hasn't configured it), fetch fails (offline / hosting down), or up-to-date.
@@ -144,7 +144,7 @@ The primary fix for the vocabulary-collision failure mode is the **rule** in `.c
 
 ## The Rule-Mechanization Hooks (GH-13)
 
-Four more hooks added by the rule-audit ticket ([#13](https://github.com/me2resh/apexstack/issues/13)) and recorded in [`docs/agdr/AgDR-0001-rule-mechanization-hooks.md`](../../docs/agdr/AgDR-0001-rule-mechanization-hooks.md). Each closes a specific "prose rule the model drops under pressure" gap that the audit surfaced.
+Four more hooks added by the rule-audit ticket ([#13](https://github.com/me2resh/apexyard/issues/13)) and recorded in [`docs/agdr/AgDR-0001-rule-mechanization-hooks.md`](../../docs/agdr/AgDR-0001-rule-mechanization-hooks.md). Each closes a specific "prose rule the model drops under pressure" gap that the audit surfaced.
 
 ### 7. AgDR-for-arch-changes — `require-agdr-for-arch-changes.sh`
 
@@ -210,7 +210,7 @@ design-tokens
 | All green | Allow |
 | Any failing / cancelled / timed out | **Block** with the check output in the error message |
 | Any pending / in-progress / queued | **Block** (pending is not green; wait for CI to finish, then retry) |
-| "No checks reported" (no CI configured) | Allow with a NOTE to stderr — legitimate state for early apexstack forks |
+| "No checks reported" (no CI configured) | Allow with a NOTE to stderr — legitimate state for early apexyard forks |
 
 **Enforces:** `.claude/rules/pr-quality.md § "No Red CI Before Merge"` — "Never merge with red CI, even if the failure is pre-existing or unrelated." Was prose-only.
 
@@ -257,7 +257,7 @@ The new hooks are registered in `.claude/settings.json` alongside the existing o
 2. **`require-design-review-for-ui.sh`**
 3. **`block-merge-on-red-ci.sh`**
 
-All three merge-gate hooks are **also** registered on `Bash(gh api *)` so the REST-API merge shape (`gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT`) can't silently bypass them. The merge-shape detection and PR-number extraction live in the shared sourced helper `_lib-extract-pr.sh` — any future change to PR-number parsing should be made there, not in the individual hooks. Context: [#47](https://github.com/me2resh/apexstack/issues/47).
+All three merge-gate hooks are **also** registered on `Bash(gh api *)` so the REST-API merge shape (`gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT`) can't silently bypass them. The merge-shape detection and PR-number extraction live in the shared sourced helper `_lib-extract-pr.sh` — any future change to PR-number parsing should be made there, not in the individual hooks. Context: [#47](https://github.com/me2resh/apexyard/issues/47).
 
 The ordering is deliberate: cheap local checks first, expensive remote checks (`gh pr checks`) last, so that a merge already blocked by Rex/CEO/design markers doesn't pay the network cost.
 

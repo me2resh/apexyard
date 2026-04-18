@@ -1,20 +1,57 @@
 # Changelog
 
-All notable changes to ApexStack are documented here.
+All notable changes to ApexYard are documented here.
+
+## [1.0.0] — 2026-04-18
+
+### Rebrand: ApexStack is now ApexYard
+
+The project has been renamed from **ApexStack** to **ApexYard**. Same framework, same people, same license, same philosophy — only the name changed.
+
+### Why
+
+Pre-launch trademark research surfaced conflicts with the original name in the software class. Rather than fight them, we picked a new name that clears UK IPO, USPTO, and EUIPO in the relevant classes. **ApexYard** also pairs cleanly with the existing `ApexScript` consultancy brand — ApexScript is the playbook, ApexYard is the yard where projects get built and governed.
+
+### Migration notes
+
+- **Repo rename:** `me2resh/apexstack` → `me2resh/apexyard`. GitHub preserves redirects so old URLs keep working, but update your `upstream` remote at your leisure:
+
+  ```bash
+  git remote set-url upstream https://github.com/me2resh/apexyard.git
+  ```
+
+- **Registry file rename:** `apexstack.projects.yaml` → `apexyard.projects.yaml`. The `.example` renamed too. Anyone with an existing ops fork should rename their local copy in the same commit as their next `git pull upstream main`.
+
+- **Email contact:** `hello+apexstack@me2resh.com` → `hello+apexyard@me2resh.com`. Both plus-aliases are monitored; prefer the new one going forward.
+
+- **Command interfaces are unchanged.** Every skill (`/handover`, `/update`, `/decide`, `/c4`, etc.), hook, agent, and rule keeps the same name, arguments, and behaviour. No code changes outside text / filenames.
+
+- **Prior releases (v0.1.0, v0.2.0, v0.3.0)** were shipped under the ApexStack name. Their git tags stay intact as the historical record. CHANGELOG prose below has been retro-renamed to ApexYard for reader consistency; if you need the name as-shipped at the time, check the release on GitHub by tag.
+
+### What's in v1.0.0 (beyond the rename)
+
+Nothing functional. Deliberately scoped to name-only changes so the upgrade is safe to merge without reviewing any logic. Any feature work since v0.3.0 lives in separate PRs.
+
+### Upgrade effort
+
+- Local fork: `git pull upstream main` + rename your `apexstack.projects.yaml` to `apexyard.projects.yaml`. Done.
+- No data migration. No config migration. No skill / hook interface changes.
+
+---
 
 ## [0.3.0] — 2026-04-18
 
 ### Multi-project comes alive
 
-v0.2 made forking apexstack the supported install path. v0.3 makes the **multi-project workflow** that fork enables actually work end-to-end: per-project context for the hooks, an upstream-drift signal at session start, and a one-command sync skill so keeping the fork current isn't archaeology.
+v0.2 made forking apexyard the supported install path. v0.3 makes the **multi-project workflow** that fork enables actually work end-to-end: per-project context for the hooks, an upstream-drift signal at session start, and a one-command sync skill so keeping the fork current isn't archaeology.
 
 - **Per-project active-ticket markers** (#41) — `require-active-ticket.sh` now resolves the active ticket per-project (one marker per `workspace/<name>/`), so working in two project clones in the same session no longer cross-contaminates ticket state.
-- **`/update` skill** (#58) — sync the ops fork with `me2resh/apexstack` from one prompt: previews the commit delta, creates a sync branch (because direct push to main is blocked), merges or rebases, walks per-file conflicts, and leaves the branch ready to push as a PR.
+- **`/update` skill** (#58) — sync the ops fork with `me2resh/apexyard` from one prompt: previews the commit delta, creates a sync branch (because direct push to main is blocked), merges or rebases, walks per-file conflicts, and leaves the branch ready to push as a PR.
 - **SessionStart drift banner** (#63) — `check-upstream-drift.sh` runs at session start (cached to once per 10 minutes), prints a one-line banner when your fork is behind. Silent if up-to-date, silent on network failure, silent when no `upstream` remote is configured.
 
 ### Architecture diagrams as a first-class artefact
 
-- **Mermaid C4 templates** (#50) — Level 1 (System Context) and Level 2 (Container) templates at `templates/architecture/`. ApexStack itself dogfoods the convention at `docs/architecture/apexstack-context.md` and `apexstack-container.md`.
+- **Mermaid C4 templates** (#50) — Level 1 (System Context) and Level 2 (Container) templates at `templates/architecture/`. ApexYard itself dogfoods the convention at `docs/architecture/apexyard-context.md` and `apexyard-container.md`.
 - **`/handover` generates a stub C4 L2 container diagram** (#67) — onboarding an external repo now seeds a starter Mermaid diagram alongside the assessment, so new projects don't begin with an empty `docs/architecture/`.
 - AgDR-0003 captures the choice of Mermaid C4 over Structurizr DSL / PlantUML / D2 — GitHub renders Mermaid inline, zero build step, no proprietary tooling.
 
@@ -55,7 +92,7 @@ Migrations are high-blast-radius work that sit awkwardly inside the standard bui
 
 ### Upgrade notes
 
-- `apexstack.projects.yaml` is unchanged from v0.2 — your registry continues to work.
+- `apexyard.projects.yaml` is unchanged from v0.2 — your registry continues to work.
 - The new migration gate (`require-migration-ticket.sh`) is a no-op for projects that don't touch migration paths. If you have non-default migration locations, override `migration_paths` in `.claude/project-config.json`.
 - The new `check-upstream-drift.sh` runs on every session start. It will be silent unless your fork is behind upstream — no action needed unless you see the banner. To skip the upstream check entirely, remove the SessionStart entry from `.claude/settings.json`.
 
@@ -65,7 +102,7 @@ Migrations are high-blast-radius work that sit awkwardly inside the standard bui
 
 ### Mechanical enforcement layer
 
-ApexStack's SDLC rules are no longer advisory prose — they're mechanically enforced by shell hooks that the Claude Code harness executes on every tool call.
+ApexYard's SDLC rules are no longer advisory prose — they're mechanically enforced by shell hooks that the Claude Code harness executes on every tool call.
 
 **15 hooks** (up from 6 in v0.1):
 
@@ -115,7 +152,7 @@ ApexStack's SDLC rules are no longer advisory prose — they're mechanically enf
 
 ### CI dogfooding
 
-ApexStack now runs its own CI:
+ApexYard now runs its own CI:
 
 - `pr-title-check.yml` — enforces ticket ID in PR titles
 - `markdown-lint.yml` — lints all markdown files
@@ -149,7 +186,7 @@ ApexStack now runs its own CI:
 
 ### Initial release
 
-ApexStack — a multi-project forge for Claude Code. Fork it, register your projects, and every managed repo gets shared memory, strict SDLC gates, and 19 role definitions that activate automatically.
+ApexYard — a multi-project forge for Claude Code. Fork it, register your projects, and every managed repo gets shared memory, strict SDLC gates, and 19 role definitions that activate automatically.
 
 - 19 role definitions across 5 departments (engineering, product, design, security, data)
 - Workflows: SDLC, code review, deployment
@@ -159,6 +196,6 @@ ApexStack — a multi-project forge for Claude Code. Fork it, register your proj
 - 5 agents (code reviewer, security reviewer, dependency auditor, PR manager, ticket manager)
 - 7 golden-path CI pipeline templates
 - Fork-first install model (no submodules, no symlinks)
-- Multi-project portfolio registry (`apexstack.projects.yaml`)
+- Multi-project portfolio registry (`apexyard.projects.yaml`)
 - `onboarding.yaml` for company configuration
 - Landing page at `site/index.html`

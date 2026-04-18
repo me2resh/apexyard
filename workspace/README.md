@@ -1,20 +1,20 @@
 # `workspace/` — Live Project Clones
 
-This directory holds **live working copies** of projects that ApexStack manages. It's where code work happens: branches, commits, PRs, CI. Everything under `workspace/*/` is gitignored — each managed project has its own remote and is cloned into this folder independently.
+This directory holds **live working copies** of projects that ApexYard manages. It's where code work happens: branches, commits, PRs, CI. Everything under `workspace/*/` is gitignored — each managed project has its own remote and is cloned into this folder independently.
 
 ## How it works
 
-1. Your ops repo is a fork of `me2resh/apexstack` (see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup)
-2. `apexstack.projects.yaml` at the root of your fork lists every project under management
+1. Your ops repo is a fork of `me2resh/apexyard` (see [`docs/multi-project.md`](../docs/multi-project.md) for the full setup)
+2. `apexyard.projects.yaml` at the root of your fork lists every project under management
 3. For each project you want a local working copy of, `git clone` it into `workspace/<name>/` — the name should match the registry entry
-4. ApexStack skills that need local git data (e.g. `/status` showing dirty files) will look here
+4. ApexYard skills that need local git data (e.g. `/status` showing dirty files) will look here
 
 ## Directory layout
 
 ```
-your-org/apexstack/                ← your fork of apexstack, cloned locally (the "ops repo")
+your-org/apexyard/                ← your fork of apexyard, cloned locally (the "ops repo")
 ├── .claude/                       ← shared rules, skills, hooks
-├── apexstack.projects.yaml        ← the registry (which projects ApexStack manages)
+├── apexyard.projects.yaml        ← the registry (which projects ApexYard manages)
 ├── onboarding.yaml                ← company, team, tech stack
 │
 ├── workspace/                     ← LIVE WORKING COPIES (this directory)
@@ -23,7 +23,7 @@ your-org/apexstack/                ← your fork of apexstack, cloned locally (t
 │   ├── billing-api/               ← `git clone github.com/your-org/billing-api`
 │   └── marketing-site/            ← `git clone github.com/your-org/marketing-site`
 │
-├── projects/                      ← APEXSTACK DOCS PER PROJECT
+├── projects/                      ← APEXYARD DOCS PER PROJECT
 │   ├── README.md
 │   ├── example-app/
 │   │   ├── README.md              ← project overview
@@ -44,7 +44,7 @@ your-org/apexstack/                ← your fork of apexstack, cloned locally (t
 | Directory | Purpose | Tracked in ops repo? | Tracked in project repo? |
 |-----------|---------|----------------------|--------------------------|
 | `workspace/<name>/` | Real git clone of the project — where code edits, builds, and `git push` happen | **No** (`.gitignore` it) | Yes (it's the project itself) |
-| `projects/<name>/` | ApexStack-managed docs **about** the project that span multiple commits or live above the repo level | **Yes** | No |
+| `projects/<name>/` | ApexYard-managed docs **about** the project that span multiple commits or live above the repo level | **Yes** | No |
 
 The split lets you keep:
 

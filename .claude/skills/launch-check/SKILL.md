@@ -189,7 +189,7 @@ Warnings (non-blocking, address before next launch):
 
 ### Step 1: Determine the project
 
-If invoked with an argument, use that path. Otherwise, use the current working directory. Verify it's a git repo with source code (not the ops repo itself — the launch check is for managed projects, not for apexstack).
+If invoked with an argument, use that path. Otherwise, use the current working directory. Verify it's a git repo with source code (not the ops repo itself — the launch check is for managed projects, not for apexyard).
 
 ### Step 2: Quick scan
 

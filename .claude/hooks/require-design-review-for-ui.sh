@@ -120,7 +120,7 @@ BLOCKED: PR #${PR_NUMBER} touches UI files but has no design-review approval mar
 UI files in this diff:
 $(echo "$TOUCHED_UI" | tr ' ' '\n' | sed 's/^/  /' | grep -v '^  $' | head -20)
 
-ApexStack requires a design review on any PR that touches user-facing UI —
+ApexYard requires a design review on any PR that touches user-facing UI —
 see .claude/rules/pr-quality.md § "Design Review (UI Changes)" and
 workflows/code-review.md § "UI Designer (conditional)".
 

@@ -5,7 +5,7 @@ agent: atlas
 model: claude-opus-4-6
 trigger: user-prompt
 status: executed
-ticket: me2resh/apexstack#20
+ticket: me2resh/apexyard#20
 ---
 
 # Warning-to-blocker upgrade for branch-name and PR-title validation
@@ -14,7 +14,7 @@ ticket: me2resh/apexstack#20
 
 ## Context
 
-The first real test run of ApexStack (2026-04-11) exposed that agents drop rules under pressure. The subsequent audit identified that two pre-existing hooks — `validate-branch-name.sh` and `validate-pr-create.sh` — only warned on rule violations via stderr output but always exited 0, allowing the operation to proceed. This makes them functionally equivalent to prose advice: the harness runs them, but their warnings can be silently ignored.
+The first real test run of ApexYard (2026-04-11) exposed that agents drop rules under pressure. The subsequent audit identified that two pre-existing hooks — `validate-branch-name.sh` and `validate-pr-create.sh` — only warned on rule violations via stderr output but always exited 0, allowing the operation to proceed. This makes them functionally equivalent to prose advice: the harness runs them, but their warnings can be silently ignored.
 
 AgDR-0001 explicitly listed the warning-to-blocker upgrade as a deferred follow-up, noting it was a "breaking change" that deserved its own ticket.
 
@@ -43,5 +43,5 @@ The breaking-change concern is real but manageable: a one-paragraph migration no
 
 ## Artifacts
 
-- Ticket: [me2resh/apexstack#20](https://github.com/me2resh/apexstack/issues/20)
+- Ticket: [me2resh/apexyard#20](https://github.com/me2resh/apexyard/issues/20)
 - Parent decision: AgDR-0001 (rule-mechanization hooks)

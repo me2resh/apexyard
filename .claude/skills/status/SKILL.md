@@ -18,7 +18,7 @@ A focused "where am I" view. Where `/inbox` shows what's waiting on you and `/pr
 
 ## Scope
 
-Iterates every project in `apexstack.projects.yaml` (the registry at the root of your ops repo), or a single project if `--project <name>` is passed.
+Iterates every project in `apexyard.projects.yaml` (the registry at the root of your ops repo), or a single project if `--project <name>` is passed.
 
 ## What it shows
 

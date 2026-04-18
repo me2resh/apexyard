@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /inbox — Items Needing Your Attention
 
-Aggregates everything that's currently waiting on **you** across the projects ApexStack manages. Designed to be the first thing you run in a session.
+Aggregates everything that's currently waiting on **you** across the projects ApexYard manages. Designed to be the first thing you run in a session.
 
 ## Usage
 
@@ -18,7 +18,7 @@ Aggregates everything that's currently waiting on **you** across the projects Ap
 
 ## Scope
 
-`/inbox` iterates every project in `apexstack.projects.yaml` at the root of your ops repo (your fork of apexstack). If the registry doesn't exist, print a clear error pointing at `docs/multi-project.md`.
+`/inbox` iterates every project in `apexyard.projects.yaml` at the root of your ops repo (your fork of apexyard). If the registry doesn't exist, print a clear error pointing at `docs/multi-project.md`.
 
 ## What goes in the inbox
 
@@ -155,7 +155,7 @@ If everything is empty:
 
 1. **Read-only** — never close, comment, or assign anything from this skill
 2. **Always sort by recency within each section** — newest updates first
-3. **Registry-scoped** — only projects listed in `apexstack.projects.yaml` count; never shell out to "all repos in the org"
+3. **Registry-scoped** — only projects listed in `apexyard.projects.yaml` count; never shell out to "all repos in the org"
 4. **Skip empty sections** — don't print headers with `(0)`
 5. **Never error on a single project** — if one repo is unreachable, mark it `?` and continue
 6. **Always include URLs** — every row needs a clickable link

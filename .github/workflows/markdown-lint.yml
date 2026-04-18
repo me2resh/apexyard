@@ -1,4 +1,4 @@
-# Markdown Lint — dogfood apexstack itself
+# Markdown Lint — dogfood apexyard itself
 #
 # Catches broken markdown and inconsistent headings across the repo.
 # Uses a relaxed ruleset via .markdownlint.json at the repo root — we care

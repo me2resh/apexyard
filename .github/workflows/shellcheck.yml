@@ -1,8 +1,8 @@
-# ShellCheck — dogfood apexstack itself
+# ShellCheck — dogfood apexyard itself
 #
 # Runs shellcheck against the hook scripts under .claude/hooks/ to catch
 # portability bugs, quoting mistakes, and common shell pitfalls. The hook
-# scripts are the mechanical enforcement layer for the apexstack workflow,
+# scripts are the mechanical enforcement layer for the apexyard workflow,
 # so any bug there weakens the whole stack.
 
 name: ShellCheck

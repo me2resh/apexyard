@@ -1,8 +1,8 @@
-# ApexStack per-session state — active ticket, pending / completed reviews,
+# ApexYard per-session state — active ticket, pending / completed reviews,
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
-# ApexStack per-project config written by /onboard. Contains deploy URLs and
+# ApexYard per-project config written by /onboard. Contains deploy URLs and
 # sensitive-topic notes that should not leak to git — keep it local.
 .claude/project-config.json
 

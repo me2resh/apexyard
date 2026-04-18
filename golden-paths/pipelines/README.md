@@ -1,6 +1,6 @@
 # CI/CD Pipeline Templates
 
-Reusable GitHub Actions workflows that integrate ApexStack's automated agents into your project builds.
+Reusable GitHub Actions workflows that integrate ApexYard's automated agents into your project builds.
 
 ## Available Pipelines
 
@@ -18,7 +18,7 @@ Reusable GitHub Actions workflows that integrate ApexStack's automated agents in
 
 ## Quick Start
 
-These pipelines live inside your fork of apexstack (the ops repo) at `golden-paths/pipelines/`. To use them in a managed project, copy them into that project's own `.github/workflows/` directory.
+These pipelines live inside your fork of apexyard (the ops repo) at `golden-paths/pipelines/`. To use them in a managed project, copy them into that project's own `.github/workflows/` directory.
 
 ### Option 1: Copy individual pipelines
 
@@ -27,16 +27,16 @@ These pipelines live inside your fork of apexstack (the ops repo) at `golden-pat
 mkdir -p .github/workflows
 
 # Copy specific pipelines from your ops repo
-cp ~/apexstack/golden-paths/pipelines/security.yml .github/workflows/
-cp ~/apexstack/golden-paths/pipelines/code-quality.yml .github/workflows/
+cp ~/apexyard/golden-paths/pipelines/security.yml .github/workflows/
+cp ~/apexyard/golden-paths/pipelines/code-quality.yml .github/workflows/
 ```
 
-(Adjust `~/apexstack` to wherever you cloned your fork.)
+(Adjust `~/apexyard` to wherever you cloned your fork.)
 
 ### Option 2: Use the combined pipeline
 
 ```bash
-cp ~/apexstack/golden-paths/pipelines/ci.yml .github/workflows/
+cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 ```
 
 ---

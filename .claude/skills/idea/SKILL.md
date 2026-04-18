@@ -19,7 +19,7 @@ Capture a new product, feature, or internal-tool idea so it lands somewhere dura
 
 ## Where the entry goes
 
-Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (your fork of apexstack). One shared backlog for every project — triage decides which project ends up owning a given idea.
+Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (your fork of apexyard). One shared backlog for every project — triage decides which project ends up owning a given idea.
 
 If the file doesn't exist yet, create it with a header and a table.
 

@@ -12,7 +12,7 @@ This skill has been split into two purpose-specific flows:
 
 | What you want to do | Run instead |
 |---------------------|-------------|
-| **Configure the ApexStack fork** (first-run setup, company info, tech stack defaults) | `/setup` |
+| **Configure the ApexYard fork** (first-run setup, company info, tech stack defaults) | `/setup` |
 | **Add a project to the portfolio** (onboard an external repo, per-project discovery) | `/handover <repo>` |
 
 ## Why the split
