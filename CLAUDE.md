@@ -172,10 +172,10 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | Hooks | `.claude/hooks/` | 17 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 32 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 33 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (32)
+### Available skills (33)
 
 | Skill | Purpose |
 |-------|---------|
@@ -203,6 +203,7 @@ ApexStack ships with a `.claude/` directory containing the Claude Code primitive
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexStack management (includes per-project discovery) |
+| `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
 | `/update` | Sync the ops fork with upstream me2resh/apexstack — preview, merge-or-rebase, leaves a sync branch ready to push |
 | `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |

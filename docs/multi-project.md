@@ -205,6 +205,7 @@ Every portfolio skill reads `apexstack.projects.yaml` and iterates the registry.
 | `/roadmap` | Reads `projects/<name>/roadmap.md`; asks which project if ambiguous |
 | `/stakeholder-update` | Portfolio rollup with a section per project |
 | `/handover` | Writes to `projects/<name>/handover-assessment.md` and appends the project to the registry |
+| `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
 
