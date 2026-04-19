@@ -10,8 +10,6 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
-Inspired by [gstacks.org](https://gstacks.org/) — but purpose-built for software teams running more than one product at a time.
-
 ## What's Inside
 
 ```

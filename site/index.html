@@ -4,7 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ApexYard - where projects get forged</title>
-<meta name="description" content="ApexYard is a multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders running 2-5 products at once. Open source. Claude Code native, but plain markdown underneath.">
+<meta name="description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. One ops repo governs all your projects. 33 skills, 18 hooks, 19 roles. MIT, plain markdown and shell, Claude Code native.">
+<link rel="canonical" href="https://yard.apexscript.com/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ApexYard">
+<meta property="og:url" content="https://yard.apexscript.com/">
+<meta property="og:title" content="ApexYard - where projects get forged">
+<meta property="og:description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. One ops repo governs all your projects. MIT, plain markdown and shell.">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:url" content="https://yard.apexscript.com/">
+<meta name="twitter:title" content="ApexYard - where projects get forged">
+<meta name="twitter:description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. MIT, plain markdown and shell.">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
@@ -169,6 +184,7 @@ a:hover { color: var(--accent); }
 .titlebar__right a {
   color: var(--ink-soft);
   position: relative;
+  white-space: nowrap;
 }
 .titlebar__right a:hover { color: var(--accent); }
 .titlebar__right a.is-cta {
@@ -786,17 +802,18 @@ a:hover { color: var(--accent); }
   margin: 0 auto;
   padding: 0 var(--gutter);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1.5rem;
 }
 @media (max-width: 900px) {
-  .demos { grid-template-columns: 1fr; }
+  .demos { grid-template-columns: minmax(0, 1fr); }
 }
 .demo {
   background: var(--paper-2);
   border: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .demo--wide { grid-column: 1 / -1; }
 
@@ -911,16 +928,17 @@ a:hover { color: var(--accent); }
   margin: 0 auto;
   padding: 0 var(--gutter);
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.5rem;
 }
 @media (max-width: 900px) {
-  .steps { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
 }
 .step {
   border: 1px solid var(--rule);
   background: var(--paper);
   padding: 1.5rem 1.5rem 1.25rem;
+  min-width: 0;
 }
 .step__num {
   font-size: 11px;
