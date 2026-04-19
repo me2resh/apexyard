@@ -618,11 +618,13 @@ a:hover { color: var(--accent); }
   position: relative;
 }
 .manifesto__text {
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  font-size: clamp(1rem, 1.5vw, 1.2rem);
   line-height: 1.7;
   color: var(--ink);
   font-weight: 500;
-  max-width: 60ch;
+  /* No max-width cap - each clause wants to sit on one line at desktop
+     width, and wraps naturally on narrower screens. Bounded by the
+     .manifesto__inner container's max-width already. */
 }
 @media (max-width: 720px) {
   .manifesto__text { font-size: 15px; line-height: 1.65; }
