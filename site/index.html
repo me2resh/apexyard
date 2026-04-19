@@ -1944,7 +1944,7 @@ confirm it skips the missing column before merge."</span></pre>
      Hidden if a prior choice is stored. On Accept, updates gtag
      Consent Mode to grant analytics_storage.
      ============================================================ -->
-<div id="consent" class="consent" role="dialog" aria-label="Cookie consent" hidden>
+<div id="consent" class="consent" role="region" aria-label="Cookie consent" hidden>
   <div class="consent__inner">
     <p class="consent__msg">
       This site uses Google Analytics to count visits. No ads, no cross-site tracking.
@@ -1966,15 +1966,26 @@ confirm it skips the missing column before merge."</span></pre>
   if (stored !== 'granted' && stored !== 'denied') {
     el.hidden = false;
   }
-  el.addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-consent]');
-    if (!btn) return;
-    var choice = btn.getAttribute('data-consent');
+  function record(choice) {
+    if (el.hidden) return;
     try { localStorage.setItem(KEY, choice); } catch (e) {}
     if (choice === 'granted' && typeof gtag === 'function') {
       gtag('consent', 'update', { 'analytics_storage': 'granted' });
     }
     el.hidden = true;
+  }
+  el.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-consent]');
+    if (!btn) return;
+    record(btn.getAttribute('data-consent'));
+  });
+  // Escape dismisses the banner as "denied" - keyboard users without
+  // a mouse shouldn't be stuck with a fixed-bottom banner they can't
+  // dismiss. "Denied" is the non-consenting default per Consent Mode v2.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !el.hidden) {
+      record('denied');
+    }
   });
 })();
 </script>
