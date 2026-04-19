@@ -2,7 +2,7 @@
 
 **Where projects get forged.**
 
-A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders and technical leads running 2–5 products at once.
+A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders who ship alone, or companies standing up AI-enabled squads.
 
 You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
@@ -27,22 +27,23 @@ apexyard/
 │   └── data/              # Data Analyst, Data Engineer, Head of Data
 │
 ├── workflows/             # Development lifecycle processes
-│   ├── sdlc.md            # Full software development lifecycle
-│   ├── code-review.md     # Code review process and standards
-│   └── deployment.md      # Deployment and release process
+│   ├── sdlc.md            # Full SDLC including the database-migration sub-workflow
+│   └── code-review.md     # Code review process and standards
 │
 ├── templates/             # Reusable document templates
 │   ├── prd.md             # Product Requirements Document
 │   ├── technical-design.md # Technical design document
 │   ├── adr.md             # Architecture Decision Record
-│   └── agdr.md            # Agent Decision Record (AI-specific)
+│   ├── agdr.md            # Agent Decision Record (AI-specific)
+│   ├── agdr-migration.md  # Migration-specific AgDR (rollback, downtime, consumers)
+│   └── architecture/      # C4 diagram templates — Context (L1) + Container (L2), Mermaid
 │
 ├── .claude/               # Claude Code primitives (the runnable layer)
-│   ├── settings.json      # Hook wiring (PreToolUse)
-│   ├── hooks/             # Shell scripts: block git add -A, block main push, secrets scan, branch & PR validation, pre-push reminder
-│   ├── rules/             # Modular rule files imported via @.claude/rules/* (AgDR triggers, code standards, git conventions, PR quality, workflow gates)
-│   ├── agents/            # Sub-agents: Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
-│   └── skills/            # 13 slash commands: /decide, /code-review, /security-review, /audit-deps, /write-spec, /idea, /handover, /projects, /inbox, /status, /tasks, /roadmap, /stakeholder-update
+│   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
+│   ├── hooks/             # 18 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, upstream-drift banner
+│   ├── rules/             # 9 modular rule files imported via @.claude/rules/* (AgDR triggers, code standards, git conventions, PR quality, workflow gates, role triggers, ticket vocabulary, agdr-decisions)
+│   ├── agents/            # 5 sub-agents — Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
+│   └── skills/            # 33 slash commands — see CLAUDE.md for the full list
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
@@ -134,17 +135,22 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 **The problem**: Claude Code is powerful, but without structure it produces inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
 
-**The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 20+ role definitions to use, battle-tested workflows to follow.
+**The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 19 role definitions to use, battle-tested workflows to follow, and 18 shell hooks that enforce the rules mechanically.
 
 ### What makes it different
 
 | Feature | Without ApexYard | With ApexYard |
 |---------|-------------------|----------------|
-| Code reviews | Ad-hoc prompts | Structured checklist with role-based review |
+| Code reviews | Ad-hoc prompts | Rex agent on every PR, SHA-bound approval marker |
 | Technical decisions | Lost in chat history | Documented as Agent Decision Records |
-| Quality gates | Hope and pray | Enforced workflow stages |
-| Role consistency | Re-explain every session | Persistent role definitions |
-| Onboarding | Days of context-setting | One config file |
+| Quality gates | Hope and pray | 18 shell hooks block bad commits, forged markers, unreviewed merges |
+| Merge approval | Informal "LGTM" | Two-marker gate — Rex (code) + CEO (per-PR explicit) |
+| Database migrations | Drop-column-on-Friday | Dedicated gate: labelled ticket + migration AgDR (rollback, downtime, consumers) required before schema edits |
+| Architecture docs | Nobody draws them | C4 L1 + L2 Mermaid templates + `/c4` skill generates stubs from a codebase |
+| Portfolio visibility | Tab through 5 GitHubs | `/inbox`, `/status`, `/tasks` aggregate across a single registry file |
+| Upstream sync | Forget for 6 months | Session-start drift banner + `/update` skill |
+| Role consistency | Re-explain every session | Persistent role definitions, activation-triggered |
+| Onboarding | Days of context-setting | `/setup` three-exchange config |
 
 ## Roles
 
@@ -192,7 +198,7 @@ ApexYard includes 19 software development roles across 5 departments:
 Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ```
 
-Each phase has entry criteria, activities, exit criteria, and quality gates.
+Each phase has entry criteria, activities, exit criteria, and quality gates. See [`workflows/sdlc.md`](workflows/sdlc.md) for the full flow.
 
 ### Code Review Process
 
@@ -202,13 +208,16 @@ Structured review with:
 - Reviewer checklist (architecture, security, testing, performance)
 - Feedback severity levels (blocking, suggestion, question)
 - Response time targets
+- Rex (code-reviewer agent) auto-runs on every PR; human reviewer activates per role triggers
 
-### Deployment Process
+### Database Migration Sub-Workflow
 
-- Infrastructure as Code patterns
-- CI/CD pipeline stages
-- Environment promotion (staging -> production)
-- Rollback procedures
+Migrations are high-blast-radius work and get their own gate (workflow gate 3a). Any edit to `migrate-*.{ts,js,py,sql}`, `**/migrations/**`, `prisma/schema.prisma`, `alembic/versions/*`, or similar requires:
+
+1. A labelled `migration` ticket
+2. A matching migration AgDR that documents rollback, estimated downtime, cross-service consumers, data volume, testing plan, observability
+
+The `/migration` skill creates both artefacts in one guided flow; the `require-migration-ticket.sh` hook blocks edits to migration paths until they exist.
 
 ## Templates
 
@@ -217,7 +226,10 @@ Structured review with:
 | PRD | Product Requirements Document with user stories, acceptance criteria |
 | Technical Design | Architecture, domain model, API design, implementation plan |
 | ADR | Architecture Decision Record for significant technical decisions |
-| AgDR | Agent Decision Record -- AI-specific decision tracking |
+| AgDR | Agent Decision Record — AI-specific decision tracking |
+| Migration AgDR | Migration-specific AgDR — rollback plan, downtime estimate, consumers, observability |
+| C4 Context (L1) | System context Mermaid diagram — external actors + system boundary |
+| C4 Container (L2) | Container Mermaid diagram — deployable units inside the system |
 
 ## Customization
 
@@ -230,11 +242,17 @@ ApexYard is designed to be customized. Every role, workflow, and template can be
 
 ## Contributing
 
-Contributions are welcome. Please:
+Contributions are welcome. ApexYard itself runs on its own rules, so the flow is the same one you'd use for any project under ApexYard governance:
 
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request with a clear description
+1. **File a ticket** — `/feature`, `/bug`, or `/task` on this repo. Describes what you want to change and why.
+2. **Start the ticket** — `/start-ticket <number>` so the ticket-first hook lets your code edits through.
+3. **Branch + commit** — `{type}/GH-{number}-{short-description}`, conventional commit format (`type(#number): subject`).
+4. **Self-check before pushing** — `npm run lint` / markdownlint / shellcheck as applicable; hooks remind you at `git push`.
+5. **Open a PR** — title `type(#number): description` + a Glossary section in the body.
+6. **Wait for Rex** — the Code Reviewer agent auto-runs on every PR.
+7. **Merge requires two markers** — Rex's approval + explicit per-PR CEO approval via `/approve-merge <pr>`. Plan-level "go" doesn't count.
+
+For larger changes (new skills, rule changes, workflow redesigns), open a discussion or draft PRD first.
 
 ## License
 
