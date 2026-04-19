@@ -1,6 +1,5 @@
-[build]
-  # Static site - no build step. Ship what's in site/.
-  publish = "site"
+# Publish directory is set in the Netlify UI (site/).
+# This file only contributes security headers so they live in source.
 
 [[headers]]
   for = "/*"
