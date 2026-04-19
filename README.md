@@ -28,7 +28,8 @@ apexyard/
 │
 ├── workflows/             # Development lifecycle processes
 │   ├── sdlc.md            # Full SDLC including the database-migration sub-workflow
-│   └── code-review.md     # Code review process and standards
+│   ├── code-review.md     # Code review process and standards
+│   └── deployment.md      # Environment promotion, rollback, IaC patterns
 │
 ├── templates/             # Reusable document templates
 │   ├── prd.md             # Product Requirements Document
@@ -41,7 +42,7 @@ apexyard/
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
 │   ├── hooks/             # 18 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, upstream-drift banner
-│   ├── rules/             # 9 modular rule files imported via @.claude/rules/* (AgDR triggers, code standards, git conventions, PR quality, workflow gates, role triggers, ticket vocabulary, agdr-decisions)
+│   ├── rules/             # 8 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
 │   ├── agents/            # 5 sub-agents — Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
 │   └── skills/            # 33 slash commands — see CLAUDE.md for the full list
 │
@@ -209,6 +210,15 @@ Structured review with:
 - Feedback severity levels (blocking, suggestion, question)
 - Response time targets
 - Rex (code-reviewer agent) auto-runs on every PR; human reviewer activates per role triggers
+
+### Deployment Process
+
+- Infrastructure as Code patterns
+- CI/CD pipeline stages
+- Environment promotion (staging → production)
+- Rollback procedures
+
+See [`workflows/deployment.md`](workflows/deployment.md) for the full flow.
 
 ### Database Migration Sub-Workflow
 
