@@ -19,6 +19,7 @@ Paired with the launch blog post at `me2resh.com/blog/apexyard-where-projects-ge
 > The merge gate.
 >
 > Every `gh pr merge` is blocked unless two files exist on disk:
+>
 > - `<pr>-rex.approved` (code review)
 > - `<pr>-ceo.approved` (explicit per-PR nod)
 >
