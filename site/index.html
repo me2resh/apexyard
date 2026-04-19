@@ -257,8 +257,25 @@ a:hover { color: var(--accent); }
   color: var(--ink);
   max-width: 60ch;
   line-height: 1.25;
-  margin-bottom: 1rem;
+  margin-bottom: 0.4rem;
   letter-spacing: -0.015em;
+}
+
+.hero__builtby {
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.25rem;
+}
+.hero__builtby a {
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1px;
+}
+.hero__builtby a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .hero__sub {
@@ -1119,7 +1136,15 @@ footer.foot {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.foot__inner a:hover { color: var(--accent); }
+.foot__inner a {
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule-faint);
+  padding-bottom: 1px;
+}
+.foot__inner a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
 
 /* ============================================================
    page-load reveal - staggered, restrained
@@ -1283,6 +1308,10 @@ footer.foot {
 
     <p class="hero__tagline rise rise-3">
       Where projects get forged.
+    </p>
+
+    <p class="hero__builtby rise rise-3">
+      Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a>
     </p>
 
     <p class="hero__sub rise rise-3">
@@ -1655,10 +1684,14 @@ confirm it skips the missing column before merge."</span></pre>
 <!-- ============================================================
      FOOTER
      ============================================================ -->
-<footer class="foot">
+<footer class="foot" role="contentinfo">
   <div class="foot__inner">
-    <span>apexyard v1.0 · MIT · plain markdown · zero dependencies</span>
-    <span><a href="https://github.com/me2resh/apexyard">github</a> · <a href="https://github.com/me2resh/apexyard/issues">issues</a> · <a href="https://github.com/me2resh/apexyard/pulls">prs</a></span>
+    <span>Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · MIT · plain markdown · zero dependencies</span>
+    <span>
+      <a href="https://github.com/me2resh" target="_blank" rel="noopener">github</a> ·
+      <a href="https://twitter.com/me2resh" target="_blank" rel="noopener">twitter</a> ·
+      <a href="https://me2resh.com" target="_blank" rel="noopener">blog</a>
+    </span>
   </div>
 </footer>
 
