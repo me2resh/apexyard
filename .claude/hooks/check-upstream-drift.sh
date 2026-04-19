@@ -63,8 +63,9 @@ fi
 if [ "$SHOULD_FETCH" = "1" ]; then
   # Quiet fetch with a short timeout. On failure (no network, no auth), exit
   # silently — we don't want a startup banner yelling about offline state.
-  # `--tags` pulls tag refs too, which is what enables tag-based drift.
-  if ! timeout 5 git fetch upstream --tags --quiet 2>/dev/null; then
+  # `--tags --prune-tags` pulls tag refs and removes local copies of any tag
+  # upstream has retracted (rare, but keeps the local tag view honest).
+  if ! timeout 5 git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
     exit 0
   fi
   mkdir -p "$CACHE_DIR"
@@ -85,17 +86,36 @@ UPSTREAM_TAG=$(git tag --list --sort=-v:refname --merged "upstream/${DEFAULT_BRA
 LOCAL_TAG=$(git tag --list --sort=-v:refname --merged "${DEFAULT_BRANCH}" 2>/dev/null | head -n 1)
 
 if [ -n "$UPSTREAM_TAG" ]; then
-  # Upstream has at least one tag. This is the steady-state case.
-  if [ "$UPSTREAM_TAG" != "$LOCAL_TAG" ]; then
-    # Different tag — and since we sort descending by semver, upstream is
-    # ahead by definition. Name the release in the banner.
+  # Upstream has at least one tag. Steady-state path.
+
+  if [ -z "$LOCAL_TAG" ]; then
+    # Fork has never merged any tag yet. First release sync is due.
+    cat <<MSG
+ApexYard: ${UPSTREAM_TAG} available. Run /update to sync.
+MSG
+    exit 0
+  fi
+
+  if [ "$UPSTREAM_TAG" = "$LOCAL_TAG" ]; then
+    # Same release. Silent even if upstream/main has unreleased commits.
+    exit 0
+  fi
+
+  # Both tags exist and differ. Decide which is newer by semver. Naive `!=`
+  # would fire when a fork owner tagged their own main past upstream (e.g.
+  # a private v2.0.0-acme on the fork while upstream is still v1.1.0), which
+  # would nag them about an older upstream release they don't want.
+  # `sort -V` does a version-aware sort; the last line is the newer tag.
+  NEWER=$(printf '%s\n%s\n' "$UPSTREAM_TAG" "$LOCAL_TAG" | sort -V | tail -n 1)
+
+  if [ "$NEWER" = "$UPSTREAM_TAG" ]; then
+    # Upstream is strictly newer. Nag.
     cat <<MSG
 ApexYard: ${UPSTREAM_TAG} available. Run /update to sync.
 MSG
   fi
-  # Same tag (or local is the tag) → silent, even if upstream/main has
-  # commits beyond the tag. Those are unreleased chore work and we do NOT
-  # nag about them.
+  # Local is strictly newer (fork has its own tag ahead of upstream's
+  # latest release). Silent — not our business.
   exit 0
 fi
 

@@ -23,6 +23,7 @@ Each commit to `me2resh/apexyard:main` used to trigger every fork's banner with 
 - **No config to change.** Tag-based is the new default; no opt-in or opt-out flag to set.
 - **First session on v1.1.0** — the banner will name the first upstream tag higher than your fork's last merged tag.
 - **Forks with never-merged-a-tag history** — fall through to the commit-count fallback on the first run, then the tag-based path after they sync once.
+- **Cache interaction**: existing installs may have a `.claude/session/last-upstream-fetch` file from pre-1.1.0. That cache still applies — so the first v1.1.0 session may wait up to 10 minutes before the new `--tags` fetch runs. Force an immediate re-check with `rm .claude/session/last-upstream-fetch`.
 
 ## [1.0.0] — 2026-04-18
 

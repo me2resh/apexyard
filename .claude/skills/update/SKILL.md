@@ -127,6 +127,11 @@ Default answer is "yes" in this mode — there's a real release the user asked a
 
 **Ahead and behind (typical fork):**
 
+The prompt's default answer branches on whether a new release is available:
+
+- If `UPSTREAM_TAG` is strictly newer than `LOCAL_TAG` → default `[Y/n]` (there's a real release to pull in).
+- If they're equal (no new release, just main drift) → default `[y/N]` (likely noise).
+
 ```
 Fork has 5 local commits not in upstream, and is 12 commits behind.
 
@@ -139,7 +144,9 @@ Upstream commits to pull in:
   c8c93bb fix: merge-gate hooks read PR HEAD via gh pr view (#57)
   (… 11 more …)
 
-Proceed with merge? [y/N]
+New release available: v1.1.0 (you are on v1.0.0).
+
+Proceed with merge? [Y/n]
 ```
 
 Cap each list at 20 entries with an `(N more)` marker.
