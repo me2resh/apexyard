@@ -169,8 +169,8 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 17 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
-| Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
+| Hooks | `.claude/hooks/` | 18 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
+| Rules | `.claude/rules/` | 8 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
 | Skills | `.claude/skills/` | 33 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
@@ -246,7 +246,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (13 slash commands) | `.claude/skills/` |
+| Skills (33 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
