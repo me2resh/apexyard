@@ -602,6 +602,33 @@ a:hover { color: var(--accent); }
 }
 
 /* ============================================================
+   manifesto - the SDLC loop, one-line callout between hero and quickstart
+   ============================================================ */
+
+.manifesto {
+  padding: clamp(2.5rem, 5vw, 4rem) 0;
+  background: var(--paper-3);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.manifesto__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  position: relative;
+}
+.manifesto__text {
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  line-height: 1.7;
+  color: var(--ink);
+  font-weight: 500;
+  max-width: 60ch;
+}
+@media (max-width: 720px) {
+  .manifesto__text { font-size: 15px; line-height: 1.65; }
+}
+
+/* ============================================================
    ascii section - boxed
    ============================================================ */
 
@@ -1434,6 +1461,19 @@ footer.foot {
       Proven shipping · <span class="kw">TypeScript</span> + AWS Lambda backends · <span class="kw">Next.js</span> web apps · <span class="kw">Chrome</span> extensions · native <span class="kw">Swift</span> macOS apps
     </p>
 
+  </div>
+</section>
+
+<!-- ============================================================
+     MANIFESTO - the SDLC loop, in one line
+     ============================================================ -->
+<section class="manifesto" aria-label="What apexyard mechanically enforces">
+  <div class="manifesto__inner">
+    <p class="manifesto__text">
+      Every pull request ties to a ticket.<br>
+      Every ticket has acceptance criteria.<br>
+      Code review validates against those criteria, and QA verifies the result in a separate pass before the ticket closes.
+    </p>
   </div>
 </section>
 
