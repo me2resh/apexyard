@@ -31,7 +31,7 @@ For a framework we expect to have hundreds of downstream forks, getting this rig
 |--------|------|------|
 | **(A) Keep commit-based drift** | No code change. Fires even on "important" untagged commits. | Noisy. Trains fork owners to ignore the banner. Scales poorly with upstream activity. |
 | **(B) Tag-based drift with commit-count fallback** *(chosen)* | Actionable signal (fires only on new releases). Quiet for chore commits. Brand-new projects with no tag history still get a useful signal via fallback. Zero config. | Relies on upstream tagging discipline. If upstream pushes a critical fix to main and forgets to tag, downstream forks don't see a banner until the next tag. |
-| **(C) Config flag (`upstream_sync_mode: tag | main`)** | Satisfies both audiences — conservative (tag) and bleeding-edge (main). | Doubled surface area. More to document, test, and maintain. Most fork owners won't ever change the default, so the flag is dead weight for the majority. Slippery slope toward more flags. |
+| **(C) Config flag (`upstream_sync_mode: tag \| main`)** | Satisfies both audiences — conservative (tag) and bleeding-edge (main). | Doubled surface area. More to document, test, and maintain. Most fork owners won't ever change the default, so the flag is dead weight for the majority. Slippery slope toward more flags. |
 
 ### Decision dimensions weighted
 
