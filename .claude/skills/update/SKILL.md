@@ -77,14 +77,20 @@ Network failure: print a warning and exit. Don't try to "work from cache" — us
 
 ### 3. Preview
 
+Two signals matter here: a new upstream **tag** (the actionable one, meaning a real release is available), and upstream **main commits** since the fork's last sync (informational — may just be a docs typo).
+
 ```bash
 AHEAD=$(git rev-list --count upstream/main..main)
 BEHIND=$(git rev-list --count main..upstream/main)
+
+# Tag-based signal — same comparison the SessionStart drift banner uses.
+UPSTREAM_TAG=$(git tag --list --sort=-v:refname --merged upstream/main | head -n 1)
+LOCAL_TAG=$(git tag --list --sort=-v:refname --merged main | head -n 1)
 ```
 
 Then report. Examples:
 
-**Up-to-date:**
+**Up-to-date (no tag drift, no commit drift):**
 
 ```
 Fork is up to date with upstream/main. Nothing to sync.
@@ -92,10 +98,21 @@ Fork is up to date with upstream/main. Nothing to sync.
 
 Exit 0.
 
-**Behind only:**
+**No release drift, but main has moved (common, NOT actionable):**
 
 ```
-Fork is 12 commits behind upstream/main.
+Fork is on upstream's latest release (v1.1.0) but upstream/main has 3 unreleased commits.
+These are typically docs tweaks, CI fixes, or work-in-progress.
+
+Sync anyway? [y/N]
+```
+
+Default answer is "no" — small main commits aren't worth syncing. Surface this without nagging; the user can still choose to pull in bleeding-edge.
+
+**Behind only — new release available (actionable, default):**
+
+```
+New release available: v1.1.0 (you are on v1.0.0, 12 commits behind upstream/main).
 
 Upstream commits to pull in:
   c8c93bb fix: merge-gate hooks read PR HEAD via gh pr view (#57)
@@ -103,8 +120,10 @@ Upstream commits to pull in:
   5f067b5 fix: reject closed issue refs (#53)
   ... (9 more)
 
-Proceed with merge? [y/N]
+Proceed with merge? [Y/n]
 ```
+
+Default answer is "yes" in this mode — there's a real release the user asked about by running `/update`.
 
 **Ahead and behind (typical fork):**
 
