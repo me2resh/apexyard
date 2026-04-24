@@ -84,9 +84,10 @@ Columns:
 |------|--------|-------------|---------------|---------------------------------|
 | HARD STOP — run `/decide` before any technical decision | `.claude/rules/agdr-decisions.md § Trigger Patterns` | prose (self-discipline) | no | trigger patterns are chat-output phrases; linting assistant prose was rejected for the same reason as in `ticket-vocabulary.md` [^self-discipline] |
 | AgDR required for architecture / infra commits | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-changes.sh` | yes | mechanized (AgDR-0001); narrow default path list, project-config override via `.architecture_paths` |
+| AgDR required at PR time when diff touches architecture paths OR adds a new dependency | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-pr.sh` | yes | mechanized ([#112][112]); fires on `gh pr create`, config via `.agdr_trigger_paths[]` + `.agdr_trigger_dep_files[]`; skip marker `<!-- agdr: not-applicable -->` bypasses with a visible warning |
 | Extend default `architecture_paths` to cover SAM / Helm / K8s / Serverless Framework | — | — | deferred | [#25][25] — default list is deliberately narrow; follow-up broadens safely |
 | AgDRs stored at `{project}/docs/agdr/AgDR-NNNN-{slug}.md` | `.claude/rules/agdr-decisions.md § What /decide Does` | prose | no | path convention, not a gatekeeping rule |
-| Code Reviewer flags PRs with arch changes that don't link an AgDR | `.claude/rules/agdr-decisions.md § Enforcement` | `code-reviewer` agent + `require-agdr-for-arch-changes.sh` | yes | mechanized |
+| Code Reviewer flags PRs with arch changes that don't link an AgDR | `.claude/rules/agdr-decisions.md § Enforcement` | `code-reviewer` agent + `require-agdr-for-arch-changes.sh` + `require-agdr-for-arch-pr.sh` | yes | mechanized |
 
 ### 5. Ticket vocabulary
 
@@ -161,11 +162,11 @@ Columns:
 
 | bucket | count |
 |--------|-------|
-| mechanized (`yes` — hook / agent enforces it fully) | 28 |
+| mechanized (`yes` — hook / agent enforces it fully) | 29 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
 | advisory (`no` — stays prose by design) | 36 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **75** |
+| **total rows** | **76** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
@@ -196,3 +197,4 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [25]: https://github.com/me2resh/apexyard/issues/25
 [107]: https://github.com/me2resh/apexyard/issues/107
 [110]: https://github.com/me2resh/apexyard/issues/110
+[112]: https://github.com/me2resh/apexyard/issues/112
