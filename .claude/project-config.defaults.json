@@ -12,7 +12,17 @@
       "CI",
       "Docs"
     ],
-    "label_priority_scheme": "P0,P1,P2,P3"
+    "label_priority_scheme": "P0,P1,P2,P3",
+    "required_sections": {
+      "Feature": ["User Story", "Acceptance Criteria"],
+      "Chore": ["Driver", "Scope", "Acceptance Criteria"],
+      "Refactor": ["Driver", "Scope", "Acceptance Criteria"],
+      "Testing": ["Driver", "Scope", "Acceptance Criteria"],
+      "CI": ["Driver", "Scope", "Acceptance Criteria"],
+      "Docs": ["Driver", "Acceptance Criteria"],
+      "Bug": ["Given / When / Then", "Repro"]
+    },
+    "skip_marker": "<!-- validate-issue-structure: skip -->"
   },
 
   "branch": {
