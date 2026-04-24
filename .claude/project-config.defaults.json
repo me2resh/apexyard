@@ -60,5 +60,13 @@
       "chore",
       "revert"
     ]
+  },
+
+  "leak_protection": {
+    "public_framework_repos": [
+      "me2resh/apexyard"
+    ],
+    "auto_detect_upstream": true,
+    "skip_marker": "<!-- private-refs: allow -->"
   }
 }
