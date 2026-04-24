@@ -185,6 +185,66 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b'; then
 ${REQUIRED_SECTIONS}
 EOF
   fi
+
+  # -------------------------------------------------------------------
+  # Single-Closes-keyword check — enforce "one ticket per PR" in the body.
+  #
+  # Counts distinct issue numbers targeted by GitHub's auto-closing keywords
+  # (close / closes / closed / fix / fixes / fixed / resolve / resolves /
+  # resolved, plus the `#NN` form). The title validator already caps the
+  # title's ticket reference at one; this closes the loophole where the
+  # body has `Closes #1 Closes #2 Closes #3` and GitHub auto-closes all
+  # three on merge.
+  #
+  # Config:
+  #   .pr.allow_multiple_closes (default false) — teams that batch
+  #     umbrella PRs (rollbacks, dependency bumps) can opt in.
+  #   .pr.multi_close_skip_marker (default `<!-- multi-close: approved -->`)
+  #     — per-PR escape hatch that leaves a grep-able trace.
+  #
+  # Scans only the body content (not the command line), so a `--title`
+  # reference doesn't accidentally count.
+  ALLOW_MULTI_CLOSES="false"
+  MULTI_CLOSE_SKIP="<!-- multi-close: approved -->"
+  # shellcheck disable=SC1090,SC1091
+  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+    . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+    CFG_ALLOW=$(config_get_or '.pr.allow_multiple_closes' 'false' 2>/dev/null)
+    if [ "$CFG_ALLOW" = "true" ]; then ALLOW_MULTI_CLOSES="true"; fi
+    CFG_MARKER=$(config_get_or '.pr.multi_close_skip_marker' "$MULTI_CLOSE_SKIP" 2>/dev/null)
+    if [ -n "$CFG_MARKER" ] && [ "$CFG_MARKER" != "null" ]; then
+      MULTI_CLOSE_SKIP="$CFG_MARKER"
+    fi
+  fi
+
+  if [ "$ALLOW_MULTI_CLOSES" != "true" ]; then
+    # Strip fenced code blocks so `fixes` in a code sample doesn't count.
+    STRIPPED_BODY=$(printf '%s\n' "$BODY_CONTENT" | awk '
+      BEGIN { in_fence = 0 }
+      /^```/ { in_fence = !in_fence; next }
+      in_fence == 0 { print }
+    ')
+
+    # Extract distinct issue numbers referenced by a closing keyword + #NN.
+    # Pattern: word-boundary, closing keyword (case-insensitive), whitespace,
+    # optional repo-qualifier (owner/name), literal `#`, digits, word-boundary.
+    CLOSE_NUMS=$(printf '%s\n' "$STRIPPED_BODY" | \
+      grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+' | \
+      grep -oE '#[0-9]+' | \
+      sort -u)
+
+    CLOSE_COUNT=$(printf '%s\n' "$CLOSE_NUMS" | grep -c '^#' || true)
+
+    if [ "$CLOSE_COUNT" -gt 1 ]; then
+      # Skip marker for umbrella PRs (rollbacks, batched revert) that really
+      # do close multiple tickets.
+      if printf '%s\n' "$BODY_CONTENT" | grep -qF -- "$MULTI_CLOSE_SKIP"; then
+        echo "WARN: multi-close check bypassed by skip marker ($MULTI_CLOSE_SKIP) in PR body." >&2
+      else
+        ERRORS="${ERRORS}PR body has $CLOSE_COUNT distinct closing references ($(printf '%s ' $CLOSE_NUMS)) — one ticket per PR (see CLAUDE.md). If this really is an umbrella PR, add the skip marker: $MULTI_CLOSE_SKIP\n"
+      fi
+    fi
+  fi
 fi
 
 # Validate branch name has ticket ID
