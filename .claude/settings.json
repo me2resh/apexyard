@@ -99,6 +99,11 @@
           },
           {
             "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-agdr-for-arch-pr.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh issue comment *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
