@@ -65,6 +65,7 @@ Columns:
 | Plan-level "go" / "ship it" does NOT authorize a merge | `.claude/rules/pr-workflow.md § Plan-level "go" is NOT merge approval` | `block-unreviewed-merge.sh` (CEO marker must be written via `/approve-merge`) | yes | mechanized via the marker-writing convention |
 | After `gh pr create` → invoke Code Reviewer | `.claude/rules/pr-workflow.md § After gh pr create` | `auto-code-review.sh` (PostToolUse reminder) | yes | mechanized as reminder-style nudge |
 | After pushing new commits to an open PR → re-invoke Code Reviewer | `.claude/rules/pr-workflow.md § After Pushing Commits` | `block-unreviewed-merge.sh` (SHA mismatch check) | yes | mechanized |
+| Surface invalidated review markers at push-time, not merge-time | `.claude/rules/pr-workflow.md § After Pushing Commits` | `warn-stale-review-markers.sh` (PostToolUse on `git push`) | yes | mechanized (warning-only; `review_markers.on_stale: delete` opts into auto-delete) |
 | Commit SHA matches Rex + CEO approvals at merge time | `.claude/rules/pr-quality.md § Commit SHA Verification` | `block-unreviewed-merge.sh` | yes | mechanized |
 | PR description MUST contain a Glossary section | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (warning) + `code-reviewer` agent (blocker) | yes | mechanized (warning + agent) |
 | Design review required when PR touches UI | `.claude/rules/pr-quality.md § Design Review`, `workflows/code-review.md` | `require-design-review-for-ui.sh` | yes | mechanized (AgDR-0001) |

@@ -68,5 +68,9 @@
     ],
     "auto_detect_upstream": true,
     "skip_marker": "<!-- private-refs: allow -->"
+  },
+
+  "review_markers": {
+    "on_stale": "warn"
   }
 }

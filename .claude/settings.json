@@ -148,6 +148,11 @@
             "type": "command",
             "if": "Bash(gh pr create *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/auto-code-review.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/warn-stale-review-markers.sh\"'"
           }
         ]
       }
