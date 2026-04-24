@@ -80,6 +80,11 @@
           {
             "type": "command",
             "if": "Bash(gh issue create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-issue-structure.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh issue create *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {

@@ -149,17 +149,23 @@ Columns:
 |------|--------|-------------|---------------|---------------------------------|
 | Never reference a registered private project (name / repo slug / workspace path / `owner/repo#N`) in issues, PRs, or comments written to a public framework repo | `.claude/rules/leak-protection.md § The rule` | `block-private-refs-in-public-repos.sh` | yes | mechanized ([#110][110]); covers `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`, and `gh api .../issues\|/pulls`; skip marker `<!-- private-refs: allow -->` bypasses with a visible warning |
 
+### 11. Ticket body shape
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Issue body must match the schema for its bracketed title prefix (`[Feature]` → `## User Story` + `## Acceptance Criteria`; `[Chore]` / `[Refactor]` / `[Testing]` / `[CI]` → `## Driver` + `## Scope` + `## Acceptance Criteria`; `[Docs]` → `## Driver` + `## Acceptance Criteria`; `[Bug]` → `## Given / When / Then` + `## Repro`) | `.claude/skills/{feature,task,bug}/SKILL.md` templates | `validate-issue-structure.sh` | yes | mechanized ([#107][107]); reads schema from `.claude/project-config.*.json` → `.ticket.required_sections`; skip marker `<!-- validate-issue-structure: skip -->` bypasses with a visible warning |
+
 ---
 
 ## Summary
 
 | bucket | count |
 |--------|-------|
-| mechanized (`yes` — hook / agent enforces it fully) | 27 |
+| mechanized (`yes` — hook / agent enforces it fully) | 28 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
 | advisory (`no` — stays prose by design) | 36 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **74** |
+| **total rows** | **75** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
@@ -188,4 +194,5 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [22]: https://github.com/me2resh/apexyard/issues/22
 [23]: https://github.com/me2resh/apexyard/issues/23
 [25]: https://github.com/me2resh/apexyard/issues/25
+[107]: https://github.com/me2resh/apexyard/issues/107
 [110]: https://github.com/me2resh/apexyard/issues/110
