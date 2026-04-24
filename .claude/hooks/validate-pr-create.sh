@@ -218,11 +218,30 @@ EOF
   fi
 
   if [ "$ALLOW_MULTI_CLOSES" != "true" ]; then
-    # Strip fenced code blocks so `fixes` in a code sample doesn't count.
+    # Strip code regions so closing keywords used as DOCUMENTATION (inside
+    # code examples) don't count as real closes:
+    #   - triple-backtick fences       (```...```)
+    #   - tilde fences                 (~~~...~~~)
+    #   - inline backticks             (`...`)
+    #
+    # Also strip inline-backticked skip markers so a PR that documents the
+    # marker doesn't accidentally bypass its own check.
     STRIPPED_BODY=$(printf '%s\n' "$BODY_CONTENT" | awk '
-      BEGIN { in_fence = 0 }
-      /^```/ { in_fence = !in_fence; next }
-      in_fence == 0 { print }
+      BEGIN { in_fence = 0; fence_char = "" }
+      {
+        line = $0
+        if (in_fence == 0) {
+          if (line ~ /^```/) { in_fence = 1; fence_char = "`"; next }
+          if (line ~ /^~~~/) { in_fence = 1; fence_char = "~"; next }
+          # Strip inline-backtick spans on non-fence lines.
+          gsub(/`[^`]*`/, "", line)
+          print line
+        } else {
+          if (fence_char == "`" && line ~ /^```/) { in_fence = 0; fence_char = ""; next }
+          if (fence_char == "~" && line ~ /^~~~/) { in_fence = 0; fence_char = ""; next }
+          # inside fence — drop
+        }
+      }
     ')
 
     # Extract distinct issue numbers referenced by a closing keyword + #NN.
@@ -233,15 +252,16 @@ EOF
       grep -oE '#[0-9]+' | \
       sort -u)
 
-    CLOSE_COUNT=$(printf '%s\n' "$CLOSE_NUMS" | grep -c '^#' || true)
+    CLOSE_COUNT=$(printf '%s\n' "$CLOSE_NUMS" | grep -c '^#')
 
     if [ "$CLOSE_COUNT" -gt 1 ]; then
-      # Skip marker for umbrella PRs (rollbacks, batched revert) that really
-      # do close multiple tickets.
-      if printf '%s\n' "$BODY_CONTENT" | grep -qF -- "$MULTI_CLOSE_SKIP"; then
+      # Skip marker check runs against the STRIPPED body too — a marker used
+      # as documentation inside backticks should not trigger a real bypass.
+      if printf '%s\n' "$STRIPPED_BODY" | grep -qF -- "$MULTI_CLOSE_SKIP"; then
         echo "WARN: multi-close check bypassed by skip marker ($MULTI_CLOSE_SKIP) in PR body." >&2
       else
-        ERRORS="${ERRORS}PR body has $CLOSE_COUNT distinct closing references ($(printf '%s ' $CLOSE_NUMS)) — one ticket per PR (see CLAUDE.md). If this really is an umbrella PR, add the skip marker: $MULTI_CLOSE_SKIP\n"
+        NUMS_LIST=$(printf '%s ' $CLOSE_NUMS)
+        ERRORS="${ERRORS}PR body has $CLOSE_COUNT distinct closing references (${NUMS_LIST}) — one ticket per PR (see CLAUDE.md). If this really is an umbrella PR, add the skip marker: $MULTI_CLOSE_SKIP\n"
       fi
     fi
   fi

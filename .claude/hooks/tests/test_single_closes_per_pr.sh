@@ -138,6 +138,31 @@ Closes me2resh/apexyard#10
 Closes me2resh/apexyard#11" \
   2 "2 distinct closing references"
 
+run_case "closing keywords in inline backticks → ignored (documentation)" \
+  "## Summary
+Documentation mentions \`Closes #1 Closes #2 Closes #3\` as examples.
+
+Closes #114" \
+  0 ""
+
+run_case "skip marker inside inline backticks → does NOT bypass" \
+  "## Summary
+Documentation: \`<!-- multi-close: approved -->\` is the marker.
+
+Closes #1
+Closes #2" \
+  2 "2 distinct closing references"
+
+run_case "tilde fence also stripped" \
+  "## Summary
+
+~~~
+Fixes #99 inside a tilde fence
+~~~
+
+Closes #114" \
+  0 ""
+
 # ---- Summary ------------------------------------------------------------
 
 echo ""
