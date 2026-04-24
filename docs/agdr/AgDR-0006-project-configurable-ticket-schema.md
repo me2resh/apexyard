@@ -21,7 +21,7 @@ status: executed
 ## Options Considered
 
 | Option | Pros | Cons |
-|--------|------|------|
+| -------- | ------ | ------ |
 | **A. Keep lists hardcoded in each hook** | Zero new abstraction | Drift; forks can't customise without editing framework files; upstream sync becomes conflict-heavy |
 | **B. Each hook reads its own one-off config key** | Minimal coupling | Same-pattern drift — every hook's reader differs; forks face N small config keys instead of one schema |
 | **C. Shared `_lib-read-config.sh` + versioned schema at `.claude/project-config.*.json` — CHOSEN** | One source of truth; skills / hooks / CI all read the same file; shipped defaults upgrade cleanly via `/update`; forks override only what they need | Schema now has a version number the framework must honour; deep-merge semantics deferred (shallow only for v1) |
@@ -36,17 +36,20 @@ Keeping the schema in `.claude/` (not `onboarding.yaml`) reflects the split that
 ## Consequences
 
 **Added:**
+
 - `.claude/project-config.defaults.json` (v1 schema, committed upstream)
 - `.claude/hooks/_lib-read-config.sh` (shared reader lib, used by hooks + skills + future)
 - `docs/project-config.md` (schema reference + extension guide)
 
 **Migrated:**
+
 - `validate-branch-name.sh` — accepts branch types from `.branch.type_whitelist`
 - `validate-commit-format.sh` — accepts commit types from `.commit.type_whitelist` (with backward-compat for the legacy flat `commit_types` key)
 - `validate-pr-create.sh` — accepts PR title types from `.pr.title_type_whitelist`
 - `/feature`, `/task`, `/bug` skills — reference the config in their Rules sections, do not hardcode the prefix list
 
 **Unlocked (downstream tickets):**
+
 - #107 validate-issue-structure.sh — reads `.ticket.required_sections` (to be added in that ticket's extension of the schema)
 - #111 pre-push-gate blocking — reads `.pre_push.commands`
 - #112 require-agdr-for-arch-pr.sh — reads `.agdr_trigger_paths` and `.agdr_trigger_dep_files`
@@ -58,6 +61,7 @@ Keeping the schema in `.claude/` (not `onboarding.yaml`) reflects the split that
 Each of those tickets extends the schema by adding keys under its own subtree; the reader + merge semantics handle this without further changes.
 
 **Non-consequences (explicitly):**
+
 - No deep merge in v1. A fork that overrides `ticket` must copy the subtree. Revisit if pain warrants.
 - No runtime schema validation. A malformed config degrades gracefully (reader returns null, hooks fall back to shipped defaults). Add JSON Schema validation if schema complexity grows.
 - No migration tool for the legacy `commit_types` flat key — it keeps working via backward-compat in `validate-commit-format.sh`. Will deprecate with a warning in a future ticket once usage is measured.

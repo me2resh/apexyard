@@ -7,7 +7,7 @@ Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #1
 ## Files
 
 | File | Who maintains | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `.claude/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork — upstream syncs via `/update`. |
 | `.claude/project-config.json` | fork owner | Overrides. Optional. Commit or gitignore per the fork's preference. |
 
@@ -43,7 +43,7 @@ Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #1
 ### Key meanings
 
 | Key | Used by | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | `ticket.prefix_whitelist` | `/feature`, `/task`, `/bug`, (future) validate-issue-structure.sh | Bracketed title prefixes accepted for tickets (`[Feature]`, `[Chore]`, …). |
 | `ticket.label_priority_scheme` | `/feature`, `/bug`, `/task`, (future) batch skill | Comma-separated priority label scheme. Teams using `P0/P1/P2/P3` vs. `priority-p0/priority-p1/…` configure here. |
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
