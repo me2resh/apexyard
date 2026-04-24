@@ -145,5 +145,5 @@ Created: {owner/repo}#{number} — {title}
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **Given/When/Then is required.** Restructure casual descriptions into the format.
 4. **At least one repro step.** Don't create bugs without repro.
-5. **Labels auto-applied.** `bug` always, plus the severity label.
-6. **Title prefix.** Severity in brackets: `[P0]`, `[P1]`, or `[P2]`.
+5. **Labels auto-applied.** `bug` always, plus the severity label. Severity label scheme reads from `.claude/project-config.*.json` → `.ticket.label_priority_scheme` (default `P0,P1,P2,P3`).
+6. **Title prefix.** The accepted prefix list reads from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; `[Bug]` must be in that list. Some teams prefer `[Bug]` prefix with the severity as a label (the default); others embed severity in the title (`[P0]`, `[P1]`). Skill respects whichever is configured. See apexyard#109.

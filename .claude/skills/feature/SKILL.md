@@ -142,5 +142,5 @@ Created: {owner/repo}#{number} — {title}
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **User story format is required.** Restructure casual answers into As a / I want / So that.
 4. **At least one acceptance criterion.** Don't create tickets with empty ACs.
-5. **Labels auto-applied.** `enhancement` always, plus the priority label.
-6. **Title prefix.** Always `[Feature]` in the issue title.
+5. **Labels auto-applied.** `enhancement` always, plus the priority label. The priority label scheme is read from `.claude/project-config.*.json` → `.ticket.label_priority_scheme` (default `P0,P1,P2,P3`); forks that use a different scheme (e.g. `priority-p0`) configure it there.
+6. **Title prefix.** `[Feature]` by default. The accepted prefix list is read from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; if a fork has added alternate feature-class prefixes (e.g. `[Enhancement]`), this skill will accept them. See apexyard#109 for the schema.

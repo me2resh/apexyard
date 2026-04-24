@@ -63,23 +63,37 @@ fi
 #   type!: subject             (breaking change, Conventional Commits 1.0)
 #   type(scope)!: subject      (breaking change with scope)
 #
-# Default types per .claude/rules/git-conventions.md:
-#   feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert
+# Default types per .claude/rules/git-conventions.md ship at
+# .claude/project-config.defaults.json (.commit.type_whitelist). Projects
+# override per-fork via .claude/project-config.json — see apexyard#109.
 #
-# Projects can override the type list via .claude/project-config.json:
-#   { "commit_types": ["wip", "feat", "fix"] }
-# When set, ONLY those types are accepted. The default list is NOT merged —
-# the override replaces it entirely. This lets teams with strict conventions
-# whitelist exactly the types they use.
+# Backward-compat: the legacy flat `commit_types` top-level key in
+# .claude/project-config.json is still honoured when present, so forks that
+# customised before #109 landed keep working without edits.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-DEFAULT_TYPES="feat|fix|refactor|test|docs|chore|style|perf|build|ci|revert"
-TYPES="$DEFAULT_TYPES"
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  CUSTOM=$(jq -r '.commit_types // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-  if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ] && [ "$CUSTOM" != "" ]; then
-    TYPES="$CUSTOM"
+TYPES=""
+
+# 1. Preferred: read from the unified project-config via the shared reader.
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  TYPES=$(config_get '.commit.type_whitelist[]' 2>/dev/null | paste -sd'|' -)
+fi
+
+# 2. Legacy compat: flat `commit_types` key at the top level of project-config.json.
+if [ -z "$TYPES" ] && [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+  LEGACY=$(jq -r '.commit_types // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  if [ -n "$LEGACY" ] && [ "$LEGACY" != "null" ]; then
+    TYPES="$LEGACY"
   fi
 fi
+
+# 3. Last-resort fallback — matches the shipped defaults (keeps this hook
+#    working in a bare checkout with no config files at all).
+if [ -z "$TYPES" ]; then
+  TYPES="feat|fix|refactor|test|docs|chore|style|perf|build|ci|revert"
+fi
+
 TYPE_REGEX="^(${TYPES})(\([^)]+\))?!?:[[:space:]]+.+"
 
 if ! echo "$SUBJECT" | grep -qE "$TYPE_REGEX"; then

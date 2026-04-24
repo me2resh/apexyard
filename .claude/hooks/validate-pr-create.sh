@@ -35,12 +35,26 @@ fi
 # Validate PR title format if we can extract it
 # Accepts: type(<TICKET>): … or type(<TICKET>)!: … (breaking change)
 # The !? makes the breaking-change marker optional per Conventional Commits 1.0.
-# Note: this pattern is intentionally aligned with the pr-title-check.yml
-# CI workflow regex so anything that passes this hook also passes CI.
+#
+# The accepted type list is project-configurable via .claude/project-config.json
+# (.pr.title_type_whitelist). Defaults ship at .claude/project-config.defaults.json.
+# See apexyard#109.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+PR_TYPES=""
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  PR_TYPES=$(config_get '.pr.title_type_whitelist[]' 2>/dev/null | paste -sd'|' -)
+fi
+if [ -z "$PR_TYPES" ]; then
+  PR_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+fi
+
 TICKET_REF=""
 if [ -n "$TITLE" ]; then
-  if ! echo "$TITLE" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\)!?:'; then
+  if ! echo "$TITLE" | grep -qE "^(${PR_TYPES})\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\)!?:"; then
     ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
+    ERRORS="${ERRORS}Accepted types (from .claude/project-config.*.json → .pr.title_type_whitelist): ${PR_TYPES//|/, }\n"
   else
     # Extract the ticket reference so we can verify it exists
     TICKET_REF=$(echo "$TITLE" | sed -nE 's/^[a-z]+\(([^)]+)\):.*/\1/p')
@@ -115,9 +129,19 @@ MSG
   fi
 fi
 
-# Check PR body for Glossary section
-if echo "$COMMAND" | grep -q '\-\-body'; then
-  if ! echo "$COMMAND" | grep -qiE '##\s*(Glossary|glossary)'; then
+# Check PR body for Glossary section.
+# Supports both --body "..." (inline) and --body-file <path> (file).
+# Without this, a legitimate PR whose body lives in a file gets false-flagged
+# because the hook never reads the file, only greps the command string.
+BODY_CONTENT=""
+BODY_FILE=$(echo "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
+  BODY_CONTENT=$(cat "$BODY_FILE")
+fi
+
+if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b'; then
+  # Scan both the file content (if --body-file) and the raw command (for --body "inline").
+  if ! { echo "$BODY_CONTENT"; echo "$COMMAND"; } | grep -qiE '##\s*(Glossary|glossary)'; then
     ERRORS="${ERRORS}PR body missing required '## Glossary' section.\n"
   fi
 fi

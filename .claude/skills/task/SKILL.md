@@ -105,12 +105,15 @@ Repo: {owner/repo}
 Create this ticket? (yes / edit / cancel)
 ```
 
-The title prefix is derived from the content:
+The title prefix is derived from the content, and must come from the project's configured prefix whitelist (`.claude/project-config.*.json` → `.ticket.prefix_whitelist`, default list at `.claude/project-config.defaults.json`). Shipped defaults map as follows:
 
 - Testing work → `[Testing]`
 - CI/CD work → `[CI]`
 - Refactoring → `[Refactor]`
+- Documentation-only change → `[Docs]`
 - Everything else → `[Chore]`
+
+A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here — the skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
 
 ### 5. Handle response
 
