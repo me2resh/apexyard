@@ -67,7 +67,7 @@ Columns:
 | After pushing new commits to an open PR → re-invoke Code Reviewer | `.claude/rules/pr-workflow.md § After Pushing Commits` | `block-unreviewed-merge.sh` (SHA mismatch check) | yes | mechanized |
 | Surface invalidated review markers at push-time, not merge-time | `.claude/rules/pr-workflow.md § After Pushing Commits` | `warn-stale-review-markers.sh` (PostToolUse on `git push`) | yes | mechanized (warning-only; `review_markers.on_stale: delete` opts into auto-delete) |
 | Commit SHA matches Rex + CEO approvals at merge time | `.claude/rules/pr-quality.md § Commit SHA Verification` | `block-unreviewed-merge.sh` | yes | mechanized |
-| PR description MUST contain a Glossary section | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (warning) + `code-reviewer` agent (blocker) | yes | mechanized (warning + agent) |
+| PR description MUST contain required sections (Glossary + Testing, per-fork configurable) | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (blocker) + `code-reviewer` agent | yes | mechanized via `.pr.required_sections` list; default `[Testing, Glossary]`; skip marker `<!-- pr-sections: skip -->` for small PRs [^pr-sections-113] |
 | Design review required when PR touches UI | `.claude/rules/pr-quality.md § Design Review`, `workflows/code-review.md` | `require-design-review-for-ui.sh` | yes | mechanized (AgDR-0001) |
 | `/approve-design` skill for writing the design marker | — | — | deferred | [#21][21] — today's convention is a manual `git rev-parse HEAD > marker` |
 | Never merge with red CI — even pre-existing failures must be fixed first | `.claude/rules/pr-quality.md § No Red CI`, `CLAUDE.md` | `block-merge-on-red-ci.sh` | yes | mechanized (AgDR-0001) |
@@ -184,6 +184,8 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [^lint]: Static-analysis concern. Belongs in each project's ESLint / `tsconfig` / equivalent — not a shell hook. The rule stays in `code-standards.md` as the canonical prose; individual projects translate it into their linter config.
 
 [^pre-push-111]: Per-fork command list lives at `.claude/project-config.json → .pre_push.commands[]` (each entry has `name` + `run` shell string). Default is an empty list (hook is a no-op) — projects opt in by defining their checks. Fail-fast: the first non-zero exit blocks the push and reports the last 20 lines of output. Emergency escape hatch: include `<!-- pre-push: skip -->` in the HEAD commit message to bypass one push with a visible WARN. The skip marker is grep-able on purpose so bypasses are auditable.
+
+[^pr-sections-113]: Per-fork required-sections list lives at `.claude/project-config.json → .pr.required_sections[]`. Default is `[Testing, Glossary]`. Each entry must appear as a H2 heading (`## Name`, case-insensitive) with non-empty content. Skip marker for small PRs (lint-only fixes, trivial bumps): `<!-- pr-sections: skip -->` in the body bypasses with a visible stderr WARN. Extended in #113.
 
 [^self-discipline]: Chat-output rule. Hooks run on tool calls, not assistant prose. The rule file is the primary defence and the downstream artefacts (commit messages, PR titles, staged diffs) are the backstop. See `ticket-vocabulary.md § Why not lint Claude's prose output?` for the full rejection of the "lint chat output" alternative.
 
