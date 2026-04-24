@@ -129,10 +129,18 @@ MSG
   fi
 fi
 
-# Check PR body for Glossary section.
+# Check PR body for required sections.
+#
+# The list of required headings is project-configurable via
+# .claude/project-config.*.json (`.pr.required_sections`). Shipped default
+# is ["Testing", "Glossary"] — matches the canonical PR description in
+# `workflows/code-review.md`. Forks extend or restrict per fork.
+#
 # Supports both --body "..." (inline) and --body-file <path> (file).
-# Without this, a legitimate PR whose body lives in a file gets false-flagged
-# because the hook never reads the file, only greps the command string.
+#
+# Skip marker: the literal `.pr.skip_marker` string in the body bypasses
+# the check with a visible stderr WARN. Default marker is
+# `<!-- pr-sections: skip -->`.
 BODY_CONTENT=""
 BODY_FILE=$(echo "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
 if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
@@ -140,9 +148,42 @@ if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
 fi
 
 if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b'; then
-  # Scan both the file content (if --body-file) and the raw command (for --body "inline").
-  if ! { echo "$BODY_CONTENT"; echo "$COMMAND"; } | grep -qiE '##\s*(Glossary|glossary)'; then
-    ERRORS="${ERRORS}PR body missing required '## Glossary' section.\n"
+  # Combined haystack — scan both the file content (if --body-file) and the
+  # raw command (so inline --body "..." also matches).
+  HAYSTACK=$(printf '%s\n%s\n' "$BODY_CONTENT" "$COMMAND")
+
+  # Load required sections + skip marker from project config (shared reader).
+  # shellcheck disable=SC1090,SC1091
+  REQUIRED_SECTIONS=""
+  PR_SKIP_MARKER=""
+  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+    . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+    REQUIRED_SECTIONS=$(config_get '.pr.required_sections[]' 2>/dev/null)
+    PR_SKIP_MARKER=$(config_get_or '.pr.skip_marker' '<!-- pr-sections: skip -->' 2>/dev/null)
+  fi
+  # Fallbacks for bare checkouts predating the config schema.
+  if [ -z "$REQUIRED_SECTIONS" ]; then
+    REQUIRED_SECTIONS=$(printf 'Testing\nGlossary')
+  fi
+  if [ -z "$PR_SKIP_MARKER" ]; then
+    PR_SKIP_MARKER='<!-- pr-sections: skip -->'
+  fi
+
+  # Skip marker short-circuits with a visible warning.
+  if echo "$HAYSTACK" | grep -qF -- "$PR_SKIP_MARKER"; then
+    echo "WARN: pr-sections check bypassed by skip marker ($PR_SKIP_MARKER) in PR body." >&2
+  else
+    # For each required heading, grep for `## <heading>` (case-insensitive).
+    while IFS= read -r section; do
+      [ -z "$section" ] && continue
+      # Escape regex metachars in the section name so names like "Given / When / Then" work.
+      section_re=$(printf '%s' "$section" | sed 's/[][\.^$*+?(){}|]/\\&/g')
+      if ! echo "$HAYSTACK" | grep -qiE "^##[[:space:]]+${section_re}\b"; then
+        ERRORS="${ERRORS}PR body missing required '## ${section}' section.\n"
+      fi
+    done <<EOF
+${REQUIRED_SECTIONS}
+EOF
   fi
 fi
 

@@ -69,7 +69,12 @@
       "ci",
       "chore",
       "revert"
-    ]
+    ],
+    "required_sections": [
+      "Testing",
+      "Glossary"
+    ],
+    "skip_marker": "<!-- pr-sections: skip -->"
   },
 
   "leak_protection": {
