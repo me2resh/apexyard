@@ -461,12 +461,26 @@ Skipping the auto-append. If you want to add it later, copy this into apexyard.p
     roles: {derived list}
 ```
 
-### 8. Return a summary
+### 8. Offer validation (conditional, default-no)
+
+If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:
+
+```
+This project looks dormant — run /validate-idea {name} to confirm it's
+still worth investing in? y/n (default n)
+```
+
+If the user accepts, hand off to `/validate-idea {name}` (which reads the just-written `handover-assessment.md` as starting context and writes its output to `projects/{name}/validation/handover-validation.md`).
+
+If the project is healthy (recent commits, active PRs/issues), skip the prompt entirely. Don't ask "should I validate?" on every handover — only when the dormancy signal warrants it.
+
+### 9. Return a summary
 
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
 Registry updated:            apexyard.projects.yaml ({added | skipped})
+Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
 
 Tech stack: {one-liner}
 Build: {ok / failed}
