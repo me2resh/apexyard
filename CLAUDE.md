@@ -172,10 +172,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Hooks | `.claude/hooks/` | 18 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
 | Rules | `.claude/rules/` | 8 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 33 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 34 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (33)
+### Available skills (34)
 
 | Skill | Purpose |
 |-------|---------|
@@ -200,6 +200,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/feature` | Create a structured feature request ticket (user story + ACs) |
 | `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
+| `/tickets-batch` | Bulk-file 5–20 structured tickets in one flow — shared-context Qs once, then a 3-question micro-interview per ticket; output conforms to `.ticket.required_sections` by construction |
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
@@ -246,7 +247,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (33 slash commands) | `.claude/skills/` |
+| Skills (34 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
