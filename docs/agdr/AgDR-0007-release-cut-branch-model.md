@@ -26,7 +26,7 @@ status: executed
 ## Options Considered
 
 | Option | Pros | Cons |
-|--------|------|------|
+| -------- | ------ | ------ |
 | **A. Stay trunk-based (status quo)** | Zero change cost; one branch to reason about | Adopters pull WIP; no release promise; cumulative effect on downstream forks |
 | **B. Trunk + tags only (forks pin to tags)** | Minimal policy change | `/update` still pulls `main` HEAD unless rewritten to pull latest tag; adopters who don't pin still see WIP |
 | **C. Release-cut (dev + main + tags) — CHOSEN** | Clean promise: main = released; light ceremony; compatible with existing tag-based drift | Contributors retarget PRs; release cadence must be curated; slight onboarding friction |
@@ -41,11 +41,13 @@ Naming: this is **NOT** git flow. It's "release-cut" or "gitflow-lite". Be preci
 ## Consequences
 
 **Kept:**
+
 - All existing hooks (block-main-push, validate-branch-name, validate-pr-create, merge-gate hooks) — they apply to `dev` PRs as-is.
 - Tag-based drift detection — continues unchanged.
 - `/update` skill — no behavioural change; semantic upgrade (pulls release-only content).
 
 **Added:**
+
 - `dev` branch as the daily-work trunk; default branch for PRs.
 - Release-PR flow (`dev` → `main` + semver tag).
 - `/release` skill to standardise the cut (this PR).
@@ -53,9 +55,11 @@ Naming: this is **NOT** git flow. It's "release-cut" or "gitflow-lite". Be preci
 - `block-main-push.sh` extended to block direct pushes/commits to `dev` too (long-lived integration branch, all changes via PR).
 
 **Dropped:**
+
 - Rolling-HEAD semantics on `main`. Adopters can no longer casually pull unreviewed WIP.
 
 **Non-consequences (explicitly):**
+
 - Managed projects under apexyard governance do **NOT** adopt this pattern. They stay trunk-based because they have no downstream consumers (only the framework does). The `docs/multi-project.md` and CLAUDE.md explicitly call this out so the pattern doesn't cargo-cult into project templates.
 - No hotfix/support branches. If multi-version maintenance becomes a need, revisit.
 - No automatic on-merge issue closing for dev PRs (GitHub auto-close only fires on default-branch merges). Each dev-PR closes its ticket manually with a merge-trace comment; the eventual release PR's body aggregates all `Closes #N` for the batch and triggers auto-close en masse when it merges to `main`. Workflow automation for the meantime is a follow-up.

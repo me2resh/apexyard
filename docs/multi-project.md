@@ -9,7 +9,7 @@ ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard
 ## TL;DR
 
 | | ApexYard |
-|---|---|
+| --- | --- |
 | **What you install** | A fork of `me2resh/apexyard`, cloned locally. No `.apexyard/` symlinks, no nested installs. |
 | **What governs the portfolio** | `apexyard.projects.yaml` at the root of your fork |
 | **Where per-project docs live** | `projects/<name>/` inside your fork, committed |
@@ -196,7 +196,7 @@ The test for *"where does this doc go?"* is **"would I want this to follow the c
 Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 
 | Skill | Behaviour |
-|-------|-----------|
+| ------- | ----------- |
 | `/projects` | Reads the registry, shows one row per project with status, branch, open PRs, open issues |
 | `/status` | Same as `/projects` but with git + CI snapshots per project, separated by headers |
 | `/inbox` | Aggregates PRs, issues, and comments needing your attention across every registered project |
@@ -223,7 +223,7 @@ Templates:
 Where to put the diagrams (same split as every other kind of doc — "would this follow the code if the project spun out?"):
 
 | Scope | Location |
-|-------|----------|
+| ------- | ---------- |
 | Framework-wide (ApexYard itself) | `docs/architecture/` in the ops fork |
 | ApexYard's view of a managed project | `projects/<name>/architecture/` in the ops fork |
 | Internal to a project's own repo | `docs/architecture/` in that project's repo (via `workspace/<name>/docs/architecture/`) |
