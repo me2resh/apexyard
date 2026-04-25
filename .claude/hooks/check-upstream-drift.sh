@@ -73,6 +73,37 @@ if [ "$SHOULD_FETCH" = "1" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Helper: does the fork's CHANGELOG.md mention the given upstream version?
+#
+# Squash-merge breaks the `--merged main` tag-reachability check because a
+# squash collapses upstream commits into a synthetic commit with no ancestor
+# link to the upstream tag's target SHA. The CHANGELOG content survives the
+# squash, so a `## [X.Y.Z]` heading on the fork's default branch is a
+# reliable secondary signal that the release was absorbed.
+#
+# Format expected (matches apexyard's CHANGELOG.md from v1.1.0 onward):
+#   ## [1.1.0] — 2026-04-19
+# Tag input is `v1.1.0` — we strip the leading `v` before matching.
+#
+# Tolerant of: missing CHANGELOG.md (returns 1 — proceed with banner),
+# different prefix conventions on the heading line, version-only matches
+# with surrounding `[`/`]` brackets.
+#
+# See AgDR-0008 + apexyard#106.
+changelog_has_version() {
+  local tag="$1"
+  local version="${tag#v}"
+  # `git show <branch>:CHANGELOG.md` fetches the file at the branch tip
+  # without affecting the working tree. Falls back silently if the file
+  # doesn't exist on that branch.
+  if git show "${DEFAULT_BRANCH}:CHANGELOG.md" 2>/dev/null \
+       | grep -qE "^##[[:space:]]+\[${version}\]"; then
+    return 0
+  fi
+  return 1
+}
+
+# ---------------------------------------------------------------------------
 # Tag-based drift (primary signal)
 # ---------------------------------------------------------------------------
 # Latest upstream tag reachable from upstream's default branch, sorted by
@@ -89,7 +120,13 @@ if [ -n "$UPSTREAM_TAG" ]; then
   # Upstream has at least one tag. Steady-state path.
 
   if [ -z "$LOCAL_TAG" ]; then
-    # Fork has never merged any tag yet. First release sync is due.
+    # Fork has never merged any tag (tag-reachable). Fall back to the
+    # CHANGELOG check — squash-merged sync PRs leave no reachable tag but
+    # do absorb the release-notes content.
+    if changelog_has_version "$UPSTREAM_TAG"; then
+      exit 0
+    fi
+    # Genuinely behind. First release sync is due.
     cat <<MSG
 ApexYard: ${UPSTREAM_TAG} available. Run /update to sync.
 MSG
@@ -109,7 +146,13 @@ MSG
   NEWER=$(printf '%s\n%s\n' "$UPSTREAM_TAG" "$LOCAL_TAG" | sort -V | tail -n 1)
 
   if [ "$NEWER" = "$UPSTREAM_TAG" ]; then
-    # Upstream is strictly newer. Nag.
+    # Upstream looks strictly newer by tag. Before nagging, check the
+    # CHANGELOG fallback — the fork might have squash-merged the release
+    # without inheriting the tag SHA reachability.
+    if changelog_has_version "$UPSTREAM_TAG"; then
+      exit 0
+    fi
+    # Genuinely behind.
     cat <<MSG
 ApexYard: ${UPSTREAM_TAG} available. Run /update to sync.
 MSG
