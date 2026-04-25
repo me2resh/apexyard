@@ -170,12 +170,12 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Layer | Path | Purpose |
 |-------|------|---------|
 | Hooks | `.claude/hooks/` | 18 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
-| Rules | `.claude/rules/` | 8 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
+| Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 33 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 34 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (33)
+### Available skills (34)
 
 | Skill | Purpose |
 |-------|---------|
@@ -211,6 +211,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/tasks` | Actionable task list with direct URLs, prioritised |
 | `/roadmap` | Update or create the product roadmap |
 | `/stakeholder-update` | Generate weekly / monthly / launch updates |
+| `/fan-out` | Spawn N parallel agents in one message — per-task agent type, worktree isolation, foreground/background mode (see `.claude/rules/parallel-work.md` for when to offer) |
 
 The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. The rules are imported via `@.claude/rules/*.md` from your project's `CLAUDE.md`.
 
@@ -246,7 +247,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (33 slash commands) | `.claude/skills/` |
+| Skills (34 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
