@@ -89,6 +89,15 @@
     "on_stale": "warn"
   },
 
+  "git": {
+    "protected_branches": [
+      "main",
+      "master",
+      "dev",
+      "develop"
+    ]
+  },
+
   "pre_push": {
     "commands": [],
     "_comment": "Default is empty — per-fork overrides (see docs/project-config.md) populate this with the commands the project actually runs (lint, typecheck, test, build). An empty list makes pre-push-gate.sh a no-op."
