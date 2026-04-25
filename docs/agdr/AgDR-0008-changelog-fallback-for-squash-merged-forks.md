@@ -21,7 +21,7 @@ status: executed
 ## Options Considered
 
 | Option | Pros | Cons |
-|--------|------|------|
+| -------- | ------ | ------ |
 | **A. Fork-tag convention** — after sync PR, manually tag fork main with upstream version | Trivial hook change, zero new deps | Manual step; easy to forget; same failure mode if forgotten |
 | **B. CHANGELOG-only check** — replace tag-reachability with CHANGELOG grep | Single source of truth | Loses the working merge-commit/rebase paths' clarity; pure CHANGELOG grep is brittle to format changes |
 | **C. Hybrid (tag primary + CHANGELOG fallback) — CHOSEN** | Preserves working paths intact; adds recovery path for squash-merge; no manual step; backward compat | CHANGELOG format dependency; if someone customises CHANGELOG headings, fallback breaks |
@@ -40,15 +40,18 @@ Option D was rejected for this round because it requires a new file convention (
 ## Consequences
 
 **Kept:**
+
 - Tag-reachability primary check — unchanged. Forks using merge-commit or rebase workflows see exactly the same behaviour.
 - The `/update` skill — no skill change required. Existing flow works; the hook just tolerates squash-merge afterwards.
 - Tag-based drift's "actionable signal" promise — small upstream commits still don't fire.
 
 **Added:**
+
 - `changelog_has_version()` helper in the hook. Tolerant grep against `${DEFAULT_BRANCH}:CHANGELOG.md`.
 - Fallback fires in two paths: (1) `LOCAL_TAG` empty (first sync, squash-merged); (2) `UPSTREAM_TAG > LOCAL_TAG` by semver (intermediate sync, squash-merged).
 
 **Non-consequences (explicitly):**
+
 - No CHANGELOG schema enforcement. The hook is tolerant; the maintainer's discretion governs format.
 - No new committed state file. The fallback uses an existing artefact (`CHANGELOG.md`) that maintainers already keep current via `/release`.
 - No retroactive fix for forks already showing the misfire — they'll go silent the next time their fork's CHANGELOG has the upstream version's heading.

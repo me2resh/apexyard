@@ -83,7 +83,7 @@ case_squash_caught_up() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
-    cd "$fk"
+    cd "$fk" || exit 1
     git checkout -q main
     git reset --hard HEAD~3 2>/dev/null
     git merge --squash upstream/main >/dev/null 2>&1
@@ -98,7 +98,7 @@ case_merge_commit_caught_up() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
-    cd "$fk"
+    cd "$fk" || exit 1
     git checkout -q main
     git reset --hard HEAD~3 2>/dev/null
     git merge --no-edit upstream/main >/dev/null 2>&1
@@ -112,7 +112,7 @@ case_genuinely_behind() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
-    cd "$fk"
+    cd "$fk" || exit 1
     git checkout -q main
     git reset --hard v1.0.0 2>/dev/null
   )
@@ -125,7 +125,7 @@ case_fork_ahead() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
-    cd "$fk"
+    cd "$fk" || exit 1
     git checkout -q main
     # Fork merges v1.1.0 cleanly first
     git reset --hard HEAD~3 2>/dev/null
@@ -145,7 +145,7 @@ case_squash_no_changelog() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
-    cd "$fk"
+    cd "$fk" || exit 1
     git checkout -q main
     git reset --hard HEAD~3 2>/dev/null
     # Squash-merge but immediately blow away CHANGELOG.md (simulate a fork that
