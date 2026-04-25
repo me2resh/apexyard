@@ -174,6 +174,16 @@ The guiding principle: **the backlog entry is the primary artefact; the tracking
 
 If the issue is created successfully, append the issue URL to the backlog row's Description column as `(GH#NN)`.
 
+### 7. Offer validation (optional, default-no)
+
+After the GitHub Issue step (whether the user accepted or skipped it), ask:
+
+```
+Validate now? Run /validate-idea IDEA-NNN — y/n (default n)
+```
+
+Default-no respects the lightweight-capture intent of `/idea`. Most users batch-validate later. If the user accepts, hand off to `/validate-idea IDEA-NNN`; if they skip, proceed to step 8.
+
 ## Output
 
 ```
@@ -181,6 +191,7 @@ Captured: IDEA-NNN — {title}
 Backlog: {file path}
 Status: NEW
 Tracking issue: {url or "skipped"}
+Validation: {"completed — verdict <GREEN|YELLOW|RED>" | "skipped (run /validate-idea IDEA-NNN later)"}
 
 Next: triage with the team, then `/write-spec` if it survives.
 ```

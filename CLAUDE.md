@@ -178,7 +178,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Hooks | `.claude/hooks/` | 18 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 34 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 35 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
 ### Available skills (34)
@@ -203,6 +203,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/security-review` | Invoke the Security Reviewer agent (Shield) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
+| `/validate-idea` | Lightweight 5-question pre-spec gate (target user, alternative, smallest version, kill criteria, build/buy/rent). Invokable standalone or as an offered follow-up inside `/idea` and `/handover`. |
 | `/feature` | Create a structured feature request ticket (user story + ACs) |
 | `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
@@ -255,7 +256,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (34 slash commands) | `.claude/skills/` |
+| Skills (35 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
