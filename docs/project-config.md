@@ -94,3 +94,38 @@ The reader uses `jq` for merging and path lookups. If `jq` is unavailable, the r
 ## Backward compatibility
 
 `validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.claude/project-config.json`. That reader is still honoured as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.
+
+## Voice prompts
+
+```jsonc
+{
+  "voice_prompts": {
+    "enabled": false,        // master switch — flip to true to opt in
+    "voice": "Daniel",       // macOS `say` voice; "Daniel" is British male premium
+    "max_chars": 200,        // cap on spoken length, truncated at sentence boundary
+    "rate_wpm": 180,         // `say -r` words-per-minute
+    "trigger": "questions-only"  // "questions-only" (default) or "always"
+  }
+}
+```
+
+**What it does:** when the assistant ends a turn with a question (or a recognised "Reply with X" / "Approved?" / "(a)/(b)/(c)" pattern), the `voice-prompt-on-pause.sh` Stop hook speaks the last paragraph aloud via macOS `say` — Jarvis-from-Iron-Man style. Surfaces "I'm waiting for input" attentionally for users who've stepped away from the keyboard. See `docs/agdr/AgDR-0009-voice-prompts-on-pause.md` for the full design.
+
+**When it does nothing:** `enabled` is `false` (the shipped default), `say` is not on PATH (Linux/Windows — Phase 2 will add cross-platform), the message doesn't match the trigger heuristic (in `questions-only` mode), or the trigger is set to an unknown value.
+
+**Examples:**
+
+```jsonc
+// Turn it on (most common override)
+{ "voice_prompts": { "enabled": true } }
+
+// Try a different macOS voice — `say -v ?` lists available
+{ "voice_prompts": { "enabled": true, "voice": "Samantha" } }
+
+// Speak every turn-end (debugging the hook itself; noisy in normal use)
+{ "voice_prompts": { "enabled": true, "trigger": "always" } }
+```
+
+**Privacy:** the hook reads the assistant's text from the local transcript file and pipes it to `say`, which is a local OS binary — nothing leaves the machine. When/if a future phase adds cloud TTS providers (OpenAI, ElevenLabs), that becomes an AgDR-worthy decision in its own right. Today's implementation is fully local.
+
+**Test mode:** the hook respects `VOICE_PROMPTS_SYNC=1` to run `say` synchronously instead of fire-and-forget. Used by `tests/test_voice_prompt_on_pause.sh` so the test runner doesn't race against orphaned background processes. Production invocations always run async.

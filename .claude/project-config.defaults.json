@@ -122,5 +122,14 @@
     "Cargo.toml",
     "go.mod",
     "Gemfile"
-  ]
+  ],
+
+  "voice_prompts": {
+    "_comment": "Speak the assistant's question aloud when it pauses for input. Initial phase: macOS only via `say`. Default OFF — opt in by overriding `enabled` to true in .claude/project-config.json. See docs/project-config.md and AgDR-0009-voice-prompts-on-pause.md.",
+    "enabled": false,
+    "voice": "Daniel",
+    "max_chars": 200,
+    "rate_wpm": 180,
+    "trigger": "questions-only"
+  }
 }
