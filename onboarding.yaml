@@ -29,22 +29,22 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
-  vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  name: "Zeyad Sleem"
+  mission: "Building full-stack SaaS applications on free-tier infrastructure"
+  vision: "Ship production-quality SaaS products as a solo developer"
+  website: ""
 
   # Core values that guide decision-making
   values:
-    - "Quality over speed"
     - "Ship and learn"
     - "Keep it simple"
+    - "Maximise free-tier infrastructure"
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
-      type: "web-app"  # web-app, mobile-app, api, cli, library, saas
+    - name: "SaaS Applications"
+      description: "Full-stack SaaS apps built on free-tier cloud services"
+      type: "saas"
 
 # -----------------------------------------------------------------------------
 # Team Structure
@@ -61,26 +61,9 @@ company:
 #   Data:        head-of-data, data-analyst, data-engineer
 #
 team:
-  - name: "Team Lead"
+  - name: "Zeyad Sleem"
     role: "tech-lead"
     department: "engineering"
-
-  - name: "Developer 1"
-    role: "backend-engineer"
-    department: "engineering"
-
-  - name: "Developer 2"
-    role: "frontend-engineer"
-    department: "engineering"
-
-  # Uncomment and add more team members as needed:
-  # - name: "PM"
-  #   role: "product-manager"
-  #   department: "product"
-  #
-  # - name: "Designer"
-  #   role: "ux-designer"
-  #   department: "design"
 
 # -----------------------------------------------------------------------------
 # Tech Stack
@@ -88,24 +71,18 @@ team:
 # Define your technology choices. This helps Claude Code give relevant advice.
 #
 tech_stack:
-  language: "TypeScript"          # Primary language
-  runtime: "Node.js"              # Runtime environment
-  framework: "React"              # Frontend framework (React, Vue, Svelte, etc.)
-  backend: "Express"              # Backend framework (Express, Fastify, NestJS, etc.)
-  database: "PostgreSQL"          # Primary database
-  hosting: "AWS"                  # Cloud provider (AWS, GCP, Azure, Vercel, etc.)
-  ci_cd: "GitHub Actions"         # CI/CD platform
-  testing: "Vitest"               # Test framework
-  e2e_testing: "Playwright"       # E2E test framework
-
-  # Additional tools (uncomment what you use):
-  # orm: "Prisma"
-  # state_management: "Zustand"
-  # styling: "Tailwind CSS"
-  # api_style: "REST"             # REST, GraphQL, gRPC
-  # iac: "Terraform"              # Infrastructure as Code tool
-  # monitoring: "Datadog"
-  # error_tracking: "Sentry"
+  language: "TypeScript"
+  runtime: "Node.js"
+  framework: "React"
+  backend: "Cloudflare Workers"
+  database: "PostgreSQL (NeonDB)"
+  hosting: "Cloudflare"
+  ci_cd: "GitHub Actions"
+  testing: "Vitest"
+  e2e_testing: "Playwright"
+  auth: "Better Auth"
+  mobile: "Expo"
+  styling: "Tailwind CSS"
 
 # -----------------------------------------------------------------------------
 # Project Management
@@ -126,8 +103,8 @@ quality:
   # Minimum test coverage percentage
   test_coverage_target: 80
 
-  # Required approvals before merge
-  required_reviews: 1
+  # Required approvals before merge (0 for solo developer — Rex still reviews)
+  required_reviews: 0
 
   # Enforce these checks before merge
   required_checks:
@@ -137,7 +114,7 @@ quality:
     - build
 
   # Code review style
-  review_style: "thorough"        # thorough, lightweight, pair-programming
+  review_style: "thorough"
 
 # -----------------------------------------------------------------------------
 # Workflows
@@ -146,12 +123,12 @@ quality:
 # Set to false to skip stages that don't apply to your team.
 #
 workflows:
-  require_prd: true               # Require PRD before development
-  require_technical_design: true   # Require tech design before coding
-  require_qa_signoff: true         # Require QA verification before Done
-  require_security_review: false   # Require security review before launch
-  use_feature_flags: false         # Use feature flags for rollouts
-  use_agent_decision_records: true # Track AI agent decisions
+  require_prd: true               # PRD required before development
+  require_technical_design: false  # Solo — lightweight process
+  require_qa_signoff: true         # Self-QA before closing tickets
+  require_security_review: false
+  use_feature_flags: false
+  use_agent_decision_records: true
 
 # -----------------------------------------------------------------------------
 # Communication
@@ -159,6 +136,6 @@ workflows:
 # Where your team communicates (helps Claude know where to suggest updates)
 #
 communication:
-  primary: "Slack"                # Slack, Discord, Teams, etc.
-  documentation: "GitHub Wiki"    # GitHub Wiki, Notion, Confluence, etc.
-  design: "Figma"                 # Figma, Sketch, code-first, etc.
+  primary: "GitHub"
+  documentation: "GitHub Wiki"
+  design: "code-first"

@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>دليل ApexYard الشامل - من الفكرة للمنتج</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a28;
+    --border: #2a2a3a;
+    --text: #e4e4ef;
+    --text-dim: #8888a0;
+    --accent: #7c5cfc;
+    --accent2: #5c9cfc;
+    --green: #4cda8a;
+    --orange: #f0a050;
+    --red: #f06060;
+    --yellow: #e8d44d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.8;
+    font-size: 16px;
+  }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 4rem 1rem;
+    background: linear-gradient(135deg, #12121a 0%, #1a1030 50%, #12121a 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: 2.8rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1rem;
+  }
+  .hero p { color: var(--text-dim); font-size: 1.2rem; max-width: 600px; margin: 0 auto; }
+
+  /* TOC */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 2rem 0;
+  }
+  .toc h2 { color: var(--accent); margin-bottom: 1rem; font-size: 1.4rem; }
+  .toc ol { padding-right: 1.5rem; }
+  .toc li { margin-bottom: 0.5rem; }
+  .toc a { color: var(--accent2); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Sections */
+  section { margin: 3rem 0; }
+  h2 {
+    font-size: 1.8rem;
+    color: var(--accent);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  h3 {
+    font-size: 1.3rem;
+    color: var(--accent2);
+    margin: 1.5rem 0 0.8rem;
+  }
+  h4 { color: var(--green); margin: 1rem 0 0.5rem; }
+
+  p { margin-bottom: 1rem; }
+
+  /* Code */
+  code {
+    background: var(--surface2);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.9em;
+    direction: ltr;
+    display: inline-block;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    direction: ltr;
+    text-align: left;
+  }
+  pre code { background: none; padding: 0; font-size: 0.88em; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+  .card.highlight { border-right: 4px solid var(--accent); }
+  .card.warn { border-right: 4px solid var(--orange); }
+  .card.success { border-right: 4px solid var(--green); }
+  .card.danger { border-right: 4px solid var(--red); }
+
+  .card-title {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.7rem 1rem;
+    text-align: right;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent2);
+    font-weight: 600;
+  }
+  td code { font-size: 0.85em; }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    margin: 1.5rem 0;
+    direction: ltr;
+  }
+  .flow-step {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    text-align: center;
+    min-width: 100px;
+  }
+  .flow-step.active { border-color: var(--accent); color: var(--accent); }
+  .flow-arrow { color: var(--text-dim); font-size: 1.2rem; }
+
+  /* Step numbers */
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--accent);
+    color: white;
+    border-radius: 50%;
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-left: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .step-row {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+  }
+  .step-content { flex: 1; }
+
+  /* Lists */
+  ul, ol { padding-right: 1.5rem; margin-bottom: 1rem; }
+  li { margin-bottom: 0.4rem; }
+
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .tag-skill { background: #7c5cfc22; color: var(--accent); border: 1px solid #7c5cfc44; }
+  .tag-hook { background: #f0a05022; color: var(--orange); border: 1px solid #f0a05044; }
+  .tag-role { background: #4cda8a22; color: var(--green); border: 1px solid #4cda8a44; }
+  .tag-gate { background: #f0606022; color: var(--red); border: 1px solid #f0606044; }
+
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 0.4rem 0; padding-right: 1.8rem; position: relative; }
+  .checklist li::before {
+    content: '[ ]';
+    position: absolute;
+    right: 0;
+    font-family: monospace;
+    color: var(--text-dim);
+  }
+
+  /* Separator */
+  hr { border: none; border-top: 1px solid var(--border); margin: 3rem 0; }
+
+  /* Scroll margin for anchors */
+  [id] { scroll-margin-top: 2rem; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 2rem; }
+    .flow { gap: 0.3rem; }
+    .flow-step { min-width: 70px; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+    pre { padding: 0.8rem; }
+    td, th { padding: 0.5rem; font-size: 0.85rem; }
+  }
+
+  /* Timeline */
+  .timeline { position: relative; padding-right: 2rem; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    right: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    right: -1.75rem;
+    top: 0.5rem;
+    width: 12px;
+    height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>ApexYard</h1>
+  <p>دليلك الشامل لاستخدام الفريم ورك من الفكرة الأولى لحد ما المنتج يطلع للعالم</p>
+</div>
+
+<div class="container">
+
+<!-- جدول المحتويات -->
+<nav class="toc">
+  <h2>المحتويات</h2>
+  <ol>
+    <li><a href="#what">إيه هو ApexYard؟</a></li>
+    <li><a href="#structure">هيكل المشروع</a></li>
+    <li><a href="#sdlc">دورة حياة البرمجيات (SDLC)</a></li>
+    <li><a href="#walkthrough">مثال عملي كامل: من الفكرة للمنتج</a></li>
+    <li><a href="#skills">الأوامر (Skills) - الـ 33 أمر</a></li>
+    <li><a href="#hooks">الحراسة التلقائية (Hooks)</a></li>
+    <li><a href="#roles">الأدوار (Roles)</a></li>
+    <li><a href="#gates">البوابات (Gates)</a></li>
+    <li><a href="#git">قواعد الـ Git</a></li>
+    <li><a href="#agdr">سجل القرارات (AgDR)</a></li>
+    <li><a href="#templates">القوالب</a></li>
+    <li><a href="#solo">نصائح للمطور المنفرد</a></li>
+  </ol>
+</nav>
+
+<!-- ===== القسم 1: إيه هو ApexYard ===== -->
+<section id="what">
+  <h2>1. إيه هو ApexYard؟</h2>
+
+  <p>
+    ApexYard هو <strong>فريم ورك لإدارة المشاريع البرمجية</strong> مبني على Claude Code.
+    تخيل إن عندك فريق كامل (مدير منتجات، مهندس برمجيات، مراجع أمني، مختبر جودة...) كلهم موجودين
+    جوا Claude Code وبيشتغلوا معاك بنظام صارم من أول الفكرة لحد ما المنتج يطلع للمستخدمين.
+  </p>
+
+  <div class="card highlight">
+    <div class="card-title">الفكرة الأساسية</div>
+    <p>
+      ApexYard بيحول Claude Code من مجرد مساعد برمجي لـ<strong>فريق تطوير كامل</strong>
+      بيتبع دورة حياة برمجية منظمة (SDLC)، وبيفرض القواعد تلقائيًا من خلال hooks و gates.
+    </p>
+  </div>
+
+  <h3>ليه تستعمل ApexYard؟</h3>
+  <ul>
+    <li><strong>نظام وانضباط</strong> — بدل ما تكتب كود عشوائي، كل شغل بيمر بدورة حياة كاملة</li>
+    <li><strong>مراجعة تلقائية</strong> — كود ريفيور آلي (Rex) بيراجع كل PR</li>
+    <li><strong>توثيق تلقائي</strong> — كل قرار تقني بيتسجل في AgDR، وكل ميزة ليها PRD</li>
+    <li><strong>إدارة مشاريع متعددة</strong> — تقدر تدير أكتر من مشروع من مكان واحد</li>
+    <li><strong>حماية من الأخطاء</strong> — hooks بتمنعك تعمل حاجات غلط زي push على main مباشرة</li>
+  </ul>
+</section>
+
+<hr>
+
+<!-- ===== القسم 2: هيكل المشروع ===== -->
+<section id="structure">
+  <h2>2. هيكل المشروع</h2>
+
+  <p>لما تعمل fork من ApexYard، هيكون عندك الهيكل ده:</p>
+
+  <pre><code>apexyard/                          &larr; الفورك بتاعك (الـ "ops repo")
+├── CLAUDE.md                       &larr; الملف الرئيسي اللي Claude بيقرأه
+├── onboarding.yaml                 &larr; إعدادات شركتك والتيك ستاك
+├── apexyard.projects.yaml          &larr; قائمة المشاريع المُدارة
+│
+├── .claude/                        &larr; القواعد والأوامر والحراسة
+│   ├── hooks/                      &larr; 18 سكريبت حراسة تلقائية
+│   ├── rules/                      &larr; 8 ملفات قواعد
+│   ├── skills/                     &larr; 33 أمر (slash command)
+│   ├── agents/                     &larr; وكلاء متخصصين (code reviewer, security...)
+│   └── settings.json               &larr; ربط الـ hooks بالأحداث
+│
+├── roles/                          &larr; 19 تعريف دور
+├── workflows/                      &larr; سير العمل (SDLC, code review)
+├── templates/                      &larr; قوالب (PRD, tech design, AgDR)
+├── golden-paths/                   &larr; CI/CD pipelines جاهزة
+│
+├── workspace/                      &larr; نسخ المشاريع الحية (متتبعش بالـ git)
+│   └── my-saas-app/                &larr; git clone للمشروع الفعلي
+│
+└── projects/                       &larr; وثائق المشاريع (متتبع بالـ git)
+    └── my-saas-app/
+        ├── README.md
+        └── roadmap.md</code></pre>
+
+  <div class="card warn">
+    <div class="card-title">الفرق بين workspace و projects</div>
+    <p>
+      <code>workspace/</code> = الكود الفعلي اللي بتشتغل عليه (gitignored — كل مشروع ليه remote خاص بيه)<br>
+      <code>projects/</code> = الوثائق والخطط والتقارير عن المشروع (متتبعة في الفورك بتاعك)
+    </p>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 3: دورة حياة البرمجيات ===== -->
+<section id="sdlc">
+  <h2>3. دورة حياة البرمجيات (SDLC)</h2>
+
+  <p>كل ميزة جديدة بتمر بـ 7 مراحل. مينفعش تتخطى مرحلة — لازم كل واحدة تخلص قبل اللي بعدها:</p>
+
+  <div class="flow">
+    <div class="flow-step">التخطيط</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">التصميم</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">البناء</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">المراجعة</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">الاختبار</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">النشر</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">المراقبة</div>
+  </div>
+
+  <h3>المرحلة 1: التخطيط (Planning)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: Tech Lead</span></p>
+    <p>في المرحلة دي بتحدد إيه اللي هتبنيه وليه. لو المشروع محتاج PRD (وثيقة متطلبات المنتج)، بتكتبها هنا.</p>
+    <ul>
+      <li>مراجعة المتطلبات وتوضيحها</li>
+      <li>تقدير الوقت المطلوب</li>
+      <li>إنشاء التذاكر (GitHub Issues)</li>
+    </ul>
+    <p><strong>الخروج:</strong> المتطلبات واضحة + التذاكر موجودة ومرتبة</p>
+  </div>
+
+  <h3>المرحلة 2: التصميم التقني (Technical Design)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: Tech Lead</span></p>
+    <p>بتكتب التصميم التقني — إيه المكونات، إزاي بتتكلم مع بعض، إيه الـ API، إيه الـ database schema.</p>
+    <ul>
+      <li>كتابة وثيقة التصميم التقني</li>
+      <li>تقسيم الشغل لمهام صغيرة</li>
+      <li>تحديد المخاطر</li>
+      <li>تسجيل القرارات التقنية في AgDR</li>
+    </ul>
+    <p><strong>الخروج:</strong> التصميم معتمد + المهام متقسمة + AgDR لكل قرار</p>
+  </div>
+
+  <h3>المرحلة 3: البناء (Build)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: Backend/Frontend Engineer</span></p>
+    <div class="card danger" style="margin: 1rem 0">
+      <div class="card-title">قاعدة صارمة: تذكرة واحدة في المرة</div>
+      <p>اشتغل على تذكرة واحدة بس. خلصها بالكامل قبل ما تبدأ اللي بعدها. كل PR = تذكرة واحدة.</p>
+    </div>
+    <p><strong>خطوات البناء:</strong></p>
+    <ol>
+      <li>فعّل التذكرة: <code>/start-ticket 42</code></li>
+      <li>أنشئ branch: <code>feature/#42-add-auth</code></li>
+      <li>اكتب الكود + الاختبارات</li>
+      <li>شغّل lint + typecheck + test + build محليًا</li>
+      <li>أنشئ PR</li>
+    </ol>
+    <p><strong>الخروج:</strong> الكود جاهز + الاختبارات ناجحة + PR مفتوح</p>
+  </div>
+
+  <h3>المرحلة 4: المراجعة (Code Review)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: Tech Lead + Rex (المراجع الآلي)</span></p>
+    <p>Rex (المراجع الآلي) بيراجع كل commit تلقائيًا. بيشيك على:</p>
+    <ul>
+      <li>هل الكود بيتبع المعمارية الصح</li>
+      <li>هل في اختبارات كافية</li>
+      <li>هل في مشاكل أمنية</li>
+      <li>هل في AgDR لو في قرار معماري</li>
+      <li>هل الـ PR فيه Glossary</li>
+    </ul>
+    <p><strong>الخروج:</strong> موافقة المراجع + CI أخضر</p>
+  </div>
+
+  <h3>المرحلة 5: اختبار الجودة (QA)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: QA Engineer</span></p>
+    <div class="card danger" style="margin: 1rem 0">
+      <div class="card-title">محطة إجبارية</div>
+      <p>التذكرة ما بتتقفلش بعد merge. لازم QA يتحقق من كل acceptance criteria الأول.</p>
+    </div>
+    <p>بعد merge، التذكرة بتتحرك لحالة QA مش Done. QA بيتحقق من:</p>
+    <ul>
+      <li>كل معايير القبول متحققة</li>
+      <li>الحالات الطرفية (edge cases) شغالة</li>
+      <li>مفيش regression في الحاجات القديمة</li>
+    </ul>
+  </div>
+
+  <h3>المرحلة 6: النشر (Deploy)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: Platform Engineer</span></p>
+    <ul>
+      <li>اختبار على staging</li>
+      <li>خطة rollback جاهزة</li>
+      <li>المراقبة متفعلة</li>
+      <li>نشر على production</li>
+    </ul>
+  </div>
+
+  <h3>المرحلة 7: المراقبة (Monitor)</h3>
+  <div class="card">
+    <p><span class="tag tag-role">الدور: SRE</span></p>
+    <p>بعد النشر، بتراقب لمدة 24-48 ساعة. لو في مشكلة، بتتصرف فورًا.</p>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 4: مثال عملي كامل ===== -->
+<section id="walkthrough">
+  <h2>4. مثال عملي كامل: من الفكرة للمنتج</h2>
+
+  <p>خلينا نمشي مع بعض خطوة بخطوة. تخيل إنك عايز تضيف <strong>نظام تسجيل دخول</strong> لتطبيقك.</p>
+
+  <div class="timeline">
+
+    <div class="timeline-item">
+      <h3>الخطوة 1: سجّل الفكرة</h3>
+      <pre><code>/idea</code></pre>
+      <p>اكتب فكرتك. الأمر ده بيضيفها في <code>projects/ideas-backlog.md</code>.</p>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 2: اكتب المتطلبات (PRD)</h3>
+      <pre><code>/write-spec</code></pre>
+      <p>أو اكتبها يدوي باستخدام القالب في <code>templates/prd.md</code>. المتطلبات بتشمل:</p>
+      <ul>
+        <li>المشكلة: "المستخدمين مش قادرين يسجلوا دخول"</li>
+        <li>user stories: "كمستخدم، عايز أسجل دخول بالإيميل عشان أوصل لحسابي"</li>
+        <li>معايير القبول: "المستخدم يقدر يسجل دخول بالإيميل والباسورد"</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 3: أنشئ تذكرة (GitHub Issue)</h3>
+      <pre><code>/feature</code></pre>
+      <p>الأمر ده بيسألك عن تفاصيل الميزة وبينشئ GitHub Issue مع user story و acceptance criteria.</p>
+      <p>أو يدوي:</p>
+      <pre><code>gh issue create --title "[Feat] Add email authentication" \
+  --body "As a user, I want to log in with email..."</code></pre>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 4: سجّل القرارات التقنية</h3>
+      <pre><code>/decide</code></pre>
+      <p>قبل ما تكتب أي كود، لازم تسجل قراراتك التقنية. مثلاً:</p>
+      <ul>
+        <li>ليه اخترت Better Auth بدل NextAuth؟</li>
+        <li>ليه اخترت NeonDB بدل Supabase؟</li>
+      </ul>
+      <p>الأمر ده بينشئ AgDR (Agent Decision Record) في <code>docs/agdr/</code>.</p>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 5: ابدأ الشغل</h3>
+      <pre><code>/start-ticket 5</code></pre>
+      <p>الأمر ده بيفعّل التذكرة #5 للجلسة الحالية. بدون الخطوة دي، الـ hooks مش هتسمحلك تعدل أي ملفات كود.</p>
+      <p>بعدها أنشئ branch:</p>
+      <pre><code>git checkout -b feature/#5-add-email-auth</code></pre>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 6: اكتب الكود</h3>
+      <p>اكتب الكود بتاعك واتبع المعايير:</p>
+      <ul>
+        <li>TypeScript strict mode</li>
+        <li>اختبارات (تغطية &gt; 80%)</li>
+        <li>مفيش <code>any</code> من غير تبرير</li>
+        <li>مفيش أسرار مكتوبة في الكود</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 7: شغّل الفحوصات محليًا</h3>
+      <pre><code>npm run lint && npm run typecheck && npm run test && npm run build</code></pre>
+      <p>لازم كلهم يعدوا قبل ما تعمل push. الـ hook بتاع <code>pre-push-gate.sh</code> هيفكرك بده.</p>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 8: ارفع الكود وأنشئ PR</h3>
+      <pre><code>git push -u origin feature/#5-add-email-auth</code></pre>
+      <p>بعدها أنشئ PR (عنوان الـ PR لازم يتبع الفورمات):</p>
+      <pre><code>gh pr create --title "feat(#5): add email authentication" \
+  --body "## Summary
+- Add email/password authentication using Better Auth
+- Add login and signup pages
+
+## Testing
+1. Run npm test
+2. Visit /login and try signing in
+
+Refs #5
+
+---
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| Better Auth | مكتبة مصادقة لـ TypeScript |
+| Session token | رمز جلسة يحفظ حالة تسجيل الدخول |"</code></pre>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 9: مراجعة الكود</h3>
+      <p>Rex (المراجع الآلي) بيراجع تلقائيًا بعد كل commit. لو عايز تشغله يدوي:</p>
+      <pre><code>/code-review</code></pre>
+      <p>لو في ملاحظات، صلّحها وادفع commits جديدة. Rex بيراجع تاني تلقائيًا.</p>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 10: الموافقة على الدمج</h3>
+      <p>بعد ما Rex يوافق و CI أخضر، لازم تأخذ موافقة صريحة على الدمج:</p>
+      <pre><code>/approve-merge 5</code></pre>
+      <div class="card danger">
+        <div class="card-title">موافقة الدمج لازم تكون صريحة</div>
+        <p>كلمة "go" أو "ship it" في سياق خطة عامة <strong>مش كافية</strong>. لازم تقول بوضوح "approved" أو تستعمل <code>/approve-merge</code> لكل PR على حدة.</p>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 11: اختبار QA</h3>
+      <p>بعد الدمج، التذكرة بتتحرك لـ QA مش Done. اتحقق من كل acceptance criteria:</p>
+      <ul class="checklist">
+        <li>المستخدم يقدر يسجل حساب جديد</li>
+        <li>المستخدم يقدر يسجل دخول</li>
+        <li>المستخدم يقدر يسجل خروج</li>
+        <li>رسالة خطأ لو الباسورد غلط</li>
+      </ul>
+    </div>
+
+    <div class="timeline-item">
+      <h3>الخطوة 12: النشر والمراقبة</h3>
+      <p>انشر على Cloudflare وراقب لمدة 24 ساعة. لو كل حاجة تمام، التذكرة بتتقفل.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 5: الأوامر (Skills) ===== -->
+<section id="skills">
+  <h2>5. الأوامر (Skills) - الـ 33 أمر</h2>
+
+  <p>الأوامر (skills) هي slash commands بتكتبها في Claude Code. كل أمر بيعمل حاجة معينة:</p>
+
+  <h3>الإعداد والتكوين</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/setup</code></td><td>إعداد الفورك لأول مرة — وصف الشركة والتيك ستاك</td></tr>
+    <tr><td><code>/handover</code></td><td>إضافة مشروع خارجي لإدارة ApexYard</td></tr>
+    <tr><td><code>/update</code></td><td>مزامنة الفورك مع upstream (تحديثات ApexYard الجديدة)</td></tr>
+  </table>
+
+  <h3>إدارة المشاريع</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/projects</code></td><td>عرض كل المشاريع المُدارة مع حالتها</td></tr>
+    <tr><td><code>/inbox</code></td><td>كل حاجة محتاجة انتباهك — PRs, issues, تعليقات</td></tr>
+    <tr><td><code>/status</code></td><td>لقطة سريعة — git, CI, الشغل الجاري</td></tr>
+    <tr><td><code>/tasks</code></td><td>قائمة مهام مرتبة بالأولوية مع روابط مباشرة</td></tr>
+    <tr><td><code>/roadmap</code></td><td>إنشاء أو تحديث خريطة الطريق</td></tr>
+    <tr><td><code>/stakeholder-update</code></td><td>تقرير أسبوعي/شهري للمعنيين</td></tr>
+  </table>
+
+  <h3>إنشاء التذاكر</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/idea</code></td><td>تسجيل فكرة جديدة في قائمة الأفكار</td></tr>
+    <tr><td><code>/feature</code></td><td>إنشاء تذكرة ميزة جديدة (user story + acceptance criteria)</td></tr>
+    <tr><td><code>/bug</code></td><td>تقرير خلل (Given/When/Then + خطوات إعادة الإنتاج)</td></tr>
+    <tr><td><code>/task</code></td><td>مهمة تقنية (ديون تقنية، بنية تحتية، إعادة هيكلة)</td></tr>
+    <tr><td><code>/migration</code></td><td>تذكرة migration + AgDR في خطوة واحدة</td></tr>
+    <tr><td><code>/start-ticket</code></td><td>تفعيل تذكرة للجلسة الحالية (مطلوب قبل تعديل الكود)</td></tr>
+  </table>
+
+  <h3>التوثيق والقرارات</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/write-spec</code></td><td>كتابة PRD أو مواصفات ميزة</td></tr>
+    <tr><td><code>/decide</code></td><td>تسجيل قرار تقني في AgDR</td></tr>
+    <tr><td><code>/c4</code></td><td>رسم مخططات C4 (System Context + Container) بالـ Mermaid</td></tr>
+  </table>
+
+  <h3>المراجعة والموافقة</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/code-review</code></td><td>تشغيل المراجع الآلي Rex على PR</td></tr>
+    <tr><td><code>/security-review</code></td><td>مراجعة أمنية متخصصة</td></tr>
+    <tr><td><code>/audit-deps</code></td><td>فحص التبعيات (ثغرات، تراخيص، تحديثات)</td></tr>
+    <tr><td><code>/approve-merge</code></td><td>موافقة صريحة على دمج PR معين</td></tr>
+    <tr><td><code>/approve-design</code></td><td>موافقة على مراجعة التصميم لـ PR بواجهة مستخدم</td></tr>
+  </table>
+
+  <h3>تدقيقات الإطلاق (Launch Checks)</h3>
+  <table>
+    <tr><th>الأمر</th><th>الوظيفة</th></tr>
+    <tr><td><code>/launch-check</code></td><td>فحص شامل من 8 أبعاد — حكم نهائي: جاهز / مش جاهز</td></tr>
+    <tr><td><code>/threat-model</code></td><td>نمذجة التهديدات (STRIDE)</td></tr>
+    <tr><td><code>/accessibility-audit</code></td><td>فحص إمكانية الوصول (WCAG 2.1 AA)</td></tr>
+    <tr><td><code>/compliance-check</code></td><td>فحص GDPR والخصوصية</td></tr>
+    <tr><td><code>/analytics-audit</code></td><td>فحص تغطية التحليلات والأحداث</td></tr>
+    <tr><td><code>/seo-audit</code></td><td>فحص SEO تقني</td></tr>
+    <tr><td><code>/performance-audit</code></td><td>فحص الأداء (حجم الحزمة، Core Web Vitals)</td></tr>
+    <tr><td><code>/monitoring-audit</code></td><td>فحص المراقبة والتنبيهات</td></tr>
+    <tr><td><code>/docs-audit</code></td><td>فحص اكتمال التوثيق</td></tr>
+  </table>
+</section>
+
+<hr>
+
+<!-- ===== القسم 6: الحراسة التلقائية (Hooks) ===== -->
+<section id="hooks">
+  <h2>6. الحراسة التلقائية (Hooks)</h2>
+
+  <p>
+    الـ Hooks هي سكريبتات بتشتغل تلقائيًا قبل أو بعد أي عملية في Claude Code.
+    بتمنعك تعمل حاجات غلط وبتفرض القواعد من غير ما تحتاج تفتكرها.
+  </p>
+
+  <h3>الحراسات الوقائية (بتمنعك من أخطاء)</h3>
+  <table>
+    <tr><th>الـ Hook</th><th>بيعمل إيه</th></tr>
+    <tr>
+      <td><code>require-active-ticket.sh</code></td>
+      <td>بيمنعك تعدل ملفات كود من غير ما يكون عندك تذكرة مفعلة بـ <code>/start-ticket</code></td>
+    </tr>
+    <tr>
+      <td><code>block-main-push.sh</code></td>
+      <td>بيمنع الـ push مباشرة على main — كل تغيير لازم يكون من خلال PR</td>
+    </tr>
+    <tr>
+      <td><code>block-git-add-all.sh</code></td>
+      <td>بيمنع <code>git add -A</code> أو <code>git add .</code> — لازم تضيف ملفات محددة</td>
+    </tr>
+    <tr>
+      <td><code>block-unreviewed-merge.sh</code></td>
+      <td>بيمنع الدمج من غير مراجعة Rex + موافقة صريحة</td>
+    </tr>
+    <tr>
+      <td><code>block-merge-on-red-ci.sh</code></td>
+      <td>بيمنع الدمج لو CI فاشل — حتى لو الفشل مش متعلق بالـ PR</td>
+    </tr>
+    <tr>
+      <td><code>check-secrets.sh</code></td>
+      <td>بيبحث عن أسرار مكتوبة في الكود (API keys, passwords, tokens)</td>
+    </tr>
+  </table>
+
+  <h3>حراسات التنسيق (بتضمن الشكل الصحيح)</h3>
+  <table>
+    <tr><th>الـ Hook</th><th>بيعمل إيه</th></tr>
+    <tr>
+      <td><code>validate-branch-name.sh</code></td>
+      <td>بيتأكد إن اسم الـ branch بيتبع الفورمات: <code>type/#ID-description</code></td>
+    </tr>
+    <tr>
+      <td><code>validate-pr-create.sh</code></td>
+      <td>بيتأكد إن عنوان الـ PR بيتبع: <code>type(#ID): description</code></td>
+    </tr>
+    <tr>
+      <td><code>validate-commit-format.sh</code></td>
+      <td>بيتأكد إن رسالة الـ commit بتبع الفورمات الصحيح</td>
+    </tr>
+    <tr>
+      <td><code>verify-commit-refs.sh</code></td>
+      <td>بيتأكد إن أرقام التذاكر المذكورة في الـ commit موجودة فعلاً</td>
+    </tr>
+  </table>
+
+  <h3>حراسات متخصصة</h3>
+  <table>
+    <tr><th>الـ Hook</th><th>بيعمل إيه</th></tr>
+    <tr>
+      <td><code>require-agdr-for-arch-changes.sh</code></td>
+      <td>بيطلب AgDR لو في تغييرات معمارية</td>
+    </tr>
+    <tr>
+      <td><code>require-design-review-for-ui.sh</code></td>
+      <td>بيطلب مراجعة تصميم لو الـ PR بيأثر على الواجهة</td>
+    </tr>
+    <tr>
+      <td><code>require-migration-ticket.sh</code></td>
+      <td>بيطلب تذكرة migration مخصصة + AgDR قبل تعديل ملفات migration</td>
+    </tr>
+    <tr>
+      <td><code>auto-code-review.sh</code></td>
+      <td>بيشغل Rex تلقائيًا بعد كل commit جديد</td>
+    </tr>
+    <tr>
+      <td><code>pre-push-gate.sh</code></td>
+      <td>بيفكرك تشغل lint/test/build قبل الـ push</td>
+    </tr>
+    <tr>
+      <td><code>check-upstream-drift.sh</code></td>
+      <td>بيخبرك لو الفورك بتاعك متأخر عن upstream</td>
+    </tr>
+    <tr>
+      <td><code>onboarding-check.sh</code></td>
+      <td>بيشيك لو <code>onboarding.yaml</code> لسه فيه قيم افتراضية</td>
+    </tr>
+    <tr>
+      <td><code>suggest-ticket-template.sh</code></td>
+      <td>بيقترح القالب المناسب للتذكرة</td>
+    </tr>
+  </table>
+</section>
+
+<hr>
+
+<!-- ===== القسم 7: الأدوار ===== -->
+<section id="roles">
+  <h2>7. الأدوار (Roles) — 19 دور</h2>
+
+  <p>
+    ApexYard فيه 19 دور متخصص. كل دور ليه ملف تعريف بيحدد مسؤولياته، إيه يقدر يعمله، وإيه مش مسموح بيه.
+    الأدوار بتتفعل تلقائيًا حسب السياق.
+  </p>
+
+  <h3>الهندسة (7 أدوار)</h3>
+  <table>
+    <tr><th>الدور</th><th>بيتفعل لما</th></tr>
+    <tr><td>رئيس الهندسة</td><td>مراجعة معمارية، إضافة تقنية جديدة</td></tr>
+    <tr><td>قائد تقني (Tech Lead)</td><td>تصميم تقني، تخطيط، مراجعة كود</td></tr>
+    <tr><td>مهندس Backend</td><td>كتابة كود الخادم، APIs، قاعدة البيانات</td></tr>
+    <tr><td>مهندس Frontend</td><td>كتابة كود الواجهة، المكونات</td></tr>
+    <tr><td>مهندس جودة (QA)</td><td>بعد الدمج — التحقق من معايير القبول</td></tr>
+    <tr><td>مهندس منصات</td><td>تغييرات CI/CD، أدوات المطورين</td></tr>
+    <tr><td>SRE</td><td>حوادث الإنتاج، مراقبة، تنبيهات</td></tr>
+  </table>
+
+  <h3>المنتج (3 أدوار)</h3>
+  <table>
+    <tr><th>الدور</th><th>بيتفعل لما</th></tr>
+    <tr><td>رئيس المنتج</td><td>ترتيب أولويات الخريطة، قرارات استراتيجية</td></tr>
+    <tr><td>مدير منتج</td><td>كتابة PRD، user stories، معايير قبول</td></tr>
+    <tr><td>محلل منتج</td><td>أبحاث السوق، تحليل المنافسين</td></tr>
+  </table>
+
+  <h3>التصميم (3 أدوار)</h3>
+  <table>
+    <tr><th>الدور</th><th>بيتفعل لما</th></tr>
+    <tr><td>رئيس التصميم</td><td>نظام التصميم، معايير UX</td></tr>
+    <tr><td>مصمم UI</td><td>مواصفات المكونات، design tokens</td></tr>
+    <tr><td>مصمم UX</td><td>تدفقات المستخدم، wireframes</td></tr>
+  </table>
+
+  <h3>الأمن (3 أدوار)</h3>
+  <table>
+    <tr><th>الدور</th><th>بيتفعل لما</th></tr>
+    <tr><td>رئيس الأمن</td><td>استراتيجية الأمان، نمذجة التهديدات</td></tr>
+    <tr><td>مدقق أمني</td><td>PR بيلمس auth / crypto / secrets / بيانات مستخدمين</td></tr>
+    <tr><td>مختبر اختراق</td><td>اختبارات نشطة، اكتشاف ثغرات</td></tr>
+  </table>
+
+  <h3>البيانات (3 أدوار)</h3>
+  <table>
+    <tr><th>الدور</th><th>بيتفعل لما</th></tr>
+    <tr><td>رئيس البيانات</td><td>استراتيجية التحليلات، حوكمة البيانات</td></tr>
+    <tr><td>محلل بيانات</td><td>استعلامات SQL، لوحات المعلومات</td></tr>
+    <tr><td>مهندس بيانات</td><td>ETL، نمذجة البيانات، schema</td></tr>
+  </table>
+
+  <div class="card highlight">
+    <div class="card-title">التفعيل للمطور المنفرد</div>
+    <p>كمطور منفرد، أنت بتلبس كل القبعات. Claude بيتعامل معاك كالتالي:</p>
+    <ul>
+      <li>في مرحلة التخطيط → بيتكلم كـ Tech Lead</li>
+      <li>في مرحلة البناء → بيتكلم كـ Backend/Frontend Engineer</li>
+      <li>لو لمست auth → بيفعل المدقق الأمني تلقائيًا</li>
+      <li>بعد merge → بيفكرك بدور QA</li>
+    </ul>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 8: البوابات ===== -->
+<section id="gates">
+  <h2>8. البوابات (Gates) — نقاط التفتيش</h2>
+
+  <p>البوابات هي نقاط تفتيش إلزامية بين المراحل. لو بوابة فشلت، <strong>توقف وأكمل الخطوة الناقصة</strong>.</p>
+
+  <table>
+    <tr><th>البوابة</th><th>قبل</th><th>تحقق من</th></tr>
+    <tr>
+      <td><span class="tag tag-gate">1</span></td>
+      <td>PRD &rarr; تصميم تقني</td>
+      <td>PRD معتمد، التذكرة الأم موجودة</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">2</span></td>
+      <td>تصميم &rarr; بناء</td>
+      <td>التصميم معتمد، تذاكر القصص موجودة، AgDR للقرارات</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">3</span></td>
+      <td>بداية الكود</td>
+      <td>التذكرة موجودة ومفعلة، الـ branch جاهز</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">3a</span></td>
+      <td>تعديل migration</td>
+      <td>تذكرة migration + AgDR migration (عبر <code>/migration</code>)</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">4</span></td>
+      <td>إنشاء PR</td>
+      <td>الاختبارات ناجحة، تغطية &gt; 80%، AgDR مرتبط</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">5</span></td>
+      <td>دمج PR</td>
+      <td>مراجعتين (Rex + موافقة صريحة)، CI أخضر، SHA متطابق</td>
+    </tr>
+    <tr>
+      <td><span class="tag tag-gate">6</span></td>
+      <td>التذكرة &rarr; Done</td>
+      <td>QA تحقق وأعطى الموافقة</td>
+    </tr>
+  </table>
+
+  <div class="card danger">
+    <div class="card-title">القاعدة الذهبية</div>
+    <p>لو بوابة فشلت &rarr; <strong>توقف</strong>. أكمل الخطوة الناقصة الأول. مفيش استثناءات — حتى لـ "مجرد إصلاح بسيط".</p>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 9: قواعد الـ Git ===== -->
+<section id="git">
+  <h2>9. قواعد الـ Git</h2>
+
+  <h3>أسماء الـ Branches</h3>
+  <div class="card">
+    <p>الفورمات: <code>{type}/{TICKET-ID}-{description}</code></p>
+    <pre><code>feature/#42-add-auth
+fix/#45-login-bug
+docs/#99-update-readme
+refactor/#12-cleanup-api
+chore/#3-configure-apexyard
+test/#50-add-unit-tests</code></pre>
+    <p>الأنواع المتاحة: <code>feature</code> <code>fix</code> <code>refactor</code> <code>chore</code> <code>docs</code> <code>test</code> <code>spike</code> <code>ci</code> <code>build</code> <code>perf</code></p>
+  </div>
+
+  <h3>عناوين الـ PR</h3>
+  <div class="card">
+    <p>الفورمات: <code>type(TICKET): description</code></p>
+    <pre><code>feat(#42): add user authentication
+fix(#45): resolve login redirect loop
+docs(#99): update API reference
+refactor(#12): extract validation logic
+feat(#42)!: remove deprecated v1 endpoints  &larr; breaking change</code></pre>
+    <p><strong>تذكرة واحدة بس في كل عنوان PR</strong> — عناوين زي <code>fix(#1,#2,#3):</code> مرفوضة.</p>
+  </div>
+
+  <h3>رسائل الـ Commit</h3>
+  <div class="card">
+    <pre><code>feat: add email login form
+
+- Create LoginForm component with validation
+- Add Better Auth session management
+- Add error handling for invalid credentials
+
+Refs #5</code></pre>
+    <p>الأنواع: <code>feat</code> <code>fix</code> <code>refactor</code> <code>test</code> <code>docs</code> <code>chore</code> <code>style</code> <code>perf</code></p>
+  </div>
+
+  <h3>قواعد صارمة</h3>
+  <div class="card danger">
+    <ul>
+      <li><strong>ممنوع</strong> <code>git add -A</code> أو <code>git add .</code> — لازم تضيف ملفات بالاسم</li>
+      <li><strong>ممنوع</strong> push مباشرة على main — كل تغيير من خلال PR</li>
+      <li><strong>ممنوع</strong> أسرار في الكود — استخدم environment variables</li>
+      <li><strong>ممنوع</strong> ذكر أرقام تذاكر مش موجودة — <code>Closes #999</code> لو #999 مش موجود هيتحجب</li>
+    </ul>
+  </div>
+</section>
+
+<hr>
+
+<!-- ===== القسم 10: سجل القرارات (AgDR) ===== -->
+<section id="agdr">
+  <h2>10. سجل القرارات (AgDR)</h2>
+
+  <p>
+    <strong>Agent Decision Record</strong> هو وثيقة بتسجل كل قرار تقني مهم.
+    ليه اخترت المكتبة دي؟ ليه الطريقة دي وليس التانية؟ الإجابات بتتسجل في AgDR عشان مستقبلك يفهم ليه.
+  </p>
+
+  <h3>امتى لازم تعمل AgDR؟</h3>
+  <div class="card warn">
+    <p>لو لقيت نفسك بتعمل أي حاجة من دول &rarr; <strong>توقف</strong> واستعمل <code>/decide</code>:</p>
+    <ul>
+      <li>"هستعمل Better Auth" → <strong>توقف</strong>، سجل ليه</li>
+      <li>"هختار بين X و Y" → <strong>توقف</strong>، سجل المقارنة</li>
+      <li>إضافة مكتبة جديدة → <strong>توقف</strong></li>
+      <li>تغيير معماري → <strong>توقف</strong></li>
+      <li>اختيار نمط تصميم (design pattern) → <strong>توقف</strong></li>
+    </ul>
+  </div>
+
+  <h3>شكل AgDR</h3>
+  <div class="card">
+    <pre><code># اختيار Better Auth للمصادقة
+
+> في سياق بناء نظام مصادقة لتطبيق SaaS،
+> أمام الحاجة لمكتبة مصادقة بسيطة وقوية،
+> قررت استعمال Better Auth لتحقيق مصادقة آمنة وسريعة،
+> مع قبول إن المجتمع أصغر من NextAuth.
+
+## السياق
+بنبني تطبيق SaaS على Cloudflare Workers ومحتاجين مصادقة.
+
+## الخيارات
+
+| الخيار | المميزات | العيوب |
+|--------|----------|--------|
+| Better Auth | بسيط، TypeScript أصلي، يشتغل مع Cloudflare | مجتمع أصغر |
+| NextAuth | مجتمع كبير، موثق كويس | مربوط بـ Next.js |
+| Lucia | خفيف، مرن | صيانة أقل |
+
+## القرار
+اخترنا **Better Auth** لأنه TypeScript أصلي وبيشتغل مع Cloudflare Workers.
+
+## النتائج
+- المصادقة هتكون أسرع في الإعداد
+- لازم نكتب بعض الأكواد المساعدة بنفسنا</code></pre>
+  </div>
+
+  <p>AgDRs بتتحفظ في: <code>docs/agdr/AgDR-NNNN-slug.md</code> داخل مشروعك.</p>
+</section>
+
+<hr>
+
+<!-- ===== القسم 11: القوالب ===== -->
+<section id="templates">
+  <h2>11. القوالب (Templates)</h2>
+
+  <table>
+    <tr><th>القالب</th><th>امتى تستعمله</th><th>المسار</th></tr>
+    <tr>
+      <td>PRD</td>
+      <td>تعريف ميزة أو منتج جديد — المشكلة، المستخدم المستهدف، user stories</td>
+      <td><code>templates/prd.md</code></td>
+    </tr>
+    <tr>
+      <td>تصميم تقني</td>
+      <td>تخطيط التنفيذ — المعمارية، API، قاعدة البيانات، خطة التنفيذ</td>
+      <td><code>templates/technical-design.md</code></td>
+    </tr>
+    <tr>
+      <td>ADR</td>
+      <td>تسجيل قرار معماري (للبشر)</td>
+      <td><code>templates/adr.md</code></td>
+    </tr>
+    <tr>
+      <td>AgDR</td>
+      <td>تسجيل قرار تقني (لـ AI agents)</td>
+      <td><code>templates/agdr.md</code></td>
+    </tr>
+    <tr>
+      <td>AgDR Migration</td>
+      <td>تسجيل قرار migration (rollback, downtime, consumers)</td>
+      <td><code>templates/agdr-migration.md</code></td>
+    </tr>
+    <tr>
+      <td>C4 Context</td>
+      <td>رسم النظام + الأطراف الخارجية (مستوى 1)</td>
+      <td><code>templates/architecture/c4-context.md</code></td>
+    </tr>
+    <tr>
+      <td>C4 Container</td>
+      <td>رسم المكونات داخل النظام (مستوى 2)</td>
+      <td><code>templates/architecture/c4-container.md</code></td>
+    </tr>
+  </table>
+</section>
+
+<hr>
+
+<!-- ===== القسم 12: نصائح للمطور المنفرد ===== -->
+<section id="solo">
+  <h2>12. نصائح للمطور المنفرد</h2>
+
+  <p>ApexYard مصمم لفرق، لكن كمطور منفرد، الإعدادات بتاعتك مخففة:</p>
+
+  <div class="card success">
+    <div class="card-title">إعداداتك المخصصة</div>
+    <table>
+      <tr><th>الإعداد</th><th>القيمة</th><th>السبب</th></tr>
+      <tr><td>مراجعات مطلوبة</td><td>0</td><td>أنت لوحدك — Rex بيراجع تلقائيًا</td></tr>
+      <tr><td>PRD مطلوب</td><td>نعم</td><td>مهم — بيوضح المشكلة والمتطلبات قبل ما تكتب كود</td></tr>
+      <tr><td>تصميم تقني مطلوب</td><td>لا</td><td>عملية خفيفة</td></tr>
+      <tr><td>مراجعة تصميم</td><td>لا</td><td>لوحدك</td></tr>
+      <tr><td>QA</td><td>نعم</td><td>بتعمل QA لنفسك قبل ما تقفل التذكرة</td></tr>
+      <tr><td>AgDR</td><td>نعم</td><td>مهم — بيساعدك تفتكر ليه اخترت حاجة معينة</td></tr>
+    </table>
+  </div>
+
+  <h3>سير العمل اليومي</h3>
+  <div class="card">
+    <ol>
+      <li><strong>افتح الفورك:</strong> <code>cd ~/apexyard</code></li>
+      <li><strong>شوف إيه محتاج انتباهك:</strong> <code>/inbox</code></li>
+      <li><strong>اختار تذكرة:</strong> <code>/start-ticket 42</code></li>
+      <li><strong>روح لمشروعك:</strong> <code>cd workspace/my-app/</code></li>
+      <li><strong>اشتغل على التذكرة</strong> — كود، اختبارات، PR</li>
+      <li><strong>ارجع للفورك:</strong> <code>cd ~/apexyard</code></li>
+      <li><strong>كل جمعة:</strong> <code>/stakeholder-update weekly</code></li>
+    </ol>
+  </div>
+
+  <h3>الحد الأدنى اللي لازم تعمله</h3>
+  <div class="card highlight">
+    <p>حتى لو عايز تخفف العملية لأقصى حد، دول <strong>مش اختياريين</strong>:</p>
+    <ol>
+      <li><strong>تذكرة قبل الكود</strong> — <code>/start-ticket</code> مطلوب دائمًا</li>
+      <li><strong>branch باسم صحيح</strong> — <code>feature/#42-description</code></li>
+      <li><strong>PR بعنوان صحيح</strong> — <code>feat(#42): description</code></li>
+      <li><strong>Glossary في كل PR</strong> — حتى لو سطر واحد</li>
+      <li><strong>AgDR لكل قرار تقني</strong> — <code>/decide</code></li>
+      <li><strong>مفيش أسرار في الكود</strong> — environment variables بس</li>
+      <li><strong>مفيش push مباشرة على main</strong></li>
+    </ol>
+  </div>
+
+  <h3>أوامر الاختصار</h3>
+  <table>
+    <tr><th>عايز تعمل إيه</th><th>الأمر</th></tr>
+    <tr><td>فكرة جديدة خطرت لك</td><td><code>/idea</code></td></tr>
+    <tr><td>تبدأ شغل على ميزة</td><td><code>/feature</code> → <code>/start-ticket N</code></td></tr>
+    <tr><td>تسجل قرار تقني</td><td><code>/decide</code></td></tr>
+    <tr><td>تراجع كودك قبل merge</td><td><code>/code-review</code></td></tr>
+    <tr><td>تتأكد إن تطبيقك جاهز للإطلاق</td><td><code>/launch-check</code></td></tr>
+    <tr><td>تشوف حالة مشاريعك</td><td><code>/status</code></td></tr>
+    <tr><td>تعمل تقرير أسبوعي</td><td><code>/stakeholder-update weekly</code></td></tr>
+  </table>
+</section>
+
+<hr>
+
+<!-- خاتمة -->
+<section>
+  <h2>الخلاصة</h2>
+
+  <div class="card success">
+    <div class="card-title">ApexYard في جملة واحدة</div>
+    <p>
+      فريم ورك بيحول Claude Code لفريق تطوير كامل بيتبع SDLC صارم —
+      33 أمر + 18 hook حراسة + 19 دور + 7 بوابات =
+      كود أنظف، قرارات موثقة، ومنتج يطلع بثقة.
+    </p>
+  </div>
+
+  <div class="flow">
+    <div class="flow-step active">فكرة</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/idea</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/feature</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/decide</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/start-ticket</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">كود</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">PR</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/code-review</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step"><code>/approve-merge</code></div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step">QA</div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-step active">منتج</div>
+  </div>
+
+  <p style="text-align: center; color: var(--text-dim); margin-top: 2rem;">
+    بالتوفيق يا زياد! ابدأ بـ <code>/idea</code> وخلي ApexYard يمشيك خطوة بخطوة.
+  </p>
+</section>
+
+</div>
+
+</body>
+</html>
