@@ -1,6 +1,6 @@
 # PRD: Self-hosted WhatsApp API Wrapper
 
-**Status**: Draft
+**Status**: Approved
 **Author**: zeyad sleem
 **Created**: 2026-04-30
 **Last Updated**: 2026-04-30

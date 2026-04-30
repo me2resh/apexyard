@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بناء SaaS باستخدام ApexYard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.8;
+            color: #1a1a2e;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 50px 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header .subtitle {
+            opacity: 0.95;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        
+        header .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        section {
+            margin-bottom: 40px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 30px;
+        }
+        
+        section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        h2 {
+            color: #667eea;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        h3 {
+            color: #764ba2;
+            font-size: 1.3em;
+            margin: 25px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            color: #4a4a6a;
+        }
+        
+        .highlight {
+            background: linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border-right: 4px solid #667eea;
+        }
+        
+        .info-box {
+            background: #f0f4ff;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border: 2px solid #667eea;
+        }
+        
+        code {
+            background: #1a1a2e;
+            color: #00d9ff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        pre {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 0.85em;
+            text-align: right;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: right;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .diagram {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            border: 2px dashed #667eea;
+        }
+        
+        .box {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: 8px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .arrow {
+            font-size: 1.5em;
+            color: #667eea;
+            margin: 0 10px;
+        }
+        
+        .steps {
+            counter-reset: step;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            position: relative;
+            padding-right: 60px;
+        }
+        
+        .step::before {
+            counter-increment: step;
+            content: counter(step);
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        
+        .step h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #667eea40;
+        }
+        
+        .feature-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .note {
+            background: #fff8e1;
+            border-right: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .warning {
+            background: #ffebee;
+            border-right: 4px solid #f44336;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #e8f5e9;
+            border-right: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        footer {
+            background: #1a1a2e;
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+        
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            header h1 { font-size: 1.8em; }
+            .content { padding: 20px; }
+            h2 { font-size: 1.4em; }
+            pre { font-size: 0.8em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 بناء SaaS باستخدام ApexYard</h1>
+            <p class="subtitle">كيف تدير دورة حياة تطوير SaaS بأسلوب ApexYard</p>
+            <span class="badge">Multi-Project Forge</span>
+        </header>
+        
+        <div class="content">
+            <!-- ما هو ApexYard -->
+            <section>
+                <h2>ما هو ApexYard؟</h2>
+                <div class="highlight">
+                    <strong>ApexYard = Multi-Project Forge</strong><br>
+                    ليس إطار عمل تقني، بل <strong>منهجية</strong> و<strong>أدوات</strong> لإدارة محفظة مشاريع متعددة من مكان واحد.
+                </div>
+                
+                <h3>الفرق:</h3>
+                <table>
+                    <tr>
+                        <th>النوع</th>
+                        <th>مثال</th>
+                    </tr>
+                    <tr>
+                        <td>Framework تقني</td>
+                        <td>Next.js, Django, Laravel - يكتب كود</td>
+                    </tr>
+                    <tr>
+                        <td>المنهجية (ApexYard)</td>
+                        <td>يدير ويgovern دورة حياة التطوير</td>
+                    </tr>
+                </table>
+                
+                <div class="info-box">
+                    <strong>💡 الفكرة:</strong> تستخدم ApexYard كـ <code>ops repo</code> - مركز التحكم - وتحتك بكل مشاريع SaaS منه.
+                </div>
+            </section>
+            
+            <!-- لماذا ApexYard لـ SaaS -->
+            <section>
+                <h2>لماذا تستخدم ApexYard لـ SaaS؟</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>🎯 SDLC صارم</h4>
+                        <p>4 gates واضحة: Design → Build → Review → Merge → QA → Done</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>👥 أدوار محددة</h4>
+                        <p>Backend, Frontend, QA, Security, Product - كل دور له صلاحياته</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📊 رؤية شاملة</h4>
+                        <p>/projects, /inbox, /tasks - كل شيء في مكان واحد</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔄 CI/CD مدمج</h4>
+                        <p>Golden paths للتأكد من جودة كل Pull Request</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>📝 توثيق إجباري</h4>
+                        <p>PRD, Technical Design, AgDR - كل قرار موثق</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>🔒 أمان مدمج</h4>
+                        <td>Hooks تمنع أخطاء commit, secret leak, direct push</td>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Setup -->
+            <section>
+                <h2>الخطوات - من الصفر ل SaaS</h2>
+                
+                <div class="steps">
+                    <div class="step">
+                        <h4>1. Fork ApexYard</h4>
+                        <p>اذهب لـ <a href="https://github.com/me2resh/apexyard" target="_blank">GitHub</a> وـ Fork المشروع في org الخاص بك.</p>
+                        <pre>gh repo fork me2resh/apexyard --clone
+cd apexyard
+git remote add upstream https://github.com/me2resh/apexyard.git</pre>
+                    </div>
+                    
+                    <div class="step">
+                        <h4>2. configure onboarding.yaml</h4>
+                        <p>عدل ملف الإعداد:</p>
+                        <pre>company:
+  name: "Your SaaS Company"
+  mission: "Solve X problem for Y"
+
+team:
+  - name: "Zeyad"
+    role: "full-stack"
+    department: "engineering"
+
+tech_stack:
+  language: "TypeScript"
+  framework: "Next.js"
+  database: "PostgreSQL"
+  hosting: "Vercel"
+  payments: "Stripe"
+  auth: "Clerk"</pre>
+                    </div>
+                    
+                    <div class="step">
+                        <h4>3. Create SaaS Project Registry</h4>
+                        <p>أنشئ ملف <code>apexyard.projects.yaml</code>:</p>
+                        <pre>version: 1
+projects:
+  - name: my-saas-app
+    repo: your-org/my-saas-app
+    docs: projects/my-saas-app
+    workspace: workspace/my-saas-app
+    status: active
+    tier: saas
+    ticket_prefix: "SAAS-"</pre>
+                    </div>
+                    
+                    <div class="step">
+                        <h4>4. Clone وابدأ العمل</h4>
+                        <pre>mkdir -p workspace/my-saas-app
+cd workspace/my-saas-app
+# أو clone الـ repo لو موجود
+git clone https://github.com/your-org/my-saas-app.git .</pre>
+                    </div>
+                </div>
+                
+                <div class="success">
+                    <strong>✅ النتيجة:</strong> الآن عندك ops repo مركزي يربط كل مشاريع SaaS!
+                </div>
+            </section>
+            
+            <!-- هيكل SaaS في ApexYard -->
+            <section>
+                <h2>هيكل SaaS ضمن ApexYard</h2>
+                <pre>
+apexyard/ (ops repo)
+├── apexyard.projects.yaml    ← سجل كل مشاريعك
+├── projects/                 ← توثيق كل مشروع
+│   └── my-saas-app/
+│       ├── README.md         ← Overview
+│       ├── roadmap.md
+│       └── architecture/
+│           └── c4-context.md
+├── workspace/                ← أكواد المشاريع (gitignored)
+│   └── my-saas-app/
+│       ├── app/             ← Next.js App
+│       ├── lib/             ← Utils (Stripe, Clerk)
+│       ├── prisma/          ← Database
+│       └── docs/
+│           └── agdr/        ← قرارات تقنية
+└── .claude/                 ← ApexYard rules & skills
+                </pre>
+                
+                <h3>مثال هيكل Next.js SaaS:</h3>
+                <pre>
+my-saas-app/
+├── app/
+│   ├── (auth)/              # Login, Register
+│   ├── (dashboard)/        # Protected App
+│   ├── api/
+│   │   ├── webhooks/       # Stripe webhooks
+│   │   └── auth/           # Clerk callbacks
+├── components/
+│   ├── ui/                 # shadcn/ui
+│   └── saas/               # Features
+├── lib/
+│   ├── db.ts               # Prisma
+│   ├── stripe.ts           # Stripe SDK
+│   ├── auth.ts             # Clerk
+│   └── tenant.ts           # Multi-tenancy
+├── prisma/
+│   └── schema.prisma
+└── .env.local
+                </pre>
+            </section>
+            
+            <!-- SDLC مع ApexYard -->
+            <section>
+                <h2>دورة حياة التطوير (SDLC)</h2>
+                <div class="diagram">
+                    <div class="box">Design</div>
+                    <span class="arrow">→</span>
+                    <div class="box">Build</div>
+                    <span class="arrow">→</span>
+                    <div class="box">Review</div>
+                    <span class="arrow">→</span>
+                    <div class="box">Merge</div>
+                    <span class="arrow">→</span>
+                    <div class="box">QA</div>
+                    <span class="arrow">→</span>
+                    <div class="box">Done</div>
+                </div>
+                
+                <h3>كل Gate له شروط:</h3>
+                <table>
+                    <tr>
+                        <th>Gate</th>
+                        <th>قبل</th>
+                        <th>التأكد</th>
+                    </tr>
+                    <tr>
+                        <td>1. Design → Build</td>
+                        <td>PRD معتمد + Tickets</td>
+                        <td>ملف PRD موجود</td>
+                    </tr>
+                    <tr>
+                        <td>2. Build → Review</td>
+                        <td>Tests > 80% coverage</td>
+                        <td>CI passes + Lint</td>
+                    </tr>
+                    <tr>
+                        <td>3. Review → Merge</td>
+                        <td>Code Review + CEO Approval</td>
+                        <td>PR approved</td>
+                    </tr>
+                    <tr>
+                        <td>4. Merge → QA</td>
+                        <td>CI أخضر</td>
+                        <td>Checks pass</td>
+                    </tr>
+                    <tr>
+                        <td>5. QA → Done</td>
+                        <td>Acceptance Criteria محققة</td>
+                        <td>QA Engineer يوافق</td>
+                    </tr>
+                </table>
+                
+                <div class="note">
+                    <strong>💡 Tip:</strong> في ApexYard كل PR = تذكرة واحدة فقط. لا تخلط أكثر من feature في نفس PR!
+                </div>
+            </section>
+            
+            <!-- استخدام الأدوار -->
+            <section>
+                <h2>استخدم الأدوار (Roles)</h2>
+                <p>في ApexYard كل دور له صلاحيات. اشتغل كـ:</p>
+                
+                <table>
+                    <tr>
+                        <th>الدور</th>
+                        <th>مهمته في SaaS</th>
+                    </tr>
+                    <tr>
+                        <td>Full-stack Engineer</td>
+                        <td>يبدأ من الصفر يبني Features</td>
+                    </tr>
+                    <tr>
+                        <td>Backend Engineer</td>
+                        <td>API, Database, Integrations</td>
+                    </tr>
+                    <tr>
+                        <td>Frontend Engineer</td>
+                        <td>UI/UX, Dashboard, Components</td>
+                    </tr>
+                    <tr>
+                        <td>QA Engineer</td>
+                        <td>اختبار الـ acceptance criteria</td>
+                    </tr>
+                    <tr>
+                        <td>Security Auditor</td>
+                        <td>فحص الثغرات قبل release</td>
+                    </tr>
+                    <tr>
+                        <td>Product Manager</td>
+                        <td>تحديد priorities, كتابة PRD</td>
+                    </tr>
+                </table>
+                
+                <h3>مثال:</h3>
+                <pre>
+# تعمل كـ Full-stack Engineer
+"Build the user authentication feature"
+
+# تعمل كـ QA Engineer  
+"Verify the signup flow"
+
+# تعمل كـ Security Auditor
+"Review this PR for vulnerabilities"
+                </pre>
+            </section>
+            
+            <!-- إدارة التذاكر -->
+            <section>
+                <h2>إدارة التذاكر (Tickets)</h2>
+                <div class="steps">
+                    <div class="step">
+                        <h4>1. قبل أي كود: /start-ticket</h4>
+                        <p>لازم تعلن التذكرة النشطة عشان الـ hook يتيح لك التعديل.</p>
+                        <pre>/start-ticket 42
+# أو
+/start-ticket your-org/my-saas-app#42</pre>
+                    </div>
+                    
+                    <div class="step">
+                        <h4>2. اسم الـ Branch</h4>
+                        <p>اتبع规则: <code>{type}/{TICKET-ID}-{description}</code></p>
+                        <pre>feature/SAAS-42-user-auth
+fix/SAAS-43-stripe-webhook
+chore/SAAS-44-upgrade-deps</pre>
+                    </div>
+                    
+                    <div class="step">
+                        <h4>3. عنوان الـ PR</h4>
+                        <pre>feat(SAAS-42): add user authentication with Clerk</pre>
+                    </div>
+                </table>
+                
+                <div class="warning">
+                    <strong>⚠️ ممنوع:</strong> 
+                    - ضغط الكود بدون تذكرة
+                    -_branch مش من format الصحيح
+                    - PR بدون ticket ID في العنوان
+                </div>
+            </section>
+            
+            <!-- التوثيق الإجباري -->
+            <section>
+                <h2>التوثيق الإجباري</h2>
+                <p>ApexYard يطلب توثيق لكل شيء:</p>
+                
+                <table>
+                    <tr>
+                        <th>نوع الوثيقة</th>
+                        <th>متى تحتاجها</th>
+                    </tr>
+                    <tr>
+                        <td>PRD</td>
+                        <td>قبل أي feature جديد</td>
+                    </tr>
+                    <tr>
+                        <td>Technical Design</td>
+                        <td>قبل بناء نظام معقد (Payments, Auth)</td>
+                    </tr>
+                    <tr>
+                        <td>AgDR</td>
+                        <td>قبل قرار تقني (DB, Framework, etc)</td>
+                    </tr>
+                    <tr>
+                        <td>C4 Diagram</td>
+                        <td>للتوثيق الـ Architecture</td>
+                    </tr>
+                </table>
+                
+                <h3>أمثلة الأوامر:</h3>
+                <pre>
+/write-spec "user authentication system"
+/decide "PostgreSQL vs MongoDB for SaaS"
+/c4 my-saas-app
+                </pre>
+            </section>
+            
+            <!-- الـ CI/CD -->
+            <section>
+                <h2>الـ CI/CD - Golden Paths</h2>
+                <p>ApexYard يوفر pipelines جاهزة في <code>golden-paths/pipelines/</code>:</p>
+                
+                <table>
+                    <tr>
+                        <th>Pipeline</th>
+                        <th>يفحص</th>
+                    </tr>
+                    <tr>
+                        <td>code-quality.yml</td>
+                        <td>TypeScript, ESLint, Tests, Build</td>
+                    </tr>
+                    <tr>
+                        <td>security.yml</td>
+                        <td>Semgrep + npm audit</td>
+                    </tr>
+                    <tr>
+                        <td>pr-title-check.yml</td>
+                        <td>تأكد من ticket ID في العنوان</td>
+                    </tr>
+                    <tr>
+                        <td>review-check.yml</td>
+                        <td>Block merge بدون review</td>
+                    </tr>
+                </table>
+                
+                <div class="info-box">
+                    <strong>🚀 Copy:</strong> استنسخ الـ pipeline في مشروعك واحركه مع الكود. ApexYard يضمن لك جودة كل PR!
+                </div>
+            </section>
+            
+            <!-- Multi-tenancy في SaaS -->
+            <section>
+                <h2>SaaS Multi-tenancy</h2>
+                <p>كل عميل (tenant) يعزل عن الثاني:</p>
+                
+                <div class="highlight">
+                    <strong>الطريقة الموصى بها - tenant_id Column:</strong>
+                </div>
+                
+                <pre>
+// Prisma Schema
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @free
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @member
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  amount    Int
+  tenantId  String   // ← المفتاح للعزل
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+                </pre>
+                
+                <h3>في كل Query:</h3>
+                <pre>
+// Wrong - تسرب بيانات!
+const orders = await db.order.findMany()
+
+// Correct - معزول!
+const orders = await db.order.findMany({
+  where: { tenantId: currentUser.tenantId }
+})
+                </pre>
+            </section>
+            
+            <!-- الـ Stack التقني -->
+            <section>
+                <h2>الـ Stack الموصى به</h2>
+                <table>
+                    <tr>
+                        <th>Layer</th>
+                        <th>الاختيار</th>
+                        <th>Alternatives</th>
+                    </tr>
+                    <tr>
+                        <td>Frontend</td>
+                        <td><strong>Next.js</strong></td>
+                        <td>React + Vite</td>
+                    </tr>
+                    <tr>
+                        <td>Styling</td>
+                        <td><strong>shadcn/ui</strong></td>
+                        <td>Tailwind only</td>
+                    </tr>
+                    <tr>
+                        <td>Database</td>
+                        <td><strong>Neon (PostgreSQL)</strong></td>
+                        <td>Supabase, Railway</td>
+                    </tr>
+                    <tr>
+                        <td>ORM</td>
+                        <td><strong>Prisma</strong></td>
+                        <td>Drizzle</td>
+                    </tr>
+                    <tr>
+                        <td>Auth</td>
+                        <td><strong>Clerk</strong></td>
+                        <td>Auth0, NextAuth</td>
+                    </tr>
+                    <tr>
+                        <td>Payments</td>
+                        <td><strong>Stripe</strong></td>
+                        <td>Paddle, LemonSqueezy</td>
+                    </tr>
+                    <tr>
+                        <td>Hosting</td>
+                        <td><strong>Vercel</strong></td>
+                        <td>Netlify, Railway</td>
+                    </tr>
+                    <tr>
+                        <td>Analytics</td>
+                        <td><strong>PostHog</strong></td>
+                        <td>Plausible, Mixpanel</td>
+                    </tr>
+                </table>
+            </section>
+            
+            <!-- الـ Workflow اليومي -->
+            <section>
+                <h2>الـ Workflow اليومي</h2>
+                <div class="steps">
+                    <div class="step">
+                        <h4>1. /inbox</h4>
+                        <p>شوف كل اللي عليك (PRs, Issues, Comments)</p>
+                    </div>
+                    <div class="step">
+                        <h4>2. /status</h4>
+                        <p>شوف حالة كل مشاريعك (git, CI)</p>
+                    </div>
+                    <div class="step">
+                        <h4>3. /tasks</h4>
+                        <p>شوف قائمة المهام</p>
+                    </div>
+                    <div class="step">
+                        <h4>4. اختر تذكرة</h4>
+                        <p>cd workspace/my-saas-app && /start-ticket 42</p>
+                    </div>
+                    <div class="step">
+                        <h4>5. اشتغل كـ دورك</h4>
+                        <p>Backend/Frontend/QA - حسب المطلوب</p>
+                    </div>
+                    <div class="step">
+                        <h4>6. اعمل PR</h4>
+                        <p>اكتب title ثابت: type(SAAS-ID): description</p>
+                    </div>
+                    <div class="step">
+                        <h4>7. /stakeholder-update</h4>
+                        <p>كل جمعة: لخص اللي تم</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- الخلاصة -->
+            <section>
+                <h2>ملخص</h2>
+                <div class="success">
+                    <strong>✅ بناء SaaS مع ApexYard = Management Framework</strong>
+                </div>
+                
+                <table>
+                    <tr>
+                        <th>الجزء</th>
+                        <th>أدواتك</th>
+                    </tr>
+                    <tr>
+                        <td>الكود التقني</td>
+                        <td>Next.js + PostgreSQL + Stripe + Clerk</td>
+                    </tr>
+                    <tr>
+                        <td>إدارة المشاريع</td>
+                        <td>ApexYard (roles, workflows, skills)</td>
+                    </tr>
+                    <tr>
+                        <td>الجودة</td>
+                        <td>Golden paths CI + Code Review + Security Audit</td>
+                    </tr>
+                    <tr>
+                        <td>التوثيق</td>
+                        <td>PRD + Tech Design + AgDR + C4</td>
+                    </tr>
+                </table>
+                
+                <div class="highlight">
+                    <strong>🎯 الخطوات التالية:</strong><br><br>
+                    1. Fork apexyard على GitHub<br>
+                    2. configure onboarding.yaml<br>
+                    3. /handover my-saas-app<br>
+                    4. /write-spec "أول feature"<br>
+                    5. /start-ticket 1<br>
+                    6. ابدأ الكود!
+                </div>
+            </section>
+        </div>
+        
+        <footer>
+            <p>مبني بـ ApexYard - Multi-Project Forge</p>
+        </footer>
+    </div>
+</body>
+</html>
