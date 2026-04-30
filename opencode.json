@@ -1,0 +1,77 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "Read AGENTS.md for project rules and workflows",
+    "Read onboarding.yaml for company configuration",
+    "Read apexyard.projects.yaml for portfolio registry"
+  ],
+  "agent": {
+    "rex": {
+      "description": "Code Reviewer - Reviews PRs for quality, security, and standards compliance",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+    "shield": {
+      "description": "Security Reviewer - Scans for vulnerabilities, injection risks, auth issues",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+    "guardian": {
+      "description": "Dependency Auditor - Monitors vulnerabilities, outdated packages, license compliance",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "read": "allow",
+        "glob": "allow"
+      }
+    },
+    "pr-manager": {
+      "description": "Manages PR workflow - creation, review, merge gates",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "read": "allow"
+      }
+    },
+    "ticket-manager": {
+      "description": "Manages ticket lifecycle - creation, tracking, handoffs",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "read": "allow"
+      }
+    }
+  },
+  "permission": {
+    "skill": {
+      ".opencode/skills/*": "allow",
+      ".claude/skills/*": "allow"
+    },
+    "read": {
+      "roles/*": "allow",
+      "workflows/*": "allow",
+      "templates/*": "allow",
+      "docs/*": "allow"
+    },
+    "bash": {
+      "git add *": "deny",
+      "git push main*": "deny",
+      "git push master*": "deny"
+    }
+  }
+}

@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ApexYard - إطار العمل</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 60px 0;
+            border-bottom: 2px solid #4a4a6a;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            font-size: 3em;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.3em;
+            color: #aaa;
+        }
+        
+        h2 {
+            color: #00d4ff;
+            font-size: 1.8em;
+            margin: 40px 0 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #4a4a6a;
+        }
+        
+        h3 {
+            color: #ff6b6b;
+            font-size: 1.4em;
+            margin: 30px 0 15px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        
+        .card {
+            background: #252542;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            border: 1px solid #4a4a6a;
+        }
+        
+        .card:hover {
+            border-color: #00d4ff;
+            transition: 0.3s;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            padding: 15px;
+            text-align: right;
+            border-bottom: 1px solid #4a4a6a;
+        }
+        
+        th {
+            background: #1a1a2e;
+            color: #00d4ff;
+        }
+        
+        tr:hover {
+            background: #2d2d4a;
+        }
+        
+        code {
+            background: #1a1a2e;
+            padding: 3px 8px;
+            border-radius: 4px;
+            color: #ff6b6b;
+            font-family: 'Consolas', monospace;
+        }
+        
+        pre {
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 15px 0;
+            border-right: 4px solid #00d4ff;
+        }
+        
+        .highlight {
+            background: linear-gradient(90deg, #00d4ff, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-item {
+            background: #252542;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid #4a4a6a;
+        }
+        
+        .feature-item .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .feature-item h4 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        
+        ul {
+            margin: 15px 0 15px 30px;
+        }
+        
+        li {
+            margin-bottom: 10px;
+        }
+        
+        .badge {
+            display: inline-block;
+            background: #00d4ff;
+            color: #1a1a2e;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin: 5px;
+        }
+        
+        .badge.red {
+            background: #ff6b6b;
+        }
+        
+        .badge.green {
+            background: #00ff88;
+        }
+        
+        .badge.yellow {
+            background: #ffd700;
+            color: #1a1a2e;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px;
+            margin-top: 60px;
+            border-top: 1px solid #4a4a6a;
+            color: #888;
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .container { padding: 20px 10px; }
+            table { font-size: 0.9em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ApexYard</h1>
+            <p class="subtitle">إطار عمل متكامل لإدارة مشاريع البرمجيات</p>
+            <p>Multi-Project Forge for OpenCode</p>
+        </header>
+
+        <section>
+            <h2>ما هو ApexYard؟</h2>
+            <div class="card">
+                <p><span class="highlight">ApexYard</span> هو إطار عمل مصمم لإدارة محفظة من المشاريع البرمجيات. يعمل كـ "مصنع" للمشاريع - لا تضيف المشروع إلى ApexYard، بل يتم إنشاء المشروع <em>داخل</em> ApexYard.</p>
+                <p>هدفه الأساسي: ضمان أن كل مشروع يوصل إلى مستوى الإنتاج بجودة عالية تحت منهجية تطوير برمجيات صارمة (SDLC).</p>
+            </div>
+        </section>
+
+        <section>
+            <h2>المكونات الرئيسية</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="icon">🎭</div>
+                    <h4>الأدوار Roles</h4>
+                    <p>تحديد هوية ومسؤوليات كل دور في الفريق</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">⚙️</div>
+                    <h4>المهارات Skills</h4>
+                    <p>33 مهارة لأداء عمليات مختلفة</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">🤖</div>
+                    <h4>الوكلاء Agents</h4>
+                    <p>وكلاء متخصصين للمراجعة والأمان</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">📋</div>
+                    <h4>القواعد Rules</h4>
+                    <p>معايير كتابة الكود والاجتماعات</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>دورة التطوير SDLC</h2>
+            <div class="card">
+                <pre>التخطيط → التصميم → البناء → المراجعة → ضمان الجودة → النشر → المراقبة</pre>
+            </div>
+
+            <h3>بوابات العمل (Workflow Gates)</h3>
+            <table>
+                <tr>
+                    <th>البوابة</th>
+                    <th>قبل</th>
+                    <th>التحقق</th>
+                </tr>
+                <tr>
+                    <td>1</td>
+                    <td>التصميم → البناء</td>
+                    <td>PRD معتمد، تذكرات موجودة</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>البناء → المراجعة</td>
+                    <td>الاختبارات تمر، >80% تغطية</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>المراجعة → الدمج</td>
+                    <td>مراجعة معتمدة، CI أخضر</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>الدمج → الإنجاز</td>
+                    <td>ضمان الجودة يverify جميع معايير القبول</td>
+                </tr>
+            </table>
+        </section>
+
+        <section>
+            <h2>الأدوار Roles</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>القسم</th>
+                        <th>الأدوار</th>
+                    </tr>
+                    <tr>
+                        <td>الهندسة</td>
+                        <td>رئيس الهندسة، قائد تقني،Backend، Frontend، ضمان الجودة</td>
+                    </tr>
+                    <tr>
+                        <td>المنتج</td>
+                        <td>رئيس المنتج، مدير المنتج</td>
+                    </tr>
+                    <tr>
+                        <td>التصميم</td>
+                        <td>مصمم UI، مصمم UX</td>
+                    </tr>
+                    <tr>
+                        <td>الأمان</td>
+                        <td>مدير الأمان، مدقق الأمان</td>
+                    </tr>
+                    <tr>
+                        <td>البيانات</td>
+                        <td>محلل البيانات، مهندس البيانات</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2>المهارات Skills</h2>
+            <div class="card">
+                <p>33 مهارة تبدأ بـ <code>/</code></p>
+                <div style="margin-top: 15px;">
+                    <span class="badge">/setup</span>
+                    <span class="badge">/start-ticket</span>
+                    <span class="badge">/code-review</span>
+                    <span class="badge">/security-review</span>
+                    <span class="badge">/audit-deps</span>
+                    <span class="badge">/approve-merge</span>
+                    <span class="badge">/approve-design</span>
+                    <span class="badge">/decide</span>
+                    <span class="badge">/write-spec</span>
+                    <span class="badge">/feature</span>
+                    <span class="badge">/bug</span>
+                    <span class="badge">/task</span>
+                    <span class="badge">/migration</span>
+                    <span class="badge">/projects</span>
+                    <span class="badge">/inbox</span>
+                    <span class="badge">/status</span>
+                    <span class="badge">/tasks</span>
+                    <span class="badge">/roadmap</span>
+                    <span class="badge">/launch-check</span>
+                </div>
+            </div>
+
+            <h3>كيفية الاستخدام</h3>
+            <pre>/code-review
+/start-ticket 42
+/audit-deps</pre>
+            <p>قم بكتابة اسم المهارة وسيتم تحميلها تلقائياً.</p>
+        </section>
+
+        <section>
+            <h2>الوكلاء Agents</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>الوكيل</th>
+                        <th>الوصف</th>
+                        <th>الاستخدام</th>
+                    </tr>
+                    <tr>
+                        <td><strong>rex</strong></td>
+                        <td>مدقق الكود</td>
+                        <td>Use Rex to review PR #42</td>
+                    </tr>
+                    <tr>
+                        <td><strong>shield</strong></td>
+                        <td>مدقق الأمان</td>
+                        <td>Use Shield to review PR #42</td>
+                    </tr>
+                    <tr>
+                        <td><strong>guardian</strong></td>
+                        <td>مدقق التبعيات</td>
+                        <td>Use Guardian to audit dependencies</td>
+                    </tr>
+                    <tr>
+                        <td><strong>pr-manager</strong></td>
+                        <td>مدير طلبات السحب</td>
+                        <td>Use PR Manager to help with PR</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ticket-manager</strong></td>
+                        <td>مدير التذكرات</td>
+                        <td>Use Ticket Manager to create issue</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2>معايير الكود</h2>
+            <div class="card">
+                <ul>
+                    <li><strong>اسم الفرع</strong>: <code>{type}/{TICKET-ID}-{description}</code></li>
+                    <li><strong>عنوان PR</strong>: <code>type(TICKET): description</code></li>
+                    <li><strong>رسالةcommit</strong>: نوع ثم موضوع ثم تفاصيل</li>
+                    <li><strong>لا push مباشر لـ main</strong> - كل شيء عبر PR</li>
+                    <li><strong>اختبارات مطلوبة</strong> - >80% تغطية</li>
+                    <li><strong>مراجعة مطلوبة</strong> قبل الدمج</li>
+                    <li><strong>موافقة CEO</strong> مطلوبة لكل دمج</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2>الملفات Templates</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>القالب</th>
+                        <th>الوصف</th>
+                    </tr>
+                    <tr>
+                        <td>PRD</td>
+                        <td>تعريف ميزة أو منتج جديد</td>
+                    </tr>
+                    <tr>
+                        <td>Technical Design</td>
+                        <td>تخطيط التنفيذ</td>
+                    </tr>
+                    <tr>
+                        <td>ADR</td>
+                        <td>تسجيل قرارات البنية</td>
+                    </tr>
+                    <tr>
+                        <td>AgDR</td>
+                        <td>تسجيل قرارات الوكيل الذكي</td>
+                    </tr>
+                    <tr>
+                        <td>C4</td>
+                        <td>رسوم بيانية للهندسة المعمارية</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2>هيكل الملفات</h2>
+            <div class="card">
+                <pre>apexyard/
+├── AGENTS.md           ← التعليمات الرئيسية
+├── opencode.json      ← إعدادات OpenCode
+├── .opencode/
+│   ├── agents/        ← 5 وكلاء
+│   ├── skills/       ← 33 مهارة
+│   ├── rules/        ← القواعد
+│   ├── commands/     ← الأوامر
+│   └── modes/        ← أوضاع العمل
+├── onboarding.yaml    ← إعدادات الشركة
+├── apexyard.projects.yaml  ← سجل المحفظة
+├── roles/            ← تعريف الأدوار
+├── workflows/        ← عمليات العمل
+├── templates/        ← القوالب
+└── golden-paths/pipelines/  ← CI/CD</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2>الفرق بين Claude Code و OpenCode</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>المكون</th>
+                        <th>Claude Code</th>
+                        <th>OpenCode</th>
+                    </tr>
+                    <tr>
+                        <td>Hooks</td>
+                        <td>18 برنامج shell</td>
+                        <td>صلاحيات + مهارات</td>
+                    </tr>
+                    <tr>
+                        <td>Settings</td>
+                        <td>JSON hooks</td>
+                        <td>opencode.json</td>
+                    </tr>
+                    <tr>
+                        <td>agents</td>
+                        <td>Markdown</td>
+                        <td>Markdown + config</td>
+                    </tr>
+                    <tr>
+                        <td>skills</td>
+                        <td>33</td>
+                        <td>33 (نف��)</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2>الخطوات السريعة</h2>
+            <div class="card">
+                <ol>
+                    <li>افتح OpenCode في مجلد apexyard:
+                        <pre>opencode /home/zeyad/learn/apexyard</pre>
+                    </li>
+                    <li>استخدم المهارات:
+                        <pre>/setup                    ← إعداد，首次تشغيل
+/start-ticket 42         ← إعلان ticket نشط
+/code-review          ← مراجعة الكود
+/approve-merge 42     ← تسجيل موافقة CEO</pre>
+                    </li>
+                    <li>استخدم الوكلاء:
+                        <pre>Use Rex to review PR #42
+Use Shield to review PR #42 for security
+Use Guardian to audit dependencies</pre>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
+        <section>
+            <h2>قواعد مهمة</h2>
+            <div class="card">
+                <ul>
+                    <li><span class="badge red">مهم</span> <strong>تذكر واحد في كل مرة</strong> - لا تبدأ Ticket جديد قبل انتهاء الحالي</li>
+                    <li><span class="badge red">مهم</span> <strong>مراجعتان</strong> - وكيل + إنسان قبل الدمج</li>
+                    <li><span class="badge red">مهم</span> <strong>Ticket أولاً</strong> - استخدم /start-ticket قبل أي تعديل كود</li>
+                    <li><span class="badge green">الاختياري</strong> <strong>مراجعة CEO</strong> - موافقة مدير الشركة للدمج</li>
+                </ul>
+            </div>
+        </section>
+
+        <footer>
+            <p>ApexYard - Multi-Project Forge</p>
+            <p>مسMig据ر من Claude Code إلى OpenCode</p>
+        </footer>
+    </div>
+</body>
+</html>
