@@ -114,7 +114,7 @@ projects:
   # WhatsApp API Wrapper
   # ---------------------------------------------------------------------------
   - name: whatsapp-api
-    repo: me2resh/whatsapp-api
+    repo: zeyadsleem/whatsapp-api
     workspace: workspace/whatsapp-api
     docs: projects/whatsapp-api
     status: active
