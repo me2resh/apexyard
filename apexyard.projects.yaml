@@ -1,0 +1,151 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+#
+# Place this file at the root of your **ops repo** — the fork of apexyard
+# you cloned to govern your portfolio of projects. Rename this file from
+# `.example` to `apexyard.projects.yaml` once you've filled it in.
+#
+# Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
+# aggregate across every project listed below. Most engineering orgs have
+# more than one repo — even a "single product" team usually has an app repo
+# + infra + a marketing site.
+#
+# If you have exactly one repo, register it here as your single entry and
+# every skill still works. There is no single-project fallback mode; the
+# registry is the source of truth for what ApexYard manages.
+#
+
+# Schema version. Bump if breaking changes are introduced.
+version: 1
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+# Each entry registers one repo as ApexYard-managed.
+#
+# Required fields:
+#   name        Short identifier. Lowercase, kebab-case. Must be unique.
+#               This is also the folder name under workspace/ and projects/.
+#   repo        GitHub repo in `owner/name` form. Source of truth for PRs
+#               and issues.
+#   workspace   Local clone path, relative to the ops repo root.
+#               Use `workspace/<name>` by convention. Optional — if you
+#               haven't cloned it locally yet, leave this off and skills
+#               will gracefully degrade to GitHub-only data.
+#   docs        Path to per-project ApexYard docs in the ops repo,
+#               relative to the ops repo root. Convention: `projects/<name>`.
+#   status      One of: active | paused | archived | handover
+#                 active   = under normal management
+#                 paused   = parked, no active work, but still tracked
+#                 archived = retired, kept for history only
+#                 handover = mid-onboarding, /handover assessment in progress
+#
+# Optional fields:
+#   roles       Which ApexYard roles apply to this project. Drives which
+#               agents and review checklists kick in. See roles/ for the
+#               full list.
+#   tier        P0 | P1 | P2 — how strategic the project is. Used by /tasks
+#               to break ties.
+#   tags        Free-form tags for filtering (e.g. ["customer-facing", "internal"])
+#   ticket_prefix
+#               Override the global ticket prefix per project. Useful when
+#               one project uses GH Issues (`GH`) and another uses Linear
+#               (`ENG`).
+#
+
+projects:
+  # ---------------------------------------------------------------------------
+  # Example 1: a customer-facing web app, fully active
+  # ---------------------------------------------------------------------------
+  - name: example-app
+    repo: your-org/example-app
+    workspace: workspace/example-app
+    docs: projects/example-app
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+    tags:
+      - customer-facing
+      - revenue
+    ticket_prefix: GH
+
+  # ---------------------------------------------------------------------------
+  # Example 2: an internal API mid-handover from another team
+  # ---------------------------------------------------------------------------
+  - name: billing-api
+    repo: your-org/billing-api
+    workspace: workspace/billing-api
+    docs: projects/billing-api
+    status: handover
+    tier: P1
+    roles:
+      - tech-lead
+      - backend-engineer
+      - sre
+      - security-auditor
+    tags:
+      - internal
+      - inherited
+    ticket_prefix: GH
+
+  # ---------------------------------------------------------------------------
+  # Example 3: a marketing site managed but with a lighter touch
+  # ---------------------------------------------------------------------------
+  - name: marketing-site
+    repo: your-org/marketing-site
+    # workspace omitted — skills will use GitHub-only data and mark git fields
+    # as "(not cloned)" until you clone it locally.
+    docs: projects/marketing-site
+    status: active
+    tier: P2
+    roles:
+      - frontend-engineer
+      - ui-designer
+    tags:
+      - customer-facing
+      - low-velocity
+
+  # ---------------------------------------------------------------------------
+  # WhatsApp API Wrapper
+  # ---------------------------------------------------------------------------
+  - name: whatsapp-api
+    repo: me2resh/whatsapp-api
+    workspace: workspace/whatsapp-api
+    docs: projects/whatsapp-api
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - backend-engineer
+    tags:
+      - infrastructure
+    ticket_prefix: GH
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+# Optional. Defaults applied to every project that doesn't override them.
+#
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead
+
+# -----------------------------------------------------------------------------
+# Notes
+# -----------------------------------------------------------------------------
+# - The registry is read by /projects, /inbox, /status, /tasks,
+#   /stakeholder-update, and /handover.
+# - Skills never modify this file automatically. To add a project, edit it
+#   by hand or have /handover suggest the snippet.
+# - The `workspace/` directory itself should be in your ops repo's .gitignore
+#   (live clones have their own remotes — don't double-track them).
+# - Per-project docs in `projects/<name>/` ARE committed to the ops repo —
+#   they're the durable record of how each project is managed.
