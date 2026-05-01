@@ -152,7 +152,7 @@ Keep it under 30 lines. The discipline matters more than the documentation.
 |---|---|
 | Hypothesis-then-fix without evidence | "Looks like a trailing-slash issue, let me set `trailingSlash: true`" — without verifying that `/auth/callback.html` was the file actually being requested |
 | Pattern-match on URL shape | "URL ends with `/`, must be a trailing-slash routing problem" — without reading the SPA-fallback code that's the real handler |
-| Multiple parallel fixes | Three PRs (#375, #377, #380) chasing the same symptom because each was based on a different guess |
+| Multiple parallel fixes | Three sequential PRs chasing the same symptom because each was based on a different guess (no evidence test in between cycles) |
 | Skipping the architecture read | Six round trips into "what does the server return?" before reading `not-found.tsx` for the first time |
 | Declaring victory on unit-test pass | "All 101 tests pass" — but the actual repro still 404s in the browser |
 | Treating compounding symptoms as separate bugs | "OK that fixed the 404, now there's a redirect loop" → file new ticket → repeat. Usually it's the same root cause |
