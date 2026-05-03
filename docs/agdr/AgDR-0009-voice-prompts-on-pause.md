@@ -1,6 +1,6 @@
 # Voice prompts on assistant pause — macOS `say` Stop hook + config gate
 
-> **Superseded by:** [AgDR-0013](AgDR-0013-sunset-voice-prompts.md) (feature retired in v1.2.0). The decision recorded below is preserved as history; the feature itself is no longer in the framework.
+**Superseded by:** [AgDR-0013](AgDR-0013-sunset-voice-prompts.md) (feature retired in v1.2.0). The decision recorded below is preserved as history; the feature itself is no longer in the framework.
 
 > In the context of long ApexYard sessions where the assistant pauses for human input ("approved?", "merge X?", "design call: a/b/c?") and the user has stepped away from the keyboard, facing zero attentional signal that input is needed, I decided to ship a configurable Stop hook that speaks the question aloud via macOS `say` (Daniel voice for a Jarvis-from-Iron-Man feel) gated behind a project-config flag defaulting to OFF, to achieve attentional surfacing without forcing TTS on every adopter, accepting that the initial phase is macOS-only and uses a heuristic question-detector rather than ML.
 

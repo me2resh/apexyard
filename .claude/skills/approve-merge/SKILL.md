@@ -185,7 +185,7 @@ Earlier versions of this skill stopped after writing the marker and required a s
 
 The hardened structured-marker format (introduced in the same change) closes the bypass surface that the two-message ceremony was indirectly hedging against — the model writing a marker via raw `echo` to short-circuit approval. Once that bypass is mechanically blocked, the second message has no work left to do.
 
-See AgDR-0012 (or 0013 — depends on whether voice-removal lands first) for the full trade-off.
+See AgDR-0012 for the full trade-off.
 
 ## Anti-pattern
 
