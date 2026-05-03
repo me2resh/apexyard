@@ -11,6 +11,18 @@ Adopt an external repo into ApexYard management. The skill reads the target repo
 
 This is the bridge between "we just inherited this codebase" and "this codebase is now governed by our normal SDLC".
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Usage
 
 ```
@@ -409,15 +421,19 @@ If yes:
 
 1. **Locate the registry**: `apexyard.projects.yaml` at the root of the ops repo. If missing, first copy from `apexyard.projects.yaml.example` and show the user a warning: `⚠ Registry didn't exist — created from .example. You may need to fill in other projects.`
 
-2. **Append the entry**. Use `yq` if available for a safe YAML edit, otherwise append as plain text with careful indentation:
+2. **Append the entry**. Use `yq` if available for a safe YAML edit, otherwise append as plain text with careful indentation. Resolve the registry path via the helper (single-fork or split-portfolio — same code path):
 
    ```bash
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   REGISTRY=$(portfolio_registry)
+
    # Prefer yq for correctness
    if command -v yq >/dev/null 2>&1; then
-     yq eval -i '.projects += [{"name": "{name}", "repo": "{owner/name}", "workspace": "workspace/{name}", "docs": "projects/{name}", "status": "handover", "roles": [{roles}]}]' apexyard.projects.yaml
+     yq eval -i '.projects += [{"name": "{name}", "repo": "{owner/name}", "workspace": "workspace/{name}", "docs": "projects/{name}", "status": "handover", "roles": [{roles}]}]' "$REGISTRY"
    else
      # Fallback: plain text append
-     cat >> apexyard.projects.yaml <<'YAML'
+     cat >> "$REGISTRY" <<'YAML'
      - name: {name}
        repo: {owner/name}
        workspace: workspace/{name}
@@ -433,9 +449,9 @@ If yes:
 3. **Validate the result**:
 
    ```bash
-   # Prefer yq or python -c 'import yaml; yaml.safe_load(open("apexyard.projects.yaml"))'
-   yq eval '.' apexyard.projects.yaml >/dev/null 2>&1 \
-     || python3 -c 'import sys, yaml; yaml.safe_load(open("apexyard.projects.yaml"))' 2>&1
+   # Prefer yq or python -c 'import yaml; yaml.safe_load(open(path))'
+   yq eval '.' "$REGISTRY" >/dev/null 2>&1 \
+     || python3 -c "import sys, yaml; yaml.safe_load(open('$REGISTRY'))" 2>&1
    ```
 
    If validation fails: **restore the previous version** from a backup made before the write, print the parse error, and tell the user to fix it manually. Never leave the registry in a broken state.
