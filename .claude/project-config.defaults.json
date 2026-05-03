@@ -131,5 +131,12 @@
     "max_chars": 200,
     "rate_wpm": 180,
     "trigger": "questions-only"
+  },
+
+  "portfolio": {
+    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing onboarding.yaml + apexyard.projects.yaml). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md.",
+    "registry": "./apexyard.projects.yaml",
+    "projects_dir": "./projects",
+    "ideas_backlog": "./projects/ideas-backlog.md"
   }
 }

@@ -165,7 +165,12 @@ Use this mode if you're on GitHub Free with any project you don't want named pub
 └── portfolio/        ← private repo (registry + per-project docs — never goes public)
 ```
 
-Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself), so all the existing skills work without modification.
+Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml` and `projects/` through one of two mechanisms:
+
+- **Config block (recommended, framework ≥ #145).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../portfolio/apexyard.projects.yaml` and `../portfolio/projects`. The `_lib-portfolio-paths.sh` helper resolves both. A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
+- **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block.
+
+The `/split-portfolio` skill (introduced #146) automates the full migration flow including the config-block write — see § "Migrating from single-fork to split-portfolio" below for adopters who already pushed private project names to a public fork.
 
 ### Setup — 7 steps, ~6 minutes
 
@@ -225,7 +230,50 @@ git commit -m "chore: initialise private portfolio"
 git push
 ```
 
-#### 6. Gitignore the portfolio paths in the fork + symlink
+#### 6. Gitignore the portfolio paths in the fork + configure path resolution
+
+The recommended path is the **config block** (framework version ≥ #145). The symlink approach below is the legacy fallback for older framework versions — both work.
+
+##### Recommended: config-block mode
+
+```bash
+cd ~/ops/apexyard
+
+# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+cat >> .gitignore <<'EOF'
+
+# Portfolio data lives in a separate private repo (split-portfolio mode).
+# See docs/multi-project.md.
+apexyard.projects.yaml
+projects
+EOF
+
+# If projects/README.md is currently tracked from the upstream framework,
+# untrack it so the config-block resolution can take its place:
+git rm -r --cached projects 2>/dev/null || true
+
+# Write the portfolio: config block pointing at the sibling repo.
+# Paths resolve relative to the ops-fork root (this directory).
+cat > .claude/project-config.json <<'JSON'
+{
+  "portfolio": {
+    "registry": "../portfolio/apexyard.projects.yaml",
+    "projects_dir": "../portfolio/projects",
+    "ideas_backlog": "../portfolio/projects/ideas-backlog.md"
+  }
+}
+JSON
+
+git add .gitignore .claude/project-config.json
+git commit -m "chore: configure split-portfolio mode (config-block path resolution)"
+git push
+```
+
+The `SessionStart` hook chain calls `portfolio_validate` from `_lib-portfolio-paths.sh` on every session start. If the resolved registry / projects_dir / ideas_backlog paths are broken (typo, missing file, etc.), you'll see a one-line banner naming the failure. Silent on success.
+
+##### Legacy: symlink-based mode (framework < #145)
+
+If you're on an older framework version that doesn't have the `portfolio:` config block, fall back to symlinks. The skills resolve through them transparently — same end result, less first-class:
 
 ```bash
 cd ~/ops/apexyard
@@ -287,17 +335,25 @@ In exchange, **zero of your private project names ever land on a public GitHub r
 
 ### Migrating from single-fork to split-portfolio
 
-If you've already started in single-fork mode and pushed private project names to your public fork, the recovery flow is:
+If you've already started in single-fork mode and pushed private project names to your public fork, run the **`/split-portfolio`** skill (introduced #146) — it automates the full destructive recovery flow with explicit operator-confirmation gates at each step:
+
+```
+/split-portfolio              # full migration — 10 steps, all gated
+/split-portfolio --verify     # read-only state report, no destructive ops
+/split-portfolio --dry-run    # walk through each step printing the commands, execute none
+```
+
+The skill performs:
 
 1. Push the current public fork's main to a backup branch (`backup-pre-rewrite`) for safety.
 2. Reset main to the commit before the bulk-handover (or use `git filter-repo` for older history) to remove the registry + `projects/` from public main.
-3. Force-push main.
+3. Force-push main with `--force-with-lease`.
 4. Create the private portfolio repo and push the extracted registry + `projects/` content into it.
-5. Symlink + gitignore as in step 6 above.
-6. **Redact any GitHub Issue or Pull Request bodies** that named the projects — `gh issue edit <n> --body-file ...` and `gh pr edit <n> --body-file ...`. The original text survives in the timeline API but is hidden from casual viewers + search engines.
-7. Delete the backup branch after a soak window.
+5. Write the `portfolio:` config block in `.claude/project-config.json` pointing at the sibling repo (or symlinks if you'd rather — your choice, prompted at the relevant step).
+6. **Redact any GitHub Issue or Pull Request bodies** that named the projects — surfaces the timeline-API survival caveat explicitly so you don't have false confidence.
+7. Offer to delete the backup branch after a soak window (default: keep for 7 days).
 
-A `/split-portfolio` migration helper to automate this flow is tracked at [me2resh/apexyard#143](https://github.com/me2resh/apexyard/issues/143). Until that ships, the steps above are manual.
+If you can't run the skill (e.g. you're on a framework version that predates it), the manual recipe above still works step-by-step — see `docs/multi-project.md` history before #146 for the original step list.
 
 ---
 

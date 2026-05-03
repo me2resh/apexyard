@@ -9,6 +9,18 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 Manage the product roadmap as a single durable file. The skill is intentionally low-ceremony: a roadmap is a markdown file with milestones, each containing a table of items. `/roadmap` reads it, edits it, and renders it.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Activated role
 
 When `/roadmap` runs, activate the **[Head of Product](../../../roles/product/head-of-product.md)** role — they own roadmap prioritisation, strategic sequencing, and milestone decisions. For adding a specific item with a PRD, chain to `/write-spec` which activates the [Product Manager](../../../roles/product/product-manager.md) instead. For items that require data-driven reprioritisation, involve the [Product Analyst](../../../roles/product/product-analyst.md).
