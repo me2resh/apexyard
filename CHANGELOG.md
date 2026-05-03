@@ -109,7 +109,7 @@ Migrations are high-blast-radius work that sit awkwardly inside the standard bui
 ### Stats
 
 - **17 commits** on `main` since v0.2.0 (9 features, 8 fixes), all PR-merged.
-- **17 hooks** wired in `.claude/settings.json` (up from 15 in v0.2).
+- **18 hooks** wired in `.claude/settings.json` (up from 15 in v0.2).
 - **32 skills** available as slash commands (up from 27 in v0.2).
 - **9 modular rule files** in `.claude/rules/` (unchanged).
 

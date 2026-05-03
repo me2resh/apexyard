@@ -29,7 +29,7 @@ Chosen: **`portfolio:` block in `.claude/project-config.{defaults,}.json` + help
 
 Three reasons it wins:
 
-1. **Reuses existing patterns.** Adopters who already configured `voice_prompts` or `leak_protection` or any of the other config blocks already understand this. Single conceptual model.
+1. **Reuses existing patterns.** Adopters who already configured `leak_protection` or `ticket` or any of the other config blocks already understand this. Single conceptual model.
 2. **Self-healing surfaces failures early.** A broken `portfolio.registry` path no longer waits until next-skill-invocation — it shows at session start. Same shape as the existing `check-upstream-drift.sh` banner: silent on success, loud on failure, never blocks the session.
 3. **`/split-portfolio` ships the migration as code, not docs.** The recovery flow is destructive enough (force-push, body redaction) that a documented step-list is genuinely error-prone. A skill captures the right sequence, the operator-confirmation gates at every destructive step, the timeline-API survival caveat, and the idempotent re-run path.
 
