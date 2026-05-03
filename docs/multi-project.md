@@ -6,9 +6,26 @@ ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard
 
 ---
 
-## TL;DR
+## Two setup modes — pick the one that matches your privacy needs
 
-| | ApexYard |
+ApexYard ships two supported patterns. **Read this section before you fork** — picking the wrong one and pushing private project names to a public fork is hard to recover from cleanly (the GitHub PR / Issue edit history survives a force-push).
+
+| | Single-fork mode (default) | Split-portfolio mode |
+| --- | --- | --- |
+| **Repos** | One: your fork of `me2resh/apexyard` | Two: public fork **+** a separate private repo for the portfolio |
+| **Where the registry lives** | `apexyard.projects.yaml` in the fork | `apexyard.projects.yaml` in the private repo, symlinked into the fork |
+| **Where `projects/<name>/` lives** | Inside the fork | Inside the private repo, symlinked into the fork |
+| **Public exposure** | Every registered project name + handover finding is on a public GitHub repo | Public fork holds only framework files; private repo holds your portfolio data |
+| **Daily workflow** | Same | Same — skills resolve through the symlinks transparently |
+| **Pick this if…** | All your projects are already public, OR you're on GitHub Pro / Team / Enterprise (which support private forks of public repos) | You're on GitHub Free with any project you don't want named publicly |
+
+**The trip-wire**: GitHub Free disallows changing a fork's visibility — you cannot make a fork of a public repo private after the fact. Combined with the framework's default of committing the registry to the fork, free-tier adopters with any private project silently publish their portfolio names the moment they push. The split-portfolio mode below is the supported way around this.
+
+---
+
+## TL;DR — single-fork mode (default)
+
+| | ApexYard (single-fork) |
 | --- | --- |
 | **What you install** | A fork of `me2resh/apexyard`, cloned locally. No `.apexyard/` symlinks, no nested installs. |
 | **What governs the portfolio** | `apexyard.projects.yaml` at the root of your fork |
@@ -16,7 +33,9 @@ ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard
 | **Where live working copies live** | `workspace/<name>/` inside your fork, gitignored |
 | **Where the registry, roadmap, ideas, updates live** | All inside your fork, alongside the apexyard primitives |
 | **How upgrades flow** | `git pull upstream main` from `me2resh/apexyard` |
-| **Best for** | CTOs, engineering leads, Chief-of-Staff roles managing 2+ repos (or 1 repo with intent to grow) |
+| **Best for** | CTOs, engineering leads, Chief-of-Staff roles managing 2+ repos (or 1 repo with intent to grow) — **all projects public, OR you have GitHub Pro / Team / Enterprise** |
+
+If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode--public-framework--private-portfolio) further down.
 
 ---
 
@@ -131,6 +150,154 @@ You should see one row per registered project. Then:
 ```
 
 Each aggregates across every registered project. You're live.
+
+---
+
+## Split-portfolio mode — public framework + private portfolio
+
+Use this mode if you're on GitHub Free with any project you don't want named publicly. The fork stays public + upstream-aligned; a separate private repo holds the registry + per-project docs.
+
+### Layout
+
+```
+~/ops/
+├── apexyard/         ← public fork of me2resh/apexyard (framework code + tooling)
+└── portfolio/        ← private repo (registry + per-project docs — never goes public)
+```
+
+Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself), so all the existing skills work without modification.
+
+### Setup — 7 steps, ~6 minutes
+
+#### 1. Fork apexyard on GitHub
+
+Same as single-fork mode. Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard) → click **Fork**. Lands in your account as `your-org/apexyard` (public). Keep the name as `apexyard`.
+
+#### 2. Create an empty private repo for your portfolio
+
+```bash
+gh repo create your-org/ops --private \
+  --description "ApexYard private portfolio: registry + per-project handover docs"
+```
+
+`your-org/ops` is the conventional name; pick whatever you like. The framework doesn't care about the name — only the local path.
+
+#### 3. Clone both side-by-side
+
+```bash
+mkdir ~/ops && cd ~/ops
+gh repo clone your-org/apexyard
+gh repo clone your-org/ops portfolio
+```
+
+Resulting layout:
+
+```
+~/ops/
+├── apexyard/         ← public fork
+└── portfolio/        ← private (currently empty)
+```
+
+#### 4. Add `upstream` for future updates
+
+```bash
+cd ~/ops/apexyard
+git remote add upstream https://github.com/me2resh/apexyard.git
+```
+
+#### 5. Initialise the private portfolio
+
+```bash
+cd ~/ops/portfolio
+
+cat > apexyard.projects.yaml <<EOF
+version: 1
+projects: []
+defaults:
+  status: active
+  ticket_prefix: GH
+EOF
+
+mkdir projects
+
+git add apexyard.projects.yaml projects
+git commit -m "chore: initialise private portfolio"
+git push
+```
+
+#### 6. Gitignore the portfolio paths in the fork + symlink
+
+```bash
+cd ~/ops/apexyard
+
+# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+cat >> .gitignore <<'EOF'
+
+# Portfolio data lives in a separate private repo (split-portfolio mode).
+# See docs/multi-project.md.
+apexyard.projects.yaml
+projects
+EOF
+
+# If projects/README.md is currently tracked from the upstream framework,
+# untrack it so the symlink can take its place:
+git rm -r --cached projects 2>/dev/null || true
+
+# Symlink the registry and projects/ into the portfolio repo:
+ln -s ../portfolio/apexyard.projects.yaml apexyard.projects.yaml
+ln -s ../portfolio/projects projects
+
+git add .gitignore
+git commit -m "chore: configure split-portfolio mode (registry + projects/ in private sibling repo)"
+git push
+```
+
+#### 7. Verify
+
+From the fork dir:
+
+```bash
+cd ~/ops/apexyard
+/projects   # should resolve through the symlink and report 0 entries (or whatever's in your portfolio)
+```
+
+Adopt your first project with `/handover` — it writes to `../portfolio/projects/<name>/` and appends to `../portfolio/apexyard.projects.yaml`, both committed only to the private portfolio repo. The public fork stays slim.
+
+### Daily workflow under split mode
+
+```bash
+cd ~/ops/apexyard      # framework changes go here, push to public fork
+cd ~/ops/portfolio     # registry + project docs changes go here, push to private repo
+```
+
+Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-update`, `/handover`) work from the apexyard dir — they resolve paths through the symlinks. Skills that touch framework files only (`/update`, `/release`) operate on the apexyard dir alone.
+
+### Upstream sync under split mode
+
+`/update` works the same. The upstream framework occasionally ships changes to `projects/README.md` (the framework's per-project docs convention). After the symlink, your fork's `projects/README.md` is replaced by the portfolio's own README. If a future upstream sync wants to update `projects/README.md`, you'll see a conflict; resolve by either accepting the upstream version (re-tracks the file, replacing the symlink behaviour for that one path) or keeping your symlink. Most upstream releases don't touch this file.
+
+### What this mode trades off
+
+- **Two repos to maintain** instead of one. Both live in the same GitHub account; trivial overhead.
+- **Two clones on each machine.** Cross-machine setup is `gh repo clone your-org/apexyard && gh repo clone your-org/ops portfolio` instead of one clone.
+- **No automatic GitHub-UI fork-of-the-portfolio.** The portfolio repo is independent. Backups happen via your normal git push to your private GitHub repo.
+- **One conflict path on `/update`** (the `projects/README.md` case above). Resolved manually if it ever fires.
+
+In exchange, **zero of your private project names ever land on a public GitHub repo**, ever.
+
+### Migrating from single-fork to split-portfolio
+
+If you've already started in single-fork mode and pushed private project names to your public fork, the recovery flow is:
+
+1. Push the current public fork's main to a backup branch (`backup-pre-rewrite`) for safety.
+2. Reset main to the commit before the bulk-handover (or use `git filter-repo` for older history) to remove the registry + `projects/` from public main.
+3. Force-push main.
+4. Create the private portfolio repo and push the extracted registry + `projects/` content into it.
+5. Symlink + gitignore as in step 6 above.
+6. **Redact any GitHub Issue or Pull Request bodies** that named the projects — `gh issue edit <n> --body-file ...` and `gh pr edit <n> --body-file ...`. The original text survives in the timeline API but is hidden from casual viewers + search engines.
+7. Delete the backup branch after a soak window.
+
+A `/split-portfolio` migration helper to automate this flow is tracked at [me2resh/apexyard#143](https://github.com/me2resh/apexyard/issues/143). Until that ships, the steps above are manual.
 
 ---
 

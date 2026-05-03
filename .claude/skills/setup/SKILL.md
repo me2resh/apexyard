@@ -41,6 +41,48 @@ GitHub Issues for tracking, 1-week sprints."
 
 **Do NOT ask sequential questions.** The whole point of this skill is to collapse the discovery into one natural-language exchange. The user describes their world; you parse it.
 
+### Step 2a: Privacy gate — ask if any projects are private
+
+Before parsing the description into config, ask one privacy question — this determines whether the adopter needs single-fork or split-portfolio mode (see `docs/multi-project.md`):
+
+```
+Quick one before I propose your config: are any of the projects you'll
+manage on this fork private (i.e. not visible to the public)?
+
+Why I'm asking: GitHub Free disallows changing a fork's visibility, so
+the standard fork-and-commit setup will silently publish your private
+project names on a public GitHub repo. If any project is private, I'll
+walk you through the split-portfolio mode (a separate private repo for
+the registry, public fork stays slim).
+
+[y / n / "I'm on GitHub Pro/Team/Enterprise" — last option supports
+private forks of public repos and avoids the issue.]
+```
+
+Branch on the answer:
+
+- **n** (all projects public) → continue with **single-fork mode** (default; the rest of this skill applies as-is).
+- **paid plan** (Pro / Team / Enterprise) → continue with **single-fork mode**, but mention that the registry will be on the (private-fork-eligible) fork and is fine.
+- **y** (any private projects on GitHub Free) → switch to **split-portfolio mode** (Step 2b below).
+
+Detection of an existing setup: if `git remote get-url origin` resolves to a fork that contains a symlinked `apexyard.projects.yaml` (i.e. `test -L apexyard.projects.yaml`), the adopter is already in split-portfolio mode — skip Step 2b and proceed normally with the registry behind the symlink.
+
+### Step 2b: Walk through split-portfolio mode (only if Step 2a triggered)
+
+The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — public framework + private portfolio". This skill should walk through it interactively rather than dumping the doc:
+
+1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
+2. **Pick the private repo name**: default suggestion `your-org/ops`. Operator confirms or overrides.
+3. **Create the private repo**: `gh repo create your-org/<name> --private --description "..."`. Confirm before running.
+4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name> portfolio`.
+5. **Initialise the portfolio**: `apexyard.projects.yaml` + empty `projects/` dir + initial commit + push. Same content as the doc's step 5.
+6. **Gitignore + symlink in the fork**: append `.gitignore` lines for `apexyard.projects.yaml` + `projects`, untrack any tracked `projects/README.md` from the upstream framework, create symlinks pointing at `../portfolio/apexyard.projects.yaml` and `../portfolio/projects`. Stage `.gitignore` for commit; the symlinks themselves are gitignored.
+7. **Verify**: `test -L apexyard.projects.yaml && test -L projects` → both should report symlinks. Confirm to the operator.
+
+Then proceed to Step 3 with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
+
+**Do NOT auto-migrate** an adopter who's already in single-fork mode with private project names already pushed. Direct them to the migration guide in `docs/multi-project.md` § "Migrating from single-fork to split-portfolio" — that flow involves a force-push history rewrite, redacting GitHub Issue / PR bodies, and a backup-branch dance, and is destructive enough to warrant a deliberate, eyes-open run rather than a `/setup` side-effect.
+
 ### Step 3: Parse and map to defaults
 
 From the user's description, extract:
