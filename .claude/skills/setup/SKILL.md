@@ -62,10 +62,12 @@ Quick one before I propose your config: are any of the projects you'll
 manage on this fork private (i.e. not visible to the public)?
 
 Why I'm asking: GitHub Free disallows changing a fork's visibility, so
-the standard fork-and-commit setup will silently publish your private
-project names on a public GitHub repo. If any project is private, I'll
-walk you through the split-portfolio mode (a separate private repo for
-the registry, public fork stays slim).
+under the standard fork-and-commit setup you might accidentally publish
+your private project names on a public GitHub repo (a stray `git push`
+after registering them — I won't push without your approval, but the
+risk is on the adopter once the data is committed locally). If any
+project is private, I'll walk you through the split-portfolio mode (a
+separate private repo for the registry, public fork stays slim).
 
 [y / n / "I'm on GitHub Pro/Team/Enterprise" — last option supports
 private forks of public repos and avoids the issue.]

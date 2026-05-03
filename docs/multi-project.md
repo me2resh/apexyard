@@ -19,7 +19,7 @@ ApexYard ships two supported patterns. **Read this section before you fork** —
 | **Daily workflow** | Same | Same — skills resolve through the symlinks transparently |
 | **Pick this if…** | All your projects are already public, OR you're on GitHub Pro / Team / Enterprise (which support private forks of public repos) | You're on GitHub Free with any project you don't want named publicly |
 
-**The trip-wire**: GitHub Free disallows changing a fork's visibility — you cannot make a fork of a public repo private after the fact. Combined with the framework's default of committing the registry to the fork, free-tier adopters with any private project silently publish their portfolio names the moment they push. The split-portfolio mode below is the supported way around this.
+**The trip-wire**: GitHub Free disallows changing a fork's visibility — you cannot make a fork of a public repo private after the fact. Combined with the framework's default of committing the registry to the fork, free-tier adopters with any private project risk accidentally publishing their portfolio names with a stray push (the framework itself never pushes without operator approval, but once the registry is committed locally the next push exposes it). The split-portfolio mode below is the supported way around this.
 
 ---
 
