@@ -22,7 +22,14 @@
       "Docs": ["Driver", "Acceptance Criteria"],
       "Bug": ["Given / When / Then", "Repro"]
     },
-    "skip_marker": "<!-- validate-issue-structure: skip -->"
+    "skip_marker": "<!-- validate-issue-structure: skip -->",
+    "_bootstrap_skills_comment": "Skills that run BEFORE any ticket can exist (fork bootstrap, project handover, framework upstream-sync). When one of these is active (marker at .claude/session/active-bootstrap), require-active-ticket.sh exempts the gate. The marker is written by the skill itself on entry, cleared on completion, AND reset at SessionStart so a stale marker can't carry over. See AgDR-0011-bootstrap-skill-exemption.md and me2resh/apexyard#150.",
+    "bootstrap_skills": [
+      "setup",
+      "handover",
+      "update",
+      "split-portfolio"
+    ]
   },
 
   "branch": {

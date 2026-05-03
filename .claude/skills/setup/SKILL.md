@@ -30,6 +30,20 @@ Re-running `/setup` on an already-configured fork shows the current config and a
 
 ## Process
 
+### Step 0: Mark this session as bootstrap (REQUIRED)
+
+`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at `.claude/session/active-bootstrap` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
+
+Run this **before any tool calls that edit files**:
+
+```bash
+mkdir -p .claude/session && echo "setup" > .claude/session/active-bootstrap
+```
+
+The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bootstrap-marker.sh`, in case this skill is interrupted).
+
+See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
+
 ### Step 1: Check current state
 
 Read `onboarding.yaml`. Two modes:
@@ -211,6 +225,14 @@ I'll need: repo name (owner/repo) and a short project name.
 
 If yes → append to `apexyard.projects.yaml`, stage alongside `onboarding.yaml`.
 If no → skip. They can add projects later with `/handover`.
+
+### Step 8: Clear the bootstrap marker (REQUIRED)
+
+```bash
+rm -f .claude/session/active-bootstrap
+```
+
+Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the stale marker on the next session.
 
 ## Rules
 

@@ -47,6 +47,17 @@ Refusal at any of these gates is silent on every other check — show only the r
 
 ## Process
 
+### 0. Mark this session as bootstrap (REQUIRED for non-`--verify` modes)
+
+`/split-portfolio` rewrites fork-root files (`.gitignore`, `.claude/project-config.json`, registry symlinks) which the `require-active-ticket.sh` PreToolUse hook would block — and the whole point of the migration is that the fork's existing private project names should no longer be referenced, so even filing a placeholder ticket is awkward. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
+
+```bash
+# Only on full / --dry-run modes. --verify is read-only and doesn't need the marker.
+mkdir -p .claude/session && echo "split-portfolio" > .claude/session/active-bootstrap
+```
+
+Clear the marker at the end of the migration (or on a confirmed-abort). If the skill is interrupted mid-flow, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
+
 ### --verify mode (no destructive ops, safe to run anytime)
 
 1. Source `_lib-read-config.sh` and `_lib-portfolio-paths.sh`.
@@ -326,6 +337,14 @@ Re-running the skill on a partially-migrated fork picks up where it left off:
 | All complete | Run --verify only and exit 0 |
 
 The `--dry-run` flag walks through every step printing the commands but executes none. Useful for the operator to preview the destructive ops before running real.
+
+## Cleanup (REQUIRED before exit)
+
+```bash
+rm -f .claude/session/active-bootstrap
+```
+
+Run on every exit path (successful migration, confirmed abort, refusal-in-flight). If the skill is interrupted before this step, `clear-bootstrap-marker.sh` clears the stale marker on the next session.
 
 ## Rules
 

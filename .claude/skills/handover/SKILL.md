@@ -48,6 +48,16 @@ The architecture stub is **written once** and never overwritten — it's a start
 
 ## Process
 
+### 0. Mark this session as bootstrap (REQUIRED)
+
+`/handover` may run before any tracker tickets exist for the project being adopted, so the `require-active-ticket.sh` PreToolUse hook would block the registry / `projects/<name>/` writes the skill needs. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
+
+```bash
+mkdir -p .claude/session && echo "handover" > .claude/session/active-bootstrap
+```
+
+Clear the marker on completion (Step "Post-Handover Checklist" below). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
+
 ### 1. Locate the target repo
 
 If a path is given, use it. If a URL is given, prompt the user to clone it into `workspace/<name>/` first (don't clone automatically — that's a side-effect with cost). If nothing is given, ask:
@@ -236,6 +246,14 @@ If no risks match a row, omit that row. If fewer than 3 actions come out, add:
 
 - `{next} /code-review the most-recent PR on this repo as Rex to calibrate review standards`
 - `{next} Stakeholder sync with the previous owner to cover context the static read couldn't surface`
+
+## Cleanup (REQUIRED before exit)
+
+```bash
+rm -f .claude/session/active-bootstrap
+```
+
+Always remove the bootstrap marker on a clean exit. If the skill is interrupted before this step, `clear-bootstrap-marker.sh` clears the stale marker on the next session.
 
 ## Post-Handover Checklist
 

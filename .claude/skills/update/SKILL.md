@@ -46,6 +46,16 @@ On up-to-date: one line, no state change.
 
 ## Process
 
+### 0. Mark this session as bootstrap (REQUIRED)
+
+`/update` edits framework-root files (resolving merge conflicts, updating CLAUDE.md imports, etc.) which the `require-active-ticket.sh` PreToolUse hook would otherwise block when the only "ticket" is the upstream-sync work itself. Write a marker so the hook exempts this skill (it's on the default `bootstrap_skills` list in `.claude/project-config.defaults.json`):
+
+```bash
+mkdir -p .claude/session && echo "update" > .claude/session/active-bootstrap
+```
+
+Clear the marker on completion (last step of this skill). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
+
 ### 1. Pre-flight
 
 Run these checks in order. On first failure, stop and explain.
@@ -335,6 +345,14 @@ Two reasons:
 ### Dry-run semantics
 
 `--dry-run` simulates step 3 (preview) only. It does NOT simulate the merge itself — running `git merge --no-commit --no-ff` as a dry-run leaves the working tree in a staged state that's easy to accidentally commit. If the preview says N commits to pull in, the user should run `/update` for real to see the merge.
+
+## Cleanup (REQUIRED before exit)
+
+```bash
+rm -f .claude/session/active-bootstrap
+```
+
+Always remove the bootstrap marker on a clean exit (after the sync branch is ready to push, or on a confirmed-abort during conflict resolution). If the skill is interrupted, `clear-bootstrap-marker.sh` clears the stale marker on the next session.
 
 ## Related
 

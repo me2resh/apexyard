@@ -15,6 +15,10 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/clear-bootstrap-marker.sh\"'"
           }
         ]
       }
@@ -150,6 +154,14 @@
             "type": "command",
             "if": "Bash(gh api *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
           }
         ]
       }

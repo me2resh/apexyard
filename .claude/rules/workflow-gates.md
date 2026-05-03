@@ -36,6 +36,23 @@ Do not start coding until **all** of these exist in your ticket tracker:
 - Technical tasks broken down
 - Tickets moved to "Todo" or "In Progress"
 
+### Bootstrap-skill exemption
+
+The pre-build gate is enforced mechanically by `require-active-ticket.sh`, which fires on `Edit`, `Write`, `MultiEdit`, **and** `Bash` (the Bash matcher uses `_lib-detect-bash-write.sh` to detect `>` redirection, `tee`, `sed -i`, `python -c '…write…'`, `node -e '…writeFile…'`, etc. — closing the bypass surface from me2resh/apexyard#151).
+
+A small set of **bootstrap-class skills** runs before any portfolio is configured, before any project is registered, and therefore before any tracker tickets can exist. For these, the gate is exempt:
+
+- `/setup` — first-run framework bootstrap on a fresh fork
+- `/handover` — adopting an external project (registry / `projects/<name>/` writes happen before the project's own tracker is wired up)
+- `/update` — upstream sync (touches framework files; the only "ticket" for this work is the sync itself)
+- `/split-portfolio` — destructive migration to split-portfolio mode (rewriting fork-root files; existing private-name tickets being redacted *as the work proceeds*)
+
+The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters extend it via `.claude/project-config.json` shallow-merge if they have custom bootstrap skills.
+
+**Mechanism:** each bootstrap skill writes its name to `.claude/session/active-bootstrap` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook sweeps stale markers from interrupted sessions so a crashed / killed skill can't leave the exemption open forever.
+
+See AgDR-0011 + me2resh/apexyard#150 for the full design rationale.
+
 ## Migration Gate (3a) — dedicated ticket + AgDR
 
 Any edit to a file that matches the migration-path patterns (configurable via `.claude/project-config.json` → `migration_paths`) requires:
