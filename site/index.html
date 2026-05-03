@@ -457,6 +457,42 @@ a:hover { color: var(--accent); }
   letter-spacing: 0.03em;
   text-transform: lowercase;
 }
+/* Tab strip — one tab per demo flow, lives where the title used to. The active tab gets an
+   accent underline. Auto-advance is JS-driven; tabs are also clickable to jump directly. */
+.shell-demo__tabs {
+  display: flex;
+  flex: 1 1 auto;
+  margin-left: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shell-demo__tabs::-webkit-scrollbar { display: none; }
+.shell-demo__tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-faint);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.shell-demo__tab:hover,
+.shell-demo__tab:focus-visible {
+  color: var(--ink-soft);
+  outline: none;
+}
+.shell-demo__tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+@media (max-width: 720px) {
+  .shell-demo__tab { padding: 0.25rem 0.5rem; font-size: 10px; }
+}
 .shell-demo__replay {
   display: none;
   margin-left: auto;
@@ -1353,15 +1389,20 @@ footer.foot {
       <a href="#quickstart" class="cta cta--ghost">or see the 3-step quickstart ↓</a>
     </div>
 
-    <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of a full ticket lifecycle in apexyard, from inbox pickup to QA sign-off">
-      <div class="shell-demo__chrome" aria-hidden="true">
-        <span class="shell-demo__dots">
+    <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of apexyard flows — one ticket lifecycle, /handover, /setup, /fan-out">
+      <div class="shell-demo__chrome">
+        <span class="shell-demo__dots" aria-hidden="true">
           <span class="shell-demo__dot"></span>
           <span class="shell-demo__dot"></span>
           <span class="shell-demo__dot is-warn"></span>
         </span>
-        <span class="shell-demo__title">claude code - apexyard - one ticket, start to finish</span>
-        <button type="button" class="shell-demo__replay" id="shell-lifecycle-replay" aria-label="Replay the lifecycle demo">replay ↻</button>
+        <div class="shell-demo__tabs" role="tablist" aria-label="apexyard demo flows">
+          <button type="button" class="shell-demo__tab is-active" role="tab" aria-selected="true"  data-tab="0">one ticket</button>
+          <button type="button" class="shell-demo__tab"           role="tab" aria-selected="false" data-tab="1">/handover</button>
+          <button type="button" class="shell-demo__tab"           role="tab" aria-selected="false" data-tab="2">/setup</button>
+          <button type="button" class="shell-demo__tab"           role="tab" aria-selected="false" data-tab="3">/fan-out</button>
+        </div>
+        <button type="button" class="shell-demo__replay" id="shell-lifecycle-replay" aria-label="Replay the active demo">replay ↻</button>
       </div>
       <div class="shell-demo__body" id="shell-lifecycle-body">
         <div class="line sys">Inbox:</div>
@@ -1446,11 +1487,11 @@ footer.foot {
         <span>Role definitions across 5 departments</span>
       </div>
       <div class="hero__metric">
-        <strong>32</strong>
+        <strong>39</strong>
         <span>Skills (slash commands)</span>
       </div>
       <div class="hero__metric">
-        <strong>18</strong>
+        <strong>24</strong>
         <span>Mechanical gates (shell hooks)</span>
       </div>
       <div class="hero__metric">
@@ -1819,92 +1860,207 @@ confirm it skips the missing column before merge."</span></pre>
   a.addEventListener('click', assemble);
 })();
 
-// ---- full lifecycle shell animation (hero) ----
-// The demo lives in the hero so it's visible on load - IntersectionObserver
-// still used so the play trigger stays consistent, and the hasPlayed gate
-// ensures it only auto-plays once. Falls back to delayed auto-play if IO is
-// missing. Respects prefers-reduced-motion - static content stays, no
-// animation. The small 17rem shell-demo--tall viewport scrolls to the
-// bottom on each new line so old lines push up and out, like a terminal.
+// ---- multi-tab shell animation (hero) ----
+// One terminal, four flow scripts (one per tab). The active tab plays
+// line-by-line; on completion the demo auto-advances to the next tab and
+// loops at the end. Tab buttons are also clickable to jump directly.
+//
+// Lives in the hero so it's visible on load. IntersectionObserver kicks
+// off the auto-play once the demo scrolls into view; auto-advance keeps
+// going from there. Respects prefers-reduced-motion (static content stays,
+// no JS-driven animation, no auto-advance).
 (function () {
   var body = document.getElementById('shell-lifecycle-body');
   var replay = document.getElementById('shell-lifecycle-replay');
   var wrapper = document.getElementById('shell-lifecycle');
+  var tabBtns = wrapper ? wrapper.querySelectorAll('.shell-demo__tab') : [];
   if (!body || !wrapper) return;
 
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     return;
   }
 
-  // Script: [type, text, delayAfterMs, typeSpeedMs (0 = instant)]
+  // Each script entry: [type, text, delayAfterMs, typeSpeedMs (0 = instant)]
   // Types: sys (narrated agent action / header), you (human input, typed),
-  //        ok (success line), muted (dim detail), blank (empty spacer).
-  // Autonomous by default - the ONLY human touchpoints are the two `you`
-  // responses (plan approval + push approval) and the CEO 👍 wait/marker.
-  var script = [
-    ['sys',   'Inbox:',                                                                    200, 0],
-    ['muted', '  #58 · Add CSV export to reports · P1 · your-org/billing-api',             800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Picking up #58...',                                                         400, 0],
-    ['ok',    '  ✓ branch feature/GH-58-csv-export',                                       300, 0],
-    ['muted', '  Tech Lead role: planning',                                                800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Plan for #58:',                                                             350, 0],
-    ['muted', '  1. CsvExporter service (domain layer)',                                   250, 0],
-    ['muted', '  2. GET /reports/:id/export endpoint',                                     250, 0],
-    ['muted', '  3. 12 unit + 1 integration test',                                         450, 0],
-    ['sys',   'Approve plan? (y/n)',                                                       500, 0],
-    ['you',   'y',                                                                         700, 200],
-    ['blank', '',                                                                          200, 0],
-    ['muted', 'Backend Engineer role: implementing',                                       500, 0],
-    ['ok',    '  ✓ src/domain/csv-exporter.ts',                                            300, 0],
-    ['ok',    '  ✓ src/handlers/export-report.handler.ts',                                 300, 0],
-    ['ok',    '  ✓ tests pass locally',                                                    700, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Detected decision: papaparse vs csv-stringify',                             400, 0],
-    ['muted', '  AgDR-0014 · chose csv-stringify (zero deps)',                             800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Local checks:',                                                             350, 0],
-    ['ok',    '  ✓ lint  ✓ types  ✓ 147 tests  ✓ 1.2mb build',                             800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Ready to push PR #84?',                                                     500, 0],
-    ['you',   'y',                                                                         700, 200],
-    ['blank', '',                                                                          200, 0],
-    ['ok',    'Pushed · Opened PR #84 · feat(#58): add CSV export',                        800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Rex reviewing a3f9c21...',                                                  500, 0],
-    ['muted', '  Architecture · PASS (domain clean)',                                      250, 0],
-    ['muted', '  Tests        · 94% coverage',                                             250, 0],
-    ['muted', '  AgDR         · AgDR-0014 linked',                                         250, 0],
-    ['muted', '  Glossary     · 5 terms',                                                  300, 0],
-    ['ok',    '  Verdict      · APPROVE - deferring to CEO',                               800, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Waiting for CEO 👍',                                                       1500, 0],
-    ['blank', '',                                                                          200, 0],
-    ['ok',    'CEO 👍',                                                                    500, 0],
-    ['ok',    '  ✓ squashed as 8b2f4c1',                                                   250, 0],
-    ['ok',    '  ✓ branch deleted',                                                        250, 0],
-    ['ok',    '  ✓ #58 → QA state (not Done yet)',                                         700, 0],
-    ['blank', '',                                                                          200, 0],
-    ['sys',   'Pipeline on main:',                                                         350, 0],
-    ['ok',    '  ✓ lint  ✓ test  ✓ build  ✓ deploy-staging',                               900, 0],
-    ['blank', '',                                                                          200, 0],
-    ['muted', 'QA Engineer role: verifying on staging',                                    500, 0],
-    ['ok',    '  ✓ AC1 · export button renders',                                           250, 0],
-    ['ok',    '  ✓ AC2 · CSV columns + escaping correct',                                  250, 0],
-    ['ok',    '  ✓ AC3 · 10k rows in <5s',                                                 250, 0],
-    ['ok',    '  ✓ regression clean',                                                      350, 0],
-    ['ok',    'QA sign-off: #58 ready for Done',                                           900, 0],
-    ['blank', '',                                                                          200, 0],
-    ['ok',    'Done · #58 · 14m 32s dev + 3m 10s QA',                                        0, 0]
+  //        cmd (slash-command invocation, typed), ok (success line),
+  //        muted (dim detail), blank (empty spacer).
+  // Scripts roughly match in length so the auto-advance cadence feels even.
+  var scripts = [
+    /* tab 0 — one ticket lifecycle (the canonical headline flow) */
+    [
+      ['sys',   'Inbox:',                                                                    200, 0],
+      ['muted', '  #58 · Add CSV export to reports · P1 · your-org/billing-api',             800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Picking up #58...',                                                         400, 0],
+      ['ok',    '  ✓ branch feature/GH-58-csv-export',                                       300, 0],
+      ['muted', '  Tech Lead role: planning',                                                800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Plan for #58:',                                                             350, 0],
+      ['muted', '  1. CsvExporter service (domain layer)',                                   250, 0],
+      ['muted', '  2. GET /reports/:id/export endpoint',                                     250, 0],
+      ['muted', '  3. 12 unit + 1 integration test',                                         450, 0],
+      ['sys',   'Approve plan? (y/n)',                                                       500, 0],
+      ['you',   'y',                                                                         700, 200],
+      ['blank', '',                                                                          200, 0],
+      ['muted', 'Backend Engineer role: implementing',                                       500, 0],
+      ['ok',    '  ✓ src/domain/csv-exporter.ts',                                            300, 0],
+      ['ok',    '  ✓ src/handlers/export-report.handler.ts',                                 300, 0],
+      ['ok',    '  ✓ tests pass locally',                                                    700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Detected decision: papaparse vs csv-stringify',                             400, 0],
+      ['muted', '  AgDR-0014 · chose csv-stringify (zero deps)',                             800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Local checks:',                                                             350, 0],
+      ['ok',    '  ✓ lint  ✓ types  ✓ 147 tests  ✓ 1.2mb build',                             800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Ready to push PR #84?',                                                     500, 0],
+      ['you',   'y',                                                                         700, 200],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'Pushed · Opened PR #84 · feat(#58): add CSV export',                        800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Rex reviewing a3f9c21...',                                                  500, 0],
+      ['muted', '  Architecture · PASS (domain clean)',                                      250, 0],
+      ['muted', '  Tests        · 94% coverage',                                             250, 0],
+      ['muted', '  AgDR         · AgDR-0014 linked',                                         250, 0],
+      ['muted', '  Glossary     · 5 terms',                                                  300, 0],
+      ['ok',    '  Verdict      · APPROVE - deferring to CEO',                               800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Waiting for CEO 👍',                                                       1500, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'CEO 👍',                                                                    500, 0],
+      ['ok',    '  ✓ squashed as 8b2f4c1',                                                   250, 0],
+      ['ok',    '  ✓ branch deleted',                                                        250, 0],
+      ['ok',    '  ✓ #58 → QA state (not Done yet)',                                         700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Pipeline on main:',                                                         350, 0],
+      ['ok',    '  ✓ lint  ✓ test  ✓ build  ✓ deploy-staging',                               900, 0],
+      ['blank', '',                                                                          200, 0],
+      ['muted', 'QA Engineer role: verifying on staging',                                    500, 0],
+      ['ok',    '  ✓ AC1 · export button renders',                                           250, 0],
+      ['ok',    '  ✓ AC2 · CSV columns + escaping correct',                                  250, 0],
+      ['ok',    '  ✓ AC3 · 10k rows in <5s',                                                 250, 0],
+      ['ok',    '  ✓ regression clean',                                                      350, 0],
+      ['ok',    'QA sign-off: #58 ready for Done',                                           900, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'Done · #58 · 14m 32s dev + 3m 10s QA',                                     1200, 0]
+    ],
+
+    /* tab 1 — /handover · adopt an external repo into the portfolio */
+    [
+      ['you',   '/handover legacy-billing-api ../legacy-billing-api',                        900, 28],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Reading repo...',                                                           500, 0],
+      ['muted', '  47 files · 12 routes · TypeScript + AWS Lambda',                          400, 0],
+      ['muted', '  No CI · no .env · 18 open issues unstaged',                               700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Quality risks (top 3):',                                                    400, 0],
+      ['muted', '  - No test coverage on /reports/* routes',                                 250, 0],
+      ['muted', '  - CI not configured (golden-paths/pipelines/ci.yml ready to copy)',       250, 0],
+      ['muted', '  - 18-issue backlog needs triage with previous owner',                     600, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Roles to activate: Backend Engineer · QA · Tech Lead',                      700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Append to apexyard.projects.yaml? (y/n)',                                   500, 0],
+      ['you',   'y',                                                                         600, 200],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    '  ✓ projects/legacy-billing-api/handover-assessment.md',                    350, 0],
+      ['ok',    '  ✓ projects/legacy-billing-api/architecture/container.md (stub)',          350, 0],
+      ['ok',    '  ✓ apexyard.projects.yaml updated',                                        800, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Suggested next steps:',                                                     350, 0],
+      ['muted', '  /status legacy-billing-api      · see project state',                     250, 0],
+      ['muted', '  /audit-deps legacy-billing-api · security baseline',                      250, 0],
+      ['muted', '  /code-review (most-recent PR)  · calibrate Rex on the team\'s style',     650, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'Done · legacy-billing-api adopted · 2m 48s',                               1200, 0]
+    ],
+
+    /* tab 2 — /setup · first-run framework bootstrap on a fresh fork */
+    [
+      ['you',   '/setup',                                                                    900, 35],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'onboarding.yaml has placeholder values.',                                   400, 0],
+      ['sys',   'Tell me about your company and tech stack:',                                700, 0],
+      ['you',   'three-person SaaS · property mgmt · TS + React + AWS SAM',                  900, 22],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Parsed:',                                                                   300, 0],
+      ['muted', '  company   · PropManager',                                                 250, 0],
+      ['muted', '  team size · 3',                                                           250, 0],
+      ['muted', '  stack     · TypeScript / React / AWS SAM / DynamoDB',                     600, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Any private projects? (y / n / paid GitHub plan)',                          500, 0],
+      ['you',   'n',                                                                         600, 200],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Proposed config:',                                                          350, 0],
+      ['muted', '  defaults    · trunk-based · GitHub Issues · 1-week sprints',              250, 0],
+      ['muted', '  ticket ref  · GH · branch: feature/GH-N-desc',                            250, 0],
+      ['muted', '  PR title    · type(#N): description',                                     350, 0],
+      ['sys',   'Accept? (y/n)',                                                             500, 0],
+      ['you',   'y',                                                                         600, 200],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    '  ✓ onboarding.yaml staged (review with git diff --cached)',                700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Register your first project? (y/n)',                                        400, 0],
+      ['you',   'y · your-org/propmanager-api',                                              900, 24],
+      ['ok',    '  ✓ apexyard.projects.yaml updated',                                        700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'All set · /handover propmanager-api when you have the repo locally',       1200, 0]
+    ],
+
+    /* tab 3 — /fan-out · spawn N parallel agents on independent tickets */
+    [
+      ['you',   '/fan-out · #42, #43, #44',                                                  900, 28],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Plan:',                                                                     350, 0],
+      ['muted', '  #42 · Add Stripe webhook       · general-purpose · worktree',             250, 0],
+      ['muted', '  #43 · Migrate jobs to BullMQ   · general-purpose · worktree',             250, 0],
+      ['muted', '  #44 · Audit auth flow          · security-reviewer · read-only',          400, 0],
+      ['sys',   'File-independent · no shared writes · spawn 3 in parallel? (y/n)',          500, 0],
+      ['you',   'y',                                                                         600, 200],
+      ['blank', '',                                                                          200, 0],
+      ['sys',   'Spawning 3 agents...',                                                      500, 0],
+      ['ok',    '  [#42] branch feature/GH-42-stripe-webhook',                               220, 0],
+      ['ok',    '  [#43] branch feature/GH-43-bullmq-migration',                             220, 0],
+      ['muted', '  [#44] reading auth/* (35 files)...',                                      700, 0],
+      ['blank', '',                                                                          200, 0],
+      ['muted', '  [#42] webhook handler · idempotency key · 8 tests · all green',           350, 0],
+      ['muted', '  [#43] migration AgDR-0042 · rollback steps · staging tested',             350, 0],
+      ['muted', '  [#44] findings: token rotation gap · no session timeout',                 500, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    '  [#42] PR #91 opened · Rex auto-review running',                           300, 0],
+      ['ok',    '  [#43] PR #92 opened · migration label + AgDR linked',                     300, 0],
+      ['ok',    '  [#44] audit report at projects/web/audit-2026-05.md',                     650, 0],
+      ['blank', '',                                                                          200, 0],
+      ['ok',    'Done · 3 tickets · 2 PRs · 1 audit report',                                 350, 0],
+      ['muted', '  ~16m wall-clock vs ~45m serial',                                         1200, 0]
+    ]
   ];
 
   var timeouts = [];
   var hasPlayed = false;
+  var activeTab = 0;
+  var advancing = false;
+  var manualOverride = false;   // set true when the user clicks a tab or replays manually
 
   function clearTimeouts() {
     timeouts.forEach(function (t) { clearTimeout(t); });
     timeouts = [];
+  }
+
+  function setActiveTab(idx) {
+    activeTab = idx;
+    tabBtns.forEach(function (btn, i) {
+      var on = (i === idx);
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    var titles = ['claude code · one ticket, start to finish',
+                  'claude code · /handover · adopt external repo',
+                  'claude code · /setup · first-run bootstrap',
+                  'claude code · /fan-out · parallel agents'];
+    if (wrapper && titles[idx]) {
+      wrapper.setAttribute('aria-label', 'Demo: ' + titles[idx]);
+    }
   }
 
   function typeInto(target, text, speed, done) {
@@ -1927,19 +2083,34 @@ confirm it skips the missing column before merge."</span></pre>
   }
 
   function scrollToBottom() {
-    // Snap to the bottom after a new line lands. Using scrollHeight
-    // directly keeps it cheap and matches real-terminal behaviour.
     body.scrollTop = body.scrollHeight;
   }
 
-  function play() {
+  function play(tabIdx) {
     clearTimeouts();
+    advancing = false;
+    setActiveTab(tabIdx);
     body.innerHTML = '';
     body.scrollTop = 0;
+    var script = scripts[tabIdx];
     var i = 0;
 
     function next() {
-      if (i >= script.length) return;
+      if (i >= script.length) {
+        // End of script: pause briefly, then auto-advance to the next tab.
+        // The user can interrupt by clicking a tab or pressing replay.
+        if (!advancing) {
+          advancing = true;
+          var nextTab = (tabIdx + 1) % scripts.length;
+          timeouts.push(setTimeout(function () {
+            // If the user clicked a different tab during the pause, the
+            // tab-click handler already kicked off a new play() — don't
+            // override that.
+            if (activeTab === tabIdx) play(nextTab);
+          }, 1800));
+        }
+        return;
+      }
       var entry = script[i];
       var type = entry[0];
       var text = entry[1];
@@ -1959,8 +2130,9 @@ confirm it skips the missing column before merge."</span></pre>
         return;
       }
 
-      if (type === 'you') {
-        // The ONLY type with a prompt - human input marker
+      if (type === 'you' || type === 'cmd') {
+        // The two typed types — `you` for prompt responses, `cmd` for
+        // slash-command invocations. Both render with a `>` prompt.
         var prompt = document.createElement('span');
         prompt.className = 'prompt';
         prompt.textContent = '> ';
@@ -1973,8 +2145,6 @@ confirm it skips the missing column before merge."</span></pre>
           timeouts.push(setTimeout(next, delayAfter));
         });
       } else {
-        // sys / ok / muted / (any other) - autonomous agent output,
-        // rendered as plain text with the type class driving colour
         line.textContent = text;
         scrollToBottom();
         i++;
@@ -1985,30 +2155,43 @@ confirm it skips the missing column before merge."</span></pre>
     next();
   }
 
+  // Tab buttons: click jumps directly to that tab's flow.
+  tabBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = parseInt(btn.getAttribute('data-tab'), 10);
+      if (isNaN(idx)) idx = 0;
+      hasPlayed = true;
+      manualOverride = true;
+      play(idx);
+    });
+  });
+
   if (replay) {
     replay.style.display = 'inline-block';
     replay.addEventListener('click', function () {
       hasPlayed = true;
-      play();
+      manualOverride = true;
+      play(activeTab);
     });
   }
 
-  // Intersection observer - auto-play ONCE when the demo scrolls into view
+  // IntersectionObserver — auto-play tab 0 once the demo scrolls into view;
+  // auto-advance carries the loop from there.
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
         if (entry.isIntersecting && !hasPlayed) {
           hasPlayed = true;
-          timeouts.push(setTimeout(play, 500));
+          timeouts.push(setTimeout(function () { play(0); }, 500));
           io.unobserve(entry.target);
         }
       });
     }, { threshold: 0.3 });
     io.observe(wrapper);
   } else {
-    // Fallback: auto-play on page load after a delay
+    // Fallback: auto-play on page load after a delay.
     timeouts.push(setTimeout(function () {
-      if (!hasPlayed) { hasPlayed = true; play(); }
+      if (!hasPlayed) { hasPlayed = true; play(0); }
     }, 3000));
   }
 })();
