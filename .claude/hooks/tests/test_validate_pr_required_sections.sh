@@ -7,11 +7,18 @@
 #   - pipes a synthetic PreToolUse JSON blob with `gh pr create --body-file <path>`
 #   - asserts exit code + stderr contents
 #
+# The sandbox installs a fake `gh` on PATH (see _lib-mock-gh.sh) so the
+# validator's `gh issue view` call against the PR-title's referenced issue
+# returns synthetic OPEN data — no live-tracker dependency. See
+# me2resh/apexyard#154.
+#
 # Exit 0 if all cases pass; exit 1 on first failure.
 
 set -u
 
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/validate-pr-create.sh"
+# shellcheck source=_lib-mock-gh.sh
+source "$(cd "$(dirname "$0")" && pwd)/_lib-mock-gh.sh"
 if [ ! -x "$HOOK_SRC" ]; then
   echo "FAIL: hook not found or not executable at $HOOK_SRC" >&2
   exit 1
@@ -47,6 +54,7 @@ make_sandbox() {
 run_case() {
   local label="$1" body_content="$2" want_rc="$3" want_stderr_regex="$4"
   local sb; sb=$(make_sandbox)
+  mock_gh_install "$sb"
   local body_file="$sb/body.md"
   printf '%s' "$body_content" > "$body_file"
   local cmd="gh pr create --repo me2resh/apexyard --title 'chore(#113): test' --body-file $body_file"

@@ -1,9 +1,17 @@
 #!/bin/bash
 # Tests for the single-Closes-keyword check in validate-pr-create.sh (#114).
+#
+# Note: the PR title in each case (`chore(#114): test`) references issue #114 in
+# me2resh/apexyard. Rather than depend on that issue staying OPEN forever, the
+# sandbox installs a fake `gh` on PATH (see _lib-mock-gh.sh) that returns a
+# synthetic OPEN response for any `gh issue view`. Removes the live-tracker
+# dependency from the suite. See me2resh/apexyard#154.
 
 set -u
 
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/validate-pr-create.sh"
+# shellcheck source=_lib-mock-gh.sh
+source "$(cd "$(dirname "$0")" && pwd)/_lib-mock-gh.sh"
 PASS=0
 FAIL=0
 FAILED_CASES=""
@@ -34,6 +42,7 @@ make_sandbox() {
 run_case() {
   local label="$1" body_content="$2" want_rc="$3" want_stderr_regex="$4" extra_config="${5-}"
   local sb; sb=$(make_sandbox)
+  mock_gh_install "$sb"
   # Body must satisfy the required-sections check so we're only testing the close-count logic.
   local body_file="$sb/body.md"
   printf '%s\n\n## Testing\nfoo\n\n## Glossary\n| t | d |\n' "$body_content" > "$body_file"
