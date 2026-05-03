@@ -60,6 +60,7 @@ Considered and rejected. The threat model is "agent makes a procedural mistake o
 **Bundle #132 + #48 in one PR.** Specifically:
 
 - New marker format `<pr>-ceo.approved`:
+
   ```
   sha=<40-char hex>
   approved_by=user
@@ -67,6 +68,7 @@ Considered and rejected. The threat model is "agent makes a procedural mistake o
   skill_version=2
   approval_summary="<≤200 char user message snippet>"
   ```
+
   Required fields validated by the merge gate: `sha=`, `approved_by=user`, `skill_version=>=2`. The other fields are audit-only.
 
 - New skill default flow: `/approve-merge <pr>` writes the structured marker AND runs `gh pr merge <pr> --repo <owner/repo> --squash --delete-branch` in the same turn. Opt-out via `/approve-merge <pr> --no-merge`.

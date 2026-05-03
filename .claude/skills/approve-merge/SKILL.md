@@ -169,7 +169,7 @@ If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references
 - You want the marker on disk to unblock a teammate who'll do the merge themselves
 - A regulated environment requires temporal separation between approval and execution
 
-The skill never writes the marker AND deferes the merge in any other case. The default IS auto-merge.
+The skill never writes the marker AND defers the merge in any other case. The default IS auto-merge.
 
 ## Notes
 
