@@ -95,6 +95,7 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    - Append `.gitignore` lines for `apexyard.projects.yaml` and `projects` (so they don't accidentally get staged in the public fork even if the operator runs `git add -A`).
    - Untrack any tracked `projects/README.md` from the upstream framework.
    - Write `.claude/project-config.json` with the `portfolio:` block pointing at the sibling repo:
+
      ```json
      {
        "portfolio": {
@@ -104,9 +105,11 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
        }
      }
      ```
+
    - Stage `.gitignore` and `.claude/project-config.json` for commit (the latter is per-fork, not per-machine, since it points at a public sibling-repo path).
    - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../portfolio/apexyard.projects.yaml` and `../portfolio/projects`. The helper resolves either way.
 7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails — surface the specific failure and ask the operator to fix it before re-running.
+
    ```bash
    source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
    source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
