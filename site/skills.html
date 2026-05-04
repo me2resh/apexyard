@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skills — ApexYard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The full ApexYard slash-command surface — 39 skills, what each one does, and how to invoke it.">
+<meta property="og:title" content="ApexYard skills">
+<meta property="og:description" content="39 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
+<meta property="og:type" content="website">
+<style>
+/* ============================================================
+   ApexYard skills page — mirrors site/index.html design tokens.
+   One typeface, warm cream paper, single warning-red accent.
+   No gradients. No shadows. Sharp corners.
+   ============================================================ */
+
+:root {
+  --paper:    #F4EFE6;
+  --paper-2:  #ECE5D2;
+  --paper-3:  #E0D7BD;
+  --ink:       #1A1612;
+  --ink-soft:  #4A4239;
+  --ink-faint: #877E70;
+  --ink-ghost: #B6AD9B;
+  --accent:      #C8321A;
+  --accent-soft: #E07050;
+  --rule:        #1A1612;
+  --rule-faint:  #B6AD9B;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --max-w:  72rem;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:    #15120D;
+    --paper-2:  #1C1813;
+    --paper-3:  #25201A;
+    --ink:       #F2EBD9;
+    --ink-soft:  #C5BEAA;
+    --ink-faint: #847C68;
+    --ink-ghost: #4A4338;
+    --accent:      #FF6E4A;
+    --accent-soft: #FFA180;
+    --rule:        #F2EBD9;
+    --rule-faint:  #4A4338;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--paper);
+  scroll-behavior: smooth;
+  font-feature-settings: 'calt', 'ss01', 'ss03';
+}
+
+body {
+  font-family: var(--mono);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 400;
+  min-height: 100vh;
+}
+
+::selection { background: var(--accent); color: var(--paper); }
+
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.5rem 1rem;
+  z-index: 10;
+}
+.skip:focus { left: 1rem; top: 1rem; }
+
+.dim { color: var(--ink-faint); }
+
+/* titlebar — same shape as the homepage */
+.titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--rule);
+}
+.titlebar__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0.6rem var(--gutter);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.titlebar__left { display: flex; align-items: center; gap: 0.65rem; }
+.titlebar__dots { display: inline-flex; gap: 0.35rem; }
+.titlebar__dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 1px solid var(--ink-faint);
+}
+.titlebar__dot.is-warn { background: var(--accent); border-color: var(--accent); }
+.titlebar__path {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+}
+.titlebar__path b { color: var(--ink); font-weight: 600; }
+.titlebar__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+}
+.titlebar__right a { color: var(--ink-faint); transition: color 0.15s ease; }
+.titlebar__right a:hover { color: var(--accent); }
+.titlebar__right a.is-cta {
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  padding: 0.3rem 0.7rem;
+}
+.titlebar__right a.is-cta:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 720px) {
+  .titlebar__right { gap: 0.7rem; font-size: 11px; }
+  .titlebar__right a:not(.is-cta):not(.always) { display: none; }
+  .titlebar__right a.always { display: inline; }
+}
+
+/* main */
+main {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 2.75rem var(--gutter) 5rem;
+}
+
+.intro {
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--rule-faint);
+}
+.intro h1 {
+  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.85rem;
+}
+.intro p { color: var(--ink-soft); max-width: 56rem; }
+.intro p + p { margin-top: 0.6rem; }
+.intro__count {
+  display: inline-block;
+  border: 1px solid var(--ink);
+  padding: 0.1rem 0.55rem;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 0.5rem;
+  vertical-align: 1px;
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.25rem;
+  margin: 1.25rem 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.toc a:hover { color: var(--accent); }
+
+/* sections */
+.section { margin: 2.75rem 0 0; }
+.section h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1.1rem;
+}
+.section__intro {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  margin-bottom: 1.25rem;
+  margin-top: -0.4rem;
+}
+
+/* skill row */
+.skill {
+  display: grid;
+  grid-template-columns: minmax(11rem, auto) 1fr;
+  gap: 1rem 2rem;
+  padding: 0.95rem 0;
+  border-bottom: 1px solid var(--rule-faint);
+  align-items: baseline;
+}
+.skill:last-child { border-bottom: 0; }
+.skill__head { font-family: var(--mono); }
+.skill__name {
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.skill__name::before { content: ''; }
+.skill__args {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  margin-top: 0.2rem;
+  word-break: break-word;
+}
+.skill__args:empty { display: none; }
+.skill__desc {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.skill.is-deprecated .skill__name {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+.skill.is-deprecated .skill__desc::before {
+  content: 'Deprecated · ';
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .skill {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+}
+
+/* footer */
+.footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule-faint);
+  color: var(--ink-faint);
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+.footer a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<a href="#main" class="skip">Skip to content</a>
+
+<header class="titlebar">
+  <div class="titlebar__inner">
+    <div class="titlebar__left">
+      <span class="titlebar__dots" aria-hidden="true">
+        <span class="titlebar__dot"></span>
+        <span class="titlebar__dot"></span>
+        <span class="titlebar__dot is-warn"></span>
+      </span>
+      <span class="titlebar__path">~/<b>apexyard</b> <span class="dim">· skills</span></span>
+    </div>
+    <nav class="titlebar__right" aria-label="Primary">
+      <a href="index.html" class="always">home</a>
+      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
+      <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="intro">
+    <h1><span class="intro__count">39 skills</span>The apexyard slash-command surface</h1>
+    <p>Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code> and is invoked from a Claude Code session as <code>/&lt;name&gt;</code>. Some take arguments, some are self-driven. The framework's mechanical hooks (in <code>.claude/hooks/</code>) gate their effects on the rest of the SDLC — for example, <code>/approve-merge</code> writes a marker that <code>block-unreviewed-merge.sh</code> then verifies before the merge actually runs.</p>
+    <p>If you're new, start with <a href="#setup"><code>/setup</code></a> on a fresh fork, then <a href="#tickets"><code>/feature</code></a> or <a href="#tickets"><code>/idea</code></a> to capture work, then <a href="#review"><code>/code-review</code></a> + <a href="#review"><code>/approve-merge</code></a> when a PR is ready to ship.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#setup">setup</a>
+      <a href="#daily">daily ops</a>
+      <a href="#tickets">tickets &amp; ideas</a>
+      <a href="#specs">specs &amp; decisions</a>
+      <a href="#review">review &amp; merge</a>
+      <a href="#architecture">architecture &amp; dev tools</a>
+      <a href="#audits">production-readiness audits</a>
+      <a href="#workflow">workflow primitives</a>
+      <a href="#comms">communications</a>
+      <a href="#deprecated">deprecated</a>
+    </nav>
+  </section>
+
+  <section class="section" id="setup">
+    <h2>Setup &amp; onboarding</h2>
+    <p class="section__intro">Get a fresh fork running, adopt external repos into the portfolio, keep the framework in sync with upstream.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/setup</code>
+        <code class="skill__args">[--reset]</code>
+      </header>
+      <p class="skill__desc">First-run framework bootstrap for a new ApexYard fork. Three exchanges — describe your stack, accept defaults, customize — and the fork is configured. Re-run anytime to update.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/handover</code>
+        <code class="skill__args">&lt;project name&gt; [path or url]</code>
+      </header>
+      <p class="skill__desc">Onboard an external repo into ApexYard management. Reads the target, synthesises a structured handover assessment, and tells you which roles, workflows, and hooks should activate.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/update</code>
+        <code class="skill__args">[--dry-run] [--rebase]</code>
+      </header>
+      <p class="skill__desc">Sync the ApexYard fork with upstream. Previews pending commits, creates a sync branch (direct push to main is blocked), merges or rebases, walks per-file conflicts, leaves the branch ready to push as a PR.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/split-portfolio</code>
+        <code class="skill__args">[--verify | --dry-run]</code>
+      </header>
+      <p class="skill__desc">Migrate a single-fork adopter to split-portfolio mode (public framework + private sibling portfolio). Automates the destructive recovery flow with explicit operator confirmation at every step.</p>
+    </article>
+  </section>
+
+  <section class="section" id="daily">
+    <h2>Daily ops</h2>
+    <p class="section__intro">Where am I, what needs my attention, what should I do next.</p>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/status</code></header>
+      <p class="skill__desc">Snapshot of the current project — git state, open PRs with CI, recent merges, in-progress issue. Multi-project aware. Use to orient yourself in a fresh session.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/inbox</code></header>
+      <p class="skill__desc">Every item across managed projects that needs your attention — PRs to review, issues assigned to you, comments to respond to, blockers. Use to triage the day.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/projects</code></header>
+      <p class="skill__desc">List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/tasks</code></header>
+      <p class="skill__desc">A flat actionable task list with direct URLs for everything needing your action — PRs to review, issues to triage, comments to respond to, failing CI. Multi-project aware.</p>
+    </article>
+  </section>
+
+  <section class="section" id="tickets">
+    <h2>Tickets &amp; ideas</h2>
+    <p class="section__intro">Capture work — from a half-formed idea through a structured ticket the team can pick up.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/idea</code>
+        <code class="skill__args">&lt;short title of the idea&gt;</code>
+      </header>
+      <p class="skill__desc">Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/validate-idea</code>
+        <code class="skill__args">&lt;IDEA-NNN | project-name | free-form description&gt;</code>
+      </header>
+      <p class="skill__desc">Lightweight 5-question idea validation. Sits between <code>/idea</code> and <code>/write-spec</code> as a 10-minute gate that catches "this isn't worth speccing" without heavyweight strategy ceremony.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/feature</code>
+        <code class="skill__args">&lt;short title of the feature&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured feature request ticket with user story, acceptance criteria, and design notes. Use when proposing a new user-facing feature.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/bug</code>
+        <code class="skill__args">&lt;short description of the bug&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/task</code>
+        <code class="skill__args">&lt;short title of the task&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/migration</code>
+        <code class="skill__args">[&lt;project&gt;]</code>
+      </header>
+      <p class="skill__desc">Create a structured database-migration ticket and its matching migration AgDR in one guided flow. Use BEFORE touching any migration files — the <code>require-migration-ticket.sh</code> hook blocks edits otherwise.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/tickets-batch</code>
+        <code class="skill__args">[&lt;optional bulk description&gt;]</code>
+      </header>
+      <p class="skill__desc">File 5–20 structured GitHub Issues in one flow. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket. Output conforms to <code>.ticket.required_sections</code> by construction.</p>
+    </article>
+  </section>
+
+  <section class="section" id="specs">
+    <h2>Specs &amp; decisions</h2>
+    <p class="section__intro">Turn validated ideas into PRDs; record technical decisions as durable artefacts.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/write-spec</code>
+        <code class="skill__args">&lt;feature or problem statement&gt;</code>
+      </header>
+      <p class="skill__desc">Write a feature spec or PRD from a problem statement or feature idea. Use when creating product requirements documents.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/decide</code>
+        <code class="skill__args">&lt;what you're deciding&gt;</code>
+      </header>
+      <p class="skill__desc">Make a technical decision with structured reasoning, creating an Agent Decision Record (AgDR). Use when choosing between libraries, frameworks, implementation approaches, or architectural patterns.</p>
+    </article>
+  </section>
+
+  <section class="section" id="review">
+    <h2>Code review &amp; merge</h2>
+    <p class="section__intro">The mechanical merge gate — Rex review, security audit, CEO approval, design review, dependency audit. Each writes a marker the merge hook verifies.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/code-review</code>
+        <code class="skill__args">&lt;pr-number&gt; [repo]</code>
+      </header>
+      <p class="skill__desc">Review a PR for quality, security, and standards compliance. Invokes the Code Reviewer agent (Rex). Writes the rex-approval marker on success.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/security-review</code>
+        <code class="skill__args">&lt;pr-number&gt; [repo]</code>
+      </header>
+      <p class="skill__desc">Security-focused PR review for vulnerabilities and best practices. Invokes the Security Reviewer agent (Shield).</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/approve-merge</code>
+        <code class="skill__args">&lt;pr-number&gt; [--no-merge]</code>
+      </header>
+      <p class="skill__desc">Record per-PR CEO approval and merge the PR in a single turn. ONLY invoke on an explicit user message that names the PR and says "approved" / "merge" / "ship it" — never on an umbrella "go" / "continue". The marker is structured (<code>sha=</code>, <code>approved_by=user</code>, <code>skill_version=2</code>) so a raw <code>echo</code> bypass is mechanically rejected.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/approve-design</code>
+        <code class="skill__args">&lt;pr-number&gt;</code>
+      </header>
+      <p class="skill__desc">Record per-PR design-review approval so the design-review merge gate lets the PR through. Same per-PR-naming discipline as <code>/approve-merge</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/audit-deps</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Audit dependencies for vulnerabilities, outdated packages, and license compliance.</p>
+    </article>
+  </section>
+
+  <section class="section" id="architecture">
+    <h2>Architecture &amp; dev tools</h2>
+    <p class="section__intro">Diagram the system; debug what's broken with structure rather than ad-hoc patching.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/c4</code>
+        <code class="skill__args">[project-name] [--level=1|2|both] [--force]</code>
+      </header>
+      <p class="skill__desc">Generate C4 Level 1 (System Context) and Level 2 (Container) architecture diagrams for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexyard templates.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/debug</code>
+        <code class="skill__args">[symptom summary]</code>
+      </header>
+      <p class="skill__desc">Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.</p>
+    </article>
+  </section>
+
+  <section class="section" id="audits">
+    <h2>Production-readiness audits</h2>
+    <p class="section__intro"><code>/launch-check</code> runs the full sweep at milestone boundaries; the dimension-specific audits below are the deep-dive companions.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/launch-check</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Production readiness audit — multi-dimension sweep (security, accessibility, compliance, analytics, SEO, performance, monitoring, docs) with a scored go / conditional-go / no-go verdict. Use at milestone boundaries, not on every PR.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/threat-model</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Full STRIDE threat-modelling exercise — Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/accessibility-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Comprehensive WCAG 2.1 AA accessibility audit — perceivable, operable, understandable, and robust criteria across the codebase.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/compliance-check</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">GDPR and ePrivacy compliance audit — cookie consent, privacy policy, data handling, right to deletion, data processing agreements.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/analytics-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Analytics coverage and event taxonomy audit — SDK configuration, event naming, funnel completeness, dashboard existence.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/seo-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Technical SEO audit — meta tags, Open Graph, sitemap, robots.txt, structured data, mobile-friendliness, Core Web Vitals readiness.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/performance-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Performance analysis — bundle size, image optimization, lazy loading, code splitting, caching, Core Web Vitals readiness.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/monitoring-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Observability and incident readiness audit — logging, error tracking, health endpoints, alerting rules, runbooks, incident response.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/docs-audit</code>
+        <code class="skill__args">[project-path]</code>
+      </header>
+      <p class="skill__desc">Documentation completeness audit using the Diataxis framework — tutorials, how-to guides, reference, explanation. Checks README quality, API docs, deployment guides, changelog, and staleness.</p>
+    </article>
+  </section>
+
+  <section class="section" id="workflow">
+    <h2>Workflow primitives</h2>
+    <p class="section__intro">Enable, parallelise, release.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/start-ticket</code>
+        <code class="skill__args">&lt;issue-number&gt; | &lt;owner/repo&gt;#&lt;number&gt;</code>
+      </header>
+      <p class="skill__desc">Declare an active ticket for this session so the ticket-first hook lets code edits through. Run this at the start of any coding work.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/fan-out</code>
+        <code class="skill__args">&lt;task1, task2, ...&gt; | &lt;path/to/tasks.md&gt; | --from-tickets &lt;ref1,ref2,...&gt;</code>
+      </header>
+      <p class="skill__desc">Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation for code-writing tasks and background mode for long runs. Use when the user's request decomposes into independent work items that share no files and have no sequential dependencies.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/release</code>
+        <code class="skill__args">&lt;optional explicit version, e.g. v1.2.0&gt;</code>
+      </header>
+      <p class="skill__desc">Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG draft from conventional commits, open the release PR, and (after merge) tag + push. Framework-only.</p>
+    </article>
+  </section>
+
+  <section class="section" id="comms">
+    <h2>Communications</h2>
+    <p class="section__intro">Roadmap planning + stakeholder updates synthesised from the activity stream.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/roadmap</code>
+        <code class="skill__args">[add | remove | reorder | show] [item]</code>
+      </header>
+      <p class="skill__desc">Update, create, or reprioritise the product roadmap. Supports adding, removing, and reordering milestones, then renders a markdown table per milestone.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/stakeholder-update</code>
+        <code class="skill__args">weekly | monthly | launch</code>
+      </header>
+      <p class="skill__desc">Generate a stakeholder update tailored to audience. Synthesises recent PRs, closed issues, AgDRs, and the roadmap into a narrative.</p>
+    </article>
+  </section>
+
+  <section class="section" id="deprecated">
+    <h2>Deprecated</h2>
+    <p class="section__intro">Kept for redirect-only behaviour while in-flight invocations migrate.</p>
+
+    <article class="skill is-deprecated">
+      <header class="skill__head"><code class="skill__name">/onboard</code></header>
+      <p class="skill__desc">Use <code>/setup</code> for framework configuration, <code>/handover</code> for adding a project to the portfolio. This skill redirects to the correct flow.</p>
+    </article>
+  </section>
+
+  <footer class="footer">
+    <a href="index.html">← apexyard.dev</a>
+    <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github</a>
+    <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog</a>
+    <a href="https://github.com/me2resh/apexyard/tree/main/.claude/skills" target="_blank" rel="noopener">skill source</a>
+  </footer>
+
+</main>
+
+</body>
+</html>
