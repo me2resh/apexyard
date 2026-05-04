@@ -270,7 +270,12 @@ fi
 # Validate branch name has ticket ID
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
-  if ! echo "$CURRENT_BRANCH" | grep -qE '[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'; then
+  # Release-cut branches are exempt — same recognition `validate-branch-name.sh`
+  # added in me2resh/apexyard#168 / #169. Release branches don't carry a
+  # ticket-id because the release itself is the ticket.
+  if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+    :  # release branch, exempt — fall through to the rest of the validator
+  elif ! echo "$CURRENT_BRANCH" | grep -qE '[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'; then
     ERRORS="${ERRORS}Branch '$CURRENT_BRANCH' missing ticket ID.\n"
   fi
 fi
