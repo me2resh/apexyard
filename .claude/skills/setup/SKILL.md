@@ -103,27 +103,27 @@ Detection of an existing setup. Either form counts as "already in split-portfoli
 The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — public framework + private portfolio". This skill walks through it interactively. The recommended path uses the **`portfolio:` config block** (introduced in #145) rather than symlinks — both work, but the config block is the first-class option:
 
 1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
-2. **Pick the private repo name**: default suggestion `your-org/ops`. Operator confirms or overrides.
+2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
 3. **Create the private repo**: `gh repo create your-org/<name> --private --description "..."`. Confirm before running.
-4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name> portfolio`.
+4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name>` (no second arg — the clone defaults to a directory named after the repo, so `your-org/apexyard-portfolio` clones into `apexyard-portfolio/`).
 5. **Initialise the portfolio**: `apexyard.projects.yaml` + empty `projects/` dir + initial commit + push. Same content as the doc's step 5.
 6. **Configure path resolution in the fork** (recommended — config-block mode):
    - Append `.gitignore` lines for `apexyard.projects.yaml` and `projects` (so they don't accidentally get staged in the public fork even if the operator runs `git add -A`).
    - Untrack any tracked `projects/README.md` from the upstream framework.
-   - Write `.claude/project-config.json` with the `portfolio:` block pointing at the sibling repo:
+   - Write `.claude/project-config.json` with the `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
 
      ```json
      {
        "portfolio": {
-         "registry": "../portfolio/apexyard.projects.yaml",
-         "projects_dir": "../portfolio/projects",
-         "ideas_backlog": "../portfolio/projects/ideas-backlog.md"
+         "registry": "../apexyard-portfolio/apexyard.projects.yaml",
+         "projects_dir": "../apexyard-portfolio/projects",
+         "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
        }
      }
      ```
 
    - Stage `.gitignore` and `.claude/project-config.json` for commit (the latter is per-fork, not per-machine, since it points at a public sibling-repo path).
-   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../portfolio/apexyard.projects.yaml` and `../portfolio/projects`. The helper resolves either way.
+   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way.
 7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails — surface the specific failure and ask the operator to fix it before re-running.
 
    ```bash

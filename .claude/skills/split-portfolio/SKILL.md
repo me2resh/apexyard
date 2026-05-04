@@ -129,8 +129,10 @@ Confirm to operator: snapshot exists, file count matches expectation. If not, re
 
 #### Step 3 — Create the private repo
 
+The suggested default name is **`<account>/<fork>-portfolio`** — keeps the relationship to the public fork explicit on GitHub. Compute `<fork>` from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed (e.g. fork = `cos` → suggested portfolio = `cos-portfolio`).
+
 ```
-Suggested name: <account>/ops
+Suggested name: <account>/<fork>-portfolio    (e.g. <account>/apexyard-portfolio)
 Override? (Enter to accept default, or type a different name)
 > _
 

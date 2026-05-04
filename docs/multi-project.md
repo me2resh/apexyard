@@ -161,13 +161,15 @@ Use this mode if you're on GitHub Free with any project you don't want named pub
 
 ```
 ~/ops/
-├── apexyard/         ← public fork of me2resh/apexyard (framework code + tooling)
-└── portfolio/        ← private repo (registry + per-project docs — never goes public)
+├── apexyard/                ← public fork of me2resh/apexyard (framework code + tooling)
+└── apexyard-portfolio/      ← private repo (registry + per-project docs — never goes public)
 ```
+
+The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you'd prefer — the framework only cares about the local path you point the config block at.
 
 Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml` and `projects/` through one of two mechanisms:
 
-- **Config block (recommended, framework ≥ #145).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../portfolio/apexyard.projects.yaml` and `../portfolio/projects`. The `_lib-portfolio-paths.sh` helper resolves both. A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
+- **Config block (recommended, framework ≥ #145).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml` and `../apexyard-portfolio/projects`. The `_lib-portfolio-paths.sh` helper resolves both. A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
 - **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block.
 
 The `/split-portfolio` skill (introduced #146) automates the full migration flow including the config-block write — see § "Migrating from single-fork to split-portfolio" below for adopters who already pushed private project names to a public fork.
@@ -181,26 +183,26 @@ Same as single-fork mode. Visit [`github.com/me2resh/apexyard`](https://github.c
 #### 2. Create an empty private repo for your portfolio
 
 ```bash
-gh repo create your-org/ops --private \
+gh repo create your-org/apexyard-portfolio --private \
   --description "ApexYard private portfolio: registry + per-project handover docs"
 ```
 
-`your-org/ops` is the conventional name; pick whatever you like. The framework doesn't care about the name — only the local path.
+The default convention is **`<fork>-portfolio`** — keeps the relationship to the public fork clear on GitHub and on disk. If your fork is named `your-org/apexyard`, the portfolio is `your-org/apexyard-portfolio`. If you renamed the fork (`your-org/cos`, `your-org/apex`), use `<fork>-portfolio` accordingly. Pick a different name if you prefer — the framework only cares about the local path you point the config block at.
 
 #### 3. Clone both side-by-side
 
 ```bash
 mkdir ~/ops && cd ~/ops
 gh repo clone your-org/apexyard
-gh repo clone your-org/ops portfolio
+gh repo clone your-org/apexyard-portfolio
 ```
 
 Resulting layout:
 
 ```
 ~/ops/
-├── apexyard/         ← public fork
-└── portfolio/        ← private (currently empty)
+├── apexyard/                ← public fork
+└── apexyard-portfolio/      ← private (currently empty)
 ```
 
 #### 4. Add `upstream` for future updates
@@ -213,7 +215,7 @@ git remote add upstream https://github.com/me2resh/apexyard.git
 #### 5. Initialise the private portfolio
 
 ```bash
-cd ~/ops/portfolio
+cd ~/ops/apexyard-portfolio
 
 cat > apexyard.projects.yaml <<EOF
 version: 1
@@ -254,12 +256,14 @@ git rm -r --cached projects 2>/dev/null || true
 
 # Write the portfolio: config block pointing at the sibling repo.
 # Paths resolve relative to the ops-fork root (this directory).
+# If you used a different sibling-dir name than apexyard-portfolio,
+# substitute it in all three paths below.
 cat > .claude/project-config.json <<'JSON'
 {
   "portfolio": {
-    "registry": "../portfolio/apexyard.projects.yaml",
-    "projects_dir": "../portfolio/projects",
-    "ideas_backlog": "../portfolio/projects/ideas-backlog.md"
+    "registry": "../apexyard-portfolio/apexyard.projects.yaml",
+    "projects_dir": "../apexyard-portfolio/projects",
+    "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
   }
 }
 JSON
@@ -292,8 +296,8 @@ EOF
 git rm -r --cached projects 2>/dev/null || true
 
 # Symlink the registry and projects/ into the portfolio repo:
-ln -s ../portfolio/apexyard.projects.yaml apexyard.projects.yaml
-ln -s ../portfolio/projects projects
+ln -s ../apexyard-portfolio/apexyard.projects.yaml apexyard.projects.yaml
+ln -s ../apexyard-portfolio/projects projects
 
 git add .gitignore
 git commit -m "chore: configure split-portfolio mode (registry + projects/ in private sibling repo)"
@@ -309,13 +313,13 @@ cd ~/ops/apexyard
 /projects   # should resolve through the symlink and report 0 entries (or whatever's in your portfolio)
 ```
 
-Adopt your first project with `/handover` — it writes to `../portfolio/projects/<name>/` and appends to `../portfolio/apexyard.projects.yaml`, both committed only to the private portfolio repo. The public fork stays slim.
+Adopt your first project with `/handover` — it writes to `../apexyard-portfolio/projects/<name>/` and appends to `../apexyard-portfolio/apexyard.projects.yaml`, both committed only to the private portfolio repo. The public fork stays slim.
 
 ### Daily workflow under split mode
 
 ```bash
 cd ~/ops/apexyard      # framework changes go here, push to public fork
-cd ~/ops/portfolio     # registry + project docs changes go here, push to private repo
+cd ~/ops/apexyard-portfolio     # registry + project docs changes go here, push to private repo
 ```
 
 Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-update`, `/handover`) work from the apexyard dir — they resolve paths through the symlinks. Skills that touch framework files only (`/update`, `/release`) operate on the apexyard dir alone.
@@ -327,7 +331,7 @@ Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-
 ### What this mode trades off
 
 - **Two repos to maintain** instead of one. Both live in the same GitHub account; trivial overhead.
-- **Two clones on each machine.** Cross-machine setup is `gh repo clone your-org/apexyard && gh repo clone your-org/ops portfolio` instead of one clone.
+- **Two clones on each machine.** Cross-machine setup is `gh repo clone your-org/apexyard && gh repo clone your-org/apexyard-portfolio` instead of one clone.
 - **No automatic GitHub-UI fork-of-the-portfolio.** The portfolio repo is independent. Backups happen via your normal git push to your private GitHub repo.
 - **One conflict path on `/update`** (the `projects/README.md` case above). Resolved manually if it ever fires.
 
