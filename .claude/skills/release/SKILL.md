@@ -82,7 +82,7 @@ Branch from `dev`: `release/vA.B.C`. Push to `upstream`. Open PR:
 
 - **Base**: `main`
 - **Head**: `release/vA.B.C`
-- **Title**: `release: vA.B.C`
+- **Title**: `release(#<release-ticket>): vA.B.C` — e.g. `release(#160): v1.2.0`. The release-cut ticket (filed via the standard ticket flow) is the natural scope, and `release` was added to the `pr.title_type_whitelist` in #168 so this title shape passes `validate-pr-create.sh` like every other PR title.
 - **Body**: the CHANGELOG draft + an explicit "this PR will tag `vA.B.C` on `main` after merge"
 
 The PR body should aggregate every `Closes #N` from the included commits so that merging the release PR auto-closes all of them on GitHub at once.

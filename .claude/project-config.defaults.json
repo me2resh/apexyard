@@ -75,7 +75,8 @@
       "build",
       "ci",
       "chore",
-      "revert"
+      "revert",
+      "release"
     ],
     "required_sections": [
       "Testing",

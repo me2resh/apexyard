@@ -26,6 +26,17 @@ if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CUR
   exit 0
 fi
 
+# Allow release-cut branches (apexyard#116, AgDR-0007). The /release skill
+# prescribes `release/vN.N.N` (and optionally a `-rcN` suffix) as the
+# canonical name for the dev → main release PR's source branch. This is
+# a narrow, intentional exception to the standard {type}/{TICKET}-{desc}
+# shape — release branches don't carry a ticket-id because the release
+# itself is the ticket. See me2resh/apexyard#168 for why this exception
+# exists.
+if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+  exit 0
+fi
+
 # Load the branch-type whitelist from project config.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 # shellcheck source=./_lib-read-config.sh
