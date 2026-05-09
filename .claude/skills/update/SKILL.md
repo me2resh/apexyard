@@ -257,7 +257,70 @@ git checkout main
 git branch -D "$BRANCH"
 ```
 
-### 8. Final state + next steps
+### 8. Detect deprecated config keys (advisory)
+
+After the merge / rebase has applied (so the new `.claude/project-config.defaults.json` is on disk), scan the adopter's `.claude/project-config.json` for **top-level keys that no longer exist in defaults** — typically a config block removed upstream (e.g. `voice_prompts` removed in me2resh/apexyard#157) that still lingers in the override as dead config.
+
+This is **advisory only**. Custom-extension keys an adopter has added (their own hooks, in-house extensions) are also surfaced — the detector cannot tell them apart from upstream-removed keys, and only the operator can. The y/n/s offer below is the human-in-the-loop step that disambiguates.
+
+#### Detection
+
+Source the helper and read the deprecated key list:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-detect-deprecated-config.sh"
+DEPRECATED=$(detect_deprecated_config_keys)
+```
+
+Return values:
+
+- Empty → nothing to surface, skip to step 9.
+- One or more newline-separated key names → continue.
+
+The helper:
+
+- Reads only **top-level** keys (whole-block removals; sub-key renames are out of scope per the ticket).
+- Whitelists metadata keys with a leading underscore (`_comment`, `_schema_version`, `_team_comment`, etc.) — those aren't deprecated config blocks.
+- Returns silently with exit 1 if `jq` is missing or defaults file is absent (skill should skip detection in that case, not fail).
+
+#### Offer
+
+If `DEPRECATED` is non-empty, format and print:
+
+```
+ApexYard /update detected N config block(s) in .claude/project-config.json
+that no longer exist in upstream defaults:
+
+  - voice_prompts
+  - abandoned_block
+
+These keys may be:
+  (a) dead config from a block the framework removed upstream (e.g.
+      voice_prompts after #157), or
+  (b) custom extension keys you've added intentionally.
+
+The detector can't tell them apart — choose:
+
+  [y] yes, remove the listed keys from .claude/project-config.json
+  [n] no, leave them alone (they're harmless; you can clean up later)
+  [s] show me the keys + their current values before deciding
+```
+
+Read the operator's reply.
+
+| Reply | Action |
+|-------|--------|
+| `y` | Run `remove_deprecated_config_keys` (edits `.claude/project-config.json` in place, no commit), then `git add .claude/project-config.json` to stage the change for the operator's review. Print `Removed N keys. Staged for review — diff with: git diff --staged .claude/project-config.json`. |
+| `n` | Print `Leaving override untouched. Re-run /update later if you change your mind.` and continue to step 9. |
+| `s` | Run `show_deprecated_config_keys` (prints each key + current value), then re-prompt with the same y/n options (no `s` recursion). |
+
+The skill **never auto-removes without explicit `y`**. The skill **never auto-commits** — staging is the contract, the operator owns the commit.
+
+#### Why advisory, not destructive
+
+A custom-extension key indistinguishable from an upstream-removed key is a real possibility (e.g. an adopter who's ahead of defaults with their own block). The cost of incorrectly removing a custom block is much higher than the cost of one extra prompt — the y/n/s pattern matches the rest of `/update`'s "operator owns each material change" stance.
+
+### 9. Final state + next steps
 
 On clean completion, print:
 
@@ -307,7 +370,7 @@ BODY
 Skill done. No remote state changed.
 ```
 
-### 9. Edge cases
+### 10. Edge cases
 
 | Situation | Handling |
 |-----------|----------|
@@ -319,6 +382,9 @@ Skill done. No remote state changed.
 | User chose rebase but has 50+ local commits | Warn about rewriting many SHAs, re-confirm |
 | Merge conflict the user aborts | Restore original branch state, delete sync branch, exit 1 |
 | Tracking issue for the sync doesn't exist | Offer to create one via `gh issue create`, get number, continue |
+| `jq` not installed (deprecated-config detection) | Skip step 8 silently; print one-line warning. The sync itself still completes. |
+| `.claude/project-config.json` missing (no override) | Skip step 8 silently — by definition no deprecated keys to surface. |
+| Operator answered `s` (show) | Print key + value, then re-prompt y/n (no `s` recursion). |
 
 ## Design notes
 

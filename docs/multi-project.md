@@ -531,7 +531,7 @@ Every few weeks, pull the latest apexyard improvements into your fork. The easy 
 /update --dry-run    # preview only, no state change
 ```
 
-`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
+`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.claude/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
 
 If you prefer the raw commands:
 
