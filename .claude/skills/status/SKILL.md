@@ -211,7 +211,7 @@ A compact 4-line "where am I" snapshot — workspace, ticket, branch, role. Desi
 Output shape (me2resh/apexyard#182):
 
 ```
-Active workspace:  curios-dog
+Active workspace:  example-app
 Active ticket:     #42 — Add CSV export
 Branch:            feature/GH-42-csv-export
 Role set:          backend
