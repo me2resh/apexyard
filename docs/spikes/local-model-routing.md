@@ -181,14 +181,17 @@ Summary (3 lines):
 #### Outputs
 
 **A — heuristic:**
+
 ```
 10 PRs pending; dominant type is feat (3/10).
 Highest priority: fix(#211)!: P0 — payment webhook drops events under burst load
 Next action: review fix(#211)! first.
 ```
+
 Quality: 6/10. Counts correctly (10), identifies the P0 correctly, but the "dominant type" framing ("feat 3/10") is mechanically true and humanly useless — readers care about themes ("security batch", "GDPR thread"), not type tallies. No mention of #244 P1 → no real next-action sequencing.
 
 **B1 — llama3.2:3B (3.2B params, Q4_K_M):**
+
 ```
 There are 8 open PRs pending, with a dominant theme of bug fixes and performance optimizations.
 
@@ -196,16 +199,21 @@ The highest-priority item is fix(#211)!: P0 — payment webhook drops events und
 
 Next action: Review the PRs in chronological order, starting with #211, to ensure that all critical issues are addressed before moving on to less urgent tasks.
 ```
+
 Quality: 5/10. Got the P0 right and produced the kind of synthesised line a human reader actually wants ("bug fixes and performance optimizations" is one step closer to themes than "feat 3/10"). **Miscounted: said "8 PRs", actual is 10.** Whiffed on the GDPR / security theme. Last line is generic filler.
+
 - in: 252 tokens, out: 84 tokens, warm wall-clock: **2.48 s**
 
 **B2 — mistral:7B (7.2B params, Q4_0):**
+
 ```
 1. 6 PRs are pending, with a dominant theme of feature implementations and bug fixes.
 2. The highest priority item is the P0 issue (#211) regarding payment webhook drops under burst load.
 3. To address the critical issue, consider merging the payment webhook fix immediately while continuing to review other PRs.
 ```
+
 Quality: 5/10. Got the P0 and the dominant-theme synthesis. **Miscounted: said "6 PRs", actual is 10.** Format-disobedient (numbered the lines despite being asked for plain prose). Skipped #244.
+
 - in: 292 tokens, out: 78 tokens, warm wall-clock: **4.89 s**
 
 **C — Claude Haiku (estimated):** would almost certainly hit ~9/10 — the synthesis quality on a 10-line list is well within the model's capability, and the count-the-list arithmetic is the failure mode that distinguishes Claude from a 3-7B local. Estimated input tokens: ~310 (titles + system prompt). Output: ~80. Cost: ~$0.0001 per call.
@@ -280,6 +288,7 @@ esac
 ```
 
 Skills that opt in call:
+
 ```bash
 if [[ "$(bin/apexyard-local available)" == yes ]]; then
   summary="$(bin/apexyard-local llm --prompt-file /tmp/inbox-summary.prompt)"
