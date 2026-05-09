@@ -197,7 +197,59 @@ run_case "skip marker bypasses validation" \
 # --- Unknown prefix --------------------------------------------------------
 run_case "unknown title prefix → block" \
   2 "unrecognised prefix" \
-  "gh issue create --title '[Spike] explore X' --body 'whatever'"
+  "gh issue create --title '[Epic] big rollup' --body 'whatever'"
+
+# --- Spike: pass path (apexyard#180) ---------------------------------------
+SPIKE_OK_BODY='## Hypothesis
+We believe library X handles 10k events/sec. We will know we are right
+when a 10-minute soak test sustains 10k/s without backpressure.
+
+## Budget
+2 days of one engineer.
+
+## Kill Criteria
+- Library X has no TypeScript types — kill, too much yak-shave for a spike.
+- 10k/s causes >50ms p95 latency in the first hour — kill, prove the bottleneck elsewhere.
+
+## Disposition
+PROMOTE — if the soak test passes, file a [Feature] for production-shaped
+delivery with retry / observability / failover.'
+
+run_case "Spike with all four required sections → pass" \
+  0 "" \
+  "gh issue create --title '[Spike] library X throughput' --body \"$SPIKE_OK_BODY\""
+
+# --- Spike: fail path — missing Disposition --------------------------------
+SPIKE_BAD_BODY='## Hypothesis
+We believe X.
+
+## Budget
+2 days.
+
+## Kill Criteria
+- something'
+
+run_case "Spike missing Disposition → block (suggests /spike)" \
+  2 "missing section: ## Disposition" \
+  "gh issue create --title '[Spike] explore Y' --body \"$SPIKE_BAD_BODY\""
+
+run_case "Spike missing Disposition → block names /spike skill" \
+  2 "/spike" \
+  "gh issue create --title '[Spike] explore Z' --body \"$SPIKE_BAD_BODY\""
+
+# --- Spike: fail path — missing Hypothesis ---------------------------------
+SPIKE_NO_HYPOTHESIS='## Budget
+3 days.
+
+## Kill Criteria
+- nothing.
+
+## Disposition
+DISCARD if no answer in 3 days.'
+
+run_case "Spike missing Hypothesis → block" \
+  2 "missing section: ## Hypothesis" \
+  "gh issue create --title '[Spike] no hypothesis' --body \"$SPIKE_NO_HYPOTHESIS\""
 
 # --- No bracketed prefix → silent pass (not every issue uses [Foo]) --------
 run_case "title without bracketed prefix → pass" \

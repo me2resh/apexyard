@@ -226,6 +226,62 @@ run_case "non-gh command → no-op" \
   "git status"
 
 # ---------------------------------------------------------------------------
+# Spike exemption (apexyard#180) — three signals; any one wins.
+# ---------------------------------------------------------------------------
+
+# Spike signal (a): PR title type = `spike(...)`. Arch path changed, no AgDR
+# in body — production rule would BLOCK; spike exemption flips to PASS.
+DIR=$(setup_repo c1_base c1_feat)
+run_case "spike PR title (arch change, no AgDR) → PASS via spike exemption" \
+  "$DIR" 0 "spike PR detected" \
+  "gh pr create --base main --title 'spike(#180): explore X' --body 'just a spike'"
+
+# Spike signal (c): branch name starts with `spike/`. Set the feature branch
+# name accordingly before running the case. Same arch-change fixture.
+spike_branch_setup() {
+  local dir
+  dir=$(setup_repo c1_base c1_feat)
+  ( cd "$dir" && git branch -m spike/GH-180-explore ) >/dev/null 2>&1
+  echo "$dir"
+}
+
+DIR=$(spike_branch_setup)
+run_case "spike branch name (arch change, no AgDR, non-spike PR title) → PASS via branch signal" \
+  "$DIR" 0 "spike PR detected" \
+  "gh pr create --base main --title 'feat(#180): tweak domain' --body 'just exploring'"
+
+# Spike signal (b): active-ticket marker references a [Spike] ticket.
+# Build a fixture where the repo IS its own ops root (has onboarding.yaml +
+# apexyard.projects.yaml + the marker). c1_base/c1_feat already provides
+# arch-path changes; we just have to seed the marker and the registry.
+spike_marker_setup() {
+  local dir
+  dir=$(setup_repo c1_base c1_feat)
+  (
+    cd "$dir" || exit 1
+    echo "version: 1
+projects: []" > apexyard.projects.yaml
+    mkdir -p .claude/session
+    cat > .claude/session/current-ticket <<'EOF'
+repo=test/repo
+number=180
+title=[Spike] active-marker exemption test
+url=https://example.test
+suggested_branch=spike/GH-180-test
+started_at=2026-05-03T00:00:00Z
+EOF
+    git add apexyard.projects.yaml
+    git commit -q -m "test: add registry"
+  )
+  echo "$dir"
+}
+
+DIR=$(spike_marker_setup)
+run_case "spike active-ticket marker (arch change, non-spike branch + title) → PASS via marker signal" \
+  "$DIR" 0 "spike PR detected" \
+  "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 

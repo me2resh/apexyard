@@ -102,6 +102,77 @@ if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER"; then
 fi
 
 # ---------------------------------------------------------------------------
+# 2a. Resolve REPO_ROOT now (used by both the spike exemption below and the
+# diff resolution further down).
+# ---------------------------------------------------------------------------
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 2b. Spike exemption (apexyard#180).
+#
+# Spike work is hypothesis-driven, time-boxed, throw-away exploration. AgDRs
+# capture decisions that should persist; spikes write disposition memos
+# instead. The exemption fires when ANY of:
+#
+#   (a) the PR title carries `spike(...)` as the conventional-commit type
+#   (b) the active ticket marker references a `[Spike]`-prefixed ticket
+#   (c) the branch is named `spike/<TICKET-ID>-...`
+#
+# Code review (Rex) and the security auditor still apply — exemptions are
+# surgical, not blanket. See .claude/rules/workflow-gates.md § Spike work.
+# ---------------------------------------------------------------------------
+spike_pr_exempt() {
+  # (a) spike(...) PR title
+  if echo "$TITLE" | grep -qE '^spike\([^)]+\)!?:'; then
+    return 0
+  fi
+
+  # (b) active ticket marker has [Spike] prefix
+  local marker_home="${REPO_ROOT}"
+  # Walk up to find the ops root (has both onboarding.yaml + apexyard.projects.yaml)
+  local r="$REPO_ROOT"
+  while [ -n "$r" ] && [ "$r" != "/" ]; do
+    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+      marker_home="$r"
+      break
+    fi
+    r=$(dirname "$r")
+  done
+
+  if [ -f "$marker_home/.claude/session/current-ticket" ]; then
+    if grep -qE '^title=\[Spike\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  if [ -d "$marker_home/.claude/session/tickets" ]; then
+    for marker in "$marker_home/.claude/session/tickets"/*; do
+      [ -f "$marker" ] || continue
+      if grep -qE '^title=\[Spike\]' "$marker" 2>/dev/null; then
+        return 0
+      fi
+    done
+  fi
+
+  # (c) branch named spike/...
+  local branch
+  branch=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)
+  if echo "$branch" | grep -qE '^spike/'; then
+    return 0
+  fi
+
+  return 1
+}
+
+if spike_pr_exempt; then
+  echo "WARN: spike PR detected — require-agdr-for-arch-pr bypassed. AgDRs not required for hypothesis-driven throw-away work; ship a memo on /spike-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # 3. Resolve base branch and compute the PR diff.
 #
 #    Precedence:
@@ -110,11 +181,6 @@ fi
 #    If none resolve to a real ref, exit 0 silently — the hook has nothing to
 #    evaluate and the PR creation itself will fail more loudly than we can.
 # ---------------------------------------------------------------------------
-
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-if [ -z "$REPO_ROOT" ]; then
-  exit 0
-fi
 
 BASE_ARG=$(extract_flag_value '--base|-B' "$COMMAND")
 BASE_REF=""

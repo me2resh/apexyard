@@ -18,7 +18,7 @@ The `TICKET-ID` should reference an issue in the project's own GitHub repo. Defa
 
 Must match: `type(TICKET): description` or `type(TICKET)!: description` (breaking change)
 
-Regex: `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)\(([A-Z]+-[0-9]+|#[0-9]+)\)!?:`
+Regex: `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|spike)\(([A-Z]+-[0-9]+|#[0-9]+)\)!?:`
 
 - One ticket ID per PR title — multi-ticket titles like `fix(ABC-1,2,3):` are rejected
 - GitHub Issues use `#XX` format: `fix(#58): description`

@@ -178,10 +178,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 41 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 43 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (41)
+### Available skills (43)
 
 | Skill | Purpose |
 |-------|---------|
@@ -210,6 +210,8 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
 | `/tickets-batch` | Bulk-file 5–20 structured tickets in one flow — shared-context Qs once, then a 3-question micro-interview per ticket; output conforms to `.ticket.required_sections` by construction |
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
+| `/spike` | Create a hypothesis-driven, time-boxed, throw-away spike ticket (Hypothesis / Budget / Kill Criteria / Disposition). Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply. |
+| `/spike-close` | Disposition gate for spikes — `--promote` files a follow-up `[Feature]`, `--discard` writes a memo to `docs/spike-memos/<slug>.md`. |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
