@@ -25,10 +25,12 @@
 **Token estimation method**: ~4 chars/token for source code (slightly worse than prose, deliberately conservative). File-content tokens calculated from `wc -c` on the actual files. Tool overhead (e.g. tool-result envelope, system prompts) is omitted on both sides — so the comparison is *delta tokens between variants*, not absolute session cost.
 
 **Variants**:
+
 - **A — Today's flow**: `Read` + `Grep` + `Glob`, no LSP. Files come into context fully or as grep matches; the agent reads each file end-to-end to disambiguate symbols.
 - **B — Clone-first + LSP flow**: assumes Claude Code's built-in LSP tool is available (`ENABLE_LSP_TOOL=1`, `typescript-lsp` plugin installed, `tsserver` running on the cloned tree). Symbol/reference/definition queries go via `goToDefinition`, `findReferences`, `workspaceSymbol`. Each LSP call returns ~1-3 file:line:column tuples + an optional code snippet (~50-200 tokens of result envelope).
 
 **Honest assumptions / limitations**:
+
 - I did not actually run a Claude Code session with `ENABLE_LSP_TOOL=1` and replay the same task in both modes — that would require re-running the same review prompts twice with deterministic tooling and clean context, which the spike scope didn't support.
 - I *did* run actual `time grep` on the real codebase to ground Variant A's wall-clock + match-count numbers.
 - LSP-side numbers come from documented response shapes (LSP spec) plus the v2.0.74 release notes' published "50ms vs 45s" figure (claim from third-party blog posts; the apexyard ticket explicitly asked us to verify, so we treat it as a *claim* not a *measurement*).
@@ -41,11 +43,13 @@ Real symbol from the test corpus: `followUser` is exported from `infrastructure/
 #### Variant A (Read + Grep + Glob)
 
 Steps:
+
 1. `Glob` for `**/*.ts` to know the search universe — ~10-50 result lines, ~500 tokens.
 2. `Grep "function followUser|const followUser"` — returns 1 match in ~5 ms.
 3. `Read infrastructure/follow-repository.ts` to confirm the signature and surrounding context — full file enters context.
 
 **Tokens IN (added to context)**:
+
 - Glob results: ~500
 - Grep results: ~50
 - File body: ~11,700 chars / 4 = **~2,925 tokens**
@@ -59,6 +63,7 @@ Steps:
 #### Variant B (LSP `goToDefinition`)
 
 Steps:
+
 1. `mcp__lsp__goToDefinition` (or whatever the tool name is — see Phase 2; the plugin marketplace exposes it as `goToDefinition`) with symbol `followUser`.
 2. Result: `{ uri: "...follow-repository.ts", range: { start: { line: 55, character: 22 }, ... } }` plus a small snippet.
 
@@ -82,6 +87,7 @@ Steps:
 #### Variant A (Read + Grep + Glob)
 
 Steps:
+
 1. `Grep "followUser("` across `**/*.ts` — returns 4 matches across 3 files (definition + two handlers + an unfollowUser line that incidentally contains the substring).
 2. `Read handlers/api/follow-user.ts` (83 LOC, 2.7 KB) — full file.
 3. `Read handlers/api/unfollow-user.ts` (53 LOC, 1.6 KB) to confirm the second match isn't a real `followUser` caller — full file.
@@ -95,6 +101,7 @@ Steps:
 #### Variant B (LSP `findReferences`)
 
 Steps:
+
 1. `mcp__lsp__findReferences` on `followUser` symbol → returns N location tuples (URI + range), all semantically valid call sites.
 
 **Tokens IN**: ~250-500 tokens (envelope + N=2-5 location tuples + brief snippets).
@@ -120,6 +127,7 @@ Real example: `handlers/triggers/post-confirmation.ts` (197 LOC, 7 KB) → impor
 #### Variant A (Read + Grep + Glob)
 
 Steps:
+
 1. `Read handlers/triggers/post-confirmation.ts` (full file, 7 KB).
 2. From imports, `Read infrastructure/dynamodb-repository.ts` — likely 200-600 LOC, conservatively ~15 KB.
 3. `Grep` for `PutCommand|UpdateCommand|TransactWrite` to identify the actual DB-write line.
@@ -134,6 +142,7 @@ Steps:
 #### Variant B (LSP `goToDefinition` chain + `prepareCallHierarchy` + `outgoingCalls`)
 
 Steps:
+
 1. `documentSymbol` on `post-confirmation.ts` → returns the handler symbol + outline (~300 tokens).
 2. For each call in the handler body, `goToDefinition` (~150 tokens each, ~3-5 calls).
 3. `prepareCallHierarchy` + `outgoingCalls` on the repository function → returns called functions one hop down (~300 tokens).
@@ -180,6 +189,7 @@ Claude Code v2.0.74 introduced an LSP tool that the model can call directly. It 
 LSP servers are configured in plugins via either `.lsp.json` at plugin root or an inline `lspServers` block in `plugin.json`. Each entry maps a language to a `command` (the LSP binary, must be on `$PATH`) plus an `extensionToLanguage` map.
 
 Example shape from the official docs:
+
 ```json
 {
   "go": {
@@ -194,6 +204,7 @@ Optional fields the spec exposes: `transport` (stdio default, socket alternative
 
 **3. Plugin marketplace exists with first-party LSP plugins.**
 The official plugin marketplace (`/plugin Discover` in the CLI) ships first-party LSP plugins for at least:
+
 - `pyright-lsp` (Python)
 - `typescript-lsp` (TypeScript / JavaScript)
 - and others covering the canonical 11 languages: Python, TypeScript, Go, Rust, Java, C/C++, C#, PHP, Kotlin, Ruby, HTML/CSS.
@@ -204,6 +215,7 @@ Third-party marketplace `Piebald-AI/claude-code-lsps` extends coverage to Vue, S
 
 **4. Tool surface exposed to the model.**
 Per the third-party marketplace README (whose tool surface tracks the official plugin spec), the LSP tool exposes:
+
 - `goToDefinition` / `goToImplementation`
 - `hover`
 - `documentSymbol` (file outline)
