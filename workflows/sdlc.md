@@ -61,7 +61,7 @@ Output: `projects/<name>/journeys/<feature-slug>.html` (preview) + `<feature-slu
 - **Entry**: PRD approved, multi-page flow involved.
 - **Exit**: stakeholders have reviewed the journey HTML, missing states / transitions filed back into the PRD or a backlog item, journey YAML committed alongside the PRD.
 
-Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0015-journey-html-rendering.md`.
+Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0016-journey-html-rendering.md`.
 
 ---
 
