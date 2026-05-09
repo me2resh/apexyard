@@ -31,6 +31,33 @@ if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
 
+# Heredoc-substitution short-circuit (#194):
+#
+#   git commit -m "$(cat <<'EOF'
+#   feat(#42): subject line
+#   ...
+#   EOF
+#   )"
+#
+# At hook-invocation time the shell hasn't expanded `$(cat <<...)` yet — the
+# hook sees the literal string `$(cat <<'EOF' ... EOF )` as the `-m` value,
+# which obviously can't match the conventional-commit subject regex. Skipping
+# validation here is the right call: the actual subject is in the heredoc
+# body, not in the `-m` argument string the hook can read. Operators who
+# want subject validation on a multi-line message should use the file-based
+# shape (`git commit -F path/to/msg`) — that path goes through the existing
+# -F branch below and gets full validation.
+#
+# Trade-off: this allows a malformed subject through if the heredoc body is
+# itself malformed. Acceptable bounded risk — the heredoc-substitution shape
+# is uncommon (mostly Claude Code's own commit-message authoring path), and
+# the more important goal is keeping the hook from misfiring on a legitimate
+# multi-line commit produced from within a worktree.
+if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit\b[^|;&]*-m\b[^|;&]*\$\(cat[[:space:]]+<<-?[[:space:]]*'\''?[A-Za-z_][A-Za-z0-9_]*'\''?'; then
+  echo "INFO: heredoc-substitution detected in -m; skipping subject validation. Use 'git commit -F <file>' for validation on multi-line messages." >&2
+  exit 0
+fi
+
 # Extract commit message (multi-line safe)
 COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
 MSG=""

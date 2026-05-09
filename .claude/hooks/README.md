@@ -240,6 +240,57 @@ With that config, `wip: scratch work` is accepted and `refactor: cleanup` is rej
 
 **Enforces:** `.claude/rules/git-conventions.md § "Commit Message Format"` — was prose-only.
 
+## PWD-vs-command-context distinction
+
+The harness's `$PWD` at hook-invocation time is whatever directory the parent
+session was sitting in when it dispatched the tool call. For most single-shell
+sessions that happens to match the worktree the operator is editing — but it
+**does not have to**. Three failure modes recur:
+
+1. **Agent fan-out workers** — `/fan-out` (and direct `Agent` calls with
+   `isolation: "worktree"`) spawn parallel agents that `cd` into per-task
+   worktrees. The parent harness's `$PWD` may still point at a sibling
+   worktree or the ops-fork root.
+2. **Cross-repo shells** — operators routinely run `gh pr create --repo X`
+   from a clone of repo Y when bouncing between projects.
+3. **Backgrounded long-running shells** — a tool call dispatched from a
+   shell whose `cwd` has drifted since session start.
+
+The lesson from #194 (validation hooks) and #47 (the `gh api .../merge` bypass)
+is the same: **gate on the command's actual context, not on the harness's
+`$PWD`**. The command itself almost always carries the truth — `--head`,
+`--repo`, the push source-ref, the API path's `/pulls/<N>/merge` segment.
+Falling back to `$PWD`-derived state (`git branch --show-current`,
+`git rev-parse HEAD`, repo-root via parent-walk) is acceptable as a fallback
+when the command does not name the context, but it must never override what
+the command says.
+
+For hook authors:
+
+- Prefer the command-arg-first, fallback-to-local-context shape:
+  `BRANCH="${HEAD_FLAG:-$(git branch --show-current)}"`. The fallback
+  preserves backwards compatibility for shapes that don't pass the flag.
+- Centralise extraction in a `_lib-extract-*.sh` helper rather than reimplementing
+  the parsing inline in each hook — same pattern as `_lib-extract-pr.sh` for
+  the merge-gate hooks. One helper, one set of tests, all hooks safe.
+- Heredoc substitution (`-m "$(cat <<EOF...)"`) is a special case where the
+  command string the hook reads is **literal-pre-expansion** — the actual
+  message lives in the heredoc body and is invisible to the hook. Detect the
+  shape and skip validation rather than block; recommend the file-based
+  alternative (`git commit -F file`) in the INFO message so operators who
+  want full validation on multi-line content know where to go.
+
+Helpers that implement this convention:
+
+| Helper | Used by | What it parses |
+|--------|---------|----------------|
+| `_lib-extract-pr.sh` | `block-unreviewed-merge.sh`, `require-design-review-for-ui.sh`, `block-merge-on-red-ci.sh` | PR number from `gh pr merge` and `gh api .../pulls/<N>/merge` |
+| `_lib-extract-push-ref.sh` | `validate-branch-name.sh` | Source ref from `git push origin <ref>` (and refspec / -u / --set-upstream / --force-with-lease variants) |
+
+When you add a new hook that depends on git state, ask first: "is the answer
+already in the command string?" If yes, parse it from there. If no, falling
+back to local context is fine — but document the trade-off.
+
 ## Settings Ordering Note
 
 The new hooks are registered in `.claude/settings.json` alongside the existing ones on the same `Bash(git commit *)` / `Bash(gh pr merge *)` matchers. The Claude Code harness runs all matching hooks sequentially, and **any exit-2 blocks the tool call**. Order of registration within a matcher block is execution order. Current order (GH-13 additions shown in **bold**):

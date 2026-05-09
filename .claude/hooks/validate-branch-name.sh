@@ -18,7 +18,28 @@ if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
 
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+# Read the branch from the actual push command's source ref when present.
+# This is the worktree-safe path: when an Agent fan-out worker runs `git push
+# origin feature/GH-N-foo` from inside its own worktree, the harness $PWD may
+# be a sibling worktree, so `git branch --show-current` returns the wrong
+# branch. The push command itself carries the truth.
+#
+# Falls back to local HEAD when the push has no source ref (no-arg push,
+# `git push origin` with no ref, etc.) — preserves today's behaviour for
+# anyone not passing the ref explicitly. See me2resh/apexyard#194.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+PUSH_REF=""
+if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-extract-push-ref.sh"
+  PUSH_REF=$(extract_push_ref "$COMMAND")
+fi
+
+if [ -n "$PUSH_REF" ]; then
+  CURRENT_BRANCH="$PUSH_REF"
+else
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+fi
 
 # Allow trunk and shared integration branches.
 # Match the dev/main release model (apexyard#116) — dev is a valid trunk.

@@ -267,8 +267,16 @@ EOF
   fi
 fi
 
-# Validate branch name has ticket ID
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+# Validate branch name has ticket ID.
+#
+# Read the branch from the `--head` flag when present, so this hook is
+# safe to run from a different worktree's $PWD (Agent fan-out workers
+# `cd` into their own worktree before running `gh pr create`, but the
+# harness $PWD may still be a sibling worktree's directory). Falls back
+# to local HEAD when `--head` isn't passed — preserves today's behaviour
+# for anyone using the implicit-branch shape. See me2resh/apexyard#194.
+HEAD_FLAG=$(echo "$COMMAND" | sed -nE 's/.*--head[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+CURRENT_BRANCH="${HEAD_FLAG:-$(git branch --show-current 2>/dev/null)}"
 if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
   # Release-cut branches are exempt — same recognition `validate-branch-name.sh`
   # added in me2resh/apexyard#168 / #169. Release branches don't carry a
