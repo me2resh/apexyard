@@ -42,6 +42,29 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 ---
 
+## Phase 1.5: Journey Preview (optional, recommended for UI-heavy features)
+
+> **Primary role**: [UX Designer](../roles/design/ux-designer.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md) (PRD source), [UI Designer](../roles/design/ui-designer.md) (visual review) · **Skill**: `/journey`
+>
+> Slots between an approved PRD and the tech-design phase. Optional — skip for tiny features and pure-backend changes; use it when the feature has a multi-page user flow that will benefit from a "preview before build" check.
+
+A PRD describes a feature in prose. A tech design describes the architecture. Neither answers *"what does the flow actually look like?"* — and that's where logic gaps hide (missing empty states, ambiguous back-navigation, unhandled error transitions). The `/journey` skill closes that gap by emitting a single self-contained HTML file mapping the user journey as clickable boxes (each opening a modal with the page's content).
+
+```
+/journey checkout-v2 --from-prd projects/example-app/prds/checkout.md
+```
+
+Output: `projects/<name>/journeys/<feature-slug>.html` (preview) + `<feature-slug>.yaml` (source of truth). The HTML opens in any browser, shares as an attachment, and renders without a build step.
+
+### Entry / exit
+
+- **Entry**: PRD approved, multi-page flow involved.
+- **Exit**: stakeholders have reviewed the journey HTML, missing states / transitions filed back into the PRD or a backlog item, journey YAML committed alongside the PRD.
+
+Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0015-journey-html-rendering.md`.
+
+---
+
 ## Phase 2: Technical Design
 
 > **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Escalation**: [Head of Engineering](../roles/engineering/head-of-engineering.md) (architecture review) · **Supporting**: [UX Designer](../roles/design/ux-designer.md), [UI Designer](../roles/design/ui-designer.md) (if UI involved)
@@ -50,6 +73,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 - Feature in sprint
 - Requirements clear
+- Journey preview reviewed (if Phase 1.5 ran)
 
 ### Activities
 
