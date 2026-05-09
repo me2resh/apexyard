@@ -3,3 +3,8 @@
 https://github.com/me2resh/apexyard.*
 https://github.com/me2resh/curios-dog.*
 https://github.com/me2resh/SharpPick.*
+
+# Medium author URLs return 403 to bot user-agents (transient anti-scraping
+# protection). The link works in browsers; lychee-action's user-agent gets
+# rejected. Cited as a Source in docs/spikes/claude-model-tier-routing.md.
+https://medium\.com/@sathishkraju/.*

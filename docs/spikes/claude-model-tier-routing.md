@@ -1,7 +1,7 @@
 # Spike: Claude Opus / Sonnet / Haiku model-tier routing for bounded sub-tasks — taxonomy + measurement + recommendation
 
 > **Ticket**: [me2resh/apexyard#197](https://github.com/me2resh/apexyard/issues/197)
-> **Sibling spike**: [me2resh/apexyard#195 → PR #196](./local-model-routing.md) (local-model routing for the same bounded-sub-task class)
+> **Sibling spike**: [me2resh/apexyard#195 → PR #196](https://github.com/me2resh/apexyard/pull/196) (local-model routing for the same bounded-sub-task class — file lands at `docs/spikes/local-model-routing.md` once #196 merges)
 > **Status**: spike complete — recommendation: **GO, opt-in via per-skill `model:` frontmatter, declared per-skill from a unified per-task tier hierarchy**
 > **Author**: Tech Lead (assumed via SDLC role activation)
 > **Date**: 2026-05-03
@@ -487,7 +487,7 @@ None that block GO. Three caveats worth carrying into the AgDR:
 - [Claude API Pricing 2026 — BenchLM](https://benchlm.ai/blog/posts/claude-api-pricing) — verified Haiku 4.5 / Sonnet 4.6 / Opus 4.7 figures
 - [Pick the Right Claude Code Model for Every Task — DEV Community](https://dev.to/klement_gunndu/pick-the-right-claude-code-model-for-every-task-1p6a) — recommended assignment pattern: Opus for reasoning, Sonnet for implementation, Haiku for discovery
 - [Claude Code Subagents: Complete Guide — Medium](https://medium.com/@sathishkraju/claude-code-subagents-the-complete-guide-to-ai-agent-delegation-d0a9aba419d0) — subagent model field, "Control costs by routing tasks to faster, cheaper models like Haiku" pattern
-- Sibling spike: [me2resh/apexyard#195 → PR #196](./local-model-routing.md) — local-model routing recommendation that this spike converges with in Phase 5
+- Sibling spike: [me2resh/apexyard#195 → PR #196](https://github.com/me2resh/apexyard/pull/196) — local-model routing recommendation that this spike converges with in Phase 5 (file lands at `docs/spikes/local-model-routing.md` once #196 merges)
 - Predecessor spike: [me2resh/apexyard#178 → PR #184](./lsp-token-savings.md) — same shape: measure first, recommend second, implement in follow-ups
 - Apexyard skill files surveyed: `.claude/skills/*/SKILL.md` (42 skills) and `.claude/agents/*.md` (5 sub-agents) — Phase 1 taxonomy is built from a walkthrough of every entry
 
