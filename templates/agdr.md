@@ -6,6 +6,10 @@ model: {model-id}
 session: {session-id}
 trigger: {user-prompt | hook | automation}
 status: {executed | rolled-back | superseded by AgDR-NNNN}
+# Optional — read by /agdr for portfolio-wide indexing. Safe to omit;
+# legacy AgDRs without this field land in the `other` bucket.
+# category: architecture | tech-stack | security | patterns | integrations | other
+# projects: [<project-name>]   # optional; defaults to the AgDR's containing project
 ---
 
 # {Short Title}

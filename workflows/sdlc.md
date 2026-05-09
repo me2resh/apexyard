@@ -60,6 +60,8 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 | Break into tasks | Tech Lead | Task list with estimates |
 | Identify risks | Tech Lead | Risk register |
 
+> **"Have we decided this before?"** Before drafting a design, run `/agdr search <term>` (or `/agdr browse --category architecture`) to scan the portfolio's existing Agent Decision Records. The skill walks every managed project and the apexyard fork itself, so prior calls on auth, data layers, or vendor choices surface in seconds rather than getting silently re-litigated.
+
 ### Exit Criteria
 
 - Technical design approved

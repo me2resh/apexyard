@@ -178,10 +178,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 39 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 40 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (39)
+### Available skills (40)
 
 | Skill | Purpose |
 |-------|---------|
@@ -199,6 +199,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/approve-merge` | Record per-PR CEO approval for a specific merge (required by merge gate) |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
+| `/agdr` | Searchable, categorized library of AgDRs across the portfolio — `browse`, `search <term>`, `show <id>`, `stats` |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
 | `/security-review` | Invoke the Security Reviewer agent (Shield) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
@@ -256,7 +257,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (39 slash commands) | `.claude/skills/` |
+| Skills (40 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
