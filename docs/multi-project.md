@@ -495,6 +495,12 @@ The same output appears when you run `/status --briefing` (or `/status -b`) insi
 
 Default `/status` (no flags) still produces the long per-project breakdown — `--briefing` only opts into the compact form.
 
+### LSP-aware skills inside a workspace
+
+If you've enabled the optional LSP tool (`ENABLE_LSP_TOOL=1` + a per-language plugin — see [`getting-started.md` § "Optional: LSP-aware code navigation"](getting-started.md#optional-lsp-aware-code-navigation)), code-aware skills like `/code-review`, `/threat-model`, and `/security-review` use semantic-index queries instead of grep when they run inside a cloned `workspace/<name>/`. The same skills fall back to grep + Read transparently when LSP is absent — there's no new failure mode, only optional speed.
+
+Cross-project portfolio skills (`/inbox`, `/tasks`, `/stakeholder-update`) walk the whole registry and stay on grep regardless, because no single LSP server has the full multi-repo view.
+
 ---
 
 ## Upgrades — pulling from upstream

@@ -265,6 +265,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Getting Started | `docs/getting-started.md` |
 | Full setup guide | `docs/multi-project.md` |
 | Rule audit (every MUST → hook / advisory / deferred) | `docs/rule-audit.md` |
+| LSP-aware navigation (optional) | Set `ENABLE_LSP_TOOL=1` + install per-language plugins. See `docs/getting-started.md` § "Optional: LSP-aware code navigation" |
 
 ---
 
