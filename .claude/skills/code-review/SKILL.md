@@ -10,6 +10,12 @@ allowed-tools: Bash, Read, Grep, Glob
 
 Review a pull request for quality, security, and adherence to standards.
 
+## LSP-aware (optional, recommended)
+
+This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
+
+Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
+
 ## Activated agent + role
 
 When `/code-review` runs:
