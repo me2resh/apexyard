@@ -495,7 +495,80 @@ Skipping the auto-append. If you want to add it later, copy this into apexyard.p
     roles: {derived list}
 ```
 
-### 8. Offer validation (conditional, default-no)
+### 8. Offer the clone-first deep-dive option (recommended)
+
+You've just produced a metadata-only handover. The next natural step is a deeper dive — security audit, threat model, code-quality assessment. Those skills benefit substantially from a local clone + LSP-aware tooling, so offer the clone-first path here, with the cost transparently disclosed. Default is **no clone** — the operator has to type `y` explicitly.
+
+#### What to ask
+
+Print a single offer block. Use the project name resolved earlier in the flow as `<name>`, and the registry's `repo` field (or the URL the operator gave in step 1) as `<repo-url>`. Don't paraphrase — the prompt below is the exact shape:
+
+```
+Want me to clone <name> into workspace/<name>/ now? It enables
+LSP-aware navigation in /code-review, /threat-model, /security-review
+and the post-handover discovery skills (~3-15× cheaper than grep on
+shallow semantic queries; ~1.4-5× on multi-hop traces).
+
+Cost: ~tens of MB on disk + a one-time clone. The clone is gitignored
+from your fork (workspace/*/).
+
+Note: LSP requires `ENABLE_LSP_TOOL=1` and a per-language Claude Code
+LSP plugin installed (the plugin install is your problem — it's not
+bundled). Cross-project semantic queries still need grep (LSP is
+per-workspace). Cold-start on large monorepos can be 30+ seconds.
+Decline now if you'd rather configure that first or skip the deep dive.
+
+[y / n / later]
+```
+
+#### Cost-transparency requirements
+
+The offer **must** explicitly disclose:
+
+1. **`ENABLE_LSP_TOOL=1`** — the env var the harness reads to enable LSP
+2. **Per-language plugin install is the adopter's problem** — don't pretend the clone alone enables LSP
+3. **Disk cost** (~tens of MB) and gitignored status (`workspace/*/`)
+4. **Cross-project queries still need grep** — LSP is per-workspace
+5. **Cold-start cost on large monorepos** — 30+ seconds is realistic per the spike
+
+If any of these aren't surfaced in the offer, the adopter accepts a deal they don't understand. Don't compress the prompt past these five.
+
+#### Branching
+
+**On `y`:**
+
+1. Resolve `<repo-url>`. If the registry already has the repo slug (`me2resh/<name>` form), translate to `https://github.com/<owner>/<name>.git`. If the operator gave a path in step 1 instead of a URL, fall back to asking for the clone URL — never invent one.
+
+2. Skip cleanly if `workspace/<name>/` already exists:
+
+   ```bash
+   if [ -d "workspace/<name>" ]; then
+     echo "✓ workspace/<name>/ already exists — skipping clone."
+   else
+     git clone <repo-url> workspace/<name>
+   fi
+   ```
+
+3. On clone failure (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone` as the recovery, and continue to the final summary. Do **not** retry, do **not** fall back to a different URL — the operator picks up from there.
+
+4. On clone success, suggest the next skill as a single follow-up question:
+
+   ```
+   ✓ Cloned into workspace/<name>/.
+     Want to run /threat-model against the new clone now? (y/n)
+   ```
+
+   If the operator declines, mention `/code-review` and `/security-review` as the other natural follow-ups, then continue to the final summary. The skill never invokes follow-up skills automatically — the operator confirms each one.
+
+**On `n` or `later`:**
+
+Skip silently — no side effects, no further prompts. The adopter can clone manually anytime with `git clone <repo-url> workspace/<name>`. Continue to the final summary.
+
+**On any other input:**
+
+Treat as `n` (no clone). Don't loop the prompt — the offer is one-shot.
+
+### 9. Offer validation (conditional, default-no)
 
 If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:
 
@@ -508,12 +581,13 @@ If the user accepts, hand off to `/validate-idea {name}` (which reads the just-w
 
 If the project is healthy (recent commits, active PRs/issues), skip the prompt entirely. Don't ask "should I validate?" on every handover — only when the dormancy signal warrants it.
 
-### 9. Return a summary
+### 10. Return a summary
 
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
 Registry updated:            apexyard.projects.yaml ({added | skipped})
+Workspace clone:             workspace/{name}/ ({cloned | preserved | skipped (declined) | skipped (later) | failed: <reason>})
 Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
 
 Tech stack: {one-liner}
@@ -534,7 +608,7 @@ Top 3 next steps:
 4. **Auto-append to the registry** (with confirmation) — don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
 5. **Derive roles from the stack** — don't hard-code `[tech-lead, backend-engineer]`. The roles list depends on the actual tech stack, CI config, and security surface detected in step 3.
 6. **Derive next steps from the risks** — don't emit generic placeholders. Every "Next Step" must correspond to a specific finding from the Quality Risks section of the assessment.
-7. **Never auto-clone** — ask for the path.
+7. **Never auto-clone** — ask for the path in step 1, and offer (default-no) the optional clone in step 8. Clone only happens on an explicit operator `y`; `n` / `later` / unrecognised input all skip cleanly.
 8. **Never store secrets** — if `.env` is found, list its presence but never read its contents.
 9. **Status starts at `handover`** — moves to `active` only after the integration plan is executed.
 10. **Never break the registry** — if the YAML append breaks the file, restore the previous version and ask the user to edit manually.

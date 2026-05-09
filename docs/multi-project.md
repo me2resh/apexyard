@@ -127,7 +127,9 @@ projects/example-app/
 └── roadmap.md     ← project-specific roadmap (optional)
 ```
 
-Or run `/handover example-app` and the skill will generate a real assessment and seed the README. Then optionally clone the live working copy:
+Or run `/handover example-app` and the skill will generate a real assessment and seed the README. At the end of its flow, `/handover` also **offers (default-no) to clone the project into `workspace/<name>/`** — accept if you intend to follow up with `/code-review`, `/threat-model`, or `/security-review` and want the LSP-aware deep-dive path; decline if you'd rather configure `ENABLE_LSP_TOOL=1` + the per-language plugin first, or skip the deep dive entirely. The prompt surfaces the disk cost, the gitignored status (`workspace/*/`), and the LSP plugin caveats explicitly so the cost is owned, not assumed.
+
+If you'd rather clone manually:
 
 ```bash
 git clone github.com/your-org/example-app workspace/example-app
@@ -431,7 +433,7 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/idea` | Appends to `projects/ideas-backlog.md` at the fork root (one shared backlog for all projects) |
 | `/roadmap` | Reads `projects/<name>/roadmap.md`; asks which project if ambiguous |
 | `/stakeholder-update` | Portfolio rollup with a section per project |
-| `/handover` | Writes to `projects/<name>/handover-assessment.md` and appends the project to the registry |
+| `/handover` | Writes to `projects/<name>/handover-assessment.md`, appends the project to the registry, and offers (default-no) to clone the project into `workspace/<name>/` for an LSP-aware deep-dive follow-up (`/code-review`, `/threat-model`, `/security-review`). The clone offer surfaces the cost (disk, gitignored status, `ENABLE_LSP_TOOL=1` + per-language plugin install) explicitly. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
