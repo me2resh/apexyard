@@ -466,11 +466,34 @@ Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML /
 A typical morning as a CTO / Chief of Staff using apexyard:
 
 1. **`cd ~/apexyard`** — into your fork
-2. **`/inbox`** — see everything waiting on you across every managed project
-3. **`/status`** — snapshot of git + CI health for each project
-4. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md))
-5. Work the ticket — the role file drives behaviour, the lifecycle demo in the hero of the landing site walks through the full flow
-6. Back at the fork root, **`/stakeholder-update weekly`** on Fridays to generate the summary
+2. **`apexyard status`** (or `/status --briefing` inside Claude Code) — 4-line "where am I" briefing: active workspace, active ticket, branch, role. Covers the orient-yourself question in one paragraph.
+3. **`/inbox`** — see everything waiting on you across every managed project
+4. **`/status`** — full snapshot of git + CI health for each project (verbose form when you want the per-project breakdown)
+5. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md))
+6. Work the ticket — the role file drives behaviour, the lifecycle demo in the hero of the landing site walks through the full flow
+7. Back at the fork root, **`/stakeholder-update weekly`** on Fridays to generate the summary
+
+### `apexyard status` — the CLI briefing
+
+`bin/apexyard` is a small bash shim that exposes the briefing at the shell. Install once by symlinking it onto your PATH:
+
+```bash
+ln -s "$(pwd)/bin/apexyard" ~/.local/bin/apexyard
+```
+
+Then from anywhere inside the fork or any `workspace/<name>/` clone:
+
+```bash
+$ apexyard status
+Active workspace:  example-app
+Active ticket:     #42 — Add CSV export
+Branch:            feature/GH-42-csv-export
+Role set:          backend
+```
+
+The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves: workspace from cwd, ticket from the per-project marker (`<ops_root>/.claude/session/tickets/<name>`) or the ops fallback (`<ops_root>/.claude/session/current-ticket`), branch from `git branch --show-current`, role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
+
+Default `/status` (no flags) still produces the long per-project breakdown — `--briefing` only opts into the compact form.
 
 ---
 
