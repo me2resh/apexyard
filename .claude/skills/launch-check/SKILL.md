@@ -1,8 +1,8 @@
 ---
 name: launch-check
-description: Production readiness audit — runs a multi-dimension sweep (security, accessibility, compliance, analytics, SEO, performance, monitoring, docs) and outputs a scored go/conditional-go/no-go verdict. Use at milestone boundaries, not on every PR.
+description: Production readiness audit — runs a multi-dimension sweep (security, accessibility, compliance, analytics, SEO, performance, monitoring, docs) and outputs a scored go/conditional-go/no-go verdict. Use at milestone boundaries, not on every PR. Persists each run to a per-project history store so the trend across runs is visible.
 disable-model-invocation: false
-argument-hint: "[project-path]"
+argument-hint: "[project-path] | trend [project-path]"
 effort: high
 ---
 
@@ -11,6 +11,11 @@ effort: high
 Runs an 8-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
+
+**Two modes:**
+
+- `/launch-check [project-path]` — full audit (default). Runs all 8 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
+- `/launch-check trend [project-path]` — read-only trend report. Renders just the trend section from existing run files. Useful for "are we trending up?" without burning the audit cost. See § "Trend-only mode" below.
 
 ## Deep-dive companions
 
@@ -216,9 +221,110 @@ Count PASS/WARN/FAIL, apply the verdict logic, format the output table.
 
 ### Step 5: Output
 
-Print the table exactly as shown in the "Output format" section above. Then stop and let the user decide what to do with the findings.
+Print the table exactly as shown in the "Output format" section above. Then continue to Step 6 to persist the run and render the trend section.
 
 **Do NOT auto-create tickets for the findings.** Offer: "Want me to create tickets for the blocking items?" — but let the user decide. The launch check is advisory.
+
+### Step 6: Persist the run + render the trend
+
+After the verdict table, persist this run to the project's history store and append a trend section if there are ≥ 2 prior runs.
+
+#### 6a. Resolve the project's launch-check directory
+
+Use the portfolio helper to resolve the projects dir — do NOT hardcode `projects/`:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+lc_dir="$projects_dir/<project-name>/launch-check"
+runs_dir="$lc_dir/runs"
+mkdir -p "$runs_dir"
+```
+
+`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project isn't registered (e.g. someone runs `/launch-check` on a directory that's never been onboarded), use the basename of the project path; tell the user the project should be `/handover`'d into the registry to make the trend persistent across machines.
+
+#### 6b. Write the per-run JSON
+
+Schema (apexyard#183):
+
+```json
+{
+  "ts": "2026-05-08T19:30:00Z",
+  "branch": "main",
+  "commit": "abc1234",
+  "scores": {
+    "security": 88,
+    "accessibility": 94,
+    "compliance": 76,
+    "analytics": 90,
+    "seo": 87,
+    "performance": 68,
+    "monitoring": 83,
+    "docs": 91
+  },
+  "verdict": "conditional-go",
+  "top_risks": ["No cookie consent banner", "Missing /health endpoint"]
+}
+```
+
+- `ts` — ISO-8601 UTC. Used for chronological sort.
+- `branch` / `commit` — `git rev-parse --abbrev-ref HEAD` and `git rev-parse --short HEAD` from the project's working tree.
+- `scores.*` — 0..100 per dimension. Map PASS → 95 ± project-specific finding-density, WARN → 70..85, FAIL → 30..55. Use your judgement based on the finding's severity. The headline score is the unweighted mean — adopters who want weighting can post-process.
+- `verdict` — one of `go`, `go-with-warnings`, `conditional-go`, `no-go`.
+- `top_risks` — the same blocking items you listed in the human-readable output.
+
+Write the file at `<runs_dir>/<ts>.json` with the timestamp safely encoded for filesystems (replace `:` with `-`, e.g. `2026-05-08T19-30-00Z.json`).
+
+**Forward-compatibility note:** the schema is open. Future framework versions may add fields (e.g. `notes`, `actor`, `weighting`); the trend renderer reads only `ts`, `scores`, `verdict`, so older run files continue to render correctly after framework upgrades.
+
+#### 6c. Render the trend section
+
+Run the trend renderer:
+
+```bash
+"$SKILL_DIR/render-trend.sh" "$runs_dir" 5
+```
+
+- With < 2 runs in the dir → prints nothing, exits 0. Skip the trend section in this run's output (this is correct on a project's first run).
+- With ≥ 2 runs → prints the trend markdown block (heading + table + ASCII chart) to stdout. Append it to this run's per-run summary markdown at `<lc_dir>/<ts>.md` and to the chat output.
+
+The `notes` column is auto-derived from the score-delta vs the previous run (e.g. "Security +12, Performance +5"). The most-recent row appends "(this run)". Operator-supplied notes are v2; v1 is auto-derived only.
+
+#### 6d. Opt-in commit (history-tracked marker)
+
+By default, history JSON files are gitignored. Most adopters do not want history bloat in the repo.
+
+Operator opt-in: a presence-only marker file at `<lc_dir>/.launch-check-history-tracked` flips this. When the marker exists, the skill emits a `.gitignore` for `<runs_dir>/` that *un-ignores* `*.json` files; when absent, the runs dir is fully gitignored.
+
+Concretely on first persist:
+
+- If `<lc_dir>/.launch-check-history-tracked` exists:
+  - Ensure `<lc_dir>/.gitignore` does NOT block runs JSON (delete or comment any `runs/` exclusion).
+- Otherwise:
+  - Ensure `<lc_dir>/.gitignore` contains `runs/` so JSON files don't accidentally get committed.
+
+Either way, leave it for the operator to `git add` when they want history committed; never auto-commit. The skill is read-only with respect to the working tree's commit state.
+
+To opt-in to committing history (for a project whose readiness trend the team wants archived in the repo):
+
+```bash
+touch projects/<name>/launch-check/.launch-check-history-tracked
+```
+
+To opt back out, delete the marker.
+
+## Trend-only mode — `/launch-check trend [project-path]`
+
+Read-only mode that produces just the trend section (no full audit, no per-dimension grep). Useful for "are we trending up?" without re-running the costly sweep.
+
+Process:
+
+1. Resolve the project's launch-check dir (same as Step 6a).
+2. If `<runs_dir>` doesn't exist or has < 2 JSON files, tell the operator there's no trend yet (run `/launch-check` first to establish baseline + at least one comparison point).
+3. Otherwise, run `render-trend.sh "$runs_dir" 5` and print the output.
+
+Do NOT run the 8-dimension sweep in this mode. Do NOT write any new JSON. This mode is purely for reviewing existing history.
 
 ## Rules
 
@@ -229,3 +335,15 @@ Print the table exactly as shown in the "Output format" section above. Then stop
 5. **Advisory, not blocking.** The user decides go/no-go based on the findings. The skill does NOT block deploys mechanically.
 6. **Don't create tickets unprompted.** Offer to create them. Let the user decide.
 7. **Run from the project directory.** The skill checks `workspace/<project>/`, not the ops repo.
+8. **Persist every run.** Step 6 always writes a JSON file under the project's `launch-check/runs/` (regardless of opt-in commit state). The `.launch-check-history-tracked` marker only controls whether those files are committed; it does NOT control whether they are written.
+9. **Resolve paths via the portfolio helper.** Don't hardcode `projects/` — adopters in split-portfolio mode have a different projects dir. Use `portfolio_projects_dir` from `_lib-portfolio-paths.sh`.
+
+## Implementation notes
+
+The persistence + trend logic ships as a small shell helper alongside this SKILL:
+
+| File | Purpose |
+|------|---------|
+| `render-trend.sh` | Reads `<runs_dir>` for `*.json` files, sorts by `ts`, emits the trend markdown block (heading + table + ASCII chart). Exits silently with no output when < 2 runs exist. |
+
+Design rationale (ASCII chart vs Mermaid, JSON schema choice, opt-in commit marker): see [`docs/agdr/AgDR-0014-launch-check-trend-tracking.md`](../../../docs/agdr/AgDR-0014-launch-check-trend-tracking.md).
