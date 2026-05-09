@@ -156,6 +156,7 @@ SB6=$(cd "$SB6" && pwd -P)
 cat > "$SB6/defaults.json" <<'JSON'
 { "ticket": {"prefix_whitelist": ["Feature"]} }
 JSON
+# shellcheck source=/dev/null
 . "$LIB_SRC"
 out6=$(detect_deprecated_config_keys "$SB6/defaults.json" "$SB6/missing.json")
 rc6=$?
@@ -187,6 +188,7 @@ cat > "$SB7/overrides.json" <<'JSON'
   "ticket": {"prefix_whitelist": ["Feature", "Bug"]}
 }
 JSON
+# shellcheck source=/dev/null
 . "$LIB_SRC"
 removed=$(remove_deprecated_config_keys "$SB7/defaults.json" "$SB7/overrides.json")
 remaining=$(jq -r 'keys | join(",")' "$SB7/overrides.json" 2>/dev/null)
