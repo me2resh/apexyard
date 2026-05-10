@@ -1,0 +1,28 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+
+version: 1
+
+projects:
+  - name: luma-pwa
+    repo: Dr-kersho/luma-pwa
+    workspace: workspace/luma-pwa
+    docs: projects/luma-pwa
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+    tags:
+      - customer-facing
+      - marketplace
+    ticket_prefix: LUM
+
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead
