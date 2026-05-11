@@ -95,10 +95,10 @@ Sub-agents are the cleanest place to apply per-task routing because each is a si
 | Agent | Today | Recommended | Reasoning |
 |-------|-------|-------------|-----------|
 | **Code Reviewer (Rex)** | `inherit` | **Opus** by default, **Sonnet** for ≤200-line PRs | The primary review gate. Substantive PRs deserve Opus's reasoning; small PRs are Sonnet-shaped. Could be wired with two agents (`code-reviewer-deep` / `code-reviewer-light`) and dispatched by PR diff size. |
-| **Security Reviewer (Shield)** | `inherit` | **Opus** | Security review is judgment-heavy with consequences. Always pay the premium. |
-| **Dependency Auditor** | `inherit` | **Haiku** | Mechanical: read package manifest, query advisories, render table. No reasoning beyond "is this CVE high or critical". |
-| **PR Manager** | `inherit` | **Sonnet** | Coordinates the PR lifecycle — multi-step but structured. Sonnet handles the workflow comfortably. |
-| **Ticket Manager** | `inherit` | **Haiku** | Creates / labels / assigns issues. Mostly `gh` calls + a paragraph of confirmation. |
+| **Security Reviewer (Hatim)** | `inherit` | **Opus** | Security review is judgment-heavy with consequences. Always pay the premium. |
+| **Dependency Auditor (Munir)** | `inherit` | **Haiku** | Mechanical: read package manifest, query advisories, render table. No reasoning beyond "is this CVE high or critical". |
+| **PR Manager (Tariq)** | `inherit` | **Sonnet** | Coordinates the PR lifecycle — multi-step but structured. Sonnet handles the workflow comfortably. |
+| **Ticket Manager (Idris)** | `inherit` | **Haiku** | Creates / labels / assigns issues. Mostly `gh` calls + a paragraph of confirmation. |
 
 ### Summary distribution across 42 skills + 5 agents
 

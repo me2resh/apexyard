@@ -1,5 +1,6 @@
 ---
 name: ticket-manager
+persona_name: Idris
 description: Creates and manages GitHub Issues in the project's own repo for all work tracking. Use when a new task is starting, a PR is being created, or work needs tracking.
 tools: Bash, Read
 model: inherit

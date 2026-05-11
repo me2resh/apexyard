@@ -1,5 +1,6 @@
 ---
 name: security-reviewer
+persona_name: Hatim
 description: Security-focused PR reviewer. Scans for vulnerabilities, injection risks, auth issues, and data protection. Use for PRs touching auth, APIs, or user input.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit
@@ -124,7 +125,7 @@ Invoked when a PR needs security review, especially for:
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
 
 ---
-🛡️ Reviewed by Shield (Security Reviewer Agent)
+🛡️ Reviewed by Hatim (Security Reviewer Agent)
 📌 Reviewed commit: `{headRefOid}`
 ```
 
