@@ -152,7 +152,7 @@ Run `/setup` (first run) or `/setup --enable-lsp` (retrofit on an already-config
 1. **Detects your language** from the `tech_stack` you described in `/setup` (or from the existing `onboarding.yaml` if you're retrofitting).
 2. **Installs the language server** (`typescript-language-server`, `pyright`, `gopls`, or `rust-analyzer`) using the right package manager for the detected language. Refuses gracefully if the prerequisite runtime (`node`, `python`, `go`, `rustup`) is missing — it never auto-installs runtimes.
 3. **Sets `ENABLE_LSP_TOOL=1` in your shell rc** (`~/.zshrc`, `~/.bashrc`, or `~/.profile` depending on `$SHELL`) — idempotently, so re-running is a no-op.
-4. **Prints the Claude Code plugin marketplace instruction** for your language. The marketplace command shape isn't stable enough for the skill to call directly today, so this step is a clear manual instruction — open the marketplace, search for your language, install.
+4. **Prints the verified plugin-install copy-paste block** for your language. Three commands to run *inside Claude Code* (not the shell): `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill substitutes the right `<plugin-name>` for your detected language (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). The marketplace add is always emitted because the docs' auto-load claim for `claude-plugins-official` doesn't always fire on fresh installs.
 
 The skill defaults to **on** for typical machines (≥ 4 cores AND ≥ 8 GB RAM) and **off** for constrained machines, with the operator free to override either way. Re-running `/setup --enable-lsp` is idempotent: if the env var and server binary are already in place, it reports "already enabled" and exits.
 
@@ -160,21 +160,39 @@ Windows is out of scope for v1 of the LSP automation — `/setup` prints a manua
 
 ### Opt-in path — manual fallback (two pieces)
 
-If you'd rather skip the skill and wire it up yourself — or you're on Windows and `/setup` declined to automate it — LSP is enabled by **two** things in the same session:
+If you'd rather skip the skill and wire it up yourself — or you're on Windows and `/setup` declined to automate it — LSP is enabled by **two** things:
 
 1. The environment variable `ENABLE_LSP_TOOL=1` (singular `_TOOL`, not plural).
-2. A per-language plugin that ships the LSP server binary and the `.lsp.json` wiring.
+2. A per-language plugin from the official Anthropic marketplace.
 
 Both are required. Setting only the env var without an installed plugin gives Claude Code nothing to talk to; installing only the plugin without the env var keeps the tool dormant.
 
-Set the env var for your session:
+Add the env var to your shell rc so it loads on every shell start:
 
 ```bash
-export ENABLE_LSP_TOOL=1
-claude
+echo 'export ENABLE_LSP_TOOL=1' >> ~/.zshrc   # or ~/.bashrc
 ```
 
-Or add it to your shell profile if you want it on by default. Plugins install through Claude Code's plugin marketplace — start at the [Claude Code plugins documentation](https://docs.claude.com/en/docs/claude-code/plugins) and search for the language you need.
+Then install the plugin for your language. Inside Claude Code (not your shell), run:
+
+```
+/plugin marketplace add anthropics/claude-plugins-official
+/plugin install <plugin-name>@claude-plugins-official
+/reload-plugins
+```
+
+Substituting `<plugin-name>` for one of:
+
+| Language | Plugin |
+|---|---|
+| TypeScript / JavaScript | `typescript-lsp` |
+| Python | `pyright-lsp` |
+| Go | `gopls-lsp` |
+| Rust | `rust-analyzer-lsp` |
+
+Other languages (C/C++, C#, Java, Kotlin, Lua, PHP, Swift) are also covered — see the [discover-plugins reference](https://code.claude.com/docs/en/discover-plugins#code-intelligence) for the full table. The marketplace add is idempotent (no-op if already registered — the docs claim `claude-plugins-official` auto-loads on Claude Code startup, but in practice the auto-add can be missing on a fresh install, so always emit it).
+
+> **Gotcha — env var not visible to the current process.** `ENABLE_LSP_TOOL=1` written to your shell rc is **not** picked up by the Claude Code process you're currently in. `/reload-plugins` reloads plugin state but does **not** re-read shell env. After adding the env var (and after installing the plugin), fully **quit** and **relaunch** Claude Code. Verify with `echo $ENABLE_LSP_TOOL` in a fresh shell — it should print `1`.
 
 ### Per-language install notes
 
@@ -188,8 +206,8 @@ The framework actively encourages LSP for these four. Pick the languages your pr
 # Verify your project ships tsserver
 npx tsserver --version 2>/dev/null || npm ls typescript
 
-# Install the Claude Code plugin from the marketplace
-# (search "typescript" / "tsserver" in the marketplace UI)
+# Install the Claude Code plugin — run inside Claude Code, not the shell:
+#   /plugin install typescript-lsp@claude-plugins-official
 ```
 
 #### Python — `pyright`
@@ -202,8 +220,8 @@ npm install -g pyright
 uv add --dev pyright
 # pip install pyright
 
-# Then install the Python plugin from the marketplace
-# (search "python" / "pyright")
+# Then install the Python plugin — run inside Claude Code, not the shell:
+#   /plugin install pyright-lsp@claude-plugins-official
 ```
 
 `pyright` understands `pyproject.toml` and `pyrightconfig.json` for path resolution; if your repo uses a virtualenv the plugin needs to know where it lives — set `python.pythonPath` in `pyrightconfig.json`.
@@ -217,8 +235,8 @@ go install golang.org/x/tools/gopls@latest
 # Verify it's on $PATH
 which gopls
 
-# Then install the Go plugin from the marketplace
-# (search "go" / "gopls")
+# Then install the Go plugin — run inside Claude Code, not the shell:
+#   /plugin install gopls-lsp@claude-plugins-official
 ```
 
 `gopls` requires Go 1.21+ and a `go.mod` at the repo root. Cold start on a large monorepo can take 30–90 seconds while the module graph builds.
@@ -234,8 +252,8 @@ rustup component add rust-analyzer
 # Verify
 rust-analyzer --version
 
-# Then install the Rust plugin from the marketplace
-# (search "rust" / "rust-analyzer")
+# Then install the Rust plugin — run inside Claude Code, not the shell:
+#   /plugin install rust-analyzer-lsp@claude-plugins-official
 ```
 
 Cargo workspaces with many crates have a slow first index — see the caveat below.

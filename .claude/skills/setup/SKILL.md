@@ -330,20 +330,39 @@ fi
 
 Tell the operator they need to either open a new shell or `source "$RC_FILE"` for the env var to take effect in the **current** shell — `/setup` cannot mutate the parent shell's environment from its own subshell.
 
-##### (d) Install the Claude Code LSP plugin
+##### (d) Print the verified plugin-install commands
 
-The Claude Code plugin-marketplace install command shape is **not** something the skill should fabricate. Today there is no documented, stable, scriptable `claude plugin install <name>` shape that the skill can rely on across harness versions (the marketplace is documented as a UI flow at <https://docs.claude.com/en/docs/claude-code/plugins>). Default to printing a clear manual instruction rather than calling a command that may not exist:
+The Claude Code plugin-marketplace command shape (`/plugin marketplace add`, `/plugin install <name>@<marketplace>`, `/reload-plugins`) is empirically stable as of Claude Code 2.1.138 — verified end-to-end during me2resh/apexyard#215. The official Anthropic marketplace is `claude-plugins-official`; per-language plugin names come from the verified table at [code.claude.com/docs/en/discover-plugins](https://code.claude.com/docs/en/discover-plugins#code-intelligence).
+
+The skill does **not** invoke these commands directly — `/plugin` is a Claude Code UI built-in, not a shell command, so a Bash call to it would silently no-op. The skill prints a copy-paste block for the operator to run inside Claude Code. Use the language → plugin map:
+
+| Detected language | Plugin name |
+|---|---|
+| `typescript` | `typescript-lsp` |
+| `python` | `pyright-lsp` |
+| `go` | `gopls-lsp` |
+| `rust` | `rust-analyzer-lsp` |
+
+Print this block to the operator, substituting `{plugin-name}` for the detected language:
 
 ```
-Plugin install for {detected-language}: open the Claude Code plugin
-marketplace (see https://docs.claude.com/en/docs/claude-code/plugins for
-the current entry point — typically `/plugin` inside Claude Code, or the
-plugins panel in the CLI), search for "{detected-language}" or
-"{server-binary}", and install the plugin. The plugin ships the `.lsp.json`
-wiring that tells Claude Code how to start the server you just installed.
+Final step — copy-paste these three commands into Claude Code (not the shell):
+
+  /plugin marketplace add anthropics/claude-plugins-official
+  /plugin install {plugin-name}@claude-plugins-official
+  /reload-plugins
+
+Then fully QUIT and RELAUNCH Claude Code (don't just /reload-plugins) so the
+new shell inherits ENABLE_LSP_TOOL=1 from your rc file. /reload-plugins
+reloads plugin state but does NOT re-read shell env, so the current Claude
+Code process won't see the env var until you restart.
+
+Verify after restart with `echo $ENABLE_LSP_TOOL` (should print 1).
 ```
 
-If a future framework version verifies the existence of a stable `claude plugin install <name>` shape, swap the printed instruction for a real subprocess call **and** keep the manual fallback for harnesses that don't support it. Don't break the whole setup just because the marketplace command shape changed — degrade gracefully.
+**Always emit the `marketplace add` line.** The Anthropic docs claim `claude-plugins-official` is auto-loaded when Claude Code starts, but in practice the auto-add can be missing on a fresh install — operators who skip the `add` and run only `/plugin install` hit "Marketplace not found" and have to debug it themselves. The `add` is a no-op when the marketplace is already registered, so there's no downside to emitting it every time. **Do not** try to optimise it away based on a presumed-already-loaded check.
+
+If a future Claude Code release changes the command shape, update the printed block here AND keep the docs URL above so a stale skill is recoverable from the link alone.
 
 #### Step 2c.6 — Smoke test
 
@@ -373,13 +392,14 @@ The smoke test is **diagnostic only** — it does NOT block Step 3. If the serve
 End Step 2c with a single status line capturing the outcome — used by Step 4's proposed-config summary so the operator can see at-a-glance what the skill changed:
 
 ```
-LSP: enabled ({detected-language} via {server-binary}, env var in {rc-file}, plugin: manual)
-LSP: enabled ({detected-language} via {server-binary}, env var in {rc-file}, plugin: installed via marketplace)
+LSP: server + env var configured ({detected-language} via {server-binary}, env var in {rc-file}); plugin-install commands printed for operator
 LSP: already enabled on this machine — no changes
 LSP: skipped (operator declined)
 LSP: skipped (Windows — manual install required, see getting-started.md)
-LSP: partial — server installed, env var added, plugin install requires manual step (see above)
+LSP: partial — server install or env var step failed (see above)
 ```
+
+The "plugin-install commands printed" wording is accurate even after the empirically-verified copy-paste from Step 2c.5(d): the skill prints the three `/plugin …` commands but cannot invoke them itself (they're Claude Code UI built-ins, not shell commands), so the operator's copy-paste is the final piece.
 
 Pick the line that matches the actual outcome. Don't claim "enabled" if any of (b)–(d) failed.
 
@@ -490,4 +510,4 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks. Running with `--enable-lsp` retrofits the LSP step on an already-configured fork; if LSP is already enabled it's a no-op.
 6. **No project-config.json.** `/setup` configures the FRAMEWORK (onboarding.yaml). Per-project config is handled by `/handover` and `/idea` when projects enter the portfolio.
 7. **Never auto-install language runtimes.** Step 2c installs LSP servers (e.g. `typescript-language-server`, `pyright`, `gopls`, `rust-analyzer`) but never the underlying runtime (`node`, `python`, `go`, `rustup`). If a runtime is missing, refuse the LSP install gracefully and tell the operator what to install.
-8. **Never fabricate plugin-install commands.** The Claude Code plugin marketplace's CLI shape isn't stable enough to bake into a skill spec. Print clear manual instructions instead — Step 2c.5(d) explains the shape. If a stable command appears in a future framework version, swap it in and keep the manual fallback.
+8. **Print plugin-install commands; never invoke them.** The Claude Code plugin marketplace command shape (`/plugin marketplace add`, `/plugin install`, `/reload-plugins`) is empirically stable — Step 2c.5(d) prints a copy-paste block for the operator. But `/plugin` is a Claude Code UI built-in, not a shell command, so the skill never runs the commands itself — it prints them. Always emit the `marketplace add` line; it's idempotent and recovers the case where the docs' auto-load claim doesn't fire on a fresh install.
