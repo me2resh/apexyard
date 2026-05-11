@@ -2,6 +2,43 @@
 
 > Persisted by `/threat-model` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. Edit the body freely; keep the frontmatter parseable. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
 
+## Data Flow Diagram
+
+A Data Flow Diagram (DFD) is the natural input to STRIDE — each crossing of a trust boundary is where threats apply most acutely, and the STRIDE walk in the table below should iterate the boundary crossings rather than invent threats ad-hoc. Replace the placeholders below with your system's actual entities; keep trust boundaries as dashed `subgraph` blocks and label every arrow with the data that crosses it (auth tokens, PII, transaction records, etc.). Mermaid-template choice rationale: see `docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`.
+
+```mermaid
+flowchart LR
+    user([External user])
+
+    subgraph internet ["Trust boundary: public internet"]
+        web[Web frontend]
+    end
+
+    subgraph backend ["Trust boundary: backend network"]
+        api[API service]
+        db[(Primary data store)]
+    end
+
+    subgraph thirdparty ["Trust boundary: third-party service"]
+        ext[External service<br/>e.g. payment / email / SSO]
+    end
+
+    user -->|credentials, form input| web
+    web -->|auth token, user PII| api
+    api -->|user PII, transaction record| db
+    db -->|query results| api
+    api -->|webhook / API call, redacted payload| ext
+    ext -->|callback, signed response| api
+    api -->|session cookie, view model| web
+    web -->|rendered HTML, JSON| user
+
+    style internet stroke-dasharray: 5 5
+    style backend stroke-dasharray: 5 5
+    style thirdparty stroke-dasharray: 5 5
+```
+
+Replace placeholders with your system's actual entities. **Each arrow that CROSSES a trust boundary is where STRIDE threats apply most acutely** — drive the table below from the boundary crossings, not from a free-form brainstorm.
+
 ## Attack surface
 
 - **Entry points**: {N} (HTTP routes, form handlers, WebSocket endpoints, file uploaders)
