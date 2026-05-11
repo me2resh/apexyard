@@ -34,6 +34,10 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
           }
         ]
       },
@@ -162,6 +166,21 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh issue edit *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
           }
         ]
       }

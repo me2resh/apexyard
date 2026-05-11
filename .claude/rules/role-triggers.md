@@ -105,3 +105,23 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 Before this rule existed, the 19 role files were passive markdown docs — no trigger, no activation, no automatic reference from workflows or skills. A user had to manually say *"please read `roles/engineering/qa-engineer.md` and act as the QA Engineer"* for anything to happen.
 
 This file closes that gap. When in a Claude Code session under apexyard, the trigger table drives which role activates, and the workflow and skill files now explicitly reference the role files at every phase boundary. Roles are now **first-class participants** in the SDLC, not reference material.
+
+### Mechanical backstop — `detect-role-trigger.sh`
+
+Self-discipline (the agent remembering to read the role file when the rule fires) is the primary mechanism. The framework also ships a mechanical backstop: `.claude/hooks/detect-role-trigger.sh` scans for trigger conditions on every relevant tool call and emits a system-reminder-style banner naming the role + the file to read.
+
+Same advisory shape as `check-upstream-drift.sh` — non-blocking, exit 0 always. The banner cannot force the agent to adopt the role, but it removes the "I forgot the rule applied here" failure mode.
+
+Triggers wired in v1 (me2resh/apexyard#206):
+
+| Trigger family | Hook event | Detection | Role |
+|----------------|------------|-----------|------|
+| Label-based  | `PreToolUse` on `Bash` (matcher: `gh issue edit *`) | `--add-label qa` (single or comma list) | QA Engineer |
+| Diff/path    | `PreToolUse` on `Edit` / `Write` / `MultiEdit` | path contains `auth/`, `crypto/`, `secrets/`, `.env*` | Security Auditor |
+| Diff/path    | same | path under `.github/workflows/` or `golden-paths/pipelines/` | Platform Engineer |
+| Diff/path    | same | path under `docs/agdr/` | Tech Lead |
+| Prompted     | `UserPromptSubmit` | "act as the X" / "as the X" / "put on your X hat" (case-insensitive, X matches any role in the activation table) | the named role |
+
+Triggers from the table above that are **not** yet mechanically detected (e.g. "production incident mentioned" → SRE, "new PRD drafted" → Product Manager) still rely on self-discipline; the hook can be extended without changing the surrounding wiring.
+
+Tests live at `.claude/hooks/tests/test_detect_role_trigger.sh` and cover the three trigger families the acceptance criteria call out.
