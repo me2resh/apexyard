@@ -33,13 +33,15 @@ Role definitions live in `roles/`. Each role defines:
 
 ### Departments
 
-| Department | Roles | Path |
-|------------|-------|------|
-| Engineering | Head of Eng, Tech Lead, Backend, Frontend, QA, Platform, SRE | `roles/engineering/` |
-| Product | Head of Product, PM, Product Analyst | `roles/product/` |
-| Design | Head of Design, UI Designer, UX Designer | `roles/design/` |
-| Security | Head of Security, Security Auditor, Pen Tester | `roles/security/` |
-| Data | Head of Data, Data Analyst, Data Engineer | `roles/data/` |
+Each role has a **persona name** — a short identifier used in conversation, PR comments, and demo scripts. The persona name lives as a bold line at the top of the role file (e.g. `**Persona name**: Khalid`). Agents carry the same identifier as a `persona_name` YAML frontmatter field. Rationale + full mapping table: [AgDR-0018](docs/agdr/AgDR-0018-persona-naming-convention.md).
+
+| Department | Roles (with persona names) | Path |
+|------------|----------------------------|------|
+| Engineering | Khalid (Head), Hisham (Tech Lead), Karim (Backend), Yasmin (Frontend), Salim (QA), Adel (Platform), Saif (SRE) | `roles/engineering/` |
+| Product | Omar (Head), Mariam (PM), Hanan (Product Analyst) | `roles/product/` |
+| Design | Maha (Head), Nour (UI Designer), Iman (UX Designer) | `roles/design/` |
+| Security | Faisal (Head), Hakim (Security Auditor), Hamza (Pen Tester) | `roles/security/` |
+| Data | Khalil (Head), Nadia (Data Analyst), Anwar (Data Engineer) | `roles/data/` |
 
 ### Activation — roles are first-class participants, not reference docs
 
@@ -177,7 +179,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 |-------|------|---------|
 | Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
 | Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
-| Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
+| Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
 | Skills | `.claude/skills/` | 43 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
@@ -201,7 +203,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Searchable, categorized library of AgDRs across the portfolio — `browse`, `search <term>`, `show <id>`, `stats` |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
-| `/security-review` | Invoke the Security Reviewer agent (Shield) on a PR |
+| `/security-review` | Invoke the Security Reviewer agent (Hatim) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
 | `/validate-idea` | Lightweight 5-question pre-spec gate (target user, alternative, smallest version, kill criteria, build/buy/rent). Invokable standalone or as an offered follow-up inside `/idea` and `/handover`. |
