@@ -84,10 +84,11 @@ detect_path_triggers() {
   fi
 
   # Security Auditor — auth / crypto / secrets / .env*
+  # Patterns anchored to path boundaries to avoid matching e.g. "author.tsx" or "myauth".
   case "$rel" in
-    *auth/*|*auth|auth/*|*/auth/*|\
-    *crypto/*|*crypto|crypto/*|*/crypto/*|\
-    *secrets/*|*secrets|secrets/*|*/secrets/*|\
+    auth|auth/*|*/auth|*/auth/*|\
+    crypto|crypto/*|*/crypto|*/crypto/*|\
+    secrets|secrets/*|*/secrets|*/secrets/*|\
     .env|.env.*|*/.env|*/.env.*)
       emit_banner \
         "Security Auditor" \
