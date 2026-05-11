@@ -46,6 +46,32 @@ Head of Product → Product Manager → Head of Design / UX Designer / UI Design
 
 Each handoff is explicit. The handing-off role delivers the artefact defined in its role file (PRD, tech design, PR, test plan, etc.); the receiving role reads it and moves forward.
 
+### How to signal activation
+
+When you activate, hand off, or exit a role, print a single-line marker at the top of your response. The reader sees who's driving the work right now.
+
+**Activation** — when entering a role:
+
+```
+▸ Activating Salim (QA Engineer) for #42 (trigger: ticket labeled `qa`)
+```
+
+**Handoff** — when one role hands off to another:
+
+```
+▸ Salim (QA Engineer) → Mariam (Product Manager) (handoff: acceptance criteria signed off)
+```
+
+**Exit** — when finishing a role and returning to ambient mode:
+
+```
+▸ Salim (QA Engineer) task complete — returning to ambient mode
+```
+
+The persona name comes from the `persona_name` field added in [#204](https://github.com/me2resh/apexyard/issues/204). If a future role doesn't have a persona name (custom adopter role), drop the name and use just the title (e.g. `▸ Activating QA Engineer for #42 …`). The triangle prefix (`▸`) makes the marker visually scannable.
+
+This is a **prose convention**, not a mechanically-enforced format. The sibling hook (`detect-role-trigger.sh`, from [#206](https://github.com/me2resh/apexyard/issues/206)) already injects an advisory reminder banner when a trigger fires; this convention adds the agent's response side so operators can see the transition in the conversation.
+
 ## Trigger Types
 
 **Auto-activation** — a role should activate automatically when its condition is detected in conversation context:

@@ -6,7 +6,7 @@ Ensure code quality, share knowledge, and catch issues before they reach product
 
 ## Roles
 
-Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate one of these roles for a review, signal it with the single-line marker convention from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" — e.g. `▸ Activating Hakim (Security Auditor) for PR #42 (trigger: diff touches **/auth/**)`.
 
 | Role | Responsibility | Role file |
 |------|----------------|-----------|

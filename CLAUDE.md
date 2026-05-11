@@ -57,6 +57,8 @@ When a role activates:
 3. Follow the handoff rules in the role file — who you receive from, who you deliver to
 4. Stay in the role until the task completes or a different trigger activates a different role
 
+When you activate, hand off, or exit a role, print a single-line marker (e.g. `▸ Activating Salim (QA Engineer) for #42 (trigger: ticket labeled qa)`) so operators can see who's driving the work — full marker convention in [`.claude/rules/role-triggers.md`](.claude/rules/role-triggers.md) § "How to signal activation".
+
 Full trigger table and handoff artefacts: @.claude/rules/role-triggers.md
 
 ---

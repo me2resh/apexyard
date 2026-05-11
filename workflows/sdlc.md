@@ -341,7 +341,7 @@ In Progress --> In Review --> QA --> Done
 
 ## Roles Summary
 
-Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate, hand off, or exit a phase's role, print the single-line marker from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" (e.g. `▸ Activating Hisham (Tech Lead) for #42 (trigger: planning phase)`) so operators can see the phase transition in the conversation.
 
 | Phase | Primary role | Supporting roles |
 |-------|--------------|------------------|
