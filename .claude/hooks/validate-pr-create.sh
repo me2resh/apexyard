@@ -81,14 +81,48 @@ if [ -n "$TICKET_REF" ]; then
     TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
   fi
 
+  # Optional upstream fallback (me2resh/apexyard#207). When the primary
+  # tracker resolution returns nothing for #N, recheck against the `upstream`
+  # remote if one is configured. Lets a fork's `fix(#N)` validate when the
+  # ticket lives on upstream and the PR targets upstream — and avoids the
+  # cross-repo workaround (`fix(owner/repo#N)`) that passes the hook but
+  # breaks GitHub's bare-#N auto-close on merge.
+  UPSTREAM_REPO=""
+  if git remote get-url upstream >/dev/null 2>&1; then
+    UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
+    UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
+    # Skip the redundant check when upstream resolves to the same repo as
+    # the primary tracker (running inside the framework itself, or when
+    # --repo on the gh command points at upstream directly).
+    if [ "$UPSTREAM_REPO" = "$TRACKER_REPO" ]; then
+      UPSTREAM_REPO=""
+    fi
+  fi
+
   if [ -n "$TICKET_NUM" ] && [ -n "$TRACKER_REPO" ]; then
     # Fetch both number and state in one call so we can distinguish
     # "does not exist" from "exists but CLOSED". Both are blocking.
     ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
+    # Short-circuit: only consult upstream when primary missed. Records which
+    # tracker actually matched so the CLOSED-state error names the right repo.
+    MATCHED_REPO="$TRACKER_REPO"
+    if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
+      ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$UPSTREAM_REPO" --json number,state 2>/dev/null)
+      if [ -n "$ISSUE_JSON" ]; then
+        MATCHED_REPO="$UPSTREAM_REPO"
+      fi
+    fi
     if [ -z "$ISSUE_JSON" ]; then
+      # Name both trackers in the error when an upstream fallback was tried,
+      # so the operator sees exactly where the lookup was attempted.
+      if [ -n "$UPSTREAM_REPO" ]; then
+        NOT_FOUND_LOC="${TRACKER_REPO} or upstream ${UPSTREAM_REPO}"
+      else
+        NOT_FOUND_LOC="${TRACKER_REPO}"
+      fi
       cat >&2 <<MSG
 BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} does not
-exist in ${TRACKER_REPO}.
+exist in ${NOT_FOUND_LOC}.
 
 This is the failure mode the ticket-vocabulary rule exists to prevent — do NOT
 use tracker notation (#N) for plan items that have no real issue behind them.
@@ -106,7 +140,7 @@ MSG
     if [ "$ISSUE_STATE" = "CLOSED" ]; then
       cat >&2 <<MSG
 BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} in
-${TRACKER_REPO} is CLOSED.
+${MATCHED_REPO} is CLOSED.
 
 Every PR needs its own OPEN ticket. Referencing a closed issue means the PR
 has no live acceptance criteria, no QA handoff, and no tracker row to move
@@ -117,7 +151,7 @@ Common causes:
     describes the follow-up, link back to the closed one in the body, and
     use the new number in the PR title.
   - The closed issue was auto-closed by a prior PR that didn't fully finish
-    the work → re-open it (gh issue reopen ${TICKET_NUM} --repo ${TRACKER_REPO})
+    the work → re-open it (gh issue reopen ${TICKET_NUM} --repo ${MATCHED_REPO})
     or create a new ticket for the remaining work.
   - The number is a typo → fix the PR title.
 
