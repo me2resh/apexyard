@@ -2,7 +2,7 @@
 name: setup
 description: First-run framework bootstrap for a new ApexYard fork. Three exchanges — "describe your stack", "here are the defaults", "accept or customize?" — and the fork is configured. Run once after forking; re-run anytime to update.
 disable-model-invocation: false
-argument-hint: "[--reset]"
+argument-hint: "[--reset] [--enable-lsp]"
 effort: medium
 ---
 
@@ -46,11 +46,12 @@ See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
 ### Step 1: Check current state
 
-Read `onboarding.yaml`. Two modes:
+Read `onboarding.yaml`. Four modes:
 
 - **First run** (placeholder values detected): proceed to Step 2.
 - **Already configured** (real values): show a summary of the current config and ask "What would you like to update?" — then jump to the specific section. Don't re-ask everything.
 - **`--reset` flag**: clear `onboarding.yaml` back to the template defaults (copy from the upstream example or regenerate) and proceed as first run.
+- **`--enable-lsp` flag** (retrofit mode): skip Steps 2 / 2a / 2b / 3-7 entirely and jump straight to Step 2c (LSP enablement). Use this when an existing adopter has a fully-configured fork and only wants to turn on LSP without re-running the whole bootstrap. The flag honours the same idempotence rules as a first-run pass through Step 2c — if LSP is already enabled, the step reports "already enabled" and exits cleanly. Step 0 (bootstrap marker) and Step 8 (clear marker) still run so the ticket gate stays coherent.
 
 Detection: `grep -q '"Your Company Name"' onboarding.yaml` — if found, it's still a template.
 
@@ -135,9 +136,252 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    fi
    ```
 
-Then proceed to Step 3 with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
+Then proceed to Step 2c with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
 
 **Do NOT auto-migrate** an adopter who's already in single-fork mode with private project names already pushed. Direct them to the migration guide in `docs/multi-project.md` § "Migrating from single-fork to split-portfolio" — that flow involves a force-push history rewrite, redacting GitHub Issue / PR bodies, and a backup-branch dance, and is destructive enough to warrant a deliberate, eyes-open run rather than a `/setup` side-effect.
+
+### Step 2c: LSP enablement (recommended)
+
+Background. Claude Code v2.0.74+ ships a built-in LSP (Language Server Protocol) tool that answers semantic queries — "where is this defined?", "find references", "what does this symbol resolve to?" — by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`) instead of grepping the file tree. The LSP spike (PR #184) measured **~3-15× cheaper** input-token cost on shallow semantic queries used by `/code-review`, `/threat-model`, `/security-review`, and `/handover` deep-dives. The framework's encouraged default is **on**.
+
+The manual opt-in path (still documented in `docs/getting-started.md` § "Optional: LSP-aware code navigation") is three steps spread across env-var + binary install + plugin install. This step bakes those three into one offer so the typical adopter gets LSP working out of the box.
+
+#### Step 2c.1 — Machine-spec heuristic for the default
+
+LSP servers are non-trivial: a cold `gopls` or `rust-analyzer` index on a large repo can spike RAM by 1-4 GB. On constrained machines, LSP is more friction than benefit. Compute a default answer **before** prompting:
+
+```bash
+# Cores
+CORES=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 0)
+
+# RAM (GB) — try /proc/meminfo on Linux, sysctl on macOS, fall back to 0
+RAM_GB=$(awk '/MemTotal/ {print int($2/1024/1024)}' /proc/meminfo 2>/dev/null \
+       || sysctl -n hw.memsize 2>/dev/null | awk '{print int($1/1024/1024/1024)}' \
+       || echo 0)
+
+if [ "$CORES" -lt 4 ] || [ "$RAM_GB" -lt 8 ]; then
+  LSP_DEFAULT="n"
+  LSP_DEFAULT_REASON="constrained hardware (cores=$CORES, ram_gb=$RAM_GB)"
+else
+  LSP_DEFAULT="y"
+  LSP_DEFAULT_REASON="recommended on this machine (cores=$CORES, ram_gb=$RAM_GB)"
+fi
+```
+
+Use `LSP_DEFAULT` as the highlighted choice in the prompt below — the operator can still pick the other option, but the default reflects what the machine can comfortably run.
+
+#### Step 2c.2 — Idempotence check (skip if already enabled)
+
+Before prompting, detect whether LSP is already fully enabled on this machine. If both conditions hold, **skip the prompt** and report "already enabled":
+
+1. **Env var already set in shell rc.** Pick the right rc file from `$SHELL`:
+
+   ```bash
+   case "$SHELL" in
+     */zsh)  RC_FILE="$HOME/.zshrc" ;;
+     */bash) RC_FILE="$HOME/.bashrc" ;;
+     *)      RC_FILE="$HOME/.profile" ;;
+   esac
+
+   ENV_VAR_SET=0
+   if [ -f "$RC_FILE" ] && grep -q 'ENABLE_LSP_TOOL=1' "$RC_FILE"; then
+     ENV_VAR_SET=1
+   fi
+   ```
+
+2. **Language-server binary on PATH.** Map the detected language to its binary (see Step 2c.3 below) and `command -v` for it:
+
+   ```bash
+   # Example for TypeScript — substitute the binary that matches the detected language
+   SERVER_INSTALLED=0
+   if command -v typescript-language-server >/dev/null 2>&1; then
+     SERVER_INSTALLED=1
+   fi
+   ```
+
+If `ENV_VAR_SET=1` and `SERVER_INSTALLED=1`, print:
+
+```
+LSP already enabled on this machine (env var set in <rc-file>, <server-binary>
+on PATH). Skipping install. Next Claude Code session will use LSP.
+```
+
+…and continue to Step 3 without prompting. This is the path that retrofit-flag (`/setup --enable-lsp`) re-runs hit on the second invocation — the skill stays silent rather than re-installing.
+
+#### Step 2c.3 — Detect the language from the user's description
+
+Map signals from the `tech_stack` description the operator gave in Step 2 (or read from the existing `onboarding.yaml` in retrofit mode). The mapping table:
+
+| Signals in description / `tech_stack.language` / `tech_stack.framework` | Detected language | Server binary | Install command (preferred) |
+|---|---|---|---|
+| "TypeScript", "JavaScript", "React", "Next", "Node", "Vue", "Svelte", "Express", "Fastify", "NestJS" | `typescript` | `typescript-language-server` | `npm install -g typescript typescript-language-server` |
+| "Python", "Django", "FastAPI", "Flask" | `python` | `pyright` | `pipx install pyright` (fallback: `pip install --user pyright`) |
+| "Go", "Golang" | `go` | `gopls` | `go install golang.org/x/tools/gopls@latest` |
+| "Rust", "Cargo", "rustup" | `rust` | `rust-analyzer` | `rustup component add rust-analyzer` |
+
+If the description mentions **multiple** matching languages (e.g. "TypeScript frontend + Python backend"), pick the language used by the primary application code — i.e. whichever language the operator is most likely to run `/code-review` against. When ambiguous, ask one explicit clarifying question:
+
+```
+Your stack mentions TypeScript and Python — which one should LSP target
+first? (You can install the other server later by re-running /setup --enable-lsp.)
+```
+
+If no language matches the table, default to `typescript` (the LSP spike's baseline) and tell the operator they can install another server manually later — don't silently install anything they didn't ask for.
+
+#### Step 2c.4 — Ask the operator (with the computed default)
+
+Present the offer as a single block, with the heuristic default highlighted:
+
+```
+LSP enablement (recommended)
+
+LSP-aware code navigation makes /code-review, /threat-model,
+/security-review, and /handover deep-dives 3-15× cheaper in token cost
+on semantic queries (measured on a real TypeScript backend; see
+docs/getting-started.md § "Optional: LSP-aware code navigation" for the
+spike summary).
+
+Enable LSP now? This will:
+  - Install the language server for {detected-language} ({install-command})
+  - Set ENABLE_LSP_TOOL=1 in your shell rc ({rc-file})
+  - Install the Claude Code LSP plugin for {detected-language} (or print
+    the manual install command if the marketplace command shape isn't
+    supported on your harness yet)
+
+Default for this machine: {LSP_DEFAULT}  ({LSP_DEFAULT_REASON})
+
+[y / n / "y, but ask before each install step"]
+```
+
+Branch on the answer:
+
+- **y** (or operator pressed enter with `LSP_DEFAULT=y`) → proceed to Step 2c.5 and run all three installs without further prompting (unless one fails — see Step 2c.6).
+- **n** (or operator pressed enter with `LSP_DEFAULT=n`) → skip Steps 2c.5–2c.7 entirely. Print: *"LSP skipped. You can enable it later via `/setup --enable-lsp` or by following the manual steps in `docs/getting-started.md` § "Optional: LSP-aware code navigation"."* Continue to Step 3.
+- **"ask before each"** (any phrasing — "step through", "one at a time", etc.) → run Step 2c.5 with `INTERACTIVE=1` so each sub-step asks for confirmation before mutating state.
+
+#### Step 2c.5 — Run the three install steps
+
+Each sub-step is **independent and idempotent** — a failure in one doesn't roll back the others, and re-running on a machine where one is already done is a no-op. Print a one-line result for each.
+
+##### (a) Refuse on Windows for v1
+
+If the harness is Windows (detect via `$OSTYPE` containing "msys", "cygwin", or "win32", or `uname -s` starting with "MINGW" / "CYGWIN" / "Windows"), do NOT attempt any installs. Print:
+
+```
+LSP automation on Windows is not supported in this release. Follow the
+manual steps in docs/getting-started.md § "Optional: LSP-aware code
+navigation" — the same three pieces (env var, language-server install,
+plugin install), just executed by hand. Continuing without LSP.
+```
+
+…and skip the rest of Step 2c. Continue to Step 3.
+
+##### (b) Install the language server
+
+For each detected language, the install command and its prerequisite check:
+
+| Language | Prerequisite check | Install command |
+|---|---|---|
+| `typescript` | `command -v npm` | `npm install -g typescript typescript-language-server` |
+| `python` | `command -v pipx \|\| command -v pip3` | `pipx install pyright` (or `pip3 install --user pyright`) |
+| `go` | `command -v go` | `go install golang.org/x/tools/gopls@latest` |
+| `rust` | `command -v rustup` | `rustup component add rust-analyzer` |
+
+If the prerequisite is missing, refuse gracefully — do NOT attempt to auto-install Node, Python, Go, or Rust runtimes (that's out of scope, and silently installing language runtimes is the wrong shape). Example refusal for TypeScript:
+
+```bash
+if ! command -v npm >/dev/null 2>&1; then
+  echo "✗ npm not found on PATH. Install Node.js first (https://nodejs.org/), then re-run /setup --enable-lsp."
+  LSP_SERVER_INSTALLED=0
+else
+  npm install -g typescript typescript-language-server
+  if command -v typescript-language-server >/dev/null 2>&1; then
+    echo "✓ typescript-language-server installed."
+    LSP_SERVER_INSTALLED=1
+  else
+    echo "✗ install succeeded but binary not on PATH. Check your npm global bin (npm config get prefix)."
+    LSP_SERVER_INSTALLED=0
+  fi
+fi
+```
+
+The other three languages follow the same shape — prerequisite check → install → verify-on-PATH → report. **Do not** continue to (c) or (d) if (b) fails on its own prerequisite; the env var and plugin without a server is dead weight. Tell the operator what's missing and move on.
+
+##### (c) Set the env var idempotently in the shell rc
+
+```bash
+case "$SHELL" in
+  */zsh)  RC_FILE="$HOME/.zshrc" ;;
+  */bash) RC_FILE="$HOME/.bashrc" ;;
+  *)      RC_FILE="$HOME/.profile" ;;
+esac
+
+if ! grep -q 'ENABLE_LSP_TOOL=1' "$RC_FILE" 2>/dev/null; then
+  {
+    echo ""
+    echo "# ApexYard: enable Claude Code LSP (added by /setup)"
+    echo "export ENABLE_LSP_TOOL=1"
+  } >> "$RC_FILE"
+  echo "✓ ENABLE_LSP_TOOL=1 added to $RC_FILE"
+else
+  echo "✓ ENABLE_LSP_TOOL=1 already present in $RC_FILE (no change)"
+fi
+```
+
+Tell the operator they need to either open a new shell or `source "$RC_FILE"` for the env var to take effect in the **current** shell — `/setup` cannot mutate the parent shell's environment from its own subshell.
+
+##### (d) Install the Claude Code LSP plugin
+
+The Claude Code plugin-marketplace install command shape is **not** something the skill should fabricate. Today there is no documented, stable, scriptable `claude plugin install <name>` shape that the skill can rely on across harness versions (the marketplace is documented as a UI flow at <https://docs.claude.com/en/docs/claude-code/plugins>). Default to printing a clear manual instruction rather than calling a command that may not exist:
+
+```
+Plugin install for {detected-language}: open the Claude Code plugin
+marketplace (see https://docs.claude.com/en/docs/claude-code/plugins for
+the current entry point — typically `/plugin` inside Claude Code, or the
+plugins panel in the CLI), search for "{detected-language}" or
+"{server-binary}", and install the plugin. The plugin ships the `.lsp.json`
+wiring that tells Claude Code how to start the server you just installed.
+```
+
+If a future framework version verifies the existence of a stable `claude plugin install <name>` shape, swap the printed instruction for a real subprocess call **and** keep the manual fallback for harnesses that don't support it. Don't break the whole setup just because the marketplace command shape changed — degrade gracefully.
+
+#### Step 2c.6 — Smoke test
+
+After Steps 2c.5 (b)–(d), run a single smoke test that confirms the server binary is on PATH and reports next-session behaviour:
+
+```bash
+case "$DETECTED_LANG" in
+  typescript) BIN=typescript-language-server ;;
+  python)     BIN=pyright ;;
+  go)         BIN=gopls ;;
+  rust)       BIN=rust-analyzer ;;
+esac
+
+if command -v "$BIN" >/dev/null 2>&1; then
+  echo "✓ $BIN installed at $(command -v $BIN)"
+else
+  echo "✗ $BIN not on PATH after install — see install errors above"
+fi
+
+echo "ℹ Next Claude Code session (with ENABLE_LSP_TOOL=1 in your shell environment) will use LSP."
+```
+
+The smoke test is **diagnostic only** — it does NOT block Step 3. If the server isn't on PATH, the operator gets a clear message and can fix it later; `/setup` shouldn't refuse to finish the bootstrap over an LSP install hiccup.
+
+#### Step 2c.7 — Final summary line for this step
+
+End Step 2c with a single status line capturing the outcome — used by Step 4's proposed-config summary so the operator can see at-a-glance what the skill changed:
+
+```
+LSP: enabled ({detected-language} via {server-binary}, env var in {rc-file}, plugin: manual)
+LSP: enabled ({detected-language} via {server-binary}, env var in {rc-file}, plugin: installed via marketplace)
+LSP: already enabled on this machine — no changes
+LSP: skipped (operator declined)
+LSP: skipped (Windows — manual install required, see getting-started.md)
+LSP: partial — server installed, env var added, plugin install requires manual step (see above)
+```
+
+Pick the line that matches the actual outcome. Don't claim "enabled" if any of (b)–(d) failed.
 
 ### Step 3: Parse and map to defaults
 
@@ -182,9 +426,12 @@ Team: 1 tech lead (you)
 Design review gate: ON (React = UI work)
 AgDR gate: ON (default architecture paths)
 Commit types: framework defaults (feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert)
+LSP: enabled (typescript via typescript-language-server, env var in ~/.zshrc, plugin: manual)
 
 Use these defaults, or customize?
 ```
+
+Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-lsp` was invoked (retrofit mode), the summary is just the single LSP status line — no other proposed-config fields, since those are already configured.
 
 ### Step 5: Confirm or customize
 
@@ -240,5 +487,7 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 2. **Propose, don't interrogate.** Show the full config with sensible defaults and let the user correct. Most fields have obvious defaults from the description.
 3. **Stage, don't commit.** The user should see the diff before it's committed. `/setup` stages; the user commits.
 4. **Preserve structure.** `onboarding.yaml` has comments that explain each section. Don't blow them away — edit in place.
-5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks.
+5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks. Running with `--enable-lsp` retrofits the LSP step on an already-configured fork; if LSP is already enabled it's a no-op.
 6. **No project-config.json.** `/setup` configures the FRAMEWORK (onboarding.yaml). Per-project config is handled by `/handover` and `/idea` when projects enter the portfolio.
+7. **Never auto-install language runtimes.** Step 2c installs LSP servers (e.g. `typescript-language-server`, `pyright`, `gopls`, `rust-analyzer`) but never the underlying runtime (`node`, `python`, `go`, `rustup`). If a runtime is missing, refuse the LSP install gracefully and tell the operator what to install.
+8. **Never fabricate plugin-install commands.** The Claude Code plugin marketplace's CLI shape isn't stable enough to bake into a skill spec. Print clear manual instructions instead — Step 2c.5(d) explains the shape. If a stable command appears in a future framework version, swap it in and keep the manual fallback.

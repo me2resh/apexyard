@@ -145,9 +145,22 @@ The LSP spike (PR #184, ticket #178) measured the input-token cost of three repr
 
 Concretely: a Code Reviewer agent run on a typical PR that does a handful of "where is this defined" lookups can come in at a quarter to a tenth of its grep-driven token bill, with the saved budget freed up for the actual review reasoning.
 
-### Opt-in path — two pieces
+### Easy path — `/setup` automates it
 
-LSP is enabled by **two** things in the same session:
+Run `/setup` (first run) or `/setup --enable-lsp` (retrofit on an already-configured fork) and the skill walks you through three things in one offer:
+
+1. **Detects your language** from the `tech_stack` you described in `/setup` (or from the existing `onboarding.yaml` if you're retrofitting).
+2. **Installs the language server** (`typescript-language-server`, `pyright`, `gopls`, or `rust-analyzer`) using the right package manager for the detected language. Refuses gracefully if the prerequisite runtime (`node`, `python`, `go`, `rustup`) is missing — it never auto-installs runtimes.
+3. **Sets `ENABLE_LSP_TOOL=1` in your shell rc** (`~/.zshrc`, `~/.bashrc`, or `~/.profile` depending on `$SHELL`) — idempotently, so re-running is a no-op.
+4. **Prints the Claude Code plugin marketplace instruction** for your language. The marketplace command shape isn't stable enough for the skill to call directly today, so this step is a clear manual instruction — open the marketplace, search for your language, install.
+
+The skill defaults to **on** for typical machines (≥ 4 cores AND ≥ 8 GB RAM) and **off** for constrained machines, with the operator free to override either way. Re-running `/setup --enable-lsp` is idempotent: if the env var and server binary are already in place, it reports "already enabled" and exits.
+
+Windows is out of scope for v1 of the LSP automation — `/setup` prints a manual-install pointer back to this section and continues without LSP.
+
+### Opt-in path — manual fallback (two pieces)
+
+If you'd rather skip the skill and wire it up yourself — or you're on Windows and `/setup` declined to automate it — LSP is enabled by **two** things in the same session:
 
 1. The environment variable `ENABLE_LSP_TOOL=1` (singular `_TOOL`, not plural).
 2. A per-language plugin that ships the LSP server binary and the `.lsp.json` wiring.
