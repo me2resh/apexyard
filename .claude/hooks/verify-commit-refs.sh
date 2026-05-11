@@ -17,6 +17,17 @@
 # Tracker repo resolves in this order:
 #   1. .claude/project-config.json `.tracker_repo`
 #   2. origin remote (parsed from `git remote get-url origin`)
+#
+# Upstream awareness (me2resh/apexyard#207): when an `upstream` remote is
+# configured (typical fork-of-apexyard layout), a #N reference that misses in
+# the primary tracker is rechecked against `upstream` before being declared
+# missing. This lets a fork's `Closes #150` validate when issue 150 lives on
+# the upstream repo — and, more importantly, lets GitHub's auto-close fire on
+# merge (auto-close requires BARE #N notation; the cross-repo workaround
+# `Closes owner/repo#150` passes the hook but breaks auto-close).
+#
+# Short-circuit: try the primary tracker first, only fall back to upstream on
+# miss. No double query for refs that resolve in origin.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -99,6 +110,21 @@ if [ -z "$TRACKER_REPO" ]; then
   exit 0
 fi
 
+# Optional upstream fallback (see file header). Parse `git remote get-url
+# upstream` into `owner/repo`; empty if no upstream remote is configured —
+# in which case the validator behaves exactly as before (origin-only check).
+UPSTREAM_REPO=""
+if git remote get-url upstream >/dev/null 2>&1; then
+  UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
+  UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
+  # Don't double-check if upstream resolves to the same repo as the primary
+  # tracker (e.g. running INSIDE the framework repo itself, where origin and
+  # upstream both point at me2resh/apexyard).
+  if [ "$UPSTREAM_REPO" = "$TRACKER_REPO" ]; then
+    UPSTREAM_REPO=""
+  fi
+fi
+
 # Verify each referenced issue exists. Fabricated #N (issue not found) is
 # BLOCKING — that's the failure mode the ticket-vocabulary rule targets.
 # References to CLOSED issues are WARNED (not blocked) because a commit may
@@ -111,6 +137,10 @@ CLOSED=""
 for REF in $REFS; do
   NUM=$(echo "$REF" | tr -d '#')
   ISSUE_JSON=$(gh issue view "$NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
+  # Short-circuit: only consult upstream when the primary tracker missed.
+  if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
+    ISSUE_JSON=$(gh issue view "$NUM" --repo "$UPSTREAM_REPO" --json number,state 2>/dev/null)
+  fi
   if [ -z "$ISSUE_JSON" ]; then
     MISSING="${MISSING}${REF} "
     continue
@@ -122,8 +152,15 @@ for REF in $REFS; do
 done
 
 if [ -n "$MISSING" ]; then
+  # Include the upstream repo in the error when one was consulted — makes the
+  # blocked-because-it's-not-in-either-place case explicit.
+  if [ -n "$UPSTREAM_REPO" ]; then
+    LOCATION_MSG="${TRACKER_REPO} or upstream ${UPSTREAM_REPO}"
+  else
+    LOCATION_MSG="${TRACKER_REPO}"
+  fi
   cat >&2 <<MSG
-BLOCKED: Commit message references issues that do not exist in ${TRACKER_REPO}:
+BLOCKED: Commit message references issues that do not exist in ${LOCATION_MSG}:
   ${MISSING}
 
 This is the failure mode the ticket-vocabulary rule exists to prevent — do NOT

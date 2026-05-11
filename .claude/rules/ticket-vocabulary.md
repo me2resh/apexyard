@@ -110,6 +110,18 @@ This rule is primarily self-discipline. It is also backed up by two mechanical h
 
 Both hooks block at the moment the fabricated reference would be committed to a durable artifact (PR title, commit message). They cannot see conversation prose — that's why the rule comes first and the hooks are labeled **backstops**, not the primary fix.
 
+### Fork → upstream PRs: bare `#N` is the right notation (since me2resh/apexyard#207)
+
+When you're working in a fork (e.g. `your-org/apexyard`) with `origin` = the fork and `upstream` = `me2resh/apexyard`, and the issue you're closing lives in **upstream**, use bare `#N` notation — not cross-repo `owner/repo#N`.
+
+| Notation | Hook check | Auto-close on merge |
+|----------|-----------|---------------------|
+| `Closes #150` (issue in upstream) | passes — both hooks consult `upstream` after origin misses | fires (GitHub auto-closes on bare `#N` when PR target = issue host) |
+| `Closes me2resh/apexyard#150` | passes (no #N extracted from the cross-repo form) | does NOT fire — cross-repo references don't trigger auto-close |
+| `Closes #99999` (nowhere) | BLOCKED — neither tracker has it | n/a |
+
+Earlier versions of these hooks were origin-only, which forced the cross-repo workaround for fork → upstream PRs and silently broke GitHub's auto-close — leaving every cross-fork PR's issue OPEN forever. After #207, bare `#N` is the supported pattern and the cross-repo workaround is no longer needed (it still passes the hook for backwards compat, but you lose auto-close).
+
 ## Why not lint Claude's prose output?
 
 Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response — which is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision wouldn't happen in the first place.
