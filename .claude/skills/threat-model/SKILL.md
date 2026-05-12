@@ -31,6 +31,8 @@ Per-language LSP plugins live in Claude Code's marketplace. Install once; the sk
 
 ### Step 1: Map the attack surface
 
+**Populate the Data Flow Diagram first** in this run's per-run artefact (per `templates/audits/threat-model.md` § Data Flow Diagram) — replace the Mermaid skeleton's placeholders with the system's actual external entities, processes, data stores, and trust boundaries, and label every arrow with the data that crosses it. The STRIDE walk in Step 2 then iterates the DFD's trust-boundary crossings rather than inventing threats ad-hoc.
+
 Read the codebase and identify:
 
 - **Entry points**: API routes, form handlers, WebSocket endpoints, file upload handlers
