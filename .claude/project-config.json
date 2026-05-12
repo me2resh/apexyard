@@ -1,0 +1,36 @@
+{
+  "portfolio": {
+    "registry": "../9h-portfolio/apexyard.projects.yaml",
+    "projects_dir": "../9h-portfolio/projects",
+    "ideas_backlog": "../9h-portfolio/projects/ideas-backlog.md"
+  },
+  "ticket": {
+    "prefix_whitelist": [
+      "Feature",
+      "Bug",
+      "Chore",
+      "Refactor",
+      "Testing",
+      "CI",
+      "Docs",
+      "Idea"
+    ],
+    "label_priority_scheme": "P0,P1,P2,P3",
+    "required_sections": {
+      "Feature": ["User Story", "Acceptance Criteria"],
+      "Chore": ["Driver", "Scope", "Acceptance Criteria"],
+      "Refactor": ["Driver", "Scope", "Acceptance Criteria"],
+      "Testing": ["Driver", "Scope", "Acceptance Criteria"],
+      "CI": ["Driver", "Scope", "Acceptance Criteria"],
+      "Docs": ["Driver", "Acceptance Criteria"],
+      "Bug": ["Given / When / Then", "Repro"]
+    },
+    "skip_marker": "<!-- validate-issue-structure: skip -->",
+    "bootstrap_skills": [
+      "setup",
+      "handover",
+      "update",
+      "split-portfolio"
+    ]
+  }
+}

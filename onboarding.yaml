@@ -29,10 +29,10 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
+  name: "9H Digital"
+  mission: "Building AI-powered WordPress, Laravel, and Next.js solutions"
   vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  website: "https://9hdigital.com"
 
   # Core values that guide decision-making
   values:
@@ -42,9 +42,18 @@ company:
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
-      type: "web-app"  # web-app, mobile-app, api, cli, library, saas
+    - name: "WordPress AI"
+      description: "AI-powered WordPress solutions and plugins"
+      type: "web-app"
+    - name: "Laravel apps"
+      description: "Custom Laravel-based web applications"
+      type: "web-app"
+    - name: "Next.js apps"
+      description: "Modern TypeScript/React web apps built on Next.js"
+      type: "web-app"
+    - name: "Python AI/ML"
+      description: "AI/ML services and tooling in Python"
+      type: "api"
 
 # -----------------------------------------------------------------------------
 # Team Structure
@@ -61,22 +70,14 @@ company:
 #   Data:        head-of-data, data-analyst, data-engineer
 #
 team:
-  - name: "Team Lead"
+  - name: "Mohamed Khaled"
     role: "tech-lead"
     department: "engineering"
 
-  - name: "Developer 1"
-    role: "backend-engineer"
-    department: "engineering"
-
-  - name: "Developer 2"
-    role: "frontend-engineer"
-    department: "engineering"
-
-  # Uncomment and add more team members as needed:
-  # - name: "PM"
-  #   role: "product-manager"
-  #   department: "product"
+  # Solo founder for now — add more team members as you hire:
+  # - name: "Developer 1"
+  #   role: "backend-engineer"
+  #   department: "engineering"
   #
   # - name: "Designer"
   #   role: "ux-designer"
@@ -88,15 +89,15 @@ team:
 # Define your technology choices. This helps Claude Code give relevant advice.
 #
 tech_stack:
-  language: "TypeScript"          # Primary language
-  runtime: "Node.js"              # Runtime environment
-  framework: "React"              # Frontend framework (React, Vue, Svelte, etc.)
-  backend: "Express"              # Backend framework (Express, Fastify, NestJS, etc.)
-  database: "PostgreSQL"          # Primary database
-  hosting: "AWS"                  # Cloud provider (AWS, GCP, Azure, Vercel, etc.)
-  ci_cd: "GitHub Actions"         # CI/CD platform
-  testing: "Vitest"               # Test framework
-  e2e_testing: "Playwright"       # E2E test framework
+  language: "PHP / TypeScript / Python"  # Polyglot — per-project varies
+  runtime: "Multiple"                    # PHP-FPM, Node.js, Python depending on project
+  framework: "Next.js"                   # Frontend (React-based)
+  backend: "Laravel + WordPress + Python"  # Per-project varies
+  database: "MySQL + PostgreSQL"         # MySQL for Laravel/WP, PostgreSQL for Python
+  hosting: "per-product (Kinsta / WP Engine / AWS varies)"  # Refine in each project's docs
+  ci_cd: "GitHub Actions"                # CI/CD platform
+  testing: "PHPUnit + Vitest + pytest"   # Per-project: PHPUnit (PHP), Vitest (TS), pytest (Python)
+  e2e_testing: "Playwright"              # E2E test framework
 
   # Additional tools (uncomment what you use):
   # orm: "Prisma"
@@ -126,8 +127,12 @@ quality:
   # Minimum test coverage percentage
   test_coverage_target: 80
 
-  # Required approvals before merge
-  required_reviews: 1
+  # Required approvals before merge.
+  # Set to 0 because solo founder — Rex (code-reviewer agent) still runs on
+  # every PR automatically via auto-code-review.sh and the merge gate still
+  # requires the CEO marker via /approve-merge. So "0" means "no extra human
+  # reviewer beyond me", not "no review at all".
+  required_reviews: 0
 
   # Enforce these checks before merge
   required_checks:
@@ -137,7 +142,7 @@ quality:
     - build
 
   # Code review style
-  review_style: "thorough"        # thorough, lightweight, pair-programming
+  review_style: "lightweight"     # thorough, lightweight, pair-programming
 
 # -----------------------------------------------------------------------------
 # Workflows

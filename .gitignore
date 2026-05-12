@@ -13,3 +13,8 @@
 # must not be double-tracked from the ops repo.
 workspace/*/
 !workspace/README.md
+
+# Portfolio data lives in a separate private repo (split-portfolio mode).
+# See docs/multi-project.md.
+apexyard.projects.yaml
+projects
