@@ -355,5 +355,6 @@ Persistence + trend logic ships as a shared shell helper that all audit skills c
 | `render-trend.sh` (this skill's dir) | Legacy chart renderer for the launch-check dimension; the lib's `audit_render_trend` dispatches to it when the dimension is `launch-check` so the chart shape stays byte-equal across the #218 refactor |
 
 Design rationale:
+
 - ASCII chart vs Mermaid, JSON schema choice, opt-in commit marker: see [`docs/agdr/AgDR-0014-launch-check-trend-tracking.md`](../../../docs/agdr/AgDR-0014-launch-check-trend-tracking.md)
 - Audit-history lib shape, JSON+MD pair, launch-check backward-compat strategy: see [`docs/agdr/AgDR-0019-audit-artefact-persistence.md`](../../../docs/agdr/AgDR-0019-audit-artefact-persistence.md) and [`docs/technical-designs/audit-artefact-persistence.md`](../../../docs/technical-designs/audit-artefact-persistence.md)
