@@ -81,9 +81,102 @@ After the STRIDE sweep, explicitly check for:
 - Security misconfiguration (CORS *, debug mode, default credentials?)
 - Using components with known vulnerabilities (`npm audit` / `pip audit`)
 
+### Step 5: Persist the run + render trend
+
+After printing the human-readable catalogue (Step 3) and OWASP check (Step 4), persist a structured artefact via the shared audit-history lib so the threat-model trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
+
+#### 5a. Resolve project name + score + verdict
+
+`<project-name>` is the project's registered name in `apexyard.projects.yaml`. If the project isn't registered, use the basename of the project path and tell the operator to `/handover` it for cross-machine trend continuity.
+
+Compute a single headline score from the severity distribution:
+
+```
+score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)
+```
+
+Compute the verdict by the worst-severity rule:
+
+| Worst severity present | Verdict |
+|---|---|
+| critical or high       | `fail` |
+| medium only            | `conditional` |
+| low only / none        | `pass` |
+
+#### 5b. Build payload + body, persist via the lib
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib's stats derivation expects
+# critical / high / medium / low / info. The visible catalogue from Step 3
+# can keep whatever capitalisation reads best.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "T1", "severity": "high",   "status": "open", "summary": "No rate limit on /auth/login"},
+    {"id": "T2", "severity": "medium", "status": "open", "summary": "Stack traces in prod errors"},
+    {"id": "T3", "severity": "high",   "status": "open", "summary": "No CSRF on state-changing forms"}
+  ]
+}
+EOF
+
+# Body = the catalogue table + OWASP cross-check (per templates/audits/threat-model.md).
+body=$(mktemp); cat > "$body" <<'EOF'
+## Attack surface
+
+3 entry points, 1 data store, 0 external integrations.
+
+## Threats by STRIDE category
+
+| # | Category | Threat | Severity | Entry point | Mitigation |
+|---|---|---|---|---|---|
+| T1 | Spoofing | No rate limit on /auth/login | high | POST /auth/login | Add rate limiter (5/min/IP) |
+| T2 | Info Disclosure | Stack traces in prod errors | medium | Global error handler | Strip when NODE_ENV=production |
+| T3 | Tampering | No CSRF on state-changing forms | high | POST /settings | Add CSRF middleware |
+
+## Recommended priority
+
+1. T1 — rate limit on /auth/login
+2. T3 — CSRF middleware
+3. T2 — strip stack traces
+
+## OWASP cross-check
+
+(... per Step 4 results ...)
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "threat-model" "$ts" "fail" 65 "$body" < "$payload"
+rm -f "$payload" "$body"
+```
+
+#### 5c. Render the trend section
+
+```bash
+audit_render_trend "<project-name>" "threat-model" 5
+```
+
+- < 2 prior runs → silent (no trend section). Don't append anything.
+- ≥ 2 prior runs → prints a markdown trend block (heading + table + ASCII chart of `score` over time) to stdout. Append it to this run's MD artefact and to the chat output.
+
+#### 5d. Opt-in commit (history-tracked marker)
+
+By default the dimension's runs/ JSON files are gitignored — most adopters don't want audit history bloat in the repo. The lib applies a `.gitignore` based on the presence of the marker:
+
+```bash
+# Opt in to commit threat-model history (per-project, per-dimension)
+touch projects/<name>/audits/threat-model/.audit-history-tracked
+```
+
+The lib re-evaluates the marker on every persist; the operator can toggle freely. The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless — they are the durable human-readable artefact.
+
 ## Rules
 
 1. **Lead with the summary table.** Details (code snippets, exploit scenarios) go AFTER the table, organized by severity.
 2. **Be specific about mitigations.** "Add auth" is not a mitigation. "Add JWT verification middleware to routes /api/admin/* using the existing authMiddleware.ts" is.
 3. **Don't cry wolf.** Only flag threats that are realistic for this codebase. A static site doesn't need CSRF protection.
 4. **Adapt scope to project type.** API-only? Focus on auth, input validation, rate limiting. Full-stack? Add XSS, CSRF, cookie security. Library? Focus on supply chain and input handling.
+5. **Always persist.** Step 5 always writes a JSON + MD pair via `audit_run_persist`, regardless of opt-in commit state. The marker only controls whether the JSON is committed; persistence is unconditional so the trend is visible across runs.
+6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical` / `high` / `medium` / `low` / `info`. The human-readable Step 3 table can use whatever capitalisation reads best.
