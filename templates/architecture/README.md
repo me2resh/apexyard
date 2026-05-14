@@ -1,0 +1,45 @@
+# Architecture Templates
+
+ApexYard ships five architecture-document templates. All diagrams are [Mermaid](https://mermaid.js.org/) — GitHub renders them inline, no build step. Decision rationale: [AgDR-0003](../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md).
+
+## When to use which
+
+| I want to document… | Use this template |
+|---------------------|-------------------|
+| The system + its external actors (as-is) | [`c4-context.md`](c4-context.md) |
+| Deployable units inside the system (as-is) | [`c4-container.md`](c4-container.md) |
+| Target-state architecture + migration path | [`vision.md`](vision.md) |
+| Trust boundaries + data flows (input to STRIDE) | [`dfd.md`](dfd.md) |
+| A request-flow walkthrough over time | [`sequence.md`](sequence.md) |
+
+## One-line summary per template
+
+- **[`c4-context.md`](c4-context.md)** — C4 Level 1. The system as a single box surrounded by people and external systems. One per project; updated when external relationships change (rare — once or twice a year).
+- **[`c4-container.md`](c4-container.md)** — C4 Level 2. The system zoomed in to its deployable units (web, API, worker, DB, cache, queue). One per project; updated when containers are added / split / merged.
+- **[`vision.md`](vision.md)** — North-star architecture. Target state + current-vs-target gap table + multi-quarter migration path + explicit anti-scope ("things we chose NOT to build"). Reviewed quarterly.
+- **[`dfd.md`](dfd.md)** — Data flow diagram with dashed-line trust boundaries. Designed to feed a STRIDE threat model — every boundary crossing is a candidate for spoofing / tampering / repudiation / disclosure / DoS / elevation analysis.
+- **[`sequence.md`](sequence.md)** — Time-ordered request-flow walkthrough. Use when *the order of interactions* is the load-bearing detail (auth handshake, payment flow, webhook callback). Includes an `alt` / `else` failure-path block + a failure-modes table.
+
+## Where to put filled-in diagrams
+
+Same split as every other doc — *"would this follow the code if the project spun out tomorrow?"* If yes → put it in the project's own repo. If no → put it in your fork's portfolio docs.
+
+| Scope | Location |
+|-------|----------|
+| Framework-wide (ApexYard itself) | `docs/architecture/` in the ops fork |
+| ApexYard's view of a managed project | `projects/<name>/architecture/` in the ops fork |
+| Internal to a project's own repo | `docs/architecture/` in that project's repo (via `workspace/<name>/docs/architecture/`) |
+
+## How they relate
+
+```
+                                ┌─ vision.md      (where are we going?)
+                                │
+   c4-context.md (L1, as-is) ───┼─ dfd.md         (what crosses trust boundaries?)
+                                │
+   c4-container.md (L2, as-is) ─┴─ sequence.md    (in what order do things happen?)
+```
+
+The two C4 templates describe **what is**. `vision.md` describes **what will be**. `dfd.md` and `sequence.md` are **lenses** on the same components — DFD asks "where are the security-relevant data crossings?", sequence asks "what happens, in what order, when this flow runs?".
+
+You don't need all five for every project. A small project ships happy with just a `c4-context.md`. Add `c4-container.md` once you have ≥ 3 deployable units. Add `vision.md` when there's a target-state delta worth coordinating around. Add `dfd.md` before the first STRIDE pass. Add `sequence.md` for the flows you'd want to read at 2 AM during an incident.

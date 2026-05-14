@@ -134,6 +134,9 @@ Template: @templates/agdr.md
 | Migration AgDR | Recording migration decisions (rollback, downtime, consumers, observability) | `templates/agdr-migration.md` |
 | C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
 | C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
+| Architecture Vision | Target-state architecture + multi-quarter migration path + explicit anti-scope | `templates/architecture/vision.md` |
+| Data Flow Diagram (DFD) | Trust boundaries + data crossings (input to STRIDE threat model) | `templates/architecture/dfd.md` |
+| Sequence Diagram | Time-ordered request-flow walkthrough (auth handshake, payment flow, etc.) | `templates/architecture/sequence.md` |
 
 ---
 

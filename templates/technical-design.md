@@ -56,13 +56,23 @@
 
 ### Component Diagram
 
+For anything beyond a trivial design, prefer one of the dedicated architecture templates over an ad-hoc ASCII sketch — they're index-aware (`templates/architecture/README.md`) and render as Mermaid on GitHub:
+
+- **As-is system context**: copy [`architecture/c4-context.md`](architecture/c4-context.md) (C4 L1).
+- **As-is container topology**: copy [`architecture/c4-container.md`](architecture/c4-container.md) (C4 L2).
+- **Target-state + migration path**: copy [`architecture/vision.md`](architecture/vision.md).
+- **Trust boundaries + data flows** (input to a STRIDE threat model): copy [`architecture/dfd.md`](architecture/dfd.md).
+- **Time-ordered request flow** (auth handshake, payment flow, webhook callback): copy [`architecture/sequence.md`](architecture/sequence.md).
+
+For a trivial design where one of those is overkill, the ASCII fallback below is fine.
+
 ```
 [Draw your architecture here using text/ASCII]
 ```
 
 ### Data Flow
 
-[Describe how data flows through the system]
+[Describe how data flows through the system. For non-trivial flows, link a [`architecture/dfd.md`](architecture/dfd.md) (data flow + trust boundaries) and/or a [`architecture/sequence.md`](architecture/sequence.md) (time-ordered walkthrough) instead of describing it inline.]
 
 ---
 
