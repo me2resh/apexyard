@@ -184,7 +184,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Layer | Path | Purpose |
 |-------|------|---------|
 | Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
-| Rules | `.claude/rules/` | 10 modular rule files (AgDR triggers, code standards, git conventions, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
+| Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
 | Skills | `.claude/skills/` | 43 slash commands — see the full list below |
