@@ -26,10 +26,25 @@
 # skill does, and the skill is defined to run only on explicit user
 # invocation that names the PR.
 #
-# Claude can technically forge either marker by running `touch` or `echo`
-# directly. Doing so is a visible, auditable, grep-able rule violation
-# and is itself a hard stop. The point of mechanical enforcement is to
-# turn invisible inference failures into visible rule violations.
+# The CEO marker is **structured** (key/value format) so the model
+# cannot pass the gate by writing a bare SHA via `echo SHA > file`. The
+# hook requires:
+#
+#   sha=<40-char hex>           # must match the PR's GitHub HEAD
+#   approved_by=user            # signals "this was a human, not the model"
+#   skill_version=<N>           # N >= 2; bare-SHA legacy markers rejected
+#
+# Other fields (approved_at, approval_summary) are written by the skill
+# but not validated by the hook — they're an audit trail, not a check.
+#
+# Claude could in principle still forge the structured fields. But the
+# act of typing out `approved_by=user` etc. is a visible, auditable,
+# grep-able rule violation — much more obvious than an `echo $SHA`. See
+# me2resh/apexyard#48 for the design rationale.
+#
+# The Rex marker is unchanged (still bare-SHA) because Rex's marker is
+# written by the code-reviewer agent's automated review flow, not an
+# explicit human-authorization moment. Different threat model.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -133,8 +148,7 @@ To unblock:
   2. When the CEO says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
      invoke the /approve-merge skill:
        /approve-merge ${PR_NUMBER}
-  3. The skill writes ${CEO_APPROVAL} with the current HEAD SHA
-  4. Retry the merge
+  3. The skill writes the structured marker AND runs the merge in one turn
 
 NEVER create this marker yourself from an umbrella "go" on a plan.
 EVER. This is the exact failure this hook exists to prevent.
@@ -142,7 +156,78 @@ MSG
   exit 2
 fi
 
-CEO_SHA=$(tr -d '[:space:]' < "$CEO_APPROVAL")
+# Parse the structured CEO marker. Required fields (#48):
+#   sha=<40-char hex>
+#   approved_by=user
+#   skill_version=<N>  with N >= 2
+#
+# Bare-SHA legacy markers (single line, no `=`) fail the parse and are
+# rejected with a clear "stale format" message pointing at /approve-merge.
+ceo_field() {
+  # Extract value of `<key>=` from the marker, stripping surrounding quotes.
+  # Reads only the first matching line so a malformed marker with duplicates
+  # still produces a deterministic answer.
+  grep -E "^${1}=" "$CEO_APPROVAL" 2>/dev/null \
+    | head -1 \
+    | sed -E "s/^${1}=//" \
+    | sed -E 's/^"(.*)"$/\1/'
+}
+
+CEO_SHA=$(ceo_field sha)
+CEO_APPROVED_BY=$(ceo_field approved_by)
+CEO_SKILL_VERSION=$(ceo_field skill_version)
+
+# Reject the bare-SHA legacy format. A marker with no `sha=` line is either
+# a pre-#132 plain-SHA file or something the model fabricated via raw echo
+# without the structured fields. Either way: not acceptable.
+if [ -z "$CEO_SHA" ]; then
+  cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} CEO marker is in a stale or unrecognised format.
+
+The marker at:
+  ${CEO_APPROVAL}
+
+does not contain the required \`sha=<HEAD>\` line. Either it's a pre-#132
+bare-SHA marker, or it was written by something other than the
+/approve-merge skill (e.g. a raw \`echo\` or \`touch\`).
+
+Re-record the approval with the current skill:
+  /approve-merge ${PR_NUMBER}
+
+The new skill writes a structured marker AND runs the merge in one turn,
+so you don't need to re-confirm separately. See me2resh/apexyard#48 +
+me2resh/apexyard#132 for the design rationale.
+MSG
+  exit 2
+fi
+
+if [ "$CEO_APPROVED_BY" != "user" ]; then
+  cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} CEO marker is missing the \`approved_by=user\` field.
+
+The marker at ${CEO_APPROVAL} has \`approved_by=${CEO_APPROVED_BY:-<empty>}\`,
+but the merge gate requires exactly \`approved_by=user\`. This field
+distinguishes a skill-written marker from a model-fabricated one.
+
+Re-record via /approve-merge ${PR_NUMBER} (which writes the field
+correctly) — never edit the marker by hand.
+MSG
+  exit 2
+fi
+
+# skill_version must be present and >= 2. The version exists so a future
+# format change can bump it without breaking existing markers in flight.
+if [ -z "$CEO_SKILL_VERSION" ] || [ "$CEO_SKILL_VERSION" -lt 2 ] 2>/dev/null; then
+  cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} CEO marker has skill_version=${CEO_SKILL_VERSION:-<missing>}.
+
+The merge gate requires skill_version >= 2 (the structured-marker format
+introduced in me2resh/apexyard#48 + #132). Older markers are no longer
+accepted — re-record via /approve-merge ${PR_NUMBER}.
+MSG
+  exit 2
+fi
+
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG
 BLOCKED: CEO approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.

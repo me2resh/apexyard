@@ -9,6 +9,18 @@ allowed-tools: Bash, Read, Write
 
 Creates a structured GitHub Issue for a bug with Given/When/Then scenario, repro steps, environment, and severity. Asks guided questions, shows the formatted ticket for confirmation, then creates the issue.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Usage
 
 ```
@@ -145,5 +157,5 @@ Created: {owner/repo}#{number} — {title}
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **Given/When/Then is required.** Restructure casual descriptions into the format.
 4. **At least one repro step.** Don't create bugs without repro.
-5. **Labels auto-applied.** `bug` always, plus the severity label.
-6. **Title prefix.** Severity in brackets: `[P0]`, `[P1]`, or `[P2]`.
+5. **Labels auto-applied.** `bug` always, plus the severity label. Severity label scheme reads from `.claude/project-config.*.json` → `.ticket.label_priority_scheme` (default `P0,P1,P2,P3`).
+6. **Title prefix.** The accepted prefix list reads from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; `[Bug]` must be in that list. Some teams prefer `[Bug]` prefix with the severity as a label (the default); others embed severity in the title (`[P0]`, `[P1]`). Skill respects whichever is configured. See apexyard#109.

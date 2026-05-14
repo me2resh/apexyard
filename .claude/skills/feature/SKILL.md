@@ -9,6 +9,18 @@ allowed-tools: Bash, Read, Write
 
 Creates a structured GitHub Issue for a new feature with a user story, acceptance criteria, and design notes. Asks guided questions, shows the formatted ticket for confirmation, then creates the issue.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Usage
 
 ```
@@ -142,5 +154,5 @@ Created: {owner/repo}#{number} — {title}
 2. **Always confirm before creating.** Show the full ticket and get explicit "yes".
 3. **User story format is required.** Restructure casual answers into As a / I want / So that.
 4. **At least one acceptance criterion.** Don't create tickets with empty ACs.
-5. **Labels auto-applied.** `enhancement` always, plus the priority label.
-6. **Title prefix.** Always `[Feature]` in the issue title.
+5. **Labels auto-applied.** `enhancement` always, plus the priority label. The priority label scheme is read from `.claude/project-config.*.json` → `.ticket.label_priority_scheme` (default `P0,P1,P2,P3`); forks that use a different scheme (e.g. `priority-p0`) configure it there.
+6. **Title prefix.** `[Feature]` by default. The accepted prefix list is read from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; if a fork has added alternate feature-class prefixes (e.g. `[Enhancement]`), this skill will accept them. See apexyard#109 for the schema.

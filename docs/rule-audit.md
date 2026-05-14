@@ -48,10 +48,10 @@ Columns:
 | Gate 1 — PRD approved + parent epic exists before tech design | `.claude/rules/workflow-gates.md` | prose | no | requires product-doc review; not a shell-observable signal [^advisory] |
 | Gate 2 — design approved + story tickets exist + AgDR for key decisions before build | `.claude/rules/workflow-gates.md` | prose + `require-agdr-for-arch-changes.sh` (arch half) | partial | AgDR half mechanized on arch commits; "design approved" stays prose |
 | Gate 3 — ticket exists + branch created + design review if UI before starting code | `.claude/rules/workflow-gates.md` | `require-active-ticket.sh` (ticket half) + prose | partial | design-review gate fires at *merge* time via `require-design-review-for-ui.sh`, not at build start |
-| Gate 4 — tests pass + checks pass + >80% coverage + AgDR linked before PR | `.claude/rules/workflow-gates.md`, `.claude/rules/pr-workflow.md` | `pre-push-gate.sh` (reminder) + prose | partial | lint/typecheck/test/build reminder mechanized; >80% coverage stays advisory — per-project CI concern [^coverage] |
+| Gate 4 — tests pass + checks pass + >80% coverage + AgDR linked before PR | `.claude/rules/workflow-gates.md`, `.claude/rules/pr-workflow.md` | `pre-push-gate.sh` (blocking runner, #111) + prose | partial | lint/typecheck/test/build now executes + blocks via configured commands; >80% coverage stays advisory — per-project CI concern [^coverage] |
 | Gate 5 — two reviews + CI green + commit SHA matches review before merge | `.claude/rules/workflow-gates.md`, `.claude/rules/pr-quality.md` | `block-unreviewed-merge.sh` + `block-merge-on-red-ci.sh` | yes | mechanized (two hooks together) |
 | Gate 6 — QA verified before ticket → Done | `.claude/rules/workflow-gates.md`, `workflows/sdlc.md § Phase 5` | prose | no | QA sign-off is a human handoff; not a shell-observable signal [^advisory] |
-| One ticket at a time (one PR = one ticket) | `.claude/rules/workflow-gates.md`, `workflows/sdlc.md` | prose | no | behavioral rule; detection would need per-session PR tracking that isn't worth the complexity [^advisory] |
+| One ticket at a time (one PR = one ticket) | `.claude/rules/workflow-gates.md`, `workflows/sdlc.md` | prose + `validate-pr-create.sh` (body-level single-Closes check, #114) | partial | `Closes`/`Fixes`/`Resolves #N` count in body capped at 1 via mechanical check; session-level "one ticket active" tracking stays advisory [^single-close-114] |
 | Pre-Build Gate checklist (parent epic, story tickets with AC, tasks broken down) | `workflows/sdlc.md § Pre-Build Gate` | prose | no | per-ticket content check requires reading issue bodies and scoring — out of scope for shell hooks [^advisory] |
 | QA state mandatory — merged PR moves to QA label, not auto-closed | `.claude/rules/workflow-gates.md § QA State`, `workflows/sdlc.md § Phase 5` | prose | no | needs integration with GitHub projects / labels; deferred to project-level automation |
 | If a gate fails → STOP, complete the missing step first | `CLAUDE.md § Workflow Gates`, `.claude/rules/workflow-gates.md` | prose | no | umbrella "STOP" rule, composed of the individual gate rows above |
@@ -65,13 +65,14 @@ Columns:
 | Plan-level "go" / "ship it" does NOT authorize a merge | `.claude/rules/pr-workflow.md § Plan-level "go" is NOT merge approval` | `block-unreviewed-merge.sh` (CEO marker must be written via `/approve-merge`) | yes | mechanized via the marker-writing convention |
 | After `gh pr create` → invoke Code Reviewer | `.claude/rules/pr-workflow.md § After gh pr create` | `auto-code-review.sh` (PostToolUse reminder) | yes | mechanized as reminder-style nudge |
 | After pushing new commits to an open PR → re-invoke Code Reviewer | `.claude/rules/pr-workflow.md § After Pushing Commits` | `block-unreviewed-merge.sh` (SHA mismatch check) | yes | mechanized |
+| Surface invalidated review markers at push-time, not merge-time | `.claude/rules/pr-workflow.md § After Pushing Commits` | `warn-stale-review-markers.sh` (PostToolUse on `git push`) | yes | mechanized (warning-only; `review_markers.on_stale: delete` opts into auto-delete) |
 | Commit SHA matches Rex + CEO approvals at merge time | `.claude/rules/pr-quality.md § Commit SHA Verification` | `block-unreviewed-merge.sh` | yes | mechanized |
-| PR description MUST contain a Glossary section | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (warning) + `code-reviewer` agent (blocker) | yes | mechanized (warning + agent) |
+| PR description MUST contain required sections (Glossary + Testing, per-fork configurable) | `.claude/rules/pr-quality.md § Glossary`, `workflows/code-review.md § PR Description Format` | `validate-pr-create.sh` (blocker) + `code-reviewer` agent | yes | mechanized via `.pr.required_sections` list; default `[Testing, Glossary]`; skip marker `<!-- pr-sections: skip -->` for small PRs [^pr-sections-113] |
 | Design review required when PR touches UI | `.claude/rules/pr-quality.md § Design Review`, `workflows/code-review.md` | `require-design-review-for-ui.sh` | yes | mechanized (AgDR-0001) |
 | `/approve-design` skill for writing the design marker | — | — | deferred | [#21][21] — today's convention is a manual `git rev-parse HEAD > marker` |
 | Never merge with red CI — even pre-existing failures must be fixed first | `.claude/rules/pr-quality.md § No Red CI`, `CLAUDE.md` | `block-merge-on-red-ci.sh` | yes | mechanized (AgDR-0001) |
 | No merge on pending / in-progress CI (pending is not green) | `.claude/rules/pr-quality.md § No Red CI` | `block-merge-on-red-ci.sh` | yes | mechanized |
-| Before `git push`: lint, typecheck, test, build must pass locally | `.claude/rules/pr-workflow.md § Before git push`, `CLAUDE.md § Quality Rules` | `pre-push-gate.sh` (reminder) | partial | reminder mechanized; actual pass/fail stays per-project CI [^project-cmds] |
+| Before `git push`: lint, typecheck, test, build must pass locally | `.claude/rules/pr-workflow.md § Before git push`, `CLAUDE.md § Quality Rules` | `pre-push-gate.sh` (blocking runner) | yes | per-fork commands from `.pre_push.commands` execute on each push; first red blocks with exit 2; skip marker in HEAD commit provides audited bypass [^pre-push-111] |
 | Ticket must exist before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | `validate-pr-create.sh` (branch-ID + issue-exists checks) | yes | mechanized |
 | Ticket must have acceptance criteria before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | prose | no | AC-content detection needs issue-body parsing and scoring — not a shell-hook job [^advisory] |
 | Branch name has ticket ID before `gh pr create` | `.claude/rules/pr-workflow.md § Before gh pr create` | `validate-branch-name.sh` + `validate-pr-create.sh` | yes | mechanized |
@@ -83,9 +84,10 @@ Columns:
 |------|--------|-------------|---------------|---------------------------------|
 | HARD STOP — run `/decide` before any technical decision | `.claude/rules/agdr-decisions.md § Trigger Patterns` | prose (self-discipline) | no | trigger patterns are chat-output phrases; linting assistant prose was rejected for the same reason as in `ticket-vocabulary.md` [^self-discipline] |
 | AgDR required for architecture / infra commits | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-changes.sh` | yes | mechanized (AgDR-0001); narrow default path list, project-config override via `.architecture_paths` |
+| AgDR required at PR time when diff touches architecture paths OR adds a new dependency | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-pr.sh` | yes | mechanized ([#112][112]); fires on `gh pr create`, config via `.agdr_trigger_paths[]` + `.agdr_trigger_dep_files[]`; skip marker `<!-- agdr: not-applicable -->` bypasses with a visible warning |
 | Extend default `architecture_paths` to cover SAM / Helm / K8s / Serverless Framework | — | — | deferred | [#25][25] — default list is deliberately narrow; follow-up broadens safely |
 | AgDRs stored at `{project}/docs/agdr/AgDR-NNNN-{slug}.md` | `.claude/rules/agdr-decisions.md § What /decide Does` | prose | no | path convention, not a gatekeeping rule |
-| Code Reviewer flags PRs with arch changes that don't link an AgDR | `.claude/rules/agdr-decisions.md § Enforcement` | `code-reviewer` agent + `require-agdr-for-arch-changes.sh` | yes | mechanized |
+| Code Reviewer flags PRs with arch changes that don't link an AgDR | `.claude/rules/agdr-decisions.md § Enforcement` | `code-reviewer` agent + `require-agdr-for-arch-changes.sh` + `require-agdr-for-arch-pr.sh` | yes | mechanized |
 
 ### 5. Ticket vocabulary
 
@@ -142,17 +144,29 @@ Columns:
 | New session without `.claude/session/onboarded` → run `/onboard` | — | `onboarding-check.sh` (SessionStart) | yes | mechanized |
 | `.claude/` duplication between ops-repo and apexyard upstream | — | — | deferred | [#15][15] |
 
+### 10. Leak protection — private refs on public repos
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Never reference a registered private project (name / repo slug / workspace path / `owner/repo#N`) in issues, PRs, or comments written to a public framework repo | `.claude/rules/leak-protection.md § The rule` | `block-private-refs-in-public-repos.sh` | yes | mechanized ([#110][110]); covers `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`, and `gh api .../issues\|/pulls`; skip marker `<!-- private-refs: allow -->` bypasses with a visible warning |
+
+### 11. Ticket body shape
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Issue body must match the schema for its bracketed title prefix (`[Feature]` → `## User Story` + `## Acceptance Criteria`; `[Chore]` / `[Refactor]` / `[Testing]` / `[CI]` → `## Driver` + `## Scope` + `## Acceptance Criteria`; `[Docs]` → `## Driver` + `## Acceptance Criteria`; `[Bug]` → `## Given / When / Then` + `## Repro`) | `.claude/skills/{feature,task,bug}/SKILL.md` templates | `validate-issue-structure.sh` | yes | mechanized ([#107][107]); reads schema from `.claude/project-config.*.json` → `.ticket.required_sections`; skip marker `<!-- validate-issue-structure: skip -->` bypasses with a visible warning |
+
 ---
 
 ## Summary
 
 | bucket | count |
 |--------|-------|
-| mechanized (`yes` — hook / agent enforces it fully) | 26 |
+| mechanized (`yes` — hook / agent enforces it fully) | 29 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
 | advisory (`no` — stays prose by design) | 36 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **73** |
+| **total rows** | **76** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
@@ -169,7 +183,11 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 
 [^lint]: Static-analysis concern. Belongs in each project's ESLint / `tsconfig` / equivalent — not a shell hook. The rule stays in `code-standards.md` as the canonical prose; individual projects translate it into their linter config.
 
-[^project-cmds]: `pre-push-gate.sh` is a reminder that echoes the commands, not a runner. Actually executing lint / typecheck / test / build requires knowing the project's package manager and script names — left to per-project CI.
+[^pre-push-111]: Per-fork command list lives at `.claude/project-config.json → .pre_push.commands[]` (each entry has `name` + `run` shell string). Default is an empty list (hook is a no-op) — projects opt in by defining their checks. Fail-fast: the first non-zero exit blocks the push and reports the last 20 lines of output. Emergency escape hatch: include `<!-- pre-push: skip -->` in the HEAD commit message to bypass one push with a visible WARN. The skip marker is grep-able on purpose so bypasses are auditable.
+
+[^pr-sections-113]: Per-fork required-sections list lives at `.claude/project-config.json → .pr.required_sections[]`. Default is `[Testing, Glossary]`. Each entry must appear as a H2 heading (`## Name`, case-insensitive) with non-empty content. Skip marker for small PRs (lint-only fixes, trivial bumps): `<!-- pr-sections: skip -->` in the body bypasses with a visible stderr WARN. Extended in #113.
+
+[^single-close-114]: PR body is scanned for GitHub closing keywords (`close(s/d)`, `fix(es/ed)`, `resolve(s/d)`) followed by `#N` or `owner/repo#N`. Distinct issue numbers are counted; more than one blocks. Code fences are stripped before counting. Opt-in `pr.allow_multiple_closes: true` disables the check for teams that deliberately batch. Per-PR bypass: `<!-- multi-close: approved -->`. Added in #114.
 
 [^self-discipline]: Chat-output rule. Hooks run on tool calls, not assistant prose. The rule file is the primary defence and the downstream artefacts (commit messages, PR titles, staged diffs) are the backstop. See `ticket-vocabulary.md § Why not lint Claude's prose output?` for the full rejection of the "lint chat output" alternative.
 
@@ -181,3 +199,6 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [22]: https://github.com/me2resh/apexyard/issues/22
 [23]: https://github.com/me2resh/apexyard/issues/23
 [25]: https://github.com/me2resh/apexyard/issues/25
+[107]: https://github.com/me2resh/apexyard/issues/107
+[110]: https://github.com/me2resh/apexyard/issues/110
+[112]: https://github.com/me2resh/apexyard/issues/112

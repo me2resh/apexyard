@@ -9,6 +9,18 @@ allowed-tools: Bash, Read, Edit, Write
 
 Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking GitHub Issue. It does **not** replace `/write-spec` — that comes later, after the idea has been triaged.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Usage
 
 ```
@@ -174,6 +186,16 @@ The guiding principle: **the backlog entry is the primary artefact; the tracking
 
 If the issue is created successfully, append the issue URL to the backlog row's Description column as `(GH#NN)`.
 
+### 7. Offer validation (optional, default-no)
+
+After the GitHub Issue step (whether the user accepted or skipped it), ask:
+
+```
+Validate now? Run /validate-idea IDEA-NNN — y/n (default n)
+```
+
+Default-no respects the lightweight-capture intent of `/idea`. Most users batch-validate later. If the user accepts, hand off to `/validate-idea IDEA-NNN`; if they skip, proceed to step 8.
+
 ## Output
 
 ```
@@ -181,6 +203,7 @@ Captured: IDEA-NNN — {title}
 Backlog: {file path}
 Status: NEW
 Tracking issue: {url or "skipped"}
+Validation: {"completed — verdict <GREEN|YELLOW|RED>" | "skipped (run /validate-idea IDEA-NNN later)"}
 
 Next: triage with the team, then `/write-spec` if it survives.
 ```

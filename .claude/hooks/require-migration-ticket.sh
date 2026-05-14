@@ -37,7 +37,32 @@
 # present, otherwise defaults below apply.
 
 INPUT=$(cat)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+
+# Bash-tool path: if the command writes, try to extract the target so we
+# can apply the migration-path matcher to it. If extraction fails (e.g.
+# `python -c '…write_text("file"…)…'`), FILE_PATH stays empty and the
+# hook exits 0 — the migration gate is path-specific, so an
+# unextractable target falls outside the gate's scope.
+# See me2resh/apexyard#151 + _lib-detect-bash-write.sh for the detector.
+if [ "$TOOL_NAME" = "Bash" ]; then
+  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  [ -z "$COMMAND" ] && exit 0
+
+  HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ -f "$HOOK_DIR/_lib-detect-bash-write.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_DIR/_lib-detect-bash-write.sh"
+    if ! bash_command_appears_to_write "$COMMAND"; then
+      exit 0
+    fi
+    FILE_PATH=$(bash_extract_write_target "$COMMAND")
+  else
+    # Library missing — fall back to no-op rather than bricking the hook.
+    exit 0
+  fi
+fi
 
 if [ -z "$FILE_PATH" ]; then
   exit 0

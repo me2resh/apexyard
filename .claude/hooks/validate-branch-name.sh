@@ -2,9 +2,9 @@
 # Validates branch naming convention before push.
 # Format: {type}/{TICKET-ID}-{description}
 #
-# Accepts any uppercase project prefix (e.g. ABC-123, ENG-45) or GitHub-style
-# issue references (GH-12, #12). Customize the regex below if your team uses
-# a different ticket scheme.
+# The accepted branch-type list is project-configurable via
+# .claude/project-config.json (.branch.type_whitelist). Defaults ship at
+# .claude/project-config.defaults.json. See apexyard#109 for the schema.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -20,17 +20,43 @@ fi
 
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 
-# Allow trunk and shared integration branches
-if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "develop" ]; then
+# Allow trunk and shared integration branches.
+# Match the dev/main release model (apexyard#116) — dev is a valid trunk.
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "develop" ] || [ "$CURRENT_BRANCH" = "dev" ]; then
   exit 0
+fi
+
+# Allow release-cut branches (apexyard#116, AgDR-0007). The /release skill
+# prescribes `release/vN.N.N` (and optionally a `-rcN` suffix) as the
+# canonical name for the dev → main release PR's source branch. This is
+# a narrow, intentional exception to the standard {type}/{TICKET}-{desc}
+# shape — release branches don't carry a ticket-id because the release
+# itself is the ticket. See me2resh/apexyard#168 for why this exception
+# exists.
+if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+  exit 0
+fi
+
+# Load the branch-type whitelist from project config.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# shellcheck source=./_lib-read-config.sh
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  TYPES=$(config_get '.branch.type_whitelist[]' | paste -sd'|' -)
+fi
+# Fallback if config unavailable (jq missing, standalone install, etc.)
+if [ -z "$TYPES" ]; then
+  TYPES="feature|fix|refactor|chore|docs|test|spike|ci|build|perf"
 fi
 
 # Validate: type/<TICKET>-<description>
 #   <TICKET> = 2-10 char uppercase prefix + dash + digits  OR  GH-<digits>  OR  #<digits>
 # Note: this pattern is intentionally aligned with the pr-title-check.yml
 # CI workflow regex so anything that passes this hook also passes CI.
-if ! echo "$CURRENT_BRANCH" | grep -qE '^(feature|fix|refactor|chore|docs|test|spike|ci|build|perf)/([A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+)-'; then
+if ! echo "$CURRENT_BRANCH" | grep -qE "^(${TYPES})/([A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+)-"; then
   echo "BLOCKED: Branch '$CURRENT_BRANCH' doesn't follow naming convention: {type}/{TICKET-ID}-{description}" >&2
+  echo "Accepted types (from .claude/project-config.*.json → .branch.type_whitelist): ${TYPES//|/, }" >&2
   echo "Examples: feature/ABC-123-add-auth, fix/GH-45-login-bug, docs/ENG-99-update-readme" >&2
   echo "Rename with: git branch -m \"\$(git branch --show-current)\" \"feature/GH-XX-description\"" >&2
   exit 2

@@ -9,6 +9,18 @@ allowed-tools: Bash, Read, Write
 
 Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit /feature or /bug.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## Usage
 
 ```
@@ -105,12 +117,15 @@ Repo: {owner/repo}
 Create this ticket? (yes / edit / cancel)
 ```
 
-The title prefix is derived from the content:
+The title prefix is derived from the content, and must come from the project's configured prefix whitelist (`.claude/project-config.*.json` → `.ticket.prefix_whitelist`, default list at `.claude/project-config.defaults.json`). Shipped defaults map as follows:
 
 - Testing work → `[Testing]`
 - CI/CD work → `[CI]`
 - Refactoring → `[Refactor]`
+- Documentation-only change → `[Docs]`
 - Everything else → `[Chore]`
+
+A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here — the skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
 
 ### 5. Handle response
 

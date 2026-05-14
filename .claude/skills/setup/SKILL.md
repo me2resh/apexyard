@@ -10,6 +10,18 @@ effort: medium
 
 Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.
 
+## Path resolution
+
+Read the registry path via `portfolio_registry`, the per-project docs dir via `portfolio_projects_dir`, and the ideas backlog via `portfolio_ideas_backlog` — all from `.claude/hooks/_lib-portfolio-paths.sh`. Source the helper at the top of any bash block that touches those paths:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+```
+
+Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
 ## When this runs
 
 The `onboarding-check.sh` SessionStart hook detects that `onboarding.yaml` still has placeholder values (e.g. `company.name: "Your Company Name"`) and prompts the user to run `/setup`. After `/setup` fills in real values and commits, the hook goes silent forever — even on fresh clones, because `onboarding.yaml` is committed.
@@ -17,6 +29,20 @@ The `onboarding-check.sh` SessionStart hook detects that `onboarding.yaml` still
 Re-running `/setup` on an already-configured fork shows the current config and asks what to update. Use `--reset` to clear everything and start from scratch.
 
 ## Process
+
+### Step 0: Mark this session as bootstrap (REQUIRED)
+
+`/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at `.claude/session/active-bootstrap` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
+
+Run this **before any tool calls that edit files**:
+
+```bash
+mkdir -p .claude/session && echo "setup" > .claude/session/active-bootstrap
+```
+
+The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bootstrap-marker.sh`, in case this skill is interrupted).
+
+See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
 ### Step 1: Check current state
 
@@ -40,6 +66,78 @@ GitHub Issues for tracking, 1-week sprints."
 ```
 
 **Do NOT ask sequential questions.** The whole point of this skill is to collapse the discovery into one natural-language exchange. The user describes their world; you parse it.
+
+### Step 2a: Privacy gate — ask if any projects are private
+
+Before parsing the description into config, ask one privacy question — this determines whether the adopter needs single-fork or split-portfolio mode (see `docs/multi-project.md`):
+
+```
+Quick one before I propose your config: are any of the projects you'll
+manage on this fork private (i.e. not visible to the public)?
+
+Why I'm asking: GitHub Free disallows changing a fork's visibility, so
+under the standard fork-and-commit setup you might accidentally publish
+your private project names on a public GitHub repo (a stray `git push`
+after registering them — I won't push without your approval, but the
+risk is on the adopter once the data is committed locally). If any
+project is private, I'll walk you through the split-portfolio mode (a
+separate private repo for the registry, public fork stays slim).
+
+[y / n / "I'm on GitHub Pro/Team/Enterprise" — last option supports
+private forks of public repos and avoids the issue.]
+```
+
+Branch on the answer:
+
+- **n** (all projects public) → continue with **single-fork mode** (default; the rest of this skill applies as-is).
+- **paid plan** (Pro / Team / Enterprise) → continue with **single-fork mode**, but mention that the registry will be on the (private-fork-eligible) fork and is fine.
+- **y** (any private projects on GitHub Free) → switch to **split-portfolio mode** (Step 2b below).
+
+Detection of an existing setup. Either form counts as "already in split-portfolio mode" — skip Step 2b:
+
+- `.claude/project-config.json` has a `portfolio:` block pointing at a sibling repo (config-block mode, recommended; introduced #145), OR
+- `apexyard.projects.yaml` is a symlink (`test -L apexyard.projects.yaml`; legacy mode, framework-version < #145).
+
+### Step 2b: Walk through split-portfolio mode (only if Step 2a triggered)
+
+The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — public framework + private portfolio". This skill walks through it interactively. The recommended path uses the **`portfolio:` config block** (introduced in #145) rather than symlinks — both work, but the config block is the first-class option:
+
+1. **Confirm the layout**: "Two repos in your account: `your-org/apexyard` (public, this fork) + `your-org/<private-name>` (new private repo for the portfolio). Both clones sit side-by-side on disk. OK?"
+2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
+3. **Create the private repo**: `gh repo create your-org/<name> --private --description "..."`. Confirm before running.
+4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name>` (no second arg — the clone defaults to a directory named after the repo, so `your-org/apexyard-portfolio` clones into `apexyard-portfolio/`).
+5. **Initialise the portfolio**: `apexyard.projects.yaml` + empty `projects/` dir + initial commit + push. Same content as the doc's step 5.
+6. **Configure path resolution in the fork** (recommended — config-block mode):
+   - Append `.gitignore` lines for `apexyard.projects.yaml` and `projects` (so they don't accidentally get staged in the public fork even if the operator runs `git add -A`).
+   - Untrack any tracked `projects/README.md` from the upstream framework.
+   - Write `.claude/project-config.json` with the `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
+
+     ```json
+     {
+       "portfolio": {
+         "registry": "../apexyard-portfolio/apexyard.projects.yaml",
+         "projects_dir": "../apexyard-portfolio/projects",
+         "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
+       }
+     }
+     ```
+
+   - Stage `.gitignore` and `.claude/project-config.json` for commit (the latter is per-fork, not per-machine, since it points at a public sibling-repo path).
+   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way.
+7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails — surface the specific failure and ask the operator to fix it before re-running.
+
+   ```bash
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   if ! portfolio_validate; then
+     echo "Setup not complete — fix the issue above and re-run /setup"
+     exit 1
+   fi
+   ```
+
+Then proceed to Step 3 with the user's earlier description, configuring `onboarding.yaml` as normal. The rest of the skill is unchanged — the only difference between modes is where the registry physically lives.
+
+**Do NOT auto-migrate** an adopter who's already in single-fork mode with private project names already pushed. Direct them to the migration guide in `docs/multi-project.md` § "Migrating from single-fork to split-portfolio" — that flow involves a force-push history rewrite, redacting GitHub Issue / PR bodies, and a backup-branch dance, and is destructive enough to warrant a deliberate, eyes-open run rather than a `/setup` side-effect.
 
 ### Step 3: Parse and map to defaults
 
@@ -127,6 +225,14 @@ I'll need: repo name (owner/repo) and a short project name.
 
 If yes → append to `apexyard.projects.yaml`, stage alongside `onboarding.yaml`.
 If no → skip. They can add projects later with `/handover`.
+
+### Step 8: Clear the bootstrap marker (REQUIRED)
+
+```bash
+rm -f .claude/session/active-bootstrap
+```
+
+Always remove the marker on a clean exit so subsequent edits in the same session go through the normal ticket gate. If `/setup` is interrupted before this step, `clear-bootstrap-marker.sh` (SessionStart hook) clears the stale marker on the next session.
 
 ## Rules
 

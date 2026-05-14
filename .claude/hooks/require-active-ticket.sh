@@ -31,16 +31,51 @@
 # Everything else (source code, config, infra) requires a ticket marker.
 
 INPUT=$(cat)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
-if [ -z "$FILE_PATH" ]; then
+# Bash-tool path: extract the target file from the command if it appears
+# to be a write. Closes the bypass surface where Bash file-writes
+# (`echo > file`, `tee file`, `sed -i ... file`, `python -c
+# 'pathlib.Path(...).write_text(...)'`, etc.) routed around the
+# Edit/Write/MultiEdit-only gate. See me2resh/apexyard#151 + the
+# _lib-detect-bash-write helper for the matcher details and design
+# choice (false-negatives preferred over false-positives).
+if [ "$TOOL_NAME" = "Bash" ]; then
+  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  if [ -z "$COMMAND" ]; then
+    exit 0
+  fi
+
+  # Source the bash-write detector. Library lives next to this hook.
+  HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ ! -f "$HOOK_DIR/_lib-detect-bash-write.sh" ]; then
+    # Library missing — fall back to non-Bash behavior to avoid bricking
+    # the hook entirely.
+    exit 0
+  fi
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-detect-bash-write.sh"
+
+  if ! bash_command_appears_to_write "$COMMAND"; then
+    # Read-only command — no gate.
+    exit 0
+  fi
+
+  # Try to extract a target path so we can apply the same path-based
+  # exemptions (.claude/, docs/, *.md). If extraction fails, FILE_PATH
+  # stays empty and the gate is applied categorically.
+  FILE_PATH=$(bash_extract_write_target "$COMMAND")
+fi
+
+if [ -z "$FILE_PATH" ] && [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
 # Normalise to repo-relative path when possible
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 REL_PATH="$FILE_PATH"
-if [ -n "$REPO_ROOT" ]; then
+if [ -n "$REPO_ROOT" ] && [ -n "$FILE_PATH" ]; then
   case "$FILE_PATH" in
     "$REPO_ROOT"/*) REL_PATH="${FILE_PATH#$REPO_ROOT/}" ;;
   esac
@@ -56,17 +91,24 @@ fi
 # existing `*.md` pattern already crosses `/`, so absolute-match via a
 # `*/…` prefix is a known-good shape — #56 extends the same trick to the
 # path-prefix exemptions.
-case "$REL_PATH" in
-  .claude/*|.claude|*/.claude/*|*/.claude) exit 0 ;;
-  docs/*|docs|*/docs/*|*/docs) exit 0 ;;
-  TODO.md|README.md|MEMORY.md|CLAUDE.md) exit 0 ;;
-esac
-# Note: `projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
-# crosses `/`), so no separate arm needed. Per-project apexyard docs are
-# matched by the generic docs-in-any-subtree pattern.
-case "$REL_PATH" in
-  *.md) exit 0 ;;
-esac
+#
+# Skipped entirely when FILE_PATH is empty (Bash command writes to an
+# unextractable target — e.g. `python -c '...write...'`). Those fall
+# through to the ticket gate; the bootstrap-skill exemption below covers
+# the legitimate use case (/setup writing to fork-root files via Bash).
+if [ -n "$REL_PATH" ]; then
+  case "$REL_PATH" in
+    .claude/*|.claude|*/.claude/*|*/.claude) exit 0 ;;
+    docs/*|docs|*/docs/*|*/docs) exit 0 ;;
+    TODO.md|README.md|MEMORY.md|CLAUDE.md) exit 0 ;;
+  esac
+  # Note: `projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
+  # crosses `/`), so no separate arm needed. Per-project apexyard docs are
+  # matched by the generic docs-in-any-subtree pattern.
+  case "$REL_PATH" in
+    *.md) exit 0 ;;
+  esac
+fi
 
 # Discover the ops root. Walk up from REPO_ROOT until we find a directory
 # with both onboarding.yaml AND apexyard.projects.yaml (a configured ops
@@ -86,6 +128,34 @@ fi
 
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 MARKER_HOME="${MARKER_HOME:-.}"
+
+# Bootstrap-skill exemption (apexyard#150): skills like /setup,
+# /handover, /update, /split-portfolio run BEFORE any ticket can exist
+# (no portfolio configured yet, no projects registered). They write a
+# marker at .claude/session/active-bootstrap with the skill name on
+# entry; this hook reads the marker, looks up the configured
+# bootstrap_skills list, and exits 0 if the active skill is on the list.
+#
+# The marker is cleared at SessionStart by clear-bootstrap-marker.sh so
+# a stale marker from an interrupted session can't carry over.
+BOOTSTRAP_MARKER="$MARKER_HOME/.claude/session/active-bootstrap"
+if [ -f "$BOOTSTRAP_MARKER" ]; then
+  active_bootstrap=$(tr -d '[:space:]' < "$BOOTSTRAP_MARKER" 2>/dev/null)
+  if [ -n "$active_bootstrap" ]; then
+    # Source the config reader and look up bootstrap_skills.
+    if [ -f "$MARKER_HOME/.claude/hooks/_lib-read-config.sh" ]; then
+      # shellcheck source=/dev/null
+      . "$MARKER_HOME/.claude/hooks/_lib-read-config.sh"
+      if command -v config_get >/dev/null 2>&1; then
+        # `config_get '.ticket.bootstrap_skills[]'` outputs one skill per
+        # line. Use grep -wF for whole-word, fixed-string match.
+        if config_get '.ticket.bootstrap_skills[]' 2>/dev/null | grep -qwF "$active_bootstrap"; then
+          exit 0
+        fi
+      fi
+    fi
+  fi
+fi
 
 # Per-project resolution (apexyard#41): if FILE_PATH points under
 # <ops_root>/workspace/<project>/, we look for a per-project marker at

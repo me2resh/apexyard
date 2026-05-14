@@ -161,6 +161,12 @@ Closes #123
 
 NEVER use `git add -A` or `git add .` -- always add specific files.
 
+### Branch model — framework only
+
+The apexyard framework repo (`me2resh/apexyard`) uses a **release-cut** branch model: daily PRs merge to `dev`; `main` only receives release PRs from `dev` (tagged with semver on each merge). This is sometimes called gitflow-lite — it is **not** full git flow (no `release/*` / `hotfix/*` branches). See `docs/release-process.md` and AgDR-0007.
+
+**This is a framework-only pattern.** Managed projects under apexyard governance (entries in `apexyard.projects.yaml`) stay **trunk-based** — PRs merge to `main` directly because they have no downstream consumers. Do **NOT** cargo-cult the dev/main split into project templates, project scaffolds, or `/handover` output. The `/release` skill is the only piece that's framework-specific and refuses to run on a managed project.
+
 ---
 
 ## CLAUDE CODE INTEGRATION
@@ -169,13 +175,13 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 18 shell scripts that mechanically enforce SDLC rules — ticket-first, migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner |
-| Rules | `.claude/rules/` | 8 modular rule files (AgDR triggers, code standards, git conventions, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
+| Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
+| Rules | `.claude/rules/` | 9 modular rule files (AgDR triggers, code standards, git conventions, parallel work, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer, Security Reviewer, Dependency Auditor, PR Manager, Ticket Manager) |
-| Skills | `.claude/skills/` | 33 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 39 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (33)
+### Available skills (39)
 
 | Skill | Purpose |
 |-------|---------|
@@ -197,20 +203,24 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/security-review` | Invoke the Security Reviewer agent (Shield) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
+| `/validate-idea` | Lightweight 5-question pre-spec gate (target user, alternative, smallest version, kill criteria, build/buy/rent). Invokable standalone or as an offered follow-up inside `/idea` and `/handover`. |
 | `/feature` | Create a structured feature request ticket (user story + ACs) |
 | `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
+| `/tickets-batch` | Bulk-file 5–20 structured tickets in one flow — shared-context Qs once, then a 3-question micro-interview per ticket; output conforms to `.ticket.required_sections` by construction |
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
 | `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
+| `/release` | (Framework-only) Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG, open the release PR, and tag after merge |
 | `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
 | `/status` | Current snapshot — git, CI, in-progress work |
 | `/tasks` | Actionable task list with direct URLs, prioritised |
 | `/roadmap` | Update or create the product roadmap |
 | `/stakeholder-update` | Generate weekly / monthly / launch updates |
+| `/fan-out` | Spawn N parallel agents in one message — per-task agent type, worktree isolation, foreground/background mode (see `.claude/rules/parallel-work.md` for when to offer) |
 
 The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. The rules are imported via `@.claude/rules/*.md` from your project's `CLAUDE.md`.
 
@@ -246,7 +256,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hooks | `.claude/hooks/` |
 | Rules (modular) | `.claude/rules/` |
 | Agents | `.claude/agents/` |
-| Skills (33 slash commands) | `.claude/skills/` |
+| Skills (39 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

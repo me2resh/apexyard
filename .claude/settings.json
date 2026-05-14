@@ -11,6 +11,14 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-upstream-drift.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/clear-bootstrap-marker.sh\"'"
           }
         ]
       }
@@ -79,11 +87,46 @@
           },
           {
             "type": "command",
+            "if": "Bash(gh issue create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-issue-structure.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh issue create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh pr create *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-pr-create.sh\"'"
           },
           {
             "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-agdr-for-arch-pr.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh issue comment *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr comment *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh api *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+          },
+          {
+            "type": "command",
             "if": "Bash(gh pr merge *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
           },
@@ -111,6 +154,14 @@
             "type": "command",
             "if": "Bash(gh api *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
           }
         ]
       }
@@ -123,6 +174,11 @@
             "type": "command",
             "if": "Bash(gh pr create *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/auto-code-review.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/warn-stale-review-markers.sh\"'"
           }
         ]
       }
