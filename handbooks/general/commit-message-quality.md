@@ -34,7 +34,7 @@ When reviewing a PR, surface a finding when:
 ## Sample findings
 
 > **Commit-message quality** — Commit `abc1234` has subject `chore(#42): fix` and no body. The diff is 180 lines across 6 files. Add a body explaining what the fix addresses, what was tried before, and any follow-up considerations.
-
+>
 > **Commit-message quality** — Commit `def5678` body says only `Adds user export feature.` — restating the subject line. Replace with the WHY: what user need does the export serve, what format / scope was chosen and why, what alternatives were considered.
 
 ## What's NOT a violation

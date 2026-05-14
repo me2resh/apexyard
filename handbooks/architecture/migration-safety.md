@@ -51,6 +51,7 @@ When reviewing a PR, surface a **blocking** finding when:
 > `prisma/migrations/20260514_drop_legacy_user_role/migration.sql` drops the `users.role_v1` column. The previous release still reads this column in `src/auth/role-resolver.ts:42`. A rolling deploy will cause the old instances to crash on every login request during the deployment window.
 >
 > **Required fix:** split into two PRs across two releases:
+>
 > - This release: stop reading `role_v1` (use `role_v2`); leave the column in place. Add an AgDR documenting the deprecation.
 > - Next release: drop the column.
 

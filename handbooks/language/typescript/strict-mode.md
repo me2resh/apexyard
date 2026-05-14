@@ -33,9 +33,9 @@ When reviewing a PR, surface a finding when:
 ## Sample findings
 
 > **Strict mode** — `src/handlers/user.ts:42` declares `function fetchUser(id: any): Promise<User>`. The `id` parameter is implicitly stringly-typed; replace with `string` (or a `UserId` value object if one exists in the domain).
-
+>
 > **Strict mode** — `src/lib/parse.ts:18` uses `// @ts-ignore`. Switch to `// @ts-expect-error` so the compiler tells us when the suppression becomes obsolete.
-
+>
 > **Strict mode** — `src/api/order.ts:67` casts `req.body as CreateOrderRequest` without validating the shape. Add a runtime check (Zod / io-ts / hand-written guard) before the cast, or import a validated DTO from `domain/`.
 
 ## What's NOT a violation
