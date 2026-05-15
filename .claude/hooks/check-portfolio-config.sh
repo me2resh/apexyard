@@ -23,18 +23,33 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
-# Walk up to find the apexyard fork root (dir with both onboarding.yaml +
-# apexyard.projects.yaml). If we can't find one, this hook has nothing to
-# say.
-ROOT=""
-cur="$REPO_ROOT"
-while [ -n "$cur" ] && [ "$cur" != "/" ]; do
-  if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
-    ROOT="$cur"
-    break
-  fi
-  cur=$(dirname "$cur")
-done
+# Walk up to find the apexyard fork root. After framework #242 the v1
+# anchor (onboarding.yaml + apexyard.projects.yaml at the candidate dir)
+# is no longer satisfied by split-portfolio v2 forks (both files live in
+# the private sibling repo). Use the shared resolver which honours BOTH
+# the v2 `.apexyard-fork` marker AND the legacy v1 anchor.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  ROOT=$(resolve_ops_root "$REPO_ROOT")
+else
+  # Library missing — fall back to the legacy inline walk so the hook
+  # still works on un-migrated forks.
+  ROOT=""
+  cur="$REPO_ROOT"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -f "$cur/.apexyard-fork" ]; then
+      ROOT="$cur"
+      break
+    fi
+    if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
+      ROOT="$cur"
+      break
+    fi
+    cur=$(dirname "$cur")
+  done
+fi
 
 if [ -z "$ROOT" ]; then
   exit 0

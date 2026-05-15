@@ -110,24 +110,51 @@ if [ -n "$REL_PATH" ]; then
   esac
 fi
 
-# Discover the ops root. Walk up from REPO_ROOT until we find a directory
-# with both onboarding.yaml AND apexyard.projects.yaml (a configured ops
-# fork). Stop at /. If not found, OPS_ROOT stays empty and we treat the
-# REPO_ROOT itself as the marker home (pre-#41 behaviour).
+# Discover the ops root. Walk up from REPO_ROOT looking for either the
+# v2 `.apexyard-fork` marker (split-portfolio v2 layout) OR the legacy
+# v1 anchor (onboarding.yaml + apexyard.projects.yaml). Stop at /. If
+# not found, OPS_ROOT stays empty and we treat the REPO_ROOT itself as
+# the marker home (pre-#41 behaviour).
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 OPS_ROOT=""
 if [ -n "$REPO_ROOT" ]; then
-  r="$REPO_ROOT"
-  while [ -n "$r" ] && [ "$r" != "/" ]; do
-    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-      OPS_ROOT="$r"
-      break
-    fi
-    r=$(dirname "$r")
-  done
+  if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_DIR/_lib-ops-root.sh"
+    OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
+  else
+    r="$REPO_ROOT"
+    while [ -n "$r" ] && [ "$r" != "/" ]; do
+      if [ -f "$r/.apexyard-fork" ]; then
+        OPS_ROOT="$r"
+        break
+      fi
+      if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+        OPS_ROOT="$r"
+        break
+      fi
+      r=$(dirname "$r")
+    done
+  fi
 fi
 
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 MARKER_HOME="${MARKER_HOME:-.}"
+
+# Resolve the workspace dir for the per-project marker resolution below.
+# Defaults to $OPS_ROOT/workspace; split-portfolio v2 adopters override
+# via portfolio.workspace_dir to point at their private sibling repo.
+WORKSPACE_DIR="$OPS_ROOT/workspace"
+if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-read-config.sh"
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-portfolio-paths.sh"
+  resolved_ws=$(portfolio_workspace_dir 2>/dev/null)
+  if [ -n "$resolved_ws" ]; then
+    WORKSPACE_DIR="$resolved_ws"
+  fi
+fi
 
 # Bootstrap-skill exemption (apexyard#150): skills like /setup,
 # /handover, /update, /split-portfolio run BEFORE any ticket can exist
@@ -157,14 +184,29 @@ if [ -f "$BOOTSTRAP_MARKER" ]; then
   fi
 fi
 
-# Per-project resolution (apexyard#41): if FILE_PATH points under
-# <ops_root>/workspace/<project>/, we look for a per-project marker at
+# Per-project resolution (apexyard#41): if FILE_PATH points under the
+# resolved workspace dir, we look for a per-project marker at
 # .claude/session/tickets/<project>. This keeps per-project session state
 # keyed by the managed-project name and localised in the ops fork
 # (gitignored), instead of the pre-#41 scheme that relied on a
 # .claude/session/ inside each managed-project clone.
+#
+# Split-portfolio v2 (#242): WORKSPACE_DIR may resolve to a sibling
+# private repo path (e.g. ../<fork>-portfolio/workspace) instead of the
+# default $OPS_ROOT/workspace; both shapes are handled here.
 PROJECT=""
-if [ -n "$OPS_ROOT" ]; then
+if [ -n "$WORKSPACE_DIR" ]; then
+  case "$FILE_PATH" in
+    "$WORKSPACE_DIR"/*)
+      tail="${FILE_PATH#$WORKSPACE_DIR/}"
+      PROJECT="${tail%%/*}"
+      ;;
+  esac
+fi
+# Belt-and-suspenders: also recognise the literal $OPS_ROOT/workspace/
+# shape, in case workspace_dir is overridden but a tool produced an
+# absolute path under the in-fork legacy location.
+if [ -z "$PROJECT" ] && [ -n "$OPS_ROOT" ]; then
   case "$FILE_PATH" in
     "$OPS_ROOT"/workspace/*)
       tail="${FILE_PATH#$OPS_ROOT/workspace/}"

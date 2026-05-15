@@ -26,16 +26,28 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
-# Walk up to find the apexyard fork root.
+# Walk up to find the apexyard fork root. Honours both the v2
+# `.apexyard-fork` marker and the legacy v1 anchor.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT=""
-cur="$REPO_ROOT"
-while [ -n "$cur" ] && [ "$cur" != "/" ]; do
-  if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
-    ROOT="$cur"
-    break
-  fi
-  cur=$(dirname "$cur")
-done
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  ROOT=$(resolve_ops_root "$REPO_ROOT")
+else
+  cur="$REPO_ROOT"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -f "$cur/.apexyard-fork" ]; then
+      ROOT="$cur"
+      break
+    fi
+    if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
+      ROOT="$cur"
+      break
+    fi
+    cur=$(dirname "$cur")
+  done
+fi
 
 if [ -z "$ROOT" ]; then
   exit 0

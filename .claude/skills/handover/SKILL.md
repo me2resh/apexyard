@@ -545,22 +545,29 @@ If any of these aren't surfaced in the offer, the adopter accepts a deal they do
 
 1. Resolve `<repo-url>`. If the registry already has the repo slug (`me2resh/<name>` form), translate to `https://github.com/<owner>/<name>.git`. If the operator gave a path in step 1 instead of a URL, fall back to asking for the clone URL — never invent one.
 
-2. Skip cleanly if `workspace/<name>/` already exists:
+2. Resolve the workspace dir via the portfolio helper, then skip cleanly if the project clone already exists:
 
    ```bash
-   if [ -d "workspace/<name>" ]; then
-     echo "✓ workspace/<name>/ already exists — skipping clone."
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   WORKSPACE_DIR=$(portfolio_workspace_dir)
+   mkdir -p "$WORKSPACE_DIR"
+
+   if [ -d "$WORKSPACE_DIR/<name>" ]; then
+     echo "✓ $WORKSPACE_DIR/<name>/ already exists — skipping clone."
    else
-     git clone <repo-url> workspace/<name>
+     git clone <repo-url> "$WORKSPACE_DIR/<name>"
    fi
    ```
+
+   In single-fork mode `WORKSPACE_DIR` resolves to `<ops-root>/workspace`; in split-portfolio v2 mode it resolves to the sibling private repo (e.g. `../<fork>-portfolio/workspace`). Don't hardcode `workspace/<name>/`.
 
 3. On clone failure (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone` as the recovery, and continue to the final summary. Do **not** retry, do **not** fall back to a different URL — the operator picks up from there.
 
 4. On clone success, suggest the next skill as a single follow-up question:
 
    ```
-   ✓ Cloned into workspace/<name>/.
+   ✓ Cloned into $WORKSPACE_DIR/<name>/.
      Want to run /threat-model against the new clone now? (y/n)
    ```
 
@@ -568,7 +575,7 @@ If any of these aren't surfaced in the offer, the adopter accepts a deal they do
 
 **On `n` or `later`:**
 
-Skip silently — no side effects, no further prompts. The adopter can clone manually anytime with `git clone <repo-url> workspace/<name>`. Continue to the final summary.
+Skip silently — no side effects, no further prompts. The adopter can clone manually anytime with `git clone <repo-url> "$WORKSPACE_DIR/<name>"`. Continue to the final summary.
 
 **On any other input:**
 

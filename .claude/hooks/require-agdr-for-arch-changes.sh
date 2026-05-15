@@ -110,16 +110,31 @@ fi
 # See .claude/rules/workflow-gates.md § Spike work.
 # ---------------------------------------------------------------------------
 spike_commit_exempt() {
-  # Walk up from REPO_ROOT to find the ops root.
+  # Walk up from REPO_ROOT to find the ops root. Honours both the v2
+  # `.apexyard-fork` marker and the legacy v1 anchor.
   local marker_home="$REPO_ROOT"
-  local r="$REPO_ROOT"
-  while [ -n "$r" ] && [ "$r" != "/" ]; do
-    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-      marker_home="$r"
-      break
-    fi
-    r=$(dirname "$r")
-  done
+  local hook_dir
+  hook_dir="$(cd "$(dirname "$0")" && pwd)"
+  if [ -f "$hook_dir/_lib-ops-root.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$hook_dir/_lib-ops-root.sh"
+    local resolved
+    resolved=$(resolve_ops_root "$REPO_ROOT")
+    [ -n "$resolved" ] && marker_home="$resolved"
+  else
+    local r="$REPO_ROOT"
+    while [ -n "$r" ] && [ "$r" != "/" ]; do
+      if [ -f "$r/.apexyard-fork" ]; then
+        marker_home="$r"
+        break
+      fi
+      if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+        marker_home="$r"
+        break
+      fi
+      r=$(dirname "$r")
+    done
+  fi
 
   if [ -f "$marker_home/.claude/session/current-ticket" ]; then
     if grep -qE '^title=\[Spike\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then

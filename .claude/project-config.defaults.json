@@ -137,9 +137,11 @@
   ],
 
   "portfolio": {
-    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing onboarding.yaml + apexyard.projects.yaml). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md.",
+    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog + onboarding config + workspace dir. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing the .apexyard-fork marker, or the legacy onboarding.yaml + apexyard.projects.yaml pair). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md. The `onboarding` and `workspace_dir` keys were added in framework #242 (split-portfolio v2) — see docs/multi-project.md § 'Split-portfolio mode'.",
     "registry": "./apexyard.projects.yaml",
     "projects_dir": "./projects",
-    "ideas_backlog": "./projects/ideas-backlog.md"
+    "ideas_backlog": "./projects/ideas-backlog.md",
+    "onboarding": "./onboarding.yaml",
+    "workspace_dir": "./workspace"
   }
 }

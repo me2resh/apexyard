@@ -107,24 +107,38 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
 2. **Pick the private repo name**: default suggestion **`your-org/<fork>-portfolio`** (e.g. `your-org/apexyard-portfolio` if you kept the fork name; `your-org/cos-portfolio` if you renamed the fork to `cos`). Compute the `<fork>` part from the public-fork repo name (`gh repo view --json name -q .name`) so the suggestion is correct even when the fork was renamed. Operator confirms or overrides — any name works, the framework only cares about the local path.
 3. **Create the private repo**: `gh repo create your-org/<name> --private --description "..."`. Confirm before running.
 4. **Clone the private repo as a sibling**: `cd .. && gh repo clone your-org/<name>` (no second arg — the clone defaults to a directory named after the repo, so `your-org/apexyard-portfolio` clones into `apexyard-portfolio/`).
-5. **Initialise the portfolio**: `apexyard.projects.yaml` + empty `projects/` dir + initial commit + push. Same content as the doc's step 5.
-6. **Configure path resolution in the fork** (recommended — config-block mode):
-   - Append `.gitignore` lines for `apexyard.projects.yaml` and `projects` (so they don't accidentally get staged in the public fork even if the operator runs `git add -A`).
-   - Untrack any tracked `projects/README.md` from the upstream framework.
-   - Write `.claude/project-config.json` with the `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
+5. **Initialise the portfolio (v2 layout)**: in the private repo, create:
+   - `apexyard.projects.yaml` with `version: 1`, `projects: []`, `defaults: {status: active, ticket_prefix: GH}`
+   - empty `projects/` dir (with a `.gitkeep` so the dir survives the initial commit)
+   - empty `workspace/` dir (with a `.gitkeep`) — managed-project clones land here
+   - **`onboarding.yaml`** seeded from the framework template — split-portfolio v2 (#242) moves company/team/stack config to the private repo too, so the public fork stays slim
+   - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
+   - initial commit + push
+6. **Configure path resolution in the fork** (recommended — v2 config-block mode):
+   - Append `.gitignore` lines for `apexyard.projects.yaml`, `projects`, `onboarding.yaml`, AND `workspace` so none of them get accidentally staged in the public fork even on a stray `git add -A`. (The first two cover registry + per-project docs; the last two are the v2 additions.)
+   - Untrack any tracked `projects/README.md`, `onboarding.yaml`, or `workspace/README.md` from the upstream framework: `git rm --cached -r projects onboarding.yaml workspace 2>/dev/null || true`.
+   - Write `.claude/project-config.json` with the v2 `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
 
      ```json
      {
        "portfolio": {
          "registry": "../apexyard-portfolio/apexyard.projects.yaml",
          "projects_dir": "../apexyard-portfolio/projects",
-         "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
+         "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md",
+         "onboarding": "../apexyard-portfolio/onboarding.yaml",
+         "workspace_dir": "../apexyard-portfolio/workspace"
        }
      }
      ```
 
-   - Stage `.gitignore` and `.claude/project-config.json` for commit (the latter is per-fork, not per-machine, since it points at a public sibling-repo path).
-   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way.
+   - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). The marker is presence-only; content is ignored. A short identifying line is fine for human-grep purposes:
+
+     ```bash
+     echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+     ```
+
+   - Stage `.gitignore`, `.claude/project-config.json`, and `.apexyard-fork` for commit. All three are per-fork, not per-machine.
+   - **Legacy fallback (framework-version < #145)**: if the adopter's framework predates the `portfolio:` config block, fall back to creating symlinks pointing at `../<sibling-dir>/apexyard.projects.yaml` and `../<sibling-dir>/projects`. The helper resolves either way. v2 (`onboarding` / `workspace_dir` / `.apexyard-fork`) requires framework ≥ #242 — older forks should run `/update` first to pick up the v2 plumbing before going through this branch.
 7. **Verify**: source `.claude/hooks/_lib-portfolio-paths.sh` and call `portfolio_validate`. Skill MUST refuse to declare success if validate fails — surface the specific failure and ask the operator to fix it before re-running.
 
    ```bash
@@ -461,16 +475,44 @@ Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-l
 
 Don't loop more than twice. If the user keeps correcting, switch to "tell me exactly what to change" direct-edit mode.
 
-### Step 6: Write onboarding.yaml
+### Step 6: Write onboarding.yaml + the .apexyard-fork marker
 
-Read the current `onboarding.yaml` template, replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments — the comments are documentation for future readers.
+Read the current `onboarding.yaml` template (in single-fork mode this is at the fork root; in v2 split-portfolio mode it lives in the private sibling repo, resolved via `portfolio_onboarding_path`), replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments — the comments are documentation for future readers.
 
 **Important:** use `Edit` tool to modify in-place, not `Write` to overwrite — this preserves comments and structure that the user didn't touch.
+
+In **single-fork mode** also write the `.apexyard-fork` marker at the fork root if it doesn't already exist (idempotent — content is ignored, presence is the signal):
+
+```bash
+if [ ! -f .apexyard-fork ]; then
+  echo "# This file marks the directory as an ApexYard ops fork." > .apexyard-fork
+  git add .apexyard-fork
+fi
+```
+
+The marker is the v2 ops-fork anchor — every hook that walks up to find the ops fork looks for it first. Single-fork adopters benefit from the same anchor (cheaper presence test, and consistency with v2 split-portfolio adopters). The legacy `onboarding.yaml + apexyard.projects.yaml` walk remains as a fallback for un-migrated forks (so existing tests + un-migrated single-fork installs keep working without a migration).
+
+In **split-portfolio v2 mode** the marker was already written in Step 2b — skip the bash above.
 
 After writing:
 
 ```bash
-git add onboarding.yaml
+# In single-fork mode: stage the in-fork onboarding.yaml.
+# In v2 mode: stage the SIBLING repo's onboarding.yaml.
+ONBOARDING=$(portfolio_onboarding_path)
+case "$ONBOARDING" in
+  "$(git rev-parse --show-toplevel)"/*)
+    git add onboarding.yaml
+    ;;
+  *)
+    # v2 mode — onboarding lives in the sibling repo. Stage it there
+    # so the user can `git -C ../<sibling> diff --cached` before committing.
+    sibling_root=$(git -C "$(dirname "$ONBOARDING")" rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$sibling_root" ]; then
+      (cd "$sibling_root" && git add onboarding.yaml)
+    fi
+    ;;
+esac
 ```
 
 Stage but do NOT commit — let the user review the diff and commit when ready. Tell them:
@@ -479,6 +521,8 @@ Stage but do NOT commit — let the user review the diff and commit when ready. 
 onboarding.yaml updated and staged. Review with `git diff --cached` and
 commit when you're happy: git commit -m "chore: configure apexyard for <company>"
 ```
+
+(In v2 mode point them at the sibling repo for the diff + commit.)
 
 ### Step 7: Optionally seed the project registry
 

@@ -82,9 +82,14 @@ spec_assert "spec-prompt-response-options" "[y / n / later]"
 spec_assert "spec-followup-threat-model" \
   "Want to run /threat-model against the new clone now?"
 
-# 6. Skip-if-exists branch is documented.
+# 6. Skip-if-exists branch is documented. After framework #242 the skill
+# resolves the workspace dir via portfolio_workspace_dir (split-portfolio
+# v2 may point it at a sibling private repo), so the literal becomes
+# `$WORKSPACE_DIR/<name>` rather than `workspace/<name>`. The shape of
+# the skip branch (an `if [ -d ... ]; then` guard around `git clone`)
+# is what the spec test pins.
 spec_assert "spec-skip-if-exists" \
-  'if [ -d "workspace/<name>" ]; then'
+  'if [ -d "$WORKSPACE_DIR/<name>" ]; then'
 
 # 7. Decline path documented as silent (no side effects).
 spec_assert "spec-decline-silent" \

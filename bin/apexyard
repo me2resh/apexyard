@@ -20,14 +20,21 @@
 set -u
 
 # ---------------------------------------------------------------------------
-# Resolve the ops-fork root from $PWD by walking up until we find a dir
-# with onboarding.yaml AND apexyard.projects.yaml. Same algorithm as the
-# briefing helper itself; we replicate it here so the shim stays a single
-# self-contained file.
+# Resolve the ops-fork root from $PWD by walking up. Honours both the
+# v2 `.apexyard-fork` marker (split-portfolio v2, framework ≥ #242) and
+# the legacy v1 anchor (onboarding.yaml + apexyard.projects.yaml). Same
+# algorithm as the briefing helper itself; we replicate it here so the
+# shim stays a single self-contained file.
 # ---------------------------------------------------------------------------
 find_ops_root() {
   local cur="$PWD"
   while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    # v2 anchor (cheap presence test).
+    if [ -e "$cur/.apexyard-fork" ]; then
+      printf '%s' "$cur"
+      return 0
+    fi
+    # Legacy v1 anchor.
     if [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; then
       printf '%s' "$cur"
       return 0
@@ -60,7 +67,7 @@ case "$cmd" in
     ;;
   status)
     if ! ops_root=$(find_ops_root); then
-      echo "apexyard: not inside an apexyard fork (no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
+      echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
       exit 1
     fi
 

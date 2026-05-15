@@ -10,13 +10,16 @@ ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard
 
 ApexYard ships two supported patterns. **Read this section before you fork** — picking the wrong one and pushing private project names to a public fork is hard to recover from cleanly (the GitHub PR / Issue edit history survives a force-push).
 
-| | Single-fork mode (default) | Split-portfolio mode |
+| | Single-fork mode (default) | Split-portfolio mode (v2) |
 | --- | --- | --- |
 | **Repos** | One: your fork of `me2resh/apexyard` | Two: public fork **+** a separate private repo for the portfolio |
-| **Where the registry lives** | `apexyard.projects.yaml` in the fork | `apexyard.projects.yaml` in the private repo, symlinked into the fork |
-| **Where `projects/<name>/` lives** | Inside the fork | Inside the private repo, symlinked into the fork |
-| **Public exposure** | Every registered project name + handover finding is on a public GitHub repo | Public fork holds only framework files; private repo holds your portfolio data |
-| **Daily workflow** | Same | Same — skills resolve through the symlinks transparently |
+| **Where the registry lives** | `apexyard.projects.yaml` in the fork | `apexyard.projects.yaml` in the private repo, resolved via config block |
+| **Where `projects/<name>/` lives** | Inside the fork | Inside the private repo, resolved via config block |
+| **Where `onboarding.yaml` lives** | Inside the fork | Inside the private repo (v2, framework ≥ #242) |
+| **Where `workspace/<name>/` lives** | Inside the fork (gitignored) | Inside the private repo (v2, framework ≥ #242) |
+| **Ops-fork anchor on disk** | `onboarding.yaml + apexyard.projects.yaml` (legacy) — or `.apexyard-fork` marker file (v2) | `.apexyard-fork` marker file (v2) — neither legacy file is in the public fork |
+| **Public exposure** | Every registered project name + handover finding is on a public GitHub repo | Public fork holds only framework files + your customisations; private repo holds your portfolio data, company config, AND your managed-project clones |
+| **Daily workflow** | Same | Same — skills resolve through the config block transparently |
 | **Pick this if…** | All your projects are already public, OR you're on GitHub Pro / Team / Enterprise (which support private forks of public repos) | You're on GitHub Free with any project you don't want named publicly |
 
 **The trip-wire**: GitHub Free disallows changing a fork's visibility — you cannot make a fork of a public repo private after the fact. Combined with the framework's default of committing the registry to the fork, free-tier adopters with any private project risk accidentally publishing their portfolio names with a stray push (the framework itself never pushes without operator approval, but once the registry is committed locally the next push exposes it). The split-portfolio mode below is the supported way around this.
@@ -169,12 +172,16 @@ Use this mode if you're on GitHub Free with any project you don't want named pub
 
 The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you'd prefer — the framework only cares about the local path you point the config block at.
 
-Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml` and `projects/` through one of two mechanisms:
+Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml`, `projects/`, **`onboarding.yaml`** (v2), and **`workspace/`** (v2) through one of two mechanisms:
 
-- **Config block (recommended, framework ≥ #145).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml` and `../apexyard-portfolio/projects`. The `_lib-portfolio-paths.sh` helper resolves both. A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
-- **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block.
+- **Config block (recommended, framework ≥ #145; v2 keys added in #242).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml`, `../apexyard-portfolio/projects`, `../apexyard-portfolio/onboarding.yaml`, and `../apexyard-portfolio/workspace`. The `_lib-portfolio-paths.sh` helper resolves all five (`registry`, `projects_dir`, `ideas_backlog`, `onboarding`, `workspace_dir`). A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
+- **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block. The v2 additions (`onboarding`, `workspace_dir`) are config-block only — there is no legacy symlink path for them.
 
-The `/split-portfolio` skill (introduced #146) automates the full migration flow including the config-block write — see § "Migrating from single-fork to split-portfolio" below for adopters who already pushed private project names to a public fork.
+**The v2 additions: why both `onboarding.yaml` and `workspace/` move to the private repo.** Earlier split-portfolio releases (v1, framework < #242) kept `onboarding.yaml` (your company name, mission, team list, tech stack) AND `workspace/<name>/` (the local clones of your managed projects) in the public fork. Both leak. The v1 layout meant a CTO running ApexYard on a private SaaS effectively published their team roster + tech-stack + every project name on a public GitHub repo via routine session activity. v2 closes that gap: every adopter-specific artefact lives in the private sibling repo; the public fork holds only framework files plus the operator's customisations to skills/hooks/rules.
+
+**The ops-fork anchor under v2.** Pre-v2 every hook + skill that walked up to find the ops fork looked for BOTH `onboarding.yaml` AND `apexyard.projects.yaml` at the candidate dir. Under v2, neither file is in the public fork — the walk-up condition fails. v2 introduces a presence-only marker file `.apexyard-fork` at the public-fork root; `_lib-ops-root.sh` and every walk-up consumer recognises both anchors (v2 marker first, legacy v1 pair as fallback for un-migrated adopters during the transition window).
+
+The `/split-portfolio` skill (introduced #146) automates the single-fork → split-portfolio migration. The `/update` skill (extended in #242) automates the v1 → v2 split-portfolio migration for adopters who're already split but on the older layout — see § "Migrating from split-portfolio v1 to v2" below.
 
 ### Setup — 7 steps, ~6 minutes
 
@@ -214,7 +221,7 @@ cd ~/ops/apexyard
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-#### 5. Initialise the private portfolio
+#### 5. Initialise the private portfolio (v2 layout)
 
 ```bash
 cd ~/ops/apexyard-portfolio
@@ -227,10 +234,32 @@ defaults:
   ticket_prefix: GH
 EOF
 
-mkdir projects
+# v2: onboarding.yaml lives here too. Seed from the framework template
+# OR run /setup later inside the public fork — /setup writes to the
+# resolved onboarding path.
+cp ~/ops/apexyard/onboarding.yaml.example onboarding.yaml 2>/dev/null \
+  || cp ~/ops/apexyard/onboarding.yaml onboarding.yaml 2>/dev/null \
+  || cat > onboarding.yaml <<'YAML'
+company:
+  name: "Your Company Name"
+  mission: ""
+YAML
 
-git add apexyard.projects.yaml projects
-git commit -m "chore: initialise private portfolio"
+# v2: workspace/ lives here too. Empty dir to start; /handover and
+# manual `git clone workspace/<name>` will populate it.
+mkdir -p projects workspace
+
+# Ignore the inner managed-project clones inside workspace/ so they
+# don't get double-tracked in the private repo either.
+cat > .gitignore <<'IGNORE'
+workspace/*/
+IGNORE
+
+# Keep the dirs alive across the initial commit.
+touch projects/.gitkeep workspace/.gitkeep
+
+git add apexyard.projects.yaml onboarding.yaml projects workspace .gitignore
+git commit -m "chore: initialise private portfolio (split-portfolio v2)"
 git push
 ```
 
@@ -238,44 +267,56 @@ git push
 
 The recommended path is the **config block** (framework version ≥ #145). The symlink approach below is the legacy fallback for older framework versions — both work.
 
-##### Recommended: config-block mode
+##### Recommended: config-block mode (v2)
 
 ```bash
 cd ~/ops/apexyard
 
-# Tell the fork to ignore the registry + projects/ — they live in the portfolio.
+# Tell the fork to ignore everything that lives in the private repo:
+# registry, per-project docs, onboarding config, and the workspace dir.
 cat >> .gitignore <<'EOF'
 
-# Portfolio data lives in a separate private repo (split-portfolio mode).
+# Portfolio data lives in a separate private repo (split-portfolio v2).
 # See docs/multi-project.md.
 apexyard.projects.yaml
 projects
+onboarding.yaml
+workspace
 EOF
 
-# If projects/README.md is currently tracked from the upstream framework,
-# untrack it so the config-block resolution can take its place:
-git rm -r --cached projects 2>/dev/null || true
+# If any of these are currently tracked from the upstream framework,
+# untrack them so the config-block resolution can take their place:
+git rm -r --cached projects onboarding.yaml workspace 2>/dev/null || true
 
-# Write the portfolio: config block pointing at the sibling repo.
+# Write the v2 portfolio: config block pointing at the sibling repo.
 # Paths resolve relative to the ops-fork root (this directory).
 # If you used a different sibling-dir name than apexyard-portfolio,
-# substitute it in all three paths below.
+# substitute it in all five paths below.
 cat > .claude/project-config.json <<'JSON'
 {
   "portfolio": {
     "registry": "../apexyard-portfolio/apexyard.projects.yaml",
     "projects_dir": "../apexyard-portfolio/projects",
-    "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
+    "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md",
+    "onboarding": "../apexyard-portfolio/onboarding.yaml",
+    "workspace_dir": "../apexyard-portfolio/workspace"
   }
 }
 JSON
 
-git add .gitignore .claude/project-config.json
-git commit -m "chore: configure split-portfolio mode (config-block path resolution)"
+# Write the v2 ops-fork anchor. Presence-only marker; content is ignored
+# but a short identifying line helps human grep. Every framework hook
+# that walks up to find the ops fork looks for this marker first
+# (legacy onboarding.yaml + apexyard.projects.yaml pair stays as a
+# fallback for un-migrated forks).
+echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+
+git add .gitignore .claude/project-config.json .apexyard-fork
+git commit -m "chore: configure split-portfolio v2 (config-block path resolution + marker)"
 git push
 ```
 
-The `SessionStart` hook chain calls `portfolio_validate` from `_lib-portfolio-paths.sh` on every session start. If the resolved registry / projects_dir / ideas_backlog paths are broken (typo, missing file, etc.), you'll see a one-line banner naming the failure. Silent on success.
+The `SessionStart` hook chain calls `portfolio_validate` from `_lib-portfolio-paths.sh` on every session start. If the resolved registry / projects_dir / ideas_backlog / onboarding / workspace_dir paths are broken (typo, missing file, etc.), you'll see a one-line banner naming the failure. Silent on success.
 
 ##### Legacy: symlink-based mode (framework < #145)
 
@@ -346,6 +387,92 @@ You'll never need to manage session-state files by hand. If you ever see a "BLOC
 - **One conflict path on `/update`** (the `projects/README.md` case above). Resolved manually if it ever fires.
 
 In exchange, **zero of your private project names ever land on a public GitHub repo**, ever.
+
+### Migrating from split-portfolio v1 to v2
+
+If you adopted split-portfolio mode before framework #242, your fork is on the v1 layout: `apexyard.projects.yaml` and `projects/` resolve to the sibling private repo (good), but `onboarding.yaml` and `workspace/` are still in the public fork. The v2 migration moves both to the private repo too, and writes the new `.apexyard-fork` anchor.
+
+**You don't need to run this manually — `/update` detects the v1 layout and offers the migration as a default-yes step during the next upstream sync.** When you run `/update` after pulling framework ≥ #242, you'll see:
+
+```
+ApexYard /update detected your fork is in split-portfolio mode (v1 layout):
+
+  - apexyard.projects.yaml     → resolved to a sibling private repo (good)
+  - projects/                  → resolved to a sibling private repo (good)
+  - onboarding.yaml            → still in this public fork (v1 layout)
+  - workspace/                 → still in this public fork (v1 layout)
+
+Split-portfolio v2 (introduced in framework #242) moves onboarding.yaml
+AND workspace/ to the private sibling repo too, so the public fork holds
+ONLY framework files + your customisations to skills/hooks/rules.
+
+Migrate now? This will:
+  - Move onboarding.yaml to the sibling private repo
+  - Move workspace/<name>/ contents to the sibling private repo
+  - Add gitignore entries for both in the public fork
+  - Write a .apexyard-fork marker (the v2 ops-fork anchor)
+  - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
+
+Files MOVED, not copied — destructive. Idempotent — if interrupted, re-run.
+
+[Y / n / dry-run — show commands, don't execute]
+```
+
+The migration is **per-file-class confirmable** (move `onboarding.yaml`? Y/N; move `workspace/`? Y/N), so you can defer one and migrate the other. It's also **idempotent** — if you re-run `/update` later, the migration is a no-op.
+
+`/update --dry-run` walks through the migration steps without executing them, useful for previewing what would change.
+
+The skill **does not commit** — staging is the contract; you own both the public-fork commit AND the sibling-repo commit. After accepting the migration:
+
+```bash
+# Public fork — review what's staged + the marker + config-block additions
+git diff --cached
+git commit -m "chore: migrate to split-portfolio v2"
+
+# Private sibling repo — onboarding + workspace landed here
+cd ../apexyard-portfolio
+git status        # see the moved files
+git add onboarding.yaml workspace
+git commit -m "chore: receive onboarding + workspace from public fork (split-portfolio v2)"
+```
+
+**What if you want to migrate by hand?** Run the same steps the `/update` skill runs:
+
+```bash
+cd ~/ops/apexyard
+
+SIBLING=../apexyard-portfolio   # adjust to your sibling-dir name
+
+# Move the two file classes
+mv onboarding.yaml "$SIBLING/onboarding.yaml"
+mkdir -p "$SIBLING/workspace"
+for entry in workspace/*; do
+  [ -e "$entry" ] || continue
+  name=$(basename "$entry")
+  [ "$name" = "README.md" ] && continue   # framework file, stays
+  mv "$entry" "$SIBLING/workspace/$name"
+done
+
+# Update .gitignore in the public fork
+cat >> .gitignore <<'IGNORE'
+
+# Split-portfolio v2 (framework ≥ #242)
+onboarding.yaml
+workspace
+IGNORE
+
+# Write the v2 anchor
+echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+
+# Update the config block — add the v2 keys
+jq --arg onb "$SIBLING/onboarding.yaml" \
+   --arg ws  "$SIBLING/workspace" \
+   '.portfolio.onboarding = (.portfolio.onboarding // $onb)
+    | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
+   .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
+
+git add .gitignore .apexyard-fork .claude/project-config.json
+```
 
 ### Migrating from single-fork to split-portfolio
 

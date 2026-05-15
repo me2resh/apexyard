@@ -2,9 +2,10 @@
 # _lib-portfolio-paths.sh — resolve portfolio paths from project-config.
 #
 # Source this library from any hook or skill that reads/writes the
-# portfolio registry, per-project docs dir, or ideas backlog. Reads the
-# `portfolio` block from .claude/project-config.{defaults,}.json (via
-# _lib-read-config.sh's `config_get_or`).
+# portfolio registry, per-project docs dir, ideas backlog, the
+# onboarding config, or the workspace dir. Reads the `portfolio` block
+# from .claude/project-config.{defaults,}.json (via _lib-read-config.sh's
+# `config_get_or`).
 #
 # Usage:
 #   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -12,25 +13,37 @@
 #   registry=$(portfolio_registry)
 #   projects_dir=$(portfolio_projects_dir)
 #   ideas_backlog=$(portfolio_ideas_backlog)
+#   onboarding=$(portfolio_onboarding_path)         # framework ≥ #242
+#   workspace_dir=$(portfolio_workspace_dir)        # framework ≥ #242
 #   portfolio_validate || echo "broken: $(portfolio_validate)"
 #
 # All resolvers output absolute paths. Relative config values resolve
-# against the ops-fork root (dir containing both onboarding.yaml and
-# apexyard.projects.yaml). Outside an apexyard fork the resolvers fall
-# back to the current git toplevel; outside any git repo they output
-# the relative literal so callers can detect the no-fork state.
+# against the ops-fork root. The ops-fork root is identified by EITHER:
+#
+#   - a `.apexyard-fork` marker file (split-portfolio v2 layout, where
+#     onboarding.yaml + apexyard.projects.yaml live in the private
+#     sibling repo), OR
+#   - both `onboarding.yaml` AND `apexyard.projects.yaml` (legacy
+#     single-fork OR un-migrated split-portfolio v1 layout)
+#
+# Outside an apexyard fork the resolvers fall back to the current git
+# toplevel; outside any git repo they output the relative literal so
+# callers can detect the no-fork state.
 #
 # Defaults (when config is missing entirely):
 #   registry      → ./apexyard.projects.yaml
 #   projects_dir  → ./projects
 #   ideas_backlog → ./projects/ideas-backlog.md
+#   onboarding    → ./onboarding.yaml
+#   workspace_dir → ./workspace
 #
 # Caching: results cached per-process in shell vars to avoid repeat jq
 # calls. Same pattern as _CONFIG_CACHE in _lib-read-config.sh.
 
 # ------------------------------------------------------------------------------
-# Internal: resolve the ops-fork root (dir with onboarding.yaml AND
-# apexyard.projects.yaml). Walks up from the git toplevel.
+# Internal: resolve the ops-fork root. Walks up from the git toplevel
+# looking for the v2 marker (`.apexyard-fork`) first, falling back to
+# the legacy v1 anchor (onboarding.yaml + apexyard.projects.yaml).
 # Falls back to git toplevel if not inside an apexyard fork.
 # ------------------------------------------------------------------------------
 _PORTFOLIO_ROOT_CACHE=""
@@ -49,6 +62,13 @@ _portfolio_root() {
 
   local cur="$r"
   while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    # v2 anchor first (cheap presence test).
+    if [ -f "$cur/.apexyard-fork" ]; then
+      _PORTFOLIO_ROOT_CACHE="$cur"
+      echo "$cur"
+      return 0
+    fi
+    # Legacy v1 anchor.
     if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
       _PORTFOLIO_ROOT_CACHE="$cur"
       echo "$cur"
@@ -151,6 +171,47 @@ portfolio_ideas_backlog() {
 }
 
 # ------------------------------------------------------------------------------
+# Public: portfolio_onboarding_path
+#   Resolves the path to onboarding.yaml. In single-fork mode this is
+#   inside the fork; in split-portfolio v2 mode it lives in the private
+#   sibling repo (e.g. ../<fork>-portfolio/onboarding.yaml).
+#
+#   Default: ./onboarding.yaml (relative to ops-fork root)
+# ------------------------------------------------------------------------------
+_PORTFOLIO_ONBOARDING_CACHE=""
+portfolio_onboarding_path() {
+  if [ -n "$_PORTFOLIO_ONBOARDING_CACHE" ]; then
+    echo "$_PORTFOLIO_ONBOARDING_CACHE"
+    return 0
+  fi
+  local raw
+  raw=$(_portfolio_get '.portfolio.onboarding' './onboarding.yaml')
+  _PORTFOLIO_ONBOARDING_CACHE=$(_portfolio_resolve "$raw")
+  echo "$_PORTFOLIO_ONBOARDING_CACHE"
+}
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_workspace_dir
+#   Resolves the path to the workspace dir (where managed-project clones
+#   live). In single-fork mode this is inside the fork; in split-portfolio
+#   v2 mode it lives in the private sibling repo (e.g.
+#   ../<fork>-portfolio/workspace).
+#
+#   Default: ./workspace (relative to ops-fork root)
+# ------------------------------------------------------------------------------
+_PORTFOLIO_WORKSPACE_DIR_CACHE=""
+portfolio_workspace_dir() {
+  if [ -n "$_PORTFOLIO_WORKSPACE_DIR_CACHE" ]; then
+    echo "$_PORTFOLIO_WORKSPACE_DIR_CACHE"
+    return 0
+  fi
+  local raw
+  raw=$(_portfolio_get '.portfolio.workspace_dir' './workspace')
+  _PORTFOLIO_WORKSPACE_DIR_CACHE=$(_portfolio_resolve "$raw")
+  echo "$_PORTFOLIO_WORKSPACE_DIR_CACHE"
+}
+
+# ------------------------------------------------------------------------------
 # Public: portfolio_validate
 #   Sanity-check that resolved paths are actually usable.
 #   On success: prints nothing, returns 0.
@@ -166,10 +227,12 @@ portfolio_ideas_backlog() {
 #   SessionStart hooks without measurable session-start lag.
 # ------------------------------------------------------------------------------
 portfolio_validate() {
-  local registry projects_dir ideas_backlog
+  local registry projects_dir ideas_backlog onboarding workspace_dir
   registry=$(portfolio_registry)
   projects_dir=$(portfolio_projects_dir)
   ideas_backlog=$(portfolio_ideas_backlog)
+  onboarding=$(portfolio_onboarding_path)
+  workspace_dir=$(portfolio_workspace_dir)
 
   if [ ! -f "$registry" ]; then
     echo "broken: portfolio.registry resolved to $registry — file does not exist"
@@ -215,6 +278,41 @@ portfolio_validate() {
     # File missing but parent exists → creatable. Treat as OK.
   fi
 
+  # onboarding.yaml: validate ONLY when the resolved path is OUTSIDE the
+  # ops-fork root (i.e. an explicit override pointing at a sibling repo,
+  # split-portfolio v2 mode). When the resolved path is the in-fork
+  # default, the onboarding-check.sh hook already handles the
+  # missing/placeholder case with a more specific message; double-flagging
+  # would be noisy on fresh forks before /setup runs.
+  local root
+  root=$(_portfolio_root)
+  case "$onboarding" in
+    "$root"/*|"$root")
+      # In-fork path — leave it to onboarding-check.sh.
+      ;;
+    *)
+      if [ ! -f "$onboarding" ]; then
+        echo "broken: portfolio.onboarding resolved to $onboarding — file does not exist"
+        return 1
+      fi
+      ;;
+  esac
+
+  # workspace_dir: same shape — only validate explicit overrides. The
+  # in-fork default may legitimately not exist yet (no managed projects
+  # cloned). Callers that need the dir should mkdir on demand.
+  case "$workspace_dir" in
+    "$root"/*|"$root")
+      # In-fork path — optional; skip.
+      ;;
+    *)
+      if [ ! -d "$workspace_dir" ]; then
+        echo "broken: portfolio.workspace_dir resolved to $workspace_dir — directory does not exist"
+        return 1
+      fi
+      ;;
+  esac
+
   return 0
 }
 
@@ -227,4 +325,19 @@ portfolio_clear_cache() {
   _PORTFOLIO_REGISTRY_CACHE=""
   _PORTFOLIO_PROJECTS_DIR_CACHE=""
   _PORTFOLIO_IDEAS_BACKLOG_CACHE=""
+  _PORTFOLIO_ONBOARDING_CACHE=""
+  _PORTFOLIO_WORKSPACE_DIR_CACHE=""
+}
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_is_v2
+#   Returns 0 if the ops fork is configured with the v2 layout (the
+#   `.apexyard-fork` marker is present at the resolved root), 1 otherwise.
+#   Useful for skills that want to branch behaviour on the layout (e.g.
+#   `/update`'s migration step, `/setup`'s split-portfolio init).
+# ------------------------------------------------------------------------------
+portfolio_is_v2() {
+  local root
+  root=$(_portfolio_root)
+  [ -n "$root" ] && [ -f "$root/.apexyard-fork" ]
 }

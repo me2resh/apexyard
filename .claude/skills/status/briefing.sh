@@ -28,9 +28,15 @@ set -u
 #
 # Same algorithm as _lib-portfolio-paths.sh (_portfolio_root) and as the
 # /start-ticket skill: walk up from the cwd / git toplevel until we find a
-# directory that contains BOTH onboarding.yaml AND apexyard.projects.yaml.
+# directory satisfying one of the apexyard-fork anchors:
 #
-# Symlinked registry / projects (split-portfolio mode) is fine — the
+#   - the v2 `.apexyard-fork` marker file (split-portfolio v2, where
+#     onboarding.yaml + apexyard.projects.yaml live in the private
+#     sibling repo and aren't present at the public fork root); OR
+#   - both onboarding.yaml AND apexyard.projects.yaml (legacy v1 layout —
+#     single-fork OR un-migrated split-portfolio).
+#
+# Symlinked registry / projects (split-portfolio v1 mode) is fine — the
 # `apexyard.projects.yaml` symlink in the fork still satisfies the test.
 # ---------------------------------------------------------------------------
 ops_root="${APEXYARD_OPS_ROOT:-}"
@@ -46,6 +52,12 @@ if [ -z "$ops_root" ]; then
 
   cur="$start"
   while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    # v2 anchor (cheap presence test).
+    if [ -e "$cur/.apexyard-fork" ]; then
+      ops_root="$cur"
+      break
+    fi
+    # Legacy v1 anchor.
     if [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; then
       ops_root="$cur"
       break
@@ -58,22 +70,45 @@ fi
 # 2. Active workspace from the cwd.
 #
 # Rules (from #182 AC):
-#   - cwd under <ops_root>/workspace/<name>/...   → workspace = "<name>"
+#   - cwd under <workspace_dir>/<name>/...         → workspace = "<name>"
 #   - cwd == <ops_root>                            → workspace = "(ops)"
 #   - anything else (or no ops_root)               → workspace = "(unknown)"
+#
+# In split-portfolio v2 mode the workspace dir lives in the private sibling
+# repo (e.g. ../<fork>-portfolio/workspace) — resolve via the portfolio
+# helper so v2 cwds map to the right workspace name. The literal
+# $ops_root/workspace/ shape stays as a belt-and-suspenders fallback for
+# legacy v1 forks.
 # ---------------------------------------------------------------------------
 cwd="${APEXYARD_CWD:-$(pwd)}"
 workspace="(unknown)"
 
+# Resolve workspace_dir via the portfolio helper if available.
+workspace_dir=""
+if [ -n "$ops_root" ] && [ -f "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" ] && [ -f "$ops_root/.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$ops_root/.claude/hooks/_lib-read-config.sh" 2>/dev/null
+  # shellcheck source=/dev/null
+  . "$ops_root/.claude/hooks/_lib-portfolio-paths.sh" 2>/dev/null
+  if command -v portfolio_workspace_dir >/dev/null 2>&1; then
+    workspace_dir=$(portfolio_workspace_dir 2>/dev/null)
+  fi
+fi
+[ -z "$workspace_dir" ] && [ -n "$ops_root" ] && workspace_dir="$ops_root/workspace"
+
 if [ -n "$ops_root" ]; then
   if [ "$cwd" = "$ops_root" ]; then
     workspace="(ops)"
-  else
+  elif [ -n "$workspace_dir" ]; then
     case "$cwd" in
+      "$workspace_dir"/*)
+        rel="${cwd#"$workspace_dir"/}"
+        workspace="${rel%%/*}"
+        ;;
       "$ops_root"/workspace/*)
+        # Belt-and-suspenders fallback for v1 forks where workspace_dir
+        # may not be the literal $ops_root/workspace.
         rel="${cwd#"$ops_root"/workspace/}"
-        # Take the first path segment as the workspace name. Survives
-        # trailing slashes and nested paths inside the workspace.
         workspace="${rel%%/*}"
         ;;
     esac
@@ -156,7 +191,9 @@ branch_dir="$cwd"
 case "$workspace" in
   "(ops)"|"(unknown)"|"") ;;
   *)
-    if [ -n "$ops_root" ] && [ -d "$ops_root/workspace/$workspace" ]; then
+    if [ -n "$workspace_dir" ] && [ -d "$workspace_dir/$workspace" ]; then
+      branch_dir="$workspace_dir/$workspace"
+    elif [ -n "$ops_root" ] && [ -d "$ops_root/workspace/$workspace" ]; then
       branch_dir="$ops_root/workspace/$workspace"
     fi
     ;;

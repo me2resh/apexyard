@@ -316,6 +316,132 @@ exit 1
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
+# Case 10 (v2): portfolio_onboarding_path resolves to in-fork default
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2: portfolio_onboarding_path defaults to in-fork onboarding.yaml" "$SB" '
+r=$(portfolio_onboarding_path)
+expected="'"$SB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 11 (v2): portfolio_workspace_dir resolves to in-fork default
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2: portfolio_workspace_dir defaults to in-fork workspace" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SB"'/workspace"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 12 (v2): explicit override for onboarding + workspace_dir wins
+# (split-portfolio v2 mode — both keys point at sibling private repo)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/workspace"
+cat > "$SIB/onboarding.yaml" <<'YAML'
+company:
+  name: "Test Co"
+YAML
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "onboarding": "$SIB/onboarding.yaml",
+    "workspace_dir": "$SIB/workspace"
+  }
+}
+JSON
+run_case "v2: portfolio_onboarding_path override → sibling repo path" "$SB" '
+r=$(portfolio_onboarding_path)
+expected="'"$SIB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2: portfolio_workspace_dir override → sibling repo path" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIB"'/workspace"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2: validate is OK against sibling-dir onboarding + workspace" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 13 (v2): override pointing at non-existent onboarding → broken
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "onboarding": "/nowhere/onboarding.yaml"
+  }
+}
+JSON
+run_case "v2: validate catches missing onboarding override" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"onboarding"*"file does not exist"*) [ "$rc" -ne 0 ] && exit 0 ;;
+esac
+echo "got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 14 (v2): override pointing at non-existent workspace_dir → broken
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "/nowhere/workspace"
+  }
+}
+JSON
+run_case "v2: validate catches missing workspace_dir override" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"workspace_dir"*"directory does not exist"*) [ "$rc" -ne 0 ] && exit 0 ;;
+esac
+echo "got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 15 (v2): missing in-fork workspace dir is OK (no managed projects yet)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+# Default workspace dir is $SB/workspace; don't create it.
+run_case "v2: validate tolerates missing in-fork workspace (creatable)" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 16 (v2): portfolio_is_v2 detects the .apexyard-fork marker
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+# Without marker — should be v1.
+run_case "v2: portfolio_is_v2 returns false without .apexyard-fork marker" "$SB" '
+if portfolio_is_v2; then echo "expected non-zero exit"; exit 1; else exit 0; fi
+'
+# Add the marker — now v2.
+touch "$SB/.apexyard-fork"
+run_case "v2: portfolio_is_v2 returns true when .apexyard-fork present" "$SB" '
+if portfolio_is_v2; then exit 0; else echo "expected zero exit"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

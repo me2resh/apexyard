@@ -320,6 +320,178 @@ The skill **never auto-removes without explicit `y`**. The skill **never auto-co
 
 A custom-extension key indistinguishable from an upstream-removed key is a real possibility (e.g. an adopter who's ahead of defaults with their own block). The cost of incorrectly removing a custom block is much higher than the cost of one extra prompt — the y/n/s pattern matches the rest of `/update`'s "operator owns each material change" stance.
 
+### 8a. Migrate to split-portfolio v2 layout (advisory, default-yes)
+
+Detection. After the merge / rebase has applied the new `_lib-portfolio-paths.sh` + `_lib-ops-root.sh`, source the helper and check for **two** conditions that together identify a pre-v2 split-portfolio adopter:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+
+# Already v2 (or single-fork) — no migration needed.
+if portfolio_is_v2; then
+  V2_NEEDED=0
+elif ! jq -e '.portfolio.registry' .claude/project-config.json >/dev/null 2>&1; then
+  # No portfolio block at all → single-fork mode → no migration.
+  V2_NEEDED=0
+else
+  # Has a portfolio block (split-portfolio) but no .apexyard-fork marker
+  # → pre-v2 split-portfolio adopter. Migration applies.
+  V2_NEEDED=1
+fi
+```
+
+If `V2_NEEDED=0` → skip this step entirely and continue to step 9.
+
+If `V2_NEEDED=1`, present the offer:
+
+```
+ApexYard /update detected your fork is in split-portfolio mode (v1 layout):
+
+  - apexyard.projects.yaml     → resolved to a sibling private repo (good)
+  - projects/                  → resolved to a sibling private repo (good)
+  - onboarding.yaml            → still in this public fork (v1 layout)
+  - workspace/                 → still in this public fork (v1 layout)
+
+Split-portfolio v2 (introduced in framework #242) moves onboarding.yaml
+AND workspace/ to the private sibling repo too, so the public fork holds
+ONLY framework files + your customisations to skills/hooks/rules.
+
+Migrate now? This will:
+  - Move onboarding.yaml to the sibling private repo
+  - Move workspace/<name>/ contents to the sibling private repo
+  - Add gitignore entries for both in the public fork
+  - Write a .apexyard-fork marker (the v2 ops-fork anchor)
+  - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
+
+Files MOVED, not copied — destructive. Idempotent — if interrupted, re-run.
+
+[Y / n / dry-run — show commands, don't execute]
+```
+
+If `--dry-run` was passed to `/update`, force the dry-run branch automatically (print the commands the migration would run, do not execute, then continue to step 9).
+
+Per-file-class confirmation — ask separately for `onboarding.yaml` and `workspace/`, so the operator can move one and defer the other:
+
+```
+Move onboarding.yaml? [Y/n]
+Move workspace/? [Y/n]   # surfaces the disk size: du -sh workspace
+```
+
+#### Migration steps
+
+For each file class the operator confirmed, run the moves below. Resolve the sibling repo dir from the existing `portfolio.registry` path (the parent dir of the registry file is the sibling repo root):
+
+```bash
+SIBLING_ROOT=$(dirname "$(jq -r '.portfolio.registry' .claude/project-config.json)")
+# e.g. SIBLING_ROOT=../apexyard-portfolio
+```
+
+##### Move onboarding.yaml
+
+```bash
+if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
+  mv onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
+  (cd "$SIBLING_ROOT" && git add onboarding.yaml)
+elif [ -f "$SIBLING_ROOT/onboarding.yaml" ] && [ -f onboarding.yaml ]; then
+  # Both present — surface the conflict and stop. The operator picks.
+  echo "WARNING: onboarding.yaml exists in BOTH the public fork and the sibling repo."
+  echo "  Resolve manually before re-running /update."
+  return 1
+fi
+```
+
+Idempotence: if `onboarding.yaml` is already only in the sibling repo, this block is a no-op.
+
+##### Move workspace/
+
+```bash
+if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
+  mkdir -p "$SIBLING_ROOT/workspace"
+  # Move each entry individually so we don't trip on `mv` of a populated dir
+  # to an existing dir (some shells refuse).
+  for entry in workspace/*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    if [ -e "$SIBLING_ROOT/workspace/$name" ]; then
+      echo "WARNING: workspace/$name exists in BOTH locations — skipped."
+      continue
+    fi
+    mv "$entry" "$SIBLING_ROOT/workspace/$name"
+  done
+  # workspace/README.md (committed framework file) stays in the public fork.
+fi
+```
+
+Idempotence: empty `workspace/` (no entries to move) is a no-op.
+
+##### Update .gitignore
+
+```bash
+NEEDS=()
+grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
+grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+
+if [ "${#NEEDS[@]}" -gt 0 ]; then
+  {
+    echo ""
+    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace live in the private sibling repo."
+    for n in "${NEEDS[@]}"; do echo "$n"; done
+  } >> .gitignore
+  git add .gitignore
+fi
+```
+
+##### Write the .apexyard-fork marker
+
+```bash
+if [ ! -f .apexyard-fork ]; then
+  echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+  git add .apexyard-fork
+fi
+```
+
+##### Update .claude/project-config.json
+
+Add the two new keys to the `portfolio` block, pointing at the sibling repo. Use `jq` to merge so existing keys are preserved:
+
+```bash
+PCONFIG=.claude/project-config.json
+if [ -f "$PCONFIG" ]; then
+  TMP=$(mktemp)
+  jq --arg onb "$SIBLING_ROOT/onboarding.yaml" \
+     --arg ws "$SIBLING_ROOT/workspace" \
+     '.portfolio.onboarding = (.portfolio.onboarding // $onb)
+      | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
+     "$PCONFIG" > "$TMP" && mv "$TMP" "$PCONFIG"
+  git add "$PCONFIG"
+fi
+```
+
+Idempotence: `// $onb` short-circuits if the operator already added the key by hand.
+
+##### Final verification
+
+```bash
+portfolio_clear_cache
+if portfolio_validate >/dev/null 2>&1; then
+  echo "✓ Migration to split-portfolio v2 layout complete."
+  echo "  Files moved to: $SIBLING_ROOT"
+  echo "  Public-fork changes staged for review (git diff --cached)."
+  echo "  Don't forget to commit + push the sibling repo as well:"
+  echo "    cd $SIBLING_ROOT && git status"
+else
+  echo "✗ Migration left portfolio_validate broken — fix manually:"
+  portfolio_validate
+fi
+```
+
+The skill **does not commit** — staging is the contract; the operator owns both the public-fork commit AND the sibling-repo commit.
+
+#### Why advisory, not silent
+
+The migration moves real files between repos. If the operator has a custom workflow built on top of the in-fork `workspace/` location, an automatic move would silently break it. The y/n/dry-run pattern matches the deprecated-config-key offer in step 8 — operator owns each material change.
+
 ### 9. Final state + next steps
 
 On clean completion, print:

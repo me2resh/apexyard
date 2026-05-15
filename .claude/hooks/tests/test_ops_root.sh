@@ -49,7 +49,7 @@ run_case() {
   fi
 }
 
-# Builds a synthetic ops-fork layout under $1:
+# Builds a synthetic ops-fork layout under $1 (legacy v1 layout):
 #   $1/onboarding.yaml
 #   $1/apexyard.projects.yaml
 #   $1/workspace/demo/  (with its own .git/, simulating a managed-project clone)
@@ -58,6 +58,17 @@ build_sandbox() {
   mkdir -p "$sb/workspace/demo/.git"
   : > "$sb/onboarding.yaml"
   : > "$sb/apexyard.projects.yaml"
+}
+
+# Builds a synthetic split-portfolio v2 ops-fork layout under $1:
+#   $1/.apexyard-fork                            (v2 anchor — presence-only)
+#   $1/workspace_local/demo/  (placeholder workspace dir for clone path)
+# NOTE: no onboarding.yaml or apexyard.projects.yaml at this root —
+# v2 moves both to a private sibling repo.
+build_v2_sandbox() {
+  local sb="$1"
+  mkdir -p "$sb/workspace_local/demo/.git"
+  : > "$sb/.apexyard-fork"
 }
 
 # ---------------------------------------------------------------------------
@@ -160,8 +171,61 @@ case_5() {
   )
 }
 
+# ---------------------------------------------------------------------------
+# Case 6 (v2): from inside a split-portfolio v2 fork with .apexyard-fork
+# marker but NO onboarding.yaml / apexyard.projects.yaml at the root
+# ---------------------------------------------------------------------------
+case_6() {
+  local case_name="resolve_ops_root v2: .apexyard-fork marker is enough"
+  local sb
+  sb=$(mktemp -d)
+  build_v2_sandbox "$sb"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$sb" && resolve_ops_root)
+    [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
+    mark_pass "$case_name"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Case 7 (v2): from inside workspace clone in a v2 fork → returns ops fork
+# ---------------------------------------------------------------------------
+case_7() {
+  local case_name="resolve_ops_root v2: from workspace_local/demo → v2 ops fork"
+  local sb
+  sb=$(mktemp -d)
+  build_v2_sandbox "$sb"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$sb/workspace_local/demo" && resolve_ops_root)
+    [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
+    mark_pass "$case_name"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Case 8 (v2): v2 marker takes precedence over a legacy anchor when both
+# happen to be present (during migration, before legacy files are removed)
+# ---------------------------------------------------------------------------
+case_8() {
+  local case_name="resolve_ops_root: v2 marker takes precedence over legacy anchor"
+  local sb
+  sb=$(mktemp -d)
+  build_v2_sandbox "$sb"
+  # Add legacy anchor too — should still resolve to this dir (no ambiguity).
+  : > "$sb/onboarding.yaml"
+  : > "$sb/apexyard.projects.yaml"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$sb" && resolve_ops_root)
+    [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
+    mark_pass "$case_name"
+  )
+}
+
 echo "Running ops-root lib tests..."
-for fn in case_1 case_2 case_3 case_4 case_5; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8; do
   run_case "$fn"
 done
 
