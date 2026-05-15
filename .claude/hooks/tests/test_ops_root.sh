@@ -68,7 +68,8 @@ case_1() {
   local sb
   sb=$(mktemp -d)
   build_sandbox "$sb"
-  ( . "$LIB"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
     out=$(cd "$sb" && resolve_ops_root)
     [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
     mark_pass "$case_name"
@@ -83,7 +84,8 @@ case_2() {
   local sb
   sb=$(mktemp -d)
   build_sandbox "$sb"
-  ( . "$LIB"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
     out=$(cd "$sb/workspace/demo" && resolve_ops_root)
     [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
     mark_pass "$case_name"
@@ -97,7 +99,8 @@ case_3() {
   local case_name="resolve_ops_root from non-ops dir → empty"
   local outside
   outside=$(mktemp -d)  # no onboarding.yaml / apexyard.projects.yaml
-  ( . "$LIB"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
     out=$(cd "$outside" && resolve_ops_root)
     # /tmp may itself be inside something the resolver finds, but mktemp -d
     # places us in a fresh subdir — assert it's NOT $outside (we walked up).
@@ -126,7 +129,8 @@ case_4() {
   build_sandbox "$sb"
   local cwd_outside
   cwd_outside=$(mktemp -d)
-  ( . "$LIB"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
     # cwd is outside; pass workspace clone as explicit start_dir.
     out=$(cd "$cwd_outside" && resolve_ops_root "$sb/workspace/demo")
     [ "$out" = "$sb" ] || { mark_fail "$case_name" "expected '$sb', got '$out'"; return; }
@@ -139,12 +143,14 @@ case_4() {
 # ---------------------------------------------------------------------------
 case_5() {
   local case_name="re-sourcing the lib is a no-op"
-  ( . "$LIB"
+  ( # shellcheck source=/dev/null
+    . "$LIB"
     if ! type resolve_ops_root >/dev/null 2>&1; then
       mark_fail "$case_name" "function not defined after first source"
       return
     fi
     # Re-source — should not error
+    # shellcheck source=/dev/null
     . "$LIB" 2>/dev/null
     if ! type resolve_ops_root >/dev/null 2>&1; then
       mark_fail "$case_name" "function gone after re-source"
