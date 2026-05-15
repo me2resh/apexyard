@@ -64,6 +64,17 @@ if [ -z "$PR_NUMBER" ]; then
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# Resolve the ops fork root (where session markers live), not the
+# workspace clone's git toplevel. Inside `workspace/<project>/`,
+# REPO_ROOT is the project clone — markers live in the ops fork
+# above it. See me2resh/apexyard#229 + #230.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
+fi
+MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
 # Default UI path patterns (regex). Note: .tsx$ / .jsx$ are EXACT — they must
 # not match plain .ts / .js, which are often backend/server files. The
@@ -111,7 +122,8 @@ if [ -z "$TOUCHED_UI" ]; then
 fi
 
 # UI PR detected — require a design approval marker
-APPROVAL="${REPO_ROOT:-.}/.claude/session/reviews/${PR_NUMBER}-design.approved"
+# Marker lives at the ops fork root (MARKER_HOME), not the workspace clone.
+APPROVAL="${MARKER_HOME}/.claude/session/reviews/${PR_NUMBER}-design.approved"
 
 if [ ! -f "$APPROVAL" ]; then
   cat >&2 <<MSG

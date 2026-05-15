@@ -237,22 +237,42 @@ If no handbooks loaded (e.g. the diff doesn't trigger any language handbooks and
 
 When your verdict is APPROVED, and ONLY then, write the approval marker file so the `block-unreviewed-merge.sh` hook can let the merge through.
 
+### Path: ops fork root, not git toplevel
+
+The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
+
+Resolve the ops fork root by walking up for `onboarding.yaml` + `apexyard.projects.yaml`:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+OPS_ROOT=""
+r="$REPO_ROOT"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+    OPS_ROOT="$r"; break
+  fi
+  r=$(dirname "$r")
+done
+MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+mkdir -p "$MARKER_HOME/.claude/session/reviews"
+```
+
 ### The command
 
-Use exactly one of these forms. Nothing else:
+Once `MARKER_HOME` is resolved (see above), use exactly one of these forms:
 
 ```bash
 # Option A — from the local HEAD of the PR branch
-git rev-parse HEAD > .claude/session/reviews/{number}-rex.approved
+git rev-parse HEAD > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
 
 # Option B — from the PR's HEAD on GitHub (preferred for cross-repo / detached HEAD)
-gh pr view {number} --json headRefOid --jq .headRefOid > .claude/session/reviews/{number}-rex.approved
+gh pr view {number} --json headRefOid --jq .headRefOid > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
 
 # Option C — literal SHA write (when you've already captured the SHA in a variable)
-printf '%s\n' "$SHA" > .claude/session/reviews/{number}-rex.approved
+printf '%s\n' "$SHA" > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
 ```
 
-Where `{number}` is the PR number and the file path is repo-relative from the repo root.
+Where `{number}` is the PR number.
 
 ### Content — MUST be bare SHA + newline
 
@@ -289,7 +309,7 @@ All of these fail the hook's whitespace-strip-then-compare check. The merge gate
 
 ### Where to write
 
-`.claude/session/reviews/` at the repo root. If running in a nested worktree, write to the worktree's reviews dir — that's where the merge-gate hook looks.
+`<ops_fork_root>/.claude/session/reviews/` per the MARKER_HOME resolution above. The merge-gate hook (`block-unreviewed-merge.sh`) resolves the same path via `_lib-ops-root.sh`. Inside a workspace clone (`workspace/<project>/`), this is NOT the project clone's `.claude/session/reviews/` — it's the ops fork above. If running in a nested worktree of the ops fork, the worktree shares the ops fork's session state (worktrees see the parent's tree below `.claude/`).
 
 ### On REQUEST CHANGES or COMMENT verdicts
 
