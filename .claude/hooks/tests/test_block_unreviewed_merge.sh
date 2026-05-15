@@ -244,6 +244,35 @@ approval_summary="user said: 211 approved, ship it"
 EOF
 run_case "structured marker with quoted multi-word summary → allows" 0 "" "$sb" 211
 
+# 13. Workspace-clone scenario (apexyard#229 + #230). Sandbox simulates
+#     an ops fork at $sb (with onboarding.yaml + apexyard.projects.yaml
+#     + _lib-ops-root.sh) and a workspace clone underneath at
+#     $sb/workspace/demo/ (with its own .git/). Markers live in the OPS
+#     FORK's reviews dir. Hook runs with cwd = workspace clone. Should
+#     pass — the OPS_ROOT walk in the hook resolves up to the ops fork.
+sb=$(make_sandbox)
+# Add the apexyard.projects.yaml that resolve_ops_root requires.
+: > "$sb/apexyard.projects.yaml"
+# Copy _lib-ops-root.sh into the sandbox's hook dir.
+cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
+# Build a workspace clone underneath, with its own git toplevel.
+mkdir -p "$sb/workspace/demo"
+( cd "$sb/workspace/demo" && git init -q )
+# Markers exist at the OPS FORK's reviews dir (where the agent + skill write).
+write_rex_marker "$sb" 212
+write_ceo_marker_structured "$sb" 212
+# Run the hook from inside workspace/demo cwd (not the ops fork).
+input=$(jq -nc --arg c "gh pr merge 212 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb/workspace/demo" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash $sb/.claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [workspace-clone cwd → resolves markers from ops fork (#229+#230)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [workspace-clone cwd → resolves markers from ops fork (#229+#230)]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}workspace-clone-resolves-up "
+fi
+
 # --- Summary ----------------------------------------------------------
 
 echo ""

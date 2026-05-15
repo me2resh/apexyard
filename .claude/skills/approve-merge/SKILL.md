@@ -73,8 +73,20 @@ Sanity checks:
 The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action.
 
 ```bash
+# Resolve the OPS FORK ROOT, not git toplevel. Inside workspace/<project>/,
+# git toplevel is the project clone; markers live in the ops fork above.
+# See me2resh/apexyard#229 + #230.
 REPO_ROOT=$(git rev-parse --show-toplevel)
-REX="$REPO_ROOT/.claude/session/reviews/<pr>-rex.approved"
+OPS_ROOT=""
+r="$REPO_ROOT"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+    OPS_ROOT="$r"; break
+  fi
+  r=$(dirname "$r")
+done
+MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+REX="$MARKER_HOME/.claude/session/reviews/<pr>-rex.approved"
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
 
@@ -107,17 +119,17 @@ Optional fields the gate stores but doesn't validate:
 | `approved_at=<ISO>` | Audit-log timestamp. Helpful when reviewing past merges. |
 | `approval_summary=<text>` | First ≤200 chars of the user's approval message, sanitised (no shell metachars). Audit trail for "what did the user say when they approved this." |
 
-Use the repo root as the path anchor — never a cwd-relative path:
+Use the **ops fork root** as the path anchor (NOT git toplevel — see #229 + #230 for the workspace-clone bug this avoids). Reuse the same MARKER_HOME computed in step 4:
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$REPO_ROOT/.claude/session/reviews"
+# (MARKER_HOME already resolved in step 4 — reuse it here.)
+mkdir -p "$MARKER_HOME/.claude/session/reviews"
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Sanitise: drop newlines, drop shell-special chars, truncate to 200.
 summary=$(echo "<user approval message>" | tr '\n' ' ' | tr -d '"`$\\' | cut -c1-200)
 
-cat > "$REPO_ROOT/.claude/session/reviews/<pr>-ceo.approved" <<EOF
+cat > "$MARKER_HOME/.claude/session/reviews/<pr>-ceo.approved" <<EOF
 sha=<headRefOid>
 approved_by=user
 approved_at=${ts}

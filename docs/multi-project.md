@@ -326,6 +326,14 @@ cd ~/ops/apexyard-portfolio     # registry + project docs changes go here, push 
 
 Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-update`, `/handover`) work from the apexyard dir — they resolve paths through the symlinks. Skills that touch framework files only (`/update`, `/release`) operate on the apexyard dir alone.
 
+#### Where session-state files live
+
+Framework session state — active-ticket markers, code-review approvals, CEO approvals, the bootstrap-skill marker — always lives at `<ops_fork_root>/.claude/session/`. **Not** inside any `workspace/<project>/` clone.
+
+This matters when you `cd workspace/<project>/` to do project-specific work: even though `git rev-parse --show-toplevel` from inside the clone returns the project clone (not the ops fork), the framework's hooks, agents, and skills (Rex, `/start-ticket`, `/approve-merge`, the merge-gate hooks) all walk up to find the ops fork (looking for both `onboarding.yaml` AND `apexyard.projects.yaml`) and write/read session state from there. The `_lib-ops-root.sh` helper (added in me2resh/apexyard#229 + #230) centralises this walk so all components agree on the canonical path.
+
+You'll never need to manage session-state files by hand. If you ever see a "BLOCKED: PR has no recorded code-reviewer approval" error after the agent visibly approved, check that BOTH `onboarding.yaml` AND `apexyard.projects.yaml` exist at the ops fork root — the walk needs both files present to identify the fork.
+
 ### Upstream sync under split mode
 
 `/update` works the same. The upstream framework occasionally ships changes to `projects/README.md` (the framework's per-project docs convention). After the symlink, your fork's `projects/README.md` is replaced by the portfolio's own README. If a future upstream sync wants to update `projects/README.md`, you'll see a conflict; resolve by either accepting the upstream version (re-tracks the file, replacing the symlink behaviour for that one path) or keeping your symlink. Most upstream releases don't touch this file.
