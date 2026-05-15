@@ -79,9 +79,56 @@ Diataxis coverage:
 Documentation readiness: PARTIAL (1 fail, 2 warnings)
 ```
 
+## Persist the run + render trend
+
+After printing the findings table, persist via the shared audit-history lib so the docs trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+
+### Resolve project name + score + verdict
+
+`<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
+
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "Documentation readiness" three-state: PARTIAL → `conditional`, MISSING → `fail`, COMPLETE → `pass`.
+
+### Persist + render
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "D2", "severity": "high",   "status": "open", "summary": "No docs/how-to/ dir; recipes scattered in Slack"},
+    {"id": "D3", "severity": "high",   "status": "open", "summary": "Env vars not documented in README (12 in .env.example)"},
+    {"id": "D5", "severity": "medium", "status": "open", "summary": "README references Express; code migrated to Fastify 3 months ago"}
+  ]
+}
+EOF
+
+# Body: per templates/audits/docs-audit.md (Diataxis quadrants + README + staleness)
+body=$(mktemp); cat > "$body" <<'EOF'
+... (filled-in body — Diataxis groupings + README quality + staleness + Recommended priority) ...
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "docs-audit" "$ts" "fail" 60 "$body" < "$payload"
+rm -f "$payload" "$body"
+
+audit_render_trend "<project-name>" "docs-audit" 5
+```
+
+### Opt-in commit
+
+```bash
+touch projects/<name>/audits/docs-audit/.audit-history-tracked
+```
+
 ## Rules
 
 1. **README is the minimum.** Every project needs a README with at least: description, quick start, and how to deploy. Everything else is a "should have."
 2. **Check for staleness, not just existence.** A README that exists but describes the wrong stack is worse than no README.
 3. **Diataxis is a lens, not a checklist.** Don't fail a project for missing all four quadrants — most projects start with tutorials + reference and add the rest over time.
 4. **Auto-PASS for the ops repo itself.** ApexYard's own docs are governed by its own process — this skill is for managed projects.
+5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
+6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.

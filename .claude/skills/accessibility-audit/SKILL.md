@@ -61,9 +61,56 @@ Summary: <N> findings (<N> high, <N> medium, <N> low)
 WCAG 2.1 AA estimate: <PASS / PARTIAL / FAIL>
 ```
 
+## Persist the run + render trend
+
+After printing the findings table, persist via the shared audit-history lib so the accessibility trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+
+### Resolve project name + score + verdict
+
+`<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
+
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "WCAG 2.1 AA estimate" three-state: FAIL → `fail`, PARTIAL → `conditional`, PASS → `pass`.
+
+### Persist + render
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "A1", "severity": "high",   "status": "open", "summary": "Images missing alt text (WCAG 1.1.1)"},
+    {"id": "A2", "severity": "high",   "status": "open", "summary": "onClick handlers without keyboard equivalent (WCAG 2.1.1)"},
+    {"id": "A3", "severity": "medium", "status": "open", "summary": "Button text contrast 2.8:1, needs 4.5:1 (WCAG 1.4.3)"}
+  ]
+}
+EOF
+
+# Body: per templates/audits/accessibility-audit.md (POUR-grouped table)
+body=$(mktemp); cat > "$body" <<'EOF'
+... (filled-in body — POUR groupings + Recommended priority) ...
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "accessibility-audit" "$ts" "fail" 60 "$body" < "$payload"
+rm -f "$payload" "$body"
+
+audit_render_trend "<project-name>" "accessibility-audit" 5
+```
+
+### Opt-in commit
+
+```bash
+touch projects/<name>/audits/accessibility-audit/.audit-history-tracked
+```
+
 ## Rules
 
 1. **Cite WCAG criteria numbers** (e.g. 1.1.1, 2.1.1) so findings are traceable to the spec.
 2. **Prioritize by user impact**, not by WCAG level. A missing alt on a hero image is worse than a missing skip link.
 3. **Auto-PASS for non-UI projects.** CLIs, APIs, and libraries don't need this audit.
 4. **Give copy-pasteable fixes** where possible (the exact HTML/JSX to add, not just "fix the contrast").
+5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
+6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`. The visible findings table can keep its conventional capitalisation.

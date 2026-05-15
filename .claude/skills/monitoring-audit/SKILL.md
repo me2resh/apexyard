@@ -68,9 +68,56 @@ Priority fixes:
   3. [ ] Replace console.log with structured logger (pino recommended for Node.js)
 ```
 
+## Persist the run + render trend
+
+After printing the findings table, persist via the shared audit-history lib so the monitoring trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+
+### Resolve project name + score + verdict
+
+`<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
+
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "Incident readiness" two-state: NOT READY → `fail`, READY → `pass`.
+
+### Persist + render
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "M2", "severity": "critical", "status": "open", "summary": "No error tracking SDK detected; uncaught errors are silent"},
+    {"id": "M3", "severity": "high",     "status": "open", "summary": "No /health endpoint; load balancer can't detect hung instance"},
+    {"id": "M4", "severity": "critical", "status": "open", "summary": "No alerting rules; nothing pages on-call"}
+  ]
+}
+EOF
+
+# Body: per templates/audits/monitoring-audit.md
+body=$(mktemp); cat > "$body" <<'EOF'
+... (filled-in body — findings table + Priority fixes) ...
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "monitoring-audit" "$ts" "fail" 35 "$body" < "$payload"
+rm -f "$payload" "$body"
+
+audit_render_trend "<project-name>" "monitoring-audit" 5
+```
+
+### Opt-in commit
+
+```bash
+touch projects/<name>/audits/monitoring-audit/.audit-history-tracked
+```
+
 ## Rules
 
 1. **Auto-PASS for projects not yet in production.** Pre-launch monitoring gaps are expected — flag them as "set up before first deploy" rather than "FAIL."
 2. **Check IaC too.** Alerting rules might be in Terraform, CloudFormation, or CDK files rather than application code.
 3. **Don't require all four pillars.** Logs + error tracking + health endpoint is the minimum. Distributed tracing and detailed metrics are "nice to have" for most teams.
 4. **Be specific about what the health endpoint should check** — "returns 200" is table stakes; checking database connectivity is the real test.
+5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
+6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.

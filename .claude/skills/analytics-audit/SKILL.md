@@ -67,9 +67,56 @@ Event inventory:
   ...
 ```
 
+## Persist the run + render trend
+
+After printing the findings table, persist via the shared audit-history lib so the analytics trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+
+### Resolve project name + score + verdict
+
+`<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
+
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`.
+
+### Persist + render
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "E2", "severity": "medium", "status": "open", "summary": "Mixed event-naming conventions (snake_case + camelCase + Title Case)"},
+    {"id": "E3", "severity": "high",   "status": "open", "summary": "signup_complete event missing — can't measure conversion"},
+    {"id": "E4", "severity": "medium", "status": "open", "summary": "No dashboard URL found in config or docs"}
+  ]
+}
+EOF
+
+# Body: per templates/audits/analytics-audit.md
+body=$(mktemp); cat > "$body" <<'EOF'
+... (filled-in body — findings table + Event taxonomy gap + Recommended priority) ...
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "analytics-audit" "$ts" "fail" 60 "$body" < "$payload"
+rm -f "$payload" "$body"
+
+audit_render_trend "<project-name>" "analytics-audit" 5
+```
+
+### Opt-in commit
+
+```bash
+touch projects/<name>/audits/analytics-audit/.audit-history-tracked
+```
+
 ## Rules
 
 1. **Auto-PASS for non-user-facing projects.** CLIs, libraries, and internal tools don't need analytics.
 2. **Don't prescribe a specific SDK.** Note what's configured, check coverage, suggest improvements.
 3. **Flag inconsistent naming** — mixed conventions make dashboard queries painful.
 4. **Privacy-aware.** Flag if PII (email, name, IP) is being sent in event properties.
+5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
+6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
