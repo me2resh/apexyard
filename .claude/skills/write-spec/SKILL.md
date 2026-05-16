@@ -50,7 +50,17 @@ If the project has integrations available:
 
 ### 4. Generate the PRD
 
-Use `templates/prd.md` as the base. The PRD should include:
+Resolve the PRD template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template prd.md)   # → custom-templates/prd.md if present, else templates/prd.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/prd.md`. Adopters who want a customised PRD shape drop their version at `<private_repo>/custom-templates/prd.md`. See `templates/README.md` for the path-mirroring convention.
+
+The PRD should include:
 
 ```markdown
 # {Feature Name} — PRD

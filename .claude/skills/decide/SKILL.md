@@ -56,7 +56,17 @@ Create file at `{project-root}/docs/agdr/AgDR-{NNNN}-{slug}.md`.
 
 **Important**: AgDRs live in the **current project's repository**, not centralised. Each project has its own `docs/agdr/` folder and its own ID sequence.
 
-Use the AgDR template at `templates/agdr.md`:
+Resolve the AgDR template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template agdr.md)   # → custom-templates/agdr.md if present, else templates/agdr.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/agdr.md`. Adopters who want a customised AgDR shape drop their version at `<private_repo>/custom-templates/agdr.md`. See `templates/README.md` for the path-mirroring convention.
+
+The skeleton:
 
 ```markdown
 ---

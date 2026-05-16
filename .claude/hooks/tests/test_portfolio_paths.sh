@@ -442,6 +442,131 @@ if portfolio_is_v2; then exit 0; else echo "expected zero exit"; exit 1; fi
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
+# Case 17 (custom-templates): seed templates/ in the sandbox so the
+# framework-default branch has something to find. Then test override
+# semantics.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates/architecture"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+cat > "$SB/templates/agdr.md" <<'MD'
+# Framework AgDR
+MD
+cat > "$SB/templates/architecture/c4-context.md" <<'MD'
+# Framework C4 Context
+MD
+run_case "custom-templates: framework default returned when no override" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: framework default returned for nested path" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SB"'/templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: missing both → empty + nonzero exit" "$SB" '
+r=$(portfolio_resolve_template does-not-exist.md)
+rc=$?
+if [ -z "$r" ] && [ "$rc" -ne 0 ]; then exit 0; else echo "got=$r rc=$rc"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 18 (custom-templates): single-fork adopter with custom-templates
+# next to the registry — override wins over framework default.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates/architecture"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+cat > "$SB/templates/architecture/c4-context.md" <<'MD'
+# Framework C4 Context
+MD
+mkdir -p "$SB/custom-templates/architecture"
+cat > "$SB/custom-templates/prd.md" <<'MD'
+# Custom PRD
+MD
+cat > "$SB/custom-templates/architecture/c4-context.md" <<'MD'
+# Custom C4 Context
+MD
+run_case "custom-templates: custom prd.md wins over framework default" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/custom-templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: nested custom override wins over framework default" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SB"'/custom-templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 19 (custom-templates): split-portfolio v2 — custom-templates
+# lives in the sibling private repo (next to the registry override).
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+cat > "$SIB/apex.yaml" <<'YAML'
+version: 1
+projects: []
+YAML
+mkdir -p "$SIB/proj"
+mkdir -p "$SIB/custom-templates/architecture"
+cat > "$SIB/custom-templates/prd.md" <<'MD'
+# Sibling Custom PRD
+MD
+cat > "$SIB/custom-templates/architecture/c4-context.md" <<'MD'
+# Sibling Custom C4 Context
+MD
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "registry": "$SIB/apex.yaml",
+    "projects_dir": "$SIB/proj"
+  }
+}
+JSON
+run_case "custom-templates: split-portfolio sibling override wins" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SIB"'/custom-templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: split-portfolio sibling nested override wins" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SIB"'/custom-templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: split-portfolio falls through to framework when no override" "$SB" '
+# Remove the sibling override for prd.md, leave c4-context.md custom.
+rm -f "'"$SIB"'/custom-templates/prd.md"
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 20 (custom-templates): empty input → nonzero exit
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "custom-templates: empty input → nonzero exit" "$SB" '
+r=$(portfolio_resolve_template "")
+rc=$?
+if [ -z "$r" ] && [ "$rc" -ne 0 ]; then exit 0; else echo "got=$r rc=$rc"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

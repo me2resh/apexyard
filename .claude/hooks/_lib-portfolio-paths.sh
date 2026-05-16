@@ -349,3 +349,74 @@ portfolio_is_v2() {
   root=$(_portfolio_root)
   [ -n "$root" ] && [ -f "$root/.apexyard-fork" ]
 }
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_resolve_template <relative_path>
+#   Resolves a template path with adopter-override semantics:
+#     1. If <private_repo>/custom-templates/<relative_path> exists,
+#        return its absolute path.
+#     2. Else if <ops_root>/templates/<relative_path> exists,
+#        return that absolute path.
+#     3. Else return empty + nonzero exit (caller decides what to do).
+#
+#   <private_repo> is the directory holding the registry (resolved via
+#   portfolio_registry's parent), so split-portfolio adopters drop
+#   overrides next to their other portfolio data while single-fork
+#   adopters fall straight through to the framework default.
+#
+#   The <relative_path> mirrors the framework's templates/ shape:
+#     portfolio_resolve_template prd.md
+#     portfolio_resolve_template architecture/c4-context.md
+#     portfolio_resolve_template agdr-migration.md
+#
+#   Examples:
+#     # Split-portfolio v2 with custom PRD shape:
+#     portfolio_resolve_template prd.md
+#     # → /home/me/ops/apexyard-portfolio/custom-templates/prd.md
+#
+#     # Single-fork adopter, no override:
+#     portfolio_resolve_template prd.md
+#     # → /home/me/ops/apexyard/templates/prd.md
+#
+#     # Neither exists:
+#     portfolio_resolve_template does-not-exist.md   # exits 1
+# ------------------------------------------------------------------------------
+portfolio_resolve_template() {
+  local rel="$1"
+  if [ -z "$rel" ]; then
+    return 1
+  fi
+
+  # Strip a leading ./ for tidier matches.
+  rel="${rel#./}"
+
+  # 1. Custom override under <private_repo>/custom-templates/.
+  #    The "private repo" is the directory holding the registry — for
+  #    single-fork adopters this is the ops-fork root (so
+  #    custom-templates/ would also live in the fork, which is fine);
+  #    for split-portfolio adopters it's the sibling private repo.
+  local registry custom_dir custom_path
+  registry=$(portfolio_registry)
+  if [ -n "$registry" ]; then
+    custom_dir=$(dirname "$registry")
+    custom_path="$custom_dir/custom-templates/$rel"
+    if [ -f "$custom_path" ]; then
+      echo "$custom_path"
+      return 0
+    fi
+  fi
+
+  # 2. Framework default under <ops_root>/templates/.
+  local root framework_path
+  root=$(_portfolio_root)
+  if [ -n "$root" ]; then
+    framework_path="$root/templates/$rel"
+    if [ -f "$framework_path" ]; then
+      echo "$framework_path"
+      return 0
+    fi
+  fi
+
+  # 3. Neither exists.
+  return 1
+}

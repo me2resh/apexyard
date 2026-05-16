@@ -150,7 +150,18 @@ On `a`: proceed to step 4.
 
 ### 4. Generate the Mermaid
 
-Use `templates/architecture/c4-context.md` as the structural skeleton for L1 and `templates/architecture/c4-container.md` for L2. Keep the surrounding markdown sections from the templates ("How to use this template" can be trimmed in the generated file since these are real diagrams, not templates).
+Resolve the C4 templates via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+context_template=$(portfolio_resolve_template architecture/c4-context.md)     # L1 skeleton
+container_template=$(portfolio_resolve_template architecture/c4-container.md) # L2 skeleton
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/architecture/c4-{context,container}.md`. Adopters who want a customised C4 shape drop their versions at `<private_repo>/custom-templates/architecture/c4-{context,container}.md`. See `templates/README.md` for the path-mirroring convention.
+
+Keep the surrounding markdown sections from the resolved templates ("How to use this template" can be trimmed in the generated file since these are real diagrams, not templates).
 
 For **L1**:
 

@@ -358,6 +358,43 @@ cd ~/ops/apexyard
 
 Adopt your first project with `/handover` — it writes to `../apexyard-portfolio/projects/<name>/` and appends to `../apexyard-portfolio/apexyard.projects.yaml`, both committed only to the private portfolio repo. The public fork stays slim.
 
+### Custom templates
+
+Every framework template (PRD, AgDR, migration AgDR, C4 context/container, vision, spike, etc.) can be overridden by an adopter-authored version. The mechanism is **path-mirroring** — drop your version at `<private_repo>/custom-templates/<path>` and it wins over the framework default at `templates/<path>`. No frontmatter, no config table, no registry.
+
+```
+~/ops/apexyard-portfolio/
+├── apexyard.projects.yaml
+├── projects/
+├── custom-templates/                    ← drop overrides here
+│   ├── prd.md                           ← overrides templates/prd.md
+│   ├── agdr.md                          ← overrides templates/agdr.md
+│   ├── agdr-migration.md                ← overrides templates/agdr-migration.md
+│   ├── spike.md                         ← overrides templates/spike.md
+│   └── architecture/
+│       ├── c4-context.md                ← overrides templates/architecture/c4-context.md
+│       └── c4-container.md              ← overrides templates/architecture/c4-container.md
+└── README.md
+```
+
+Why path-mirroring instead of frontmatter or a config table? Discovery is the convention itself — if you want to override `templates/<path>`, you put your version at `custom-templates/<path>`. Same shape as how `handbooks/<dim>/...` discovery works (#232). And resolution is **override, not additive**: an authored `custom-templates/prd.md` wins in full; the framework's `templates/prd.md` is ignored for that invocation. Templates are *forms*, not *content*, so partial-merge across two markdown files would be unreliable. Copy the framework default in full, then edit it.
+
+Single-fork adopters drop overrides at `<fork>/custom-templates/<path>` (sibling to `templates/`). Same resolution rule — adopters with no `custom-templates/` dir get the framework default automatically, zero behaviour change.
+
+The `_lib-portfolio-paths.sh` helper exposes `portfolio_resolve_template <relative_path>` (e.g. `portfolio_resolve_template architecture/c4-context.md`); every template-consuming skill (`/decide`, `/write-spec`, `/c4`, `/migration`, `/spike`, `/handover`) routes through it. Full reference: [`templates/README.md`](../templates/README.md). Design rationale: [`AgDR-0023`](agdr/AgDR-0023-custom-templates-override-semantics.md).
+
+To seed the directory in your private repo, copy the example README that ships with the framework:
+
+```bash
+cd ~/ops/apexyard-portfolio
+mkdir -p custom-templates
+cp ../apexyard/templates/custom-templates.README.example.md custom-templates/README.md
+git add custom-templates
+git commit -m "chore: scaffold custom-templates/ for adopter overrides"
+```
+
+The README is a starting point — the resolver doesn't read it; it's there for future-you and any human collaborator.
+
 ### Daily workflow under split mode
 
 ```bash

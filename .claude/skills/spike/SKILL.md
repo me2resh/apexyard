@@ -128,7 +128,17 @@ boundary you'd cross to fail-fast.
 
 ### 5. Show the formatted ticket for confirmation
 
-Display the full ticket:
+Resolve the spike body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template spike.md)   # → custom-templates/spike.md if present, else templates/spike.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/spike.md`. Adopters who want a customised spike-body shape drop their version at `<private_repo>/custom-templates/spike.md`. See `templates/README.md` for the path-mirroring convention.
+
+Display the full ticket using the resolved template's section headings (the default `templates/spike.md` shape is reproduced below):
 
 ```
 Here's the ticket I'll create:

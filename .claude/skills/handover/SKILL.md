@@ -395,7 +395,17 @@ If there's a `Dockerfile` at repo root but no `docker-compose.yml`: one containe
 
 #### Assembling the file
 
-Start from `templates/architecture/c4-container.md` (the template shipped in #50). Replace:
+Resolve the C4 container template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+container_template=$(portfolio_resolve_template architecture/c4-container.md)
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/architecture/c4-container.md` (the template shipped in #50). Adopters who want a customised C4 shape drop their version at `<private_repo>/custom-templates/architecture/c4-container.md`. See `templates/README.md` for the path-mirroring convention.
+
+Start from the resolved template. Replace:
 
 - `{Project Name}` → the project's real name (from the handover)
 - The sample `System_Boundary` contents → the containers you detected
@@ -428,7 +438,7 @@ Create `projects/<name>/architecture/` if missing.
 
 #### If there's nothing meaningful to draw
 
-If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected — add manually from templates/architecture/c4-container.md when ready)`. Better to write nothing than fabricate a wrong diagram.
+If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected — add manually from the C4 container template — resolve via portfolio_resolve_template architecture/c4-container.md — when ready)`. Better to write nothing than fabricate a wrong diagram.
 
 ### 7. Append to the portfolio registry
 
