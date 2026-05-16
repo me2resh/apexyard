@@ -135,7 +135,7 @@ Template: @templates/agdr.md
 | Investigation | Sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries. Hypothesis-tree methodology; live-doc workflow. Used by `/investigation`. | `templates/investigation.md` |
 | C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
 | C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
-| Architecture Vision | Target-state architecture + multi-quarter migration path + explicit anti-scope | `templates/architecture/vision.md` |
+| Architecture Vision | Target-state architecture + multi-quarter migration path + explicit anti-scope. Author interactively via `/tech-vision <project>`. | `templates/architecture/vision.md` |
 | Data Flow Diagram (DFD) | Trust boundaries + data crossings (input to STRIDE threat model) | `templates/architecture/dfd.md` |
 | Sequence Diagram | Time-ordered request-flow walkthrough (auth handshake, payment flow, etc.) | `templates/architecture/sequence.md` |
 
@@ -188,10 +188,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 47 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 48 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (47)
+### Available skills (48)
 
 | Skill | Purpose |
 |-------|---------|
@@ -229,6 +229,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/process` | Extract a named business process from one or more registered repos (state machines, queue chains, cron, state-column transitions, API choreography, existing BPMN, documented steps), interview only on the gaps, and emit a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Anchor-scoped + cross-repo via `apexyard.projects.yaml`. Sibling to `/extract-features` (feature inventory) and `/c4` (system topology) in the read-first-then-ask family. |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
 | `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) from a codebase — six-axis discovery + trust boundaries + data classifications. Source of truth that `/threat-model` and `/compliance-check` consume. See AgDR-0026. |
+| `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template — target-state, current-vs-target gap table, multi-quarter migration path, explicit anti-scope, and quarterly review cadence. Writes `projects/<name>/architecture/vision.md` via the custom-templates resolver (#244). Sibling to `/c4` and `/dfd` in the architecture-doc family. (Named `tech-vision` to disambiguate from product / company vision.) See AgDR-0028. |
 | `/journey` | Generate a single self-contained user-journey HTML — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact. |
 | `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
 | `/release` | (Framework-only) Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG, open the release PR, and tag after merge |
@@ -275,7 +276,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (44 slash commands) | `.claude/skills/` |
+| Skills (45 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
