@@ -206,7 +206,7 @@ UI components describe the **interaction surface** of the system — every scree
 | Framework | Signature |
 |-----------|-----------|
 | React (router) | `react-router-dom` `<Route path=`; Next.js `pages/**`; Next.js `app/**/page.{tsx,js}`; Remix `app/routes/**` |
-| React (components) | top-level `function|const \w+ = ...` returning JSX in `src/components/`, `src/screens/`, `src/pages/`, `src/views/` |
+| React (components) | top-level `function\|const \w+ = ...` returning JSX in `src/components/`, `src/screens/`, `src/pages/`, `src/views/` |
 | Vue | `.vue` files; `defineComponent\s*\(` ; route files (`router/index.ts`) |
 | Svelte / SvelteKit | `routes/**/+page.svelte` ; `routes/**/+layout.svelte` ; `.svelte` components |
 | Angular | `@Component\s*\(` ; `RouterModule\.forRoot\s*\(\s*\[` ; `path:` entries |
