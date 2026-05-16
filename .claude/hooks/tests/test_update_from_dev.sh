@@ -44,20 +44,22 @@ mark_fail() { echo "  ✗ $1: $2" >&2; FAIL=$((FAIL+1)); FAILED="$FAILED\n  - $1
 parse_flags() {
   FROM_DEV=0
   DRY_RUN=0
-  # shellcheck disable=SC2034
   # REBASE is set but not read in this test — kept in lockstep with the
   # pre-step bash block in SKILL.md (which DOES read it for the merge/rebase
   # branch). Tests assert ref/branch resolution only; the rebase path is
-  # exercised by the existing /update tests on the default flow.
+  # exercised by the existing /update tests on the default flow. The
+  # `: "${REBASE}"` reference after the case statement keeps shellcheck
+  # happy without scope-confusing disable directives on individual branches
+  # (which trip SC1124).
   REBASE=0
   for arg in "$@"; do
     case "$arg" in
       --from-dev) FROM_DEV=1 ;;
       --dry-run)  DRY_RUN=1 ;;
-      # shellcheck disable=SC2034
       --rebase)   REBASE=1 ;;
     esac
   done
+  : "${REBASE}"
 
   if [ "$FROM_DEV" = "1" ]; then
     UPSTREAM_REF=upstream/dev
