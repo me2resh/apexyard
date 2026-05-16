@@ -179,6 +179,40 @@ run_case "origin yes, upstream no → pass (short-circuit on origin)" \
   'mock_gh_set_repo_existence "$sb" 7 fork-org/apexyard yes
    mock_gh_set_repo_existence "$sb" 7 me2resh/apexyard no'
 
+# ---- Embedded double quotes in commit message — me2resh/apexyard#227 ----
+# Pre-227 the sed-based -m extractor's `"([^"]*)"` regex truncated the
+# commit message at the FIRST embedded `"`, so any `Closes #N` reference
+# that lived past the first internal `"` was invisible to the hook.
+# Result: a fabricated #N in the back half slipped through, and a real
+# #N pre-quote got verified but the rest weren't. Post-fix the extractor
+# is greedy + anchored on next-flag-or-EOS.
+
+# Embedded quote followed by a real #N in origin → must extract #N → pass.
+run_case "commit msg with embedded quote + valid Closes #N after → pass" \
+  "no" \
+  'fix: handle "admin notice" string\n\nThe notice said "do the thing".\n\nCloses #42' \
+  0 "" \
+  ''
+
+# Embedded quote followed by a phantom #N → must extract #N → block.
+# Pre-fix: the regex would truncate at the first `"` and #99999 (post-quote)
+# would never be extracted → false PASS. Post-fix: full message scans, #99999
+# is found, the gh lookup fails on both repos, hook blocks.
+run_case "commit msg with embedded quote + phantom Closes #N after → block" \
+  "yes" \
+  'fix: handle "admin notice" string\n\nDescribed "current state" flow.\n\nCloses #99999' \
+  2 "do not exist" \
+  'mock_gh_set_repo_existence "$sb" 99999 fork-org/apexyard no
+   mock_gh_set_repo_existence "$sb" 99999 me2resh/apexyard no'
+
+# Multiple embedded quotes — pre-fix the second `"` would end the truncated
+# value early. Post-fix all #N references are extracted and verified.
+run_case "commit msg with multiple embedded quotes + Closes #N → pass" \
+  "no" \
+  'feat: add "X" and "Y" and "Z" tags\n\nAll three are "important".\n\nCloses #5' \
+  0 "" \
+  ''
+
 # ---- Summary ------------------------------------------------------------
 
 echo ""

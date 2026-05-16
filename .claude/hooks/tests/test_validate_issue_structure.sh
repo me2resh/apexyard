@@ -291,6 +291,71 @@ run_case "--body-file path with valid Feature body → pass" \
   0 "" \
   "gh issue create --title '[Feature] X' --body-file $BODY_FILE_PATH"
 
+# --- Embedded double quotes in body — me2resh/apexyard#227 -----------------
+# Pre-227 the awk extractor's non-greedy `"([^"]*)"` regex truncated the
+# body at the FIRST embedded `"`, so any `##` heading past that point was
+# invisible to the hook and falsely reported as missing. Post-fix the
+# extractor is greedy + anchored on next-flag-or-EOS, so embedded `"` in
+# prose (admin-notice strings, status labels in quotes) no longer truncate.
+
+CHORE_EMBEDDED_QUOTE_BODY='## Driver
+Test of the body extractor.
+
+## Scope
+- Mention an admin notice that says "do the thing"
+- Another bullet mentioning "current state" labels
+
+## Acceptance Criteria
+- [ ] Whatever
+- [ ] Another one'
+
+run_case "Chore body with embedded double quotes → pass (no truncation)" \
+  0 "" \
+  "gh issue create --title '[Chore] Embedded-quote repro' --body \"$CHORE_EMBEDDED_QUOTE_BODY\""
+
+# Same body but with --label tail to confirm greedy match stops at next flag
+run_case "Chore body with embedded quotes + trailing --label → pass" \
+  0 "" \
+  "gh issue create --title '[Chore] x' --body \"$CHORE_EMBEDDED_QUOTE_BODY\" --label chore"
+
+# Feature body with embedded quote between User Story and Acceptance Criteria
+FEATURE_EMBEDDED_QUOTE_BODY='## User Story
+As a user I want to see an "admin notice" so I know what to do.
+
+## Acceptance Criteria
+- [ ] notice renders
+- [ ] dismiss button works'
+
+run_case "Feature body with embedded quotes in User Story → pass" \
+  0 "" \
+  "gh issue create --title '[Feature] embedded notice' --body \"$FEATURE_EMBEDDED_QUOTE_BODY\""
+
+# Bug body with embedded quotes — Given / When / Then often quotes prose
+BUG_EMBEDDED_QUOTE_BODY='## Given / When / Then
+Given the user sees an "admin notice"
+When they click "dismiss"
+Then the notice goes away
+
+## Repro
+1. open the app
+2. observe the "admin notice"
+3. click "dismiss"'
+
+run_case "Bug body with multiple embedded quotes → pass" \
+  0 "" \
+  "gh issue create --title '[Bug] dismiss notice' --body \"$BUG_EMBEDDED_QUOTE_BODY\""
+
+# Negative case: embedded quotes are no protection from missing sections.
+# Body has embedded quotes AND is genuinely missing a required section.
+BUG_EMBEDDED_BUT_INCOMPLETE='## Given / When / Then
+Given the user sees an "admin notice"
+When they click "dismiss"
+Then the notice goes away'
+
+run_case "Bug body with embedded quotes but missing Repro → still blocks" \
+  2 "missing section: ## Repro" \
+  "gh issue create --title '[Bug] no repro' --body \"$BUG_EMBEDDED_BUT_INCOMPLETE\""
+
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------

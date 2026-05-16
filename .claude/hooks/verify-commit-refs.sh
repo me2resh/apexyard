@@ -46,31 +46,58 @@ fi
 #
 # IMPORTANT: Claude and humans both commonly use multi-line -m arguments via
 # HEREDOC substitution like `git commit -m "$(cat <<EOF ... EOF)"`, which means
-# the literal -m value spans multiple lines in the command string. `sed -nE`
-# processes stdin line-by-line by default, so a regex like `-m "([^"]*)"`
-# cannot span lines and silently fails to match.
+# the literal -m value spans multiple lines in the command string. We use awk
+# with a line-by-line accumulator so the match runs against the whole logical
+# command, not one physical line.
 #
-# Fix: flatten the command string with `tr '\n' ' '` before sed processing.
-# The message then parses as a single logical line. The ref-pattern grep
-# below doesn't care about line breaks either way.
-#
-# Without this flattening, the hook was INERT for any multi-line commit —
-# which is the default shape for Claude-generated commits. Confirmed via
-# smoke test before the fix.
-COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
+# Quoted-value regex is GREEDY and anchored on the next flag boundary
+# (whitespace + `-<letter>`) or end-of-string. The earlier sed form
+# `-m "([^"]*)"` truncated at the first embedded double quote
+# (me2resh/apexyard#227), so commit messages whose body contained any
+# `"` (admin-notice strings, status labels in quotes, prose like "current
+# state") had their `Closes #N` / `Refs #N` references past the truncation
+# point go unverified. awk + greedy + boundary anchor matches the closing
+# `"` of the FLAG argument, not the first internal `"` inside the message.
 
-MSG=""
+extract_commit_msg() {
+  # $1 = whole command string. Prints the extracted -m value, empty if none.
+  printf '%s' "$1" | awk -v SQ="'" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Boundary terminator: whitespace + `-<letter>` (catches -F, -- flags,
+      # and short flags like -S / -s) or end-of-string. -m is the only flag
+      # before us in this branch, so any later -<letter> marks the end of
+      # the -m value.
+      # Single-quoted -m value, greedy.
+      re = "-m[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+-[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^-m[[:space:]]+" SQ, "", chunk)
+        sub(SQ "([[:space:]]+-[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+      # Double-quoted -m value, greedy.
+      re = "-m[[:space:]]+\"(.*)\"([[:space:]]+-[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^-m[[:space:]]+\"", "", chunk)
+        sub("\"([[:space:]]+-[a-zA-Z].*)?$", "", chunk)
+        sub("\"[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
+}
 
-# -m 'single quoted'
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-
-# -m "double quoted"
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
+MSG=$(extract_commit_msg "$COMMAND")
 
 # -F <file> / --file <file>
 if [ -z "$MSG" ]; then
+  COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
   MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
     MSG=$(cat "$MSG_FILE")

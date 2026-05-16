@@ -148,19 +148,54 @@ fi
 # ---------------------------------------------------------------------------
 
 extract_flag_value() {
-  # $1 = python-flag regex (e.g. --title | -t). Matches:
+  # $1 = python-flag regex (e.g. --title | -t). Matches (possibly multi-line):
   #   --title "value with spaces"
   #   --title 'value'
   #   --title value
+  #
+  # Quoted-value regex is GREEDY and anchored on the next flag boundary
+  # (whitespace + `--<letter>`) or end-of-string. The earlier sed form
+  # `[^"]*` truncated at the first embedded double quote
+  # (me2resh/apexyard#227); for the leak-protection hook that's a real
+  # security tail — a body with an embedded `"` could let private refs in
+  # the back half slip past the gate. awk + greedy + boundary anchor
+  # gives us multi-line consumption and correct termination in one shot.
   local flag_re="$1"
   local cmd="$2"
-  local v
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+\"([^\"]*)\".*/\2/p" | head -1)
-  if [ -n "$v" ]; then echo "$v"; return; fi
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+'([^']*)'.*/\2/p" | head -1)
-  if [ -n "$v" ]; then echo "$v"; return; fi
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+([^[:space:]]+).*/\2/p" | head -1)
-  echo "$v"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
+        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+      # Single-quoted value: same greedy + anchor treatment.
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
+        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+      # Unquoted value: single token, embedded quotes irrelevant.
+      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
 }
 
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")

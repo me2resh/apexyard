@@ -26,11 +26,44 @@ fi
 
 ERRORS=""
 
-# Extract --title value (macOS-compatible, no grep -P)
-TITLE=$(echo "$COMMAND" | sed -n 's/.*--title[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' | head -1)
-if [ -z "$TITLE" ]; then
-  TITLE=$(echo "$COMMAND" | sed -n 's/.*--title[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -1)
-fi
+# Extract --title value. Greedy + boundary-anchored awk extraction so an
+# embedded `"` or `'` in the title (rare but possible — `[Bug] handle "X"`
+# / `[Chore] fix "foo" tests`) doesn't truncate at the first internal quote
+# (me2resh/apexyard#227). Same shape as validate-issue-structure.sh.
+TITLE=$(printf '%s' "$COMMAND" | awk -v SQ="'" '
+  { buf = (NR == 1 ? $0 : buf "\n" $0) }
+  END {
+    s = buf
+    # Double-quoted title, greedy.
+    re = "--title[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+    if (match(s, re)) {
+      chunk = substr(s, RSTART, RLENGTH)
+      sub("^--title[[:space:]]+\"", "", chunk)
+      sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+      sub("\"[[:space:]]*$", "", chunk)
+      print chunk
+      exit
+    }
+    # Single-quoted title, greedy.
+    re = "--title[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+    if (match(s, re)) {
+      chunk = substr(s, RSTART, RLENGTH)
+      sub("^--title[[:space:]]+" SQ, "", chunk)
+      sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+      sub(SQ "[[:space:]]*$", "", chunk)
+      print chunk
+      exit
+    }
+    # Unquoted single-token title.
+    re = "--title[[:space:]]+[^[:space:]]+"
+    if (match(s, re)) {
+      chunk = substr(s, RSTART, RLENGTH)
+      sub("^--title[[:space:]]+", "", chunk)
+      print chunk
+      exit
+    }
+  }
+')
 
 # Validate PR title format if we can extract it
 # Accepts: type(<TICKET>): … or type(<TICKET>)!: … (breaking change)
