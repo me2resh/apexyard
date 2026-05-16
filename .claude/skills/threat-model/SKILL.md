@@ -285,7 +285,7 @@ Dragon's auto-arrange (toolbar) re-flows the auto-grid layout on first open.
 
 #### 6d. Layout note
 
-The serialiser uses an auto-grid layout (actors row at `y=0`, processes at `y=200`, stores at `y=400`; x-spaced 200px). Trust-boundary boxes wrap their children with a 40px margin. This is a sane starting state — Threat Dragon's own auto-arrange button re-flows the diagram into a tidier view on first open. Hand-authored coordinates are out of scope for v1 (see AgDR-0022 § "Auto-grid layout decision").
+The serialiser uses an auto-grid layout (actors row at `y=0`, processes at `y=200`, stores at `y=400`; x-spaced 200px). Trust-boundary boxes wrap their children with a 40px margin. This is a sane starting state — Threat Dragon's own auto-arrange button re-flows the diagram into a tidier view on first open. Hand-authored coordinates are out of scope for v1 (see AgDR-0024 § "Auto-grid layout decision").
 
 #### 5d. Opt-in commit (history-tracked marker)
 
@@ -306,4 +306,4 @@ The lib re-evaluates the marker on every persist; the operator can toggle freely
 4. **Adapt scope to project type.** API-only? Focus on auth, input validation, rate limiting. Full-stack? Add XSS, CSRF, cookie security. Library? Focus on supply chain and input handling.
 5. **Always persist.** Step 5 always writes a JSON + MD pair via `audit_run_persist`, regardless of opt-in commit state. The marker only controls whether the JSON is committed; persistence is unconditional so the trend is visible across runs.
 6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical` / `high` / `medium` / `low` / `info`. The human-readable Step 3 table can use whatever capitalisation reads best.
-7. **Default output is unchanged.** `--format=dragon` and `--format=both` are opt-in; the markdown-only path stays default so existing adopters see no behaviour change. See AgDR-0022 for the format-choice rationale.
+7. **Default output is unchanged.** `--format=dragon` and `--format=both` are opt-in; the markdown-only path stays default so existing adopters see no behaviour change. See AgDR-0024 for the format-choice rationale.
