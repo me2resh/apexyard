@@ -10,7 +10,7 @@ effort: high
 
 Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy, terms of service, data handling, and user rights. Invoke when `/launch-check`'s compliance row shows WARN or FAIL, or proactively before launching in the EU/UK.
 
-**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md) for data-handling analysis (Step 4).** The DFD's classifications table at `projects/<project>/architecture/dfd.md` is the source of truth for which fields are PII / PCI / secrets, and the DFD's external-services list is the source of truth for cross-border transfers and third-party processors. If the DFD doesn't exist, this skill falls back to its own grep-based discovery (degraded mode — surface in the output banner). See AgDR-0024 for the single-source-of-truth rationale.
+**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md) for data-handling analysis (Step 4).** The DFD's classifications table at `projects/<project>/architecture/dfd.md` is the source of truth for which fields are PII / PCI / secrets, and the DFD's external-services list is the source of truth for cross-border transfers and third-party processors. If the DFD doesn't exist, this skill falls back to its own grep-based discovery (degraded mode — surface in the output banner). See AgDR-0026 for the single-source-of-truth rationale.
 
 ## Compliance Areas
 

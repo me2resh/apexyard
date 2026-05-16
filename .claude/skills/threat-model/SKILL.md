@@ -10,7 +10,7 @@ effort: high
 
 Deep-dive security analysis using the STRIDE framework. Produces a prioritized threat catalogue with mitigations. This is the expert companion to `/launch-check`'s security row — invoke it when security shows WARN or FAIL, or proactively before any launch.
 
-**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md).** The Data Flow Diagram at `projects/<project>/architecture/dfd.md` is the source of truth; this skill iterates its trust-boundary crossings rather than rebuilding its own data-flow view. If the DFD doesn't exist, this skill OFFERS to run `/dfd` first (see Step 1). See AgDR-0024 for the single-source-of-truth rationale.
+**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md).** The Data Flow Diagram at `projects/<project>/architecture/dfd.md` is the source of truth; this skill iterates its trust-boundary crossings rather than rebuilding its own data-flow view. If the DFD doesn't exist, this skill OFFERS to run `/dfd` first (see Step 1). See AgDR-0026 for the single-source-of-truth rationale.
 
 ## LSP-aware (optional, recommended)
 

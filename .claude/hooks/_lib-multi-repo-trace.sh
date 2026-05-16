@@ -4,7 +4,7 @@
 #
 # Source this library from any skill that follows an outbound call from
 # one registered project into another, using `apexyard.projects.yaml` as
-# the registry. See AgDR-0024 (DFD skill) for design rationale; the same
+# the registry. See AgDR-0026 (DFD skill) for design rationale; the same
 # discovery shape applies to /process (#256).
 #
 # Usage:
@@ -273,12 +273,12 @@ mrt_is_third_party() {
     *.supabase.co*)                                       echo "supabase";   return 0 ;;
     *sentry.io*)                                          echo "sentry";     return 0 ;;
     *datadoghq.com*|*datadoghq.eu*)                       echo "datadog";    return 0 ;;
-    *posthog.com*|*eu.posthog.com*|*app.posthog.com*)     echo "posthog";    return 0 ;;
-    *amplitude.com*|*api.amplitude.com*)                  echo "amplitude";  return 0 ;;
-    *mixpanel.com*|*api.mixpanel.com*)                    echo "mixpanel";   return 0 ;;
-    *segment.com*|*api.segment.io*)                       echo "segment";    return 0 ;;
+    *posthog.com*)                                        echo "posthog";    return 0 ;;
+    *amplitude.com*)                                      echo "amplitude";  return 0 ;;
+    *mixpanel.com*)                                       echo "mixpanel";   return 0 ;;
+    *segment.com*|*segment.io*)                           echo "segment";    return 0 ;;
     *salesforce.com*|*.force.com*)                        echo "salesforce"; return 0 ;;
-    *api.github.com*|*github.com*)                        echo "github";     return 0 ;;
+    *github.com*)                                         echo "github";     return 0 ;;
     *.googleapis.com*)                                    echo "google-api"; return 0 ;;
     *.googletagmanager.com*)                              echo "gtm";        return 0 ;;
     *.algolia.net*|*.algolianet.com*)                     echo "algolia";    return 0 ;;

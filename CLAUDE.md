@@ -225,7 +225,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/extract-features` | Scan an existing codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and write a consolidated Feature Inventory at `projects/<name>/feature-inventory.md` — the "what we must preserve" spec for a greenfield rewrite. Complements `/handover` (high-level project assessment); `/extract-features` is the granular feature catalogue. |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
-| `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) from a codebase — six-axis discovery + trust boundaries + data classifications. Source of truth that `/threat-model` and `/compliance-check` consume. See AgDR-0024. |
+| `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) from a codebase — six-axis discovery + trust boundaries + data classifications. Source of truth that `/threat-model` and `/compliance-check` consume. See AgDR-0026. |
 | `/journey` | Generate a single self-contained user-journey HTML — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact. |
 | `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
 | `/release` | (Framework-only) Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG, open the release PR, and tag after merge |

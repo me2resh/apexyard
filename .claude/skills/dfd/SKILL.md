@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 Reads a codebase (or a portfolio of codebases for system-wide DFDs) and produces a Data Flow Diagram showing external actors, processes, data stores, data flows, trust boundaries, and per-element data classifications. The DFD is the **input to STRIDE threat modelling** and to GDPR cross-border / DPA-coverage analysis.
 
-This skill is the **canonical DFD producer** in the apexyard family. `/threat-model` and `/compliance-check` consume the DFD it writes instead of regenerating their own — see AgDR-0024 for the design rationale.
+This skill is the **canonical DFD producer** in the apexyard family. `/threat-model` and `/compliance-check` consume the DFD it writes instead of regenerating their own — see AgDR-0026 for the design rationale.
 
 | Skill | Role |
 |-------|------|
@@ -187,7 +187,7 @@ echo "$model_json" \
 
 `generate-dragon.sh` is a **pure function over the in-memory model** — `/threat-model --format=dragon` (#255) will import the same serialiser when it lands. If `#255` ships first with the serialiser inside `/threat-model`, switch this skill to import from there during code review.
 
-Schema reference: [OWASP Threat Dragon v2 JSON schema](https://github.com/OWASP/threat-dragon/blob/main/td.vue/src/service/migration/schema/threat-model.v2.json).
+Schema reference: [OWASP Threat Dragon repository](https://github.com/OWASP/threat-dragon) (see `td.vue/src/service/migration/schema/` for the published v2 JSON schema).
 
 #### 5c. Cross-repo composition (on `--scope-all`)
 
@@ -257,6 +257,7 @@ Re-run /dfd {project} after architecture changes.
 Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that integrates with Stripe + SendGrid:
 
 **Discovery** picks up:
+
 - HTTP routes (12) → public_user actor + http_api process + public ↔ backend boundary
 - `@auth0` import → auth0 external actor
 - `stripe`, `@sendgrid/mail` imports → stripe + sendgrid external actors + us ↔ third-party boundary
@@ -266,6 +267,7 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 - `cron.schedule(` → scheduled-job process
 
 **Classifications** detect:
+
 - `user.email` (Prisma column) → PII
 - `user.phone_number` (Prisma column) → PII
 - `card_number` (mentioned in Stripe-flow code) → PCI
