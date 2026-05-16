@@ -110,7 +110,8 @@ out=$(run_hook "$SB")
 rc=$?
 # Should be exit 0, empty output, no symlinks created.
 [ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$(ls -A "$SB/.claude/skills" 2>/dev/null)" ]
-assert "case 1: no private custom-skills dir → no-op silent (no symlinks, no output)" $?
+rc2=$?
+assert "case 1: no private custom-skills dir → no-op silent (no symlinks, no output)" "$rc2"
 rm -rf "$SB"
 
 # ==========================================================================
