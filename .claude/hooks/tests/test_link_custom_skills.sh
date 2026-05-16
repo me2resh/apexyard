@@ -109,8 +109,11 @@ SB=$(make_fork)
 out=$(run_hook "$SB")
 rc=$?
 # Should be exit 0, empty output, no symlinks created.
-[ "$rc" -eq 0 ] && [ -z "$out" ] && [ -z "$(ls -A "$SB/.claude/skills" 2>/dev/null)" ]
-rc2=$?
+ok=1
+[ "$rc" -eq 0 ] || ok=0
+[ -z "$out" ] || ok=0
+[ -z "$(ls -A "$SB/.claude/skills" 2>/dev/null)" ] || ok=0
+[ "$ok" -eq 1 ] && rc2=0 || rc2=1
 assert "case 1: no private custom-skills dir → no-op silent (no symlinks, no output)" "$rc2"
 rm -rf "$SB"
 
