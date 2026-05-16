@@ -310,6 +310,14 @@ portfolio_validate() {
         echo "broken: portfolio.workspace_dir resolved to $workspace_dir — directory does not exist"
         return 1
       fi
+      # Writability check — read-only mounts (NFS / SMB / nested-container
+      # bind-mounts that drop write perms) would otherwise silent-fail when
+      # /handover or the v2 migration tries to write into workspace/.
+      # Surface the failure here so SessionStart catches it.
+      if [ ! -w "$workspace_dir" ]; then
+        echo "broken: portfolio.workspace_dir at $workspace_dir is not writable"
+        return 1
+      fi
       ;;
   esac
 

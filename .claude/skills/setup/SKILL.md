@@ -131,10 +131,13 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
      }
      ```
 
-   - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). The marker is presence-only; content is ignored. A short identifying line is fine for human-grep purposes:
+   - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). **Spec: presence-only — readers MUST ignore content; only file presence matters.** Writers MAY include a single explanatory line so `head .apexyard-fork` is informative for operators encountering it the first time. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B for the rationale.
 
      ```bash
+     # Either form is valid — both are presence-only as far as readers are concerned:
      echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+     # OR (strictly empty, also valid):
+     # touch .apexyard-fork
      ```
 
    - Stage `.gitignore`, `.claude/project-config.json`, and `.apexyard-fork` for commit. All three are per-fork, not per-machine.

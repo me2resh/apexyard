@@ -395,9 +395,13 @@ if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
   (cd "$SIBLING_ROOT" && git add onboarding.yaml)
 elif [ -f "$SIBLING_ROOT/onboarding.yaml" ] && [ -f onboarding.yaml ]; then
   # Both present — surface the conflict and stop. The operator picks.
-  echo "WARNING: onboarding.yaml exists in BOTH the public fork and the sibling repo."
-  echo "  Resolve manually before re-running /update."
-  return 1
+  # `exit 1` (not `return 1`) — this snippet runs at top-level in the
+  # operator's shell when invoked from the skill; `return` would fail
+  # outside a function. Wrap the whole step 8a in `( ... )` if you want
+  # the exit contained to a subshell.
+  printf 'WARNING: onboarding.yaml exists in BOTH the public fork and the sibling repo.\n' >&2
+  printf '  Resolve manually before re-running /update.\n' >&2
+  exit 1
 fi
 ```
 
@@ -413,13 +417,19 @@ if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
   for entry in workspace/*; do
     [ -e "$entry" ] || continue
     name=$(basename "$entry")
+    # workspace/README.md is a committed framework artefact explaining the
+    # workspace/*/ convention — it stays in the public fork (matches the
+    # manual recipe in docs/multi-project.md § "What if you want to migrate
+    # by hand?"). See AgDR-0021 § G for the rationale.
+    if [ "$name" = "README.md" ]; then
+      continue
+    fi
     if [ -e "$SIBLING_ROOT/workspace/$name" ]; then
       echo "WARNING: workspace/$name exists in BOTH locations — skipped."
       continue
     fi
     mv "$entry" "$SIBLING_ROOT/workspace/$name"
   done
-  # workspace/README.md (committed framework file) stays in the public fork.
 fi
 ```
 
@@ -443,6 +453,8 @@ fi
 ```
 
 ##### Write the .apexyard-fork marker
+
+The marker is **presence-only**: readers (every ops-root walk) MUST ignore content; only file presence matters. Writers MAY include a single explanatory line so `head .apexyard-fork` is informative — both `echo "# comment" > .apexyard-fork` and `touch .apexyard-fork` are valid. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B.
 
 ```bash
 if [ ! -f .apexyard-fork ]; then
