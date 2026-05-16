@@ -2,7 +2,7 @@
 name: threat-model
 description: Full STRIDE threat modelling exercise — identifies Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege surfaces across the codebase. Deep-dive companion to /launch-check's security dimension.
 disable-model-invocation: false
-argument-hint: "[project-path]"
+argument-hint: "[project-path] [--format=markdown|dragon|both]"
 effort: high
 ---
 
@@ -15,6 +15,39 @@ Deep-dive security analysis using the STRIDE framework. Produces a prioritized t
 This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
 
 Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
+
+## Usage
+
+```
+/threat-model                                # default: markdown only (unchanged)
+/threat-model --format=markdown              # explicit markdown only
+/threat-model --format=dragon                # OWASP Threat Dragon v2 JSON only
+/threat-model --format=both                  # both markdown AND Threat Dragon JSON
+/threat-model workspace/example-app --format=both
+```
+
+| Flag | Effect |
+|------|--------|
+| (none) | Persist the markdown catalogue via `_lib-audit-history.sh` (default). Backwards-compatible. |
+| `--format=markdown` | Same as default — explicit form. |
+| `--format=dragon` | Skip the markdown body; emit only `<output-dir>/threat-model.json` in OWASP Threat Dragon v2 schema. JSON still flows through `_lib-audit-history.sh` for findings persistence (the lib's per-run JSON is unrelated to the Dragon export). |
+| `--format=both` | Emit markdown AND `<output-dir>/threat-model.json`. Recommended when you want PR-reviewable markdown AND a Dragon-openable file. |
+
+The Threat Dragon export is implemented by `serialize_dragon.py` (sibling to this SKILL.md). It reads a small structured-input file the skill builds during Step 1–2 (entities + flows + boundaries + threats) and writes a Threat Dragon v2 JSON document that opens directly in [OWASP Threat Dragon](https://github.com/OWASP/threat-dragon) (desktop or web). Format-choice rationale: [`docs/agdr/AgDR-0022-threat-dragon-export.md`](../../../docs/agdr/AgDR-0022-threat-dragon-export.md).
+
+### Worked example (--format=dragon)
+
+```
+/threat-model workspace/example-app --format=dragon
+```
+
+After the STRIDE walk produces the entities + flows + threats, the skill emits:
+
+```
+projects/example-app/audits/threat-model/threat-model.json
+```
+
+Open the JSON in Threat Dragon (`File → Open Existing Threat Model`). Dragon's auto-arrange (toolbar) re-flows the auto-grid layout into a tidier view — the grid is just a sane starting state. STRIDE findings appear pinned to their parent shapes; click any shape's threat tab to edit them visually.
 
 ## STRIDE Categories
 
@@ -163,6 +196,97 @@ audit_render_trend "<project-name>" "threat-model" 5
 - < 2 prior runs → silent (no trend section). Don't append anything.
 - ≥ 2 prior runs → prints a markdown trend block (heading + table + ASCII chart of `score` over time) to stdout. Append it to this run's MD artefact and to the chat output.
 
+### Step 6: Emit Threat Dragon JSON (only if `--format=dragon` or `--format=both`)
+
+When `--format=dragon` or `--format=both` is set, build a structured-input YAML (or JSON — either is accepted by the serialiser) from the DFD + STRIDE catalogue, then invoke `serialize_dragon.py`.
+
+Structured-input schema (see `fixtures/sample-input.yaml` for a worked example):
+
+| Top-level key | Type | Purpose |
+|---------------|------|---------|
+| `title` | string | Becomes `summary.title` (required by Threat Dragon schema). |
+| `description` | string | Optional `summary.description`. |
+| `owner` | string | Optional `summary.owner`. |
+| `contributors` | list[string] | Becomes `detail.contributors[]`. |
+| `reviewer` | string | Optional `detail.reviewer`. |
+| `actors` | list[{id, name}] | External entities → `shape: actor`. |
+| `processes` | list[{id, name}] | Processes → `shape: process`. |
+| `stores` | list[{id, name}] | Data stores → `shape: store`. |
+| `boundaries` | list[{id, name, children: [id, ...]}] | Trust boundaries → `shape: trust-boundary-box` wrapping their children with a 40px margin. |
+| `flows` | list[{id, source, target, label}] | Data flows → `shape: flow` with `source.cell` / `target.cell` UUIDs. |
+| `threats` | list[{parent, type, severity, title, description, mitigation}] | STRIDE findings → attached to the parent entity's `data.threats[]`. |
+
+Severity vocabulary in the input matches the rest of the skill (lowercase `critical / high / medium / low / info`); the serialiser maps it into Dragon's `High / Medium / Low` enum. STRIDE `type` is one of `Spoofing`, `Tampering`, `Repudiation`, `Information disclosure`, `Denial of service`, `Elevation of privilege` (the canonical labels Dragon uses; common shortenings like `info disc`, `DoS`, `EoP` are accepted and normalised).
+
+#### 6a. Resolve the output path
+
+```bash
+out_dir=$(audit_resolve_dir "<project-name>" "threat-model")
+dragon_path="$out_dir/threat-model.json"
+```
+
+`$out_dir` is the same per-project audit dir Step 5 writes to. The Dragon JSON sits alongside the per-run JSON + per-run MD; one Dragon export per project at a time (overwritten on subsequent runs). Operators who want to keep historic Dragon exports for diffing should rename them by hand — the markdown trend in Step 5c is the supported way to track findings over time.
+
+#### 6b. Build the structured input and invoke the serialiser
+
+Write the structured input to a temp file, then invoke `serialize_dragon.py`:
+
+```bash
+input=$(mktemp --suffix=.yaml)
+cat > "$input" <<'YAML'
+title: "Example Web Application"
+description: "Threat model run on 2026-05-16, commit <sha>."
+owner: "Security Team"
+contributors: ["Alice", "Bob"]
+reviewer: "Carol"
+
+actors:
+  - { id: user, name: "External user" }
+
+processes:
+  - { id: web, name: "Web frontend" }
+  - { id: api, name: "API service" }
+
+stores:
+  - { id: db, name: "Primary data store" }
+
+boundaries:
+  - { id: internet, name: "Public internet", children: [web] }
+  - { id: backend,  name: "Backend network", children: [api, db] }
+
+flows:
+  - { id: f1, source: user, target: web, label: "credentials" }
+  - { id: f2, source: web,  target: api, label: "auth token, user PII" }
+  - { id: f3, source: api,  target: db,  label: "user PII, transaction" }
+
+threats:
+  - parent: api
+    type: "Spoofing"
+    severity: "high"
+    title: "No rate limit on /auth/login"
+    description: "Attacker can brute-force login credentials."
+    mitigation: "Add a rate limiter (5/min/IP) at the API gateway."
+YAML
+
+python3 "$(git rev-parse --show-toplevel)/.claude/skills/threat-model/serialize_dragon.py" \
+  "$input" --out "$dragon_path"
+rm -f "$input"
+```
+
+#### 6c. Tell the operator what was written
+
+After the file is written, surface it in the chat output so the operator knows where to find it:
+
+```
+Threat Dragon v2 JSON written to: <dragon_path>
+Open in https://www.threatdragon.com or the OWASP Threat Dragon desktop app.
+Dragon's auto-arrange (toolbar) re-flows the auto-grid layout on first open.
+```
+
+#### 6d. Layout note
+
+The serialiser uses an auto-grid layout (actors row at `y=0`, processes at `y=200`, stores at `y=400`; x-spaced 200px). Trust-boundary boxes wrap their children with a 40px margin. This is a sane starting state — Threat Dragon's own auto-arrange button re-flows the diagram into a tidier view on first open. Hand-authored coordinates are out of scope for v1 (see AgDR-0022 § "Auto-grid layout decision").
+
 #### 5d. Opt-in commit (history-tracked marker)
 
 By default the dimension's runs/ JSON files are gitignored — most adopters don't want audit history bloat in the repo. The lib applies a `.gitignore` based on the presence of the marker:
@@ -182,3 +306,4 @@ The lib re-evaluates the marker on every persist; the operator can toggle freely
 4. **Adapt scope to project type.** API-only? Focus on auth, input validation, rate limiting. Full-stack? Add XSS, CSRF, cookie security. Library? Focus on supply chain and input handling.
 5. **Always persist.** Step 5 always writes a JSON + MD pair via `audit_run_persist`, regardless of opt-in commit state. The marker only controls whether the JSON is committed; persistence is unconditional so the trend is visible across runs.
 6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical` / `high` / `medium` / `low` / `info`. The human-readable Step 3 table can use whatever capitalisation reads best.
+7. **Default output is unchanged.** `--format=dragon` and `--format=both` are opt-in; the markdown-only path stays default so existing adopters see no behaviour change. See AgDR-0022 for the format-choice rationale.
