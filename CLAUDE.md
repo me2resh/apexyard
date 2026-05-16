@@ -132,6 +132,7 @@ Template: @templates/agdr.md
 | ADR | Recording architecture decisions | `templates/adr.md` |
 | AgDR | Recording AI agent decisions | `templates/agdr.md` |
 | Migration AgDR | Recording migration decisions (rollback, downtime, consumers, observability) | `templates/agdr-migration.md` |
+| Investigation | Sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries. Hypothesis-tree methodology; live-doc workflow. Used by `/investigation`. | `templates/investigation.md` |
 | C4 Context (L1) | System + external actors (one per project) | `templates/architecture/c4-context.md` |
 | C4 Container (L2) | Deployable units inside the system | `templates/architecture/c4-container.md` |
 | Architecture Vision | Target-state architecture + multi-quarter migration path + explicit anti-scope | `templates/architecture/vision.md` |
@@ -187,10 +188,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 44 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 47 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (44)
+### Available skills (47)
 
 | Skill | Purpose |
 |-------|---------|
@@ -221,6 +222,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/spike` | Create a hypothesis-driven, time-boxed, throw-away spike ticket (Hypothesis / Budget / Kill Criteria / Disposition). Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply. |
 | `/spike-close` | Disposition gate for spikes — `--promote` files a follow-up `[Feature]`, `--discard` writes a memo to `docs/spike-memos/<slug>.md`. |
+| `/investigation` | Create a structured investigation ticket + live-doc for sustained root-cause work (incident retro, bug archaeology, regression hunt, performance mystery). Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix). Closes when every Follow-up action lands, not on PR merge. Template override via `custom-templates/investigation.md`. See AgDR-0027. |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/extract-features` | Scan an existing codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and write a consolidated Feature Inventory at `projects/<name>/feature-inventory.md` — the "what we must preserve" spec for a greenfield rewrite. Complements `/handover` (high-level project assessment); `/extract-features` is the granular feature catalogue. |
