@@ -26,44 +26,20 @@ fi
 
 ERRORS=""
 
-# Extract --title value. Greedy + boundary-anchored awk extraction so an
-# embedded `"` or `'` in the title (rare but possible — `[Bug] handle "X"`
-# / `[Chore] fix "foo" tests`) doesn't truncate at the first internal quote
-# (me2resh/apexyard#227). Same shape as validate-issue-structure.sh.
-TITLE=$(printf '%s' "$COMMAND" | awk -v SQ="'" '
-  { buf = (NR == 1 ? $0 : buf "\n" $0) }
-  END {
-    s = buf
-    # Double-quoted title, greedy.
-    re = "--title[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
-    if (match(s, re)) {
-      chunk = substr(s, RSTART, RLENGTH)
-      sub("^--title[[:space:]]+\"", "", chunk)
-      sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-      sub("\"[[:space:]]*$", "", chunk)
-      print chunk
-      exit
-    }
-    # Single-quoted title, greedy.
-    re = "--title[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
-    if (match(s, re)) {
-      chunk = substr(s, RSTART, RLENGTH)
-      sub("^--title[[:space:]]+" SQ, "", chunk)
-      sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-      sub(SQ "[[:space:]]*$", "", chunk)
-      print chunk
-      exit
-    }
-    # Unquoted single-token title.
-    re = "--title[[:space:]]+[^[:space:]]+"
-    if (match(s, re)) {
-      chunk = substr(s, RSTART, RLENGTH)
-      sub("^--title[[:space:]]+", "", chunk)
-      print chunk
-      exit
-    }
-  }
-')
+# Extract --title value (macOS-compatible, no grep -P).
+#
+# Kept as the original non-greedy `[^"']*` form: PR titles are short,
+# single-line, and conventionally do NOT contain embedded `"` or `'`
+# (they're command-line arguments and gh would have shell-escape
+# friction). The greedy + flag-boundary fix used in the body extractors
+# (me2resh/apexyard#227) is NOT applied here on purpose — when the
+# command has a multi-line `--body "$(cat <<'EOF' ... EOF)"` after the
+# title, greedy match over-consumes the body content as part of the
+# title value. Non-greedy is correct for this position.
+TITLE=$(echo "$COMMAND" | sed -n 's/.*--title[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' | head -1)
+if [ -z "$TITLE" ]; then
+  TITLE=$(echo "$COMMAND" | sed -n 's/.*--title[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -1)
+fi
 
 # Validate PR title format if we can extract it
 # Accepts: type(<TICKET>): … or type(<TICKET>)!: … (breaking change)

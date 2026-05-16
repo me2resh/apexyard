@@ -149,22 +149,6 @@ run_pr_case "origin yes, upstream no → pass (short-circuit)" \
   'mock_gh_set_repo_existence "$sb" 7 fork-org/apexyard yes
    mock_gh_set_repo_existence "$sb" 7 me2resh/apexyard no'
 
-# ---- Embedded double quotes in title — me2resh/apexyard#227 -------------
-# Pre-227 the sed-based --title extractor's `[^"]*` regex truncated the
-# title at the first embedded quote, so a title like
-# `fix(#42): handle "X" string` extracted as `fix(#42): handle ` and
-# failed the type(TICKET): regex (or extracted the wrong ticket ref).
-# Post-fix the awk extractor is greedy + boundary-anchored, so the full
-# title survives extraction.
-
-# Embedded double-quote in title — must extract whole title, find ticket.
-run_pr_case "title with embedded double quotes → pass (ticket extracted)" \
-  "no" 'fix(#42): handle "admin notice" rendering' "no" 0 ""
-
-# Two embedded quotes — same behavior.
-run_pr_case "title with two embedded quotes → pass" \
-  "no" 'feat(#5): add "X" and "Y" labels' "no" 0 ""
-
 # ---- Summary ------------------------------------------------------------
 
 echo ""
