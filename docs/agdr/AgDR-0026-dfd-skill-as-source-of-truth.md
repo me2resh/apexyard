@@ -1,4 +1,4 @@
-# AgDR-0024: `/dfd` skill as single source of truth — Mermaid primary, Threat Dragon JSON secondary
+# AgDR-0026: `/dfd` skill as single source of truth — Mermaid primary, Threat Dragon JSON secondary
 
 > In the context of building a Data Flow Diagram (DFD) extractor for the apexyard skill family, facing the fact that `/threat-model` (#225) and `/compliance-check` each regenerate their own DFD slices and the upcoming `/threat-model --format=dragon` (#255) wants a Threat Dragon JSON export, I decided to ship `/dfd` as the canonical DFD producer that writes a Mermaid markdown file at `projects/<name>/architecture/dfd.md` (primary), an OWASP Threat Dragon v2 JSON at the same dir (secondary on `--format=dragon`), with first-class data-classification heuristics and a shared multi-repo trace helper, to achieve one place where the DFD lives, accepting one more skill to learn and one refactor pass through the two consumer skills.
 
