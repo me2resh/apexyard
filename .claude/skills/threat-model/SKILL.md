@@ -33,7 +33,7 @@ Per-language LSP plugins live in Claude Code's marketplace. Install once; the sk
 | `--format=dragon` | Skip the markdown body; emit only `<output-dir>/threat-model.json` in OWASP Threat Dragon v2 schema. JSON still flows through `_lib-audit-history.sh` for findings persistence (the lib's per-run JSON is unrelated to the Dragon export). |
 | `--format=both` | Emit markdown AND `<output-dir>/threat-model.json`. Recommended when you want PR-reviewable markdown AND a Dragon-openable file. |
 
-The Threat Dragon export is implemented by `serialize_dragon.py` (sibling to this SKILL.md). It reads a small structured-input file the skill builds during Step 1–2 (entities + flows + boundaries + threats) and writes a Threat Dragon v2 JSON document that opens directly in [OWASP Threat Dragon](https://github.com/OWASP/threat-dragon) (desktop or web). Format-choice rationale: [`docs/agdr/AgDR-0022-threat-dragon-export.md`](../../../docs/agdr/AgDR-0022-threat-dragon-export.md).
+The Threat Dragon export is implemented by `serialize_dragon.py` (sibling to this SKILL.md). It reads a small structured-input file the skill builds during Step 1–2 (entities + flows + boundaries + threats) and writes a Threat Dragon v2 JSON document that opens directly in [OWASP Threat Dragon](https://github.com/OWASP/threat-dragon) (desktop or web). Format-choice rationale: [`docs/agdr/AgDR-0024-threat-dragon-export.md`](../../../docs/agdr/AgDR-0024-threat-dragon-export.md).
 
 ### Worked example (--format=dragon)
 

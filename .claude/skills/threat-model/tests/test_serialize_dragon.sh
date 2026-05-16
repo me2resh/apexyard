@@ -274,7 +274,7 @@ fi
 # ---------------------------------------------------------------------------
 # Case 11: AgDR-0022 exists and captures the format-choice decision.
 # ---------------------------------------------------------------------------
-AGDR="$SRC_ROOT/docs/agdr/AgDR-0022-threat-dragon-export.md"
+AGDR="$SRC_ROOT/docs/agdr/AgDR-0024-threat-dragon-export.md"
 if [ -f "$AGDR" ] && grep -q "Threat Dragon" "$AGDR" && grep -qE 'TMT|\.tm7' "$AGDR" && grep -q "IriusRisk" "$AGDR"; then
   mark_pass "11. AgDR-0022 captures format choice (Dragon vs TMT vs IriusRisk)"
 else
