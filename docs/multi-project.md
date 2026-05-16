@@ -668,6 +668,8 @@ Every few weeks, pull the latest apexyard improvements into your fork. The easy 
 
 `/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.claude/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
 
+> **Pre-release testing (`/update --from-dev`).** A hidden `--from-dev` flag pulls from `upstream/dev` instead of the latest tagged release on `upstream/main`. Intended for the framework maintainer testing pre-release work on a separate machine, and for adopters who explicitly want to validate an upcoming framework change before the release tag is cut. **Not a supported general-adopter path** — the adopter contract is tagged releases from `upstream/main` (see [AgDR-0007](agdr/AgDR-0007-release-cut-branch-model.md)). Prints a `⚠ PRE-RELEASE SYNC` banner before any state mutation, uses the same sync-branch + conflict-resolution flow, and lands on a `chore/sync-upstream-dev` branch. Revert with `git reset --hard origin/main` if needed. See `.claude/skills/update/SKILL.md` § Options for details.
+
 If you prefer the raw commands:
 
 ```bash

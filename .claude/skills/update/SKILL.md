@@ -5,6 +5,17 @@ argument-hint: "[--dry-run] [--rebase]"
 allowed-tools: Bash, Read, Write, Edit
 ---
 
+<!--
+  Hidden flag: --from-dev (NOT in description above, on purpose — see #250).
+  Pulls from upstream/dev instead of the latest tagged release. Adopter
+  contract is tagged releases; --from-dev is an opt-in for framework
+  maintainers and adopters who explicitly want to test pre-release work.
+  Documented in `## Usage` and `## Options` below for operators who read
+  the spec; deliberately omitted from `description` so /help does not
+  surface it.
+-->
+
+
 # /update — Sync ApexYard Fork from Upstream
 
 Single-command replacement for the manual "fetch → branch → merge → push → PR" dance that fork maintainers do to pull upstream apexyard changes into their ops fork.
@@ -27,7 +38,16 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /update              # merge-based sync (default, safer)
 /update --rebase     # rebase local customisations on top of upstream
 /update --dry-run    # preview only, don't touch anything
+/update --from-dev   # (hidden) pull from upstream/dev — pre-release; expect breakage
 ```
+
+## Options
+
+| Flag | Effect |
+|------|--------|
+| `--rebase` | Rebase local commits onto upstream instead of merging. Cleaner linear history; rewrites local SHAs. |
+| `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. |
+| `--from-dev` | **Hidden / opt-in.** Sync from `upstream/dev` (pre-release work) instead of the latest `upstream/main` tag. Prints a `⚠ PRE-RELEASE SYNC` banner BEFORE any fetch/state-mutation. Same sync-branch + conflict-resolution flow; branch is named `chore/sync-upstream-dev` (or `chore/#<TICKET>-sync-upstream-dev` if a tracking issue is supplied). Intended for the framework maintainer (testing pre-release work on another machine) and for adopters who explicitly want to validate an upcoming framework change. **Not** in the skill's `description` frontmatter on purpose — `/help` should not surface it, since the adopter contract is tagged releases (see AgDR-0007 release-cut model). Combinable with `--rebase` and `--dry-run`. |
 
 ## Output
 
@@ -45,6 +65,44 @@ On up-to-date: one line, no state change.
 - You want to sync a specific feature branch from upstream. Out of scope — this skill is for default-branch fork sync only.
 
 ## Process
+
+### Pre-step: Parse flags + print pre-release banner (when --from-dev)
+
+Parse the invocation arguments first, BEFORE any fetch / branch / merge work:
+
+```bash
+FROM_DEV=0
+DRY_RUN=0
+REBASE=0
+for arg in "$@"; do
+  case "$arg" in
+    --from-dev) FROM_DEV=1 ;;
+    --dry-run)  DRY_RUN=1 ;;
+    --rebase)   REBASE=1 ;;
+  esac
+done
+
+# Resolve the upstream ref + sync-branch suffix once, at the top, so every
+# downstream step references the same target.
+if [ "$FROM_DEV" = "1" ]; then
+  UPSTREAM_REF=upstream/dev
+  BRANCH_SUFFIX=sync-upstream-dev
+else
+  UPSTREAM_REF=upstream/main
+  BRANCH_SUFFIX=sync-upstream-apexyard
+fi
+```
+
+If `FROM_DEV=1`, print this banner BEFORE doing anything else (in particular, before any `git fetch`, branch-create, or merge — operator must see the warning before any state mutation):
+
+```
+⚠ PRE-RELEASE SYNC — pulling from upstream/dev
+   This is unreleased work; expect breakage.
+   Revert with: git reset --hard origin/main
+   For supported updates, use /update (no flag) to pull tagged releases.
+```
+
+The banner restates the deal every invocation — an operator who used `--from-dev` once should not be surprised the next time they run plain `/update` and find themselves on a different code path. The banner is load-bearing on purpose: dropping it would let pre-release breakage land silently.
 
 ### 0. Mark this session as bootstrap (REQUIRED)
 
@@ -90,6 +148,8 @@ fi
 
 ### 2. Fetch both remotes
 
+`git fetch upstream --quiet` brings down all upstream branches by default (including `upstream/dev`), so a single fetch covers both the default and the `--from-dev` target. No conditional fetch needed.
+
 ```bash
 git fetch upstream --quiet
 git fetch origin --quiet
@@ -101,13 +161,17 @@ Network failure: print a warning and exit. Don't try to "work from cache" — us
 
 Two signals matter here: a new upstream **tag** (the actionable one, meaning a real release is available), and upstream **main commits** since the fork's last sync (informational — may just be a docs typo).
 
-```bash
-AHEAD=$(git rev-list --count upstream/main..main)
-BEHIND=$(git rev-list --count main..upstream/main)
+When `--from-dev` is set, the comparison target is `upstream/dev` instead of `upstream/main`, and tag-based signals are skipped (dev is by definition pre-release; there is no tag to compare against). The preview reports the commit delta against `upstream/dev` and the operator decides whether to proceed.
 
-# Tag-based signal — same comparison the SessionStart drift banner uses.
-UPSTREAM_TAG=$(git tag --list --sort=-v:refname --merged upstream/main | head -n 1)
-LOCAL_TAG=$(git tag --list --sort=-v:refname --merged main | head -n 1)
+```bash
+AHEAD=$(git rev-list --count "$UPSTREAM_REF"..main)
+BEHIND=$(git rev-list --count main.."$UPSTREAM_REF")
+
+# Tag-based signal applies only to the tagged-release path.
+if [ "$FROM_DEV" = "0" ]; then
+  UPSTREAM_TAG=$(git tag --list --sort=-v:refname --merged upstream/main | head -n 1)
+  LOCAL_TAG=$(git tag --list --sort=-v:refname --merged main | head -n 1)
+fi
 ```
 
 Then report. Examples:
@@ -146,6 +210,21 @@ Proceed with merge? [Y/n]
 ```
 
 Default answer is "yes" in this mode — there's a real release the user asked about by running `/update`.
+
+**`--from-dev` (pre-release):**
+
+```
+Pre-release sync: 7 unreleased commits on upstream/dev since fork's HEAD.
+
+Upstream/dev commits to pull in:
+  ab12cde feat(#250): /update --from-dev hidden flag
+  cd34efg fix(#248): tighten validation
+  ... (5 more)
+
+Proceed with merge from upstream/dev? [Y/n]
+```
+
+Default answer is "yes" — the operator opted into pre-release explicitly with the flag, the banner already warned them about breakage, and asking again would be nagging. Skip the tag-based prompts entirely; dev has no tags to compare.
 
 **Ahead and behind (typical fork):**
 
@@ -197,22 +276,31 @@ Rationale for diverging from the `#58` AC wording ("leaves updated local main"):
 # Find or create a tracking issue. If a recent "sync" issue is open, reuse its number.
 # Otherwise prompt the user to create one (or offer to create it via `gh issue create`).
 
-BRANCH="chore/#${TICKET}-sync-upstream-apexyard"
+# $BRANCH_SUFFIX was set in the pre-step:
+#   sync-upstream-apexyard  for upstream/main (default)
+#   sync-upstream-dev       for upstream/dev (--from-dev)
+if [ -n "$TICKET" ]; then
+  BRANCH="chore/#${TICKET}-${BRANCH_SUFFIX}"
+else
+  BRANCH="chore/${BRANCH_SUFFIX}"
+fi
 git checkout -b "$BRANCH"
 ```
 
 ### 6. Do the sync
 
+`$UPSTREAM_REF` was set in the pre-step (`upstream/main` by default, `upstream/dev` under `--from-dev`).
+
 **Merge path:**
 
 ```bash
-git merge upstream/main --no-edit
+git merge "$UPSTREAM_REF" --no-edit
 ```
 
 **Rebase path:**
 
 ```bash
-git rebase upstream/main
+git rebase "$UPSTREAM_REF"
 ```
 
 Capture stdout/stderr for the conflict-detection step.
@@ -506,10 +594,10 @@ The migration moves real files between repos. If the operator has a custom workf
 
 ### 9. Final state + next steps
 
-On clean completion, print:
+On clean completion, print (substituting `$UPSTREAM_REF` for the literal `upstream/main` so the operator sees the actual ref synced under `--from-dev`):
 
 ```
-Synced to upstream/main @ <SHA> on branch <BRANCH>.
+Synced to <UPSTREAM_REF> @ <SHA> on branch <BRANCH>.
 
   Commits merged:     <N>
   Files changed:      <F>
@@ -569,6 +657,9 @@ Skill done. No remote state changed.
 | `jq` not installed (deprecated-config detection) | Skip step 8 silently; print one-line warning. The sync itself still completes. |
 | `.claude/project-config.json` missing (no override) | Skip step 8 silently — by definition no deprecated keys to surface. |
 | Operator answered `s` (show) | Print key + value, then re-prompt y/n (no `s` recursion). |
+| `--from-dev` passed but `upstream/dev` doesn't exist on the configured remote | Print: `upstream/dev not found — the configured upstream may not have a dev branch. Verify with: git ls-remote upstream dev`. Exit 1; no banner-suppression, no fallback to main. |
+| `--from-dev` combined with `--dry-run` | Banner prints first, then preview against `upstream/dev`, then exit 0. Same no-state-change semantics as plain `--dry-run`. |
+| `--from-dev` combined with `--rebase` | Allowed. Pre-release commits are rebased on top instead of merged; banner + branch convention unchanged. |
 
 ## Design notes
 
@@ -595,6 +686,16 @@ Two reasons:
 ### Dry-run semantics
 
 `--dry-run` simulates step 3 (preview) only. It does NOT simulate the merge itself — running `git merge --no-commit --no-ff` as a dry-run leaves the working tree in a staged state that's easy to accidentally commit. If the preview says N commits to pull in, the user should run `/update` for real to see the merge.
+
+### Why `--from-dev` is hidden (#250)
+
+The framework's adopter contract is "tagged releases from `upstream/main`" (release-cut model — see [AgDR-0007](../../../docs/agdr/AgDR-0007-release-cut-branch-model.md)). Adopters who pull from `dev` are signing up for breakage between releases — that's an opt-in behaviour, not a default. Three design choices flow from this:
+
+1. **Not in `description` frontmatter.** `/help` enumerates skill descriptions; surfacing `--from-dev` there would invite casual use and defeat the release-cut model's stability promise. The flag IS in `## Usage` and `## Options` so an operator who reads the spec finds it.
+2. **Banner before any state mutation.** An operator who used `--from-dev` once may not remember the deal next time. The banner prints BEFORE the first `git fetch`, restating the deal every invocation. Dropping it would let pre-release breakage land silently.
+3. **Same sync-branch + conflict-resolution flow as the default path.** A separate `/update-dev` skill would duplicate ~95% of the logic for a one-line flag-check difference; the flag-on-existing-skill shape is cheaper to maintain and means every safety check (sync branch, conflict resolution, no auto-merge) applies identically.
+
+Use cases that motivated the flag: the framework maintainer testing pre-release work on a separate machine before cutting a release tag; adopters validating an upcoming framework change before the wider rollout; CI workflows pinning to dev for integration testing (rare but legitimate).
 
 ## Cleanup (REQUIRED before exit)
 
