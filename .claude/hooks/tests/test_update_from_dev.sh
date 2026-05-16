@@ -54,6 +54,7 @@ parse_flags() {
     case "$arg" in
       --from-dev) FROM_DEV=1 ;;
       --dry-run)  DRY_RUN=1 ;;
+      # shellcheck disable=SC2034
       --rebase)   REBASE=1 ;;
     esac
   done
