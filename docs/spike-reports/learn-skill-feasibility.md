@@ -21,7 +21,7 @@ Built a Python extractor (`/tmp/learn-spike/extract.py`) that walks each session
 | Signal class | How extracted |
 |--------------|---------------|
 | Hook BLOCKED messages | regex `BLOCKED:\|hook error` on `tool_result` content; hook name pulled from the wrapper path (`xxx.sh`) |
-| User correction phrases | regex over short user prompts (< 1500 chars): `don't`, `do not`, `stop`, `no `, `actually`, `wrong`, `that's not`, `never (do\|use\|call)`, `why did you`, `instead`, `you were supposed to`, `should have`, `didn't (invoke\|call\|use)` |
+| User correction phrases | regex over short user prompts (< 1500 chars): `don't`, `do not`, `stop`, `no\s`, `actually`, `wrong`, `that's not`, `never (do\|use\|call)`, `why did you`, `instead`, `you were supposed to`, `should have`, `didn't (invoke\|call\|use)` |
 | Missed `▸ Activating` markers | counted role-trigger reminders in user-side system messages vs `▸ Activating` markers in assistant prose |
 | Repeated skill invocations | regex `<command-name>X</command-name>` and `` `/X` `` on user messages, deduped by skill name + session |
 
@@ -55,7 +55,7 @@ Suppression rules applied during pattern judgement:
 
 ### Patterns DROPPED during analysis (kept here for transparency)
 
-- `correction phrases` regex matched 9 hits total but was almost entirely noise: "no, those were spelling mistakes", "no, do that", "no go", `no ` at start of sentence. The literal-phrase approach is too lossy. A `/learn` v1 should drop this entirely or rewrite it as semantic intent classification.
+- `correction phrases` regex matched 9 hits total but was almost entirely noise: "no, those were spelling mistakes", "no, do that", "no go", literal `no\s` at start of sentence. The literal-phrase approach is too lossy. A `/learn` v1 should drop this entirely or rewrite it as semantic intent classification.
 - `forced reruns` (same bash command N×) were dominated by legitimate `cd /Users/…/apexstack` repetition (worktree resets). Useful as a cwd-drift signal *separately*; useless for framework drift.
 - `permission denials` — 0 hits. Not a current pain point.
 
@@ -82,17 +82,20 @@ This shifts the design implication for the full skill:
 Sketch for the full `/learn --propose` skill:
 
 **Inputs**:
+
 - Memory directory: `~/.claude/projects/<project-slug>/memory/*.md`
 - Session JSONLs: `~/.claude/projects/<project-slug>/*.jsonl`
 - Active rules + hooks: `<ops_root>/.claude/rules/*.md` + `<ops_root>/.claude/hooks/*.sh`
 - Suppression ledger: `<ops_root>/.claude/learn/suppressed.yaml`
 
 **Output modes** (the choice mentioned in the spike spec):
+
 1. **Adopter-config-only** (`--config`): proposes additions to `.claude/project-config.json` (e.g. tighten an existing hook's threshold, add a path to a deny-list). Lowest blast radius.
 2. **Framework-PR** (`--upstream`): generates a draft `gh issue create` body for `me2resh/apexyard` proposing a rule edit, hook tightening, or new skill. Includes evidence rows from the report so the upstream maintainer can judge severity without reproducing the analysis.
 3. **Local-only memory** (`--memory`): writes a new `feedback_*.md` entry. The signal-to-noise from this spike suggests this should be the *least* preferred mode — pattern #2 shows memory alone doesn't prevent recurrence.
 
 **Suppression ledger** (`<ops_root>/.claude/learn/suppressed.yaml`):
+
 ```yaml
 patterns:
   - id: cd-resets
@@ -104,9 +107,11 @@ patterns:
     pattern: "^no[, ]"
     reason: "too noisy; mostly conjunctional 'no'"
 ```
+
 Allows the operator to mark a pattern as "noise" so it doesn't surface again across runs.
 
 **Threshold tuning**: defaults proposed (each overrideable per-pattern):
+
 - Minimum frequency: 3 occurrences in the window
 - Minimum sessions: 2 distinct sessions (otherwise it's a single bad session, not drift)
 - Minimum confidence: HIGH or MEDIUM only by default; LOW behind `--include-low`
@@ -115,6 +120,7 @@ Allows the operator to mark a pattern as "noise" so it doesn't surface again acr
 **Schedule**: weekly cron via `/schedule` (already shipped). Operator gets a Friday-afternoon report with patterns to confirm/dismiss; confirmations append to suppression ledger or kick off the `--upstream` ticket flow.
 
 **Scope deliberately excluded from v1**:
+
 - LLM-based "semantic correction" pattern detection (regex won out for v0; v1 can add a Claude-API call per-pattern for richer judgement, but only after the regex-only baseline ships).
 - Cross-portfolio pattern detection (this spike is single-fork-only; multi-fork rollup is a v2 stretch goal).
 - Auto-applying changes (always operator-confirmed; never destructive).
