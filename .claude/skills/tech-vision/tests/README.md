@@ -4,7 +4,7 @@ Standalone bash script that validates the three load-bearing contracts of the
 `/tech-vision` skill without spinning up an interactive Claude Code session:
 
 1. **Template structure** — every section heading SKILL.md's interview drives
-   from must exist as a `## ` heading in `templates/architecture/vision.md`. If
+   from must exist as a `##` heading in `templates/architecture/vision.md`. If
    either side drifts, the interview prompts for sections the template doesn't
    support, or skips sections the template does.
 2. **Custom-template resolver** — `portfolio_resolve_template architecture/vision.md`
@@ -58,7 +58,7 @@ adds one), update:
 3. SKILL.md's interview-section table — document the prompt shape for the
    new section
 
-The skill itself drives off `^## ` heading discovery at runtime; it does NOT
+The skill itself drives off `^##` heading discovery at runtime; it does NOT
 hardcode the section list. So adding a section to the template
 automatically extends the interview without code changes to the skill — but
 the smoke test does need updating since it asserts the framework default's

@@ -1,7 +1,7 @@
 # AgDR-0028: `/tech-vision` skill — interactive section-by-section authoring, markdown-only output
 
 > In the context of shipping a `/tech-vision` skill that fills in the existing `templates/architecture/vision.md` template (#224), facing the question of whether the skill should be a one-shot prose generator, a fully-rendered diagram tool, or an interactive section-by-section interviewer, I decided to ship `/tech-vision` as an **interactive section-by-section interviewer that emits text-first markdown** at `projects/<name>/architecture/vision.md` via the custom-templates resolver (#244), to achieve the load-bearing sections (current-vs-target, anti-scope, migration path) actually getting filled in with operator-authored content, accepting that the skill takes longer to run than a single-shot generator.
-
+>
 > **Naming note.** The skill is `/tech-vision`, not `/vision`. The shorter `/vision` collides with product / company vision in a multi-stakeholder portfolio (CEOs / Heads of Product use the same word for non-architecture documents). The template path stays `templates/architecture/vision.md` — renaming the template would break the `custom-templates/architecture/vision.md` override path that landed in #244 / #224. Only the slash-command is renamed.
 
 ## Context

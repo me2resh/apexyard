@@ -111,7 +111,7 @@ Parse the resolved template (`portfolio_resolve_template architecture/vision.md`
 
 If the operator has overridden the template at `<private_repo>/custom-templates/architecture/vision.md`, the skill reads that file's sections instead. The interview follows whatever sections the resolved template defines — the section list is not hardcoded.
 
-**Discovery**: walk the template's `^## ` headings in order; each heading is one interview section. Use the heading text verbatim in the prompts.
+**Discovery**: walk the template's `^##` headings in order; each heading is one interview section. Use the heading text verbatim in the prompts.
 
 ### 3. Run the interview — section by section, per-section confirm
 
@@ -121,6 +121,7 @@ For each section:
 2. **Prompt for the section's content**. The prompt shape depends on whether the section is single-answer, multi-line, or repeated-row (per the table above). For sections with worked examples in the template, surface 1–2 examples as starting suggestions — never as the answer.
 3. **Show the assembled section** as it will appear in the final file.
 4. **Confirm**:
+
    ```
    Section "Principles" — looks good?
      (y) accept and continue to next section
