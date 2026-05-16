@@ -1,6 +1,6 @@
 # Templates
 
-ApexYard ships markdown templates under `templates/` that consuming skills read at invocation time — `/decide` reads `agdr.md`, `/write-spec` reads `prd.md`, `/c4` reads `architecture/c4-context.md` and `architecture/c4-container.md`, `/migration` reads `agdr-migration.md`, `/spike` reads `spike.md`, `/handover` reads `architecture/c4-container.md`. The full inventory is in [`CLAUDE.md` § "Templates"](../CLAUDE.md).
+ApexYard ships markdown templates under `templates/` that consuming skills read at invocation time — `/decide` reads `agdr.md`, `/write-spec` reads `prd.md`, `/c4` reads `architecture/c4-context.md` and `architecture/c4-container.md`, `/migration` reads `agdr-migration.md`, `/spike` reads `spike.md`, `/investigation` reads `investigation.md`, `/handover` reads `architecture/c4-container.md`. The full inventory is in [`CLAUDE.md` § "Templates"](../CLAUDE.md).
 
 ## Adopter overrides — the `custom-templates/` layer
 
@@ -12,6 +12,7 @@ Every framework template can be overridden by an adopter-authored version. The o
 | `templates/agdr.md` | `<private_repo>/custom-templates/agdr.md` |
 | `templates/agdr-migration.md` | `<private_repo>/custom-templates/agdr-migration.md` |
 | `templates/spike.md` | `<private_repo>/custom-templates/spike.md` |
+| `templates/investigation.md` | `<private_repo>/custom-templates/investigation.md` |
 | `templates/architecture/c4-context.md` | `<private_repo>/custom-templates/architecture/c4-context.md` |
 | `templates/architecture/c4-container.md` | `<private_repo>/custom-templates/architecture/c4-container.md` |
 | `templates/architecture/vision.md` | `<private_repo>/custom-templates/architecture/vision.md` |
