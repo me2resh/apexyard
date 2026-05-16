@@ -187,10 +187,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 43 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 44 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (43)
+### Available skills (44)
 
 | Skill | Purpose |
 |-------|---------|
@@ -224,6 +224,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
 | `/extract-features` | Scan an existing codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and write a consolidated Feature Inventory at `projects/<name>/feature-inventory.md` — the "what we must preserve" spec for a greenfield rewrite. Complements `/handover` (high-level project assessment); `/extract-features` is the granular feature catalogue. |
+| `/process` | Extract a named business process from one or more registered repos (state machines, queue chains, cron, state-column transitions, API choreography, existing BPMN, documented steps), interview only on the gaps, and emit a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Anchor-scoped + cross-repo via `apexyard.projects.yaml`. Sibling to `/extract-features` (feature inventory) and `/c4` (system topology) in the read-first-then-ask family. |
 | `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
 | `/journey` | Generate a single self-contained user-journey HTML — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact. |
 | `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
