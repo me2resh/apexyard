@@ -606,6 +606,7 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/roadmap` | Reads `projects/<name>/roadmap.md`; asks which project if ambiguous |
 | `/stakeholder-update` | Portfolio rollup with a section per project |
 | `/handover` | Writes to `projects/<name>/handover-assessment.md`, appends the project to the registry, and offers (default-no) to clone the project into `workspace/<name>/` for an LSP-aware deep-dive follow-up (`/code-review`, `/threat-model`, `/security-review`). The clone offer surfaces the cost (disk, gitignored status, `ENABLE_LSP_TOOL=1` + per-language plugin install) explicitly. |
+| `/extract-features` | Scans a project's codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and writes a consolidated Feature Inventory at `projects/<name>/feature-inventory.md`. Pairs with `/handover` as the **greenfield-rewrite path** — `/handover` produces the high-level project assessment, `/extract-features` produces the granular "what we must preserve" catalogue. One-off scan, not a recurring audit; re-runs OFFER (default-no) to overwrite. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
