@@ -10,6 +10,8 @@ effort: high
 
 Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy, terms of service, data handling, and user rights. Invoke when `/launch-check`'s compliance row shows WARN or FAIL, or proactively before launching in the EU/UK.
 
+**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md) for data-handling analysis (Step 4).** The DFD's classifications table at `projects/<project>/architecture/dfd.md` is the source of truth for which fields are PII / PCI / secrets, and the DFD's external-services list is the source of truth for cross-border transfers and third-party processors. If the DFD doesn't exist, this skill falls back to its own grep-based discovery (degraded mode — surface in the output banner). See AgDR-0024 for the single-source-of-truth rationale.
+
 ## Compliance Areas
 
 | Area | Regulation | Key requirement |
@@ -46,12 +48,38 @@ Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy,
 - Check for opt-out mechanisms for marketing communications
 - Check if the auth system supports account deactivation
 
-### Step 4: Data handling
+### Step 4: Data handling (DFD-driven)
 
-- Check what PII is stored (names, emails, addresses, phone numbers, payment info)
-- Check if PII is encrypted at rest
-- Check if sensitive data is logged (grep for logging calls that might include user data)
-- Check for data retention policies (is old data cleaned up?)
+**Prefer the DFD when present.** Read the classifications table at `projects/<project>/architecture/dfd.md` § "Data classifications" — that's the canonical view of PII / PCI / secrets across the system, produced by `/dfd`'s three-pathway heuristic walk (annotations + env-var heuristics + schema columns) plus any explicit registry the project ships.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+
+dfd="${projects_dir}/${project_name}/architecture/dfd.md"
+if [ -f "$dfd" ]; then
+  # DFD present — use it as source of truth
+  : # parse the Classifications table + External actors block
+else
+  # Degraded mode — surface in output banner, fall back to grep walk
+  : # legacy independent scan
+fi
+```
+
+From the DFD's classifications + flows, derive:
+
+- **What PII is stored** — every row labelled `pii` in the classifications table
+- **What PCI data crosses the system** — every row labelled `pci` (any presence triggers stricter retention + encryption rules)
+- **Where secrets live** — every row labelled `secrets` (env vars + schema columns) — confirm they're loaded from a secrets manager, not committed
+- **Cross-border transfers** — every External Service actor + its inferred region (Stripe-US, SendGrid-US, Auth0-US, Cognito-region-dependent, etc.) — flag if any PII flow lands on a non-EU vendor without a Standard Contractual Clause
+- **Third-party processors** — every External Service is a candidate Data Processing Agreement (DPA) requirement
+
+Then complement with the inline checks (still needed regardless of DFD source):
+
+- Check if PII is encrypted at rest (DB encryption flag / column-level encryption)
+- Check if sensitive data is logged (grep for logging calls that might include user data — the DFD lists the fields; this step verifies they're not in logs)
+- Check for data retention policies (is old data cleaned up? — usually only in cron specs or DB triggers)
 
 ### Step 5: Output findings
 

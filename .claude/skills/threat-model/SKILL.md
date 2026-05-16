@@ -10,6 +10,8 @@ effort: high
 
 Deep-dive security analysis using the STRIDE framework. Produces a prioritized threat catalogue with mitigations. This is the expert companion to `/launch-check`'s security row — invoke it when security shows WARN or FAIL, or proactively before any launch.
 
+**Consumes the DFD produced by [`/dfd`](../dfd/SKILL.md).** The Data Flow Diagram at `projects/<project>/architecture/dfd.md` is the source of truth; this skill iterates its trust-boundary crossings rather than rebuilding its own data-flow view. If the DFD doesn't exist, this skill OFFERS to run `/dfd` first (see Step 1). See AgDR-0024 for the single-source-of-truth rationale.
+
 ## LSP-aware (optional, recommended)
 
 This skill performs semantic code navigation — finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`), queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP, the skill falls back to grep + Read transparently — no new failure mode, just optional speed.
@@ -29,16 +31,42 @@ Per-language LSP plugins live in Claude Code's marketplace. Install once; the sk
 
 ## Process
 
-### Step 1: Map the attack surface
+### Step 1: Read the DFD (source of truth)
 
-**Populate the Data Flow Diagram first** in this run's per-run artefact (per `templates/audits/threat-model.md` § Data Flow Diagram) — replace the Mermaid skeleton's placeholders with the system's actual external entities, processes, data stores, and trust boundaries, and label every arrow with the data that crosses it. The STRIDE walk in Step 2 then iterates the DFD's trust-boundary crossings rather than inventing threats ad-hoc.
+The DFD is produced by [`/dfd`](../dfd/SKILL.md) and lives at `projects/<project>/architecture/dfd.md` — this is the **source of truth**. This skill consumes it; it does NOT regenerate it. The STRIDE walk in Step 2 iterates the DFD's trust-boundary crossings (the table in `dfd.md` § "Trust boundaries") rather than inventing threats ad-hoc.
 
-Read the codebase and identify:
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
 
-- **Entry points**: API routes, form handlers, WebSocket endpoints, file upload handlers
-- **Data stores**: databases, caches, file systems, environment variables
-- **External integrations**: third-party APIs, payment processors, email services, auth providers
-- **Trust boundaries**: client ↔ server, server ↔ database, server ↔ external API
+dfd="${projects_dir}/${project_name}/architecture/dfd.md"
+if [ ! -f "$dfd" ]; then
+  # DFD missing — offer to run /dfd first
+  cat <<MSG
+This project has no DFD at $dfd.
+
+A STRIDE walk without a DFD is reactive — threats get invented per
+entry point rather than enumerated per trust-boundary crossing.
+
+Run /dfd ${project_name} first to produce the canonical DFD, then
+re-run /threat-model.
+
+Continue without the DFD? [y/N]
+MSG
+fi
+```
+
+If the operator declines to run `/dfd` first, fall back to inline discovery (the legacy behaviour preserved below for backwards compat). Surface this as a degraded mode in the output banner so the report's quality is visible.
+
+For the legacy fallback (or in addition to the DFD), the per-run artefact still includes a DFD section per `templates/audits/threat-model.md` — but when `dfd.md` exists, the artefact references it by path rather than re-rendering the Mermaid.
+
+The DFD's structured elements feed Step 2:
+
+- **Entry points** — every external actor → process arrow in the DFD is an entry point
+- **Data stores** — every store node in the DFD
+- **External integrations** — every external-service actor in the DFD
+- **Trust boundaries** — every dashed subgraph border in the DFD; the per-boundary auth + classification table in `dfd.md` is the STRIDE worksheet
 
 ### Step 2: Apply STRIDE to each entry point
 
