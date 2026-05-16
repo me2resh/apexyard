@@ -36,6 +36,8 @@
 #   ideas_backlog → ./projects/ideas-backlog.md
 #   onboarding    → ./onboarding.yaml
 #   workspace_dir → ./workspace
+#   custom_skills_dir    → ./custom-skills      (split-portfolio v2 + #243)
+#   custom_handbooks_dir → ./custom-handbooks   (split-portfolio v2 + #243)
 #
 # Caching: results cached per-process in shell vars to avoid repeat jq
 # calls. Same pattern as _CONFIG_CACHE in _lib-read-config.sh.
@@ -212,6 +214,53 @@ portfolio_workspace_dir() {
 }
 
 # ------------------------------------------------------------------------------
+# Public: portfolio_custom_skills_dir
+#   Resolves the path to the company-private custom-skills directory. In
+#   single-fork mode this defaults to an in-fork path (rarely used — adopters
+#   can drop a custom skill straight into .claude/skills/<name>/ if they
+#   don't need split-portfolio privacy). In split-portfolio v2 mode this
+#   lives in the private sibling repo (e.g. ../<fork>-portfolio/custom-skills).
+#
+#   The link-custom-skills.sh SessionStart hook reads this path and creates
+#   gitignored symlinks at .claude/skills/<name>/ for each subdirectory it
+#   finds.
+#
+#   Default: ./custom-skills (relative to ops-fork root)
+# ------------------------------------------------------------------------------
+_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=""
+portfolio_custom_skills_dir() {
+  if [ -n "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE" ]; then
+    echo "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE"
+    return 0
+  fi
+  local raw
+  raw=$(_portfolio_get '.portfolio.custom_skills_dir' './custom-skills')
+  _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=$(_portfolio_resolve "$raw")
+  echo "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE"
+}
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_custom_handbooks_dir
+#   Resolves the path to the company-private custom-handbooks directory.
+#   Same shape as portfolio_custom_skills_dir but for adopter coding
+#   standards (the Rex agent reads this path as a second discovery source
+#   beyond the public-fork's handbooks/ tree).
+#
+#   Default: ./custom-handbooks (relative to ops-fork root)
+# ------------------------------------------------------------------------------
+_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=""
+portfolio_custom_handbooks_dir() {
+  if [ -n "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE" ]; then
+    echo "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE"
+    return 0
+  fi
+  local raw
+  raw=$(_portfolio_get '.portfolio.custom_handbooks_dir' './custom-handbooks')
+  _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=$(_portfolio_resolve "$raw")
+  echo "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE"
+}
+
+# ------------------------------------------------------------------------------
 # Public: portfolio_validate
 #   Sanity-check that resolved paths are actually usable.
 #   On success: prints nothing, returns 0.
@@ -335,6 +384,8 @@ portfolio_clear_cache() {
   _PORTFOLIO_IDEAS_BACKLOG_CACHE=""
   _PORTFOLIO_ONBOARDING_CACHE=""
   _PORTFOLIO_WORKSPACE_DIR_CACHE=""
+  _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=""
+  _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=""
 }
 
 # ------------------------------------------------------------------------------

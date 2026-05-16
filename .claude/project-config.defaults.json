@@ -137,11 +137,13 @@
   ],
 
   "portfolio": {
-    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog + onboarding config + workspace dir. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing the .apexyard-fork marker, or the legacy onboarding.yaml + apexyard.projects.yaml pair). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md. The `onboarding` and `workspace_dir` keys were added in framework #242 (split-portfolio v2) — see docs/multi-project.md § 'Split-portfolio mode'.",
+    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog + onboarding config + workspace dir + private custom skills/handbooks. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing the .apexyard-fork marker, or the legacy onboarding.yaml + apexyard.projects.yaml pair). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md. The `onboarding` and `workspace_dir` keys were added in framework #242 (split-portfolio v2). The `custom_skills_dir` and `custom_handbooks_dir` keys were added in framework #243 — see docs/multi-project.md § 'Private custom skills + handbooks'.",
     "registry": "./apexyard.projects.yaml",
     "projects_dir": "./projects",
     "ideas_backlog": "./projects/ideas-backlog.md",
     "onboarding": "./onboarding.yaml",
-    "workspace_dir": "./workspace"
+    "workspace_dir": "./workspace",
+    "custom_skills_dir": "./custom-skills",
+    "custom_handbooks_dir": "./custom-handbooks"
   }
 }

@@ -13,3 +13,17 @@
 # must not be double-tracked from the ops repo.
 workspace/*/
 !workspace/README.md
+
+# Backups of framework skills that were overridden by an adopter's
+# private custom skill (link-custom-skills.sh moves the framework version
+# aside as <skill-name>.framework.bak so the symlink can take its place).
+# These are per-machine artefacts; never committed.
+.claude/skills/*.framework.bak/
+
+# Symlinks at .claude/skills/<name>/ created by link-custom-skills.sh
+# pointing into the private sibling repo's custom-skills/ are NOT covered
+# by a globbed gitignore (we can't predict adopter skill names without
+# clobbering framework skill names). The hook never stages them, and
+# `git status` shows them as untracked symlinks — leave them alone.
+# If you absolutely want to suppress the untracked-symlink line, add the
+# specific name to .git/info/exclude on each clone.

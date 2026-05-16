@@ -6,6 +6,8 @@ This is the place to encode the rules your team would otherwise enforce by Slack
 
 Decision rationale: [`docs/agdr/AgDR-0020-adopter-handbooks-for-rex.md`](../docs/agdr/AgDR-0020-adopter-handbooks-for-rex.md).
 
+> **Two layers, same convention.** This `handbooks/` tree lives in the public ops fork — handbooks here are safe to publish on a public framework fork. Split-portfolio adopters who want company-confidential handbooks (naming internal systems, referring to proprietary policy, etc.) can additionally drop them at `<private_repo>/custom-handbooks/{architecture,general,language/<lang>}/*.md`. Rex discovers both layers using the **same path-convention** described below and applies findings from both. Resolution helper: `portfolio_custom_handbooks_dir` in `.claude/hooks/_lib-portfolio-paths.sh`. Setup pointer: `docs/multi-project.md` § "Private custom skills + handbooks". Single-fork adopters typically only use this `handbooks/` tree.
+
 ## Discovery
 
 Rex finds handbooks by **path convention** — there is no YAML frontmatter, no `applies_to:` glob to maintain. The directory IS the targeting metadata.

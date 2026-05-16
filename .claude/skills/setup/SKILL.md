@@ -112,6 +112,8 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    - empty `projects/` dir (with a `.gitkeep` so the dir survives the initial commit)
    - empty `workspace/` dir (with a `.gitkeep`) — managed-project clones land here
    - **`onboarding.yaml`** seeded from the framework template — split-portfolio v2 (#242) moves company/team/stack config to the private repo too, so the public fork stays slim
+   - empty **`custom-skills/`** dir + a one-paragraph `custom-skills/README.md` explaining the convention. Company-specific proprietary skills (`/file-internal-bug`, `/check-policy`, etc.) live as `custom-skills/<name>/SKILL.md` here; the public fork's `link-custom-skills.sh` SessionStart hook symlinks each into `.claude/skills/<name>/` so Claude Code discovers them. Custom skill names override framework skills of the same name (warning printed at SessionStart). See `docs/multi-project.md` § "Private custom skills + handbooks" for the full convention. (Added in #243.)
+   - empty **`custom-handbooks/`** dir + a one-paragraph `custom-handbooks/README.md` explaining the convention. Company-confidential coding standards live as `custom-handbooks/{architecture,general,language/<lang>}/*.md` here, mirroring the public `handbooks/` path-convention. Rex consumes both layers during code review (advisory by default, blocking with `ENFORCEMENT: blocking` at the top of the file). See `handbooks/README.md` for the format. (Added in #243.)
    - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
    - initial commit + push
 6. **Configure path resolution in the fork** (recommended — v2 config-block mode):
@@ -126,10 +128,14 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
          "projects_dir": "../apexyard-portfolio/projects",
          "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md",
          "onboarding": "../apexyard-portfolio/onboarding.yaml",
-         "workspace_dir": "../apexyard-portfolio/workspace"
+         "workspace_dir": "../apexyard-portfolio/workspace",
+         "custom_skills_dir": "../apexyard-portfolio/custom-skills",
+         "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks"
        }
      }
      ```
+
+     The two `custom_*_dir` keys are optional — defaults match `./custom-skills` and `./custom-handbooks` resolved against the ops-fork root. Setting them explicitly here is the v2 split-portfolio shape and matches what step 5 just created in the private repo.
 
    - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). **Spec: presence-only — readers MUST ignore content; only file presence matters.** Writers MAY include a single explanatory line so `head .apexyard-fork` is informative for operators encountering it the first time. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B for the rationale.
 

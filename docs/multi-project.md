@@ -425,6 +425,81 @@ You'll never need to manage session-state files by hand. If you ever see a "BLOC
 
 In exchange, **zero of your private project names ever land on a public GitHub repo**, ever.
 
+### Private custom skills + handbooks
+
+Split-portfolio mode also houses two layers of company-specific customisation that wouldn't be safe to publish on the public fork (introduced in framework #243):
+
+| Layer | Where in the private repo | What lives here |
+| --- | --- | --- |
+| **Custom skills** | `<private_repo>/custom-skills/<name>/SKILL.md` | Company-specific proprietary slash commands — `/file-internal-bug` against your internal tracker, `/check-policy` against a private compliance corpus, `/escalate-to-pagerduty`, etc. |
+| **Custom handbooks** | `<private_repo>/custom-handbooks/{architecture,general,language/<lang>}/*.md` | Company-confidential coding standards that name internal systems, refer to proprietary policy, or otherwise don't belong on a public repo. Same path-convention as the public `handbooks/` tree. |
+
+#### How discovery works
+
+- **Custom skills** — Claude Code discovers skills by walking `.claude/skills/<name>/SKILL.md` in the active fork. We don't control that glob path. The `link-custom-skills.sh` SessionStart hook fixes that gap: on every session start it iterates `<private_repo>/custom-skills/<name>/`, and for each subdirectory containing a `SKILL.md` it creates a gitignored symlink at `.claude/skills/<name>/` pointing into the private dir. Claude Code then sees the skill transparently. **Custom skills with the same name as a framework skill win** — the hook moves the framework version to `.claude/skills/<name>.framework.bak/` (gitignored) and prints a one-line warning at SessionStart so the override is visible. **Windows is not supported in v1**; the hook prints a one-line manual-install pointer and skips. Same shape as the LSP install on Windows.
+- **Custom handbooks** — Rex's agent prompt (`.claude/agents/code-reviewer.md` § 8) gains a second discovery path. The `portfolio_custom_handbooks_dir` resolver in `_lib-portfolio-paths.sh` returns the private dir; Rex globs both the public `handbooks/` tree AND the private one using the same architecture/general/language convention. No symlinks involved — handbooks aren't discovered by Claude Code, only by Rex's prompt, so a second glob is enough. Per-handbook precedence on overlapping topics: **Rex applies BOTH layers** and cites both when relevant; conflict resolution is the operator's responsibility (write it as prose in the custom handbook).
+
+#### Setup
+
+`/setup --split-portfolio` (or step 5 of the manual setup above) creates the two empty dirs in the private repo with a one-paragraph README explaining the convention. The two new keys go in your config block alongside the existing v2 keys:
+
+```json
+{
+  "portfolio": {
+    "registry":             "../apexyard-portfolio/apexyard.projects.yaml",
+    "projects_dir":         "../apexyard-portfolio/projects",
+    "ideas_backlog":        "../apexyard-portfolio/projects/ideas-backlog.md",
+    "onboarding":           "../apexyard-portfolio/onboarding.yaml",
+    "workspace_dir":        "../apexyard-portfolio/workspace",
+    "custom_skills_dir":    "../apexyard-portfolio/custom-skills",
+    "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks"
+  }
+}
+```
+
+The two `custom_*_dir` keys are optional — defaults resolve to `./custom-skills` and `./custom-handbooks` against the ops-fork root. For split-portfolio adopters, set them explicitly to the sibling repo so the dirs come out of the private layer.
+
+#### Authoring a custom skill
+
+Manual `cp + edit` is fine for v1 — there's no `/custom-skill` authoring helper:
+
+```bash
+cd ~/ops/apexyard-portfolio
+
+# Copy a framework skill as a starting shape (or write from scratch)
+cp -R ~/ops/apexyard/.claude/skills/feature custom-skills/file-internal-bug
+$EDITOR custom-skills/file-internal-bug/SKILL.md   # adjust frontmatter (name, description, argument-hint)
+
+git add custom-skills/file-internal-bug
+git commit -m "feat: add /file-internal-bug for the internal tracker"
+git push
+```
+
+Next session start in the public fork, the `link-custom-skills.sh` SessionStart hook surfaces the new skill as `.claude/skills/file-internal-bug/` and Claude Code starts discovering it.
+
+#### Authoring a custom handbook
+
+Same as the public-handbook convention — copy a sample, edit, commit:
+
+```bash
+cd ~/ops/apexyard-portfolio
+mkdir -p custom-handbooks/architecture
+cp ~/ops/apexyard/handbooks/architecture/clean-architecture-layers.md custom-handbooks/architecture/internal-pii-handling.md
+$EDITOR custom-handbooks/architecture/internal-pii-handling.md   # write the rule
+git add custom-handbooks/architecture/internal-pii-handling.md
+git commit -m "docs: handbook on internal PII handling"
+```
+
+Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/custom-handbooks/architecture/*.md` and applies findings from both. Add `ENFORCEMENT: blocking` at the top of the file to opt the rule into REQUEST CHANGES verdicts; default is advisory.
+
+#### Out of scope (v1)
+
+- **Per-team / per-project handbook overrides.** Still framework-level only — handbooks travel with the ops fork (and the private layer for split-portfolio adopters). File a separate ticket if multi-team adopters need this.
+- **Encryption on top of gitignore for the private custom dirs.** They're inside a private GitHub repo; the gitignore on the public fork is the boundary.
+- **Distribution to other organisations.** Custom skills + handbooks are private to one org by design — sharing across orgs is what the public framework + handbooks layer is for.
+- **A `/custom-skill` authoring helper.** Manual `cp framework-skill custom-skills/...` + edit is fine for v1.
+- **Multi-version handbook conflict resolution.** Operator's prose responsibility.
+
 ### Migrating from split-portfolio v1 to v2
 
 If you adopted split-portfolio mode before framework #242, your fork is on the v1 layout: `apexyard.projects.yaml` and `projects/` resolve to the sibling private repo (good), but `onboarding.yaml` and `workspace/` are still in the public fork. The v2 migration moves both to the private repo too, and writes the new `.apexyard-fork` anchor.

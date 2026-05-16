@@ -566,6 +566,81 @@ if [ -z "$r" ] && [ "$rc" -ne 0 ]; then exit 0; else echo "got=$r rc=$rc"; exit 
 '
 rm -rf "$SB"
 
+
+# Case 21 (#243): portfolio_custom_skills_dir defaults to in-fork path
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2/#243: portfolio_custom_skills_dir defaults to in-fork ./custom-skills" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SB"'/custom-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 22 (#243): portfolio_custom_handbooks_dir defaults to in-fork path
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2/#243: portfolio_custom_handbooks_dir defaults to in-fork ./custom-handbooks" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SB"'/custom-handbooks"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 23 (#243): explicit overrides for the new keys win (split-portfolio v2 mode)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/custom-skills" "$SIB/custom-handbooks"
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "custom_skills_dir": "$SIB/custom-skills",
+    "custom_handbooks_dir": "$SIB/custom-handbooks"
+  }
+}
+JSON
+run_case "v2/#243: portfolio_custom_skills_dir override → sibling repo path" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SIB"'/custom-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2/#243: portfolio_custom_handbooks_dir override → sibling repo path" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SIB"'/custom-handbooks"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 24 (#243): relative override resolves against fork root
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/elsewhere-skills" "$SB/elsewhere-hb"
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "custom_skills_dir": "./elsewhere-skills",
+    "custom_handbooks_dir": "./elsewhere-hb"
+  }
+}
+JSON
+run_case "v2/#243: relative-override custom_skills_dir resolves against fork root" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SB"'/elsewhere-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2/#243: relative-override custom_handbooks_dir resolves against fork root" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SB"'/elsewhere-hb"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
