@@ -215,7 +215,7 @@ WS_KEY=$(jq -r '.portfolio.workspace_dir // empty' "$SB/public/.claude/project-c
 
 # Validate the post-state
 (
-  cd "$SB/public"
+  cd "$SB/public" || exit 1
   # shellcheck source=/dev/null
   . .claude/hooks/_lib-read-config.sh
   # shellcheck source=/dev/null
