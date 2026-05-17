@@ -497,6 +497,30 @@ main {
       </header>
       <p class="skill__desc">File 5–20 structured GitHub Issues in one flow. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket. Output conforms to <code>.ticket.required_sections</code> by construction.</p>
     </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/spike</code>
+        <code class="skill__args">&lt;short title&gt;</code>
+      </header>
+      <p class="skill__desc">Create a hypothesis-driven, time-boxed, throw-away spike ticket — Hypothesis, Budget, Kill Criteria, Disposition. Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/spike-close</code>
+        <code class="skill__args">&lt;ticket&gt; --promote | --discard</code>
+      </header>
+      <p class="skill__desc">Disposition gate for spikes. <code>--promote</code> files a follow-up <code>[Feature]</code> ticket with cross-references; <code>--discard</code> writes a memo to <code>docs/spike-memos/&lt;slug&gt;.md</code>. Closing without running this gate leaves no record of what was learned.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/investigation</code>
+        <code class="skill__args">&lt;short title&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured investigation ticket + live-doc for sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries, competitive analyses. Distinct from <code>/spike</code> (forward-looking hypothesis with a budget) and <code>/bug</code> (immediate-fix). Closes when every follow-up action lands, not on PR merge.</p>
+    </article>
   </section>
 
   <section class="section" id="specs">
@@ -517,6 +541,14 @@ main {
         <code class="skill__args">&lt;what you're deciding&gt;</code>
       </header>
       <p class="skill__desc">Make a technical decision with structured reasoning, creating an Agent Decision Record (AgDR). Use when choosing between libraries, frameworks, implementation approaches, or architectural patterns.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/agdr</code>
+        <code class="skill__args">browse | search &lt;term&gt; | show &lt;id&gt; | stats</code>
+      </header>
+      <p class="skill__desc">Searchable, categorised library of Agent Decision Records across the portfolio. Walks the registry, reads each project's <code>docs/agdr/*.md</code>, parses YAML frontmatter, answers "have we decided this before?" without grepping every project.</p>
     </article>
   </section>
 
@@ -583,6 +615,46 @@ main {
         <code class="skill__args">[symptom summary]</code>
       </header>
       <p class="skill__desc">Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/dfd</code>
+        <code class="skill__args">[project-name | . | --scope-all] [--format=mermaid|dragon|all]</code>
+      </header>
+      <p class="skill__desc">Extract a Data Flow Diagram from a codebase with trust boundaries and data classifications. Writes Mermaid markdown (renders on GitHub) as the canonical source-of-truth that <code>/threat-model</code> and <code>/compliance-check</code> consume. OWASP Threat Dragon v2 JSON available via <code>--format=dragon</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/process</code>
+        <code class="skill__args">&lt;process-slug&gt; [--from-endpoint METHOD /path] [--from-machine ClassName] [--scope dir/]</code>
+      </header>
+      <p class="skill__desc">Extract the business process actually implemented by one or more registered repos (state machines, queue chains, cron, state-column transitions, API choreography, existing BPMN, documented steps), interview only on the gaps, then emit a lint-clean BPMN 2.0 file that opens in Camunda Modeler.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/tech-vision</code>
+        <code class="skill__args">[project-slug | . | --framework]</code>
+      </header>
+      <p class="skill__desc">Interactive section-by-section author for the technical / architecture vision template — Scope, Principles, Target-state, Current-vs-Target gap table, multi-quarter Migration path, explicit Anti-scope, Review cadence. Writes <code>projects/&lt;name&gt;/architecture/vision.md</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/journey</code>
+        <code class="skill__args">&lt;feature-slug&gt; [--from-prd &lt;path&gt;]</code>
+      </header>
+      <p class="skill__desc">Generate a single self-contained HTML user-journey map — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact, surfacing flow-level logic gaps before any implementation begins.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/extract-features</code>
+        <code class="skill__args">[project-name | .]</code>
+      </header>
+      <p class="skill__desc">Scan an existing codebase and produce a structured Feature Inventory — six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) consolidated into a "what we must preserve" specification suitable for a greenfield rewrite.</p>
     </article>
   </section>
 
@@ -724,7 +796,7 @@ main {
   </section>
 
   <footer class="footer">
-    <a href="index.html">← apexyard.dev</a>
+    <a href="index.html">← yard.apexscript.com</a>
     <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github</a>
     <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog</a>
     <a href="https://github.com/me2resh/apexyard/tree/main/.claude/skills" target="_blank" rel="noopener">skill source</a>
