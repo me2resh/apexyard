@@ -64,7 +64,7 @@ Open the JSON in Threat Dragon (`File → Open Existing Threat Model`). Dragon's
 
 ## Process
 
-### Step 1: Read the DFD (source of truth)
+### Step 1: Read the DFD (source of truth) — refuse if absent
 
 The DFD is produced by [`/dfd`](../dfd/SKILL.md) and lives at `projects/<project>/architecture/dfd.md` — this is the **source of truth**. This skill consumes it; it does NOT regenerate it. The STRIDE walk in Step 2 iterates the DFD's trust-boundary crossings (the table in `dfd.md` § "Trust boundaries") rather than inventing threats ad-hoc.
 
@@ -75,24 +75,22 @@ projects_dir=$(portfolio_projects_dir)
 
 dfd="${projects_dir}/${project_name}/architecture/dfd.md"
 if [ ! -f "$dfd" ]; then
-  # DFD missing — offer to run /dfd first
-  cat <<MSG
-This project has no DFD at $dfd.
+  cat >&2 <<MSG
+BLOCKED: /threat-model requires a DFD at $dfd.
 
 A STRIDE walk without a DFD is reactive — threats get invented per
-entry point rather than enumerated per trust-boundary crossing.
+entry point rather than enumerated per trust-boundary crossing. Worse,
+without a DFD snapshot inlined at audit time, future readers can't tell
+which architecture the threat model was enumerated against (#270).
 
 Run /dfd ${project_name} first to produce the canonical DFD, then
 re-run /threat-model.
-
-Continue without the DFD? [y/N]
 MSG
+  exit 1
 fi
 ```
 
-If the operator declines to run `/dfd` first, fall back to inline discovery (the legacy behaviour preserved below for backwards compat). Surface this as a degraded mode in the output banner so the report's quality is visible.
-
-For the legacy fallback (or in addition to the DFD), the per-run artefact still includes a DFD section per `templates/audits/threat-model.md` — but when `dfd.md` exists, the artefact references it by path rather than re-rendering the Mermaid.
+**Refusal (not fallback) is deliberate (#270).** The audit artefact embeds a DFD snapshot at audit time so the threat model remains internally consistent after the live DFD evolves. A threat model authored without a DFD has no anchor; the legacy "inline discovery" fallback that preceded #270 silently produced low-quality artefacts whose threats couldn't be re-validated later. Better to fail fast.
 
 The DFD's structured elements feed Step 2:
 
@@ -100,6 +98,40 @@ The DFD's structured elements feed Step 2:
 - **Data stores** — every store node in the DFD
 - **External integrations** — every external-service actor in the DFD
 - **Trust boundaries** — every dashed subgraph border in the DFD; the per-boundary auth + classification table in `dfd.md` is the STRIDE worksheet
+
+### Step 1b: Extract DFD sections for snapshot inlining
+
+The threat-model audit output will inline three sections from `dfd.md` so the artefact is self-contained. Extract them now into separate variables so they can be embedded in the Step 5b body:
+
+```bash
+# Extract the ```mermaid ... ``` fenced block under `## Diagram`
+dfd_mermaid=$(awk '
+  /^## Diagram/        { in_diagram = 1; next }
+  /^## /               { if (in_diagram) exit }
+  in_diagram           { print }
+' "$dfd")
+
+# Extract the `## Trust boundaries` section (heading + body, up to next `## `)
+dfd_trust=$(awk '
+  /^## Trust boundaries/  { capture = 1 }
+  /^## / && !/^## Trust/  { if (capture && NR > 1) exit }
+  capture                 { print }
+' "$dfd")
+
+# Extract the `## Data classifications` section
+dfd_classifications=$(awk '
+  /^## Data classifications/ { capture = 1 }
+  /^## / && !/^## Data classifications/ { if (capture && NR > 1) exit }
+  capture                    { print }
+' "$dfd")
+
+# Discovery provenance is intentionally NOT extracted — too noisy for an
+# audit snapshot. Readers click through to the live DFD for that.
+
+dfd_captured_at=$(date -u +"%Y-%m-%d")
+```
+
+These three blocks become the `## DFD (snapshot as of YYYY-MM-DD)` section at the top of the audit body in Step 5b.
 
 ### Step 2: Apply STRIDE to each entry point
 
@@ -185,8 +217,28 @@ payload=$(mktemp); cat > "$payload" <<'EOF'
 }
 EOF
 
-# Body = the catalogue table + OWASP cross-check (per templates/audits/threat-model.md).
-body=$(mktemp); cat > "$body" <<'EOF'
+# Body = DFD snapshot + catalogue + OWASP cross-check (per templates/audits/threat-model.md).
+# The DFD snapshot (#270) sits at the top so readers see the architecture
+# this threat model was enumerated against BEFORE the threats themselves.
+# Use a heredoc-with-expansion (no quotes around 'EOF') so the captured
+# variables from Step 1b interpolate.
+body=$(mktemp); cat > "$body" <<EOF
+## DFD (snapshot as of ${dfd_captured_at})
+
+> **Point-in-time capture.** This is the DFD as it was when this threat model
+> was enumerated. The live DFD evolves at \`${dfd}\` — re-run \`/threat-model\`
+> to refresh against current architecture. Future runs of this audit will
+> snapshot the DFD as-it-was-then, not as-it-is-now.
+
+\`\`\`mermaid
+${dfd_mermaid}\`\`\`
+
+${dfd_trust}
+
+${dfd_classifications}
+
+---
+
 ## Attack surface
 
 3 entry points, 1 data store, 0 external integrations.
@@ -214,6 +266,18 @@ ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 audit_run_persist "<project-name>" "threat-model" "$ts" "fail" 65 "$body" < "$payload"
 rm -f "$payload" "$body"
 ```
+
+After persistence, lint the inlined Mermaid (#266) to catch any DFD-syntax breakage that would render badly on GitHub:
+
+```bash
+# The audit_run_persist writes to projects/<name>/audits/threat-model/<ts>.md.
+# Resolve the path the lib used and run the shared Mermaid lint.
+audit_md="$(audit_resolve_dir "<project-name>" "threat-model")/${ts//:/}.md"
+ops_root="$(git rev-parse --show-toplevel)"
+"$ops_root/.claude/skills/_lib-mermaid-lint.sh" "$audit_md" || lint_rc=$?
+```
+
+Exit 1 (parse error in the snapshotted block) → the DFD itself has broken Mermaid; surface that and ask the operator to fix the live DFD before re-running. Exit 3 (Node missing) → one-line warning, proceed. The snapshot's lint passes whenever the live DFD's lint passes — same parser, same input.
 
 #### 5c. Render the trend section
 
@@ -335,3 +399,13 @@ The lib re-evaluates the marker on every persist; the operator can toggle freely
 5. **Always persist.** Step 5 always writes a JSON + MD pair via `audit_run_persist`, regardless of opt-in commit state. The marker only controls whether the JSON is committed; persistence is unconditional so the trend is visible across runs.
 6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical` / `high` / `medium` / `low` / `info`. The human-readable Step 3 table can use whatever capitalisation reads best.
 7. **Default output is unchanged.** `--format=dragon` and `--format=both` are opt-in; the markdown-only path stays default so existing adopters see no behaviour change. See AgDR-0024 for the format-choice rationale.
+8. **No DFD → no threat model (#270).** Refuse rather than fall back to inline discovery. A threat model that wasn't enumerated against a DFD has no point-in-time anchor; future readers can't replay the analysis. The fail-fast behaviour is mechanical (Step 1 `exit 1`), not advisory.
+9. **DFD snapshot is by copy, not by link.** The audit artefact embeds the DFD's Mermaid block + Trust-boundaries table + Data-classifications table inline. This is deliberate (#270) — linking would couple the rendering of historical threat models to whatever the live DFD says today, defeating the audit's point-in-time guarantee. Re-run `/threat-model` to refresh the snapshot.
+10. **Discovery provenance is excluded from the snapshot.** The live DFD's `## Discovery provenance` section (raw axis-by-axis evidence) is too noisy for an audit artefact. Readers click through to the live DFD if they need the provenance trail.
+
+## Anti-patterns
+
+- **Don't link to the live DFD.** Inline copy at audit time. The whole point of the snapshot is that the threat model survives later DFD edits without rotting.
+- **Don't fall back to "inline discovery" when the DFD is missing.** That was the pre-#270 behaviour; it produced low-quality artefacts that couldn't be re-validated later. Refuse instead.
+- **Don't extract from `dfd.md` programmatically beyond the three sections named in Step 1b.** The contract is: Mermaid block + trust boundaries + classifications. Adding more (e.g. provenance) bloats the artefact; adding less breaks the audit's self-containment.
+- **Don't skip the Mermaid lint after persistence.** If the live DFD has broken Mermaid, the snapshot inherits it. Surfacing that here is cheaper than discovering it on GitHub.
