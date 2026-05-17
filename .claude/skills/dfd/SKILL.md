@@ -191,6 +191,19 @@ Schema reference: [OWASP Threat Dragon repository](https://github.com/OWASP/thre
 
 #### 5c. Cross-repo composition (on `--scope-all`)
 
+### Mermaid lint gate (after every write)
+
+After every `dfd.md` write, run `lint.sh` against the output file. The lint wraps the shared `_lib-mermaid-lint.sh` — extracts the `` ```mermaid `` flowchart block and validates via `mmdc` so broken trust-boundary diagrams are caught at write time, not when a human opens the file on GitHub. Graceful-degrades when Node / npx is unavailable (exit 3, advisory only).
+
+```bash
+SKILL_DIR="$(dirname "$(realpath "$0")")"
+"$SKILL_DIR/lint.sh" "$dfd_out" || lint_rc=$?
+```
+
+Exit 1 (parse error) → print the lint output and ask the operator whether to regenerate the diagram block, fix by hand, or re-run with `--skip-lint`. Exit 3 (Node missing) → one-line warning, proceed.
+
+---
+
 For each registered project, run discovery → render per-service sub-model. Compose by:
 
 1. Each service becomes a **dashed trust-boundary subgraph** in the composed Mermaid

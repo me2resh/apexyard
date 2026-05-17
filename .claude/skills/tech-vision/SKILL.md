@@ -156,9 +156,18 @@ Vision assembled — {N} sections, {M} principles, {K} anti-scope items, {Q} mig
 > 
 ```
 
-### 5. Write the file
+### 5. Write the file + lint the Mermaid
 
-Write the assembled markdown to the resolved output path. End the file with the apexyard-skill footer convention (same as `/c4`, `/dfd`, `/extract-features`):
+Write the assembled markdown to the resolved output path. The Target-state section may contain a `` ```mermaid `` C4 L1 block (pasted by the operator or generated via `/c4`). Validate every Mermaid block in the file via the shared lint:
+
+```bash
+SKILL_DIR="$(dirname "$(realpath "$0")")"
+"$SKILL_DIR/lint.sh" "$vision_out" || lint_rc=$?
+```
+
+Wraps `_lib-mermaid-lint.sh` — graceful-degrades when Node / npx is unavailable (exit 3, advisory only). Exit 1 (parse error) → ask the operator whether to fix the Target-state block by hand or re-run with `--skip-lint`. Exit 3 → one-line warning, proceed.
+
+End the file with the apexyard-skill footer convention (same as `/c4`, `/dfd`, `/extract-features`):
 
 ```markdown
 ---
