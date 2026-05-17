@@ -44,6 +44,24 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Process
 
+### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+
+Before doing anything else, write this skill's name to the active-issue-skill marker so the `require-skill-for-issue-create.sh` hook lets your `gh issue create` (or other configured tracker CLI) through. Run from any bash block at skill entry:
+
+```bash
+ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+mkdir -p "$ops_root/.claude/session"
+echo "migration" > "$ops_root/.claude/session/active-issue-skill"
+```
+
+Remove the marker on **every** exit path (success, early-exit, user cancel, error):
+
+```bash
+rm -f "$ops_root/.claude/session/active-issue-skill"
+```
+
+The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from killed sessions, but a clean exit should never leave one behind. See AgDR-0030.
+
 ### 1. Resolve the target project
 
 If the user passed `<project>`, use that. Otherwise:
