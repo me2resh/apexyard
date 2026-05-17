@@ -29,6 +29,15 @@
       "handover",
       "update",
       "split-portfolio"
+    ],
+    "_create_command_patterns_comment": "Raw ticket-create CLI shapes that require-skill-for-issue-create.sh blocks unless a structured ticket skill (/task, /feature, /bug, /spike, /migration, /investigation, /idea) is in flight (marker at .claude/session/active-issue-skill). Tracker-agnostic: extend this list in .claude/project-config.json for Linear, Jira, Asana, or custom trackers. Patterns are matched as substrings of the (whitespace-collapsed) bash command. See AgDR-0030 and me2resh/apexyard#268.",
+    "create_command_patterns": [
+      "gh issue create",
+      "gh api repos/",
+      "linear issue create",
+      "jira issue create",
+      "jira create",
+      "asana task create"
     ]
   },
 

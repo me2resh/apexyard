@@ -115,3 +115,30 @@ Both hooks block at the moment the fabricated reference would be committed to a 
 Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response — which is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision wouldn't happen in the first place.
 
 For adversarial trust beyond self-discipline, rely on GitHub branch protection, CODEOWNERS, and required status checks — those are a separate layer this rule does not replace.
+
+## Skill-gated ticket-create (multi-tracker)
+
+The structured ticket skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) are the **only supported origin** for new tickets — the agent should not call raw `gh issue create` (or any tracker-CLI equivalent) free-hand. This is enforced mechanically by `require-skill-for-issue-create.sh` (PreToolUse:Bash, introduced me2resh/apexyard#268, AgDR-0030), which blocks any command matching the configured CLI-shape list unless one of the seven ticket skills is in flight (marker file at `.claude/session/active-issue-skill`).
+
+**Multi-tracker adopters** (Linear / Jira / Asana / custom): the matcher list lives at `.claude/project-config.defaults.json` → `ticket.create_command_patterns`. Defaults cover GitHub (`gh issue create`, `gh api repos/`), Linear (`linear issue create`), Jira (`jira issue create`, `jira create`), and Asana (`asana task create`). To add patterns for your tracker, extend the list via shallow-merge in `.claude/project-config.json`:
+
+```json
+{
+  "ticket": {
+    "bootstrap_skills": ["setup", "handover", "update", "split-portfolio"],
+    "create_command_patterns": [
+      "gh issue create",
+      "gh api repos/",
+      "linear issue create",
+      "jira issue create",
+      "jira create",
+      "asana task create",
+      "mycorp-tracker new"
+    ]
+  }
+}
+```
+
+The shallow merge replaces the entire `ticket` subtree, so copy the default fields you still want (e.g. `bootstrap_skills`) when adding your own pattern.
+
+**Emergency bypass** (broken skill, recovery scenario): set `APEXYARD_ALLOW_RAW_TICKET_CREATE=1` for the single command. The hook allows it through with a visible stderr warning. This is per-session by design — there is no permanent-bypass config knob.
