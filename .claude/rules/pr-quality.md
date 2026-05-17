@@ -31,6 +31,15 @@ This prevents merging code that was pushed after the last review.
 
 If the PR touches user-facing UI → design review is required before merge. Mechanically enforced by `require-design-review-for-ui.sh` (blocks merge without a design marker) and the `/approve-design <pr>` skill (writes the marker on explicit designer approval). See `.claude/skills/approve-design/SKILL.md` for the full invocation rules.
 
+**Customising what counts as "UI"** (`.claude/project-config.json`):
+
+| Key | Behaviour | When to use |
+|-----|-----------|-------------|
+| `.ui_paths` | **REPLACE** the default regex list entirely (JSON array of patterns). | Full control over the UI definition; you accept the maintenance cost of keeping the list in sync with framework defaults. |
+| `.ui_paths_exclude` (#275) | **ADDITIVE** carve-out: paths matching any pattern here are removed from the touched-UI set *after* `.ui_paths` matching. | Keep the broad defaults but skip specific dirs where `.jsx`/`.tsx` are doc samples (e.g. `["^docs/examples/", "^wiki/artifacts/"]`) — non-breaking, doesn't drift from upstream. |
+
+Prefer `ui_paths_exclude` for the common case of "the default is right except for these few dirs"; reach for `ui_paths` only when the framework's UI definition genuinely doesn't fit your repo layout.
+
 ## QA Gate Checklist
 
 Before moving a ticket to Done:
