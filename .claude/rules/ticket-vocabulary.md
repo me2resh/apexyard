@@ -107,6 +107,7 @@ This rule is primarily self-discipline. It is also backed up by two mechanical h
 |------|-------|-----------------|
 | `validate-pr-create.sh` | `PreToolUse` on `gh pr create` | PR titles that reference an issue number which doesn't exist in the tracker repo |
 | `verify-commit-refs.sh` | `PreToolUse` on `git commit -m / -F` | Commit messages with `Closes #N` / `Refs #N` / `Fixes #N` / `Resolves #N` pointing at issues that don't exist |
+| `require-skill-for-issue-create.sh` (#268) | `PreToolUse` on `Bash` | Raw ticket-create CLI calls (`gh issue create`, `gh api repos/...`, `linear issue create`, `jira issue create`, `asana task create`, custom) that bypass the structured skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`). Tracker-agnostic — extend the matcher list via `.claude/project-config.json → ticket.create_command_patterns` for Linear, Jira, Asana, or your own tracker. Operator escape hatch: `APEXYARD_ALLOW_RAW_TICKET_CREATE=1`. See AgDR-0030. |
 
 Both hooks block at the moment the fabricated reference would be committed to a durable artifact (PR title, commit message). They cannot see conversation prose — that's why the rule comes first and the hooks are labeled **backstops**, not the primary fix.
 
