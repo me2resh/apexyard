@@ -11,7 +11,7 @@ related: me2resh/apexyard#268, AgDR-0011-bootstrap-skill-exemption.md
 
 ## Context
 
-`validate-issue-structure.sh` (#192) catches *missing prefix / missing sections* in already-drafted ticket bodies. It does **not** catch the upstream failure: the agent skipped the structured-skill interview entirely and drafted a body free-hand. me2resh/apexyard#265 and #266 were both filed via raw `gh issue create` because the interactive skills "felt heavy for context the operator had already provided" — exactly the silent-bypass-for-throughput failure mode the [Invoke matching skills](MEMORY) feedback was meant to prevent.
+`validate-issue-structure.sh` (#192) catches *missing prefix / missing sections* in already-drafted ticket bodies. It does **not** catch the upstream failure: the agent skipped the structured-skill interview entirely and drafted a body free-hand. me2resh/apexyard#265 and #266 were both filed via raw `gh issue create` because the interactive skills "felt heavy for context the operator had already provided" — exactly the silent-bypass-for-throughput failure mode the **"Invoke matching skills"** operator-feedback memory was meant to prevent.
 
 The framework is also multi-tracker by design. Per `docs/multi-project.md` § FAQ ("Can I use this with Linear / Jira / etc.?"), adopters set per-project `ticket_prefix` and may use Linear, Jira, Asana, or another tracker. The gate must not bake `gh`/GitHub in as the only CLI shape.
 
