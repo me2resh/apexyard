@@ -7,14 +7,12 @@
 <meta name="description" content="The ApexYard architecture at a glance — five layers (governance, capability, framework defaults, customisation overlay, per-project data) plus the optional split-portfolio private sibling repo. One fork governs every project.">
 <link rel="canonical" href="https://yard.apexscript.com/architecture.html">
 
-<!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/architecture.html">
 <meta property="og:title" content="ApexYard — Architecture">
 <meta property="og:description" content="Five layers in one ops fork — governance, capability, defaults, customisation overlay, per-project data. Plus the optional split-portfolio sibling repo for adopters on GitHub Free.">
 
-<!-- Twitter / X -->
 <meta name="twitter:card" content="summary">
 <meta name="twitter:url" content="https://yard.apexscript.com/architecture.html">
 <meta name="twitter:title" content="ApexYard — Architecture">
@@ -27,11 +25,11 @@
 <style>
 /* ============================================================
    ApexYard — Architecture page
-   Same terminal-native brutalism as the homepage: JetBrains Mono,
-   warm cream paper, single warning-red accent. The diagram (SVG)
-   is recoloured to fit — pastel layer fills become cream-paper
-   tonal contrast; the red accent stamps only on customisation
-   overrides (where its "override" semantic earns its place).
+   Mirrors site/index.html design tokens (terminal-native
+   brutalism — JetBrains Mono, cream paper, single warning-red
+   accent). The diagram uses muted hue-tinted papers per layer
+   for the info-graphic feel — each layer gets a colour that
+   sits on the cream without screaming.
    ============================================================ */
 
 :root {
@@ -46,11 +44,10 @@
   --ink-faint: #877E70;
   --ink-ghost: #B6AD9B;
 
-  /* the single accent — stamps on customisation overrides only */
+  /* the single CSS accent — diagram introduces layer hues, all muted */
   --accent:      #C8321A;
   --accent-soft: #E07050;
 
-  /* hairlines */
   --rule:        #1A1612;
   --rule-faint:  #B6AD9B;
 
@@ -118,7 +115,7 @@ a:hover { color: var(--accent); }
 .kw { color: var(--accent); font-weight: 600; }
 
 /* ============================================================
-   titlebar — same shape as the homepage / skills.html
+   shared titlebar — identical shape + nav set on every page
    ============================================================ */
 .titlebar {
   position: sticky;
@@ -147,11 +144,17 @@ a:hover { color: var(--accent); }
   display: inline-block;
 }
 .titlebar__dot.is-warn { background: var(--accent); border-color: var(--accent); }
-.titlebar__path { color: var(--ink-soft); }
-.titlebar__path b { color: var(--ink); font-weight: 600; }
+.titlebar__path {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+}
+.titlebar__path a { color: inherit; }
+.titlebar__path a:hover { color: var(--accent); }
+.titlebar__path b { color: var(--ink); font-weight: 700; }
 .titlebar__right { display: flex; gap: 1.25rem; align-items: center; font-size: 12px; }
 .titlebar__right a { color: var(--ink-faint); transition: color 0.15s ease; }
 .titlebar__right a:hover { color: var(--accent); }
+.titlebar__right a.is-current { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 2px; pointer-events: none; }
 .titlebar__right a.is-cta {
   border: 1px solid var(--rule);
   padding: 0.35rem 0.75rem;
@@ -165,7 +168,7 @@ a:hover { color: var(--accent); }
 }
 
 /* ============================================================
-   page header
+   page header — shared shape with skills.html
    ============================================================ */
 .page-header {
   border-bottom: 1px solid var(--rule);
@@ -238,33 +241,20 @@ a:hover { color: var(--accent); }
   padding: 0 var(--gutter);
 }
 .diagram-stage {
-  background: var(--paper-2);
+  background: var(--paper);
   border: 1px solid var(--rule);
   padding: clamp(0.75rem, 1.5vw, 1.25rem);
-  margin-bottom: 0.85rem;
   overflow-x: auto;
 }
 .diagram-stage svg {
   width: 100%;
   height: auto;
   display: block;
-  min-width: 1000px; /* below this, the SVG would shrink labels to unreadable */
-}
-.diagram-hint {
-  font-size: 12px;
-  color: var(--ink-faint);
-  font-style: italic;
-}
-.diagram-hint code {
-  font-family: var(--mono);
-  background: var(--paper-2);
-  border: 1px solid var(--rule-faint);
-  padding: 1px 5px;
-  font-style: normal;
+  min-width: 1000px; /* below this, labels collapse to unreadable */
 }
 
 /* ============================================================
-   legend + notes blocks
+   notes — 3 columns above, 1 wide note below
    ============================================================ */
 .notes {
   padding: clamp(2rem, 4vw, 3rem) 0;
@@ -275,13 +265,19 @@ a:hover { color: var(--accent); }
   margin: 0 auto;
   padding: 0 var(--gutter);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: clamp(1rem, 2vw, 1.75rem);
+}
+@media (max-width: 900px) {
+  .notes__inner { grid-template-columns: 1fr; }
 }
 .note {
   border: 1px solid var(--rule);
   padding: 1.25rem 1.4rem;
   background: var(--paper-2);
+}
+.note--wide {
+  grid-column: 1 / -1;
 }
 .note h3 {
   font-size: 12px;
@@ -335,10 +331,10 @@ a:hover { color: var(--accent); }
         <span class="titlebar__dot"></span>
         <span class="titlebar__dot is-warn"></span>
       </span>
-      <span class="titlebar__path">~/<b>apexyard</b> <span class="dim">· architecture</span></span>
+      <span class="titlebar__path">~/<a href="index.html"><b>apexyard</b></a> <span class="dim">· architecture</span></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
-      <a href="index.html" class="always">home</a>
+      <a href="architecture.html" class="is-current always">architecture</a>
       <a href="skills.html">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
       <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
@@ -372,7 +368,6 @@ a:hover { color: var(--accent); }
 <svg viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg" font-family="'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="ApexYard architecture: five layers (governance, capability, framework defaults, customisation, per-project data) inside the ops fork, plus an optional private sibling repo on the right.">
 
   <defs>
-    <!-- arrowheads -->
     <marker id="arrow-solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1A1612"/>
     </marker>
@@ -384,9 +379,7 @@ a:hover { color: var(--accent); }
     </marker>
   </defs>
 
-  <!-- ============================================================ -->
-  <!-- HEADER                                                       -->
-  <!-- ============================================================ -->
+  <!-- HEADER -->
   <text x="60" y="60" font-size="40" font-weight="800" fill="#1A1612" letter-spacing="-2">ApexYard</text>
   <text x="60" y="95" font-size="16" fill="#4A4239">A multi-project forge for Claude Code — governance, capability, customisation, and per-project data in one fork.</text>
 
@@ -397,119 +390,106 @@ a:hover { color: var(--accent); }
   <text x="84" y="170" font-size="18" font-weight="700" fill="#1A1612">[#] ApexYard Ops Fork</text>
   <text x="290" y="170" font-size="13" fill="#4A4239" font-style="italic">(your-org/apexyard — the public fork you clone)</text>
 
-  <!-- ─────────── LAYER 1: GOVERNANCE ─────────── -->
-  <text x="84" y="210" font-size="12" font-weight="700" fill="#1A1612" letter-spacing="2">GOVERNANCE — declares what, enforces how</text>
+  <!-- ─────────── LAYER 1: GOVERNANCE — slate-blue ─────────── -->
+  <text x="84" y="210" font-size="12" font-weight="700" fill="#1E3A5F" letter-spacing="2">GOVERNANCE — declares what, enforces how</text>
 
-  <!-- Registry -->
-  <rect x="84" y="225" width="290" height="90" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="100" y="252" font-size="14" font-weight="700" fill="#1A1612">[*] Registry</text>
+  <rect x="84" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
+  <text x="100" y="252" font-size="14" font-weight="700" fill="#1E3A5F">[*] Registry</text>
   <text x="100" y="275" font-size="12" fill="#1A1612">apexyard.projects.yaml</text>
-  <text x="100" y="295" font-size="11" fill="#4A4239">Lists every managed project</text>
+  <text x="100" y="295" font-size="11" fill="#4A6FA5">Lists every managed project</text>
 
-  <!-- Hooks -->
-  <rect x="394" y="225" width="290" height="90" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="410" y="252" font-size="14" font-weight="700" fill="#1A1612">[~] Hooks</text>
+  <rect x="394" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
+  <text x="410" y="252" font-size="14" font-weight="700" fill="#1E3A5F">[~] Hooks</text>
   <text x="410" y="275" font-size="12" fill="#1A1612">.claude/hooks/  · 26 shell gates</text>
-  <text x="410" y="295" font-size="11" fill="#4A4239">Merge gate · ticket-first · secrets · …</text>
+  <text x="410" y="295" font-size="11" fill="#4A6FA5">Merge gate · ticket-first · secrets · …</text>
 
-  <!-- Rules -->
-  <rect x="704" y="225" width="290" height="90" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="720" y="252" font-size="14" font-weight="700" fill="#1A1612">[=] Rules</text>
+  <rect x="704" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
+  <text x="720" y="252" font-size="14" font-weight="700" fill="#1E3A5F">[=] Rules</text>
   <text x="720" y="275" font-size="12" fill="#1A1612">.claude/rules/  · 11 files</text>
-  <text x="720" y="295" font-size="11" fill="#4A4239">Self-discipline guides for the agent</text>
+  <text x="720" y="295" font-size="11" fill="#4A6FA5">Self-discipline guides for the agent</text>
 
-  <!-- Onboarding -->
-  <rect x="1014" y="225" width="290" height="90" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="1030" y="252" font-size="14" font-weight="700" fill="#1A1612">[i] Onboarding</text>
+  <rect x="1014" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
+  <text x="1030" y="252" font-size="14" font-weight="700" fill="#1E3A5F">[i] Onboarding</text>
   <text x="1030" y="275" font-size="12" fill="#1A1612">onboarding.yaml</text>
-  <text x="1030" y="295" font-size="11" fill="#4A4239">Company name, mission, team, stack</text>
+  <text x="1030" y="295" font-size="11" fill="#4A6FA5">Company name, mission, team, stack</text>
 
-  <!-- ─────────── LAYER 2: CAPABILITY ─────────── -->
-  <text x="84" y="358" font-size="12" font-weight="700" fill="#1A1612" letter-spacing="2">CAPABILITY — what the agent can do</text>
+  <!-- ─────────── LAYER 2: CAPABILITY — forest-green ─────────── -->
+  <text x="84" y="358" font-size="12" font-weight="700" fill="#1B4332" letter-spacing="2">CAPABILITY — what the agent can do</text>
 
-  <!-- Skills -->
-  <rect x="84" y="373" width="600" height="100" fill="#E0D7BD" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="100" y="402" font-size="15" font-weight="700" fill="#1A1612">[/] Skills</text>
+  <rect x="84" y="373" width="600" height="100" fill="#DDE9DD" stroke="#2D6A4F" stroke-width="1.3"/>
+  <text x="100" y="402" font-size="15" font-weight="700" fill="#1B4332">[/] Skills</text>
   <text x="100" y="425" font-size="12" fill="#1A1612">.claude/skills/  ·  48 slash commands</text>
-  <text x="100" y="447" font-size="11" fill="#4A4239">/feature  /handover  /c4  /threat-model  /process  /dfd  /journey  /update  /release  …</text>
+  <text x="100" y="447" font-size="11" fill="#52796F">/feature  /handover  /c4  /threat-model  /process  /dfd  /journey  /update  /release  …</text>
 
-  <!-- Agents -->
-  <rect x="704" y="373" width="600" height="100" fill="#E0D7BD" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="720" y="402" font-size="15" font-weight="700" fill="#1A1612">[&gt;] Agents</text>
+  <rect x="704" y="373" width="600" height="100" fill="#DDE9DD" stroke="#2D6A4F" stroke-width="1.3"/>
+  <text x="720" y="402" font-size="15" font-weight="700" fill="#1B4332">[&gt;] Agents</text>
   <text x="720" y="425" font-size="12" fill="#1A1612">.claude/agents/  ·  5 specialised sub-agents</text>
-  <text x="720" y="447" font-size="11" fill="#4A4239">Rex (code review) · Hatim (security) · Munir (deps) · Tariq (PR) · Idris (tickets)</text>
+  <text x="720" y="447" font-size="11" fill="#52796F">Rex (code review) · Hatim (security) · Munir (deps) · Tariq (PR) · Idris (tickets)</text>
 
-  <!-- ─────────── LAYER 3: FRAMEWORK DEFAULTS ─────────── -->
-  <text x="84" y="513" font-size="12" font-weight="700" fill="#1A1612" letter-spacing="2">FRAMEWORK DEFAULTS — ship out of the box</text>
+  <!-- ─────────── LAYER 3: FRAMEWORK DEFAULTS — ochre ─────────── -->
+  <text x="84" y="513" font-size="12" font-weight="700" fill="#5C4218" letter-spacing="2">FRAMEWORK DEFAULTS — ship out of the box</text>
 
-  <!-- Templates -->
-  <rect x="84" y="528" width="600" height="85" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="100" y="555" font-size="14" font-weight="700" fill="#1A1612">[T] templates/</text>
+  <rect x="84" y="528" width="600" height="85" fill="#EFE6CA" stroke="#8B6914" stroke-width="1.3"/>
+  <text x="100" y="555" font-size="14" font-weight="700" fill="#5C4218">[T] templates/</text>
   <text x="100" y="578" font-size="12" fill="#1A1612">PRD · AgDR · technical-design · C4 context/container · DFD · vision · spike · …</text>
-  <text x="100" y="600" font-size="11" fill="#4A4239" font-style="italic">Overridable per file via custom-templates/&lt;same-path&gt;.md</text>
+  <text x="100" y="600" font-size="11" fill="#946C2B" font-style="italic">Overridable per file via custom-templates/&lt;same-path&gt;.md</text>
 
-  <!-- Handbooks -->
-  <rect x="704" y="528" width="600" height="85" fill="#ECE5D2" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="720" y="555" font-size="14" font-weight="700" fill="#1A1612">[H] handbooks/</text>
+  <rect x="704" y="528" width="600" height="85" fill="#EFE6CA" stroke="#8B6914" stroke-width="1.3"/>
+  <text x="720" y="555" font-size="14" font-weight="700" fill="#5C4218">[H] handbooks/</text>
   <text x="720" y="578" font-size="12" fill="#1A1612">architecture/  ·  general/  ·  language/&lt;lang&gt;/  ← Rex consults during code review</text>
-  <text x="720" y="600" font-size="11" fill="#4A4239" font-style="italic">Additive: custom-handbooks/&lt;path&gt; layered alongside, NOT replacing</text>
+  <text x="720" y="600" font-size="11" fill="#946C2B" font-style="italic">Additive: custom-handbooks/&lt;path&gt; layered alongside, NOT replacing</text>
 
-  <!-- ─────────── LAYER 4: CUSTOMISATION ─────────── -->
+  <!-- ─────────── LAYER 4: CUSTOMISATION — accent red ─────────── -->
   <text x="84" y="653" font-size="12" font-weight="700" fill="#C8321A" letter-spacing="2">CUSTOMISATION LAYER — adopter overrides</text>
 
-  <!-- custom-templates -->
-  <rect x="84" y="668" width="395" height="90" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.5"/>
+  <rect x="84" y="668" width="395" height="90" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.5"/>
   <text x="100" y="695" font-size="13" font-weight="700" fill="#C8321A">[+] custom-templates/</text>
   <text x="100" y="717" font-size="11" fill="#1A1612">Path-mirror override</text>
-  <text x="100" y="737" font-size="11" fill="#4A4239" font-style="italic">Wins over framework on collision (#244)</text>
+  <text x="100" y="737" font-size="11" fill="#A03B1F" font-style="italic">Wins over framework on collision (#244)</text>
 
-  <!-- custom-skills -->
-  <rect x="494" y="668" width="395" height="90" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.5"/>
+  <rect x="494" y="668" width="395" height="90" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.5"/>
   <text x="510" y="695" font-size="13" font-weight="700" fill="#C8321A">[+] custom-skills/</text>
   <text x="510" y="717" font-size="11" fill="#1A1612">Symlinked into .claude/skills/</text>
-  <text x="510" y="737" font-size="11" fill="#4A4239" font-style="italic">Framework moves to .framework.bak (#243)</text>
+  <text x="510" y="737" font-size="11" fill="#A03B1F" font-style="italic">Framework moves to .framework.bak (#243)</text>
 
-  <!-- custom-handbooks -->
-  <rect x="904" y="668" width="400" height="90" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.5"/>
+  <rect x="904" y="668" width="400" height="90" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.5"/>
   <text x="920" y="695" font-size="13" font-weight="700" fill="#C8321A">[+] custom-handbooks/</text>
   <text x="920" y="717" font-size="11" fill="#1A1612">Additive — Rex reads BOTH layers</text>
-  <text x="920" y="737" font-size="11" fill="#4A4239" font-style="italic">Same path conventions as framework (#243)</text>
+  <text x="920" y="737" font-size="11" fill="#A03B1F" font-style="italic">Same path conventions as framework (#243)</text>
 
   <!-- Override arrows: customisation → defaults -->
   <line x1="281" y1="668" x2="281" y2="615" stroke="#C8321A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-override)"/>
-  <line x1="691" y1="668" x2="180" y2="473" stroke="#C8321A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-override)" opacity="0.6"/>
+  <line x1="691" y1="668" x2="180" y2="473" stroke="#C8321A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-override)" opacity="0.55"/>
   <line x1="1104" y1="668" x2="1004" y2="615" stroke="#C8321A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-override)"/>
 
   <text x="296" y="640" font-size="10" fill="#C8321A" font-style="italic">overrides</text>
   <text x="1014" y="640" font-size="10" fill="#C8321A" font-style="italic">layers onto</text>
 
-  <!-- ─────────── LAYER 5: PER-PROJECT DATA ─────────── -->
-  <text x="84" y="798" font-size="12" font-weight="700" fill="#1A1612" letter-spacing="2">PER-PROJECT DATA — one entry per row in the registry</text>
+  <!-- ─────────── LAYER 5: PER-PROJECT DATA — plum ─────────── -->
+  <text x="84" y="798" font-size="12" font-weight="700" fill="#3D2A50" letter-spacing="2">PER-PROJECT DATA — one entry per row in the registry</text>
 
-  <!-- projects/ -->
-  <rect x="84" y="813" width="600" height="195" fill="#E0D7BD" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="100" y="842" font-size="14" font-weight="700" fill="#1A1612">[d] projects/&lt;name&gt;/</text>
-  <text x="100" y="864" font-size="11" fill="#4A4239" font-style="italic">Committed to the fork — ApexYard's view of each project</text>
-  <line x1="100" y1="877" x2="668" y2="877" stroke="#1A1612" stroke-width="0.5" opacity="0.4"/>
+  <rect x="84" y="813" width="600" height="195" fill="#E8E0EA" stroke="#5B3E70" stroke-width="1.3"/>
+  <text x="100" y="842" font-size="14" font-weight="700" fill="#3D2A50">[d] projects/&lt;name&gt;/</text>
+  <text x="100" y="864" font-size="11" fill="#6F538C" font-style="italic">Committed to the fork — ApexYard's view of each project</text>
+  <line x1="100" y1="877" x2="668" y2="877" stroke="#5B3E70" stroke-width="0.5" opacity="0.4"/>
   <text x="100" y="900" font-size="12" fill="#1A1612">README.md  ·  roadmap.md  ·  handover-assessment.md</text>
   <text x="100" y="920" font-size="12" fill="#1A1612">prds/  ·  architecture/  (C4, DFD, vision)  ·  journeys/</text>
   <text x="100" y="940" font-size="12" fill="#1A1612">processes/ (BPMN)  ·  feature-inventory.md  ·  audits/  ·  updates/</text>
   <text x="100" y="960" font-size="12" fill="#1A1612">docs/agdr/  ← per-project Agent Decision Records</text>
-  <text x="100" y="988" font-size="10" fill="#4A4239" font-style="italic">"Would it follow the code if the project spun out tomorrow?"  NO → here.</text>
+  <text x="100" y="988" font-size="10" fill="#6F538C" font-style="italic">"Would it follow the code if the project spun out tomorrow?"  NO → here.</text>
 
-  <!-- workspace/ -->
-  <rect x="704" y="813" width="600" height="195" fill="#E0D7BD" stroke="#1A1612" stroke-width="1.2"/>
-  <text x="720" y="842" font-size="14" font-weight="700" fill="#1A1612">[w] workspace/&lt;name&gt;/</text>
-  <text x="720" y="864" font-size="11" fill="#4A4239" font-style="italic">Live git clones — gitignored from the fork itself</text>
-  <line x1="720" y1="877" x2="1288" y2="877" stroke="#1A1612" stroke-width="0.5" opacity="0.4"/>
+  <rect x="704" y="813" width="600" height="195" fill="#E8E0EA" stroke="#5B3E70" stroke-width="1.3"/>
+  <text x="720" y="842" font-size="14" font-weight="700" fill="#3D2A50">[w] workspace/&lt;name&gt;/</text>
+  <text x="720" y="864" font-size="11" fill="#6F538C" font-style="italic">Live git clones — gitignored from the fork itself</text>
+  <line x1="720" y1="877" x2="1288" y2="877" stroke="#5B3E70" stroke-width="0.5" opacity="0.4"/>
   <text x="720" y="900" font-size="12" fill="#1A1612">Real git clone of the managed repo</text>
   <text x="720" y="920" font-size="12" fill="#1A1612">cd into to do code work · branches · PRs · CI</text>
   <text x="720" y="940" font-size="12" fill="#1A1612">LSP-aware skills run here (semantic index)</text>
   <text x="720" y="960" font-size="12" fill="#1A1612">Cross-repo trace (/process, /dfd) follows registry links</text>
-  <text x="720" y="988" font-size="10" fill="#4A4239" font-style="italic">"Would it follow the code if the project spun out tomorrow?"  YES → here.</text>
+  <text x="720" y="988" font-size="10" fill="#6F538C" font-style="italic">"Would it follow the code if the project spun out tomorrow?"  YES → here.</text>
 
   <!-- ============================================================ -->
-  <!-- PRIVATE SIBLING REPO (RIGHT)                                 -->
+  <!-- PRIVATE SIBLING REPO (RIGHT) — slate, dashed                 -->
   <!-- ============================================================ -->
   <rect x="1380" y="135" width="480" height="900" fill="#F4EFE6" stroke="#4A4239" stroke-width="1.5" stroke-dasharray="8 5"/>
   <text x="1404" y="170" font-size="18" font-weight="700" fill="#1A1612">[lock] Sibling Private Repo</text>
@@ -522,27 +502,27 @@ a:hover { color: var(--accent); }
   <line x1="1404" y1="280" x2="1836" y2="280" stroke="#4A4239" stroke-width="1"/>
   <text x="1404" y="305" font-size="11" font-weight="700" fill="#1A1612" letter-spacing="1">CONTENTS — replaces public-fork copies</text>
 
-  <!-- File list as compact cards -->
   <g font-size="12" fill="#1A1612">
-    <rect x="1404" y="320" width="432" height="32" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.8"/>
+    <!-- the four files use their layer's colour as a left-border hint -->
+    <rect x="1404" y="320" width="432" height="32" fill="#E0E8F0" stroke="#2C4E70" stroke-width="0.9"/>
     <text x="1418" y="341">[*] apexyard.projects.yaml</text>
 
-    <rect x="1404" y="362" width="432" height="32" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.8"/>
+    <rect x="1404" y="362" width="432" height="32" fill="#E0E8F0" stroke="#2C4E70" stroke-width="0.9"/>
     <text x="1418" y="383">[i] onboarding.yaml</text>
 
-    <rect x="1404" y="404" width="432" height="32" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.8"/>
+    <rect x="1404" y="404" width="432" height="32" fill="#E8E0EA" stroke="#5B3E70" stroke-width="0.9"/>
     <text x="1418" y="425">[d] projects/</text>
 
-    <rect x="1404" y="446" width="432" height="32" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.8"/>
+    <rect x="1404" y="446" width="432" height="32" fill="#E8E0EA" stroke="#5B3E70" stroke-width="0.9"/>
     <text x="1418" y="467">[w] workspace/</text>
 
-    <rect x="1404" y="488" width="432" height="32" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.2"/>
+    <rect x="1404" y="488" width="432" height="32" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.3"/>
     <text x="1418" y="509" fill="#C8321A">[+] custom-templates/</text>
 
-    <rect x="1404" y="530" width="432" height="32" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.2"/>
+    <rect x="1404" y="530" width="432" height="32" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.3"/>
     <text x="1418" y="551" fill="#C8321A">[+] custom-skills/</text>
 
-    <rect x="1404" y="572" width="432" height="32" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.2"/>
+    <rect x="1404" y="572" width="432" height="32" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.3"/>
     <text x="1418" y="593" fill="#C8321A">[+] custom-handbooks/</text>
   </g>
 
@@ -550,43 +530,42 @@ a:hover { color: var(--accent); }
   <text x="1404" y="652" font-size="11" fill="#4A4239" font-style="italic">transparently — the public fork stays slim,</text>
   <text x="1404" y="669" font-size="11" fill="#4A4239" font-style="italic">your private data never leaks upstream.</text>
 
-  <!-- Public fork anchor file -->
   <line x1="1404" y1="690" x2="1836" y2="690" stroke="#4A4239" stroke-width="1"/>
   <text x="1404" y="715" font-size="11" font-weight="700" fill="#1A1612" letter-spacing="1">PUBLIC FORK MARKER</text>
-  <rect x="1404" y="725" width="432" height="40" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.8"/>
+  <rect x="1404" y="725" width="432" height="40" fill="#ECE5D2" stroke="#1A1612" stroke-width="0.9"/>
   <text x="1418" y="745" font-size="12" fill="#1A1612">[anchor] .apexyard-fork  <tspan fill="#877E70">(presence marker)</tspan></text>
   <text x="1418" y="760" font-size="10" fill="#877E70">walked-up by hooks to find the ops-fork root</text>
 
-  <!-- Resolution arrow into the main fork -->
   <line x1="1380" y1="475" x2="1304" y2="475" stroke="#4A4239" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arrow-dashed)"/>
   <text x="1310" y="465" font-size="10" fill="#4A4239" font-style="italic" text-anchor="end">resolves into fork</text>
 
   <!-- ============================================================ -->
-  <!-- LEGEND / FOOTER                                              -->
+  <!-- LEGEND — six layer swatches                                  -->
   <!-- ============================================================ -->
   <g font-size="12" fill="#1A1612">
-    <rect x="60" y="1050" width="14" height="14" fill="#ECE5D2" stroke="#1A1612"/>
-    <text x="82" y="1062">Governance / defaults</text>
+    <rect x="60" y="1050" width="14" height="14" fill="#E0E8F0" stroke="#2C4E70"/>
+    <text x="82" y="1062">Governance</text>
 
-    <rect x="220" y="1050" width="14" height="14" fill="#E0D7BD" stroke="#1A1612"/>
-    <text x="242" y="1062">Capability / per-project data</text>
+    <rect x="190" y="1050" width="14" height="14" fill="#DDE9DD" stroke="#2D6A4F"/>
+    <text x="212" y="1062">Capability</text>
 
-    <rect x="430" y="1050" width="14" height="14" fill="#ECE5D2" stroke="#C8321A" stroke-width="1.2"/>
-    <text x="452" y="1062" fill="#C8321A">Customisation (overrides)</text>
+    <rect x="305" y="1050" width="14" height="14" fill="#EFE6CA" stroke="#8B6914"/>
+    <text x="327" y="1062">Framework defaults</text>
 
-    <rect x="640" y="1050" width="14" height="14" fill="#F4EFE6" stroke="#4A4239" stroke-dasharray="3 2"/>
-    <text x="662" y="1062">Optional private sibling</text>
+    <rect x="475" y="1050" width="14" height="14" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.3"/>
+    <text x="497" y="1062" fill="#C8321A">Customisation (overrides)</text>
+
+    <rect x="690" y="1050" width="14" height="14" fill="#E8E0EA" stroke="#5B3E70"/>
+    <text x="712" y="1062">Per-project data</text>
+
+    <rect x="855" y="1050" width="14" height="14" fill="#F4EFE6" stroke="#4A4239" stroke-dasharray="3 2"/>
+    <text x="877" y="1062">Optional private sibling</text>
   </g>
 
   <text x="1860" y="1062" font-size="11" fill="#877E70" text-anchor="end" font-style="italic">apexyard.dev  ·  fork the framework, register your repos, ship.</text>
 
 </svg>
       </div>
-
-      <p class="diagram-hint">
-        Right-click the diagram → <strong>Save Image As</strong> → drop into a slide. Or take a screenshot —
-        the layout fits 16:9 at <code>1920×1080</code>.
-      </p>
 
     </div>
   </section>
@@ -635,16 +614,14 @@ a:hover { color: var(--accent); }
         </p>
       </div>
 
-      <div class="note">
+      <div class="note note--wide">
         <h3>Optional private sibling</h3>
         <p>
-          The <strong>dashed box on the right</strong> is opt-in. Adopters on GitHub Free who don't
-          want portfolio names on a public fork put the registry, onboarding, projects/, workspace/,
-          and the custom-* trees in a sibling private repo. Skills resolve paths via the
+          The <strong>dashed box on the right</strong> is opt-in. Adopters on GitHub Free who don't want
+          portfolio names on a public fork put the registry, onboarding, <code>projects/</code>, <code>workspace/</code>,
+          and the <code>custom-*</code> trees in a sibling private repo. Skills resolve paths via the
           <code>portfolio.*</code> keys in <code>.claude/project-config.json</code> — the public
           fork stays slim, the private data never leaks upstream.
-        </p>
-        <p>
           Full setup walkthrough lives in
           <a href="https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md" target="_blank" rel="noopener">docs/multi-project.md ↗</a>.
         </p>

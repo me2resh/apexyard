@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <title>Skills — ApexYard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The full ApexYard slash-command surface — 39 skills, what each one does, and how to invoke it.">
+<meta name="description" content="The full ApexYard slash-command surface — 48 skills, what each one does, and how to invoke it.">
 <meta property="og:title" content="ApexYard skills">
-<meta property="og:description" content="39 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
+<meta property="og:description" content="48 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
 <meta property="og:type" content="website">
 <style>
 /* ============================================================
@@ -88,52 +88,46 @@ a:hover { color: var(--accent); }
 
 .dim { color: var(--ink-faint); }
 
-/* titlebar — same shape as the homepage */
+/* titlebar — identical shape on every page */
 .titlebar {
   position: sticky;
   top: 0;
-  z-index: 5;
-  background: var(--paper-2);
+  z-index: 100;
+  background: var(--paper);
   border-bottom: 1px solid var(--rule);
+  padding: 0.75rem 0;
+  font-size: 12px;
 }
 .titlebar__inner {
   max-width: var(--max-w);
   margin: 0 auto;
-  padding: 0.6rem var(--gutter);
+  padding: 0 var(--gutter);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 .titlebar__left { display: flex; align-items: center; gap: 0.65rem; }
 .titlebar__dots { display: inline-flex; gap: 0.35rem; }
 .titlebar__dot {
+  width: 11px; height: 11px;
+  border: 1px solid var(--rule);
   display: inline-block;
-  width: 0.6rem;
-  height: 0.6rem;
-  border: 1px solid var(--ink-faint);
 }
 .titlebar__dot.is-warn { background: var(--accent); border-color: var(--accent); }
-.titlebar__path {
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  letter-spacing: 0.02em;
-}
-.titlebar__path b { color: var(--ink); font-weight: 600; }
-.titlebar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  text-transform: lowercase;
-}
+.titlebar__path { color: var(--ink-soft); }
+.titlebar__path a { color: inherit; }
+.titlebar__path a:hover { color: var(--accent); }
+.titlebar__path b { color: var(--ink); font-weight: 700; }
+.titlebar__right { display: flex; gap: 1.25rem; align-items: center; font-size: 12px; }
 .titlebar__right a { color: var(--ink-faint); transition: color 0.15s ease; }
 .titlebar__right a:hover { color: var(--accent); }
+.titlebar__right a.is-current { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 2px; pointer-events: none; }
 .titlebar__right a.is-cta {
+  border: 1px solid var(--rule);
+  padding: 0.35rem 0.75rem;
   color: var(--ink);
-  border: 1px solid var(--ink);
-  padding: 0.3rem 0.7rem;
 }
 .titlebar__right a.is-cta:hover { color: var(--accent); border-color: var(--accent); }
 @media (max-width: 720px) {
@@ -141,6 +135,65 @@ a:hover { color: var(--accent); }
   .titlebar__right a:not(.is-cta):not(.always) { display: none; }
   .titlebar__right a.always { display: inline; }
 }
+
+/* page header — shared shape with architecture.html */
+.page-header {
+  border-bottom: 1px solid var(--rule);
+  padding: clamp(2rem, 5vw, 3.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
+}
+.page-header__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+.page-header__eyebrow {
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.65rem;
+}
+.page-header__eyebrow .pill {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  margin-right: 0.5rem;
+}
+.page-header h1 {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+}
+.page-header h1::after {
+  content: '_';
+  color: var(--accent);
+  animation: blink 1.1s steps(1, end) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.page-header .tagline {
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  color: var(--ink-soft);
+  max-width: 72ch;
+  line-height: 1.55;
+  margin-bottom: 0.5rem;
+}
+.page-header .meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 1.25rem;
+}
+.page-header .meta a {
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule-faint);
+  padding-bottom: 1px;
+}
+.page-header .meta a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* main */
 main {
@@ -276,11 +329,11 @@ main {
         <span class="titlebar__dot"></span>
         <span class="titlebar__dot is-warn"></span>
       </span>
-      <span class="titlebar__path">~/<b>apexyard</b> <span class="dim">· skills</span></span>
+      <span class="titlebar__path">~/<a href="index.html"><b>apexyard</b></a> <span class="dim">· skills</span></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
-      <a href="index.html" class="always">home</a>
       <a href="architecture.html">architecture</a>
+      <a href="skills.html" class="is-current always">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
       <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
@@ -289,22 +342,38 @@ main {
 
 <main id="main">
 
-  <section class="intro">
-    <h1><span class="intro__count">39 skills</span>The apexyard slash-command surface</h1>
-    <p>Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code> and is invoked from a Claude Code session as <code>/&lt;name&gt;</code>. Some take arguments, some are self-driven. The framework's mechanical hooks (in <code>.claude/hooks/</code>) gate their effects on the rest of the SDLC — for example, <code>/approve-merge</code> writes a marker that <code>block-unreviewed-merge.sh</code> then verifies before the merge actually runs.</p>
-    <p>If you're new, start with <a href="#setup"><code>/setup</code></a> on a fresh fork, then <a href="#tickets"><code>/feature</code></a> or <a href="#tickets"><code>/idea</code></a> to capture work, then <a href="#review"><code>/code-review</code></a> + <a href="#review"><code>/approve-merge</code></a> when a PR is ready to ship.</p>
-    <nav class="toc" aria-label="Sections">
-      <a href="#setup">setup</a>
-      <a href="#daily">daily ops</a>
-      <a href="#tickets">tickets &amp; ideas</a>
-      <a href="#specs">specs &amp; decisions</a>
-      <a href="#review">review &amp; merge</a>
-      <a href="#architecture">architecture &amp; dev tools</a>
-      <a href="#audits">production-readiness audits</a>
-      <a href="#workflow">workflow primitives</a>
-      <a href="#comms">communications</a>
-      <a href="#deprecated">deprecated</a>
-    </nav>
+  <section class="page-header">
+    <div class="page-header__inner">
+      <div class="page-header__eyebrow">
+        <span class="pill">apexyard / skills</span>
+        <span>48 slash commands · invoke from any Claude Code session</span>
+      </div>
+      <h1>Skills</h1>
+      <p class="tagline">
+        Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code> and is invoked from a
+        Claude Code session as <code>/&lt;name&gt;</code>. Mechanical hooks in <code>.claude/hooks/</code>
+        gate their effects on the rest of the SDLC — <code>/approve-merge</code> writes a marker that
+        <code>block-unreviewed-merge.sh</code> then verifies before the merge actually runs.
+      </p>
+      <p class="meta">
+        New here? Start with <a href="#setup"><code>/setup</code></a> on a fresh fork, then
+        <a href="#tickets"><code>/feature</code></a> or <a href="#tickets"><code>/idea</code></a> to capture work,
+        then <a href="#review"><code>/code-review</code></a> + <a href="#review"><code>/approve-merge</code></a>
+        when a PR is ready to ship.
+      </p>
+      <nav class="toc" aria-label="Sections">
+        <a href="#setup">setup</a>
+        <a href="#daily">daily ops</a>
+        <a href="#tickets">tickets &amp; ideas</a>
+        <a href="#specs">specs &amp; decisions</a>
+        <a href="#review">review &amp; merge</a>
+        <a href="#architecture">architecture &amp; dev tools</a>
+        <a href="#audits">production-readiness audits</a>
+        <a href="#workflow">workflow primitives</a>
+        <a href="#comms">communications</a>
+        <a href="#deprecated">deprecated</a>
+      </nav>
+    </div>
   </section>
 
   <section class="section" id="setup">
