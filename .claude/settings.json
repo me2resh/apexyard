@@ -22,6 +22,10 @@
           },
           {
             "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/clear-issue-skill-marker.sh\"'"
+          },
+          {
+            "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ ! -f \"$r/.apexyard-fork\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/link-custom-skills.sh\"'"
           }
         ]
@@ -87,6 +91,10 @@
             "type": "command",
             "if": "Bash(git push *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/pre-push-gate.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/require-skill-for-issue-create.sh\"'"
           },
           {
             "type": "command",
