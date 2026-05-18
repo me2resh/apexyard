@@ -8,7 +8,7 @@ All notable changes to ApexYard are documented here.
 
 v1.3.0 adds the **architecture-doc family** — eight new skills that read the codebase and produce maintained design artefacts (`/c4`, `/dfd`, `/process`, `/tech-vision`, `/journey`, `/extract-features`, `/agdr`, plus `/threat-model --format=dragon` for OWASP Threat Dragon export). Audit outputs gain a canonical persistence shape (paired JSON + MD per run, dated subdirs) so trend across runs is finally legible. Split-portfolio mode reaches v2 (private repo absorbs `onboarding.yaml` + `workspace/` alongside the registry). Mechanical enforcement deepens: the ticket-first gate now extends past `gh issue create` to Linear / Jira / Asana / custom trackers (#268), Mermaid blocks are parse-validated at write time (#266), and `/threat-model` inlines the DFD as a point-in-time snapshot so historical audits stay self-consistent (#270).
 
-10 new skills, 2 new hooks (28 total), 1 new agent, 25 new AgDRs.
+**9 new skills, 4 new hooks (28 total), 16 new AgDRs** (AgDR-0014 → AgDR-0028, plus AgDR-0030; 0029 is the parked packaging proposal in PR #267).
 
 ### Highlights
 
