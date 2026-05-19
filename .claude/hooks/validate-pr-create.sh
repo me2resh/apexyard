@@ -70,14 +70,38 @@ if [ -n "$TITLE" ]; then
   fi
 fi
 
-# Verify the ticket in the title actually exists in the tracker repo
-# (backstop for ticket-vocabulary.md — catches fabricated #N in PR titles)
+# Verify the ticket in the title actually exists in the tracker
+# (backstop for ticket-vocabulary.md — catches fabricated #N in PR titles).
+#
+# Tracker-aware: uses `_lib-tracker.sh` for the existence check. Default
+# config (tracker.kind = gh) preserves today's behaviour exactly: dispatches
+# to `gh issue view --repo <owner/repo>`, with the upstream-fallback step
+# for fork → upstream PRs (#207). When the adopter has configured Linear /
+# Jira / Asana / custom, the tracker lib calls THAT CLI instead; for those
+# kinds the `--repo` and upstream concepts may not apply, so the upstream
+# fallback is skipped. `tracker.kind = none` short-circuits the existence
+# check (caller falls back to shape-only via `tracker_id_pattern`).
 if [ -n "$TICKET_REF" ]; then
   # Extract digits from the ref (works for both #N and PREFIX-N)
   TICKET_NUM=$(echo "$TICKET_REF" | grep -oE '[0-9]+$')
 
-  # Resolve tracker repo: prefer --repo flag, then project-config.json, then origin
+  # Load the tracker library (kind / view command / id pattern).
   REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+  TRACKER_KIND="gh"
+  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+    TRACKER_KIND=$(tracker_kind)
+  fi
+
+  # Short-circuit: existence verification disabled.
+  if [ "$TRACKER_KIND" = "none" ]; then
+    # Shape-only validation already happened above (PR title regex). Nothing
+    # more to do for this branch.
+    TICKET_NUM=""
+  fi
+
+  # Resolve tracker repo: prefer --repo flag, then project-config.json, then origin
   TRACKER_REPO=""
   if [ -n "$CMD_REPO" ]; then
     TRACKER_REPO="$CMD_REPO"
@@ -96,8 +120,11 @@ if [ -n "$TICKET_REF" ]; then
   # ticket lives on upstream and the PR targets upstream — and avoids the
   # cross-repo workaround (`fix(owner/repo#N)`) that passes the hook but
   # breaks GitHub's bare-#N auto-close on merge.
+  #
+  # The upstream fallback only makes sense for the gh kind — Linear / Jira /
+  # Asana don't have a fork-of-a-tracker concept.
   UPSTREAM_REPO=""
-  if git remote get-url upstream >/dev/null 2>&1; then
+  if [ "$TRACKER_KIND" = "gh" ] && git remote get-url upstream >/dev/null 2>&1; then
     UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
     UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
     # Skip the redundant check when upstream resolves to the same repo as
@@ -108,15 +135,16 @@ if [ -n "$TICKET_REF" ]; then
     fi
   fi
 
-  if [ -n "$TICKET_NUM" ] && [ -n "$TRACKER_REPO" ]; then
-    # Fetch both number and state in one call so we can distinguish
-    # "does not exist" from "exists but CLOSED". Both are blocking.
-    ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
-    # Short-circuit: only consult upstream when primary missed. Records which
-    # tracker actually matched so the CLOSED-state error names the right repo.
+  if [ -n "$TICKET_NUM" ] && { [ "$TRACKER_KIND" != "gh" ] || [ -n "$TRACKER_REPO" ]; }; then
+    # Dispatch via the tracker lib. For non-gh kinds the {owner_repo}
+    # placeholder is supplied but the template may not reference it.
+    ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$TRACKER_REPO" 2>/dev/null)
+    # Short-circuit: only consult upstream (gh only) when primary missed.
+    # Records which tracker actually matched so the CLOSED-state error names
+    # the right repo.
     MATCHED_REPO="$TRACKER_REPO"
     if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
-      ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$UPSTREAM_REPO" --json number,state 2>/dev/null)
+      ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$UPSTREAM_REPO" 2>/dev/null)
       if [ -n "$ISSUE_JSON" ]; then
         MATCHED_REPO="$UPSTREAM_REPO"
       fi
@@ -146,7 +174,17 @@ MSG
     fi
 
     ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
-    if [ "$ISSUE_STATE" = "CLOSED" ]; then
+    # Closed-state recognition is tracker-specific. gh: "CLOSED". Asana: "Closed".
+    # Linear / Jira: "Done", "Closed", "Cancelled", "Resolved" etc. — list the
+    # common closed states so non-gh adopters get the same gate as gh adopters.
+    ISSUE_STATE_LC=$(echo "$ISSUE_STATE" | tr '[:upper:]' '[:lower:]')
+    case "$ISSUE_STATE_LC" in
+      closed|done|cancelled|canceled|resolved|completed)
+        IS_CLOSED=1 ;;
+      *)
+        IS_CLOSED=0 ;;
+    esac
+    if [ "$IS_CLOSED" = "1" ]; then
       cat >&2 <<MSG
 BLOCKED: PR title references ${TICKET_REF} but issue #${TICKET_NUM} in
 ${MATCHED_REPO} is CLOSED.

@@ -17,8 +17,9 @@ Rex finds handbooks by **path convention** — there is no YAML frontmatter, no 
 | `handbooks/architecture/*.md` | **Always** — architecture standards apply to every PR |
 | `handbooks/general/*.md` | **Always** — cross-cutting rules (commit messages, comment density, naming) apply to every PR |
 | `handbooks/language/<lang>/*.md` | **On diff match** — only when the PR touches files of that language. `<lang>` matches by extension: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`, etc. |
+| `handbooks/domain/<area>/*.md` | **On diff match via opt-in `paths:` frontmatter** — domain-specific review knowledge (GitHub EMU semantics, Stripe webhook validation, SSO SAML claim shapes, etc.). Each handbook may declare a `paths:` YAML frontmatter list of globs; Rex loads the handbook only when the PR diff matches at least one glob. Handbooks without a `paths:` field load always (foundational domain rules with no path boundary). See [`handbooks/domain/README.md`](domain/README.md) and AgDR-0037. |
 
-If you need a fourth bucket, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
+If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
 
 ## File format
 
@@ -121,3 +122,5 @@ No skill scaffolding — handbook authoring is intentionally raw markdown editin
 | `general/commit-message-quality.md` | Always-load cross-cutting | Advisory | Commits explain WHY, not WHAT — reduces future archaeology cost |
 
 Adopters can keep, edit, or replace any of these. They're not load-bearing for the framework — just demonstrative of the convention.
+
+The `domain/` bucket ships **without samples** — domain handbooks are by definition adopter-specific (one team's "GitHub EMU" is another team's irrelevant noise), and the framework can't seed a generic example without dragging in unrelated content. See [`handbooks/domain/README.md`](domain/README.md) for the convention + a worked-example shape; add your first domain handbook by copying the shape into `handbooks/domain/<your-area>/<rule>.md`.

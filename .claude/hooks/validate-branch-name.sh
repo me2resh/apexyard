@@ -71,13 +71,46 @@ if [ -z "$TYPES" ]; then
   TYPES="feature|fix|refactor|chore|docs|test|spike|ci|build|perf"
 fi
 
+# Load the ticket-ID regex from the tracker lib. The pattern is shape-only
+# (no existence check at the push gate — that's validate-pr-create.sh's job).
+# Default covers GH `#123` / `GH-123` plus enterprise prefixes (LIN, JIRA,
+# ABC). Adopters who want a stricter shape (e.g. exactly Linear: `^[A-Z]+-[0-9]+$`)
+# override `.tracker.id_pattern` in project-config.json. See AgDR-0033 and
+# `.claude/hooks/_lib-tracker.sh`.
+TRACKER_ID_PATTERN=""
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  TRACKER_ID_PATTERN=$(tracker_id_pattern)
+fi
+
+# Strip the anchors from the tracker pattern so we can embed it inside the
+# branch-name regex (`type/<TICKET-ID>-<description>`). The lib returns a
+# fully-anchored regex (`^...$`) because consumers like /start-ticket use
+# it standalone; here we need the inner alternation.
+INNER_PATTERN="${TRACKER_ID_PATTERN#^}"
+INNER_PATTERN="${INNER_PATTERN%$}"
+# Drop the wrapping parens if the pattern was `^(...)$` — they get re-added below.
+case "$INNER_PATTERN" in
+  '('*')')
+    INNER_PATTERN="${INNER_PATTERN#(}"
+    INNER_PATTERN="${INNER_PATTERN%)}"
+    ;;
+esac
+# Fallback if extraction failed.
+if [ -z "$INNER_PATTERN" ]; then
+  INNER_PATTERN='[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'
+fi
+
 # Validate: type/<TICKET>-<description>
-#   <TICKET> = 2-10 char uppercase prefix + dash + digits  OR  GH-<digits>  OR  #<digits>
-# Note: this pattern is intentionally aligned with the pr-title-check.yml
-# CI workflow regex so anything that passes this hook also passes CI.
-if ! echo "$CURRENT_BRANCH" | grep -qE "^(${TYPES})/([A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+)-"; then
+# The TICKET pattern is sourced from tracker.id_pattern so Linear / Jira
+# / custom adopters get their own shape validation. Note: this pattern is
+# intentionally aligned with the pr-title-check.yml CI workflow regex so
+# anything that passes this hook also passes CI.
+if ! echo "$CURRENT_BRANCH" | grep -qE "^(${TYPES})/(${INNER_PATTERN})-"; then
   echo "BLOCKED: Branch '$CURRENT_BRANCH' doesn't follow naming convention: {type}/{TICKET-ID}-{description}" >&2
   echo "Accepted types (from .claude/project-config.*.json → .branch.type_whitelist): ${TYPES//|/, }" >&2
+  echo "Accepted ticket-ID pattern (from .claude/project-config.*.json → .tracker.id_pattern): ${INNER_PATTERN}" >&2
   echo "Examples: feature/ABC-123-add-auth, fix/GH-45-login-bug, docs/ENG-99-update-readme" >&2
   echo "Rename with: git branch -m \"\$(git branch --show-current)\" \"feature/GH-XX-description\"" >&2
   exit 2

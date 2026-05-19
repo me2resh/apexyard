@@ -8,7 +8,7 @@ drifted.
 
 ## What it checks
 
-1. **Template required-section coverage** — `templates/investigation.md`
+1. **Template required-section coverage** — `templates/tickets/investigation.md`
    contains every section the SKILL.md interview promises to fill in
    (`Trigger`, `Hypothesis being tested`, `Method`, `Findings`,
    `Conclusion`, `Follow-up actions`).
@@ -20,9 +20,9 @@ drifted.
    from a search hit see the boundaries spelled out.
 4. **`portfolio_resolve_template` override semantics** — builds a synthetic
    ops-fork + sibling private-repo fixture, drops a marker custom-template
-   at `<sibling>/custom-templates/investigation.md`, and asserts the
+   at `<sibling>/custom-templates/tickets/investigation.md`, and asserts the
    resolver picks the override over the framework default. Closes the
-   contract with the `_lib-portfolio-paths.sh` helper (#244).
+   contract with the `_lib-portfolio-paths.sh` helper (#244, path moved in #281).
 5. **project-config / template alignment** —
    `.ticket.required_sections.Investigation` in
    `.claude/project-config.defaults.json` matches the sections actually in

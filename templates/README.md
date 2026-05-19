@@ -1,6 +1,14 @@
 # Templates
 
-ApexYard ships markdown templates under `templates/` that consuming skills read at invocation time — `/decide` reads `agdr.md`, `/write-spec` reads `prd.md`, `/c4` reads `architecture/c4-context.md` and `architecture/c4-container.md`, `/migration` reads `agdr-migration.md`, `/spike` reads `spike.md`, `/investigation` reads `investigation.md`, `/handover` reads `architecture/c4-container.md`. The full inventory is in [`CLAUDE.md` § "Templates"](../CLAUDE.md).
+ApexYard ships markdown templates under `templates/` that consuming skills read at invocation time — `/decide` reads `agdr.md`, `/write-spec` reads `prd.md`, `/c4` reads `architecture/c4-context.md` and `architecture/c4-container.md`, `/migration` reads `agdr-migration.md` (for the AgDR) AND `tickets/migration.md` (for the ticket body), `/spike` reads `tickets/spike.md`, `/investigation` reads `tickets/investigation.md`, `/feature` / `/bug` / `/task` / `/idea` read their matching files under `tickets/`, `/handover` reads `architecture/c4-container.md`. The full inventory is in [`CLAUDE.md` § "Templates"](../CLAUDE.md).
+
+## `tickets/` subdir — uniform ticket body templates (since #281)
+
+Every ticket-creating skill (`/feature`, `/bug`, `/task`, `/migration`, `/idea`, `/spike`, `/investigation`) reads its issue-body shape from `templates/tickets/<name>.md`. Adopters override any of them by dropping a file at `<private_repo>/custom-templates/tickets/<name>.md` — same path-mirroring contract as every other template (AgDR-0023, refactored to apply uniformly to all 7 ticket types in AgDR-0031).
+
+Prior to #281, the 5 older skills (`/feature`, `/bug`, `/task`, `/migration`, `/idea`) constructed their issue body inline via heredoc; only `/spike` and `/investigation` shipped a real template file. That meant a `<private_repo>/custom-templates/feature.md` override silently failed — the framework had no template file at the mirrored path for the override to win over. #281 closes that gap by adding the missing 5 template files and refactoring the 5 skills to resolve via `portfolio_resolve_template tickets/<name>.md`.
+
+**Backward-compat fallback**: if the resolved template file is missing (partial adopter setup), each skill falls back to its inline heredoc body and prints a one-line WARN on stderr. This preserves the pre-#281 behaviour for installations whose `templates/tickets/` dir is missing.
 
 ## Adopter overrides — the `custom-templates/` layer
 
@@ -11,8 +19,13 @@ Every framework template can be overridden by an adopter-authored version. The o
 | `templates/prd.md` | `<private_repo>/custom-templates/prd.md` |
 | `templates/agdr.md` | `<private_repo>/custom-templates/agdr.md` |
 | `templates/agdr-migration.md` | `<private_repo>/custom-templates/agdr-migration.md` |
-| `templates/spike.md` | `<private_repo>/custom-templates/spike.md` |
-| `templates/investigation.md` | `<private_repo>/custom-templates/investigation.md` |
+| `templates/tickets/feature.md` | `<private_repo>/custom-templates/tickets/feature.md` |
+| `templates/tickets/bug.md` | `<private_repo>/custom-templates/tickets/bug.md` |
+| `templates/tickets/task.md` | `<private_repo>/custom-templates/tickets/task.md` |
+| `templates/tickets/migration.md` | `<private_repo>/custom-templates/tickets/migration.md` |
+| `templates/tickets/idea.md` | `<private_repo>/custom-templates/tickets/idea.md` |
+| `templates/tickets/spike.md` | `<private_repo>/custom-templates/tickets/spike.md` |
+| `templates/tickets/investigation.md` | `<private_repo>/custom-templates/tickets/investigation.md` |
 | `templates/architecture/c4-context.md` | `<private_repo>/custom-templates/architecture/c4-context.md` |
 | `templates/architecture/c4-container.md` | `<private_repo>/custom-templates/architecture/c4-container.md` |
 | `templates/architecture/vision.md` | `<private_repo>/custom-templates/architecture/vision.md` |
