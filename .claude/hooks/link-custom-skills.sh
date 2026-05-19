@@ -48,21 +48,28 @@ if [ "$IS_WINDOWS" -eq 0 ]; then
   esac
 fi
 
-# Resolve the ops-fork root by walking up from $PWD. Cheaper than the full
-# helper for the no-op cases (no helper sourced, no jq fork). The helper
-# walks the same path; we replicate that minimal logic here so the hook
-# stays useful even if the lib hasn't been installed yet on a fresh fork.
+# Resolve the ops-fork root via the shared helper (recognises both the v2
+# `.apexyard-fork` marker AND the legacy v1 anchor). Falls back to a small
+# inline walk-up with the same conditions if the helper is missing — same
+# graceful-degradation shape as check-jq-installed.sh / clear-bootstrap-marker.sh.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 ops_root=""
-cur="$PWD"
-while [ -n "$cur" ] && [ "$cur" != "/" ]; do
-  if [ -f "$cur/.apexyard-fork" ]; then
-    ops_root="$cur"; break
-  fi
-  if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
-    ops_root="$cur"; break
-  fi
-  cur=$(dirname "$cur")
-done
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  ops_root=$(resolve_ops_root "$PWD")
+else
+  cur="$PWD"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -f "$cur/.apexyard-fork" ]; then
+      ops_root="$cur"; break
+    fi
+    if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
+      ops_root="$cur"; break
+    fi
+    cur=$(dirname "$cur")
+  done
+fi
 
 # Outside any apexyard fork → nothing to do.
 [ -z "$ops_root" ] && exit 0
