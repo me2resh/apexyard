@@ -30,6 +30,31 @@ Re-running `/setup` on an already-configured fork shows the current config and a
 
 ## Process
 
+### Step −1: Pre-flight — refuse if `jq` is missing (REQUIRED)
+
+`/setup` (and every framework hook that reads `.claude/project-config.json` overrides) depends on `jq`. Without it, override reads silently fall back to defaults — the adopter's `.ui_paths`, `.tracker.*`, `.migration_paths`, etc. have zero effect and there's no error to debug. Refuse to proceed until jq is on PATH so the operator never sees the silently-degraded state.
+
+Run this **before any other tool call** in the skill:
+
+```bash
+if ! command -v jq >/dev/null 2>&1; then
+  cat <<'MSG'
+✗ ApexYard requires `jq` for reading project-config overrides, but it's not installed.
+
+Install instructions:
+  macOS:   brew install jq
+  Debian:  apt-get install jq
+  Fedora:  dnf install jq
+  Other:   https://jqlang.org/download/
+
+Once installed, re-run /setup.
+MSG
+  exit 1
+fi
+```
+
+The sibling `check-jq-installed.sh` SessionStart hook surfaces the same gap as a one-line banner outside `/setup` so a fork that's already configured (and never re-runs `/setup`) still sees the warning. See AgDR-0038 for the design rationale.
+
 ### Step 0: Mark this session as bootstrap (REQUIRED)
 
 `/setup` runs BEFORE any portfolio is configured, so no project tickets can exist yet. The `require-active-ticket.sh` PreToolUse hook would otherwise block every Edit / Write / Bash-write the skill needs to make. To stay coherent with the ticket-first rule without forcing adopters to file a placeholder ticket against nothing, the skill writes a one-line marker at `.claude/session/active-bootstrap` containing the skill name. The hook reads the marker and exempts skills listed in `ticket.bootstrap_skills` (in `.claude/project-config.defaults.json` — `setup` is on the default list).
