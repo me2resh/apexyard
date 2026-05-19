@@ -11,7 +11,7 @@ The ticket-CREATE gate was already tracker-agnostic from #268 (the `ticket.creat
 | `/start-ticket` | `gh issue view <N> --repo <repo> --json ...` | Skill refuses to write the active-ticket marker; all downstream Edit/Write hooks block |
 | `validate-pr-create.sh` | `gh issue view` to confirm the ticket exists | Blocks PR creation even when the ticket exists in Linear/Jira |
 | `verify-commit-refs.sh` | `gh issue view` per `Closes #N` reference | Blocks commits with valid `Closes LIN-42` references |
-| `validate-branch-name.sh` | Hardcoded regex `[A-Z]+-[0-9]+ | #[0-9]+` | Shape regex was already permissive enough (Linear / Jira IDs pass); no functional gap here today, but the regex was inlined in the hook rather than parameterised, so future stricter shapes would have nowhere to plug in |
+| `validate-branch-name.sh` | Hardcoded regex `[A-Z]+-[0-9]+ \| #[0-9]+` | Shape regex was already permissive enough (Linear / Jira IDs pass); no functional gap here today, but the regex was inlined in the hook rather than parameterised, so future stricter shapes would have nowhere to plug in |
 
 The shape regex was already permissive enough for Jira (`TIC-1234`) and Linear (`ENG-123`); the gap was the **existence-verification step** calling `gh`.
 

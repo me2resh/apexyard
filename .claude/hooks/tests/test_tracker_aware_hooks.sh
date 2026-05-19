@@ -451,7 +451,7 @@ cat > "$SB/.claude/project-config.json" <<'JSON'
 JSON
 # Push a branch that matches the strict Linear-only pattern.
 (
-  cd "$SB"
+  cd "$SB" || exit 1
   git checkout -q -b feature/LIN-7-test
 )
 cmd='git push origin feature/LIN-7-test'
@@ -464,7 +464,7 @@ fi
 # Push a branch that uses `#` notation — should fail under the strict pattern
 # (Linear IDs don't use #).
 (
-  cd "$SB"
+  cd "$SB" || exit 1
   git checkout -q -b 'feature/#42-test' 2>/dev/null || true
 )
 cmd='git push origin feature/#42-test'
@@ -481,7 +481,7 @@ rm -rf "$SB"
 # =============================================================================
 SB=$(make_fork)
 (
-  cd "$SB"
+  cd "$SB" || exit 1
   git checkout -q -b feature/GH-1-default-test
 )
 cmd='git push origin feature/GH-1-default-test'
