@@ -8,3 +8,9 @@ https://github.com/me2resh/SharpPick.*
 # protection). The link works in browsers; lychee-action's user-agent gets
 # rejected. Cited as a Source in docs/spikes/claude-model-tier-routing.md.
 https://medium\.com/@sathishkraju/.*
+
+# Martin Fowler's article hosts timeout from CI runners under sustained load
+# (the article server applies aggressive per-IP rate limiting; lychee's burst
+# trips it). The links work in browsers and on retry from cold IPs. Cited in
+# AgDR-0037 and AgDR-0039 as the harness-engineering source.
+https://martinfowler\.com/articles/exploring-gen-ai/.*

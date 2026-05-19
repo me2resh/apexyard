@@ -108,11 +108,38 @@ fi
 # intentionally aligned with the pr-title-check.yml CI workflow regex so
 # anything that passes this hook also passes CI.
 if ! echo "$CURRENT_BRANCH" | grep -qE "^(${TYPES})/(${INNER_PATTERN})-"; then
-  echo "BLOCKED: Branch '$CURRENT_BRANCH' doesn't follow naming convention: {type}/{TICKET-ID}-{description}" >&2
-  echo "Accepted types (from .claude/project-config.*.json → .branch.type_whitelist): ${TYPES//|/, }" >&2
-  echo "Accepted ticket-ID pattern (from .claude/project-config.*.json → .tracker.id_pattern): ${INNER_PATTERN}" >&2
-  echo "Examples: feature/ABC-123-add-auth, fix/GH-45-login-bug, docs/ENG-99-update-readme" >&2
-  echo "Rename with: git branch -m \"\$(git branch --show-current)\" \"feature/GH-XX-description\"" >&2
+  cat >&2 <<MSG
+BLOCKED: Branch '$CURRENT_BRANCH' doesn't follow naming convention.
+
+Required shape (.claude/rules/git-conventions.md § "Branch Naming"):
+  {type}/{TICKET-ID}-{description}
+
+Accepted types: ${TYPES//|/, }
+  (configurable: .claude/project-config.*.json → .branch.type_whitelist)
+
+Accepted ticket-ID pattern: ${INNER_PATTERN}
+  (configurable: .claude/project-config.*.json → .tracker.id_pattern)
+
+Examples:
+  feature/ABC-123-add-auth
+  fix/GH-45-login-bug
+  docs/ENG-99-update-readme
+
+To unblock:
+  1. Pick a ticket-ID (existing or new): /feature, /task, /bug
+  2. Pick a short kebab-case description (max ~40 chars)
+  3. Rename the current branch in place:
+       git branch -m "$CURRENT_BRANCH" "feature/GH-XX-your-description"
+     OR start fresh from the project's integration branch (most
+     managed projects are trunk-based on 'main'; the apexyard framework
+     itself uses 'dev' — pick the one that matches THIS repo):
+       git checkout main && git checkout -b "feature/GH-XX-your-description"
+  4. Retry the operation
+
+If the current branch has commits you want to keep, the rename in
+step 3 preserves them — the branch keeps its history, just gains a
+new name.
+MSG
   exit 2
 fi
 

@@ -236,7 +236,9 @@ cat >&2 <<MSG
 BLOCKED: No active ticket set for this session.
 
 ApexYard requires a ticket BEFORE any code changes (workflow-gates rule #3,
-pre-build gate, "one ticket at a time"). To proceed:
+pre-build gate, "one ticket at a time").
+
+To unblock:
 
   1. Create or find the ticket (GitHub Issue in the project's own repo):
        gh issue create --repo <owner/repo> --title "..."
