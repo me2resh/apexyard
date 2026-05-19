@@ -16,6 +16,8 @@ This skill complements `/handover`:
 
 Run `/handover` first when adopting an unfamiliar repo; run `/extract-features` second when you've decided to rewrite it.
 
+**See also**: [`/feature-diagram <feature-slug>`](../feature-diagram/SKILL.md) — once the inventory exists, this skill emits a per-feature Mermaid sub-graph (routes + models + jobs + screens for one feature) at `projects/<name>/features/<slug>.md`. The inventory's `Feature` column gains a link to each per-feature diagram. Sibling to `/c4` (system topology) and `/dfd` (data flows) in the architecture-doc family — different lens (per-feature slice) on the same codebase. See `AgDR-0035` for the design rationale.
+
 ## LSP-aware (optional, recommended)
 
 Discovery walks across all six axes — `documentSymbol`, `references`, `definition` queries — are the obvious win for LSP. With `ENABLE_LSP_TOOL=1` + per-language plugin (per `docs/getting-started.md` § "Optional: LSP-aware code navigation"), route-handler enumeration, model walks, and test-name extraction are ~3-15× cheaper in token cost than grep + Read. Without LSP, the skill falls back to grep transparently using the framework signatures listed below. No new failure mode, just optional speed.

@@ -370,7 +370,14 @@ Every framework template (PRD, AgDR, migration AgDR, C4 context/container, visio
 │   ├── prd.md                           ← overrides templates/prd.md
 │   ├── agdr.md                          ← overrides templates/agdr.md
 │   ├── agdr-migration.md                ← overrides templates/agdr-migration.md
-│   ├── spike.md                         ← overrides templates/spike.md
+│   ├── tickets/
+│   │   ├── feature.md                   ← overrides templates/tickets/feature.md
+│   │   ├── bug.md                       ← overrides templates/tickets/bug.md
+│   │   ├── task.md                      ← overrides templates/tickets/task.md
+│   │   ├── migration.md                 ← overrides templates/tickets/migration.md
+│   │   ├── idea.md                      ← overrides templates/tickets/idea.md
+│   │   ├── spike.md                     ← overrides templates/tickets/spike.md
+│   │   └── investigation.md             ← overrides templates/tickets/investigation.md
 │   └── architecture/
 │       ├── c4-context.md                ← overrides templates/architecture/c4-context.md
 │       └── c4-container.md              ← overrides templates/architecture/c4-container.md
@@ -682,9 +689,11 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/stakeholder-update` | Portfolio rollup with a section per project |
 | `/handover` | Writes to `projects/<name>/handover-assessment.md`, appends the project to the registry, and offers (default-no) to clone the project into `workspace/<name>/` for an LSP-aware deep-dive follow-up (`/code-review`, `/threat-model`, `/security-review`). The clone offer surfaces the cost (disk, gitignored status, `ENABLE_LSP_TOOL=1` + per-language plugin install) explicitly. |
 | `/extract-features` | Scans a project's codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and writes a consolidated Feature Inventory at `projects/<name>/feature-inventory.md`. Pairs with `/handover` as the **greenfield-rewrite path** — `/handover` produces the high-level project assessment, `/extract-features` produces the granular "what we must preserve" catalogue. One-off scan, not a recurring audit; re-runs OFFER (default-no) to overwrite. |
+| `/feature-diagram` | Slice the system by feature — reads one row from `projects/<name>/feature-inventory.md` and emits a Mermaid `flowchart LR` at `projects/<name>/features/<slug>.md` showing the routes / models / jobs / screens that participate in that feature. Sibling to `/c4` (system topology) and `/dfd` (data flows) — different lens (per-feature slice) on the same codebase. Inventory is a hard dependency: run `/extract-features` first. Re-runs prompt to overwrite; `--force` bypasses. See AgDR-0035. |
 | `/process` | Anchor-scoped scan across **seven** process-discovery axes (explicit workflow definitions, queue/job chains, cron triggers, state-column transitions, API choreography, existing BPMN/Mermaid, documented steps) — optionally cross-repo via `apexyard.projects.yaml`. Interviews only on the gaps the code couldn't answer, then emits a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Sibling to `/c4` (static system topology) and `/extract-features` (exhaustive feature catalogue) — same read-first-then-ask shape, BPMN as the output. Requires Node + npm for `bpmn-auto-layout` + `bpmnlint`; falls back to bare BPMN when Node is missing. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
 | `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template (named `tech-vision` to disambiguate from product / company vision). Walks the operator through Scope, Principles, Target-state C4 L1, Current vs Target gap table, multi-quarter Migration path, explicit Anti-scope ("things we explicitly chose NOT to build"), and Review cadence — then writes `projects/<name>/architecture/vision.md`. Resolves the template via `portfolio_resolve_template architecture/vision.md` so adopters with `<private_repo>/custom-templates/architecture/vision.md` see their shape. Re-runs OFFER (default-no) to overwrite; refresh mode preserves existing content as defaults for a quarterly review. Markdown-only output — Mermaid C4 block renders inline on GitHub, same as `/c4` / `/dfd`. See AgDR-0028. |
+| `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF. Asks where the PDF should land via a 4-option prompt: `workspace/<name>/docs/` (travels with the code), `projects/<name>/pdfs/` (ApexYard's view), a custom path, or "keep next to source". Converter dispatch is pandoc → md-to-pdf → wkhtmltopdf for markdown/HTML, and bpmn-to-image → SVG → pandoc for BPMN. Graceful-degrades when no converter is installed (exit 3 + advisory). See AgDR-0034. |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
 
@@ -710,6 +719,19 @@ Where to put the diagrams (same split as every other kind of doc — "would this
 ApexYard dogfoods its own convention — see `docs/architecture/apexyard-context.md` and `apexyard-container.md` for a worked example.
 
 Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML / D2): [`docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`](agdr/AgDR-0003-mermaid-c4-for-diagrams.md).
+
+### PDF exports follow the same rule
+
+The `/pdf` skill (introduced in framework #284) converts framework-generated docs (markdown / HTML / BPMN) to PDF for sharing with non-technical stakeholders, board members, customers, or auditors. At export time it **asks** where the PDF should land — using exactly the "would it follow the code if the project spun out?" test from the table above:
+
+| If YES (travels with the code) | If NO (ApexYard's view) |
+|---|---|
+| `workspace/<name>/docs/<stem>.pdf` | `projects/<name>/pdfs/<stem>.pdf` |
+| Examples: API spec PDF, deployment runbook PDF, internal sequence diagram | Examples: handover assessment, stakeholder update, audit verdict, multi-quarter roadmap snapshot |
+
+The prompt also offers a custom-path slot and a "keep next to source" slot for one-off shares. Defaults can be locked via the `pdf.default_destination` key in `.claude/project-config.json` — see `.claude/skills/pdf/SKILL.md` and [`docs/agdr/AgDR-0034-pdf-export-and-converter-dispatch.md`](agdr/AgDR-0034-pdf-export-and-converter-dispatch.md).
+
+`/pdf` graceful-degrades when no PDF converter is installed — same shape as `/process` (bpmnlint) and `/c4` (Mermaid lint): exit 3 with an advisory naming each install option, so adopters who never need PDFs still pay zero install cost.
 
 ---
 

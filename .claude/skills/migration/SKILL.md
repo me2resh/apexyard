@@ -143,7 +143,19 @@ Title: `[Migration] <type>: <summary>`
 
 Labels: `migration` (or whatever the project configures as its migration label — check `.claude/project-config.json` key `migration_label`, default `migration`), plus the priority label (`P0` / `P1` / `P2` / `P3`).
 
-Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh` can verify it):
+Body — resolve the migration ticket body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+ticket_template=$(portfolio_resolve_template tickets/migration.md)   # → custom-templates/tickets/migration.md if present
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/migration.md`. Adopters who want a customised migration-ticket shape drop their version at `<private_repo>/custom-templates/tickets/migration.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/migration.md template missing — using inline fallback`).
+
+Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh` can verify it) — the default `templates/tickets/migration.md` shape is reproduced below:
 
 ```markdown
 ## Migration
@@ -179,6 +191,12 @@ Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh
 ## Agent Decision Record
 
 Migration AgDR: `<relative-path-to-AgDR>`
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| <term> | <definition> |
 
 ---
 
