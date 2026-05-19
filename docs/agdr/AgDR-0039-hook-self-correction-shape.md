@@ -4,7 +4,7 @@
 
 ## Context
 
-Per Böckeler's [harness-engineering framing](https://martinfowler.com/articles/exploring-gen-ai/harness-engineering-for-coding-agent-users.html), the highest-leverage tactic for improving inferential agents' self-correction is to embed **structured next-action guidance directly in sensor error messages** — what she calls "a good kind of prompt injection." When an agent hits a blocking hook, the difference between `BLOCKED: secret detected. Use env vars instead.` and `BLOCKED: secret detected. To unblock: 1. Move the value to .env, 2. Add to gitignore, 3. Reference via process.env, 4. Re-stage, 5. Retry.` is the difference between the agent thrashing for two or three attempts and the agent recovering on the first try.
+Industry-standard prior art on harness engineering for coding agents holds that the highest-leverage tactic for improving inferential agents' self-correction is to embed **structured next-action guidance directly in sensor error messages** — a positive form of prompt injection that lets the agent recover in-context rather than re-querying the operator. When an agent hits a blocking hook, the difference between `BLOCKED: secret detected. Use env vars instead.` and `BLOCKED: secret detected. To unblock: 1. Move the value to .env, 2. Add to gitignore, 3. Reference via process.env, 4. Re-stage, 5. Retry.` is the difference between the agent thrashing for two or three attempts and the agent recovering on the first try.
 
 ApexYard's hooks are an uneven mix today:
 
@@ -28,7 +28,7 @@ The standardised shape also matters for **future hooks** — once the convention
 
 | Option | Pros | Cons |
 |---|---|---|
-| **A. Standardise on a heredoc shape with `To unblock:` numbered list** (chosen) | Matches the existing gold-standard hooks; canonical phrasing across all 17; explicit next-actions per Böckeler's design principle; one shape to learn for future hook authors | Multi-PR work to retrofit all 17; small risk of a hook author writing too-verbose guidance |
+| **A. Standardise on a heredoc shape with `To unblock:` numbered list** (chosen) | Matches the existing gold-standard hooks; canonical phrasing across all 17; explicit next-actions consistent with industry harness-engineering principles; one shape to learn for future hook authors | Multi-PR work to retrofit all 17; small risk of a hook author writing too-verbose guidance |
 | **B. Keep per-hook variation, document a "minimum bar" instead** | Lighter touch — only specifies the floor, not the shape | Doesn't solve the variation problem; future hooks still freelance; no canonical phrase means inconsistent agent-side parsing |
 | **C. Move all guidance out of the hook into a separate "recovery hint" file Rex reads on block** | Decouples hook code from prose; easier to update guidance without re-deploying hooks | Adds indirection at the worst possible moment (the agent has just been blocked and needs the recovery path NOW); two files to keep in sync; complicates testing |
 | **D. Let the agent figure out recovery without explicit guidance** | Zero per-hook authoring cost | Token cost compounds — every block triggers an agent search instead of pointing at the answer; cf. the actual evidence from existing sessions |
@@ -76,7 +76,7 @@ The phrase **`To unblock:`** is canonical. Prior hooks variously used `To procee
 - Every block message gives the agent (and the operator) a concrete, actionable next step.
 - Future hook authors have a canonical template; no debate per PR about message format.
 - Inferential-agent token cost on blocks drops — the agent doesn't have to search for the recovery path.
-- The framework dogfoods Böckeler's "good kind of prompt injection" principle.
+- The framework instantiates the "good kind of prompt injection" principle from industry harness-engineering prior art — sensor errors carry their own recovery path.
 
 ### Negative
 
@@ -93,5 +93,4 @@ The phrase **`To unblock:`** is canonical. Prior hooks variously used `To procee
 
 - PR me2resh/apexyard#301 — the shape definition + 5 hook retrofits (this work)
 - Ticket me2resh/apexyard#295 — feature/ticket spec
-- Reference: Böckeler, ["Harness engineering for coding agent users"](https://martinfowler.com/articles/exploring-gen-ai/harness-engineering-for-coding-agent-users.html), 2026-04-02 (the "good kind of prompt injection" idea)
-- Reference: Böckeler, ["Maintainability sensors for coding agents"](https://martinfowler.com/articles/exploring-gen-ai/maintainability-sensors.html), 2026-05-19 (the custom-formatter pattern for ESLint that inspired this)
+- Prior art: industry articles on harness engineering for coding agents (2026) — the "good kind of prompt injection" framing and the maintainability-sensors / custom-formatter pattern that informed this design
