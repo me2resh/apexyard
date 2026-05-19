@@ -47,6 +47,9 @@ make_sandbox() {
   local src_root
   src_root=$(cd "$(dirname "$0")/../../.." && pwd)
   cp "$src_root/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+  if [ -f "$src_root/.claude/hooks/_lib-tracker.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-tracker.sh" "$sb/.claude/hooks/_lib-tracker.sh"
+  fi
   cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   echo "$sb"
 }

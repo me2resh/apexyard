@@ -132,7 +132,25 @@ if [ -z "$TRACKER_REPO" ]; then
   TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
 fi
 
-if [ -z "$TRACKER_REPO" ]; then
+# Load the tracker library (dispatches `gh issue view` by default; can be
+# pointed at Linear / Jira / Asana / custom via `.tracker.kind`).
+TRACKER_KIND="gh"
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  TRACKER_KIND=$(tracker_kind)
+fi
+
+# `tracker.kind = none` disables existence verification — there's no CLI to
+# call against. We have nothing to check; bail out cleanly.
+if [ "$TRACKER_KIND" = "none" ]; then
+  exit 0
+fi
+
+# `tracker.kind = gh` (default) still requires an origin / configured repo;
+# preserve today's behaviour. For non-gh kinds the {owner_repo} placeholder
+# in the configured view_command may be unused, so we don't gate on it.
+if [ "$TRACKER_KIND" = "gh" ] && [ -z "$TRACKER_REPO" ]; then
   echo "WARN: verify-commit-refs.sh could not resolve tracker repo. Skipping." >&2
   exit 0
 fi
@@ -140,8 +158,11 @@ fi
 # Optional upstream fallback (see file header). Parse `git remote get-url
 # upstream` into `owner/repo`; empty if no upstream remote is configured —
 # in which case the validator behaves exactly as before (origin-only check).
+#
+# Upstream fallback only applies to the gh kind. Linear / Jira / Asana
+# don't have a fork-of-a-tracker concept.
 UPSTREAM_REPO=""
-if git remote get-url upstream >/dev/null 2>&1; then
+if [ "$TRACKER_KIND" = "gh" ] && git remote get-url upstream >/dev/null 2>&1; then
   UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
   UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
   # Don't double-check if upstream resolves to the same repo as the primary
@@ -163,19 +184,24 @@ MISSING=""
 CLOSED=""
 for REF in $REFS; do
   NUM=$(echo "$REF" | tr -d '#')
-  ISSUE_JSON=$(gh issue view "$NUM" --repo "$TRACKER_REPO" --json number,state 2>/dev/null)
+  # Dispatch via the tracker lib. For non-gh kinds `--repo` may be a no-op.
+  ISSUE_JSON=$(tracker_view "$NUM" "$TRACKER_REPO" 2>/dev/null)
   # Short-circuit: only consult upstream when the primary tracker missed.
   if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
-    ISSUE_JSON=$(gh issue view "$NUM" --repo "$UPSTREAM_REPO" --json number,state 2>/dev/null)
+    ISSUE_JSON=$(tracker_view "$NUM" "$UPSTREAM_REPO" 2>/dev/null)
   fi
   if [ -z "$ISSUE_JSON" ]; then
     MISSING="${MISSING}${REF} "
     continue
   fi
   ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
-  if [ "$ISSUE_STATE" = "CLOSED" ]; then
-    CLOSED="${CLOSED}${REF} "
-  fi
+  # Closed-state recognition: gh emits "CLOSED"; non-gh trackers report
+  # "Done" / "Closed" / "Resolved" / "Cancelled" depending on workflow.
+  ISSUE_STATE_LC=$(echo "$ISSUE_STATE" | tr '[:upper:]' '[:lower:]')
+  case "$ISSUE_STATE_LC" in
+    closed|done|cancelled|canceled|resolved|completed)
+      CLOSED="${CLOSED}${REF} " ;;
+  esac
 done
 
 if [ -n "$MISSING" ]; then

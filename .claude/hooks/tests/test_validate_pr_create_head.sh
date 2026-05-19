@@ -21,6 +21,7 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/validate-pr-create.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
+LIB_TRACKER="$SRC_ROOT/.claude/hooks/_lib-tracker.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
 # shellcheck source=_lib-mock-gh.sh
@@ -55,6 +56,7 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
   if [ -f "$LIB_CFG" ]; then cp "$LIB_CFG" "$sb/.claude/hooks/_lib-read-config.sh"; fi
+  if [ -f "$LIB_TRACKER" ]; then cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"; fi
   if [ -f "$DEFAULTS" ]; then cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"; fi
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   echo "$sb"

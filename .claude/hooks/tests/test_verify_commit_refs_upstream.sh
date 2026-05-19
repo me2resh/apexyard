@@ -52,6 +52,21 @@ make_sandbox_fork() {
     git add README.md
     git commit -q -m "init"
   )
+  # Copy the tracker lib + read-config lib + defaults into the sandbox so the
+  # refactored hook can source them (it expects them at <repo_root>/.claude/hooks/).
+  # The hook itself is run directly from $HOOK_SRC, not copied.
+  local src_root
+  src_root=$(cd "$(dirname "$0")/../../.." && pwd)
+  mkdir -p "$sb/.claude/hooks"
+  if [ -f "$src_root/.claude/hooks/_lib-tracker.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-tracker.sh" "$sb/.claude/hooks/_lib-tracker.sh"
+  fi
+  if [ -f "$src_root/.claude/hooks/_lib-read-config.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+  fi
+  if [ -f "$src_root/.claude/project-config.defaults.json" ]; then
+    cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
+  fi
   echo "$sb"
 }
 

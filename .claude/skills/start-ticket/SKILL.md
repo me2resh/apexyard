@@ -49,15 +49,25 @@ If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
 
 ### 2. Verify the Issue Exists
 
-Run:
+Source the tracker library and call `tracker_view`. The library dispatches the right CLI based on `.tracker.kind` in `.claude/project-config.{defaults,}.json` — `gh` (default), `linear`, `jira`, `asana`, `custom`, or `none`. See `.claude/hooks/_lib-tracker.sh` and AgDR-0033.
 
 ```bash
-gh issue view <number> --repo <owner/repo> --json number,title,state,url,labels
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
+
+issue_json=$(tracker_view "<number>" "<owner/repo>")
+state=$(echo "$issue_json" | jq -r '.state // empty')
+title=$(echo "$issue_json" | jq -r '.title // empty')
+url=$(echo "$issue_json" | jq -r '.url // empty')
 ```
 
-If `state` is not `OPEN`, warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapter parses the underlying CLI's JSON into this common shape, so the skill doesn't need to branch per-CLI.
 
-If the issue does not exist, stop and report the error — do not write the marker.
+If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
+
+If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+
+**`tracker.kind = none` adopters:** the lib returns no data. Skip the existence check entirely; trust the user's input. Re-verify the shape against `tracker_id_pattern` so obvious typos still block.
 
 ### 3. Derive a Branch Suggestion
 
