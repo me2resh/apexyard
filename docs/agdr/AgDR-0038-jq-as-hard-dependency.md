@@ -1,3 +1,10 @@
+---
+title: jq as a hard dependency (declare + check + warn)
+category: architecture
+status: accepted
+date: 2026-05-19
+---
+
 # AgDR-0038 — `jq` as a hard dependency (declare + check + warn)
 
 > In the context of 22+ framework hooks reading `.claude/project-config.json` via `jq` to honour adopter overrides, facing the failure mode where a jq-less machine silently degrades every override to the framework default with no error and no warning, I decided to **declare `jq` as a hard dependency** with **`/setup` pre-flight detection**, a **SessionStart advisory hook**, and a **prerequisite line in `docs/getting-started.md`**, accepting that locked-down corporate environments without jq install rights cannot run the framework until they get jq onto PATH.
