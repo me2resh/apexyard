@@ -1,10 +1,3 @@
----
-title: Standardised self-correction guidance shape for blocking hooks
-category: ergonomics
-status: accepted
-date: 2026-05-19
----
-
 # Standardised self-correction guidance shape for blocking hooks
 
 > In the context of ApexYard's 17 blocking PreToolUse hooks, facing the failure mode that some hooks ship gold-standard "BLOCKED → context → numbered next-action list" error messages (e.g. `require-active-ticket.sh`, `validate-commit-format.sh`) while others ship a single-line `BLOCKED: <reason>` with no recovery path (e.g. `check-secrets.sh`, `block-git-add-all.sh`), I decided to standardise on the gold-standard heredoc shape with a canonical `To unblock:` numbered list, to achieve consistent agent self-correction across every block, accepting that retrofitting all 17 hooks is multi-PR work and is being staged.
