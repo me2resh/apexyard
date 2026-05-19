@@ -9,6 +9,7 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 - A GitHub account and an org you can fork into
 - [Claude Code](https://claude.com/claude-code) installed
 - [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
+- [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
 
 ---
