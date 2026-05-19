@@ -191,7 +191,7 @@ migration_chain() {
 
   # Collect all "from" sides of pair files; sort ascending.
   local pairs
-  pairs=$(ls "$dir"/v*-to-v*.sh 2>/dev/null | xargs -n1 basename 2>/dev/null \
+  pairs=$(find "$dir" -maxdepth 1 -name 'v*-to-v*.sh' -exec basename {} \; 2>/dev/null \
           | sed 's/\.sh$//' | sort -V)
 
   if [ -z "$pairs" ]; then
