@@ -188,10 +188,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 50 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 51 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (50)
+### Available skills (51)
 
 | Skill | Purpose |
 |-------|---------|
@@ -222,6 +222,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
 | `/spike` | Create a hypothesis-driven, time-boxed, throw-away spike ticket (Hypothesis / Budget / Kill Criteria / Disposition). Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply. |
 | `/spike-close` | Disposition gate for spikes — `--promote` files a follow-up `[Feature]`, `--discard` writes a memo to `docs/spike-memos/<slug>.md`. |
+| `/codify-rule` | Turn a human review comment that caught a Rex-miss into a draft handbook entry. Operator-curated capture — Y/N gate before any file is written, source-PR footer for traceability, routes to the right bucket (domain / architecture / general / language). Stage 2 of #293 (Rex domain-aware handbooks); sibling to the future `/enrich-domain` skill (Stage 3). See AgDR-0040. |
 | `/investigation` | Create a structured investigation ticket + live-doc for sustained root-cause work (incident retro, bug archaeology, regression hunt, performance mystery). Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix). Closes when every Follow-up action lands, not on PR merge. Template override via `custom-templates/tickets/investigation.md`. See AgDR-0027. |
 | `/idea` | Capture a new product idea to the backlog |
 | `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery) |
