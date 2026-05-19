@@ -415,9 +415,11 @@ Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-
 
 Framework session state — active-ticket markers, code-review approvals, CEO approvals, the bootstrap-skill marker — always lives at `<ops_fork_root>/.claude/session/`. **Not** inside any `workspace/<project>/` clone.
 
-This matters when you `cd workspace/<project>/` to do project-specific work: even though `git rev-parse --show-toplevel` from inside the clone returns the project clone (not the ops fork), the framework's hooks, agents, and skills (Rex, `/start-ticket`, `/approve-merge`, the merge-gate hooks) all walk up to find the ops fork (looking for both `onboarding.yaml` AND `apexyard.projects.yaml`) and write/read session state from there. The `_lib-ops-root.sh` helper (added in me2resh/apexyard#229 + #230) centralises this walk so all components agree on the canonical path.
+This matters when you `cd workspace/<project>/` to do project-specific work: even though `git rev-parse --show-toplevel` from inside the clone returns the project clone (not the ops fork), the framework's hooks, agents, and skills (Rex, `/start-ticket`, `/approve-merge`, the merge-gate hooks) all walk up to find the ops fork and write/read session state from there. The `_lib-ops-root.sh` helper (added in me2resh/apexyard#229 + #230, extended for v2 in #242) centralises the walk and recognises BOTH the v2 `.apexyard-fork` marker AND the legacy v1 pair (`onboarding.yaml + apexyard.projects.yaml`) — so all components agree on the canonical path under either layout.
 
-You'll never need to manage session-state files by hand. If you ever see a "BLOCKED: PR has no recorded code-reviewer approval" error after the agent visibly approved, check that BOTH `onboarding.yaml` AND `apexyard.projects.yaml` exist at the ops fork root — the walk needs both files present to identify the fork.
+The same dual-anchor rule applies to the `.claude/settings.json` hook wrappers themselves (every `SessionStart` / `PreToolUse` / `PostToolUse` entry walks up to locate `.claude/hooks/<name>.sh` before exec'ing it). Adopters writing new entries — or framework PRs adding new SessionStart hooks — should use the canonical v2-aware wrapper documented in [`AgDR-0041`](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md). The old `onboarding.yaml`-only walk-up shape silently fails on v2 forks.
+
+You'll never need to manage session-state files by hand. If you ever see a "BLOCKED: PR has no recorded code-reviewer approval" error after the agent visibly approved, check that at least one of the ops-fork anchors is present at the fork root: `.apexyard-fork` (v2) OR both `onboarding.yaml` AND `apexyard.projects.yaml` (v1).
 
 ### Upstream sync under split mode
 
