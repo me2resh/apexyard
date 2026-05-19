@@ -419,6 +419,8 @@ This matters when you `cd workspace/<project>/` to do project-specific work: eve
 
 The same dual-anchor rule applies to the `.claude/settings.json` hook wrappers themselves (every `SessionStart` / `PreToolUse` / `PostToolUse` entry walks up to locate `.claude/hooks/<name>.sh` before exec'ing it). Adopters writing new entries — or framework PRs adding new SessionStart hooks — should use the canonical v2-aware wrapper documented in [`AgDR-0041`](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md). The old `onboarding.yaml`-only walk-up shape silently fails on v2 forks.
 
+> **Note on wrapper-level v1 detection laxness.** The wrappers accept `onboarding.yaml` alone as the v1 anchor, while `_lib-ops-root.sh` (the in-hook resolver) requires BOTH `onboarding.yaml` AND `apexyard.projects.yaml`. This is deliberate: the wrapper only needs to locate `.claude/hooks/<name>.sh` and `exec` it, so a single marker suffices. The hook itself does the stricter canonical ops-root check internally via the lib. See [AgDR-0041](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md) § "Decision" point 2 for the full rationale.
+
 You'll never need to manage session-state files by hand. If you ever see a "BLOCKED: PR has no recorded code-reviewer approval" error after the agent visibly approved, check that at least one of the ops-fork anchors is present at the fork root: `.apexyard-fork` (v2) OR both `onboarding.yaml` AND `apexyard.projects.yaml` (v1).
 
 ### Upstream sync under split mode

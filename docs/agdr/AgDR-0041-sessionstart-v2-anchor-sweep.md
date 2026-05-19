@@ -10,7 +10,7 @@ Pre-#242, every adopter's ops fork had `onboarding.yaml` + `apexyard.projects.ya
 r=$PWD; while [ ! -f "$r/onboarding.yaml" ] && [ "$r" != / ]; do r=${r%/*}; done; exec "$r/.claude/hooks/<name>.sh"
 ```
 
-#242 (split-portfolio v2) moved `onboarding.yaml` and `apexyard.projects.yaml` into the private sibling repo. The public fork is anchored solely by the new `.apexyard-fork` marker file. Inside a v2 fork, the legacy walk-up:
+PR #242 (split-portfolio v2) moved `onboarding.yaml` and `apexyard.projects.yaml` into the private sibling repo. The public fork is anchored solely by the new `.apexyard-fork` marker file. Inside a v2 fork, the legacy walk-up:
 
 - Never finds `onboarding.yaml` going up the tree (it's now in a sibling repo)
 - Walks all the way to `/`
@@ -31,6 +31,7 @@ PR #300 (the `check-jq-installed.sh` hook) shipped using the same legacy shape, 
 | **B. Inline the v2-aware walk-up in every wrapper** | Self-contained; matches what the lib does internally; one canonical shape. | Logic duplicated across ~35 wrapper entries; if the anchor set changes again, both the lib and every wrapper need updating. Acceptable: anchors don't change every release. |
 | **C. Replace wrappers with a single dispatch script (`.claude/hooks/_dispatch.sh <name>`)** | DRY — anchor check lives in one place. | Adds an extra hop on every hook invocation; introduces a script lookup before any hook can run; failure modes get worse if the dispatch script itself can't be located. Defer. |
 | **D. Drop the wrapper walk entirely, exec from `$PWD/.claude/hooks/<name>.sh`** | Simpler. | Breaks when the operator works in `workspace/<project>/` — `$PWD` is the project clone, not the ops fork. Project clones don't have framework hooks. Rejected. |
+| **E. Push the walk into the Claude Code runtime — runtime resolves hook paths from the ops-fork root, not from `$PWD` via `bash -c`** | Cleanest — no inline walk in any wrapper, no dispatch hop, no lib-sourcing dance. The runtime already knows where the project root is. | Needs an upstream Claude Code change (settings.json semantics + how hook commands are resolved). Out of this PR's scope. Defer; this AgDR's Option B is the right shape until the runtime grows that ability. |
 
 ## Decision
 

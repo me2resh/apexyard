@@ -21,13 +21,14 @@ set -u
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/link-custom-skills.sh"
 LIB_PORTFOLIO_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-portfolio-paths.sh"
 LIB_CONFIG_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-read-config.sh"
+LIB_OPS_ROOT_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-ops-root.sh"
 DEFAULTS_SRC="$(cd "$(dirname "$0")/../.." && pwd)/project-config.defaults.json"
 
 if [ ! -f "$HOOK_SRC" ]; then
   echo "FAIL: hook not found at $HOOK_SRC" >&2
   exit 1
 fi
-if [ ! -f "$LIB_PORTFOLIO_SRC" ] || [ ! -f "$LIB_CONFIG_SRC" ] || [ ! -f "$DEFAULTS_SRC" ]; then
+if [ ! -f "$LIB_PORTFOLIO_SRC" ] || [ ! -f "$LIB_CONFIG_SRC" ] || [ ! -f "$LIB_OPS_ROOT_SRC" ] || [ ! -f "$DEFAULTS_SRC" ]; then
   echo "FAIL: prerequisite libs / defaults missing" >&2
   exit 1
 fi
@@ -37,11 +38,19 @@ FAIL=0
 FAILED_CASES=""
 
 # --------------------------------------------------------------------------
-# make_fork: build an isolated apexyard fork sandbox with the v2 marker,
-# the hook script, the portfolio + config libs, and the defaults file.
+# make_fork [--no-ops-root-lib]: build an isolated apexyard fork sandbox
+# with the v2 marker, the hook script, the portfolio + config libs, and
+# the defaults file. By default also copies _lib-ops-root.sh so the
+# refactor's primary lib-sourcing path is exercised. Pass
+# --no-ops-root-lib to omit it and force the graceful-degradation
+# fallback path (covered by case 7).
 # Returns the sandbox path on stdout.
 # --------------------------------------------------------------------------
 make_fork() {
+  local copy_ops_root=1
+  if [ "${1:-}" = "--no-ops-root-lib" ]; then
+    copy_ops_root=0
+  fi
   local sb
   sb=$(mktemp -d)
   sb=$(cd "$sb" && pwd -P)
@@ -68,6 +77,9 @@ MD
     cp "$HOOK_SRC"          .claude/hooks/link-custom-skills.sh
     cp "$LIB_PORTFOLIO_SRC" .claude/hooks/_lib-portfolio-paths.sh
     cp "$LIB_CONFIG_SRC"    .claude/hooks/_lib-read-config.sh
+    if [ "$copy_ops_root" -eq 1 ]; then
+      cp "$LIB_OPS_ROOT_SRC" .claude/hooks/_lib-ops-root.sh
+    fi
     cp "$DEFAULTS_SRC"      .claude/project-config.defaults.json
     chmod +x .claude/hooks/link-custom-skills.sh
 
@@ -291,6 +303,46 @@ ok=1
 echo "$out" | grep -q "linked 1 custom skill" || ok=0
 [ "$ok" -eq 1 ] && rc2=0 || rc2=1
 assert "case 6: subdir without SKILL.md is skipped; only valid skills linked" "$rc2"
+if [ "$ok" -ne 1 ]; then echo "  out: $out"; fi
+rm -rf "$SB" "$SIB"
+
+# ==========================================================================
+# Case 7: Graceful-degradation fallback — sandbox has NO _lib-ops-root.sh
+# (simulating an old framework version or a stripped-down adopter
+# install). The hook should fall back to its inline walk-up and still
+# link custom skills correctly.
+#
+# This case is the COMPLEMENT to cases 1-6: those exercise the primary
+# lib-sourcing path (because make_fork copies _lib-ops-root.sh by
+# default). Together they pin BOTH branches of the
+#   if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then ... else ... fi
+# discovery shape that link-custom-skills.sh (and several other hooks)
+# share.
+# ==========================================================================
+SB=$(make_fork --no-ops-root-lib)
+# Verify the lib really is missing in this sandbox.
+[ ! -f "$SB/.claude/hooks/_lib-ops-root.sh" ] || {
+  echo "FAIL: case 7 setup — _lib-ops-root.sh unexpectedly present"
+  exit 1
+}
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/custom-skills/fallback-skill"
+cat > "$SIB/custom-skills/fallback-skill/SKILL.md" <<'MD'
+---
+name: fallback-skill
+---
+MD
+cat > "$SB/.claude/project-config.json" <<JSON
+{ "portfolio": { "custom_skills_dir": "$SIB/custom-skills" } }
+JSON
+
+out=$(run_hook "$SB")
+ok=1
+[ -L "$SB/.claude/skills/fallback-skill" ] || ok=0
+echo "$out" | grep -q "linked 1 custom skill" || ok=0
+[ "$ok" -eq 1 ] && rc2=0 || rc2=1
+assert "case 7: graceful-degradation fallback works when _lib-ops-root.sh is absent" "$rc2"
 if [ "$ok" -ne 1 ]; then echo "  out: $out"; fi
 rm -rf "$SB" "$SIB"
 
