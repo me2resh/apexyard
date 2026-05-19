@@ -14,6 +14,10 @@
           },
           {
             "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-jq-installed.sh\"'"
+          },
+          {
+            "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
           },
           {
