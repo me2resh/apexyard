@@ -98,7 +98,7 @@ The phrase **`To unblock:`** is canonical. Prior hooks variously used `To procee
 
 ## Artifacts
 
-- PR me2resh/apexyard#XXX — the shape definition + 5 hook retrofits (this work)
+- PR me2resh/apexyard#301 — the shape definition + 5 hook retrofits (this work)
 - Ticket me2resh/apexyard#295 — feature/ticket spec
 - Reference: Böckeler, ["Harness engineering for coding agent users"](https://martinfowler.com/articles/exploring-gen-ai/harness-engineering-for-coding-agent-users.html), 2026-04-02 (the "good kind of prompt injection" idea)
 - Reference: Böckeler, ["Maintainability sensors for coding agents"](https://martinfowler.com/articles/exploring-gen-ai/maintainability-sensors.html), 2026-05-19 (the custom-formatter pattern for ESLint that inspired this)

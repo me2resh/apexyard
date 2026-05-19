@@ -130,8 +130,10 @@ To unblock:
   2. Pick a short kebab-case description (max ~40 chars)
   3. Rename the current branch in place:
        git branch -m "$CURRENT_BRANCH" "feature/GH-XX-your-description"
-     OR start fresh from the integration branch:
-       git checkout dev && git checkout -b "feature/GH-XX-your-description"
+     OR start fresh from the project's integration branch (most
+     managed projects are trunk-based on 'main'; the apexyard framework
+     itself uses 'dev' — pick the one that matches THIS repo):
+       git checkout main && git checkout -b "feature/GH-XX-your-description"
   4. Retry the operation
 
 If the current branch has commits you want to keep, the rename in

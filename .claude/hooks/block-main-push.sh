@@ -43,10 +43,12 @@ To unblock:
   3. Open a PR via /feature → /start-ticket → gh pr create, OR if the
      ticket exists, just: gh pr create --base <protected-branch> --head <feature-branch>
 
-Override (rare — only if your fork's branch model genuinely treats
-this branch as a daily-work trunk): add the branch name to
-.claude/project-config.json → .git.protected_branches[] to override
-the default protection list.
+Customise (rare): .claude/project-config.json → .git.protected_branches[]
+REPLACES the default list (main / master / dev / develop). To REMOVE
+protection from a default-protected branch (e.g. you legitimately use
+'dev' as your trunk), write the array with that branch OMITTED. To ADD
+protection to a new branch, write the array INCLUDING it. The hook
+trusts whichever list you provide — get the direction right.
 MSG
   exit 2
 fi
@@ -68,12 +70,15 @@ To unblock:
   2. Retry the commit on the feature branch
   3. Push and open a PR when ready
 
-If you've already committed locally to '$CURRENT_BRANCH' by accident:
-  1. Move the commit to a feature branch:
+If you've already committed locally to '$CURRENT_BRANCH' by accident,
+the recovery is a three-step rescue (NOT a separate To-unblock — the
+gate is still the one above): create a recovery branch pointing at the
+current commit, reset $CURRENT_BRANCH to drop the accidental commit
+locally, then check out the recovery branch.
+
        git branch feature/GH-<ticket>-recovery
        git reset --hard HEAD~1   # drops the commit from $CURRENT_BRANCH
        git checkout feature/GH-<ticket>-recovery
-  2. The commit now lives on the feature branch; push and open a PR.
 MSG
     exit 2
   fi

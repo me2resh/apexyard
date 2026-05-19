@@ -46,9 +46,9 @@ markdown code block, or a public-by-design API key constant):
     retry. The hook only matches actual secret-shape lines; comments
     don't trip it.
 
-Pattern source: .claude/hooks/check-secrets.sh (the regex is intentional
-ally noisy on the false-positive side — secret leaks are worse than
-extra friction).
+Pattern source: .claude/hooks/check-secrets.sh (the regex is
+intentionally noisy on the false-positive side — secret leaks are
+worse than extra friction).
 MSG
   exit 2
 fi
