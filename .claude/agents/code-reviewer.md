@@ -269,14 +269,30 @@ def glob_to_regex(glob):
         c = glob[i]
         if c == '*':
             if i + 1 < len(glob) and glob[i+1] == '*':
-                rgx += '.*'; i += 2
-                if i < len(glob) and glob[i] == '/': i += 1
+                # `**/` — zero or more path segments. Translating it to
+                # `.*` would over-match across segment boundaries (so
+                # `**/foo.ts` would match `notfoo.ts`). `(?:.*/)?`
+                # matches either empty (root file) or any prefix ending
+                # in `/`, which is bash globstar semantics.
+                if i + 2 < len(glob) and glob[i+2] == '/':
+                    rgx += '(?:.*/)?'; i += 3
+                else:
+                    rgx += '.*'; i += 2  # `**` not followed by `/` — be permissive
             else:
                 rgx += '[^/]*'; i += 1
         elif c == '?': rgx += '.'; i += 1
         elif c in '.()[]+^$|\\': rgx += '\\' + c; i += 1
         else: rgx += c; i += 1
     return '^' + rgx + '$'
+
+# Strip a YAML inline comment ` # ...` from a line before the list-item
+# regex runs. YAML's comment rule: a `#` preceded by whitespace starts
+# a comment. We strip whitespace-prefixed `#` only, so a literal `#` in
+# a (rare) quoted glob survives. Without this strip, `- "src/foo/**"
+# # rationale` captures `src/foo/**"  # rationale` as the glob and
+# silently fails to match anything — the exact under-loads-silently
+# failure mode this design warns against.
+_STRIP_COMMENT = re.compile(r'\s+#.*$')
 
 def should_load(hb, diff):
     try:
@@ -289,8 +305,11 @@ def should_load(hb, diff):
     if fm_end is None:
         return True  # unterminated → degrade visibly to always-load
     globs = []; in_paths = False
-    for line in lines[1:fm_end]:
-        if re.match(r'^\s*#', line): continue
+    for raw in lines[1:fm_end]:
+        # Strip ` # comment` tails before any further parsing — see the
+        # `_STRIP_COMMENT` doc above for why.
+        line = _STRIP_COMMENT.sub('', raw)
+        if re.match(r'^\s*#', line) or not line.strip(): continue
         if re.match(r'^paths\s*:', line):
             in_paths = True
             tail = line.split(':', 1)[1].strip()

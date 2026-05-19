@@ -62,7 +62,7 @@ Chosen: **Option A — frontmatter `paths:` field on each handbook in `handbooks
 
 - Rex's prompt grows by ~15 lines covering the frontmatter parse + path-match step. This is a small but real per-review token cost.
 - Domain handbooks introduce a fourth shape (frontmatter + body) alongside the three frontmatter-free buckets. New authors need to learn this is the only bucket with frontmatter. Mitigated by `handbooks/domain/README.md` calling it out explicitly.
-- If an adopter's `paths:` globs are malformed, Rex silently skips the handbook (no compile-time validation). Mitigated by the always-load default — a misconfigured `paths:` block degrades to always-load, which is over-loading, not under-loading.
+- If an adopter's `paths:` globs are malformed (unterminated frontmatter, unparseable YAML, invalid glob syntax), Rex degrades to **always-load with a visible `⚠` warning** in the review output, not silent skip. The asymmetry is deliberate: over-loading visibly is recoverable (the operator sees the warning and fixes the YAML); under-loading silently is not (the handbook never fires and the operator never learns). The matcher's parse path applies this default at every branch — missing `paths:`, empty `paths: []`, unterminated frontmatter, and exceptions during file read all fall through to `return True`.
 
 ### Matcher invocation shape — batched, not per-handbook
 
@@ -80,5 +80,5 @@ Both stages are tracked in #293's ACs but implemented as separate follow-up tick
 - `handbooks/domain/README.md` — operator-facing convention doc
 - `handbooks/README.md` — updated to mention the new bucket
 - `.claude/agents/code-reviewer.md` § 8 — Rex's prompt with the fourth bucket + frontmatter-parse + path-match step
-- PR me2resh/apexyard#XXX — implementation
+- PR me2resh/apexyard#294 — implementation
 - Ticket me2resh/apexyard#293 — feature spec with the three-stage plan
