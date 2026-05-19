@@ -188,10 +188,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 48 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 49 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (48)
+### Available skills (49)
 
 | Skill | Purpose |
 |-------|---------|
@@ -231,6 +231,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) from a codebase — six-axis discovery + trust boundaries + data classifications. Source of truth that `/threat-model` and `/compliance-check` consume. See AgDR-0026. |
 | `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template — target-state, current-vs-target gap table, multi-quarter migration path, explicit anti-scope, and quarterly review cadence. Writes `projects/<name>/architecture/vision.md` via the custom-templates resolver (#244). Sibling to `/c4` and `/dfd` in the architecture-doc family. (Named `tech-vision` to disambiguate from product / company vision.) See AgDR-0028. |
 | `/journey` | Generate a single self-contained user-journey HTML — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact. |
+| `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF with a destination prompt that mirrors the "would it follow the code if the project spun out?" rule. Dispatches across pandoc → md-to-pdf → wkhtmltopdf → bpmn-to-image; graceful-degrades when no converter is installed (exit 3 + advisory). See AgDR-0034. |
 | `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
 | `/release` | (Framework-only) Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG, open the release PR, and tag after merge |
 | `/projects` | List all managed projects from the registry with status |
@@ -276,7 +277,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (48 slash commands) | `.claude/skills/` |
+| Skills (49 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

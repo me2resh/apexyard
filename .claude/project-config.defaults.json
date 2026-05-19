@@ -156,5 +156,12 @@
     "workspace_dir": "./workspace",
     "custom_skills_dir": "./custom-skills",
     "custom_handbooks_dir": "./custom-handbooks"
+  },
+
+  "pdf": {
+    "_comment": "Config for the /pdf skill. preferred_converter picks between pandoc / md-to-pdf / wkhtmltopdf when multiple are installed (null = first available in the dispatch order). pdf_engine is passed to pandoc as --pdf-engine; common values are xelatex (best Unicode), pdflatex (smaller install), wkhtmltopdf (no LaTeX needed but degraded typography). default_destination is used when /pdf is invoked with --no-prompt — one of 'workspace' (project repo docs/), 'projects' (ops fork projects/<name>/pdfs/), 'keep' (next to source), or 'ask' (require the interactive prompt; passing --no-prompt with this value is an error). See AgDR-0034.",
+    "preferred_converter": "pandoc",
+    "pdf_engine": "xelatex",
+    "default_destination": "ask"
   }
 }
