@@ -858,7 +858,43 @@ Files that stay close to upstream (merge cleanly most of the time):
 
 **Does the registry support globs?** No. It's an explicit list. If you want all repos in an org, use `gh repo list` to generate the file once and commit the result — but you should still curate it.
 
-**Can I use this with Linear / Jira / etc.?** Yes. Set `ticket_prefix` per project in the registry. Skills that read tickets will use the right prefix per project.
+**Can I use this with Linear / Jira / etc.?** Yes — and the framework's mechanical hooks (`/start-ticket`, `validate-pr-create.sh`, `verify-commit-refs.sh`, `validate-branch-name.sh`) verify ticket existence against your tracker via the `tracker` config block. The default `kind = gh` calls `gh issue view`; swap it for `linear` / `jira` / `asana` / `custom` to dispatch a different CLI. See AgDR-0033 and `.claude/hooks/_lib-tracker.sh`. Example override in `.claude/project-config.json`:
+
+```json
+{
+  "tracker": {
+    "kind": "linear",
+    "view_command": "linear issue view {id} --json",
+    "id_pattern": "^[A-Z]+-[0-9]+$"
+  }
+}
+```
+
+For Jira, point at the [ankitpokhrel/jira-cli](https://github.com/ankitpokhrel/jira-cli) raw-JSON output:
+
+```json
+{
+  "tracker": {
+    "kind": "jira",
+    "view_command": "jira issue view {id} --raw",
+    "id_pattern": "^[A-Z]+-[0-9]+$"
+  }
+}
+```
+
+For Asana (per-task lookup by GID):
+
+```json
+{
+  "tracker": {
+    "kind": "asana",
+    "view_command": "asana task get {id} --json",
+    "id_pattern": "^[0-9]+$"
+  }
+}
+```
+
+If your tracker has no CLI, use `kind: "custom"` with a `view_command` that calls `curl` and a `normalise_jq` filter to map the response into `{state, title, url, labels}`. If you want to disable existence verification entirely (rare — accepted gap when no CLI exists), set `kind: "none"` — the hooks fall back to shape-only validation via `tracker.id_pattern`. The registry-level `ticket_prefix` field is still respected per-project for the `/start-ticket` branch-suggestion step.
 
 **What if I only have one repo?** Fork apexyard anyway and register that one repo. The skills work the same way. When you add a second project, just append to the registry — no migration, no re-setup.
 

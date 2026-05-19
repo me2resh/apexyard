@@ -156,5 +156,12 @@
     "workspace_dir": "./workspace",
     "custom_skills_dir": "./custom-skills",
     "custom_handbooks_dir": "./custom-handbooks"
+  },
+
+  "tracker": {
+    "_comment": "Tracker dispatch — selects which CLI verifies that ticket-IDs reference real tickets. Default is GH (GitHub Issues via `gh issue view`), matching today's behaviour exactly. Supported `kind` values: gh, linear, jira, asana, custom, none. `view_command` is a template with `{id}` and `{owner_repo}` placeholders — the lib substitutes them and runs the result. `id_pattern` is the regex `validate-branch-name.sh` and `validate-pr-create.sh` use to shape-check ticket IDs (covers GH `#123` / `GH-123` plus enterprise prefixes like `LIN-456` / `JIRA-789` by default). Set `kind = none` to disable existence verification entirely (shape-only). See AgDR-0033 and `.claude/hooks/_lib-tracker.sh`.",
+    "kind": "gh",
+    "view_command": "gh issue view {id} --repo {owner_repo} --json state,title,url,labels",
+    "id_pattern": "^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$"
   }
 }
