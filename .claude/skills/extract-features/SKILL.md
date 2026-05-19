@@ -1,7 +1,7 @@
 ---
 name: extract-features
 description: Scan an existing codebase and produce a structured Feature Inventory — six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) consolidated into a "what we must preserve" specification suitable for a greenfield rewrite.
-argument-hint: "[project-name]"
+argument-hint: "[project-name] [--with-mockups]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
@@ -39,12 +39,26 @@ Defaults match today's single-fork layout (`./projects`). Adopters in split-port
 ## Usage
 
 ```
-/extract-features                       # current project (cwd inside workspace/<name>/)
-/extract-features billing-api           # registered project; resolve to workspace/billing-api/
-/extract-features .                     # treat cwd as the project root
+/extract-features                              # current project (cwd inside workspace/<name>/)
+/extract-features billing-api                  # registered project; resolve to workspace/billing-api/
+/extract-features .                            # treat cwd as the project root
+/extract-features billing-api --with-mockups   # also emit AI-inferred ASCII wireframes per UI screen
 ```
 
 If `<project-name>` is given but `workspace/<name>/` doesn't exist, the skill stops and asks the user to clone the project (it does not auto-clone — that's a side-effect with cost; same convention as `/handover`).
+
+### `--with-mockups` (opt-in, default off)
+
+When set, the inventory file gains a new `## Screens` section after the existing axes. For each UI screen discovered in axis 5, the skill emits a low-fidelity **ASCII wireframe** — boxed layout, form fields (`[ ]` text, `[v]` dropdown, `[X]` checkbox, `[ Button ]` button), tables as ASCII grids, max 80 chars wide.
+
+The wireframes are **model-inferred from static analysis** — route component imports, form-field bindings, data-model field types. They're not lifts from real DOM. Two design constraints follow:
+
+1. **ASCII format only.** No PNG/SVG/HTML. ASCII boxes keep the fidelity honest — a reader sees a sketch and treats it as a sketch.
+2. **Mandatory disclaimer header per wireframe.** Every screen wireframe carries `> AI-inferred sketch — verify before relying on. Source: <route-or-component-path>` on its own line above the box.
+
+Backward-compat: running `/extract-features` without `--with-mockups` produces today's inventory exactly — the flag adds the `## Screens` section; nothing else changes.
+
+File-size policy: if more than **10 UI screens** are detected, the skill writes one file per screen under `<projects_dir>/<name>/screens/<slug>.md` and the `## Screens` section in the inventory becomes a linked index. Threshold rationale in [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
 
 ## Output location
 
@@ -329,6 +343,10 @@ Grouped by file or feature cluster:
 |-------|--------|-------------|
 | ... | ... | ... |
 
+{IF --with-mockups, INSERT the `## Screens` section here. Each wireframe carries
+the mandatory disclaimer header `> AI-inferred sketch — verify before relying
+on. Source: <path>` on its own line above the ASCII box. See step 4b.}
+
 ## Coverage gaps
 
 The scanner could **not** determine these — they need human review of the existing code or stakeholder interviews:
@@ -356,6 +374,164 @@ The scanner could **not** determine these — they need human review of the exis
 
 ````
 
+### 4b. Emit ASCII wireframes (only when `--with-mockups` is set)
+
+For each UI screen captured in axis 2e, build a low-fidelity ASCII wireframe. Append the section to the inventory if 10 or fewer screens; write per-screen files at `<projects_dir>/<name>/screens/<slug>.md` and replace the inventory's `## Screens` body with a linked index if more than 10 screens.
+
+#### Disclaimer header (MANDATORY — every wireframe)
+
+Every wireframe carries this exact one-line header on its own line **above** the box:
+
+```
+> AI-inferred sketch — verify before relying on. Source: <route or component path>
+```
+
+The `<route or component path>` is the source detection result from the rules below — the file (or route) the wireframe was inferred from. No exceptions. A wireframe without a disclaimer is a broken artefact.
+
+#### Source detection (the `Source:` value in the disclaimer)
+
+Pick the strongest signal available, in this order:
+
+| Stack | Source |
+|-------|--------|
+| Next.js (App Router) | `app/<segments>/page.{tsx,jsx,js}` |
+| Next.js (Pages Router) | `pages/<path>.{tsx,jsx,js}` |
+| Remix | `app/routes/<route>.{tsx,jsx,js}` |
+| SvelteKit | `src/routes/<path>/+page.svelte` |
+| React Router (declared) | the route's `element=` component file (e.g. `src/pages/LoginPage.jsx`) |
+| Vue Router | the route's `component:` SFC path (e.g. `src/views/Login.vue`) |
+| Angular | the route's `component:` path |
+| Plain component (no router) | the component file itself (e.g. `src/components/SignupForm.tsx`) |
+
+If a screen has both a route AND a component, prefer the route (it's the user-addressable name) and reference the component in the inventory's "UI screens" table.
+
+#### Inference rules
+
+The wireframe is built from these signals — all available **statically**, no runtime probing:
+
+| Signal | Inferred wireframe element |
+|--------|---------------------------|
+| Imported `<TopNav>` / `<Header>` / `<NavBar>` component | Top nav strip at the top of the box |
+| Imported `<Sidebar>` / `<SideNav>` / `<Drawer>` (persistent) | Left sidebar column |
+| Imported `<Footer>` | Footer strip at the bottom of the box |
+| `<Modal>` / `<Dialog>` / `<Drawer>` (as the root return) | Centered modal layout (smaller box, dimmed-overlay hint) |
+| Form components (`<form>`, `useForm`, `react-hook-form`, `Formik`, Vue `v-model`) | Form section with one row per field |
+| Form field bound to a `string` model field, or `<input type="text\|email\|password">` | `Field name: [ ____________________ ]` |
+| Form field bound to a `boolean` model field, or `<input type="checkbox">` | `[ ] Field label` (use `[X]` for default-checked) |
+| Form field bound to an `enum` model field, `<select>`, `<Dropdown>`, `<RadioGroup>` | `Field name: [v ____________________ ]` (the `v` denotes dropdown caret) |
+| Foreign-key field (Prisma `@relation`, `belongs_to`, etc.) | `Field name: [v ____________________ ]` |
+| Form field bound to `number` / `int` / `float` model field | `Field name: [ 0__________________ ]` |
+| `<textarea>` or string field with `@db.Text` / large size hint | Multi-line `[ ___________________ ]` (3 lines) |
+| `<button type="submit">` / `<Button>` with submit semantics | `[ Submit ]` (use the actual label when known) |
+| Cancel / secondary buttons | `[ Cancel ]` |
+| `<Table>` / `<DataGrid>` / `<List>` imports bound to a model | ASCII grid: header row from model fields, 2-3 stub data rows |
+| `<Card>` clusters in a dashboard layout | Boxed cards in a grid; chart placeholders as `[░░ chart ░░]` |
+
+When a signal is absent (no nav, no footer, etc.), omit that element entirely. **Do not invent layout the code doesn't imply.**
+
+#### Box drawing conventions
+
+Use ASCII box-drawing with `+`, `-`, `|`. Maximum width **80 chars** (the disclaimer line is exempt). Examples:
+
+**Form-heavy screen**:
+
+```
++----------------------------------------------------------------------------+
+| TopNav: [Logo]  Home  Orders  Account                          [Log out]  |
++----------------------------------------------------------------------------+
+|                                                                            |
+|   Sign in                                                                  |
+|                                                                            |
+|   Email:    [ _______________________________________________________ ]    |
+|   Password: [ _______________________________________________________ ]    |
+|   [ ] Remember me                                                          |
+|                                                                            |
+|   [ Sign in ]   [ Forgot password? ]                                       |
+|                                                                            |
++----------------------------------------------------------------------------+
+```
+
+**Table-heavy screen**:
+
+```
++----------------------------------------------------------------------------+
+| TopNav: [Logo]  Home  Orders  Account                          [Log out]  |
++----------------------------------------------------------------------------+
+|                                                                            |
+|   Orders                                            [ + New order ]        |
+|                                                                            |
+|   +-------+-------------+----------+--------+----------+-----------+       |
+|   | ID    | Customer    | Total    | Status | Created  |           |       |
+|   +-------+-------------+----------+--------+----------+-----------+       |
+|   | 1001  | ...         | ...      | ...    | ...      | [ View ]  |       |
+|   | 1002  | ...         | ...      | ...    | ...      | [ View ]  |       |
+|   | 1003  | ...         | ...      | ...    | ...      | [ View ]  |       |
+|   +-------+-------------+----------+--------+----------+-----------+       |
+|                                                                            |
++----------------------------------------------------------------------------+
+```
+
+**Modal screen**:
+
+```
++----------------------------------------------------------------------------+
+|  ░░░░░░░░░░░░░░░░░░░░░░░ (dimmed background) ░░░░░░░░░░░░░░░░░░░░░░░░░░░  |
+|                                                                            |
+|             +----------------------------------------------+               |
+|             |  Confirm deletion                       [X]  |               |
+|             +----------------------------------------------+               |
+|             |                                              |               |
+|             |  Are you sure you want to delete this        |               |
+|             |  order? This action cannot be undone.        |               |
+|             |                                              |               |
+|             |              [ Cancel ]   [ Delete ]         |               |
+|             +----------------------------------------------+               |
+|                                                                            |
++----------------------------------------------------------------------------+
+```
+
+**Dashboard screen (mixed cards + chart)**:
+
+```
++----------------------------------------------------------------------------+
+| TopNav: [Logo]  Home  Orders  Account                          [Log out]  |
++--------------+-------------------------------------------------------------+
+| Sidebar      |                                                             |
+|  - Overview  |   Overview                                                  |
+|  - Orders    |                                                             |
+|  - Users     |   +----------------+ +----------------+ +----------------+  |
+|  - Settings  |   | Orders today   | | Revenue (MTD)  | | Active users   |  |
+|              |   |   [   142   ]  | |  [  $12,840 ]  | |   [   893   ]  |  |
+|              |   +----------------+ +----------------+ +----------------+  |
+|              |                                                             |
+|              |   Orders over time                                          |
+|              |   [░░░░░░░░░░░░░░░░░░░░ chart ░░░░░░░░░░░░░░░░░░░░░]       |
+|              |                                                             |
++--------------+-------------------------------------------------------------+
+```
+
+#### File-size handling
+
+Count the UI screens from axis 2e:
+
+- **≤ 10 screens** → emit all wireframes inline under `## Screens` in the inventory file.
+- **> 10 screens** → emit one file per screen at `<projects_dir>/<name>/screens/<slug>.md` (slug from the route path or component name, kebab-case). The inventory's `## Screens` section becomes a linked index:
+
+  ```markdown
+  ## Screens
+
+  > AI-inferred sketches — each linked file carries its own disclaimer.
+
+  | # | Screen | Source | Wireframe |
+  |---|--------|--------|-----------|
+  | 1 | Login | `src/pages/LoginPage.jsx` | [screens/login.md](./screens/login.md) |
+  | 2 | Orders list | `src/pages/OrdersPage.jsx` | [screens/orders.md](./screens/orders.md) |
+  ```
+
+  Each per-screen file has the disclaimer header at the top followed by the box.
+
+The threshold is documented and overridable; see [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
+
 ### 5. Save and report
 
 Write `projects/<name>/feature-inventory.md`. If the file exists, prompt:
@@ -375,6 +551,13 @@ Feature inventory written: projects/<name>/feature-inventory.md
 {N} coverage gaps flagged. {N} recommended next steps.
 ```
 
+When `--with-mockups` is set, append a second line:
+
+```
+ASCII wireframes emitted: {N} screen(s) {inline | under projects/<name>/screens/}.
+All wireframes carry the AI-inferred disclaimer — verify before relying on.
+```
+
 ## Why this skill exists
 
 A greenfield rewrite that proceeds without a feature inventory has two common failure modes:
@@ -391,3 +574,5 @@ The inventory is the single artefact that cuts both. It's not a spec, it's not a
 - **Don't run this every sprint.** It's a pre-rewrite scan, not a recurring audit. Run once, treat the artefact as a baseline, update only when the source codebase has changed substantially.
 - **Don't substitute this for `/code-review` or `/launch-check`.** The inventory says what features exist; it doesn't say whether they're well-implemented, secure, or production-ready. Use the audit skills for quality signals.
 - **Don't skip the human review step.** Prior-art bias is real — the matrix can feel authoritative even when it's missing 20% of the picture. Always reconcile with the previous owner / stakeholders before treating the inventory as canonical.
+- **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact — the reader sees `AI-inferred sketch — verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
+- **Don't upgrade `--with-mockups` to PNG/SVG.** The format is ASCII by design — visual fidelity should match epistemic confidence. A pixel-perfect render of a model's guess at a screen is exactly the failure mode the flag was designed to avoid.
