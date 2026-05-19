@@ -64,6 +64,10 @@ Chosen: **Option A — frontmatter `paths:` field on each handbook in `handbooks
 - Domain handbooks introduce a fourth shape (frontmatter + body) alongside the three frontmatter-free buckets. New authors need to learn this is the only bucket with frontmatter. Mitigated by `handbooks/domain/README.md` calling it out explicitly.
 - If an adopter's `paths:` globs are malformed, Rex silently skips the handbook (no compile-time validation). Mitigated by the always-load default — a misconfigured `paths:` block degrades to always-load, which is over-loading, not under-loading.
 
+### Matcher invocation shape — batched, not per-handbook
+
+The matcher is invoked **once per review** with all candidate handbooks passed as argv, not once per handbook. The naive shape (`for hb in handbooks; python3 match.py "$hb"; done`) would make the per-review Bash count grow O(N) in handbook count — and in sandboxed environments every `python3 ...` invocation surfaces a permission prompt. The batched shape keeps the count constant: one `python3 /tmp/match_handbooks.py "${HBS[@]}" < diff` regardless of how many handbooks the adopter has registered. The Python script reads handbook paths from `sys.argv[1:]` and the diff from `sys.stdin`, then prints loadable paths to stdout. The bash loop simply pipes that stdout into the same load path as the architecture/general/language buckets.
+
 ### Future work (tracked in the same feature ticket #293)
 
 - **Stage 2: `/codify-rule` skill.** Turn a human review comment that caught a Rex-miss into a handbook entry. Operator approves Y/N per finding. The captured rule includes the source PR for traceability — so future readers see *why* this rule exists.

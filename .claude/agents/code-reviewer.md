@@ -189,16 +189,25 @@ echo "$DIFF_FILES" | (
 )
 
 # Domain buckets — public + private. Frontmatter-driven (see next section).
+# Collect all candidate handbooks first, then make ONE batched matcher call
+# (one python3 invocation regardless of how many handbooks exist — keeps
+# the per-review Bash count constant rather than O(N) in handbook count,
+# which matters for permission-prompt surface in sandboxed environments).
+DOMAIN_HBS=()
 for d in handbooks/domain/*/ ${PRIV:+$PRIV/domain/*/}; do
   [ -d "$d" ] || continue
   for hb in "$d"*.md; do
     [ -f "$hb" ] || continue
     [ "$(basename "$hb")" = "README.md" ] && continue
-    if domain_handbook_matches "$hb" "$DIFF_FILES"; then
-      echo "$hb"
-    fi
+    DOMAIN_HBS+=("$hb")
   done
 done
+
+# Single batched matcher invocation. Prints loadable handbook paths to
+# stdout, one per line. Skips silently when no candidates exist.
+if [ ${#DOMAIN_HBS[@]} -gt 0 ]; then
+  printf '%s\n' "$DIFF_FILES" | python3 /tmp/match_handbooks.py "${DOMAIN_HBS[@]}"
+fi
 ```
 
 Read each loaded handbook in full. They're flat markdown (with an optional frontmatter block on domain handbooks) — no heavy parser needed.
@@ -224,14 +233,13 @@ Domain handbooks (`handbooks/domain/<area>/*.md`, both public and private custom
 
 4. **On parse failure** (malformed frontmatter, unreadable YAML), **default to always-load** and emit a one-line warning to your review output: `⚠ handbook frontmatter unparseable, defaulting to always-load: <path>`. Under-loading silently is worse than over-loading visibly.
 
-Reference implementation — a self-contained Python matcher that handles `**`, `*`, `?`, and `{a,b,c}` brace alternation correctly. **Use this verbatim** unless you have a reason to roll your own — the bash-`case` approach silently fails on `**` (case patterns don't support globstar) and on `{ts,js}` (brace expansion happens at command-parse time, not pattern-match time):
+Reference implementation — a **batched** Python matcher that takes N handbook paths in `argv` plus the diff on stdin and prints the loadable subset to stdout. One invocation per review, not per handbook. The batched shape keeps the per-review Bash count constant regardless of how many domain handbooks the adopter has — important in sandboxed environments where every `python3 ...` invocation surfaces a permission prompt:
 
 ```python
 #!/usr/bin/env python3
-# match_handbook.py — load decision for one domain handbook.
-# Exit 0: load (matched, or always-load default).
-# Exit 1: skip (paths: declared, no glob matched the diff).
-# Usage: python3 match_handbook.py <handbook_path> < diff-files-on-stdin
+# match_handbooks.py — batched load decision for N domain handbooks.
+# Usage: match_handbooks.py <handbook1> [<handbook2> ...] < diff-files-on-stdin
+# Prints loadable handbook paths to stdout, one per line. Exits 0 always.
 
 import re, sys
 
@@ -270,12 +278,16 @@ def glob_to_regex(glob):
         else: rgx += c; i += 1
     return '^' + rgx + '$'
 
-def main():
-    hb = sys.argv[1]
-    with open(hb) as f: lines = f.readlines()
-    if not lines or lines[0].rstrip() != '---': return 0  # no frontmatter
+def should_load(hb, diff):
+    try:
+        with open(hb) as f: lines = f.readlines()
+    except OSError:
+        return False
+    if not lines or lines[0].rstrip() != '---':
+        return True  # no frontmatter → always load
     fm_end = next((i for i in range(1, len(lines)) if lines[i].rstrip() == '---'), None)
-    if fm_end is None: return 0  # unterminated → degrade visibly to always-load
+    if fm_end is None:
+        return True  # unterminated → degrade visibly to always-load
     globs = []; in_paths = False
     for line in lines[1:fm_end]:
         if re.match(r'^\s*#', line): continue
@@ -284,29 +296,32 @@ def main():
             tail = line.split(':', 1)[1].strip()
             if tail.startswith('['):
                 inner = tail.strip('[]').strip()
-                if inner: globs.extend([s.strip().strip('"\'') for s in inner.split(',')])
+                if inner:
+                    globs.extend([s.strip().strip('"\'') for s in inner.split(',')])
                 in_paths = False
             continue
         if in_paths:
             if not re.match(r'^\s', line): in_paths = False; continue
             m = re.match(r'^\s*-\s*["\']?(.*?)["\']?\s*$', line)
             if m and m.group(1): globs.append(m.group(1))
-    if not globs: return 0  # no paths key, or empty list → always load
+    if not globs:
+        return True  # no paths key, or empty list → always load
     patterns = [re.compile(glob_to_regex(g)) for orig in globs for g in expand_braces(orig)]
-    for f in sys.stdin.read().splitlines():
-        f = f.strip()
-        if not f: continue
-        if any(rgx.match(f) for rgx in patterns): return 0
-    return 1  # paths declared, none matched → skip
+    for f in diff:
+        if any(rgx.match(f) for rgx in patterns):
+            return True
+    return False
 
-sys.exit(main())
+def main():
+    diff = [ln.strip() for ln in sys.stdin.read().splitlines() if ln.strip()]
+    for hb in sys.argv[1:]:
+        if should_load(hb, diff):
+            print(hb)
+
+main()
 ```
 
-Use this from the discovery loop above by saving the script once per review (e.g. to `/tmp/match_handbook.py`) and invoking it per handbook:
-
-```bash
-python3 /tmp/match_handbook.py "$hb" <<< "$DIFF_FILES" && echo "$hb"   # exit 0 → load
-```
+The discovery loop above passes `${DOMAIN_HBS[@]}` to one invocation of this script — N handbooks, 1 Bash call. The stdout list flows into the same handbook-load path as the architecture / general / language buckets.
 
 If the agent's environment lacks Python, fall back to the contract: parse the `---`-delimited frontmatter, extract the `paths:` list, expand `{}` alternation, treat `**` as cross-segment and `*` as within-segment, and load the handbook iff any glob matches any diff file. Get this right — under-loading silently is worse than over-loading visibly.
 
