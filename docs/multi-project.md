@@ -370,7 +370,14 @@ Every framework template (PRD, AgDR, migration AgDR, C4 context/container, visio
 │   ├── prd.md                           ← overrides templates/prd.md
 │   ├── agdr.md                          ← overrides templates/agdr.md
 │   ├── agdr-migration.md                ← overrides templates/agdr-migration.md
-│   ├── spike.md                         ← overrides templates/spike.md
+│   ├── tickets/
+│   │   ├── feature.md                   ← overrides templates/tickets/feature.md
+│   │   ├── bug.md                       ← overrides templates/tickets/bug.md
+│   │   ├── task.md                      ← overrides templates/tickets/task.md
+│   │   ├── migration.md                 ← overrides templates/tickets/migration.md
+│   │   ├── idea.md                      ← overrides templates/tickets/idea.md
+│   │   ├── spike.md                     ← overrides templates/tickets/spike.md
+│   │   └── investigation.md             ← overrides templates/tickets/investigation.md
 │   └── architecture/
 │       ├── c4-context.md                ← overrides templates/architecture/c4-context.md
 │       └── c4-container.md              ← overrides templates/architecture/c4-container.md

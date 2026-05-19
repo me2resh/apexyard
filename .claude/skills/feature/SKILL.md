@@ -110,9 +110,23 @@ Priority?
 Anything explicitly out of scope? (or press Enter to skip)
 ```
 
-### 4. Show the formatted ticket for confirmation
+### 4. Resolve the feature body template
 
-Display the full ticket:
+Resolve the feature body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template tickets/feature.md)   # → custom-templates/tickets/feature.md if present, else templates/tickets/feature.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/feature.md`. Adopters who want a customised feature-body shape drop their version at `<private_repo>/custom-templates/tickets/feature.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/feature.md template missing — using inline fallback`). This preserves the pre-refactor behaviour for adopters whose installations don't yet have the new template files.
+
+### 5. Show the formatted ticket for confirmation
+
+Substitute the gathered inputs into the resolved template (or the inline heredoc fallback), then display the full ticket using the resolved shape (the default `templates/tickets/feature.md` shape is reproduced below):
 
 ```
 Here's the ticket I'll create:
@@ -136,6 +150,11 @@ As a {persona}, I want {goal} so that {benefit}.
 
 ## Effort Estimate
 TBD
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| {term} | {definition} |
 ---
 
 Labels: enhancement, {P0|P1|P2}
@@ -144,13 +163,13 @@ Repo: {owner/repo}
 Create this ticket? (yes / edit / cancel)
 ```
 
-### 5. Handle response
+### 6. Handle response
 
 - **yes** / **looks good** / **go** → create the issue
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 6. Create the GitHub Issue
+### 7. Create the GitHub Issue
 
 ```bash
 gh issue create --repo {owner/repo} \
@@ -159,7 +178,7 @@ gh issue create --repo {owner/repo} \
   --body "{formatted body}"
 ```
 
-### 7. Return the URL
+### 8. Return the URL
 
 ```
 Created: {owner/repo}#{number} — {title}

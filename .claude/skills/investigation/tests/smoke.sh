@@ -3,7 +3,7 @@
 #
 # Verifies the contract that the consuming skill depends on:
 #
-#   1. templates/investigation.md exists and contains every required section
+#   1. templates/tickets/investigation.md exists and contains every required section
 #      (Trigger, Hypothesis being tested, Method, Findings, Conclusion,
 #       Follow-up actions) — these are what /investigation interviews on
 #       and what AgDR-0027 names as the load-bearing shape.
@@ -13,8 +13,8 @@
 #       one line).
 #
 #   3. The portfolio_resolve_template helper resolves a custom override
-#      when one is dropped at <private_repo>/custom-templates/investigation.md,
-#      and falls through to templates/investigation.md otherwise.
+#      when one is dropped at <private_repo>/custom-templates/tickets/investigation.md,
+#      and falls through to templates/tickets/investigation.md otherwise.
 #
 #   4. The skill's required-sections claim matches what's actually in the
 #      project-config defaults — no drift between the SKILL.md sections
@@ -57,14 +57,14 @@ assert_eq() {
 }
 
 # Resolve the ops-fork root. From inside the skill's tests/ dir, walk up
-# until we hit the dir containing templates/investigation.md.
+# until we hit the dir containing templates/tickets/investigation.md.
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 ops_root="$script_dir"
-while [ "$ops_root" != "/" ] && [ ! -f "$ops_root/templates/investigation.md" ]; do
+while [ "$ops_root" != "/" ] && [ ! -f "$ops_root/templates/tickets/investigation.md" ]; do
   ops_root=$(dirname "$ops_root")
 done
-if [ ! -f "$ops_root/templates/investigation.md" ]; then
-  echo "FAIL: could not locate ops-fork root (templates/investigation.md missing)"
+if [ ! -f "$ops_root/templates/tickets/investigation.md" ]; then
+  echo "FAIL: could not locate ops-fork root (templates/tickets/investigation.md missing)"
   exit 1
 fi
 
@@ -75,7 +75,7 @@ echo ""
 # 1. Template ships with every required section
 # ---------------------------------------------------------------------------
 echo "1. Template required-section coverage:"
-template="$ops_root/templates/investigation.md"
+template="$ops_root/templates/tickets/investigation.md"
 assert_grep "Trigger heading"                "^## Trigger"                "$template"
 assert_grep "Hypothesis being tested heading" "^## Hypothesis being tested" "$template"
 assert_grep "Method heading"                 "^## Method"                 "$template"
@@ -114,12 +114,12 @@ echo "4. portfolio_resolve_template override semantics:"
 # We're inside a worktree without those, so cd into the ops root first.
 pushd "$ops_root" >/dev/null
 
-# Test path A: no custom-templates/investigation.md → resolves to framework default
+# Test path A: no custom-templates/tickets/investigation.md → resolves to framework default
 portfolio_clear_cache
-resolved=$(portfolio_resolve_template investigation.md 2>/dev/null || echo "(not resolved)")
+resolved=$(portfolio_resolve_template tickets/investigation.md 2>/dev/null || echo "(not resolved)")
 case "$resolved" in
-  */templates/investigation.md)
-    echo "  PASS: no override → falls through to templates/investigation.md ($resolved)"
+  */templates/tickets/investigation.md)
+    echo "  PASS: no override → falls through to templates/tickets/investigation.md ($resolved)"
     PASS=$((PASS + 1))
     ;;
   *)
@@ -131,7 +131,7 @@ case "$resolved" in
 esac
 
 # Test path B: synthesise a custom override using a fixture private-repo dir
-#   - create temp dir with apexyard.projects.yaml + custom-templates/investigation.md
+#   - create temp dir with apexyard.projects.yaml + custom-templates/tickets/investigation.md
 #   - point a temporary project-config at it
 #   - assert the resolver picks the override
 fixture_root=$(mktemp -d -t investigation-fixture-XXXXXX)
@@ -140,8 +140,8 @@ trap 'rm -rf "$fixture_root"' EXIT
 # Build a synthetic ops-fork rooted at $fixture_root/fork with a config
 # pointing at a sibling $fixture_root/portfolio that holds the override.
 mkdir -p "$fixture_root/fork/.claude/hooks"
-mkdir -p "$fixture_root/fork/templates"
-mkdir -p "$fixture_root/portfolio/custom-templates"
+mkdir -p "$fixture_root/fork/templates/tickets"
+mkdir -p "$fixture_root/portfolio/custom-templates/tickets"
 
 # Mark the synthetic fork as an ops fork (v2 anchor).
 touch "$fixture_root/fork/.apexyard-fork"
@@ -153,7 +153,7 @@ projects: []
 YAML
 
 # Seed the framework template at the synthetic fork (resolver fallback target).
-cat > "$fixture_root/fork/templates/investigation.md" <<'MD'
+cat > "$fixture_root/fork/templates/tickets/investigation.md" <<'MD'
 # framework default
 ## Trigger
 ## Hypothesis being tested
@@ -164,7 +164,7 @@ cat > "$fixture_root/fork/templates/investigation.md" <<'MD'
 MD
 
 # Seed the adopter override at the sibling private repo.
-cat > "$fixture_root/portfolio/custom-templates/investigation.md" <<'MD'
+cat > "$fixture_root/portfolio/custom-templates/tickets/investigation.md" <<'MD'
 # ADOPTER OVERRIDE
 ## Trigger
 ## Hypothesis being tested
@@ -206,12 +206,12 @@ override_resolved=$(
     . .claude/hooks/_lib-read-config.sh
     . .claude/hooks/_lib-portfolio-paths.sh
     portfolio_clear_cache
-    portfolio_resolve_template investigation.md
+    portfolio_resolve_template tickets/investigation.md
   '
 )
 
 case "$override_resolved" in
-  */portfolio/custom-templates/investigation.md)
+  */portfolio/custom-templates/tickets/investigation.md)
     echo "  PASS: custom override wins → $override_resolved"
     PASS=$((PASS + 1))
     # Sanity-check it's actually the adopter version, not the framework one.
