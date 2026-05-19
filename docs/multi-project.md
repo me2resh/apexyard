@@ -370,7 +370,14 @@ Every framework template (PRD, AgDR, migration AgDR, C4 context/container, visio
 │   ├── prd.md                           ← overrides templates/prd.md
 │   ├── agdr.md                          ← overrides templates/agdr.md
 │   ├── agdr-migration.md                ← overrides templates/agdr-migration.md
-│   ├── spike.md                         ← overrides templates/spike.md
+│   ├── tickets/
+│   │   ├── feature.md                   ← overrides templates/tickets/feature.md
+│   │   ├── bug.md                       ← overrides templates/tickets/bug.md
+│   │   ├── task.md                      ← overrides templates/tickets/task.md
+│   │   ├── migration.md                 ← overrides templates/tickets/migration.md
+│   │   ├── idea.md                      ← overrides templates/tickets/idea.md
+│   │   ├── spike.md                     ← overrides templates/tickets/spike.md
+│   │   └── investigation.md             ← overrides templates/tickets/investigation.md
 │   └── architecture/
 │       ├── c4-context.md                ← overrides templates/architecture/c4-context.md
 │       └── c4-container.md              ← overrides templates/architecture/c4-container.md
@@ -504,7 +511,7 @@ Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/cu
 
 If you adopted split-portfolio mode before framework #242, your fork is on the v1 layout: `apexyard.projects.yaml` and `projects/` resolve to the sibling private repo (good), but `onboarding.yaml` and `workspace/` are still in the public fork. The v2 migration moves both to the private repo too, and writes the new `.apexyard-fork` anchor.
 
-**You don't need to run this manually — `/update` detects the v1 layout and offers the migration as a default-yes step during the next upstream sync.** As of framework v1.4.0 the migration is also encoded as `.claude/migrations/v1.2.0-to-v1.3.0.sh` and runs automatically as part of the multi-hop chain (see [`docs/upgrading.md`](upgrading.md)) — both paths converge on the same end state. When you run `/update` after pulling framework ≥ #242, you'll see:
+**You don't need to run this manually — `/update` detects the v1 layout and offers the migration as a default-yes step during the next upstream sync.** When you run `/update` after pulling framework ≥ #242, you'll see:
 
 ```
 ApexYard /update detected your fork is in split-portfolio mode (v1 layout):
@@ -685,6 +692,7 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/process` | Anchor-scoped scan across **seven** process-discovery axes (explicit workflow definitions, queue/job chains, cron triggers, state-column transitions, API choreography, existing BPMN/Mermaid, documented steps) — optionally cross-repo via `apexyard.projects.yaml`. Interviews only on the gaps the code couldn't answer, then emits a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Sibling to `/c4` (static system topology) and `/extract-features` (exhaustive feature catalogue) — same read-first-then-ask shape, BPMN as the output. Requires Node + npm for `bpmn-auto-layout` + `bpmnlint`; falls back to bare BPMN when Node is missing. |
 | `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
 | `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template (named `tech-vision` to disambiguate from product / company vision). Walks the operator through Scope, Principles, Target-state C4 L1, Current vs Target gap table, multi-quarter Migration path, explicit Anti-scope ("things we explicitly chose NOT to build"), and Review cadence — then writes `projects/<name>/architecture/vision.md`. Resolves the template via `portfolio_resolve_template architecture/vision.md` so adopters with `<private_repo>/custom-templates/architecture/vision.md` see their shape. Re-runs OFFER (default-no) to overwrite; refresh mode preserves existing content as defaults for a quarterly review. Markdown-only output — Mermaid C4 block renders inline on GitHub, same as `/c4` / `/dfd`. See AgDR-0028. |
+| `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF. Asks where the PDF should land via a 4-option prompt: `workspace/<name>/docs/` (travels with the code), `projects/<name>/pdfs/` (ApexYard's view), a custom path, or "keep next to source". Converter dispatch is pandoc → md-to-pdf → wkhtmltopdf for markdown/HTML, and bpmn-to-image → SVG → pandoc for BPMN. Graceful-degrades when no converter is installed (exit 3 + advisory). See AgDR-0034. |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
 
@@ -710,6 +718,19 @@ Where to put the diagrams (same split as every other kind of doc — "would this
 ApexYard dogfoods its own convention — see `docs/architecture/apexyard-context.md` and `apexyard-container.md` for a worked example.
 
 Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML / D2): [`docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`](agdr/AgDR-0003-mermaid-c4-for-diagrams.md).
+
+### PDF exports follow the same rule
+
+The `/pdf` skill (introduced in framework #284) converts framework-generated docs (markdown / HTML / BPMN) to PDF for sharing with non-technical stakeholders, board members, customers, or auditors. At export time it **asks** where the PDF should land — using exactly the "would it follow the code if the project spun out?" test from the table above:
+
+| If YES (travels with the code) | If NO (ApexYard's view) |
+|---|---|
+| `workspace/<name>/docs/<stem>.pdf` | `projects/<name>/pdfs/<stem>.pdf` |
+| Examples: API spec PDF, deployment runbook PDF, internal sequence diagram | Examples: handover assessment, stakeholder update, audit verdict, multi-quarter roadmap snapshot |
+
+The prompt also offers a custom-path slot and a "keep next to source" slot for one-off shares. Defaults can be locked via the `pdf.default_destination` key in `.claude/project-config.json` — see `.claude/skills/pdf/SKILL.md` and [`docs/agdr/AgDR-0034-pdf-export-and-converter-dispatch.md`](agdr/AgDR-0034-pdf-export-and-converter-dispatch.md).
+
+`/pdf` graceful-degrades when no PDF converter is installed — same shape as `/process` (bpmnlint) and `/c4` (Mermaid lint): exit 3 with an advisory naming each install option, so adopters who never need PDFs still pay zero install cost.
 
 ---
 
@@ -781,9 +802,7 @@ Every few weeks, pull the latest apexyard improvements into your fork. The easy 
 /update --dry-run    # preview only, no state change
 ```
 
-`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.claude/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), **walks the per-version migration chain** when your fork is multiple releases behind (since v1.4.0 — see [`docs/upgrading.md`](upgrading.md)), and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
-
-> **Multi-hop syncs (since v1.4.0).** If your fork is multiple releases behind, `/update` walks **every intermediate release's migration script** in order — not just the latest. The flow reads `.claude/framework-version` (your current version anchor), compares against `upstream/main`'s latest tag, builds the chain (e.g. v1.0.0 → v1.1.0 → v1.2.0 → v1.3.0 → v1.4.0), and offers each step `[Y / n / show-diff / skip-all]`. Forks that pre-date v1.4.0 don't have the anchor file yet — `/update` prompts you once to confirm which release you're on, then writes the anchor going forward. Full adopter reference: [`docs/upgrading.md`](upgrading.md). Design rationale: [`docs/agdr/AgDR-0032-update-chain-migrations.md`](agdr/AgDR-0032-update-chain-migrations.md).
+`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.claude/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
 
 > **Pre-release testing (`/update --from-dev`).** A hidden `--from-dev` flag pulls from `upstream/dev` instead of the latest tagged release on `upstream/main`. Intended for the framework maintainer testing pre-release work on a separate machine, and for adopters who explicitly want to validate an upcoming framework change before the release tag is cut. **Not a supported general-adopter path** — the adopter contract is tagged releases from `upstream/main` (see [AgDR-0007](agdr/AgDR-0007-release-cut-branch-model.md)). Prints a `⚠ PRE-RELEASE SYNC` banner before any state mutation, uses the same sync-branch + conflict-resolution flow, and lands on a `chore/sync-upstream-dev` branch. Revert with `git reset --hard origin/main` if needed. See `.claude/skills/update/SKILL.md` § Options for details.
 

@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /investigation — Create an Investigation Ticket + Live-Doc
 
-Creates a structured GitHub Issue + a sibling live-doc markdown file for an **investigation** — sustained root-cause work whose deliverable is a *written artefact* of what was observed, what we concluded, and what's next. Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix) — see the comparison block at the top of `templates/investigation.md`.
+Creates a structured GitHub Issue + a sibling live-doc markdown file for an **investigation** — sustained root-cause work whose deliverable is a *written artefact* of what was observed, what we concluded, and what's next. Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix) — see the comparison block at the top of `templates/tickets/investigation.md`.
 
 > **When to use an investigation vs a bug vs a spike.** A `/bug` is filed when you already know what's broken and need to coordinate the fix. A `/spike` is filed when you want to test a forward-looking hypothesis ("will this approach work?") inside a time budget. An `/investigation` is filed when the *question itself* is the unknown — "why did this happen?", "what's actually going on with the metric drift?", "how does competitor X handle this?". The investigation produces a written record; the bug fix that may follow is a downstream artefact.
 
@@ -99,7 +99,7 @@ The slug becomes part of the live-doc filename: `<YYYY-MM-DD>-<slug>.md`. Today'
 
 ### 4. Gather details (one section at a time)
 
-Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next. Mirror the section structure of `templates/investigation.md` so the user sees their answers slot into the artefact directly.
+Ask conversationally — do NOT batch all questions. Wait for each answer before asking the next. Mirror the section structure of `templates/tickets/investigation.md` so the user sees their answers slot into the artefact directly.
 
 **a) Trigger (required)**
 
@@ -165,10 +165,12 @@ Resolve the investigation template via the portfolio helper so adopter overrides
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
-template=$(portfolio_resolve_template investigation.md)   # → custom-templates/investigation.md if present, else templates/investigation.md
+template=$(portfolio_resolve_template tickets/investigation.md)   # → custom-templates/tickets/investigation.md if present, else templates/tickets/investigation.md
 ```
 
-Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/investigation.md`. Adopters who want a customised investigation shape (e.g. Five Whys instead of Hypothesis Tree) drop their version at `<private_repo>/custom-templates/investigation.md`. See `templates/README.md` for the path-mirroring convention.
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/investigation.md`. Adopters who want a customised investigation shape (e.g. Five Whys instead of Hypothesis Tree) drop their version at `<private_repo>/custom-templates/tickets/investigation.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup or pre-#281 layout where the file lived at `templates/investigation.md`), fall back to the inline heredoc body below (the live-doc bootstrap structure mirroring the resolved template's sections) and print a one-line WARN on stderr (`WARN: tickets/investigation.md template missing — using inline fallback`).
 
 Read the resolved template and substitute the gathered inputs into the four sections that have inputs (Trigger, Hypothesis being tested, Method sketch, plus the placeholder Findings / Conclusion / Follow-up actions sections to fill in as the investigation progresses).
 
@@ -275,7 +277,7 @@ Suggested follow-up skills depending on what the investigation surfaces:
 6. **Close semantics are different from every other ticket type.** Investigations close when every Follow-up action is resolved or explicitly dropped — NOT on PR merge. The `investigation` label is the signal that downstream automation (if any) should treat the ticket as long-running.
 7. **Labels.** `investigation` always. Priority labels (P0 / P1 / etc.) are NOT applied by default — investigations are scoped by *the question*, not prioritised by P-class. If the investigation is incident-driven and the operator wants a P-label, they can add one manually.
 8. **No close gate (no `/investigation-close` skill).** The Follow-up actions section IS the close gate. Operators close the issue when actions land. Different from `/spike-close` because investigations have an open-ended action list, not a binary disposition. See AgDR-0027 for the rationale.
-9. **Template override.** Adopters who prefer Five Whys / Fishbone over the default Hypothesis Tree drop a replacement at `<private_repo>/custom-templates/investigation.md`. The skill resolves via `portfolio_resolve_template` — no skill changes needed.
+9. **Template override.** Adopters who prefer Five Whys / Fishbone over the default Hypothesis Tree drop a replacement at `<private_repo>/custom-templates/tickets/investigation.md`. The skill resolves via `portfolio_resolve_template tickets/investigation.md` — no skill changes needed.
 
 ## How investigations relate to other skills
 
