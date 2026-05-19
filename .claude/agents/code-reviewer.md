@@ -158,6 +158,7 @@ The path conventions below apply to **each** of the two source roots. Within a s
 | `architecture/*.md` | Always — every PR |
 | `general/*.md` | Always — every PR |
 | `language/<lang>/*.md` | When the PR diff includes files matching `<lang>`'s extensions: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`. Other directories under `language/` follow the same `<lang>/` → matching-extension convention. |
+| `domain/<area>/*.md` | **Parse the YAML frontmatter** (a `---`-delimited block at the top of the file). If a `paths:` field is present and non-empty, load this handbook only when the PR diff matches at least one glob in the list. If `paths:` is absent or empty, **always load** (foundational domain rule with no path boundary). See § "Domain handbook frontmatter — `paths:` field" below for the parse + match shape and [`handbooks/domain/README.md`](../../handbooks/domain/README.md) for the authoring convention. |
 | `<other>/*.md` | Default to always-load if you don't recognise the directory; flag in your review that the directory convention is undocumented. |
 
 Discovery shape (load BOTH source roots):
@@ -178,16 +179,136 @@ find handbooks/architecture handbooks/general -name '*.md' 2>/dev/null
 [ -n "$PRIV" ] && find "$PRIV/architecture" "$PRIV/general" -name '*.md' 2>/dev/null
 
 # Diff-matched language buckets — public + private.
-gh pr diff <number> --name-only | (
+DIFF_FILES=$(gh pr diff <number> --name-only)
+echo "$DIFF_FILES" | (
   if grep -qE '\.(ts|tsx)$'; then
     find handbooks/language/typescript -name '*.md' 2>/dev/null
     [ -n "$PRIV" ] && find "$PRIV/language/typescript" -name '*.md' 2>/dev/null
   fi
   # ... etc per language
 )
+
+# Domain buckets — public + private. Frontmatter-driven (see next section).
+for d in handbooks/domain/*/ ${PRIV:+$PRIV/domain/*/}; do
+  [ -d "$d" ] || continue
+  for hb in "$d"*.md; do
+    [ -f "$hb" ] || continue
+    [ "$(basename "$hb")" = "README.md" ] && continue
+    if domain_handbook_matches "$hb" "$DIFF_FILES"; then
+      echo "$hb"
+    fi
+  done
+done
 ```
 
-Read each loaded handbook in full. They're flat markdown — no parser needed.
+Read each loaded handbook in full. They're flat markdown (with an optional frontmatter block on domain handbooks) — no heavy parser needed.
+
+#### Domain handbook frontmatter — `paths:` field
+
+Domain handbooks (`handbooks/domain/<area>/*.md`, both public and private custom layers) are the **only** bucket that supports a frontmatter block. Parse it cheaply:
+
+1. **Detect frontmatter.** If the file's first line is exactly `---`, the frontmatter block runs from line 2 to the next line that is exactly `---`. Everything after is the markdown body. If line 1 is not `---`, there is no frontmatter — treat the whole file as body and apply the always-load default.
+
+2. **Extract `paths:`.** Within the frontmatter block, find a YAML list literal under the `paths:` key. The expected shape:
+
+   ```yaml
+   paths:
+     - "scripts/github-emu-migration/**"
+     - "**/emu-*.{ts,js,py}"
+     - "src/auth/emu/**"
+   ```
+
+   A one-line `paths: []` (empty list) counts as **absent** for the always-load rule. A missing `paths:` field also counts as **absent**.
+
+3. **Match against the PR diff.** For each glob in `paths:`, test against every file in `gh pr diff <number> --name-only`. Use shell pathname expansion semantics (`**` matches across directory boundaries, `*` matches within a single segment, `{a,b}` alternation expands). If **any** glob matches **any** diff file → load this handbook. Otherwise skip.
+
+4. **On parse failure** (malformed frontmatter, unreadable YAML), **default to always-load** and emit a one-line warning to your review output: `⚠ handbook frontmatter unparseable, defaulting to always-load: <path>`. Under-loading silently is worse than over-loading visibly.
+
+Reference implementation — a self-contained Python matcher that handles `**`, `*`, `?`, and `{a,b,c}` brace alternation correctly. **Use this verbatim** unless you have a reason to roll your own — the bash-`case` approach silently fails on `**` (case patterns don't support globstar) and on `{ts,js}` (brace expansion happens at command-parse time, not pattern-match time):
+
+```python
+#!/usr/bin/env python3
+# match_handbook.py — load decision for one domain handbook.
+# Exit 0: load (matched, or always-load default).
+# Exit 1: skip (paths: declared, no glob matched the diff).
+# Usage: python3 match_handbook.py <handbook_path> < diff-files-on-stdin
+
+import re, sys
+
+def expand_braces(glob):
+    out = ['']; i = 0
+    while i < len(glob):
+        c = glob[i]
+        if c == '{':
+            depth = 1; j = i + 1
+            while j < len(glob) and depth:
+                if glob[j] == '{': depth += 1
+                elif glob[j] == '}': depth -= 1
+                if depth: j += 1
+            if depth:
+                out = [p + c for p in out]; i += 1
+            else:
+                alts = glob[i+1:j].split(',')
+                out = [p + a for p in out for a in alts]
+                i = j + 1
+        else:
+            out = [p + c for p in out]; i += 1
+    return out
+
+def glob_to_regex(glob):
+    rgx = ''; i = 0
+    while i < len(glob):
+        c = glob[i]
+        if c == '*':
+            if i + 1 < len(glob) and glob[i+1] == '*':
+                rgx += '.*'; i += 2
+                if i < len(glob) and glob[i] == '/': i += 1
+            else:
+                rgx += '[^/]*'; i += 1
+        elif c == '?': rgx += '.'; i += 1
+        elif c in '.()[]+^$|\\': rgx += '\\' + c; i += 1
+        else: rgx += c; i += 1
+    return '^' + rgx + '$'
+
+def main():
+    hb = sys.argv[1]
+    with open(hb) as f: lines = f.readlines()
+    if not lines or lines[0].rstrip() != '---': return 0  # no frontmatter
+    fm_end = next((i for i in range(1, len(lines)) if lines[i].rstrip() == '---'), None)
+    if fm_end is None: return 0  # unterminated → degrade visibly to always-load
+    globs = []; in_paths = False
+    for line in lines[1:fm_end]:
+        if re.match(r'^\s*#', line): continue
+        if re.match(r'^paths\s*:', line):
+            in_paths = True
+            tail = line.split(':', 1)[1].strip()
+            if tail.startswith('['):
+                inner = tail.strip('[]').strip()
+                if inner: globs.extend([s.strip().strip('"\'') for s in inner.split(',')])
+                in_paths = False
+            continue
+        if in_paths:
+            if not re.match(r'^\s', line): in_paths = False; continue
+            m = re.match(r'^\s*-\s*["\']?(.*?)["\']?\s*$', line)
+            if m and m.group(1): globs.append(m.group(1))
+    if not globs: return 0  # no paths key, or empty list → always load
+    patterns = [re.compile(glob_to_regex(g)) for orig in globs for g in expand_braces(orig)]
+    for f in sys.stdin.read().splitlines():
+        f = f.strip()
+        if not f: continue
+        if any(rgx.match(f) for rgx in patterns): return 0
+    return 1  # paths declared, none matched → skip
+
+sys.exit(main())
+```
+
+Use this from the discovery loop above by saving the script once per review (e.g. to `/tmp/match_handbook.py`) and invoking it per handbook:
+
+```bash
+python3 /tmp/match_handbook.py "$hb" <<< "$DIFF_FILES" && echo "$hb"   # exit 0 → load
+```
+
+If the agent's environment lacks Python, fall back to the contract: parse the `---`-delimited frontmatter, extract the `paths:` list, expand `{}` alternation, treat `**` as cross-segment and `*` as within-segment, and load the handbook iff any glob matches any diff file. Get this right — under-loading silently is worse than over-loading visibly.
 
 #### Per-handbook precedence on overlapping topics
 
