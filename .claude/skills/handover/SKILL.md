@@ -121,6 +121,91 @@ Should I attempt to build the project to check current health? (y/n)
 
 If yes and it's a Node project: `npm install --ignore-scripts && npm run build` (or whatever the package.json scripts say). Capture pass/fail and any errors.
 
+### 4.5. Harnessability assessment
+
+> Why this exists. ApexYard's value as a "harness" depends on the codebase having the ambient affordances the framework's rules and handbooks expect — type safety, module boundaries, lint baselines, etc. When those are missing, Rex's architecture handbooks (especially `ENFORCEMENT: blocking` ones like clean-architecture-layers) fire false positives and create review noise rather than catching real issues. Naming that gap during adoption — rather than after the first noisy code review — gives the operator a chance to either adopt advisory-only, or schedule the scaffolding work as a follow-up. This step codifies the assessment so a `low` score becomes a visible warning at adoption time, not a surprise.
+>
+> The framing draws on industry-standard harness-engineering prior art on **ambient affordances** — the idea that a tool's effectiveness depends on the working environment already supplying the signals the tool relies on. See AgDR-0042.
+
+Score 5 codebase dimensions, each with a 1-line rationale citing the evidence found in steps 2-4. Combine into an overall verdict (high / moderate / low) using the truth table below. If `low`, print the warning text verbatim. Persist the result in the handover assessment file (step 5).
+
+#### The 5 dimensions
+
+| # | Dimension | What to check (examples per language) | Verdict |
+|---|-----------|----------------------------------------|---------|
+| 1 | **Type safety** | TS: `tsconfig.json` with `"strict": true` (or all `strict*` flags set). Ruby: `sorbet/` dir + `# typed:` sigils in src files. Python: `mypy.ini` OR `[tool.mypy] strict = true` in `pyproject.toml` OR `pyrightconfig.json` strict. Go: implicitly strong (assume `strong`). Rust: implicitly strong (assume `strong`). | `strong` / `partial` / `none` |
+| 2 | **Module boundaries** | Presence of `src/domain/` + `src/application/` + `src/infrastructure/` (clean-architecture); presence of `packwerk.yml` + `packs/` (Ruby Packwerk); monorepo workspace config (`package.json` `workspaces:`, `pnpm-workspace.yaml`, `nx.json`, `turbo.json`) indicating package-level boundaries. Otherwise flat single-`src/`. | `strong` / `partial` / `flat` |
+| 3 | **Framework opinionation** | `package.json` deps containing Next.js / NestJS / Remix (TS strong); `pom.xml` / `build.gradle` containing Spring (Java strong); `requirements.txt` / `pyproject.toml` containing Django / FastAPI (Python strong / moderate respectively); `Gemfile` containing Rails (Ruby strong); `go.mod` containing Gin / Echo (Go moderate) vs raw `net/http` only (weak). Strong = full opinionation (persistence + HTTP + DI / conventions). Moderate = HTTP framework only. Weak = raw scripts, no framework. | `strong` / `moderate` / `weak` |
+| 4 | **Test coverage signal** | `jest.config.*` with a `coverageThreshold` block; `.nycrc` (Istanbul) with thresholds; `pytest.ini` / `setup.cfg` / `pyproject.toml` containing `--cov` or `[tool.coverage]`; `vitest.config.*` with `coverage.thresholds`; Go CI step running `go test -cover`; coverage step / threshold in any `.github/workflows/*.yml` or `.gitlab-ci.yml`. | `present` / `absent` |
+| 5 | **Lint baseline** | ESLint config (`.eslintrc.*`, `eslint.config.*`); RuboCop (`.rubocop.yml`); golangci-lint (`.golangci.yml`); ruff / flake8 / pylint config (or `[tool.ruff]` etc. in `pyproject.toml`); `.pre-commit-config.yaml` with any linter hook. | `present` / `absent` |
+
+Each dimension MUST be backed by a one-line rationale citing the evidence path and key signal, e.g.:
+
+```
+- Type safety: strong — tsconfig.json line 6: "strict": true
+- Module boundaries: flat — only src/, no domain/application/infrastructure dirs
+- Framework opinionation: moderate — package.json has express but no ORM/DI framework
+- Test coverage signal: absent — no coverageThreshold in jest.config.js, no coverage step in .github/workflows/
+- Lint baseline: present — .eslintrc.json at repo root
+```
+
+#### Overall verdict (truth table)
+
+Count how many of the 5 dimensions are `strong` or `present` (the "good" buckets):
+
+| Strong-or-present count | Other conditions | Verdict |
+|-------------------------|------------------|---------|
+| 5 / 5 | — | `high` |
+| 3 or 4 / 5 | — | `moderate` |
+| ≤ 2 / 5 | — | `low` |
+| any | Type safety is `none` AND framework opinionation is `weak` | `low` (override — these two together amplify each other) |
+
+Implement the rule as a bash-shaped truth table so re-implementations agree:
+
+```bash
+# Pseudocode — dimension verdicts as variables
+# Each is one of: strong/partial/none, strong/partial/flat,
+#                 strong/moderate/weak, present/absent, present/absent
+good=0
+[ "$type_safety"        = "strong"  ] && good=$((good+1))
+[ "$module_boundaries"  = "strong"  ] && good=$((good+1))
+[ "$framework_opinion"  = "strong"  ] && good=$((good+1))
+[ "$test_coverage"      = "present" ] && good=$((good+1))
+[ "$lint_baseline"      = "present" ] && good=$((good+1))
+
+if [ "$type_safety" = "none" ] && [ "$framework_opinion" = "weak" ]; then
+  verdict="low"
+elif [ "$good" -ge 5 ]; then
+  verdict="high"
+elif [ "$good" -ge 3 ]; then
+  verdict="moderate"
+else
+  verdict="low"
+fi
+```
+
+These thresholds are deliberately conservative for v1 — `high` requires every dimension to be in the top bucket. See AgDR-0042 for the rationale and tuning notes.
+
+#### Warning text (only when verdict is `low`)
+
+Print this text **verbatim** to the operator after the assessment, and also embed it inside the handover-assessment.md file under the "Harnessability assessment" section:
+
+```
+⚠ Harnessability: LOW
+
+Rex's architecture handbooks will fire advisory-only on this codebase. The blocking gate (`ENFORCEMENT: blocking`) will generate false positives. Recommended: adopt as advisory-only, plan a follow-up to add the missing scaffolding (typescript strict, lint baseline, etc.)
+```
+
+For `high` and `moderate` verdicts, do NOT print the warning — the score in the assessment file is enough.
+
+#### What this step does NOT do
+
+- Does **not** auto-fix the missing scaffolding. Adding TS strict, ESLint, coverage thresholds, etc. is out of scope and must be filed as a follow-up by the operator.
+- Does **not** apply per-team / per-stack weights to the dimensions. v1 is universal; per-team tuning is deferred.
+- Does **not** track the score over time. The score lives in the handover-assessment.md only; re-running `/handover` re-scores from the live tree.
+
+See AgDR-0042 for the dimensions + thresholds rationale, the alternatives considered, and the legacy-adopter sensitivity.
+
 ### 5. Synthesise the assessment
 
 Write `projects/<name>/handover-assessment.md`:
@@ -164,6 +249,26 @@ Write `projects/<name>/handover-assessment.md`:
 - Open issues: {…}
 - Open PRs: {…}
 - Top contributors: {…}
+
+## Harnessability assessment
+
+**Overall verdict**: `{high | moderate | low}`
+
+{If `low`, embed the warning block verbatim here:}
+
+> ⚠ Harnessability: LOW
+>
+> Rex's architecture handbooks will fire advisory-only on this codebase. The blocking gate (`ENFORCEMENT: blocking`) will generate false positives. Recommended: adopt as advisory-only, plan a follow-up to add the missing scaffolding (typescript strict, lint baseline, etc.)
+
+| Dimension | Score | Evidence |
+|-----------|-------|----------|
+| Type safety | `{strong / partial / none}` | {1-line rationale citing the path + key signal, e.g. `tsconfig.json line 6: "strict": true`} |
+| Module boundaries | `{strong / partial / flat}` | {1-line rationale, e.g. `src/domain/ + src/application/ + src/infrastructure/ all present`} |
+| Framework opinionation | `{strong / moderate / weak}` | {1-line rationale, e.g. `package.json deps include @nestjs/core (DI + HTTP + persistence opinionation)`} |
+| Test coverage signal | `{present / absent}` | {1-line rationale, e.g. `jest.config.js has coverageThreshold: { global: { lines: 80 } }`} |
+| Lint baseline | `{present / absent}` | {1-line rationale, e.g. `.eslintrc.json present at repo root`} |
+
+See AgDR-0042 for the scoring rationale and v1 thresholds.
 
 ## Quality Risks
 
