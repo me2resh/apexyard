@@ -467,24 +467,31 @@ AND workspace/ to the private sibling repo too, so the public fork holds
 ONLY framework files + your customisations to skills/hooks/rules.
 
 Migrate now? This will:
-  - Move onboarding.yaml to the sibling private repo
-  - Move workspace/<name>/ contents to the sibling private repo
+  - COPY onboarding.yaml to the sibling private repo (sibling becomes
+    canonical) + untrack it from the public fork (snapshot left on disk)
+  - MOVE workspace/<name>/ contents to the sibling private repo
   - Add gitignore entries for both in the public fork
   - Write a .apexyard-fork marker (the v2 ops-fork anchor)
   - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
 
-Files MOVED, not copied — destructive. Idempotent — if interrupted, re-run.
+onboarding.yaml is COPIED (not moved) — the file is small, the legacy
+ops-root walk still reads it as a fallback anchor, and a public-fork
+snapshot is a useful safety net while the sibling-repo copy becomes
+the source of truth. workspace/ is MOVED — clones are gigabytes; we
+don't double disk. See AgDR-0021 § "v1→v2 migration semantics".
+
+Idempotent — if interrupted, re-run.
 
 [Y / n / dry-run — show commands, don't execute]
 ```
 
 If `--dry-run` was passed to `/update`, force the dry-run branch automatically (print the commands the migration would run, do not execute, then continue to step 9).
 
-Per-file-class confirmation — ask separately for `onboarding.yaml` and `workspace/`, so the operator can move one and defer the other:
+Per-file-class confirmation — ask separately for `onboarding.yaml` and `workspace/`, so the operator can migrate one and defer the other:
 
 ```
-Move onboarding.yaml? [Y/n]
-Move workspace/? [Y/n]   # surfaces the disk size: du -sh workspace
+Copy onboarding.yaml to sibling private repo? [Y/n]
+Move workspace/?                              [Y/n]   # surfaces disk size: du -sh workspace
 ```
 
 #### Migration steps
@@ -496,25 +503,34 @@ SIBLING_ROOT=$(dirname "$(jq -r '.portfolio.registry' .claude/project-config.jso
 # e.g. SIBLING_ROOT=../apexyard-portfolio
 ```
 
-##### Move onboarding.yaml
+##### Copy onboarding.yaml (NOT move — see AgDR-0021 § "v1→v2 migration semantics")
 
 ```bash
 if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
-  mv onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
+  # COPY (cp -p preserves mtimes/permissions). The sibling-repo copy
+  # becomes the canonical source of truth; the public-fork copy is left
+  # on disk as a snapshot for the legacy ops-root walk-up fallback.
+  cp -p onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
   (cd "$SIBLING_ROOT" && git add onboarding.yaml)
+
+  # Untrack from the public fork so future commits don't ship it.
+  # The file stays on disk (gitignored in the next sub-step) as a
+  # legacy-tool snapshot.
+  git rm --cached onboarding.yaml 2>/dev/null || true
 elif [ -f "$SIBLING_ROOT/onboarding.yaml" ] && [ -f onboarding.yaml ]; then
-  # Both present — surface the conflict and stop. The operator picks.
-  # `exit 1` (not `return 1`) — this snippet runs at top-level in the
-  # operator's shell when invoked from the skill; `return` would fail
-  # outside a function. Wrap the whole step 8a in `( ... )` if you want
-  # the exit contained to a subshell.
-  printf 'WARNING: onboarding.yaml exists in BOTH the public fork and the sibling repo.\n' >&2
-  printf '  Resolve manually before re-running /update.\n' >&2
-  exit 1
+  # Both present — sibling is canonical; we still need to untrack the
+  # public-fork copy if it's currently tracked. Idempotent.
+  git rm --cached onboarding.yaml 2>/dev/null || true
 fi
 ```
 
-Idempotence: if `onboarding.yaml` is already only in the sibling repo, this block is a no-op.
+Idempotence: re-running this block on a v2 layout is a no-op (the second branch's `git rm --cached` returns non-zero when the file is already untracked, suppressed by `|| true`; the first branch is gated by the negated `[ ! -f "$SIBLING_ROOT/onboarding.yaml" ]`).
+
+**Why copy, not move?** Three reasons codified in AgDR-0021 § H:
+
+1. **Legacy ops-root walk-up fallback** — `_lib-ops-root.sh` checks `.apexyard-fork` first, but falls back to `onboarding.yaml + apexyard.projects.yaml` for un-migrated forks. Leaving a snapshot in the public fork keeps the legacy path working even if the marker is accidentally removed.
+2. **Safety net** — `onboarding.yaml` is small (KB, not GB). A duplicate on disk costs nothing meaningful and gives the operator a recoverable reference if the sibling repo is unreachable.
+3. **Canonical source of truth in the sibling** — the public-fork copy is untracked (`git rm --cached`) and gitignored, so it cannot drift into commits. The sibling repo's copy is the one /setup writes to and /handover reads.
 
 ##### Move workspace/
 
