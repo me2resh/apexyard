@@ -1,0 +1,115 @@
+# Go Data Pipeline CI
+# Copy this to .github/workflows/go-pipeline-ci.yml in your project.
+#
+# Topology: go-data-pipeline (apexyard topology v1.0.0)
+# Purpose: Go-specific quality + race detection + cross-platform build smoke
+#
+# Tools assumed:
+#   - Go 1.22+
+#   - golangci-lint (preset: golangci-lint.yml in repo OR default)
+#   - go vet, go test -race, go test -cover
+
+name: Go Data Pipeline CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  quality:
+    name: Quality + Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          if ! git diff --quiet go.mod go.sum; then
+            echo "::error::go.mod / go.sum out of date. Run 'go mod tidy' locally and commit."
+            git diff go.mod go.sum
+            exit 1
+          fi
+
+      # golangci-lint — replaces piecemeal linter configs
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+
+      # go vet — additional static checks
+      - name: go vet
+        run: go vet ./...
+
+      # Race-condition detector — every pipeline has goroutines
+      - name: Tests (race + coverage)
+        id: tests
+        run: |
+          go test -race -cover -coverprofile=coverage.out -covermode=atomic ./...
+
+          # Enforce 80% coverage threshold
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          THRESHOLD=80.0
+
+          # Use awk to compare floats (bash doesn't do float math)
+          if awk "BEGIN {exit !($COVERAGE < $THRESHOLD)}"; then
+            echo "::error::Coverage $COVERAGE% below threshold $THRESHOLD%"
+            exit 1
+          fi
+
+          echo "Coverage: $COVERAGE% (threshold: $THRESHOLD%)"
+
+      # Cross-platform build smoke — pipelines often run on multiple OS/arches
+      - name: Build (linux/amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/...
+
+      - name: Build (linux/arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o /dev/null ./cmd/...
+
+      - name: Build (darwin/arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/...
+
+      # Goroutine leak detection — runs as part of `go test` if goleak is wired
+      # in TestMain. This step verifies it's actually wired.
+      - name: Verify goleak integration
+        run: |
+          if ! grep -r "goleak" . --include="*.go" > /dev/null; then
+            echo "::warning::goleak not detected in test code. Add 'go.uber.org/goleak' to TestMain for leak detection. See handbook on goroutine-lifecycle."
+          fi
+
+      # Generate summary
+      - name: Generate Summary
+        if: always()
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # Go Pipeline CI Report
+
+          | Check | Status |
+          |-------|--------|
+          | go mod tidy | (see job log) |
+          | golangci-lint | (see job log) |
+          | go vet | (see job log) |
+          | go test -race | (see job log) |
+          | Coverage (>= 80%) | (see job log) |
+          | Cross-platform build (linux/amd64, linux/arm64, darwin/arm64) | (see job log) |
+
+          ---
+          Topology: go-data-pipeline v1.0.0
+          EOF

@@ -776,6 +776,96 @@ Skipped migrations (replay later with bash .claude/migrations/<pair>.sh):
   - v1.2.0-to-v1.3.0
 ```
 
+### 8c. Topology drift detection (advisory, default-skip)
+
+When a project was instantiated with a topology bundle (via `/handover --topology <name>` or the step 1.5 pick), the project's `projects/<name>/.topology/VERSION` records the topology version at instantiation time. If the framework has since bumped the topology's `VERSION`, the adopter's instantiated bundle is drifting from the curated baseline.
+
+Walk the registry; for each project that has a `.topology/` anchor, compare versions:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+
+PROJECTS_DIR=$(portfolio_projects_dir)
+OPS_ROOT="$(git rev-parse --show-toplevel)"
+
+DRIFTED=()
+for proj in "$PROJECTS_DIR"/*/; do
+  [ -d "$proj" ] || continue
+  anchor="$proj/.topology"
+  [ -f "$anchor/name" ] || continue
+  [ -f "$anchor/VERSION" ] || continue
+
+  topology=$(cat "$anchor/name")
+  instantiated_ver=$(cat "$anchor/VERSION")
+  framework_ver=$(cat "$OPS_ROOT/topologies/$topology/VERSION" 2>/dev/null)
+
+  if [ -z "$framework_ver" ]; then
+    echo "⚠ $proj uses topology '$topology' but topologies/$topology/ is missing in this framework version."
+    continue
+  fi
+
+  if [ "$instantiated_ver" != "$framework_ver" ]; then
+    DRIFTED+=("$(basename "$proj")|$topology|$instantiated_ver|$framework_ver")
+  fi
+done
+```
+
+If `DRIFTED` is empty → skip this step entirely and continue to step 9.
+
+If non-empty, surface the drift with a y/n/d offer per project — same shape as the deprecated-config offer in step 8:
+
+```
+Topology drift detected — N projects are behind the framework's topology bundle:
+
+  - billing-api: topology=python-fastapi instantiated=1.0.0 → framework=1.1.0
+  - dashboard:   topology=typescript-nextjs instantiated=1.0.0 → framework=1.2.0
+
+Per-file diff acceptance — for each file in the topology, you'll see the
+diff and pick:
+
+  [Y] copy the framework version (overwrite the project's copy)
+  [n] keep the project's copy (skip this file)
+  [d] show the diff (then re-prompt)
+  [s] skip this project entirely (advance to next)
+
+Default per file is `n` (skip — operator owns the change).
+
+Re-instantiate now? [y/N/dry-run]
+```
+
+| Input | Effect |
+|-------|--------|
+| `y` | Walk each drifted project; for each file in `topologies/<name>/handbooks/**` + `topologies/<name>/golden-paths/**` + `topologies/<name>/templates/**`, prompt y/n/d; on `y` copy the framework version over the project copy; on `n` skip the file. After all files for a project are processed, update `projects/<proj>/.topology/VERSION` to the framework version. |
+| `N` / unrecognised | Skip this step entirely. Drift persists. Print: `Drift left in place. Re-run /update later or run /handover --topology <name> on the affected project to fully re-instantiate.` |
+| `dry-run` | Walk each drifted project; for each file, print the diff and what would be copied, but execute no writes. |
+
+#### Per-file prompt shape
+
+```
+Project: dashboard (typescript-nextjs 1.0.0 → 1.2.0)
+File:    handbooks/architecture/migration-safety.md
+
+[Y]es — copy framework version over project copy
+[n]o  — keep project copy as-is
+[d]iff — show the diff and re-prompt
+[s]kip — skip this project entirely (advance to next)
+
+[Y/n/d/s]
+```
+
+#### Why per-file (not bulk)
+
+The deciding factor is the same as step 8b: adopters routinely edit topology handbooks in their project (tightening the rule, adding domain-specific examples, opting in to blocking enforcement). A bulk replace would silently destroy those edits; per-file lets the operator preview and choose.
+
+#### Surfaces in the final-state report (step 9) as one line
+
+```
+Topology drift: <N projects drifted | skipped> ({…}, …)
+```
+
+This step **always** runs after step 8b. It does NOT block the sync — drift handling is purely additive and reversible (the operator can re-run `/update` later).
+
 ### 9. Final state + next steps
 
 On clean completion, print (substituting `$UPSTREAM_REF` for the literal `upstream/main` so the operator sees the actual ref synced under `--from-dev`):

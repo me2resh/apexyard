@@ -1,7 +1,7 @@
 ---
 name: handover
 description: Onboard an external repo via a structured handover assessment + harnessability scoring across 5 codebase dimensions.
-argument-hint: "<project name> [path or url]"
+argument-hint: "<project name> [path or url] [--topology <name>]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
@@ -35,7 +35,10 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /handover legacy-billing-api
 /handover legacy-billing-api ../legacy-billing-api
 /handover marketing-site https://github.com/some-org/marketing-site
+/handover marketing-site --topology typescript-nextjs
 ```
+
+The `--topology <name>` flag pre-selects a topology bundle and skips the interactive pick in step 1.5. Available v1 topologies: `typescript-nextjs`, `python-fastapi`, `go-data-pipeline`. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
 
 ## Output location
 
@@ -71,6 +74,38 @@ If a path is given, use it. If a URL is given, prompt the user to clone it into 
 ```
 Where is the target repo? Local path or git URL?
 ```
+
+### 1.5. Pick a topology (default: skip / custom)
+
+ApexYard ships **harness-template topologies** — bundles of curated handbooks + CI pipelines + AgDR templates per service shape. Picking one here pre-bakes the right governance surface for the stack; declining keeps the existing flow byte-for-byte. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
+
+If the operator passed `--topology <name>` on the CLI, skip the interactive prompt and use that pick. Otherwise prompt:
+
+```
+Which topology fits this project?
+
+  [1] typescript-nextjs   — TypeScript + Next.js web app (App Router, Prisma, JWT)
+  [2] python-fastapi      — Python + FastAPI service (Pydantic v2, SQLAlchemy async, JWT)
+  [3] go-data-pipeline    — Go batch / streaming pipeline (no HTTP surface)
+  [4] Skip / custom       — no topology bundle; use the framework defaults
+
+Read topologies/<name>/README.md for what each bundle includes.
+
+[1/2/3/4 — default 4]
+```
+
+**Branching:**
+
+- **Pick 1/2/3:** record the topology name in `$PICKED_TOPOLOGY` (e.g. `typescript-nextjs`). Verify the topology dir exists at `<ops_root>/topologies/<name>/`. If missing (e.g. operator on an older framework version), print `⚠ topology dir not found — falling back to no bundle` and continue with `$PICKED_TOPOLOGY=""`.
+- **Pick 4 / default / any other input:** set `$PICKED_TOPOLOGY=""`. Continue exactly as the pre-topology flow.
+
+**Verifying the pick.** Read the topology's `README.md` and `VERSION` files. Print a one-line confirmation:
+
+```
+Topology: typescript-nextjs v1.0.0 — will instantiate 11 files into projects/<name>/ and workspace/<name>/.github/workflows/. (See step 5.5.)
+```
+
+If `$PICKED_TOPOLOGY=""`, print nothing — the rest of the flow is unchanged.
 
 ### 2. Read the surface area
 
@@ -383,6 +418,108 @@ Also derived from the risks found. Tailor to the specific repo — don't emit ge
 - {anything you couldn't determine from a static read}
 
 ````
+
+### 5.5. Instantiate the topology bundle (conditional on step 1.5 pick)
+
+**Skip condition**: if `$PICKED_TOPOLOGY` is empty (operator chose "Skip / custom"), skip this entire step and note in the final summary `topology: skipped`.
+
+If a topology was picked, copy the bundle into the project's instantiation locations. **All copies, never symlinks** — copies are stable across framework updates; `/update` detects drift on top (see AgDR-0048).
+
+#### Resolve paths
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+
+OPS_ROOT="$(git rev-parse --show-toplevel)"
+TOPOLOGY_SRC="$OPS_ROOT/topologies/$PICKED_TOPOLOGY"
+PROJECTS_DIR=$(portfolio_projects_dir)
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+TOPOLOGY_VERSION=$(cat "$TOPOLOGY_SRC/VERSION")
+```
+
+#### Confirm before any write
+
+Print a per-file plan and prompt for confirmation. This is destructive (creates new files); operator owns the decision.
+
+```
+Topology bundle: $PICKED_TOPOLOGY v$TOPOLOGY_VERSION
+About to instantiate into the project:
+
+  $PROJECTS_DIR/<name>/handbooks/                     ← all topology handbooks
+  $PROJECTS_DIR/<name>/.topology/VERSION              ← version anchor for /update drift detection
+  $PROJECTS_DIR/<name>/.topology/name                 ← topology name (one line: $PICKED_TOPOLOGY)
+  $PROJECTS_DIR/<name>/docs/agdr/<stack>-<topology>.draft.md   ← stack-specific AgDR template (draft)
+  workspace/<name>/.github/workflows/<topology-ci>.yml          ← CI pipeline (only if workspace clone exists)
+
+Existing files at any of these paths will be PRESERVED (no overwrite). If you
+want a clean re-instantiation, delete the files and re-run.
+
+Proceed? [Y/n]
+```
+
+If the operator declines (`n`), set `TOPOLOGY_INSTANTIATED="declined"` and continue to step 6.
+
+#### Copy handbooks
+
+```bash
+mkdir -p "$PROJECTS_DIR/<name>/handbooks"
+# rsync if available (handles "preserve target if exists"); fall back to cp -n
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --ignore-existing "$TOPOLOGY_SRC/handbooks/" "$PROJECTS_DIR/<name>/handbooks/"
+else
+  cp -Rn "$TOPOLOGY_SRC/handbooks/." "$PROJECTS_DIR/<name>/handbooks/"
+fi
+```
+
+The `--ignore-existing` / `-n` flag is load-bearing — adopters who've already started editing handbooks in the project keep their edits.
+
+#### Write the topology anchor (for `/update` drift detection)
+
+```bash
+mkdir -p "$PROJECTS_DIR/<name>/.topology"
+echo "$PICKED_TOPOLOGY" > "$PROJECTS_DIR/<name>/.topology/name"
+cp "$TOPOLOGY_SRC/VERSION" "$PROJECTS_DIR/<name>/.topology/VERSION"
+```
+
+`/update` reads these two files to know which topology to diff against (see [`.claude/skills/update/SKILL.md`](../update/SKILL.md) § "Topology drift detection").
+
+#### Seed the AgDR template (as a draft — `.draft.md` extension)
+
+```bash
+mkdir -p "$PROJECTS_DIR/<name>/docs/agdr"
+TEMPLATE_FILE=$(ls "$TOPOLOGY_SRC/templates/agdr-"*.md 2>/dev/null | head -1)
+if [ -n "$TEMPLATE_FILE" ]; then
+  TEMPLATE_NAME=$(basename "$TEMPLATE_FILE" .md)
+  TARGET="$PROJECTS_DIR/<name>/docs/agdr/${TEMPLATE_NAME}.draft.md"
+  [ ! -f "$TARGET" ] && cp "$TEMPLATE_FILE" "$TARGET"
+fi
+```
+
+The `.draft.md` extension is load-bearing: the AgDR-required hooks ignore `.draft.md` files, so the seed doesn't trigger spurious "AgDR not referenced" findings on the first PR. The operator renames `.draft.md` → `.md` when they fill it in.
+
+#### Copy the CI pipeline (only if `workspace/<name>/` exists locally)
+
+```bash
+if [ -d "$WORKSPACE_DIR/<name>/.git" ]; then
+  mkdir -p "$WORKSPACE_DIR/<name>/.github/workflows"
+  for pipeline in "$TOPOLOGY_SRC/golden-paths"/*.yml; do
+    [ -e "$pipeline" ] || continue
+    target="$WORKSPACE_DIR/<name>/.github/workflows/$(basename "$pipeline")"
+    if [ ! -f "$target" ]; then
+      cp "$pipeline" "$target"
+    fi
+  done
+fi
+```
+
+If the workspace clone doesn't exist yet (operator hasn't cloned), defer the pipeline copy — emit a one-line note: `topology pipelines pending — clone the repo into workspace/<name>/ then re-run /handover, or copy topologies/$PICKED_TOPOLOGY/golden-paths/*.yml manually`.
+
+#### Set the instantiation marker for the final summary
+
+```bash
+TOPOLOGY_INSTANTIATED="$PICKED_TOPOLOGY@$TOPOLOGY_VERSION"
+```
 
 ### 6. Write the L2 container diagram stub (if missing)
 
@@ -714,6 +851,7 @@ If the project is healthy (recent commits, active PRs/issues), skip the prompt e
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
+Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
 Workspace clone:             workspace/{name}/ ({cloned | preserved | skipped (declined) | skipped (later) | failed: <reason>})
 Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
@@ -742,6 +880,8 @@ Top 3 next steps:
 10. **Never break the registry** — if the YAML append breaks the file, restore the previous version and ask the user to edit manually.
 11. **Never overwrite the architecture stub** — `projects/<name>/architecture/container.md` is written once on first handover, then owned by the team. Re-runs of `/handover` (e.g. if the tech stack changed) must preserve any manual refinements. If you want to regenerate, the user deletes the file first.
 12. **Architecture stubs are starting points, not truths** — the auto-generated note at the top of the file explicitly tells the user to review and refine. Never claim the detector is authoritative.
+13. **Topology instantiation never overwrites** — step 5.5 copies files with `rsync --ignore-existing` / `cp -n`. Adopters who edited a topology handbook keep their edits across re-runs. Drift detection lives in `/update` (see AgDR-0048).
+14. **Default is no topology** — pick 4 (Skip / custom) is the default. The pre-topology flow is byte-for-byte preserved for adopters who don't want a bundle. Never auto-pick a topology based on tech-stack detection in v1 — let the operator choose.
 
 ## When to use this
 

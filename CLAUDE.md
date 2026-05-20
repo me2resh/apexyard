@@ -290,6 +290,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
+| **Topology bundles** (harness templates per service shape) | `topologies/<name>/` — see [`topologies/README.md`](topologies/README.md) |
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting Started | `docs/getting-started.md` |
 | Full setup guide | `docs/multi-project.md` |
