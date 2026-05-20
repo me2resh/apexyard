@@ -2,11 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Skills — ApexYard</title>
+<title>ApexYard Skills — 53 slash commands for Claude Code</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="The full ApexYard slash-command surface — 48 skills, what each one does, and how to invoke it.">
-<meta property="og:title" content="ApexYard skills">
-<meta property="og:description" content="48 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
+<meta name="description" content="ApexYard ships 53 slash commands across audits, tickets, architecture, decisions, portfolio, and framework ops. Drop into any Claude Code session.">
+<link rel="canonical" href="https://yard.apexscript.com/skills.html">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/skills.md">
+
+<meta property="og:title" content="ApexYard Skills — 53 slash commands for Claude Code">
+<meta property="og:description" content="53 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yard.apexscript.com/skills.html">
 <meta property="og:site_name" content="ApexYard">
@@ -16,9 +22,31 @@
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/skills.html">
-<meta name="twitter:title" content="ApexYard skills">
-<meta name="twitter:description" content="The full ApexYard slash-command surface — 52 skills, what each one does, and how to invoke it.">
+<meta name="twitter:title" content="ApexYard Skills — 53 slash commands for Claude Code">
+<meta name="twitter:description" content="The full ApexYard slash-command surface — 53 skills, what each one does, and how to invoke it.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/skills.png">
+
+<!-- Structured data: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "ApexYard",
+      "item": "https://yard.apexscript.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Skills",
+      "item": "https://yard.apexscript.com/skills.html"
+    }
+  ]
+}
+</script>
 <style>
 /* ============================================================
    ApexYard skills page — mirrors site/index.html design tokens.
@@ -357,14 +385,13 @@ main {
     <div class="page-header__inner">
       <div class="page-header__eyebrow">
         <span class="pill">apexyard / skills</span>
-        <span>48 slash commands · invoke from any Claude Code session</span>
+        <span>53 slash commands · invoke from any Claude Code session</span>
       </div>
       <h1>Skills</h1>
-      <p class="tagline">
-        Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code> and is invoked from a
-        Claude Code session as <code>/&lt;name&gt;</code>. Mechanical hooks in <code>.claude/hooks/</code>
-        gate their effects on the rest of the SDLC — <code>/approve-merge</code> writes a marker that
-        <code>block-unreviewed-merge.sh</code> then verifies before the merge actually runs.
+      <p class="tagline" id="ai-lead">
+        <strong>What is it?</strong> ApexYard ships 53 slash commands across six buckets (setup, daily ops, tickets &amp; ideas, specs &amp; decisions, review &amp; merge, architecture, production-readiness audits, workflow primitives, communications).
+        <strong>What can it do?</strong> Each <code>/&lt;name&gt;</code> is a structured workflow with guardrails — mechanical hooks in <code>.claude/hooks/</code> gate the effects on the rest of the SDLC, so <code>/approve-merge</code> writes a marker that <code>block-unreviewed-merge.sh</code> verifies before the merge actually runs.
+        <strong>What's needed to start?</strong> Browse below; invoke any from a Claude Code session inside an apexyard fork. Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code>.
       </p>
       <p class="meta">
         New here? Start with <a href="#setup"><code>/setup</code></a> on a fresh fork, then
@@ -388,7 +415,7 @@ main {
   </section>
 
   <section class="section" id="setup">
-    <h2>Setup &amp; onboarding</h2>
+    <h2>Which skills help me set up?</h2>
     <p class="section__intro">Get a fresh fork running, adopt external repos into the portfolio, keep the framework in sync with upstream.</p>
 
     <article class="skill">
@@ -425,7 +452,7 @@ main {
   </section>
 
   <section class="section" id="daily">
-    <h2>Daily ops</h2>
+    <h2>Which skills run during daily ops?</h2>
     <p class="section__intro">Where am I, what needs my attention, what should I do next.</p>
 
     <article class="skill">
@@ -450,7 +477,7 @@ main {
   </section>
 
   <section class="section" id="tickets">
-    <h2>Tickets &amp; ideas</h2>
+    <h2>How do I file structured tickets and ideas?</h2>
     <p class="section__intro">Capture work — from a half-formed idea through a structured ticket the team can pick up.</p>
 
     <article class="skill">
@@ -535,7 +562,7 @@ main {
   </section>
 
   <section class="section" id="specs">
-    <h2>Specs &amp; decisions</h2>
+    <h2>How do I capture specs and technical decisions?</h2>
     <p class="section__intro">Turn validated ideas into PRDs; record technical decisions as durable artefacts.</p>
 
     <article class="skill">
@@ -564,7 +591,7 @@ main {
   </section>
 
   <section class="section" id="review">
-    <h2>Code review &amp; merge</h2>
+    <h2>How does code review and merge get gated?</h2>
     <p class="section__intro">The mechanical merge gate — Rex review, security audit, CEO approval, design review, dependency audit. Each writes a marker the merge hook verifies.</p>
 
     <article class="skill">
@@ -609,7 +636,7 @@ main {
   </section>
 
   <section class="section" id="architecture">
-    <h2>Architecture &amp; dev tools</h2>
+    <h2>Which skills generate architecture and dev artefacts?</h2>
     <p class="section__intro">Diagram the system; debug what's broken with structure rather than ad-hoc patching.</p>
 
     <article class="skill">
@@ -670,7 +697,7 @@ main {
   </section>
 
   <section class="section" id="audits">
-    <h2>Production-readiness audits</h2>
+    <h2>Which audits check production readiness?</h2>
     <p class="section__intro"><code>/launch-check</code> runs the full sweep at milestone boundaries; the dimension-specific audits below are the deep-dive companions.</p>
 
     <article class="skill">
@@ -747,7 +774,7 @@ main {
   </section>
 
   <section class="section" id="workflow">
-    <h2>Workflow primitives</h2>
+    <h2>What workflow primitives are available?</h2>
     <p class="section__intro">Enable, parallelise, release.</p>
 
     <article class="skill">
@@ -776,7 +803,7 @@ main {
   </section>
 
   <section class="section" id="comms">
-    <h2>Communications</h2>
+    <h2>How do I generate roadmap and stakeholder communications?</h2>
     <p class="section__intro">Roadmap planning + stakeholder updates synthesised from the activity stream.</p>
 
     <article class="skill">
@@ -797,7 +824,7 @@ main {
   </section>
 
   <section class="section" id="deprecated">
-    <h2>Deprecated</h2>
+    <h2>Which skills are deprecated?</h2>
     <p class="section__intro">Kept for redirect-only behaviour while in-flight invocations migrate.</p>
 
     <article class="skill is-deprecated">

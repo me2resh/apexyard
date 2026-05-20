@@ -13,7 +13,7 @@
 ApexYard is an SDLC-as-code framework for AI-driven dev teams. One fork
 governs a portfolio of repos under one organisation; strict merge gates
 (code-reviewer agent + per-PR CEO approval); persistent AgDR (Agent
-Decision Record) memory across every managed project; 52 slash commands
+Decision Record) memory across every managed project; 53 slash commands
 across 6 buckets:
 
 - **Audits** (`/launch-check`, `/threat-model`, `/accessibility-audit`,
@@ -32,7 +32,7 @@ across 6 buckets:
   `/split-portfolio`, `/fan-out`, `/start-ticket`, `/approve-merge`,
   `/approve-design`)
 
-24 shell hooks enforce SDLC rules mechanically — ticket-first, migration
+29 shell hooks enforce SDLC rules mechanically — ticket-first, migration
 gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR
 title validation, AgDR-required-for-architecture, upstream-drift banner,
 leak protection. 19 role definitions activate on triggers (label, diff

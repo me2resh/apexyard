@@ -1,0 +1,87 @@
+# ApexYard
+
+> Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox. MIT, plain markdown and shell.
+
+## What is it?
+
+ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs every project under management with strict merge gates, persistent AgDR memory, and 53 audit-and-decision skills.
+
+## What can it do?
+
+- Activate the right role on each ticket (19 roles across 5 departments)
+- Run mechanical merge gates as shell hooks (not PDFs) — 29 hooks block PRs that bypass code review, CEO approval, design review, secrets scanning, AgDR-required architecture changes, and migration tickets
+- Aggregate every project's PRs, issues, and CI into one inbox via `/inbox`, `/status`, `/tasks`
+- Persist architectural decisions as AgDRs across the portfolio so prior decisions resurface in seconds via `/agdr search`
+- Generate C4 L1 + L2 diagrams, BPMN process flows, DFDs with trust boundaries, and structured product specs
+
+## What's needed to start?
+
+1. Fork `github.com/me2resh/apexyard` on GitHub
+2. Clone the fork locally — it IS your ops repo, no nested installs, no symlinks
+3. Run `/setup` in Claude Code — three exchanges to configure company, team, and tech stack
+4. Register projects via `/handover <repo>` for adoption, or `/idea` to capture new concepts
+
+## Get started in three steps
+
+### 1. Star, fork, clone
+
+```bash
+gh repo fork me2resh/apexyard --clone
+cd apexyard
+git remote add upstream https://github.com/me2resh/apexyard.git
+```
+
+### 2. Claude, /setup
+
+```bash
+cd apexyard
+claude
+/setup
+# three questions → onboarding.yaml is configured
+```
+
+### 3. Adopt, or originate
+
+- `/handover <repo-url>` — existing project → assessment + registry + architecture stub
+- `/idea` — new concept → ideas-backlog.md, optional GitHub issue
+
+## What you can actually do
+
+### Roles · 19
+
+PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. Migration edit → Data Engineer + migration AgDR. Each role has CAN / CANNOT lists — it won't step outside its lane.
+
+### Skills · 53 slash commands
+
+`/handover` adopts a project. `/idea` captures a concept. `/inbox`, `/status`, `/tasks` triage the portfolio. `/decide` records a technical call as an AgDR. `/launch-check` runs a 10-dimension readiness audit. `/c4` generates L1 + L2 architecture diagrams from a codebase.
+
+### Hooks · 29 shell scripts
+
+Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.
+
+### Agents · 5 sub-agents
+
+- **Rex** (code review) checks architecture + tests + AgDR links + glossary
+- **Hatim** (security) flags auth / crypto / secrets
+- **Munir** (deps) scans vulnerabilities + licences
+- **Tariq** (PR manager) and **Idris** (ticket manager) handle the orchestration
+
+### Portfolio · one fork, N products
+
+`apexyard.projects.yaml` at your fork root lists every repo you manage. Skills like `/inbox`, `/status`, `/tasks`, `/stakeholder-update` aggregate across it. One prompt, every project. Add a project with `/handover`; sync with upstream via `/update`.
+
+### CI · 7 golden-path workflows
+
+At `golden-paths/pipelines/`: `ci.yml`, `code-quality.yml`, `security.yml`, `dependency-audit.yml`, `pr-title-check.yml`, `review-check.yml`, `seo-check.yml`. Copy what you need into each project's `.github/workflows/`.
+
+## Manifesto
+
+Every pull request ties to a ticket. Every ticket has acceptance criteria. Code review validates against those criteria, and QA verifies the result in a separate pass before the ticket closes.
+
+## Links
+
+- GitHub: <https://github.com/me2resh/apexyard>
+- Releases: <https://github.com/me2resh/apexyard/releases>
+- Setup guide: <https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md>
+- Architecture: <https://yard.apexscript.com/architecture.md>
+- Skills: <https://yard.apexscript.com/skills.md>

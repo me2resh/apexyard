@@ -2,7 +2,7 @@
 
 > ApexYard is a multi-project ops repo framework for Claude Code that governs
 > a portfolio of repos under one fork — strict SDLC, persistent AgDR memory,
-> 52 skills, 24 hooks, 19 role definitions. MIT, plain markdown and shell,
+> 53 skills, 29 hooks, 19 role definitions. MIT, plain markdown and shell,
 > no SaaS, no lock-in.
 
 This file is the LLM/agent-friendly concatenation of the apexyard marketing
@@ -82,7 +82,7 @@ the operator can see who's driving each piece of work.
 
 ### One prompt, one thing
 
-52 slash commands, each scoped to one capability. `/feature` files a
+53 slash commands, each scoped to one capability. `/feature` files a
 structured feature ticket; `/migration` produces a labelled ticket + a
 migration AgDR; `/threat-model` runs the STRIDE 6-category audit on
 the current codebase.
@@ -184,7 +184,7 @@ disallows changing a public fork's visibility after the fact).
 
 # Skills (https://yard.apexscript.com/skills.html)
 
-The full ApexYard slash-command surface — 52 skills, organised by
+The full ApexYard slash-command surface — 53 skills, organised by
 purpose. Each is a markdown SKILL.md file under `.claude/skills/<name>/`.
 
 ## Setup & onboarding

@@ -3,16 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ApexYard - where projects get forged</title>
-<meta name="description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. One ops repo governs all your projects. 48 skills, 28 hooks, 19 roles. MIT, plain markdown and shell, Claude Code native.">
+<title>ApexYard — multi-project SDLC framework for Claude Code</title>
+<meta name="description" content="Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox. MIT, plain markdown and shell.">
 <link rel="canonical" href="https://yard.apexscript.com/">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/index.md">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/">
-<meta property="og:title" content="ApexYard - where projects get forged">
-<meta property="og:description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. One ops repo governs all your projects. MIT, plain markdown and shell.">
+<meta property="og:title" content="ApexYard — multi-project SDLC framework for Claude Code">
+<meta property="og:description" content="Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox. MIT, plain markdown and shell.">
 <meta property="og:image" content="https://yard.apexscript.com/og/index.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -20,9 +24,61 @@
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/">
-<meta name="twitter:title" content="ApexYard - where projects get forged">
-<meta name="twitter:description" content="SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. MIT, plain markdown and shell.">
+<meta name="twitter:title" content="ApexYard — multi-project SDLC framework for Claude Code">
+<meta name="twitter:description" content="ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
+
+<!-- Structured data: SoftwareApplication, Organization, WebSite -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ApexYard",
+  "alternateName": "apexyard",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Cross-platform",
+  "url": "https://yard.apexscript.com/",
+  "description": "Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox.",
+  "license": "https://opensource.org/licenses/MIT",
+  "softwareVersion": "1.1.0",
+  "downloadUrl": "https://github.com/me2resh/apexyard",
+  "author": {
+    "@type": "Person",
+    "name": "Ahmed Abdelaliem",
+    "url": "https://me2resh.com"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "ApexYard",
+  "url": "https://yard.apexscript.com/",
+  "logo": "https://yard.apexscript.com/favicon.svg",
+  "sameAs": [
+    "https://github.com/me2resh/apexyard"
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "ApexYard",
+  "url": "https://yard.apexscript.com/",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": "https://github.com/me2resh/apexyard/search?q={search_term_string}",
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1383,8 +1439,10 @@ footer.foot {
       Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a>
     </p>
 
-    <p class="hero__sub rise rise-3">
-      SDLC-as-code for founders who ship alone, or companies standing up AI-enabled squads. One ops-repo fork governs <em>all</em> your products. Rules that can't be argued with - they're shell hooks, not PDFs. 19 roles, 48 skills, 28 mechanical gates, one inbox across the whole portfolio. Claude Code is the default driver; the rules, hooks, agents, and skills are plain markdown and shell - swap the AI, keep the forge.
+    <p class="hero__sub rise rise-3" id="ai-lead">
+      <strong>What is it?</strong> ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs every project under management with strict merge gates, persistent AgDR memory, and 53 audit-and-decision skills.
+      <strong>What can it do?</strong> Activate the right role on each ticket, run mechanical merge gates as shell hooks (not PDFs), aggregate every project's PRs, issues, and CI into one inbox, persist architectural decisions as AgDRs across the portfolio.
+      <strong>What's needed to start?</strong> Fork <code>github.com/me2resh/apexyard</code>, clone it, run <code>/setup</code>, register your projects. 19 roles, 53 skills, 29 mechanical gates, one inbox across the whole portfolio. Claude Code is the default driver; the rules, hooks, agents, and skills are plain markdown and shell — swap the AI, keep the forge.
     </p>
 
     <div class="hero__cta rise rise-4">
@@ -1491,11 +1549,11 @@ footer.foot {
         <span>Role definitions across 5 departments</span>
       </div>
       <div class="hero__metric">
-        <strong>39</strong>
+        <strong>53</strong>
         <span>Skills (slash commands)</span>
       </div>
       <div class="hero__metric">
-        <strong>24</strong>
+        <strong>29</strong>
         <span>Mechanical gates (shell hooks)</span>
       </div>
       <div class="hero__metric">
@@ -1531,7 +1589,7 @@ footer.foot {
 
   <div class="section__head">
     <span class="section__num">01 / QUICKSTART</span>
-    <h2 class="section__title">Get started in three steps</h2>
+    <h2 class="section__title">How do I get started?</h2>
     <p class="section__lede">
       From fork to first command. Everything is public; no invite needed.
     </p>
@@ -1578,7 +1636,7 @@ claude
 
   <div class="section__head">
     <span class="section__num">02 / WALKTHROUGHS</span>
-    <h2 class="section__title">What it actually feels like to use</h2>
+    <h2 class="section__title">What does using apexyard look like in practice?</h2>
     <p class="section__lede">
       Three flows - one for a feature, one for the portfolio, one for a risky change. Each starts with a specific pain and ends with the exact gates that handled it.
     </p>
@@ -1677,7 +1735,7 @@ confirm it skips the missing column before merge."</span></pre>
 
   <div class="section__head">
     <span class="section__num">04 / WHAT'S IN THE BOX</span>
-    <h2 class="section__title">What you can actually do</h2>
+    <h2 class="section__title">What can apexyard do?</h2>
     <p class="section__lede">
       Everything below is already wired in your fork. Nothing to install, nothing to configure beyond <code>/setup</code>.
     </p>
@@ -1694,15 +1752,15 @@ confirm it skips the missing column before merge."</span></pre>
     </article>
 
     <article class="layer">
-      <div class="layer__num">skills · 33 slash commands</div>
+      <div class="layer__num">skills · 53 slash commands</div>
       <h3 class="layer__title">One prompt, one thing</h3>
       <p class="layer__desc">
-        <code>/handover</code> adopts a project. <code>/idea</code> captures a concept. <code>/inbox</code>, <code>/status</code>, <code>/tasks</code> triage the portfolio. <code>/decide</code> records a technical call as an AgDR. <code>/launch-check</code> runs an 8-dimension readiness audit. <code>/c4</code> generates L1 + L2 architecture diagrams from a codebase.
+        <code>/handover</code> adopts a project. <code>/idea</code> captures a concept. <code>/inbox</code>, <code>/status</code>, <code>/tasks</code> triage the portfolio. <code>/decide</code> records a technical call as an AgDR. <code>/launch-check</code> runs a 10-dimension readiness audit. <code>/c4</code> generates L1 + L2 architecture diagrams from a codebase.
       </p>
     </article>
 
     <article class="layer">
-      <div class="layer__num">hooks · 18 shell scripts</div>
+      <div class="layer__num">hooks · 29 shell scripts</div>
       <h3 class="layer__title">Rules that fire themselves</h3>
       <p class="layer__desc">
         Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.

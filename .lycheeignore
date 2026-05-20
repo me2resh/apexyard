@@ -15,5 +15,5 @@ https://medium\.com/@sathishkraju/.*
 # here so framework PRs aren't blocked on adopter-side DNS / cert config.
 # Fix is in Netlify dashboard (Site → Domain management → HTTPS →
 # Provision certificate), separate concern from any framework diff.
-https://me2resh\.com/?
-https://yard\.apexscript\.com/?
+https://me2resh\.com.*
+https://yard\.apexscript\.com.*

@@ -1,0 +1,86 @@
+# ApexYard Architecture
+
+> Five layers (governance, capability, defaults, customisation, per-project data) inside one ops fork — plus an optional split-portfolio private sibling repo. The canonical mental model for ApexYard adopters.
+
+## What is it?
+
+ApexYard governs a portfolio of repos as one organisation. The architecture is a 5-layer model inside a single fork of `me2resh/apexyard`, plus an optional private-sibling repo for adopters who don't want portfolio names on a public GitHub.
+
+## What can it do?
+
+A single ops fork holds the registry, hooks, rules, skills, agents, templates, and handbooks. Managed projects clone in as gitignored workspace dirs. Cross-project portfolio skills (`/inbox`, `/status`, `/tasks`) aggregate across the registry.
+
+## What's needed to start?
+
+Fork apexyard once and treat the fork as your ops repo. Add an entry to `apexyard.projects.yaml` for every project you want governed. Skills resolve transparently whether you're in single-fork or split-portfolio mode.
+
+## The 5-layer model
+
+### Layer 1 — Governance (slate-blue in the diagram)
+
+Declares what's true and what's enforced:
+
+- **Registry** (`apexyard.projects.yaml`) — lists every managed project
+- **Hooks** (`.claude/hooks/`) — 29 shell gates: merge gate, ticket-first, secrets scan, AgDR for architecture, migration gate, red-CI block, branch/PR-title validation, leak protection
+- **Rules** (`.claude/rules/`) — 11 modular self-discipline guides
+- **Onboarding** (`onboarding.yaml`) — company name, mission, team, tech stack
+
+### Layer 2 — Capability (forest-green)
+
+What the agent can DO:
+
+- **Skills** (`.claude/skills/`) — 53 slash commands: `/feature`, `/handover`, `/c4`, `/threat-model`, `/process`, `/dfd`, `/journey`, `/update`, `/release`, and 44 more
+- **Agents** (`.claude/agents/`) — 5 specialised sub-agents: Rex (code review), Hatim (security), Munir (deps), Tariq (PR), Idris (tickets)
+
+### Layer 3 — Framework defaults (ochre)
+
+Ships out of the box:
+
+- **Templates** (`templates/`) — PRD, AgDR, technical-design, C4 context/container, DFD, vision, spike, migration, investigation, idea
+- **Handbooks** (`handbooks/`) — `architecture/`, `general/`, `language/<lang>/` — Rex consults during code review
+
+### Layer 4 — Customisation overlay (accent red — overrides)
+
+- **`custom-templates/`** — path-mirror override, wins over framework on collision
+- **`custom-skills/`** — symlinked into `.claude/skills/`; framework version moves to `.framework.bak` on collision
+- **`custom-handbooks/`** — additive: Rex reads BOTH layers; same path conventions as framework
+
+### Layer 5 — Per-project data (plum — one entry per row in the registry)
+
+- **`projects/<name>/`** (committed) — ApexYard's view: README, roadmap, handover-assessment, PRDs, architecture/ (C4, DFD, vision), journeys, processes (BPMN), feature-inventory, audits, updates, docs/agdr/
+- **`workspace/<name>/`** (gitignored) — live git clones of the managed repos; cd into to do code work; LSP-aware skills run here
+
+The test for *"which side does this doc go?"* is: would it follow the code if the project spun out tomorrow? YES → `workspace/<name>/docs/`. NO → `projects/<name>/`.
+
+## How does the portfolio model work?
+
+### Single-fork mode (default)
+
+One repo: your fork of `me2resh/apexyard`. Registry + projects + onboarding + workspace all live in the fork. Best for fully-public portfolios or GitHub Pro/Team/Enterprise (which support private forks of public repos).
+
+### Split-portfolio mode (v2)
+
+Two repos: the public framework fork + a separate private repo for the portfolio. Resolved via a `portfolio:` config block in `.claude/project-config.json`. The public fork holds only framework files plus your customisations; the private sibling holds portfolio data, company config, and managed-project clones. Use this if you're on GitHub Free with any project you don't want named publicly.
+
+## Optional private sibling repo (the dashed box in the diagram)
+
+When v2 is enabled, skills resolve these paths from the sibling repo transparently:
+
+- `apexyard.projects.yaml` (registry)
+- `projects/` (per-project docs)
+- `onboarding.yaml` (company config)
+- `workspace/` (managed-project clones)
+- `custom-templates/`, `custom-skills/`, `custom-handbooks/` (customisation overlay)
+
+The public fork carries a `.apexyard-fork` marker file as the anchor. Every framework hook that walks up to find the ops fork looks for this marker first (legacy `onboarding.yaml + apexyard.projects.yaml` pair stays as a fallback during the transition window).
+
+## Full setup walkthrough
+
+Read [`docs/multi-project.md`](https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md) for the full step-by-step setup, daily workflow, upgrade flow, and FAQ.
+
+## Links
+
+- Home: <https://yard.apexscript.com/index.md>
+- Skills: <https://yard.apexscript.com/skills.md>
+- GitHub: <https://github.com/me2resh/apexyard>
+- Setup guide: <https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md>
