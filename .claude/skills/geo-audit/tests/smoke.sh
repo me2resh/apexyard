@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /generative-engine-audit smoke test
+# /geo-audit smoke test
 #
 # Verifies the documentation contracts the consuming surface depends on:
 #
@@ -14,11 +14,11 @@
 #   8. AgDR-0043 references the registry file path
 #   9. AI-crawler registry exists at .claude/registries/ai-crawlers.json,
 #      valid JSON, lists all 11 named crawlers from the ticket
-#  10. Audit template exists at templates/audits/generative-engine-audit.md
-#  11. CLAUDE.md skill count is 52 AND /generative-engine-audit row is present
-#  12. docs/multi-project.md skill-behaviour table has /generative-engine-audit row
-#  13. /seo-audit SKILL.md cross-links to /generative-engine-audit
-#  14. /launch-check SKILL.md references /generative-engine-audit in the
+#  10. Audit template exists at templates/audits/geo-audit.md
+#  11. CLAUDE.md skill count is 53 AND /geo-audit row is present
+#  12. docs/multi-project.md skill-behaviour table has /geo-audit row
+#  13. /seo-audit SKILL.md cross-links to /geo-audit
+#  14. /launch-check SKILL.md references /geo-audit in the
 #      deep-dive companions table (so the fan-out claim is testable)
 #  15. /launch-check SKILL.md description mentions generative-engine
 #  16. /launch-check SKILL.md sweep size updated 8 → 9
@@ -87,13 +87,13 @@ if [ ! -f "$ops_root/CLAUDE.md" ]; then
   exit 1
 fi
 
-echo "Smoke test: /generative-engine-audit contract checks (ops_root=$ops_root)"
+echo "Smoke test: /geo-audit contract checks (ops_root=$ops_root)"
 echo ""
 
-SKILL="$ops_root/.claude/skills/generative-engine-audit/SKILL.md"
-AGDR="$ops_root/docs/agdr/AgDR-0043-generative-engine-audit-skill.md"
+SKILL="$ops_root/.claude/skills/geo-audit/SKILL.md"
+AGDR="$ops_root/docs/agdr/AgDR-0043-geo-audit-skill.md"
 REGISTRY="$ops_root/.claude/registries/ai-crawlers.json"
-TEMPLATE="$ops_root/templates/audits/generative-engine-audit.md"
+TEMPLATE="$ops_root/templates/audits/geo-audit.md"
 SEO_SKILL="$ops_root/.claude/skills/seo-audit/SKILL.md"
 LAUNCH_SKILL="$ops_root/.claude/skills/launch-check/SKILL.md"
 CLAUDEMD="$ops_root/CLAUDE.md"
@@ -104,7 +104,7 @@ MULTIPROJECT="$ops_root/docs/multi-project.md"
 # ---------------------------------------------------------------------------
 echo "1. SKILL.md frontmatter sanity:"
 [ -f "$SKILL" ] || { echo "FAIL: SKILL.md missing at $SKILL"; exit 1; }
-assert_grep "name field present"           "^name: generative-engine-audit"  "$SKILL"
+assert_grep "name field present"           "^name: geo-audit"  "$SKILL"
 assert_grep "argument-hint field present"  "^argument-hint:"                  "$SKILL"
 assert_grep "effort field present"         "^effort:"                         "$SKILL"
 assert_grep "description names LLM/agent"  "LLM/agent|LLM crawler"           "$SKILL"
@@ -235,38 +235,38 @@ fi
 echo ""
 echo "10. Audit template exists at the canonical path:"
 [ -f "$TEMPLATE" ] || { echo "FAIL: template missing at $TEMPLATE"; exit 1; }
-assert_grep "Template has H1"            "^# Generative Engine Audit"  "$TEMPLATE"
-assert_grep "Template has Findings hdr"  "^## Findings"                 "$TEMPLATE"
+assert_grep "Template has H1"            "^# GEO Audit"     "$TEMPLATE"
+assert_grep "Template has Findings hdr"  "^## Findings"     "$TEMPLATE"
 
 # ---------------------------------------------------------------------------
 # 11. CLAUDE.md skill count + row
 # ---------------------------------------------------------------------------
 echo ""
-echo "11. CLAUDE.md skill count is 52 + /generative-engine-audit row present:"
-assert_grep "Skill count is 52"   "^### Available skills \\(52\\)"     "$CLAUDEMD"
-assert_grep "Skill row present"   "^\\| \`/generative-engine-audit\`"   "$CLAUDEMD"
+echo "11. CLAUDE.md skill count is 53 + /geo-audit row present:"
+assert_grep "Skill count is 53"   "^### Available skills \\(53\\)"     "$CLAUDEMD"
+assert_grep "Skill row present"   "^\\| \`/geo-audit\`"                 "$CLAUDEMD"
 
 # ---------------------------------------------------------------------------
 # 12. docs/multi-project.md skill-behaviour table has the new row
 # ---------------------------------------------------------------------------
 echo ""
-echo "12. docs/multi-project.md skill-behaviour table has /generative-engine-audit row:"
-assert_grep "Row present in multi-project" "^\\| \`/generative-engine-audit\`" "$MULTIPROJECT"
+echo "12. docs/multi-project.md skill-behaviour table has /geo-audit row:"
+assert_grep "Row present in multi-project" "^\\| \`/geo-audit\`" "$MULTIPROJECT"
 
 # ---------------------------------------------------------------------------
-# 13. /seo-audit cross-links to /generative-engine-audit
+# 13. /seo-audit cross-links to /geo-audit
 # ---------------------------------------------------------------------------
 echo ""
-echo "13. /seo-audit SKILL.md cross-links to /generative-engine-audit:"
-assert_grep "/seo-audit links to sibling" "/generative-engine-audit" "$SEO_SKILL"
+echo "13. /seo-audit SKILL.md cross-links to /geo-audit:"
+assert_grep "/seo-audit links to sibling" "/geo-audit" "$SEO_SKILL"
 
 # ---------------------------------------------------------------------------
-# 14. /launch-check references /generative-engine-audit in deep-dive table
+# 14. /launch-check references /geo-audit in deep-dive table
 # ---------------------------------------------------------------------------
 echo ""
-echo "14. /launch-check SKILL.md references /generative-engine-audit:"
-assert_grep "/launch-check references generative-engine-audit" \
-  "/generative-engine-audit" "$LAUNCH_SKILL"
+echo "14. /launch-check SKILL.md references /geo-audit:"
+assert_grep "/launch-check references geo-audit" \
+  "/geo-audit" "$LAUNCH_SKILL"
 
 # ---------------------------------------------------------------------------
 # 15. /launch-check description mentions generative-engine
@@ -297,5 +297,5 @@ if [ "$FAIL" -gt 0 ]; then
   echo -e "Failures:$FAILED_CASES"
   exit 1
 fi
-echo "OK: all /generative-engine-audit smoke checks passed."
+echo "OK: all /geo-audit smoke checks passed."
 exit 0

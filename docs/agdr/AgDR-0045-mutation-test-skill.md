@@ -145,5 +145,5 @@ Six sections, in order:
 - Sibling patterns this AgDR reuses:
   - AgDR-0034 — graceful-degradation shape (exit 3 + install advisory) from `/pdf`
   - AgDR-0025 — `/process` graceful-degrade for `bpmnlint`
-  - AgDR-0043 — `/generative-engine-audit` sibling-skill pattern (dispatched from `/launch-check`)
+  - AgDR-0043 — `/geo-audit` sibling-skill pattern (dispatched from `/launch-check`)
   - AgDR-0019 — audit artefact persistence (the `quality/` subdir is sibling to `audits/<dim>/` rather than nested, because mutation reports are score + catalogue, not severity-graded findings)

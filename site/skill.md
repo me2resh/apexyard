@@ -18,7 +18,7 @@ across 6 buckets:
 
 - **Audits** (`/launch-check`, `/threat-model`, `/accessibility-audit`,
   `/compliance-check`, `/analytics-audit`, `/seo-audit`,
-  `/generative-engine-audit`, `/performance-audit`, `/monitoring-audit`,
+  `/geo-audit`, `/performance-audit`, `/monitoring-audit`,
   `/docs-audit`)
 - **Tickets** (`/feature`, `/bug`, `/task`, `/spike`, `/migration`,
   `/investigation`, `/idea`, `/tickets-batch`)

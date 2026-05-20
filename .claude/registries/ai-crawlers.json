@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "description": "v1 AI-crawler list consumed by /generative-engine-audit. Each entry names a crawler user-agent token, its scope (training vs retrieval-at-inference vs both), and the primary vendor / use case. Single source of truth — the audit's robots.txt-directive check iterates this list.",
+  "description": "v1 AI-crawler list consumed by /geo-audit. Each entry names a crawler user-agent token, its scope (training vs retrieval-at-inference vs both), and the primary vendor / use case. Single source of truth — the audit's robots.txt-directive check iterates this list.",
   "see_also": [
-    "docs/agdr/AgDR-0043-generative-engine-audit-skill.md",
-    ".claude/skills/generative-engine-audit/SKILL.md"
+    "docs/agdr/AgDR-0043-geo-audit-skill.md",
+    ".claude/skills/geo-audit/SKILL.md"
   ],
   "crawlers": [
     {

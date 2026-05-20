@@ -28,7 +28,7 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 | Compliance | `/launch-check` row 3 | **`/compliance-check`** — GDPR + ePrivacy analysis |
 | Analytics | `/launch-check` row 4 | **`/analytics-audit`** — event taxonomy and funnel coverage |
 | SEO | `/launch-check` row 5 | **`/seo-audit`** — technical SEO against Google best practices |
-| Generative-engine | `/launch-check` row 6 | **`/generative-engine-audit`** — LLM/agent discoverability (GEO + AEO), `llms.txt`, `AGENTS.md`, AI-crawler directives, JSON-LD citation grounding |
+| Generative-engine | `/launch-check` row 6 | **`/geo-audit`** — LLM/agent discoverability (GEO + AEO), `llms.txt`, `AGENTS.md`, AI-crawler directives, JSON-LD citation grounding |
 | Performance | `/launch-check` row 7 | **`/performance-audit`** — bundle, images, Core Web Vitals |
 | Monitoring | `/launch-check` row 8 | **`/monitoring-audit`** — observability and incident readiness |
 | Documentation | `/launch-check` row 9 | **`/docs-audit`** — Diataxis framework completeness |
@@ -153,7 +153,7 @@ Warnings (non-blocking, address before next launch):
 
 ### 6. Generative-engine (LLM/agent discoverability)
 
-**What to check** (quick scan — full deep-dive lives in `/generative-engine-audit`):
+**What to check** (quick scan — full deep-dive lives in `/geo-audit`):
 
 - `llms.txt` and `llms-full.txt` at the site root
 - `AGENTS.md` at the repo root
@@ -161,7 +161,7 @@ Warnings (non-blocking, address before next launch):
 - JSON-LD citation metadata on article-shaped pages (`author`, `dateModified`, `datePublished`, `publisher`)
 - Per-page token count for the largest docs page (heuristic: `char_count / 4` — flag pages over 25K)
 
-Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perplexity, Gemini) and **AEO** (coding-agent consumption — Claude Code, Cursor, Aider, Cline). Both consume the same artefacts, so they share one row at the milestone-boundary level. For the bucket-by-bucket breakdown, run `/generative-engine-audit`.
+Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perplexity, Gemini) and **AEO** (coding-agent consumption — Claude Code, Cursor, Aider, Cline). Both consume the same artefacts, so they share one row at the milestone-boundary level. For the bucket-by-bucket breakdown, run `/geo-audit`.
 
 **PASS if:** `llms.txt` present, `AGENTS.md` present with sandbox + MCP sections, JSON-LD citation metadata on key pages.
 **WARN if:** some artefacts missing (e.g. `AGENTS.md` exists but lacks sandbox links).
@@ -249,7 +249,7 @@ Go through each dimension in order. For each:
 2. Classify as PASS / WARN / FAIL based on the criteria
 3. Write a one-line finding for the table
 
-**Do NOT spend more than 30 seconds per dimension.** The checks should be quick grepping and file scanning, not deep code review. Deep dives happen in the dedicated companion skill (`/seo-audit`, `/generative-engine-audit`, `/threat-model`, etc.) — not inside the initial sweep.
+**Do NOT spend more than 30 seconds per dimension.** The checks should be quick grepping and file scanning, not deep code review. Deep dives happen in the dedicated companion skill (`/seo-audit`, `/geo-audit`, `/threat-model`, etc.) — not inside the initial sweep.
 
 ### Step 4: Compile the verdict
 

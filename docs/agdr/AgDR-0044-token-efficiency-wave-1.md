@@ -6,7 +6,7 @@
 
 ApexYard's session-start cost is dominated by three surfaces that load on every session, every fork, every project:
 
-- **`CLAUDE.md`** — read once at session start. The "Available skills" table grew to multi-clause descriptions per row (some 5–10 lines wide; the longest row was the `/generative-engine-audit` row at 1,160 chars with five sentences of clarification and a cross-link to AgDR-0043).
+- **`CLAUDE.md`** — read once at session start. The "Available skills" table grew to multi-clause descriptions per row (some 5–10 lines wide; the longest row was the `/geo-audit` row — then named `/generative-engine-audit`, renamed in #334 — at 1,160 chars with five sentences of clarification and a cross-link to AgDR-0043).
 - **`SKILL.md` frontmatter `description:` strings** — Claude Code's harness injects every skill's description into the "available skills" system reminder at session start. The aggregate across 52 skills was 13,283 characters (~3,320 tokens) — a third of which was rationale, history references, and "see AgDR-NNNN" links that belong inside the skill body, not in the index.
 - **SessionStart hook banners** — seven hooks fire in series. Most were already correctly silent on the happy path. One — `onboarding-check.sh` — emitted a 430-char multi-paragraph banner when the placeholder onboarding.yaml was still present, far in excess of what the actionable signal needed.
 
@@ -70,7 +70,7 @@ Verified at the close of Wave 1:
 - **No primitives removed.** `ls .claude/skills/ | grep -v ^_lib | wc -l` = 52, unchanged. Hooks (29), rules (11), agents (5), templates, roles (19) all present in their original counts.
 - **Every skill findable in `CLAUDE.md`.** All 52 skill directory names appear as `\`/<name>\`` rows in the table.
 - **Every skill findable in the harness skill index.** Every `SKILL.md` still has a `description:` field (none deleted); shortened, never blanked.
-- **Sub-skill composition preserved.** `/launch-check` description still names its 9-dimension fan-out; deep-dive siblings (`/threat-model`, `/seo-audit`, `/generative-engine-audit`, etc.) all reference `/launch-check` in their descriptions. `/dfd` → `/threat-model` + `/compliance-check` link preserved. `/extract-features` → `/feature-diagram` link preserved.
+- **Sub-skill composition preserved.** `/launch-check` description still names its 9-dimension fan-out; deep-dive siblings (`/threat-model`, `/seo-audit`, `/geo-audit`, etc.) all reference `/launch-check` in their descriptions. `/dfd` → `/threat-model` + `/compliance-check` link preserved. `/extract-features` → `/feature-diagram` link preserved.
 - **Adopter readability of skill bodies unchanged.** Compression touched only the frontmatter `description:` line; the skill body content is byte-for-byte identical.
 
 ## Artifacts

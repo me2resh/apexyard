@@ -204,7 +204,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/compliance-check` | GDPR + ePrivacy compliance — consent, privacy policy, data handling, user rights |
 | `/analytics-audit` | Analytics event-taxonomy audit — SDK coverage, naming, funnel completeness |
 | `/seo-audit` | Technical SEO audit — meta tags, sitemap, robots.txt, OG, structured data |
-| `/generative-engine-audit` | LLM/agent SEO (GEO/AEO) — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD |
+| `/geo-audit` | GEO/AEO audit — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding |
 | `/performance-audit` | Performance audit — bundle size, images, lazy load, code split, Core Web Vitals |
 | `/monitoring-audit` | Observability audit — error tracking, health endpoints, alerting, runbooks |
 | `/docs-audit` | Diataxis docs audit — tutorials, how-to, reference, explanation |

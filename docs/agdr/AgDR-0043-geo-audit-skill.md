@@ -1,6 +1,6 @@
-# AgDR-0043 — `/generative-engine-audit`: GEO + AEO sibling to `/seo-audit`
+# AgDR-0043 — `/geo-audit`: GEO + AEO sibling to `/seo-audit`
 
-> In the context of LLM/agent crawlers becoming a meaningful share of inbound traffic to documentation sites and product pages, facing the choice of whether to extend `/seo-audit` with a new dimension or ship a dedicated sibling skill, I decided to ship a **standalone `/generative-engine-audit`** that mirrors `/seo-audit`'s shape (findings table + score + verdict + opt-in persistence via `_lib-audit-history.sh`), covers the two related sub-scopes **GEO** (Generative Engine Optimization — content for LLM citations) and **AEO** (Agentic Engine Optimization — docs for coding-agent consumption), is fanned out from `/launch-check` alongside `/seo-audit`, and pins its v1 AI-crawler list in a dedicated registry file, accepting that the sub-scope merge means one skill carries two related but distinct evaluation lenses and that the on-disk `skill.md` capability-manifest convention now collides nominally with Claude Code's `SKILL.md` slash-command spec.
+> In the context of LLM/agent crawlers becoming a meaningful share of inbound traffic to documentation sites and product pages, facing the choice of whether to extend `/seo-audit` with a new dimension or ship a dedicated sibling skill, I decided to ship a **standalone `/geo-audit`** (originally shipped as `/generative-engine-audit`; renamed in #334 — see Consequences) that mirrors `/seo-audit`'s shape (findings table + score + verdict + opt-in persistence via `_lib-audit-history.sh`), covers the two related sub-scopes **GEO** (Generative Engine Optimization — content for LLM citations) and **AEO** (Agentic Engine Optimization — docs for coding-agent consumption), is fanned out from `/launch-check` alongside `/seo-audit`, and pins its v1 AI-crawler list in a dedicated registry file, accepting that the sub-scope merge means one skill carries two related but distinct evaluation lenses and that the on-disk `skill.md` capability-manifest convention now collides nominally with Claude Code's `SKILL.md` slash-command spec.
 
 ## Context
 
@@ -28,7 +28,7 @@ Three live problems followed:
 | Option | Pros | Cons |
 |--------|------|------|
 | Extend `/seo-audit` with a GEO+AEO sub-section | One skill to learn. One audit run covers Google + LLM surfaces. | Forces every adopter to pay the GEO+AEO cost on every SEO audit, even when they only care about Google. Doubles the table length on a one-pager-shaped audit. Conflates two audiences whose findings rarely apply to the same fix list. |
-| New sibling `/generative-engine-audit` (chosen) | Independently invokable. Operators who only care about Google keep using `/seo-audit`. `/launch-check` fans out to both, so the milestone-boundary audit covers both. Output, persistence, and verdict shape mirror `/seo-audit` byte-for-byte so the audit family stays consistent. | One more skill to maintain. Adopters discover the GEO/AEO surface only through `/launch-check` or this AgDR (mitigated by the cross-link in `/seo-audit` SKILL.md). |
+| New sibling `/geo-audit` (chosen — originally shipped as `/generative-engine-audit`, renamed in #334) | Independently invokable. Operators who only care about Google keep using `/seo-audit`. `/launch-check` fans out to both, so the milestone-boundary audit covers both. Output, persistence, and verdict shape mirror `/seo-audit` byte-for-byte so the audit family stays consistent. | One more skill to maintain. Adopters discover the GEO/AEO surface only through `/launch-check` or this AgDR (mitigated by the cross-link in `/seo-audit` SKILL.md). |
 | Two sibling skills — `/geo-audit` and `/aeo-audit` | Cleanest mental model — one audience per skill. | Doubles the skill surface for what is, on average, the same set of 10-15 checks with subtly different framing. Most checks overlap (e.g. `llms.txt` matters for both; JSON-LD with `dateModified` matters for both). The 80% overlap dwarfs the 20% difference. |
 
 ### Axis 2 — `skill.md` (the upstream capability-manifest convention) vs the existing `SKILL.md` Claude Code uses
@@ -61,13 +61,13 @@ The upstream GEO/AEO prior art proposes a `skill.md` file at the site or project
 
 ### Chosen on axis 1 — **Sibling skill**
 
-`/generative-engine-audit` ships as a standalone slash command, separately invokable, and is fanned out by `/launch-check` alongside `/seo-audit`. The two skills share zero code (each owns its own SKILL.md flow), share the persistence library (`_lib-audit-history.sh`), and cross-link in prose.
+`/geo-audit` ships as a standalone slash command, separately invokable, and is fanned out by `/launch-check` alongside `/seo-audit`. The two skills share zero code (each owns its own SKILL.md flow), share the persistence library (`_lib-audit-history.sh`), and cross-link in prose.
 
 The one-pager shape is preserved: findings table → score → verdict → opt-in persistence — byte-for-byte the same shape as `/seo-audit`.
 
 ### Chosen on axis 2 — **Check `skill.md`, name the clash**
 
-The audit checks for `skill.md` at the site root (capability-manifest convention). The SKILL.md for `/generative-engine-audit` contains a verbatim callout: *"This is the upstream `skill.md` convention (a capability manifest). It is **distinct from Claude Code's `SKILL.md`** (the slash-command spec at `.claude/skills/<name>/SKILL.md`)."* The smoke test pins the presence of this exact phrase so the callout can't silently drift.
+The audit checks for `skill.md` at the site root (capability-manifest convention). The SKILL.md for `/geo-audit` contains a verbatim callout: *"This is the upstream `skill.md` convention (a capability manifest). It is **distinct from Claude Code's `SKILL.md`** (the slash-command spec at `.claude/skills/<name>/SKILL.md`)."* The smoke test pins the presence of this exact phrase so the callout can't silently drift.
 
 On case-insensitive filesystems an adopter could in principle have one file serve both purposes, but this is rare in practice — Claude Code skill specs live under `.claude/skills/<name>/`, not at the site root.
 
@@ -96,7 +96,7 @@ Adopters who want to add an internal crawler edit the file in their fork. Upstre
 
 ### Positive
 
-- **One audience per skill.** `/seo-audit` stays focused on Google; `/generative-engine-audit` focuses on LLMs + agents. Operators reach for the right one based on the question they're asking.
+- **One audience per skill.** `/seo-audit` stays focused on Google; `/geo-audit` focuses on LLMs + agents. Operators reach for the right one based on the question they're asking.
 - **`/launch-check` covers both** at milestone boundaries — the milestone-shaped audit gets the LLM/agent surface for free without forcing every PR-level SEO audit to pay the cost.
 - **Persistence + trend tracking via the shared lib** — `_lib-audit-history.sh` (AgDR-0019) treats this as one more dimension. Adopters get the trend chart, score deltas, and opt-in commit marker behaviour they already know from `/seo-audit`, `/threat-model`, and the rest of the audit family.
 - **Registry file is reusable.** Future skills that need the AI-crawler list (a hypothetical `/llms-txt-generator`, `/robots-audit`) read the same JSON. No drift.
@@ -116,11 +116,15 @@ Adopters who want to add an internal crawler edit the file in their fork. Upstre
 - **Rollback** is `git revert` of the introducing PR. No state in `.claude/session/` is created. The registry file sits at `.claude/registries/ai-crawlers.json`; adopters who delete the file will get a no-op skill (the SKILL.md flow checks for the file and exits with an advisory when missing).
 - **Future evolution path.** When the upstream conventions stabilise (the `skill.md` capability-manifest naming clash gets resolved by the wider ecosystem, the `llms.txt` spec ships a v1.0), we re-evaluate the advisory→strict posture and the registry schema in a follow-up AgDR.
 
+### Post-v1 rename — `/generative-engine-audit` → `/geo-audit`
+
+2026-05-20 — renamed from `/generative-engine-audit` per #334; clean rename, no shim. Reason: industry GEO term + `/seo-audit` sibling shape + terseness in `/launch-check` output tables. The skill shipped under the original name on 2026-05-19 (PR #315) and was renamed less than a week later, before any meaningful adopter usage accrued. No backward-compatibility symlink — adopters who typed the old name see "command not found" and switch. The AI-crawler registry file (`.claude/registries/ai-crawlers.json`) keeps its path; only the skill name (and its directory, AgDR filename, template filename, and cross-reference text) changed.
+
 ## Artifacts
 
-- Issue: [me2resh/apexyard#311](https://github.com/me2resh/apexyard/issues/311)
-- Skill: `.claude/skills/generative-engine-audit/SKILL.md`
+- Issue: [me2resh/apexyard#311](https://github.com/me2resh/apexyard/issues/311) (original v1 ship), [me2resh/apexyard#334](https://github.com/me2resh/apexyard/issues/334) (rename)
+- Skill: `.claude/skills/geo-audit/SKILL.md`
 - Registry: `.claude/registries/ai-crawlers.json`
-- Audit template: `templates/audits/generative-engine-audit.md`
-- Smoke test: `.claude/skills/generative-engine-audit/tests/smoke.sh`
+- Audit template: `templates/audits/geo-audit.md`
+- Smoke test: `.claude/skills/geo-audit/tests/smoke.sh`
 - Related: AgDR-0019 (audit-artefact persistence), AgDR-0014 (launch-check trend tracking), `.claude/skills/seo-audit/SKILL.md` (the SEO sibling)

@@ -292,7 +292,7 @@ at milestone boundaries. Each dimension also has a standalone deep-dive:
 - `/compliance-check` — GDPR + ePrivacy audit.
 - `/analytics-audit` — SDK config, event naming, funnel completeness.
 - `/seo-audit` — meta, OG, sitemap, robots.txt, structured data.
-- `/generative-engine-audit` — LLM/agent SEO (GEO + AEO) — `llms.txt`,
+- `/geo-audit` — GEO + AEO audit — `llms.txt`,
   `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding.
 - `/performance-audit` — bundle size, image opt, lazy load, code split,
   CWV.

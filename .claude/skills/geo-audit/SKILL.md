@@ -1,19 +1,19 @@
 ---
-name: generative-engine-audit
-description: LLM/agent SEO audit (GEO + AEO) — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding. Sibling to /seo-audit.
+name: geo-audit
+description: GEO + AEO audit — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding. Sibling to /seo-audit.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
 ---
 
-# /generative-engine-audit — LLM/Agent Discoverability Audit
+# /geo-audit — LLM/Agent Discoverability Audit
 
 Deep-dive audit against the emerging GEO + AEO conventions. Checks discovery files (`llms.txt`, `AGENTS.md`), AI-crawler directives in `robots.txt`, capability manifests, citation-friendly metadata, snippet-extractable content shape, and token economics. Invoke when `/launch-check` flags the generative-engine row, or directly during docs/landing-site work.
 
 **Sibling to `/seo-audit`** (NOT an extension). The two skills run independently:
 
 - `/seo-audit` — Google-shaped SEO: title, description, og, sitemap, robots.txt, schema for Googlebot
-- `/generative-engine-audit` — LLM/agent surface: `llms.txt`, `AGENTS.md`, AI-crawler directives, citation JSON-LD, token economics
+- `/geo-audit` — LLM/agent surface: `llms.txt`, `AGENTS.md`, AI-crawler directives, citation JSON-LD, token economics
 
 `/launch-check` fans out to both at milestone boundaries so the production-readiness verdict covers both audiences.
 
@@ -122,7 +122,7 @@ Token-count heuristic is `char_count / 4` (cross-vendor estimate). Adopters who 
 ### Step 7: Output
 
 ```
-GENERATIVE ENGINE AUDIT — <project> @ <sha>
+GEO AUDIT — <project> @ <sha>
 
 | #   | Bucket             | Area                                  | Status | Severity | Finding                                          |
 |-----|--------------------|---------------------------------------|--------|----------|--------------------------------------------------|
@@ -179,22 +179,22 @@ payload=$(mktemp); cat > "$payload" <<'EOF'
 }
 EOF
 
-# Body: per templates/audits/generative-engine-audit.md
+# Body: per templates/audits/geo-audit.md
 body=$(mktemp); cat > "$body" <<'EOF'
 ... (filled-in body — findings table + Recommended priority) ...
 EOF
 
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-audit_run_persist "<project-name>" "generative-engine-audit" "$ts" "fail" 55 "$body" < "$payload"
+audit_run_persist "<project-name>" "geo-audit" "$ts" "fail" 55 "$body" < "$payload"
 rm -f "$payload" "$body"
 
-audit_render_trend "<project-name>" "generative-engine-audit" 5
+audit_render_trend "<project-name>" "geo-audit" 5
 ```
 
 ### Opt-in commit
 
 ```bash
-touch projects/<name>/audits/generative-engine-audit/.audit-history-tracked
+touch projects/<name>/audits/geo-audit/.audit-history-tracked
 ```
 
 ## Rules
@@ -212,9 +212,9 @@ touch projects/<name>/audits/generative-engine-audit/.audit-history-tracked
 | File | Purpose |
 |------|---------|
 | `.claude/registries/ai-crawlers.json` | v1 AI-crawler list (12 entries) consumed by the G3 check |
-| `templates/audits/generative-engine-audit.md` | Per-run body template (audit family standard, AgDR-0019) |
+| `templates/audits/geo-audit.md` | Per-run body template (audit family standard, AgDR-0019) |
 | `.claude/hooks/_lib-audit-history.sh` | Shared persistence + trend rendering (audit family standard, AgDR-0019) |
 | `.claude/skills/seo-audit/SKILL.md` | Google-shaped SEO sibling — independent, complementary |
 | `.claude/skills/launch-check/SKILL.md` | Fans out to both this skill and `/seo-audit` at milestone boundaries |
 
-Design rationale: [`docs/agdr/AgDR-0043-generative-engine-audit-skill.md`](../../../docs/agdr/AgDR-0043-generative-engine-audit-skill.md).
+Design rationale: [`docs/agdr/AgDR-0043-geo-audit-skill.md`](../../../docs/agdr/AgDR-0043-geo-audit-skill.md).

@@ -1,6 +1,6 @@
-# Generative Engine Audit — {project} @ {short-sha}
+# GEO Audit — {project} @ {short-sha}
 
-> Persisted by `/generative-engine-audit` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
+> Persisted by `/geo-audit` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
 
 ## Scope
 
@@ -50,6 +50,6 @@ Out of scope: auto-generating the missing artefacts, content-quality grading for
 
 ## See also
 
-- `docs/agdr/AgDR-0043-generative-engine-audit-skill.md` — design rationale, including the `skill.md` vs Claude Code `SKILL.md` naming clash
+- `docs/agdr/AgDR-0043-geo-audit-skill.md` — design rationale, including the `skill.md` vs Claude Code `SKILL.md` naming clash
 - `.claude/skills/seo-audit/SKILL.md` — the Google-shaped SEO sibling
 - `.claude/skills/launch-check/SKILL.md` — milestone-boundary audit that fans out to both
