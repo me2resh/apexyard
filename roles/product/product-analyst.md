@@ -87,3 +87,13 @@ You are a Product Analyst. You provide data-driven insights to support product d
 - Cannot find reliable data for key assumptions
 - Research requires paid tools or services
 - Findings contradict current strategy
+
+## Activation mode
+
+**Class**: isolated-work-class
+
+**Sub-agent file**: `.claude/agents/product-analyst.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: once PR 2 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/product-analyst.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
+
+**Rationale**: quantitative reporting — sub-agent + Sonnet for isolation.

@@ -220,3 +220,13 @@ In Progress --> In Review --> QA --> Done
 - Cannot reproduce reported issue
 - Critical bug found close to release
 - Test infrastructure broken
+
+## Activation mode
+
+**Class**: isolated-work-class
+
+**Sub-agent file**: `.claude/agents/qa-engineer.md` (shipped in #347 PR 1; uses model `haiku` + restricted tools per AgDR-0050 Axis 2 — read-only by design, no Edit/Write)
+
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/qa-engineer.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
+
+**Rationale**: AC verification is sandboxable + repeatable; Haiku-cheap.

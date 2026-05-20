@@ -113,3 +113,13 @@ Error states:
 - Discovered usability issue in launched feature
 - Conflicting requirements affect UX
 - Need user research budget
+
+## Activation mode
+
+**Class**: in-flow-class
+
+**Sub-agent file**: `.claude/agents/ux-designer.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; once PR 2 lands, the sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
+
+**Rationale**: user flow + IA is iterative.

@@ -112,3 +112,13 @@ For every PR:
 - Pattern of recurring security issues
 - Third-party dependency with known exploit
 - Suspected data breach indicators
+
+## Activation mode
+
+**Class**: isolated-work-class
+
+**Sub-agent file**: `.claude/agents/security-auditor.md` (ships in #347 PR 3; will use model `opus` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/security-auditor.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism — and the existing Hatim utility agent (`.claude/agents/security-reviewer.md`) remains available via `/security-review`.
+
+**Rationale**: OWASP / threat-model depth needs isolated context — matches existing Hatim utility agent pattern.

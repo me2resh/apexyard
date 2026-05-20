@@ -108,3 +108,13 @@ Before creating a PR:
 - Performance problems
 - Accessibility conflict with design
 - Blocked by backend work
+
+## Activation mode
+
+**Class**: in-flow-class
+
+**Sub-agent file**: `.claude/agents/frontend-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
+
+**Rationale**: same as Backend — the engineer IS the operator's hands during build; sub-agent would lose in-flight context.

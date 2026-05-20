@@ -135,3 +135,13 @@ You are a Penetration Tester who thinks like an attacker. Your job is to find ex
 - Data exposure discovered
 - Authentication bypass confirmed
 - Multiple chained vulnerabilities create severe risk
+
+## Activation mode
+
+**Class**: isolated-work-class
+
+**Sub-agent file**: `.claude/agents/penetration-tester.md` (ships in #347 PR 3; will use model `opus` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/penetration-tester.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
+
+**Rationale**: adversarial exploration benefits from isolation.

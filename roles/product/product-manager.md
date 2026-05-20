@@ -91,3 +91,13 @@ Before submitting a PRD for review:
 - Blocker not resolved within 24 hours
 - Customer feedback suggests major pivot needed
 - Engineering pushes back on feasibility
+
+## Activation mode
+
+**Class**: in-flow-class
+
+**Sub-agent file**: `.claude/agents/product-manager.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; once PR 2 lands, the sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
+
+**Rationale**: PRD authoring is conversational + iterative — shared context wins.

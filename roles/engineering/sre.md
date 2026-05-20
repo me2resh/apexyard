@@ -149,3 +149,13 @@ For each service:
 - Security breach suspected
 - Data loss occurred
 - Error budget exhausted
+
+## Activation mode
+
+**Class**: isolated-work-class
+
+**Sub-agent file**: `.claude/agents/sre.md` (shipped in #347 PR 1; uses model `opus` + restricted tools per AgDR-0050 Axis 2)
+
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/sre.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
+
+**Rationale**: incident response is bounded + needs isolated diagnosis context.
