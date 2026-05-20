@@ -10,13 +10,12 @@
 
 ## Now (P0)
 
-1. **#16** Meta WhatsApp Business API setup + AgDR
+1. **#17** Conditional auto-send — PR open (after #16 merged)
 2. **#6 / #8 / #9** Staging deploy: Auth0, Vercel env, D2 smoke
 
 ## Next (P1)
 
-3. **#17** Conditional auto-send WhatsApp (`opt_in` + approved template only)
-4. **#18** Inbound webhook → stage + call log
+3. **#18** Inbound webhook → stage + call log
 
 ## Later
 
