@@ -114,9 +114,15 @@ run_migration() {
 
     SIBLING_ROOT=$(dirname "$(jq -r '.portfolio.registry' .claude/project-config.json)")
 
-    # Move onboarding.yaml
+    # Copy onboarding.yaml (NOT move — see AgDR-0021 § H).
+    # Sibling becomes canonical; public-fork copy is untracked and left on
+    # disk as a legacy ops-root walk-up fallback / safety-net snapshot.
     if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
-      mv onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
+      cp -p onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
+      git rm --cached onboarding.yaml >/dev/null 2>&1 || true
+    elif [ -f "$SIBLING_ROOT/onboarding.yaml" ] && [ -f onboarding.yaml ]; then
+      # Idempotence: sibling is canonical, just ensure public-fork copy is untracked.
+      git rm --cached onboarding.yaml >/dev/null 2>&1 || true
     fi
 
     # Move workspace contents
@@ -176,13 +182,33 @@ fi
 run_migration "$SB/public"
 
 # Post-checks
-[ ! -f "$SB/public/onboarding.yaml" ] \
-  && mark_pass "onboarding.yaml moved out of public fork" \
-  || mark_fail "onboarding moved" "still present in public fork"
+#
+# onboarding.yaml: COPY semantics (refined #317, see AgDR-0021 § H).
+# Both copies exist, contents are identical, and the public-fork copy
+# is untracked (git rm --cached'd) so it can't drift into commits.
+[ -f "$SB/public/onboarding.yaml" ] \
+  && mark_pass "onboarding.yaml snapshot retained in public fork (copy semantics)" \
+  || mark_fail "onboarding snapshot retained" "missing from public fork"
 
 [ -f "$SB/private/onboarding.yaml" ] \
-  && mark_pass "onboarding.yaml landed in sibling private repo" \
+  && mark_pass "onboarding.yaml landed in sibling private repo (canonical)" \
   || mark_fail "onboarding landed" "missing in sibling repo"
+
+if [ -f "$SB/public/onboarding.yaml" ] && [ -f "$SB/private/onboarding.yaml" ]; then
+  if cmp -s "$SB/public/onboarding.yaml" "$SB/private/onboarding.yaml"; then
+    mark_pass "onboarding.yaml: public-fork snapshot matches sibling-repo canonical"
+  else
+    mark_fail "onboarding identical" "public-fork and sibling-repo copies differ"
+  fi
+fi
+
+# The public-fork copy must be UNTRACKED so future commits don't ship it.
+# `git ls-files` lists tracked paths only — empty output means untracked.
+if [ -z "$( cd "$SB/public" && git ls-files onboarding.yaml 2>/dev/null )" ]; then
+  mark_pass "onboarding.yaml untracked in public fork (git rm --cached applied)"
+else
+  mark_fail "onboarding untracked" "still tracked in public fork"
+fi
 
 [ ! -d "$SB/public/workspace/demo" ] \
   && mark_pass "workspace/demo moved out of public fork" \
@@ -282,6 +308,61 @@ if [ "$?" -eq 0 ]; then
   mark_pass "post-v2: resolve_ops_root finds the public fork via .apexyard-fork"
 else
   mark_fail "post-v2 ops_root" "see error above"
+fi
+
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 4: onboarding.yaml is COPIED (not moved) — explicit semantics check
+#
+# Refined in #317 (see AgDR-0021 § H): the public-fork onboarding.yaml is
+# left on disk as an untracked gitignored snapshot so the legacy ops-root
+# walk-up fallback (_lib-ops-root.sh) keeps working even if .apexyard-fork
+# is accidentally removed. The sibling-repo copy is canonical.
+#
+# This case modifies the public-fork copy AFTER migration and asserts the
+# sibling-repo copy is NOT affected — proves the two are independent files
+# (a `mv` followed by `cp` to recreate would have the same observable
+# pre-state but reading would still be a single canonical copy; this test
+# specifically pins that we have two real files on disk).
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d)
+SB=$(cd "$SB" && pwd -P)
+build_pre_v2 "$SB"
+
+# Capture pre-migration content for comparison
+ORIG_CONTENT=$(cat "$SB/public/onboarding.yaml")
+
+run_migration "$SB/public"
+
+# Sanity: both files exist after migration
+if [ ! -f "$SB/public/onboarding.yaml" ] || [ ! -f "$SB/private/onboarding.yaml" ]; then
+  mark_fail "case-4 sanity" "expected both copies of onboarding.yaml post-migration"
+else
+  # Modify the public-fork snapshot
+  echo "# touched by case 4" >> "$SB/public/onboarding.yaml"
+
+  # The sibling-repo copy must be untouched (independent file, not a hard link)
+  SIB_CONTENT=$(cat "$SB/private/onboarding.yaml")
+  if [ "$SIB_CONTENT" = "$ORIG_CONTENT" ]; then
+    mark_pass "copy-not-move: sibling-repo onboarding.yaml unaffected by public-fork edits"
+  else
+    mark_fail "copy semantics" "sibling-repo copy changed when public-fork copy was edited (hard link or move-with-symlink?)"
+  fi
+
+  # And both must be on disk simultaneously (the load-bearing semantic of copy vs move)
+  if [ -f "$SB/public/onboarding.yaml" ] && [ -f "$SB/private/onboarding.yaml" ]; then
+    mark_pass "copy-not-move: both public-fork and sibling-repo onboarding.yaml exist after migration"
+  else
+    mark_fail "both copies exist" "one of the copies is missing"
+  fi
+
+  # And the public-fork .gitignore must list onboarding.yaml so the snapshot can't drift back into commits
+  if grep -qxF onboarding.yaml "$SB/public/.gitignore"; then
+    mark_pass "copy-not-move: public-fork .gitignore lists onboarding.yaml (snapshot can't drift into commits)"
+  else
+    mark_fail "gitignore guards snapshot" "onboarding.yaml not in public-fork .gitignore"
+  fi
 fi
 
 rm -rf "$SB"
