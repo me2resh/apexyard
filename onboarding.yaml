@@ -24,14 +24,16 @@
 # apexyard and register a single project — the skills work the same way.
 #
 # See docs/setup.md for the full guide.
+#
+# Portfolio focus: KoraID (P0 active), LUMA PWA (paused), QPPV, Training Command Center.
 
 # -----------------------------------------------------------------------------
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Dr-kersho Engineering"
-  mission: "Portfolio of regulated and customer-facing products built with ApexYard SDLC"
-  vision: "Ship compliant, maintainable software across verticals"
+  name: "Dr-kersho"
+  mission: "Ship credible football identity and booking products for underserved Egyptian players and clinics"
+  vision: "Portfolio of focused PWAs governed by one SDLC-as-code ops repo"
   website: "https://github.com/Dr-kersho"
 
   values:
@@ -39,30 +41,42 @@ company:
     - "Ship and learn"
     - "Keep it simple"
     - "Domain language before code"
+    - "Drill-verified truth over self-reported stats"
 
   products:
+    - name: "KoraID"
+      description: "Grassroots football PWA — FIFA-style cards, court booking, community"
+      type: "web-app"
     - name: "LUMA PWA"
       description: "Aesthetic clinic booking marketplace PWA"
       type: "web-app"
     - name: "QPPV AI Assistant"
       description: "Egyptian pharmacovigilance assistant for QPPVs — ICSR, signals, PSUR, RAG, training"
       type: "web-app"
+    - name: "Training Command Center"
+      description: "AI-driven personal training command center — coach portal and internal tooling"
+      type: "web-app"
 
 team:
-  - name: "Dev"
+  - name: "Ahmed"
     role: "tech-lead"
-    department: "engineering"
-
-  - name: "Dev"
-    role: "backend-engineer"
-    department: "engineering"
-
-  - name: "Dev"
-    role: "frontend-engineer"
     department: "engineering"
 
 tech_stack:
   note: "Per-project stack — see apexyard.projects.yaml and each repo CLAUDE.md"
+  koraid:
+    language: "TypeScript"
+    runtime: "Node.js"
+    framework: "Next.js 14 (App Router)"
+    backend: "Next.js Route Handlers; DynamoDB (AWS) or in-memory dev store"
+    database: "DynamoDB single-table (prod); memory store (dev)"
+    hosting: "Vercel / AWS (per project)"
+    ci_cd: "GitHub Actions"
+    testing: "npm run typecheck; eslint; add Vitest/Playwright as coverage grows"
+    e2e_testing: "Playwright (optional); gstack /qa"
+    state_management: "React server + client components"
+    styling: "Tailwind CSS — see each project's DESIGN.md"
+    api_style: "REST"
   luma_pwa:
     language: "TypeScript"
     framework: "Next.js 14 (App Router)"
@@ -79,7 +93,7 @@ project_management:
   tool: "GitHub Issues"
   sprint_duration: "1 week"
   branching_strategy: "feature-branch"
-  ticket_prefix: "Per project registry (LUM, QPPV, GH)"
+  ticket_prefix: "Per project registry (Koraid, LUM, QPPV, GH)"
 
 quality:
   test_coverage_target: 80
@@ -100,6 +114,6 @@ workflows:
   use_agent_decision_records: true
 
 communication:
-  primary: "Slack"
-  documentation: "GitHub Wiki"
-  design: "Figma"
+  primary: "GitHub"
+  documentation: "Repo docs + projects/<name>/ in ops repo; GitHub Wiki where used"
+  design: "DESIGN.md per app repo; Figma where applicable"

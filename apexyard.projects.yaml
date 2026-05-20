@@ -1,16 +1,29 @@
-# =============================================================================
-# ApexYard Portfolio Registry
-# =============================================================================
-
 version: 1
 
 projects:
+  - name: koraid
+    repo: Dr-kersho/koraid
+    workspace: workspace/koraid
+    docs: projects/koraid
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+    tags:
+      - customer-facing
+      - revenue
+      - pwa
+    ticket_prefix: GH
+
   - name: luma-pwa
     repo: Dr-kersho/luma-pwa
     workspace: workspace/luma-pwa
     docs: projects/luma-pwa
-    status: active
-    tier: P0
+    status: paused
+    tier: P1
     roles:
       - tech-lead
       - backend-engineer
