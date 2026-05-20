@@ -6,10 +6,18 @@
 
 ## In flight
 
-| Issue | Title | Priority |
-|-------|-------|----------|
-| #18 | One-command local dev + healthcheck | P0 |
-| #19 | Coach UI a11y + copy-link | P0 |
+| Issue | PR | Title | Priority |
+|-------|-----|-------|----------|
+| #18 | [#20](https://github.com/Dr-kersho/AI-Driven-Personal-Training-Command-Center-/pull/20) | One-command local dev + healthcheck | P0 — Rex merge-safe |
+| #19 | [#21](https://github.com/Dr-kersho/AI-Driven-Personal-Training-Command-Center-/pull/21) | Coach UI a11y + copy-link | P0 — Rex merge-safe |
+
+## Queued
+
+| Issue | Title |
+|-------|-------|
+| #22 | CONTRIBUTING + ARCHITECTURE |
+| #23 | Web build CI |
+| #24 | Staging + smoke |
 
 ## Next (from DX audit)
 
