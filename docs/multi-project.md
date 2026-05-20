@@ -530,18 +530,22 @@ AND workspace/ to the private sibling repo too, so the public fork holds
 ONLY framework files + your customisations to skills/hooks/rules.
 
 Migrate now? This will:
-  - Move onboarding.yaml to the sibling private repo
+  - Copy onboarding.yaml to the sibling private repo (sibling becomes canonical;
+    public fork keeps a gitignored snapshot for legacy tooling)
   - Move workspace/<name>/ contents to the sibling private repo
   - Add gitignore entries for both in the public fork
   - Write a .apexyard-fork marker (the v2 ops-fork anchor)
   - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
 
-Files MOVED, not copied — destructive. Idempotent — if interrupted, re-run.
+Per-file-class semantics: onboarding.yaml is COPIED (small text file, sibling is
+the canonical source of truth); workspace/ is MOVED (size constraint — clones
+are potentially gigabytes, doubling disk usage makes no sense). Idempotent — if
+interrupted, re-run. Per AgDR-0021 § H.
 
 [Y / n / dry-run — show commands, don't execute]
 ```
 
-The migration is **per-file-class confirmable** (move `onboarding.yaml`? Y/N; move `workspace/`? Y/N), so you can defer one and migrate the other. It's also **idempotent** — if you re-run `/update` later, the migration is a no-op.
+The migration is **per-file-class confirmable** (copy `onboarding.yaml`? Y/N; move `workspace/`? Y/N), so you can defer one and migrate the other. It's also **idempotent** — if you re-run `/update` later, the migration is a no-op. The mixed copy / move semantics are deliberate — see [AgDR-0021 § H](agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) for the rationale (small text files like `onboarding.yaml` benefit from a public-fork snapshot for legacy tooling; large directories like `workspace/` would waste disk if duplicated).
 
 `/update --dry-run` walks through the migration steps without executing them, useful for previewing what would change.
 
@@ -559,15 +563,20 @@ git add onboarding.yaml workspace
 git commit -m "chore: receive onboarding + workspace from public fork (split-portfolio v2)"
 ```
 
-**What if you want to migrate by hand?** Run the same steps the `/update` skill runs:
+**What if you want to migrate by hand?** Run the same steps the `/update` skill runs (per AgDR-0021 § H — `onboarding.yaml` uses **copy** semantics, `workspace/` uses **move**):
 
 ```bash
 cd ~/ops/apexyard
 
 SIBLING=../apexyard-portfolio   # adjust to your sibling-dir name
 
-# Move the two file classes
-mv onboarding.yaml "$SIBLING/onboarding.yaml"
+# Copy onboarding.yaml — sibling becomes canonical source of truth; public
+# fork keeps a gitignored snapshot for legacy tooling (per AgDR-0021 § H).
+cp -p onboarding.yaml "$SIBLING/onboarding.yaml"
+git rm --cached onboarding.yaml 2>/dev/null || true
+
+# Move workspace/<name>/ contents — size constraint (clones are potentially
+# gigabytes; duplicating wastes disk).
 mkdir -p "$SIBLING/workspace"
 for entry in workspace/*; do
   [ -e "$entry" ] || continue
@@ -576,7 +585,8 @@ for entry in workspace/*; do
   mv "$entry" "$SIBLING/workspace/$name"
 done
 
-# Update .gitignore in the public fork
+# Update .gitignore in the public fork (must include onboarding.yaml so the
+# kept-but-gitignored snapshot doesn't get committed alongside customisations).
 cat >> .gitignore <<'IGNORE'
 
 # Split-portfolio v2 (framework ≥ #242)
