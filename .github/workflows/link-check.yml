@@ -43,6 +43,7 @@ jobs:
             --exclude-loopback
             --exclude-private
             --accept 200,204,206,301,302,429
+            --base https://yard.apexscript.com/
             'site/index.html'
             '**/*.md'
           fail: true
