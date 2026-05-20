@@ -91,6 +91,33 @@ Invoked when a PR is ready for review.
   - Design patterns applied
   - Domain concepts
   - Abbreviations and acronyms
+- [ ] **Summary bullets are narrative, not label-only** (advisory — see below)
+
+#### Label-only summary bullets — advisory check (non-blocking)
+
+Per `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality", every bullet in the PR's `## Summary` section should answer two questions: **what changed** AND **why it matters to the person reading this**. Label-only bullets force reviewers into diff archaeology before they can pick a review focus.
+
+**Heuristic for detecting a label-only bullet:**
+
+1. Bullet text (after stripping markdown markers, bold markers, and leading list punctuation) is **≤ 6 words**, AND
+2. Bullet contains **no verb** (past-tense like "fixed", "added", "renamed"; present-tense like "blocks", "renders"; or imperative like "fix", "add" — any of these counts as a verb)
+
+Examples that trigger the heuristic:
+
+- `- State fix` (2 words, no verb)
+- `- OPA/Rego compliance policies` (3 words, no verb)
+- `- CI pipeline changes` (3 words, no verb)
+- `- Pre-commit hooks` (2 words, no verb)
+
+Examples that **do not** trigger the heuristic:
+
+- `- Fixed broken repository state — added moved blocks so Terraform renames…` (verb + >6 words + rationale)
+- `- Bumps lockfile to lodash 4.17.21 (CVE-2021-23337)` (verb + >6 words; legitimate dependency-bump shape)
+- `- Renames Foo → Bar across 17 files` (verb + >6 words; legitimate mechanical-refactor shape)
+
+**Verdict effect: NONE.** This is an **advisory** finding only. Surface it as a `nit:` or `suggestion:` comment in the review body, cite `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality" so the author can self-correct on the next PR, and do NOT downgrade the overall verdict from APPROVED to CHANGES REQUESTED on this finding alone. The rationale: the false-positive rate on a heuristic this simple is too high to justify blocking (legitimate one-line bug fixes and dependency bumps would churn the merge gate); the goal is to surface the rule, not to mechanically enforce it.
+
+**Skip condition.** If the diff is a pure dependency bump (touches only lockfiles + `package.json` / `requirements.txt` / `Cargo.toml` etc.) OR a pure rename refactor (every change is a path/identifier rename with no other diff content), skip the check entirely — the short-bullet shape is the right one for those PRs.
 
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
@@ -517,6 +544,7 @@ Report the failure in plain text with the exact command the caller needs to run.
 - ✅ Security:                  [Pass / Fail]
 - ✅ Performance:               [Pass / Fail]
 - ✅ PR Description & Glossary: [Pass / Fail]
+- ⚠ Summary Bullet Narrative:  [Pass / Advisory]   ← advisory only, never blocks
 - ✅ Technical Decisions (AgDR):[Pass / Fail / N/A]
 - ✅ Adopter Handbooks:         [Pass / Fail / N/A]   ← N/A if no handbooks loaded
 
