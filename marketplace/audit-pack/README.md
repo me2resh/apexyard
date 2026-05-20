@@ -61,6 +61,18 @@ Honest list of what stays in the full framework:
 
 If any of that list resonates, the next step is [the full framework](#graduation-path-the-full-framework).
 
+## Known framework references — what you'll see in the files
+
+This sub-pack is **extracted** from the upstream ApexYard framework, not rewritten for the marketplace. The skill / hook / lib files retain prose references to upstream framework primitives — by design, as funnel pointers, not as bugs. Specifically:
+
+- **SKILL.md author guidance** in several audit skills (e.g. `compliance-check`, `launch-check`, `geo-audit`, `seo-audit`) mentions reading project names from `apexyard.projects.yaml` or invoking `/handover`. These appear in "Process" / "Implementation notes" sections as hints to the full-framework experience. In a plain `.claude/` drop-in (no fork, no `apexyard.projects.yaml`), the skills fall back to the current working directory — they work, the prose just over-promises portfolio-aware features the standalone install doesn't have.
+- **`_lib-audit-history.sh`** conditionally sources `_lib-portfolio-paths.sh` (which is NOT shipped — the `command -v` fallback handles the missing-lib case) and calls `portfolio_projects_dir()` to find where audit-run history lives. Outside an apexyard fork, the fallback writes to `$(git rev-parse --show-toplevel)/projects/<name>/audits/`. This is graceful-degrade — your audit history will accumulate under `projects/<name>/audits/` in whatever repo you ran it in, even if that's a single-project repo with no portfolio model. If you don't want a `projects/` dir created, run the audit from a tmp dir or symlink it elsewhere.
+- **Broken relative links** to upstream `docs/agdr/AgDR-NNNN-*.md` files in some skills' Implementation notes / See-also sections. These point at design rationale that lives in the full framework. Visit <https://github.com/me2resh/apexyard/tree/main/docs/agdr> to read them.
+
+The path-leak smoke test (`.claude/hooks/tests/test_subpack_extraction.sh`) catches **file-path leaks** (e.g. accidentally extracting `_lib-portfolio-paths.sh` itself), not **content-leaks** like the prose hints above. The trade-off was deliberate: a content-scrub would either kill the funnel pitch (sub-packs become orphans, no graduation path visible) OR fork the source files (which contradicts the framework's "generated-not-forked" maintenance contract — see AgDR-0049). v2 of the marketplace plugins may revisit this if adopters consistently surface the prose hints as friction.
+
+If your use case requires zero references to the full framework — e.g. you're shipping the audit-pack into a non-apexyard org's `.claude/` and explicitly don't want to advertise the framework — please file an issue at the upstream repo. v2 scope.
+
 ## Graduation path: the full framework
 
 This sub-pack is one tooth of the ApexYard governance comb. The full framework includes everything above — 19 role definitions, a portfolio registry, AgDR memory, the two-marker merge gate, migration enforcement, and the rest — and is delivered by **forking** the upstream repo into your own ops repo (it's not a plugin; the framework IS the ops repo).
