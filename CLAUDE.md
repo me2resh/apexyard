@@ -191,17 +191,18 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Skills | `.claude/skills/` | 51 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (51)
+### Available skills (52)
 
 | Skill | Purpose |
 |-------|---------|
 | `/setup` | **First-run bootstrap** — describe your stack, accept defaults, configure `onboarding.yaml` in 3 exchanges |
-| `/launch-check` | **Production readiness audit** — 8-dimension sweep with go/no-go verdict. Use at milestone boundaries, not per-PR. Each dimension has a dedicated deep-dive skill below. |
+| `/launch-check` | **Production readiness audit** — 9-dimension sweep with go/no-go verdict. Use at milestone boundaries, not per-PR. Each dimension has a dedicated deep-dive skill below. |
 | `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, info disclosure, DoS, privilege escalation |
 | `/accessibility-audit` | WCAG 2.1 AA compliance — perceivable, operable, understandable, robust |
 | `/compliance-check` | GDPR + ePrivacy — cookie consent, privacy policy, data handling, user rights |
 | `/analytics-audit` | Event taxonomy — SDK coverage, naming conventions, funnel completeness |
 | `/seo-audit` | Technical SEO — meta tags, sitemap, robots.txt, Open Graph, structured data |
+| `/generative-engine-audit` | LLM/agent discoverability — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation grounding, token economics. Covers GEO (LLM citations) + AEO (coding-agent consumption). Sibling to `/seo-audit`; `/launch-check` fans out to both. v1 AI-crawler list pinned in `.claude/registries/ai-crawlers.json`. The audit's `skill.md` capability-manifest check is the upstream convention — distinct from Claude Code's `SKILL.md` slash-command spec. See AgDR-0043. |
 | `/performance-audit` | Bundle and Core Web Vitals — size, images, lazy loading, code splitting |
 | `/monitoring-audit` | Observability — error tracking, health endpoints, alerting, runbooks |
 | `/docs-audit` | Diataxis documentation — tutorials, how-to guides, reference, explanation |

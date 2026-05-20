@@ -1,6 +1,6 @@
 ---
 name: launch-check
-description: Production readiness audit — runs a multi-dimension sweep (security, accessibility, compliance, analytics, SEO, performance, monitoring, docs) and outputs a scored go/conditional-go/no-go verdict. Use at milestone boundaries, not on every PR. Persists each run to a per-project history store so the trend across runs is visible.
+description: Production readiness audit — runs a multi-dimension sweep (security, accessibility, compliance, analytics, SEO, generative-engine discoverability, performance, monitoring, docs) and outputs a scored go/conditional-go/no-go verdict. Use at milestone boundaries, not on every PR. Persists each run to a per-project history store so the trend across runs is visible.
 disable-model-invocation: false
 argument-hint: "[project-path] | trend [project-path]"
 effort: high
@@ -8,13 +8,13 @@ effort: high
 
 # /launch-check — Production Readiness Audit
 
-Runs an 8-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
+Runs a 9-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
 
 **Two modes:**
 
-- `/launch-check [project-path]` — full audit (default). Runs all 8 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
+- `/launch-check [project-path]` — full audit (default). Runs all 9 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
 - `/launch-check trend [project-path]` — read-only trend report. Renders just the trend section from existing run files. Useful for "are we trending up?" without burning the audit cost. See § "Trend-only mode" below.
 
 ## Deep-dive companions
@@ -28,9 +28,10 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 | Compliance | `/launch-check` row 3 | **`/compliance-check`** — GDPR + ePrivacy analysis |
 | Analytics | `/launch-check` row 4 | **`/analytics-audit`** — event taxonomy and funnel coverage |
 | SEO | `/launch-check` row 5 | **`/seo-audit`** — technical SEO against Google best practices |
-| Performance | `/launch-check` row 6 | **`/performance-audit`** — bundle, images, Core Web Vitals |
-| Monitoring | `/launch-check` row 7 | **`/monitoring-audit`** — observability and incident readiness |
-| Documentation | `/launch-check` row 8 | **`/docs-audit`** — Diataxis framework completeness |
+| Generative-engine | `/launch-check` row 6 | **`/generative-engine-audit`** — LLM/agent discoverability (GEO + AEO), `llms.txt`, `AGENTS.md`, AI-crawler directives, JSON-LD citation grounding |
+| Performance | `/launch-check` row 7 | **`/performance-audit`** — bundle, images, Core Web Vitals |
+| Monitoring | `/launch-check` row 8 | **`/monitoring-audit`** — observability and incident readiness |
+| Documentation | `/launch-check` row 9 | **`/docs-audit`** — Diataxis framework completeness |
 
 When a dimension shows WARN or FAIL, tell the user: *"For a detailed analysis, run `/threat-model`"* (or the relevant expert skill).
 
@@ -41,16 +42,17 @@ The output should be **scannable in 10 seconds**. One table, one verdict, one bl
 ```
 LAUNCH CHECK — <project> @ <sha> (<date>)
 
-| #  | Dimension       | Status | Finding                              |
-|----|-----------------|--------|--------------------------------------|
-| 1  | Security        | PASS   | No critical vulns, auth flow ok      |
-| 2  | Accessibility   | WARN   | 3 images missing alt text            |
-| 3  | Compliance      | FAIL   | No cookie consent banner detected    |
-| 4  | Analytics       | PASS   | GA4 configured, 12 events tracked    |
-| 5  | SEO             | WARN   | Missing og:image on 2 pages          |
-| 6  | Performance     | PASS   | Bundle < 200KB, LCP < 2.5s          |
-| 7  | Monitoring      | FAIL   | No health check endpoint found       |
-| 8  | Documentation   | PASS   | README updated this week             |
+| #  | Dimension          | Status | Finding                              |
+|----|--------------------|--------|--------------------------------------|
+| 1  | Security           | PASS   | No critical vulns, auth flow ok      |
+| 2  | Accessibility      | WARN   | 3 images missing alt text            |
+| 3  | Compliance         | FAIL   | No cookie consent banner detected    |
+| 4  | Analytics          | PASS   | GA4 configured, 12 events tracked    |
+| 5  | SEO                | WARN   | Missing og:image on 2 pages          |
+| 6  | Generative-engine  | WARN   | No llms.txt, AGENTS.md missing       |
+| 7  | Performance        | PASS   | Bundle < 200KB, LCP < 2.5s          |
+| 8  | Monitoring         | FAIL   | No health check endpoint found       |
+| 9  | Documentation      | PASS   | README updated this week             |
 
 Verdict: CONDITIONAL GO (2 failures need resolution)
 
@@ -74,7 +76,7 @@ Warnings (non-blocking, address before next launch):
 | Any FAIL | **CONDITIONAL GO** — resolve the blocking items before launch |
 | 3+ FAIL or any critical security finding | **NO-GO** — significant gaps, not launch-ready |
 
-## The 8 dimensions
+## The 9 dimensions
 
 ### 1. Security
 
@@ -147,7 +149,23 @@ Warnings (non-blocking, address before next launch):
 **WARN if:** missing OG tags on some pages, or no structured data.
 **FAIL if:** no title/description on the main page, or no robots.txt. (Non-web projects: auto-PASS.)
 
-### 6. Performance
+### 6. Generative-engine (LLM/agent discoverability)
+
+**What to check** (quick scan — full deep-dive lives in `/generative-engine-audit`):
+
+- `llms.txt` and `llms-full.txt` at the site root
+- `AGENTS.md` at the repo root
+- AI-crawler directives in `robots.txt` (does it name `GPTBot`, `ClaudeBot`, `PerplexityBot`, etc.?)
+- JSON-LD citation metadata on article-shaped pages (`author`, `dateModified`, `datePublished`, `publisher`)
+- Per-page token count for the largest docs page (heuristic: `char_count / 4` — flag pages over 25K)
+
+Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perplexity, Gemini) and **AEO** (coding-agent consumption — Claude Code, Cursor, Aider, Cline). Both consume the same artefacts, so they share one row at the milestone-boundary level. For the bucket-by-bucket breakdown, run `/generative-engine-audit`.
+
+**PASS if:** `llms.txt` present, `AGENTS.md` present with sandbox + MCP sections, JSON-LD citation metadata on key pages.
+**WARN if:** some artefacts missing (e.g. `AGENTS.md` exists but lacks sandbox links).
+**FAIL if:** no `llms.txt` AND no `AGENTS.md` AND no citation JSON-LD on a content-heavy site. (Non-web projects: auto-PASS.)
+
+### 7. Performance
 
 **What to check:**
 
@@ -161,7 +179,7 @@ Warnings (non-blocking, address before next launch):
 **WARN if:** bundle 300-500KB, or a few large images.
 **FAIL if:** bundle > 1MB, or systematically unoptimized images. (Non-web: auto-PASS.)
 
-### 7. Monitoring
+### 8. Monitoring
 
 **What to check:**
 
@@ -175,7 +193,7 @@ Warnings (non-blocking, address before next launch):
 **WARN if:** error tracking but no health endpoint, or no runbook.
 **FAIL if:** no error tracking at all on a production app, or no health endpoint.
 
-### 8. Documentation
+### 9. Documentation
 
 **What to check:**
 
@@ -200,10 +218,10 @@ If invoked with an argument, use that path. Otherwise, use the current working d
 
 Read the project's structure to determine what checks apply:
 
-- Is it a web app? (has `index.html`, React/Vue/Svelte/Next.js markers) → all 8 dimensions
-- Is it an API only? (has routes/endpoints but no frontend) → skip accessibility, SEO, performance (auto-PASS)
-- Is it a CLI/library? → skip accessibility, compliance, analytics, SEO, performance (auto-PASS on those)
-- Is it a mobile app? → adjust accessibility checks for mobile, skip SEO
+- Is it a web app? (has `index.html`, React/Vue/Svelte/Next.js markers) → all 9 dimensions
+- Is it an API only? (has routes/endpoints but no frontend) → skip accessibility, SEO, generative-engine, performance (auto-PASS)
+- Is it a CLI/library? → skip accessibility, compliance, analytics, SEO, generative-engine, performance (auto-PASS on those)
+- Is it a mobile app? → adjust accessibility checks for mobile, skip SEO, skip generative-engine
 
 ### Step 3: Run each applicable dimension
 
@@ -213,7 +231,7 @@ Go through each dimension in order. For each:
 2. Classify as PASS / WARN / FAIL based on the criteria
 3. Write a one-line finding for the table
 
-**Do NOT spend more than 30 seconds per dimension.** The checks should be quick grepping and file scanning, not deep code review. Deep dives happen in follow-up ("tell me more about X") not in the initial sweep.
+**Do NOT spend more than 30 seconds per dimension.** The checks should be quick grepping and file scanning, not deep code review. Deep dives happen in the dedicated companion skill (`/seo-audit`, `/generative-engine-audit`, `/threat-model`, etc.) — not inside the initial sweep.
 
 ### Step 4: Compile the verdict
 
@@ -253,8 +271,8 @@ payload=$(mktemp); cat > "$payload" <<'EOF'
   "commit": "abc1234",
   "scores": {
     "security": 88, "accessibility": 94, "compliance": 76,
-    "analytics": 90, "seo": 87, "performance": 68,
-    "monitoring": 83, "docs": 91
+    "analytics": 90, "seo": 87, "generative_engine": 64,
+    "performance": 68, "monitoring": 83, "docs": 91
   },
   "top_risks": ["No cookie consent banner", "Missing /health endpoint"],
   "findings": [
@@ -331,7 +349,7 @@ Process:
 2. Call `audit_render_trend "<project-name>" "launch-check" 5`. The lib reads both the canonical path AND the legacy path; if the merged set has < 2 runs the call is silent and you tell the operator there's no trend yet.
 3. Print the renderer's output.
 
-Do NOT run the 8-dimension sweep in this mode. Do NOT write any new JSON. This mode is purely for reviewing existing history.
+Do NOT run the 9-dimension sweep in this mode. Do NOT write any new JSON. This mode is purely for reviewing existing history.
 
 ## Rules
 

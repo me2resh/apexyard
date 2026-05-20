@@ -10,6 +10,8 @@ effort: medium
 
 Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technical SEO, and social sharing metadata. Invoke when `/launch-check`'s SEO row shows WARN or FAIL.
 
+> **See also**: `/generative-engine-audit` for the LLM/agent-discoverability sibling check — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, token economics. `/seo-audit` covers the Googlebot audience; `/generative-engine-audit` covers the LLM-crawler and coding-agent audience. The two run independently; `/launch-check` fans out to both at milestone boundaries.
+
 ## Process
 
 ### Step 1: On-page SEO
