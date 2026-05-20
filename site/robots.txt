@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yard.apexscript.com/sitemap.xml
+LLM-Sitemap: https://yard.apexscript.com/llms.txt
