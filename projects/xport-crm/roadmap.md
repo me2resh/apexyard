@@ -12,15 +12,21 @@
 
 ## Now (P0)
 
-1. **#26** Staging DynamoDB on real AWS (issue #7 closed prematurely; tunnel interim only)
-2. **#6 / #8 / #9** Staging deploy — Vercel live; preflight requires `staging_ready` (#26 for green)
+1. **#30** Funnel automation epic — ingest → active
+2. **#28 / #29** Stage rules + follow-up outreach (in PR)
+
+## Shipped (funnel)
+
+- [x] **#26** Real AWS staging
+- [x] **#13–#18** Auto-leads + WhatsApp epic
 
 ## Next (P1)
 
-_(WhatsApp epic #16–#18 complete on `staging`)_
+- **#30** trial → active rules, scheduled Apollo ingest, deal/PO record
+- Meta WhatsApp env on Vercel (`whatsapp_cloud`)
 
 ## Later
 
 - Legacy `/api/import` → delegate to scored ingest
 - Lead detail UI to edit consent
-- Backfill `consent_*` on pre-#14 leads
+- Programmatic follow-up send (#17 extension)
