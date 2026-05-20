@@ -31,6 +31,10 @@
           {
             "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/link-custom-skills.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/apply-agent-routing.sh\"'"
           }
         ]
       }
@@ -95,6 +99,16 @@
             "type": "command",
             "if": "Bash(git push *)",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/pre-push-gate.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
           },
           {
             "type": "command",

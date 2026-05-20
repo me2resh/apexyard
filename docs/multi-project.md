@@ -573,13 +573,18 @@ The key is optional — the default resolves to `./agent-routing.yaml` against t
 
 The `_lib-portfolio-paths.sh` helper exposes the resolver as `portfolio_agent_routing` (mirrors the shape of `portfolio_registry`, `portfolio_onboarding_path`, etc.); the SessionStart sync hook (see below) uses it to find the file.
 
-#### Status — Wave 1 PR 1 (this PR)
+#### How the overrides get applied
 
-This PR ships the **schema + resolver + adopter docs** only. Until the sync hook lands in **#351 PR 2**, the YAML file is documented but inert — `portfolio_agent_routing` resolves the path and the schema example parses cleanly, but no hook applies the overrides to `.claude/agents/*.md` frontmatter yet.
+The `apply-agent-routing.sh` SessionStart hook reads `agent-routing.yaml` on every session start and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Adopter routing choices land in the rendered agent files for that session and stay there until the hook re-runs.
+
+Two **drift-prevention guards** (PreToolUse on `git commit *` and `git push *`) catch the rewritten frontmatter before it leaves the local environment so adopter overrides never leak to the public fork:
+
+- **`block-agent-routing-drift.sh`** — fires on staged `.claude/agents/*.md` diffs whose `model:` frontmatter no longer matches the framework default. Exits 2 with an explanation; the operator restores the default and re-stages, OR explicitly opts in via the `# routing-config:override <reason>` escape-hatch comment when an intentional framework-default change is the *point* of the commit (rare, framework-PR territory).
+
+Per AgDR-0050 § Axis 4.
 
 #### What ships next
 
-- **#351 PR 2** — `apply-agent-routing.sh` SessionStart hook that reads `agent-routing.yaml` and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Pre-commit + pre-push **drift-prevention guards** block accidental commits of the rewritten frontmatter so adopter routing choices never leak to the public fork. Per AgDR-0050 § Axis 4.
 - **#351 PR 3** — `/setup` integration. Split-portfolio adopters get the YAML seeded in the private repo; single-fork adopters get `agent-routing.yaml` gitignored automatically.
 - **#351 PR 4** — local-routing entries (Ollama endpoints) in the seeded template, gated on the **#348** feasibility spike's verdict. If the spike promotes, specific local-model entries land in the example; if it discards, the `endpoint:` field stays in the schema for adopter-author override only.
 
