@@ -1,0 +1,31 @@
+{
+  "subpack": "audit-pack",
+  "upstream_repo": "me2resh/apexyard",
+  "upstream_sha": "8089198eb7fb134477529f6628c2c0569faac7ec",
+  "extracted_at": "2026-05-20T13:10:36Z",
+  "extracted_by": "bin/extract-subpacks.sh",
+  "files": [
+    ".claude/hooks/_lib-audit-history.sh",
+    ".claude/hooks/_lib-ops-root.sh",
+    ".claude/hooks/_lib-read-config.sh",
+    ".claude/registries/ai-crawlers.json",
+    ".claude/skills/accessibility-audit/SKILL.md",
+    ".claude/skills/analytics-audit/SKILL.md",
+    ".claude/skills/compliance-check/SKILL.md",
+    ".claude/skills/docs-audit/SKILL.md",
+    ".claude/skills/geo-audit/SKILL.md",
+    ".claude/skills/launch-check/SKILL.md",
+    ".claude/skills/launch-check/render-trend.sh",
+    ".claude/skills/monitoring-audit/SKILL.md",
+    ".claude/skills/performance-audit/SKILL.md",
+    ".claude/skills/seo-audit/SKILL.md",
+    "templates/audits/accessibility-audit.md",
+    "templates/audits/analytics-audit.md",
+    "templates/audits/compliance-check.md",
+    "templates/audits/docs-audit.md",
+    "templates/audits/geo-audit.md",
+    "templates/audits/monitoring-audit.md",
+    "templates/audits/performance-audit.md",
+    "templates/audits/seo-audit.md"
+  ]
+}

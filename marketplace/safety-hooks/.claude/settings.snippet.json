@@ -1,0 +1,19 @@
+{
+  "_comment": "Recommended PreToolUse hook wiring for apexyard/safety-hooks. Copy the entries inside hooks.PreToolUse into your project's .claude/settings.json (your file already exists; you're appending to its hooks.PreToolUse array). All hooks use Bash matcher pattern matching — the wrapper exits 0 (no-op) when the bash command doesn't match the hook's interest. Order matters: secrets first (kills the most damaging leak), then git-add-all (catches the over-broad stage), then commit refs, then push gate, then PR/branch validation.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/check-secrets.sh" },
+          { "type": "command", "command": "bash .claude/hooks/block-git-add-all.sh" },
+          { "type": "command", "command": "bash .claude/hooks/block-main-push.sh" },
+          { "type": "command", "command": "bash .claude/hooks/pre-push-gate.sh" },
+          { "type": "command", "command": "bash .claude/hooks/verify-commit-refs.sh" },
+          { "type": "command", "command": "bash .claude/hooks/validate-pr-create.sh" },
+          { "type": "command", "command": "bash .claude/hooks/validate-branch-name.sh" }
+        ]
+      }
+    ]
+  }
+}
