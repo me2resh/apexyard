@@ -12,7 +12,8 @@
 
 ## Now (P0)
 
-1. **#6 / #8 / #9** Staging deploy — see `docs/STAGING-CHECKLIST.md` + PR (health/CI/D2 scripts)
+1. **#26** Staging DynamoDB on real AWS (issue #7 closed prematurely; tunnel interim only)
+2. **#6 / #8 / #9** Staging deploy — Vercel live; preflight requires `staging_ready` (#26 for green)
 
 ## Next (P1)
 
