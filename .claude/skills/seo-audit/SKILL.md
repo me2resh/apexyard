@@ -1,6 +1,6 @@
 ---
 name: seo-audit
-description: Technical SEO audit — meta tags, Open Graph, sitemap, robots.txt, structured data, mobile-friendliness, Core Web Vitals readiness. Deep-dive companion to /launch-check's SEO dimension.
+description: Technical SEO audit — meta, OG, sitemap, robots.txt, structured data, mobile, CWV readiness. Deep-dive for /launch-check SEO.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

@@ -1,6 +1,6 @@
 ---
 name: tech-vision
-description: Interactive section-by-section author for the architecture vision template. Interviews the operator on Scope, Principles, Target-state architecture, Current vs Target, Migration path, anti-scope ("things we explicitly chose NOT to build"), and Review cadence — then writes the assembled vision to `projects/<name>/architecture/vision.md` via the custom-templates resolver. Sibling to `/c4` (static topology) and `/dfd` (data flow) in the architecture-doc family.
+description: Interactive author for the architecture vision template — target, gap, migration, anti-scope, cadence.
 argument-hint: "[project-slug | . | --framework]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

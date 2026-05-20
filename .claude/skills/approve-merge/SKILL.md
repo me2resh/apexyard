@@ -1,6 +1,6 @@
 ---
 name: approve-merge
-description: Record per-PR CEO approval and merge the PR in a single turn. ONLY invoke this on an explicit user message that names the PR and says "approved" / "merge" / "ship it". NEVER invoke it on an umbrella "go" / "continue" / "execute the plan" that happens to include a merge step. The whole point of this skill is to make merge approval a discrete, auditable moment — if you are not certain the user's most recent message is an explicit per-PR merge nod, STOP and ask.
+description: Record per-PR CEO approval and merge in one turn. ONLY on an explicit per-PR "approved" — never on umbrella "go".
 disable-model-invocation: false
 argument-hint: "<pr-number> [--no-merge]"
 effort: low

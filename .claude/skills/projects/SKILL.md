@@ -1,6 +1,6 @@
 ---
 name: projects
-description: List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.
+description: List all managed projects with status, branch, open PRs, and open issue counts — portfolio-level view.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

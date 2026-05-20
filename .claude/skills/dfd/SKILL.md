@@ -1,6 +1,6 @@
 ---
 name: dfd
-description: Extract a Data Flow Diagram from a codebase (single-service or multi-repo system) with trust boundaries and data classifications. Writes Mermaid markdown (renders on GitHub) as the canonical source; OWASP Threat Dragon v2 JSON on `--format=dragon`. Becomes the source of truth that `/threat-model` and `/compliance-check` consume.
+description: DFD with trust boundaries + data classifications (Mermaid + optional Threat Dragon JSON). Source-of-truth for /threat-model.
 argument-hint: "[project-name | . | --scope-all] [--format=mermaid|dragon|all]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

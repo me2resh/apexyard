@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Create a structured feature request ticket with user story, acceptance criteria, and design notes. Use when proposing a new user-facing feature.
+description: Create a structured feature ticket (user story, acceptance criteria, design notes) for a new user-facing feature.
 argument-hint: "<short title of the feature>"
 allowed-tools: Bash, Read, Write
 ---

@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Update, create, or reprioritise the product roadmap. Supports adding, removing, and reordering milestones, then renders a markdown table per milestone.
+description: Update / create / reprioritise the product roadmap — add, remove, reorder milestones; renders a markdown table per milestone.
 argument-hint: "[add|remove|reorder|show] [item]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---

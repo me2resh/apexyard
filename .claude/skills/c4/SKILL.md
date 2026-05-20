@@ -1,6 +1,6 @@
 ---
 name: c4
-description: Generate C4 Level 1 (System Context) and Level 2 (Container) architecture diagrams for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexyard templates.
+description: Generate C4 L1 (Context) + L2 (Container) Mermaid diagrams from a project's codebase.
 argument-hint: "[project-name] [--level=1|2|both] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

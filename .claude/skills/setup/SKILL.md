@@ -1,6 +1,6 @@
 ---
 name: setup
-description: First-run framework bootstrap for a new ApexYard fork. Three exchanges — "describe your stack", "here are the defaults", "accept or customize?" — and the fork is configured. Run once after forking; re-run anytime to update.
+description: First-run framework bootstrap — 3 exchanges (describe stack → defaults → accept/customize) and the fork is configured.
 disable-model-invocation: false
 argument-hint: "[--reset] [--enable-lsp]"
 effort: medium

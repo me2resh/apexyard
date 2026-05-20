@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.
+description: Hypothesis-driven debugging — architecture-first reading + evidence-before-fix. For bugs that resisted naïve fix attempts.
 disable-model-invocation: false
 argument-hint: "[symptom summary]"
 effort: medium

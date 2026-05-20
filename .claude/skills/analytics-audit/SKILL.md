@@ -1,6 +1,6 @@
 ---
 name: analytics-audit
-description: Analytics coverage and event taxonomy audit — SDK configuration, event naming, funnel completeness, dashboard existence. Deep-dive companion to /launch-check's analytics dimension.
+description: Analytics audit — SDK config, event naming, funnel completeness, dashboards. Deep-dive for /launch-check analytics.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

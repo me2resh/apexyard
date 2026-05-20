@@ -44,21 +44,7 @@ fi
 
 # Check if the placeholder is still present
 if grep -q '"Your Company Name"' "$CONFIG" 2>/dev/null; then
-  cat <<MSG
-APEXYARD SETUP NOT RUN
-
-This fork hasn't been configured yet. onboarding.yaml still has
-placeholder values ("Your Company Name").
-
-Run /setup to configure your fork in ~2 minutes:
-
-  1. Describe your company and tech stack (one question)
-  2. Review the proposed defaults
-  3. Accept or customize
-
-The config is committed to onboarding.yaml so it persists across
-clones and team members — you only need to do this once per fork.
-MSG
+  echo "ApexYard: onboarding.yaml is unconfigured (placeholder still present). Run /setup to configure this fork."
 fi
 
 exit 0

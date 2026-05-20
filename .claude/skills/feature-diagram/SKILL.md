@@ -1,6 +1,6 @@
 ---
 name: feature-diagram
-description: Slice the system by feature — emit a Mermaid flowchart sub-graph for one feature row in the inventory at projects/<name>/feature-inventory.md, showing the routes, models, jobs, and screens that participate. Consumes /extract-features output; sibling to /c4 (system topology) and /dfd (data flows) in the architecture-doc family.
+description: Per-feature Mermaid flowchart — routes / models / jobs / screens. Consumes /extract-features inventory.
 argument-hint: "<feature-slug> [project-name] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 ---

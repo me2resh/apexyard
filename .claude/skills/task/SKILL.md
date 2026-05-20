@@ -1,6 +1,6 @@
 ---
 name: task
-description: Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.
+description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes.
 argument-hint: "<short title of the task>"
 allowed-tools: Bash, Read, Write
 ---

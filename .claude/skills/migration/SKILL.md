@@ -1,6 +1,6 @@
 ---
 name: migration
-description: Create a structured database-migration ticket and its matching migration AgDR in one guided flow. Use BEFORE touching any migration files (migrate-*.ts, migrations/*, Prisma / TypeORM / Alembic dirs, infrastructure DB resources) — the require-migration-ticket.sh hook blocks edits to those paths until both artefacts exist.
+description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
 argument-hint: "[<project>]"
 allowed-tools: Bash, Read, Write
 ---

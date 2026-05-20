@@ -1,6 +1,6 @@
 ---
 name: extract-features
-description: Scan an existing codebase and produce a structured Feature Inventory — six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) consolidated into a "what we must preserve" specification suitable for a greenfield rewrite.
+description: Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) — a "what we must preserve" spec for greenfield rewrites.
 argument-hint: "[project-name] [--with-mockups]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

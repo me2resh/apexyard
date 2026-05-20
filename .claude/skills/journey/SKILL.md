@@ -1,6 +1,6 @@
 ---
 name: journey
-description: Generate a single self-contained HTML user-journey map — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact, surfacing flow-level logic gaps before any implementation begins.
+description: Self-contained HTML user-journey map (boxes/arrows with per-page modals) — preview between PRD and tech-design.
 disable-model-invocation: false
 argument-hint: "[<feature-slug>] [--from-prd <path>] [--from-yaml <path>] [--update] [--wireframe]"
 allowed-tools: Bash, Read, Grep, Glob, Write

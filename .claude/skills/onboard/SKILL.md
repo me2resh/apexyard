@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: "DEPRECATED — use /setup for framework configuration, /handover for adding a project to the portfolio. This skill redirects to the correct flow."
+description: "DEPRECATED — use /setup (framework config) or /handover (adopt a project). This skill redirects."
 disable-model-invocation: false
 argument-hint: ""
 effort: low
