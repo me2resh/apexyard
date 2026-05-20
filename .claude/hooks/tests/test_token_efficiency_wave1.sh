@@ -93,7 +93,8 @@ for f in "$SKILLS_DIR"/*/SKILL.md; do
     overs120=$((overs120 + 1))
   fi
 done
-echo "  Total: $total chars across 52 skills"
+skill_count=$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '_lib*' | wc -l | tr -d ' ')
+echo "  Total: $total chars across $skill_count skills"
 echo "  Soft warnings (121–200 chars): $overs120 (documented exception per AgDR-0044)"
 [ "$overs200" -eq 0 ] && green "  OK (hard cap)"
 

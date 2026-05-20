@@ -1,6 +1,6 @@
 ---
 name: launch-check
-description: Production readiness audit — 9-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs).
+description: Production readiness audit — 10-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs, behaviour-quality).
 disable-model-invocation: false
 argument-hint: "[project-path] | trend [project-path]"
 effort: high
@@ -8,13 +8,13 @@ effort: high
 
 # /launch-check — Production Readiness Audit
 
-Runs a 9-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
+Runs a 10-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
 
 **Two modes:**
 
-- `/launch-check [project-path]` — full audit (default). Runs all 9 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
+- `/launch-check [project-path]` — full audit (default). Runs all 10 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
 - `/launch-check trend [project-path]` — read-only trend report. Renders just the trend section from existing run files. Useful for "are we trending up?" without burning the audit cost. See § "Trend-only mode" below.
 
 ## Deep-dive companions
@@ -32,6 +32,7 @@ Each dimension has a dedicated expert skill for when you need to go deeper than 
 | Performance | `/launch-check` row 7 | **`/performance-audit`** — bundle, images, Core Web Vitals |
 | Monitoring | `/launch-check` row 8 | **`/monitoring-audit`** — observability and incident readiness |
 | Documentation | `/launch-check` row 9 | **`/docs-audit`** — Diataxis framework completeness |
+| Behaviour quality | `/launch-check` row 10 | **`/mutation-test`** — mutation-testing sensor; measures whether the test suite constrains behaviour, not just executes lines |
 
 When a dimension shows WARN or FAIL, tell the user: *"For a detailed analysis, run `/threat-model`"* (or the relevant expert skill).
 
@@ -53,6 +54,7 @@ LAUNCH CHECK — <project> @ <sha> (<date>)
 | 7  | Performance        | PASS   | Bundle < 200KB, LCP < 2.5s          |
 | 8  | Monitoring         | FAIL   | No health check endpoint found       |
 | 9  | Documentation      | PASS   | README updated this week             |
+| 10 | Behaviour quality  | WARN   | Mutation score 54% (threshold 60%)   |
 
 Verdict: CONDITIONAL GO (2 failures need resolution)
 
@@ -207,6 +209,22 @@ Covers two related sub-scopes: **GEO** (LLM citations — ChatGPT, Claude, Perpl
 **PASS if:** README has setup + run + deploy instructions, and was updated recently.
 **WARN if:** README exists but is stale (> 30 days behind code changes), or API undocumented.
 **FAIL if:** no README, or README is the default GitHub template.
+
+### 10. Behaviour quality (mutation testing)
+
+**What to check** (quick gate — full deep-dive lives in `/mutation-test`):
+
+- Read `.claude/project-config.json → mutation.threshold` (default 60% from `.claude/project-config.defaults.json`)
+- Check whether a recent mutation report exists at `projects/<name>/quality/mutation-<YYYY-MM-DD>.md` (within the last 30 days)
+- If the latest report's score < threshold → **WARN** (not FAIL — mutation is a leading indicator, not a launch blocker)
+- If **no recent report exists**, *offer* to dispatch to `/mutation-test` for a fresh run, but do **NOT** auto-run it during `/launch-check`. A mutation audit takes 20–40 minutes on a medium codebase — too slow to fold into the milestone-boundary sweep silently. The dimension reports **WARN** with the finding "no recent mutation report (run `/mutation-test` for a fresh number)".
+- If `mutation.runner` is `null` or the project's primary language has no recognised mutation runner installed: **auto-PASS** (the audit doesn't apply — same shape as SEO auto-PASS for non-web projects). Surface the gap as `INFO` in the finding column.
+
+**PASS if:** recent mutation report exists AND score ≥ threshold.
+**WARN if:** recent mutation report exists BUT score < threshold, OR no recent report (operator should run `/mutation-test`).
+**FAIL if:** never — mutation testing is advisory, not a launch blocker. See AgDR-0045 for the rationale.
+
+Auto-PASS for projects without a mutation runner installed (or where the language has no recognised dispatch — e.g. Rust at v1).
 
 ## Process
 

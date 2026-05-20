@@ -188,17 +188,17 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 52 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 53 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (52)
+### Available skills (53)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
 | Skill | Purpose |
 |-------|---------|
 | `/setup` | First-run bootstrap — configure `onboarding.yaml` in 3 exchanges |
-| `/launch-check` | Production readiness audit — 9-dimension go/no-go sweep at milestone boundaries |
+| `/launch-check` | Production readiness audit — 10-dimension go/no-go sweep at milestone boundaries |
 | `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP |
 | `/accessibility-audit` | WCAG 2.1 AA accessibility audit — perceivable, operable, understandable, robust |
 | `/compliance-check` | GDPR + ePrivacy compliance — consent, privacy policy, data handling, user rights |
@@ -208,6 +208,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/performance-audit` | Performance audit — bundle size, images, lazy load, code split, Core Web Vitals |
 | `/monitoring-audit` | Observability audit — error tracking, health endpoints, alerting, runbooks |
 | `/docs-audit` | Diataxis docs audit — tutorials, how-to, reference, explanation |
+| `/mutation-test` | Mutation-testing sensor — Stryker/MutPy/go-mutesting/mutant; milestone cadence, exit-3 graceful-degrade |
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
 | `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
@@ -285,7 +286,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (52 slash commands) | `.claude/skills/` |
+| Skills (53 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

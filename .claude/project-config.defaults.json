@@ -170,5 +170,18 @@
     "preferred_converter": "pandoc",
     "pdf_engine": "xelatex",
     "default_destination": "ask"
+  },
+
+  "mutation": {
+    "_comment": "Config for the /mutation-test skill. runner maps a detected language to its mutation-test tool; threshold is the mutation-score % below which /launch-check WARNs (not FAILs — mutation is a leading indicator, not a launch blocker). timeout_minutes caps a single run so a stuck runner can't hold up the whole milestone-boundary audit. See AgDR-0045.",
+    "runner": {
+      "ts": "stryker",
+      "js": "stryker",
+      "python": "mutpy",
+      "go": "go-mutesting",
+      "ruby": "mutant"
+    },
+    "threshold": 60,
+    "timeout_minutes": 90
   }
 }
