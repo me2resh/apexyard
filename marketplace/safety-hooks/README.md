@@ -81,7 +81,7 @@ Supported kinds: `gh` (default), `linear`, `jira`, `asana`, `custom`, `none`. Se
 
 If your tracker has no CLI, use `kind: "custom"` with a `view_command` that calls `curl` and a `normalise_jq` filter. If you want to skip existence verification entirely (rare), set `kind: "none"` — the hooks fall back to shape-only validation via `tracker.id_pattern`.
 
-## Graduation path — the full framework
+## Graduation path: the full framework
 
 This sub-pack is one tooth of the ApexYard governance comb. The full framework includes everything above PLUS the two-marker merge gate, the migration gate, the active-ticket gate, leak protection, the Rex code-reviewer agent, AgDR memory, 19 role definitions, and a portfolio registry — and is delivered by **forking** the upstream repo into your own ops repo (it's not a plugin; the framework IS the ops repo).
 

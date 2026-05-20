@@ -61,7 +61,7 @@ Honest list of what stays in the full framework:
 
 If any of that list resonates, the next step is [the full framework](#graduation-path-the-full-framework).
 
-## Graduation path — the full framework
+## Graduation path: the full framework
 
 This sub-pack is one tooth of the ApexYard governance comb. The full framework includes everything above — 19 role definitions, a portfolio registry, AgDR memory, the two-marker merge gate, migration enforcement, and the rest — and is delivered by **forking** the upstream repo into your own ops repo (it's not a plugin; the framework IS the ops repo).
 

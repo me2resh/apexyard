@@ -31,7 +31,7 @@ yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
 # Run the extraction into a tmp dir so this test doesn't depend on the
 # repo's marketplace/ state (and doesn't trample it).
 TMP_ROOT="$(mktemp -d)"
-trap "rm -rf '$TMP_ROOT'" EXIT
+trap 'rm -rf "$TMP_ROOT"' EXIT
 
 echo "== Step 1: run bin/extract-subpacks.sh into a tmp dir"
 if ! bash "$REPO_ROOT/bin/extract-subpacks.sh" "$TMP_ROOT" >/dev/null 2>&1; then
