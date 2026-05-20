@@ -10,19 +10,26 @@
 | Onboarding docs | #22 → PR #25 |
 | Staging runbook | #24 → PR #26 |
 
+## Done (recent)
+
+| Issue | PR |
+|-------|-----|
+| #23 CI | #28 |
+| #29 healthcheck | #30 |
+| #31 e2e assertion | #32 |
+
 ## In flight
 
-| Issue | Title | Blocker |
-|-------|-------|---------|
-| [#23](https://github.com/Dr-kersho/AI-Driven-Personal-Training-Command-Center-/issues/23) | Web + API GitHub Actions CI | `gh auth refresh -s workflow` then push `.github/workflows/*` |
+| Issue | Title |
+|-------|-------|
+| [#27](https://github.com/Dr-kersho/AI-Driven-Personal-Training-Command-Center-/issues/27) | 3 production pilots + gap analysis |
 
 ## Next
 
 | Priority | Work |
 |----------|------|
-| P0 product | #25 — 3 production pilots + `docs/PILOT-GAP-ANALYSIS.md` |
-| P1 | Deploy staging per `docs/STAGING.md`, run `smoke-staging.sh` |
-| P1 | Close draft PR #1 (obsolete spec) |
+| P0 | Staging deploy (`docs/STAGING.md`) then production pilots on hosted URLs |
+| P0 | Fill `docs/PILOT-GAP-ANALYSIS.md` per client |
 
 ## Product gate (PRD §2)
 
