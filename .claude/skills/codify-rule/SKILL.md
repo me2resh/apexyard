@@ -1,6 +1,6 @@
 ---
 name: codify-rule
-description: Turn a human review comment that caught a Rex-miss into a draft handbook entry. Operator-curated capture — every entry is approved Y/N before any file is written, includes a source-PR footer for traceability, and routes to the right bucket (domain / architecture / general / language). Stage 2 of #293 (Rex domain-aware handbooks); sibling to the future /enrich-domain skill (Stage 3).
+description: Turn a review comment that caught a Rex-miss into a draft handbook entry — Y/N gate, source-PR footer, bucket-routed.
 argument-hint: "[--pr <N>] [--blocking] [<github-pr-comment-url>]"
 allowed-tools: Bash, Read, Write
 ---

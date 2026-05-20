@@ -1,6 +1,6 @@
 ---
 name: investigation
-description: Create a structured investigation ticket + live-doc for sustained root-cause work — incident retrospectives, bug archaeology, regression hunts, performance mysteries, competitive analyses. Distinct from /spike (forward-looking hypothesis with a budget), /bug (immediate-fix), and /debug (live debugging session). Investigations close when every Follow-up action lands, not on PR merge.
+description: Create an investigation ticket + live-doc for sustained root-cause work (retros, bug archaeology, regression hunts).
 argument-hint: "[short-slug-or-incident-id]"
 allowed-tools: Bash, Read, Write
 ---

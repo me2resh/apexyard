@@ -1,6 +1,6 @@
 ---
 name: start-ticket
-description: Declare an active ticket for this session so the ticket-first hook lets code edits through. Accepts either a plain issue number (resolves against the current repo's origin) or a fully-qualified `<owner>/<repo>#<number>` reference. Run this at the start of any coding work.
+description: Declare an active ticket so the ticket-first hook lets code edits through. Accepts `<N>` or `<owner>/<repo>#<N>`.
 disable-model-invocation: false
 argument-hint: "<issue-number> | <owner/repo>#<number>"
 effort: low

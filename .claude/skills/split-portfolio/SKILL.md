@@ -1,6 +1,6 @@
 ---
 name: split-portfolio
-description: Migrate a single-fork apexyard adopter to split-portfolio mode (public framework + private sibling portfolio). Automates the destructive recovery flow — force-push history rewrite, GitHub Issue/PR body redaction, private repo creation, and config-block writing — with explicit operator-confirmation gates at every destructive step. ONLY invoke when the adopter has actively asked to migrate, OR is using `--verify` to inspect state without destructive ops. Refuses on a paid GitHub plan, a clean working tree, or an already-migrated fork.
+description: Migrate single-fork to split-portfolio mode (public framework + private portfolio) via gated destructive recovery flow.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 argument-hint: "[--verify | --dry-run]"
 effort: high

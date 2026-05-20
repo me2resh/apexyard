@@ -1,6 +1,6 @@
 ---
 name: generative-engine-audit
-description: Audit how well a web project is discoverable, parsable, and citable by LLM/agent crawlers (ChatGPT, Claude, Perplexity, Gemini) and AI coding agents (Claude Code, Cursor, Aider, Cline). Covers GEO (Generative Engine Optimization — content for LLM citations) and AEO (Agentic Engine Optimization — docs for coding-agent consumption). Sibling to /seo-audit.
+description: LLM/agent SEO audit (GEO + AEO) — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding. Sibling to /seo-audit.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

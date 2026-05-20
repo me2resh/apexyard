@@ -1,6 +1,6 @@
 ---
 name: spike
-description: Create a hypothesis-driven, time-boxed, throw-away spike ticket — covers POC, prototype, experiment, and exploration work. Drops the user-story / acceptance-criteria fields; adds Hypothesis, Budget, Kill Criteria, and Disposition. Spike PRs are exempt from the AgDR + 80% coverage gates; code review (Rex) and the security auditor still apply.
+description: Create a hypothesis-driven, time-boxed spike ticket (Hypothesis/Budget/Kill Criteria/Disposition). Exempt from AgDR + coverage gates.
 argument-hint: "<short title of the spike>"
 allowed-tools: Bash, Read, Write
 ---

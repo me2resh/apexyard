@@ -1,6 +1,6 @@
 ---
 name: handover
-description: Onboard an external repo into ApexYard management by generating a structured handover assessment. Use when adopting a project that wasn't built under ApexYard.
+description: Onboard an external repo via a structured handover assessment + harnessability scoring across 5 codebase dimensions.
 argument-hint: "<project name> [path or url]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

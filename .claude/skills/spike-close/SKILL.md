@@ -1,6 +1,6 @@
 ---
 name: spike-close
-description: Close an open spike ticket via the disposition gate — PROMOTE files a follow-up [Feature] ticket with cross-references, DISCARD writes a memo to docs/spike-memos/<slug>.md. Sibling to /spike. Closing without running this gate is allowed but leaves no record of what was learned.
+description: Close a spike via the disposition gate — `--promote` files a [Feature] follow-up, `--discard` writes a memo.
 argument-hint: "--promote | --discard [<spike-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---

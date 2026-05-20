@@ -1,6 +1,6 @@
 ---
 name: update
-description: Sync the ApexYard fork (ops repo) with upstream me2resh/apexyard. Fetches upstream, previews pending commits, merges (or rebases) on a sync branch, walks the chain of per-version migration scripts (v1.2.0→v1.3.0, v1.3.0→v1.4.0, …) when the fork is multiple releases behind, handles conflicts, and leaves a branch ready to push as a PR. Use when the SessionStart drift banner says the fork is behind, or periodically as fork maintenance.
+description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch, walk per-version migrations.
 argument-hint: "[--dry-run] [--rebase] [--from-version vN.N.N] [--skip-migrations]"
 allowed-tools: Bash, Read, Write, Edit
 ---

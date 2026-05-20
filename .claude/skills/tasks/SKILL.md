@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: Generate a flat actionable task list with direct URLs for everything needing your action — PRs to review, issues to triage, comments to respond to, failing CI. Multi-project aware.
+description: Flat actionable task list across the portfolio with direct URLs — PRs to review, issues to triage, comments, failing CI.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 

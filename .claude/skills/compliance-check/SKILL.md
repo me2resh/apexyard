@@ -1,6 +1,6 @@
 ---
 name: compliance-check
-description: GDPR and ePrivacy compliance audit — cookie consent, privacy policy, data handling, right to deletion, data processing agreements. Deep-dive companion to /launch-check's compliance dimension.
+description: GDPR + ePrivacy audit — consent, privacy policy, data handling, right-to-deletion, DPAs. Deep-dive for /launch-check compliance.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: high

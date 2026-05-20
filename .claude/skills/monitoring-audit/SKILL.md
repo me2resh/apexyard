@@ -1,6 +1,6 @@
 ---
 name: monitoring-audit
-description: Observability and incident readiness audit — logging, error tracking, health endpoints, alerting rules, runbooks, incident response. Deep-dive companion to /launch-check's monitoring dimension.
+description: Observability audit — logging, error tracking, health endpoints, alerting, runbooks. Deep-dive for /launch-check monitoring.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium

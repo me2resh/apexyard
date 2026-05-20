@@ -1,6 +1,6 @@
 ---
 name: bug
-description: Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.
+description: Create a structured bug ticket (Given/When/Then scenario, repro steps, severity).
 argument-hint: "<short description of the bug>"
 allowed-tools: Bash, Read, Write
 ---

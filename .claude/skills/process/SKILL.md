@@ -1,6 +1,6 @@
 ---
 name: process
-description: Extract the business process actually implemented by one or more registered repos (state machines, queue chains, cron jobs, state-column transitions, API choreography, existing BPMN, documented steps), augment via gap-targeted interview, then emit a lint-clean BPMN 2.0 file that opens cleanly in Camunda Modeler. Sibling to /extract-features (feature inventory) and /c4 (system topology) — same read-first-then-ask shape, BPMN as the output target.
+description: Extract a business process from registered repos via 7-axis code scan + gap-targeted interview, then emit lint-clean BPMN 2.0.
 argument-hint: "<process-slug> [--from-endpoint METHOD /path] [--from-machine ClassName] [--from-job JobName] [--scope dir/] [--project name] [--pools] [--swimlanes] [--skip-lint] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---

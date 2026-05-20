@@ -1,6 +1,6 @@
 ---
 name: launch-check
-description: Production readiness audit — runs a multi-dimension sweep (security, accessibility, compliance, analytics, SEO, generative-engine discoverability, performance, monitoring, docs) and outputs a scored go/conditional-go/no-go verdict. Use at milestone boundaries, not on every PR. Persists each run to a per-project history store so the trend across runs is visible.
+description: Production readiness audit — 9-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs).
 disable-model-invocation: false
 argument-hint: "[project-path] | trend [project-path]"
 effort: high

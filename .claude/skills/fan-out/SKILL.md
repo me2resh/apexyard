@@ -1,6 +1,6 @@
 ---
 name: fan-out
-description: Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation for code-writing tasks and background mode for long runs. Use when the user's request decomposes into independent work items that share no files and have no sequential dependencies.
+description: Spawn N parallel Agent calls in one message (per-task agent type, worktree isolation, background mode).
 disable-model-invocation: false
 argument-hint: "<task1, task2, ...> | <path/to/tasks.md> | --from-tickets <ref1,ref2,...>"
 effort: medium

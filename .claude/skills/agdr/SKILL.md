@@ -1,6 +1,6 @@
 ---
 name: agdr
-description: Searchable, categorized library of Agent Decision Records (AgDRs) across the portfolio. Walks the registry, reads each project's docs/agdr/*.md (locally or via `gh api`), parses YAML frontmatter, and answers browse / search / show / stats queries. Use when you want to recall "have we decided this before?" without grepping every project.
+description: Browse / search / show / stats AgDRs across the portfolio — recalls "have we decided this before?".
 argument-hint: "[browse|search <term>|show <id>|stats] [--project <name>] [--category <cat>] [--no-cache]"
 allowed-tools: Bash, Read, Grep, Glob
 ---

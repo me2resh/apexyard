@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG draft from conventional commits, open the release PR, and (after merge) tag + push.
+description: Cut an apexyard release — diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, tag + push after merge.
 argument-hint: "<optional explicit version, e.g. v1.2.0>"
 allowed-tools: Bash, Read, Write
 ---

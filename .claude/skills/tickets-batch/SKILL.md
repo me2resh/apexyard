@@ -1,6 +1,6 @@
 ---
 name: tickets-batch
-description: File 5–20 structured GitHub Issues in one flow without dropping to raw `gh issue create` or running `/feature` 20 times serially. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket, confirms the full batch, and files each via specific `gh issue create` calls. Output conforms to `.ticket.required_sections` by construction.
+description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `gh issue create`.
 argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write
 ---

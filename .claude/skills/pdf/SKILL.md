@@ -1,6 +1,6 @@
 ---
 name: pdf
-description: Convert a framework-generated doc to PDF, with destination prompt for project docs/ vs ops projects/. Supports markdown, HTML, and BPMN inputs via pandoc / md-to-pdf / wkhtmltopdf / bpmn-to-image. Graceful-degrades when no converter is installed (exit 3 with advisory). Mirrors the "would it follow the code if the project spun out?" rule from docs/multi-project.md.
+description: Convert markdown/HTML/BPMN to PDF (pandoc/md-to-pdf/wkhtmltopdf/bpmn-to-image), destination-prompted; graceful-degrades.
 argument-hint: "<input-file> [--no-prompt] [--converter=pandoc|md-to-pdf|wkhtmltopdf] [--destination=workspace|projects|keep|<path>] [--project=<name>]"
 allowed-tools: Bash, Read, Write
 ---

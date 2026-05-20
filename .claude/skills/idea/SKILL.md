@@ -1,6 +1,6 @@
 ---
 name: idea
-description: Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.
+description: Capture a new product idea / feature concept / internal tool proposal to the ideas backlog (pre-triage).
 argument-hint: "<short title of the idea>"
 allowed-tools: Bash, Read, Edit, Write
 ---

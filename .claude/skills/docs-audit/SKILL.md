@@ -1,6 +1,6 @@
 ---
 name: docs-audit
-description: Documentation completeness audit using the Diataxis framework — tutorials, how-to guides, reference, explanation. Checks README quality, API docs, deployment guides, changelog, and staleness. Deep-dive companion to /launch-check's documentation dimension.
+description: Diataxis docs audit — tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
