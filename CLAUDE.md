@@ -188,62 +188,67 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | Specialised sub-agents (Code Reviewer — Rex, Security Reviewer — Hatim, Dependency Auditor — Munir, PR Manager — Tariq, Ticket Manager — Idris) |
-| Skills | `.claude/skills/` | 51 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 52 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
 ### Available skills (52)
 
+One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
+
 | Skill | Purpose |
 |-------|---------|
-| `/setup` | **First-run bootstrap** — describe your stack, accept defaults, configure `onboarding.yaml` in 3 exchanges |
-| `/launch-check` | **Production readiness audit** — 9-dimension sweep with go/no-go verdict. Use at milestone boundaries, not per-PR. Each dimension has a dedicated deep-dive skill below. |
-| `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, info disclosure, DoS, privilege escalation |
-| `/accessibility-audit` | WCAG 2.1 AA compliance — perceivable, operable, understandable, robust |
-| `/compliance-check` | GDPR + ePrivacy — cookie consent, privacy policy, data handling, user rights |
-| `/analytics-audit` | Event taxonomy — SDK coverage, naming conventions, funnel completeness |
-| `/seo-audit` | Technical SEO — meta tags, sitemap, robots.txt, Open Graph, structured data |
-| `/generative-engine-audit` | LLM/agent discoverability — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation grounding, token economics. Covers GEO (LLM citations) + AEO (coding-agent consumption). Sibling to `/seo-audit`; `/launch-check` fans out to both. v1 AI-crawler list pinned in `.claude/registries/ai-crawlers.json`. The audit's `skill.md` capability-manifest check is the upstream convention — distinct from Claude Code's `SKILL.md` slash-command spec. See AgDR-0043. |
-| `/performance-audit` | Bundle and Core Web Vitals — size, images, lazy loading, code splitting |
-| `/monitoring-audit` | Observability — error tracking, health endpoints, alerting, runbooks |
-| `/docs-audit` | Diataxis documentation — tutorials, how-to guides, reference, explanation |
+| `/setup` | First-run bootstrap — configure `onboarding.yaml` in 3 exchanges |
+| `/launch-check` | Production readiness audit — 9-dimension go/no-go sweep at milestone boundaries |
+| `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP |
+| `/accessibility-audit` | WCAG 2.1 AA accessibility audit — perceivable, operable, understandable, robust |
+| `/compliance-check` | GDPR + ePrivacy compliance — consent, privacy policy, data handling, user rights |
+| `/analytics-audit` | Analytics event-taxonomy audit — SDK coverage, naming, funnel completeness |
+| `/seo-audit` | Technical SEO audit — meta tags, sitemap, robots.txt, OG, structured data |
+| `/generative-engine-audit` | LLM/agent SEO (GEO/AEO) — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD |
+| `/performance-audit` | Performance audit — bundle size, images, lazy load, code split, Core Web Vitals |
+| `/monitoring-audit` | Observability audit — error tracking, health endpoints, alerting, runbooks |
+| `/docs-audit` | Diataxis docs audit — tutorials, how-to, reference, explanation |
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
-| `/approve-merge` | Record per-PR CEO approval for a specific merge (required by merge gate) |
+| `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
-| `/agdr` | Searchable, categorized library of AgDRs across the portfolio — `browse`, `search <term>`, `show <id>`, `stats` |
+| `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
 | `/security-review` | Invoke the Security Reviewer agent (Hatim) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
-| `/validate-idea` | Lightweight 5-question pre-spec gate (target user, alternative, smallest version, kill criteria, build/buy/rent). Invokable standalone or as an offered follow-up inside `/idea` and `/handover`. |
-| `/feature` | Create a structured feature request ticket (user story + ACs) |
-| `/bug` | Create a structured bug report (Given/When/Then + repro + severity) |
+| `/validate-idea` | Lightweight 5-question pre-spec gate before `/write-spec` |
+| `/feature` | Create a structured feature ticket (user story + acceptance criteria) |
+| `/bug` | Create a structured bug ticket (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
-| `/tickets-batch` | Bulk-file 5–20 structured tickets in one flow — shared-context Qs once, then a 3-question micro-interview per ticket; output conforms to `.ticket.required_sections` by construction |
-| `/migration` | Create a labelled migration ticket + migration AgDR in one guided flow (required by the migration gate) |
-| `/spike` | Create a hypothesis-driven, time-boxed, throw-away spike ticket (Hypothesis / Budget / Kill Criteria / Disposition). Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply. |
-| `/spike-close` | Disposition gate for spikes — `--promote` files a follow-up `[Feature]`, `--discard` writes a memo to `docs/spike-memos/<slug>.md`. |
-| `/codify-rule` | Turn a human review comment that caught a Rex-miss into a draft handbook entry. Operator-curated capture — Y/N gate before any file is written, source-PR footer for traceability, routes to the right bucket (domain / architecture / general / language). Stage 2 of #293 (Rex domain-aware handbooks); sibling to the future `/enrich-domain` skill (Stage 3). See AgDR-0040. |
-| `/investigation` | Create a structured investigation ticket + live-doc for sustained root-cause work (incident retro, bug archaeology, regression hunt, performance mystery). Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix). Closes when every Follow-up action lands, not on PR merge. Template override via `custom-templates/tickets/investigation.md`. See AgDR-0027. |
-| `/idea` | Capture a new product idea to the backlog |
-| `/handover` | Onboard an external repo into ApexYard management (includes per-project discovery + a **harnessability assessment** scoring 5 codebase dimensions — type safety, module boundaries, framework opinionation, test coverage signal, lint baseline — with a `low`-verdict warning about Rex blocking-handbook false positives. See AgDR-0042). |
-| `/extract-features` | Scan an existing codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and write a consolidated Feature Inventory at `projects/<name>/feature-inventory.md` — the "what we must preserve" spec for a greenfield rewrite. Complements `/handover` (high-level project assessment); `/extract-features` is the granular feature catalogue. Optional `--with-mockups` flag emits AI-inferred ASCII wireframes per UI screen, each carrying a mandatory disclaimer header (`> AI-inferred sketch — verify before relying on`); see AgDR-0036 for the trust-contract rationale. See also `/feature-diagram` for the per-feature view. |
-| `/feature-diagram` | Slice the system by feature — emit a Mermaid `flowchart LR` per feature row in `projects/<name>/feature-inventory.md` showing the routes / models / jobs / screens that participate. Writes `projects/<name>/features/<slug>.md`, one file per feature, and updates the inventory's `Feature` column to link to it. Sibling to `/c4` (system topology) and `/dfd` (data flows) in the architecture-doc family — different lens (per-feature slice) on the same codebase. See AgDR-0035. |
-| `/process` | Extract a named business process from one or more registered repos (state machines, queue chains, cron, state-column transitions, API choreography, existing BPMN, documented steps), interview only on the gaps, and emit a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Anchor-scoped + cross-repo via `apexyard.projects.yaml`. Sibling to `/extract-features` (feature inventory) and `/c4` (system topology) in the read-first-then-ask family. |
-| `/c4` | Generate C4 L1 (System Context) + L2 (Container) Mermaid diagrams for a project by reading its codebase |
-| `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) from a codebase — six-axis discovery + trust boundaries + data classifications. Source of truth that `/threat-model` and `/compliance-check` consume. See AgDR-0026. |
-| `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template — target-state, current-vs-target gap table, multi-quarter migration path, explicit anti-scope, and quarterly review cadence. Writes `projects/<name>/architecture/vision.md` via the custom-templates resolver (#244). Sibling to `/c4` and `/dfd` in the architecture-doc family. (Named `tech-vision` to disambiguate from product / company vision.) See AgDR-0028. |
-| `/journey` | Generate a single self-contained user-journey HTML — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact. |
-| `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF with a destination prompt that mirrors the "would it follow the code if the project spun out?" rule. Dispatches across pandoc → md-to-pdf → wkhtmltopdf → bpmn-to-image; graceful-degrades when no converter is installed (exit 3 + advisory). See AgDR-0034. |
-| `/update` | Sync the ops fork with upstream me2resh/apexyard — preview, merge-or-rebase, leaves a sync branch ready to push |
-| `/release` | (Framework-only) Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG, open the release PR, and tag after merge |
+| `/tickets-batch` | Bulk-file 5–20 structured tickets in one shared-context flow |
+| `/migration` | Create a labelled migration ticket + migration AgDR (required by migration gate) |
+| `/spike` | Create a time-boxed, hypothesis-driven spike ticket (exempt from AgDR + coverage gates) |
+| `/spike-close` | Disposition gate for spikes — `--promote` files a feature, `--discard` writes a memo |
+| `/codify-rule` | Turn a review comment that caught a Rex-miss into a draft handbook entry |
+| `/investigation` | Create an investigation ticket + live-doc for sustained root-cause work |
+| `/idea` | Capture a new product idea to the shared backlog |
+| `/handover` | Onboard an external repo + score harnessability across 5 codebase dimensions |
+| `/onboard` | Deprecated alias — redirects to `/setup` or `/handover` |
+| `/extract-features` | Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) for rewrites |
+| `/feature-diagram` | Per-feature Mermaid flowchart of routes / models / jobs / screens involved |
+| `/process` | Extract a business process from registered repos and emit lint-clean BPMN 2.0 |
+| `/c4` | Generate C4 L1 + L2 Mermaid diagrams from a project's codebase |
+| `/dfd` | Extract a Data Flow Diagram (Mermaid + optional Threat Dragon JSON) with trust boundaries |
+| `/tech-vision` | Interactive author for the architecture vision template (target / gap / migration / anti-scope) |
+| `/journey` | Single self-contained user-journey HTML — boxes-and-arrows with per-page modals |
+| `/pdf` | Convert framework-generated markdown / HTML / BPMN to PDF (destination-prompted) |
+| `/debug` | Structured hypothesis-driven debugging for issues that resisted naïve fixes |
+| `/update` | Sync the ops fork with upstream apexyard — preview, merge-or-rebase, sync branch |
+| `/split-portfolio` | Migrate a single-fork adopter to split-portfolio mode (public framework + private portfolio) |
+| `/release` | (Framework-only) Cut an apexyard release — diff, bump, CHANGELOG, release PR, tag |
 | `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
-| `/status` | Current snapshot — git, CI, in-progress work |
-| `/tasks` | Actionable task list with direct URLs, prioritised |
+| `/status` | Current snapshot — git, CI, in-progress work (use `--briefing` for 4-line shape) |
+| `/tasks` | Actionable task list across the portfolio with direct URLs, prioritised |
 | `/roadmap` | Update or create the product roadmap |
-| `/stakeholder-update` | Generate weekly / monthly / launch updates |
-| `/fan-out` | Spawn N parallel agents in one message — per-task agent type, worktree isolation, foreground/background mode (see `.claude/rules/parallel-work.md` for when to offer) |
+| `/stakeholder-update` | Generate weekly / monthly / launch stakeholder updates |
+| `/fan-out` | Spawn N parallel agents in one message (per-task agent type, worktree isolation) |
 
 The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. The rules are imported via `@.claude/rules/*.md` from your project's `CLAUDE.md`.
 
@@ -280,7 +285,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (50 slash commands) | `.claude/skills/` |
+| Skills (52 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
