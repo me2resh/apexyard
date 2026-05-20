@@ -12,7 +12,7 @@
 
 ## Now (P0)
 
-1. **#6 / #8 / #9** Staging deploy: Auth0, Vercel env, D2 smoke
+1. **#6 / #8 / #9** Staging deploy — see `docs/STAGING-CHECKLIST.md` + PR (health/CI/D2 scripts)
 
 ## Next (P1)
 
