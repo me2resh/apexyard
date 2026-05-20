@@ -41,6 +41,7 @@ The batch-size knobs:
 ## Why
 
 Per-record fixed costs are huge:
+
 - Postgres `INSERT` ≈ 1ms + payload time. Single-row inserts: 1000 records = 1 second of pure overhead.
 - Postgres `COPY` of 1000 rows ≈ 5ms + payload time. **200x faster.**
 - Kafka produce per-record: ~5ms acknowledged. Batched produce of 1000: ~10ms acknowledged. **500x faster.**
