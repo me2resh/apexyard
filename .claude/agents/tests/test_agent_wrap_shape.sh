@@ -1,17 +1,26 @@
 #!/bin/bash
-# Smoke test for the 7 engineering-department sub-agent wrappers shipped
-# in me2resh/apexyard#347 PR 1, plus the `## Activation mode` section
-# coverage on all 19 role files. Per AgDR-0050 Axis 1 (WRAP), Axis 2
-# (default model matrix), and Axis 6 (HYBRID role-trigger integration).
+# Smoke test for the role-derived sub-agent wrappers shipped under
+# me2resh/apexyard#347, plus the `## Activation mode` section coverage
+# on all 19 role files. Per AgDR-0050 Axis 1 (WRAP), Axis 2 (default
+# model matrix), and Axis 6 (HYBRID role-trigger integration).
+#
+# Wave history:
+#   - #347 PR 1 (merged): engineering dept (7 agents) + `## Activation
+#     mode` section on all 19 role files.
+#   - #347 PR 2: product + design depts (6 agents) — covered here.
+#   - #347 PR 3 (upcoming): security + data depts (6 agents).
+#   - #347 PR 4 (upcoming): utility-agent `model:` frontmatter
+#     (Rex / Hatim / Munir / Tariq / Idris).
 #
 # Invariants pinned here:
 #
-#   1. All 7 engineering agent files exist at .claude/agents/<slug>.md
-#   2. Each engineering agent file has the required frontmatter fields:
+#   1. All currently-shipped role-derived agent files exist at
+#      .claude/agents/<slug>.md
+#   2. Each agent file has the required frontmatter fields:
 #      name, description, model, allowed-tools, persona_name
 #   3. Each model value is one of `opus | sonnet | haiku`
 #   4. Each agent file's body references the role file
-#      `@roles/engineering/<role>.md` (the WRAP contract — agent files
+#      `@roles/<dept>/<role>.md` (the WRAP contract — agent files
 #      are thin wrappers that delegate identity to roles/)
 #   5. All 19 role files have a `## Activation mode` section
 #   6. Each role file's `## Activation mode` section declares a `Class:`
@@ -21,7 +30,7 @@
 # dirname, red/green helpers, FAIL counter, exit 0/1). No external
 # test framework.
 #
-# Usage: bash .claude/agents/tests/test_engineering_agents_wrap_shape.sh
+# Usage: bash .claude/agents/tests/test_agent_wrap_shape.sh
 # Exit 0 on success, 1 on any failure.
 
 set -u
@@ -37,16 +46,27 @@ FAIL=0
 red()    { printf '\033[31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
 
-# 7 engineering agents shipped in #347 PR 1.
-# Format: "<slug>:<expected_model>:<expected_persona_name>"
-ENG_AGENTS=(
-  "head-of-engineering:opus:Khalid"
-  "tech-lead:opus:Hisham"
-  "backend-engineer:sonnet:Karim"
-  "frontend-engineer:sonnet:Yasmin"
-  "qa-engineer:haiku:Salim"
-  "platform-engineer:sonnet:Adel"
-  "sre:opus:Saif"
+# 13 role-derived agents shipped to date (#347 PR 1 + PR 2).
+# Format: "<slug>:<expected_model>:<expected_persona_name>:<dept>"
+# <dept> is the subdir under roles/ that hosts the canonical role file.
+# The agent body must reference `@roles/<dept>/<slug>.md`.
+ROLE_AGENTS=(
+  # PR 1 — engineering dept
+  "head-of-engineering:opus:Khalid:engineering"
+  "tech-lead:opus:Hisham:engineering"
+  "backend-engineer:sonnet:Karim:engineering"
+  "frontend-engineer:sonnet:Yasmin:engineering"
+  "qa-engineer:haiku:Salim:engineering"
+  "platform-engineer:sonnet:Adel:engineering"
+  "sre:opus:Saif:engineering"
+  # PR 2 — product dept
+  "head-of-product:sonnet:Omar:product"
+  "product-manager:sonnet:Mariam:product"
+  "product-analyst:sonnet:Hanan:product"
+  # PR 2 — design dept
+  "head-of-design:sonnet:Maha:design"
+  "ui-designer:sonnet:Nour:design"
+  "ux-designer:sonnet:Iman:design"
 )
 
 # All 19 role files (path under roles/) + expected Activation mode Class.
@@ -98,15 +118,13 @@ get_frontmatter_value() {
 }
 
 # -----------------------------------------------------------------------------
-# Invariant 1 + 2 + 3 + 4 — engineering agent files: existence, frontmatter,
-# model value in matrix, role-file reference present.
+# Invariant 1 + 2 + 3 + 4 — role-derived agent files: existence, frontmatter,
+# model value in matrix, role-file reference present (per-dept path).
 # -----------------------------------------------------------------------------
-echo "== Engineering agent wrap-shape (AgDR-0050 § Axis 1 + 2)"
-for entry in "${ENG_AGENTS[@]}"; do
-  slug="${entry%%:*}"
-  rest="${entry#*:}"
-  expected_model="${rest%%:*}"
-  expected_persona="${rest#*:}"
+echo "== Role-derived agent wrap-shape (AgDR-0050 § Axis 1 + 2)"
+for entry in "${ROLE_AGENTS[@]}"; do
+  # Parse the 4-field entry safely (slug, model, persona, dept).
+  IFS=':' read -r slug expected_model expected_persona dept <<<"$entry"
   agent_file="$AGENTS_DIR/${slug}.md"
 
   # Invariant 1: file exists
@@ -154,16 +172,16 @@ for entry in "${ENG_AGENTS[@]}"; do
     continue
   fi
 
-  # Invariant 4: body references @roles/engineering/<slug>.md
+  # Invariant 4: body references @roles/<dept>/<slug>.md
   # Note: the SRE role file is at roles/engineering/sre.md (no -engineer
   # suffix); the agent slug matches. All others map 1:1.
-  if ! grep -q "@roles/engineering/${slug}.md" "$agent_file"; then
-    red "  FAIL: $slug — missing @roles/engineering/${slug}.md reference in body"
+  if ! grep -q "@roles/${dept}/${slug}.md" "$agent_file"; then
+    red "  FAIL: $slug — missing @roles/${dept}/${slug}.md reference in body"
     FAIL=$((FAIL + 1))
     continue
   fi
 
-  green "  PASS: $slug (model=$actual_model, persona=$actual_persona)"
+  green "  PASS: $slug (dept=$dept, model=$actual_model, persona=$actual_persona)"
 done
 
 # -----------------------------------------------------------------------------
@@ -221,5 +239,5 @@ if [ "$FAIL" -gt 0 ]; then
   red "FAIL: $FAIL invariant(s) failed"
   exit 1
 fi
-green "PASS: engineering agent wrap-shape + 19-role Activation mode coverage"
+green "PASS: role-derived agent wrap-shape + 19-role Activation mode coverage"
 exit 0
