@@ -25,7 +25,7 @@
 #
 # See docs/setup.md for the full guide.
 #
-# Portfolio focus: KoraID (P0 active), LUMA PWA (paused), QPPV, Training Command Center.
+# Portfolio focus: KoraID, XPORT CRM (P0 active), QPPV, Training Command Center; LUMA PWA (paused).
 
 # -----------------------------------------------------------------------------
 # Company Information
@@ -55,6 +55,9 @@ company:
       type: "web-app"
     - name: "Training Command Center"
       description: "AI-driven personal training command center — coach portal and internal tooling"
+      type: "web-app"
+    - name: "XPORT CRM"
+      description: "Gulf export sales CRM — pipeline, auto-leads, assisted WhatsApp, consent-gated outreach"
       type: "web-app"
 
 team:

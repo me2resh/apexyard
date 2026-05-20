@@ -62,6 +62,23 @@ projects:
       - coach-portal
     ticket_prefix: GH
 
+  - name: xport-crm
+    repo: Dr-kersho/XPORT-CRM
+    workspace: workspace/xport-crm
+    docs: projects/xport-crm
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+    tags:
+      - customer-facing
+      - crm
+      - revenue
+    ticket_prefix: GH
+
 defaults:
   status: active
   tier: P1
