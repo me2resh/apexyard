@@ -1,6 +1,6 @@
 # ApexYard
 
-> Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 29 hooks, 19 roles, one inbox. MIT, plain markdown and shell.
+> Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 31 hooks, 19 roles, one inbox. MIT, plain markdown and shell.
 
 ## What is it?
 
@@ -9,7 +9,7 @@ ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs
 ## What can it do?
 
 - Activate the right role on each ticket (19 roles across 5 departments)
-- Run mechanical merge gates as shell hooks (not PDFs) — 29 hooks block PRs that bypass code review, CEO approval, design review, secrets scanning, AgDR-required architecture changes, and migration tickets
+- Run mechanical merge gates as shell hooks (not PDFs) — 31 hooks block PRs that bypass code review, CEO approval, design review, secrets scanning, AgDR-required architecture changes, and migration tickets
 - Aggregate every project's PRs, issues, and CI into one inbox via `/inbox`, `/status`, `/tasks`
 - Persist architectural decisions as AgDRs across the portfolio so prior decisions resurface in seconds via `/agdr search`
 - Generate C4 L1 + L2 diagrams, BPMN process flows, DFDs with trust boundaries, and structured product specs
@@ -55,7 +55,7 @@ PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. 
 
 `/handover` adopts a project. `/idea` captures a concept. `/inbox`, `/status`, `/tasks` triage the portfolio. `/decide` records a technical call as an AgDR. `/launch-check` runs a 10-dimension readiness audit. `/c4` generates L1 + L2 architecture diagrams from a codebase.
 
-### Hooks · 29 shell scripts
+### Hooks · 31 shell scripts
 
 Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.
 
