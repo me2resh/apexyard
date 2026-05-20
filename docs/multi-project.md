@@ -511,6 +511,88 @@ Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/cu
 - **A `/custom-skill` authoring helper.** Manual `cp framework-skill custom-skills/...` + edit is fine for v1.
 - **Multi-version handbook conflict resolution.** Operator's prose responsibility.
 
+### Centralised agent routing — `agent-routing.yaml`
+
+ApexYard ships 24 Claude Code sub-agents (19 role-derived personas + 5 utility agents — Rex, Hatim, Munir, Tariq, Idris). The framework picks sensible per-agent model defaults from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md) (Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work). Adopters override those defaults — switch the QA Engineer to Sonnet for higher-recall AC runs, route the Data Analyst through a local Ollama endpoint, raise the Pen Tester's invocation timeout — via a single YAML file kept in the private portfolio repo.
+
+This sibling pattern to **Custom templates** (path-mirroring overrides; see AgDR-0023) and **Custom skills + handbooks** above puts every adopter-specific routing choice in one centrally-edited surface, source-controlled in the private repo, never leaking to the public fork.
+
+#### File location
+
+| Mode | Path | Visibility |
+| --- | --- | --- |
+| **Split-portfolio (v2)** | `<private_repo>/agent-routing.yaml` | Private — committed to the sibling repo, resolved via `.portfolio.agent_routing` in `.claude/project-config.json` |
+| **Single-fork** | `<fork>/agent-routing.yaml` | Local — gitignored by the framework (`/agent-routing.yaml` in `.gitignore`), never pushed to the public fork |
+
+Seed from the framework example:
+
+```bash
+# Split-portfolio:
+cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard-portfolio/agent-routing.yaml
+
+# Single-fork:
+cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard/agent-routing.yaml
+```
+
+Edit the file; the schema is self-documented inside the example. An empty `agents: {}` block is identical to "no file" — adopters get framework defaults out-of-box.
+
+#### Schema (per-entry fields)
+
+The full reference lives in [`agent-routing.yaml.example`](../agent-routing.yaml.example). One-line summary per field:
+
+| Field | Required? | Purpose |
+| --- | --- | --- |
+| `model` | yes (for an override entry) | Model specifier — `opus` / `sonnet` / `haiku` / `ollama/<spec>` / `bedrock/<spec>` |
+| `endpoint` | no | Alternative inference endpoint (e.g. LiteLLM proxy URL); session-scoped — sets `ANTHROPIC_BASE_URL` at SessionStart |
+| `env` | no | Map of environment variables for the agent's invocations; supports `$VAR_NAME` refs |
+| `timeout_seconds` | no | Override the framework default invocation timeout |
+| `allowed_tools_override` | no (advanced) | Replace the agent's shipped `allowed-tools` list — use sparingly |
+
+Worked examples (single-agent override, multiple overrides, local routing via Ollama + LiteLLM, Bedrock with AWS env, timeout override) are in the example file.
+
+#### Config-block wiring (split-portfolio v2)
+
+Add the `agent_routing` key to your existing `portfolio:` block alongside the v2 + #243 keys:
+
+```json
+{
+  "portfolio": {
+    "registry":             "../apexyard-portfolio/apexyard.projects.yaml",
+    "projects_dir":         "../apexyard-portfolio/projects",
+    "ideas_backlog":        "../apexyard-portfolio/projects/ideas-backlog.md",
+    "onboarding":           "../apexyard-portfolio/onboarding.yaml",
+    "workspace_dir":        "../apexyard-portfolio/workspace",
+    "custom_skills_dir":    "../apexyard-portfolio/custom-skills",
+    "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks",
+    "agent_routing":        "../apexyard-portfolio/agent-routing.yaml"
+  }
+}
+```
+
+The key is optional — the default resolves to `./agent-routing.yaml` against the ops-fork root. Single-fork adopters can leave it unset and just keep `agent-routing.yaml` at the fork root (gitignored).
+
+The `_lib-portfolio-paths.sh` helper exposes the resolver as `portfolio_agent_routing` (mirrors the shape of `portfolio_registry`, `portfolio_onboarding_path`, etc.); the SessionStart sync hook (see below) uses it to find the file.
+
+#### Status — Wave 1 PR 1 (this PR)
+
+This PR ships the **schema + resolver + adopter docs** only. Until the sync hook lands in **#351 PR 2**, the YAML file is documented but inert — `portfolio_agent_routing` resolves the path and the schema example parses cleanly, but no hook applies the overrides to `.claude/agents/*.md` frontmatter yet.
+
+#### What ships next
+
+- **#351 PR 2** — `apply-agent-routing.sh` SessionStart hook that reads `agent-routing.yaml` and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Pre-commit + pre-push **drift-prevention guards** block accidental commits of the rewritten frontmatter so adopter routing choices never leak to the public fork. Per AgDR-0050 § Axis 4.
+- **#351 PR 3** — `/setup` integration. Split-portfolio adopters get the YAML seeded in the private repo; single-fork adopters get `agent-routing.yaml` gitignored automatically.
+- **#351 PR 4** — local-routing entries (Ollama endpoints) in the seeded template, gated on the **#348** feasibility spike's verdict. If the spike promotes, specific local-model entries land in the example; if it discards, the `endpoint:` field stays in the schema for adopter-author override only.
+
+#### Out of scope (v1)
+
+- **Mixed remote + local routing on one session.** v1 is single-endpoint per session — all agents on a session share the configured `ANTHROPIC_BASE_URL` or none do. Per-agent invocation env scoping is deferred to v2 (AgDR-0050 § Axis 5 + Risks).
+- **Per-task / per-invocation model overrides.** `claude --model <m>` already exists for one-off use; this file is the persistent surface.
+- **A web UI / CLI for editing the routing config.** Adopters edit YAML.
+- **Auto-detection of local endpoints.** Adopters declare them.
+- **Cost dashboards / per-agent usage tracking.** Separate concern; file if needed once running data exists.
+
+Design rationale: [AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md) (axes 3-5). Prior-art for the "adopter customisation layer in the private repo" pattern: [AgDR-0023 — custom-templates override semantics](agdr/AgDR-0023-custom-templates-override-semantics.md). Prior-art for the SessionStart-driven file rewrites that PR 2 will use: [AgDR-0041](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md).
+
 ### Migrating from split-portfolio v1 to v2
 
 If you adopted split-portfolio mode before framework #242, your fork is on the v1 layout: `apexyard.projects.yaml` and `projects/` resolve to the sibling private repo (good), but `onboarding.yaml` and `workspace/` are still in the public fork. The v2 migration moves both to the private repo too, and writes the new `.apexyard-fork` anchor.
