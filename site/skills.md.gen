@@ -1,0 +1,124 @@
+# ApexYard Skills
+
+> 53 slash commands across audits, tickets, architecture, decisions, portfolio, and framework ops. Drop into your Claude Code session inside an apexyard fork.
+
+## What is it?
+
+ApexYard ships 53 slash commands across six buckets: setup & onboarding, daily ops, tickets & ideas, specs & decisions, code review & merge, architecture & dev tools, production-readiness audits, workflow primitives, communications.
+
+## What can it do?
+
+Each `/<name>` is a structured workflow with guardrails. Mechanical hooks in `.claude/hooks/` gate the effects on the rest of the SDLC — `/approve-merge` writes a marker that `block-unreviewed-merge.sh` verifies before the merge actually runs. Every skill ships in `.claude/skills/<name>/SKILL.md`.
+
+## What's needed to start?
+
+Browse below; invoke any skill from a Claude Code session inside an apexyard fork. New here? Start with `/setup` on a fresh fork, then `/feature` or `/idea` to capture work, then `/code-review` and `/approve-merge` when a PR is ready to ship.
+
+---
+
+## Which skills help me set up?
+
+Get a fresh fork running, adopt external repos into the portfolio, keep the framework in sync with upstream.
+
+- `/setup [--reset]` — First-run framework bootstrap for a new ApexYard fork. Three exchanges (describe stack, accept defaults, customise) and the fork is configured.
+- `/handover <name> [path-or-url]` — Onboard an external repo into ApexYard management. Reads the target, synthesises a structured handover assessment, and tells you which roles, workflows, and hooks should activate. Scores harnessability across 5 codebase dimensions.
+- `/update [--dry-run] [--rebase]` — Sync the ApexYard fork with upstream. Previews pending commits, creates a sync branch (direct push to main is blocked), merges or rebases, walks per-file conflicts.
+- `/split-portfolio [--verify] [--dry-run]` — Migrate from single-fork to split-portfolio mode (public framework + private portfolio).
+
+## Which skills run during daily ops?
+
+Portfolio-wide triage, project status, attention items.
+
+- `/projects` — List all managed projects with status, branch, open PRs, open issue counts.
+- `/inbox` — Items needing your attention across the portfolio: PRs, assigned issues, comments, blockers.
+- `/status [--briefing | -b]` — Per-project git + CI snapshot; `--briefing` for the 4-line compact form (active workspace, ticket, branch, role).
+- `/tasks` — Aggregated, scored, sorted task list across the portfolio with direct URLs.
+
+## How do I file structured tickets and ideas?
+
+Structured-ticket skills enforce minimum schemas (driver, scope, ACs) so tracker entries are reviewable as data, not free-text.
+
+- `/feature` — Create a structured feature ticket (user story + acceptance criteria + design notes).
+- `/bug` — Create a structured bug ticket (Given/When/Then + repro steps + severity).
+- `/task` — Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring.
+- `/tickets-batch` — Bulk-file 5–20 structured tickets in one flow (shared-context Qs once, 3-Q micro-interview per ticket).
+- `/migration` — Create a labelled migration ticket + matching migration AgDR (rollback, downtime, consumers, observability). Required by the migration gate.
+- `/spike` — Create a hypothesis-driven, time-boxed spike ticket. Exempt from AgDR + coverage gates.
+- `/spike-close --promote | --discard` — Disposition gate for spikes — promote files a fresh `[Feature]`; discard writes a memo.
+- `/investigation` — Create an investigation ticket + live-doc for sustained root-cause work.
+- `/idea` — Capture a new product idea / feature concept / internal tool proposal to the shared backlog.
+- `/validate-idea` — Lightweight 5-question pre-spec gate between `/idea` and `/write-spec`.
+
+## How do I capture specs and technical decisions?
+
+PRDs, AgDRs, and the rationale layer.
+
+- `/write-spec` — Generate a PRD or feature spec from a problem statement.
+- `/decide` — Make a technical decision and create an Agent Decision Record (AgDR). Required before architecture changes by `require-agdr-for-arch-pr.sh`.
+- `/agdr browse | search | show | stats` — Browse / search / show / stats across the portfolio's AgDR library — recalls "have we decided this before?".
+
+## How does code review and merge get gated?
+
+Per-PR review + merge controls.
+
+- `/code-review` — Invoke the Code Reviewer agent (Rex) on a PR. Checks architecture, tests, AgDR links, glossary.
+- `/security-review` — Invoke the Security Reviewer agent (Hatim) on a PR. Flags auth / crypto / secrets / OWASP issues.
+- `/audit-deps` — Audit dependencies for vulnerabilities, outdated packages, licences.
+- `/approve-merge <pr>` — Record per-PR CEO approval and merge in one turn. Only on an explicit per-PR "approved" — never on umbrella "go".
+- `/approve-design <pr>` — Record per-PR design-review approval for UI PRs.
+- `/codify-rule` — Turn a human (or Copilot) review comment that caught a Rex-miss into a draft handbook entry.
+
+## Which skills generate architecture and dev artefacts?
+
+C4 diagrams, BPMN process, feature inventories, journeys, technical visions.
+
+- `/c4` — Generate C4 L1 (Context) + L2 (Container) Mermaid diagrams from a project's codebase.
+- `/dfd` — Extract a Data Flow Diagram with trust boundaries + data classifications (Mermaid + optional Threat Dragon JSON). Source of truth for `/threat-model`.
+- `/tech-vision` — Interactive author for the architecture vision template (target / gap / migration / anti-scope).
+- `/process` — Extract a business process from registered repos via 7-axis code scan + gap-targeted interview, then emit lint-clean BPMN 2.0.
+- `/extract-features` — Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) — a "what we must preserve" spec for greenfield rewrites.
+- `/feature-diagram` — Per-feature Mermaid flowchart of routes / models / jobs / screens involved.
+- `/journey` — Self-contained HTML user-journey map (boxes/arrows with per-page modals) — preview between PRD and tech-design.
+- `/pdf` — Convert markdown/HTML/BPMN to PDF (pandoc / md-to-pdf / wkhtmltopdf / bpmn-to-image).
+- `/debug` — Hypothesis-driven debugging — architecture-first reading + evidence-before-fix.
+
+## Which audits check production readiness?
+
+Cross-cutting deep-dive audits.
+
+- `/launch-check` — Production readiness audit — 10-dimension go/no-go sweep at milestone boundaries.
+- `/threat-model` — STRIDE threat modelling (spoofing, tampering, repudiation, disclosure, DoS, EoP). Deep-dive for `/launch-check` security.
+- `/accessibility-audit` — WCAG 2.1 AA audit. Deep-dive for `/launch-check` accessibility.
+- `/compliance-check` — GDPR + ePrivacy audit (consent, privacy policy, data handling, right to deletion, DPAs).
+- `/analytics-audit` — Analytics event-taxonomy audit (SDK coverage, naming, funnel completeness).
+- `/seo-audit` — Technical SEO audit (meta tags, sitemap, robots.txt, OG, structured data).
+- `/generative-engine-audit` — LLM/agent SEO (GEO/AEO) — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding.
+- `/performance-audit` — Performance audit (bundle size, images, lazy load, code split, Core Web Vitals).
+- `/monitoring-audit` — Observability audit (logging, error tracking, health endpoints, alerting, runbooks).
+- `/docs-audit` — Diataxis docs audit (tutorials, how-to, reference, explanation).
+- `/mutation-test` — Mutation-testing sensor (Stryker / MutPy / go-mutesting / mutant); milestone cadence, exit-3 graceful-degrade.
+
+## What workflow primitives are available?
+
+Enable, parallelise, release.
+
+- `/start-ticket <N> | <owner>/<repo>#<N>` — Declare an active ticket for this session so the ticket-first hook lets code edits through.
+- `/fan-out <task1, task2, ...>` — Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation.
+- `/release [version]` — Cut a new apexyard release (framework-only). Diffs dev vs main, picks a semver bump, generates CHANGELOG, opens release PR.
+
+## How do I generate roadmap and stakeholder communications?
+
+Roadmap planning + stakeholder updates synthesised from the activity stream.
+
+- `/roadmap [add | remove | reorder | show] [item]` — Update, create, or reprioritise the product roadmap. Renders a markdown table per milestone.
+- `/stakeholder-update weekly | monthly | launch` — Generate a stakeholder update tailored to audience. Synthesises recent PRs, closed issues, AgDRs, and the roadmap into a narrative.
+
+## Which skills are deprecated?
+
+- `/onboard` — Use `/setup` for framework configuration, `/handover` for adding a project to the portfolio. This skill redirects to the correct flow.
+
+## Links
+
+- Home: <https://yard.apexscript.com/index.md>
+- Architecture: <https://yard.apexscript.com/architecture.md>
+- GitHub source for each skill: <https://github.com/me2resh/apexyard/tree/main/.claude/skills>
