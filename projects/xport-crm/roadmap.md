@@ -12,10 +12,11 @@
 
 ## Now (P0)
 
-1. **#18** Inbound webhook — PR open
-2. **#6 / #8 / #9** Staging deploy: Auth0, Vercel env, D2 smoke
+1. **#6 / #8 / #9** Staging deploy: Auth0, Vercel env, D2 smoke
 
 ## Next (P1)
+
+_(WhatsApp epic #16–#18 complete on `staging`)_
 
 ## Later
 
