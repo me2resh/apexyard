@@ -26,7 +26,7 @@ cd "$FRAMEWORK_ROOT" || {
 # --- Compute actual counts ---------------------------------------------------
 
 actual_skills=$(find .claude/skills -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
-actual_hooks=$(ls .claude/hooks/*.sh 2>/dev/null | grep -v '_lib\|/tests/' | wc -l | tr -d ' ')
+actual_hooks=$(find .claude/hooks -maxdepth 1 -name '*.sh' ! -name '_lib*' 2>/dev/null | wc -l | tr -d ' ')
 actual_roles=$(find roles -name '*.md' -not -name 'README*' -not -path '*/agdr/*' 2>/dev/null | wc -l | tr -d ' ')
 
 if [ "$actual_skills" = "0" ] || [ "$actual_hooks" = "0" ] || [ "$actual_roles" = "0" ]; then

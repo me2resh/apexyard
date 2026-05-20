@@ -17,3 +17,13 @@ https://medium\.com/@sathishkraju/.*
 # Provision certificate), separate concern from any framework diff.
 https://me2resh\.com/?
 https://yard\.apexscript\.com/?
+
+# Root-relative paths in site/*.html — lychee can't resolve these locally
+# without a --base arg; they're valid at deploy time (Netlify serves
+# /favicon.* + /apple-touch-icon.png from site root, and /index.md /
+# /architecture.md / /skills.md via the _redirects rewrite to .md.gen).
+# Favicons themselves are TODOs per #326 (design pending) — the meta
+# tags reference target paths so they resolve as soon as files ship.
+^/favicon\.(ico|svg)$
+^/apple-touch-icon\.png$
+^/(index|architecture|skills)\.md$
