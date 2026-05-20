@@ -193,7 +193,7 @@ Write to `<projects_dir>/<name>/quality/mutation-<YYYY-MM-DD>.md`. If a report f
 
 Report shape (six sections):
 
-```markdown
+````markdown
 # Mutation report — <project> — <YYYY-MM-DD>
 
 | Field | Value |
@@ -255,7 +255,7 @@ return a - b;
 - File-specific test gaps surfaced above
 - Equivalent-mutant suppression candidates (mutants the runner classified survived but that look semantically equivalent)
 - Runner-config tweaks (e.g. `stryker.conf.json` `ignorePatterns`)
-```
+````
 
 ### Step 8 — Emit a one-line verdict to stdout
 
