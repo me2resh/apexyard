@@ -20,6 +20,21 @@ projects:
       - marketplace
     ticket_prefix: LUM
 
+  - name: qppv-agent
+    repo: Dr-kersho/QPPV-Agent
+    docs: projects/qppv-agent
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+    tags:
+      - pharmacovigilance
+      - regulated
+      - ai
+    ticket_prefix: QPPV
+
 defaults:
   status: active
   tier: P1

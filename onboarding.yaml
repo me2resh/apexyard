@@ -29,19 +29,23 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "LUMA"
-  mission: "Aesthetic clinic booking marketplace connecting patients with top clinics"
-  vision: "The premier platform for discovering and booking aesthetic treatments"
-  website: "https://luma-pwa.vercel.app"
+  name: "Dr-kersho Engineering"
+  mission: "Portfolio of regulated and customer-facing products built with ApexYard SDLC"
+  vision: "Ship compliant, maintainable software across verticals"
+  website: "https://github.com/Dr-kersho"
 
   values:
     - "Quality over speed"
     - "Ship and learn"
     - "Keep it simple"
+    - "Domain language before code"
 
   products:
     - name: "LUMA PWA"
       description: "Aesthetic clinic booking marketplace PWA"
+      type: "web-app"
+    - name: "QPPV AI Assistant"
+      description: "Egyptian pharmacovigilance assistant for QPPVs — ICSR, signals, PSUR, RAG, training"
       type: "web-app"
 
 team:
@@ -58,25 +62,24 @@ team:
     department: "engineering"
 
 tech_stack:
-  language: "TypeScript"
-  runtime: "Node.js"
-  framework: "Next.js 14 (App Router)"
-  backend: "Next.js Route Handlers; transactional email via Resend; patient OTP (Twilio in prod) and admin PIN + httpOnly JWT"
-  database: "PostgreSQL (Neon serverless)"
-  hosting: "Vercel"
-  ci_cd: "GitHub Actions"
-  testing: "next lint; add Vitest / Playwright as coverage grows"
-  e2e_testing: "Playwright (optional)"
-  orm: "Prisma 7 + @prisma/adapter-neon"
-  state_management: "React Context"
-  styling: "Tailwind CSS + globals.css design tokens"
-  api_style: "REST"
+  note: "Per-project stack — see apexyard.projects.yaml and each repo CLAUDE.md"
+  luma_pwa:
+    language: "TypeScript"
+    framework: "Next.js 14 (App Router)"
+    database: "PostgreSQL (Neon)"
+    orm: "Prisma 7"
+  qppv_agent:
+    language: "TypeScript + Python 3.11"
+    framework: "Next.js 15 PWA + FastAPI"
+    database: "PostgreSQL 16 + Qdrant"
+    orm: "SQLAlchemy 2 async"
+    ai: "Claude, OpenAI embeddings, Perplexity"
 
 project_management:
   tool: "GitHub Issues"
   sprint_duration: "1 week"
   branching_strategy: "feature-branch"
-  ticket_prefix: "LUM"
+  ticket_prefix: "Per project registry (LUM, QPPV, GH)"
 
 quality:
   test_coverage_target: 80
