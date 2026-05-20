@@ -119,7 +119,7 @@ done
 # -----------------------------------------------------------------------------
 echo "== Invariant 4: SessionStart hooks emit ≤ 600 chars on the happy path (worst-case fixture)"
 ss_total=0
-for h in onboarding-check check-upstream-drift check-jq-installed check-portfolio-config clear-bootstrap-marker clear-issue-skill-marker link-custom-skills; do
+for h in onboarding-check check-upstream-drift check-jq-installed check-portfolio-config clear-bootstrap-marker clear-issue-skill-marker link-custom-skills apply-agent-routing; do
   if [ ! -x "$HOOKS_DIR/$h.sh" ] && [ ! -f "$HOOKS_DIR/$h.sh" ]; then
     continue
   fi
