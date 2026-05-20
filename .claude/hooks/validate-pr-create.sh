@@ -48,11 +48,31 @@ fi
 # The accepted type list is project-configurable via .claude/project-config.json
 # (.pr.title_type_whitelist). Defaults ship at .claude/project-config.defaults.json.
 # See apexyard#109.
+#
+# Resolve the directory holding the config:
+#   - HOOK_DIR points at the lib files (always next to this script).
+#   - CONFIG_ROOT is the ops fork (where .claude/project-config.json lives).
+#     When the operator runs inside workspace/<project>/, `git rev-parse
+#     --show-toplevel` resolves to the project clone, NOT the ops fork —
+#     resulting in tracker.kind defaulting to "gh" even when the operator
+#     configured Linear / Jira / Asana / custom (me2resh/apexyard#310).
+#     `_lib-ops-root.sh` walks up to the ops-fork anchor (v2 marker or v1
+#     pair) and is the right primitive.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-PR_TYPES=""
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+CONFIG_ROOT=""
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  CONFIG_ROOT=$(resolve_ops_root "$PWD")
+fi
+if [ -z "$CONFIG_ROOT" ]; then
+  CONFIG_ROOT="$REPO_ROOT"
+fi
+PR_TYPES=""
+if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-read-config.sh"
   PR_TYPES=$(config_get '.pr.title_type_whitelist[]' 2>/dev/null | paste -sd'|' -)
 fi
 if [ -z "$PR_TYPES" ]; then
@@ -86,11 +106,14 @@ if [ -n "$TICKET_REF" ]; then
   TICKET_NUM=$(echo "$TICKET_REF" | grep -oE '[0-9]+$')
 
   # Load the tracker library (kind / view command / id pattern).
-  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+  # Source from HOOK_DIR so we don't depend on cwd-relative resolution
+  # (inside workspace/<project>/ the lib still lives at the ops fork). The
+  # lib itself reads config via _lib-read-config.sh which now resolves
+  # from the ops fork too (me2resh/apexyard#310).
   TRACKER_KIND="gh"
-  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+  if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
     # shellcheck disable=SC1090,SC1091
-    . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+    . "$HOOK_DIR/_lib-tracker.sh"
     TRACKER_KIND=$(tracker_kind)
   fi
 
@@ -101,12 +124,16 @@ if [ -n "$TICKET_REF" ]; then
     TICKET_NUM=""
   fi
 
-  # Resolve tracker repo: prefer --repo flag, then project-config.json, then origin
+  # Resolve tracker repo: prefer --repo flag, then ops-fork-rooted
+  # project-config.json (.tracker_repo), then origin remote of the
+  # current cwd's git checkout. The ops-fork-rooted read matters when the
+  # operator is inside workspace/<project>/ — the project clone's git root
+  # is NOT where the framework config lives.
   TRACKER_REPO=""
   if [ -n "$CMD_REPO" ]; then
     TRACKER_REPO="$CMD_REPO"
-  elif [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-    TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  elif [ -n "$CONFIG_ROOT" ] && [ -f "${CONFIG_ROOT}/.claude/project-config.json" ]; then
+    TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${CONFIG_ROOT}/.claude/project-config.json" 2>/dev/null)
   fi
   if [ -z "$TRACKER_REPO" ]; then
     # Parse owner/repo from origin remote
@@ -234,11 +261,14 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b'; then
   HAYSTACK=$(printf '%s\n%s\n' "$BODY_CONTENT" "$COMMAND")
 
   # Load required sections + skip marker from project config (shared reader).
+  # Source via HOOK_DIR so this works regardless of cwd (inside a workspace
+  # clone, REPO_ROOT would point at the project — _lib-read-config.sh itself
+  # resolves the config files relative to the ops fork).
   # shellcheck disable=SC1090,SC1091
   REQUIRED_SECTIONS=""
   PR_SKIP_MARKER=""
-  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
-    . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+    . "$HOOK_DIR/_lib-read-config.sh"
     REQUIRED_SECTIONS=$(config_get '.pr.required_sections[]' 2>/dev/null)
     PR_SKIP_MARKER=$(config_get_or '.pr.skip_marker' '<!-- pr-sections: skip -->' 2>/dev/null)
   fi
@@ -287,9 +317,10 @@ EOF
   # reference doesn't accidentally count.
   ALLOW_MULTI_CLOSES="false"
   MULTI_CLOSE_SKIP="<!-- multi-close: approved -->"
+  # Source via HOOK_DIR — see note above on cwd-relative resolution.
   # shellcheck disable=SC1090,SC1091
-  if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
-    . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+  if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+    . "$HOOK_DIR/_lib-read-config.sh"
     CFG_ALLOW=$(config_get_or '.pr.allow_multiple_closes' 'false' 2>/dev/null)
     if [ "$CFG_ALLOW" = "true" ]; then ALLOW_MULTI_CLOSES="true"; fi
     CFG_MARKER=$(config_get_or '.pr.multi_close_skip_marker' "$MULTI_CLOSE_SKIP" 2>/dev/null)

@@ -121,11 +121,33 @@ if [ -z "$REFS" ]; then
   exit 0
 fi
 
-# Resolve tracker repo
+# Resolve tracker repo.
+#
+# Two roots come into play:
+#   - HOOK_DIR: where this script and the sibling libs live (always
+#     resolvable, doesn't depend on cwd).
+#   - CONFIG_ROOT: the ops fork holding .claude/project-config.json. When
+#     the operator runs inside workspace/<project>/, `git rev-parse
+#     --show-toplevel` resolves to the project clone, NOT the ops fork —
+#     causing the tracker.kind to silently default to "gh" even when the
+#     operator configured Linear / Jira / Asana / custom at the ops-fork
+#     level (me2resh/apexyard#310). _lib-ops-root.sh walks up to the
+#     ops-fork anchor (v2 marker or v1 pair) and is the right primitive.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+CONFIG_ROOT=""
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  CONFIG_ROOT=$(resolve_ops_root "$PWD")
+fi
+if [ -z "$CONFIG_ROOT" ]; then
+  CONFIG_ROOT="$REPO_ROOT"
+fi
+
 TRACKER_REPO=""
-if [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+if [ -n "$CONFIG_ROOT" ] && [ -f "${CONFIG_ROOT}/.claude/project-config.json" ]; then
+  TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${CONFIG_ROOT}/.claude/project-config.json" 2>/dev/null)
 fi
 if [ -z "$TRACKER_REPO" ]; then
   ORIGIN_URL=$(git remote get-url origin 2>/dev/null)
@@ -134,10 +156,12 @@ fi
 
 # Load the tracker library (dispatches `gh issue view` by default; can be
 # pointed at Linear / Jira / Asana / custom via `.tracker.kind`).
+# Source via HOOK_DIR so this works regardless of cwd. The lib's own config
+# reader resolves the ops fork for the actual config file.
 TRACKER_KIND="gh"
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  . "$HOOK_DIR/_lib-tracker.sh"
   TRACKER_KIND=$(tracker_kind)
 fi
 
