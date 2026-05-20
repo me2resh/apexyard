@@ -28,11 +28,9 @@ SKILLS_DIR="$ROOT/.claude/skills"
 HOOKS_DIR="$ROOT/.claude/hooks"
 
 FAIL=0
-WARN=0
 
 red()    { printf '\033[31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
 
 # -----------------------------------------------------------------------------
 # Invariant 1 — CLAUDE.md skill-table rows are terse (≤ 25 words in description)
