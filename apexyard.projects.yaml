@@ -35,6 +35,20 @@ projects:
       - ai
     ticket_prefix: QPPV
 
+  - name: training-command-center
+    repo: Dr-kersho/AI-Driven-Personal-Training-Command-Center-
+    docs: projects/training-command-center
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+    tags:
+      - internal-tool
+      - coach-portal
+    ticket_prefix: GH
+
 defaults:
   status: active
   tier: P1
