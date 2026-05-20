@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Architecture — ApexYard</title>
-<meta name="description" content="The ApexYard architecture at a glance — five layers (governance, capability, framework defaults, customisation overlay, per-project data) plus the optional split-portfolio private sibling repo. One fork governs every project.">
+<title>ApexYard Architecture — 5 layers + portfolio model</title>
+<meta name="description" content="ApexYard's 5-layer architecture — governance, capability, defaults, customisation, per-project data — plus the optional split-portfolio private sibling repo.">
 <link rel="canonical" href="https://yard.apexscript.com/architecture.html">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="alternate" type="text/markdown" href="/architecture.md">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/architecture.html">
-<meta property="og:title" content="ApexYard — Architecture">
+<meta property="og:title" content="ApexYard Architecture — 5 layers + portfolio model">
 <meta property="og:description" content="Five layers in one ops fork — governance, capability, defaults, customisation overlay, per-project data. Plus the optional split-portfolio sibling repo for adopters on GitHub Free.">
 <meta property="og:image" content="https://yard.apexscript.com/og/architecture.png">
 <meta property="og:image:width" content="1200">
@@ -18,9 +22,31 @@
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/architecture.html">
-<meta name="twitter:title" content="ApexYard — Architecture">
+<meta name="twitter:title" content="ApexYard Architecture — 5 layers + portfolio model">
 <meta name="twitter:description" content="Five layers in one ops fork — governance, capability, defaults, customisation overlay, per-project data.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/architecture.png">
+
+<!-- Structured data: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "ApexYard",
+      "item": "https://yard.apexscript.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Architecture",
+      "item": "https://yard.apexscript.com/architecture.html"
+    }
+  ]
+}
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -275,6 +301,17 @@ a:hover { color: var(--accent); }
 @media (max-width: 900px) {
   .notes__inner { grid-template-columns: 1fr; }
 }
+.notes__inner h2 {
+  grid-column: 1 / -1;
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 1.25rem 0 0.25rem;
+  color: var(--ink);
+}
+.notes__inner h2:first-of-type {
+  margin-top: 0;
+}
 .note {
   border: 1px solid var(--rule);
   padding: 1.25rem 1.4rem;
@@ -355,9 +392,10 @@ a:hover { color: var(--accent); }
         <span>one fork, five layers, optional sibling repo</span>
       </div>
       <h1>Architecture</h1>
-      <p class="tagline">
-        A multi-project forge for Claude Code — governance, capability, customisation, and per-project data in one fork.
-        The diagram below is the canonical mental model.
+      <p class="tagline" id="ai-lead">
+        <strong>What is it?</strong> ApexYard governs a portfolio of repos as one organisation: 5 layers (governance, capability, framework defaults, customisation overlay, per-project data) plus an optional split-portfolio private-sibling repo.
+        <strong>What can it do?</strong> One ops fork holds the registry, hooks, rules, skills, agents, templates, and handbooks; managed projects clone in as gitignored workspace dirs.
+        <strong>What's needed to start?</strong> Fork apexyard, register your projects, and read this page if you're deciding how to lay out the fork for your team. The diagram below is the canonical mental model.
       </p>
       <p class="meta">
         See also: <a href="index.html">overview</a> · <a href="skills.html">skills</a> · <a href="https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md" target="_blank" rel="noopener">setup guide ↗</a>
@@ -404,7 +442,7 @@ a:hover { color: var(--accent); }
 
   <rect x="394" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
   <text x="410" y="252" font-size="14" font-weight="700" fill="#1E3A5F">[~] Hooks</text>
-  <text x="410" y="275" font-size="12" fill="#1A1612">.claude/hooks/  · 26 shell gates</text>
+  <text x="410" y="275" font-size="12" fill="#1A1612">.claude/hooks/  · 29 shell gates</text>
   <text x="410" y="295" font-size="11" fill="#4A6FA5">Merge gate · ticket-first · secrets · …</text>
 
   <rect x="704" y="225" width="290" height="90" fill="#E0E8F0" stroke="#2C4E70" stroke-width="1.3"/>
@@ -422,7 +460,7 @@ a:hover { color: var(--accent); }
 
   <rect x="84" y="373" width="600" height="100" fill="#DDE9DD" stroke="#2D6A4F" stroke-width="1.3"/>
   <text x="100" y="402" font-size="15" font-weight="700" fill="#1B4332">[/] Skills</text>
-  <text x="100" y="425" font-size="12" fill="#1A1612">.claude/skills/  ·  48 slash commands</text>
+  <text x="100" y="425" font-size="12" fill="#1A1612">.claude/skills/  ·  53 slash commands</text>
   <text x="100" y="447" font-size="11" fill="#52796F">/feature  /handover  /c4  /threat-model  /process  /dfd  /journey  /update  /release  …</text>
 
   <rect x="704" y="373" width="600" height="100" fill="#DDE9DD" stroke="#2D6A4F" stroke-width="1.3"/>
@@ -577,6 +615,8 @@ a:hover { color: var(--accent); }
   <section class="notes">
     <div class="notes__inner">
 
+      <h2>What is the ApexYard architecture?</h2>
+
       <div class="note">
         <h3>The 5-layer model</h3>
         <p>
@@ -586,21 +626,6 @@ a:hover { color: var(--accent); }
           <strong>Customisation</strong> is your overrides; the <span class="kw">red border</span> in
           the diagram is the override semantic. <strong>Per-project data</strong> lives at the bottom
           — one entry per row in the registry.
-        </p>
-      </div>
-
-      <div class="note">
-        <h3>One fork, every project</h3>
-        <p>
-          You fork ApexYard once and treat the fork as your ops repo. Every project you want
-          governed gets a row in <code>apexyard.projects.yaml</code> and a folder under
-          <code>projects/&lt;name&gt;/</code>. Skills like <code>/inbox</code>,
-          <code>/status</code>, and <code>/tasks</code> aggregate across the registry — one
-          command surveys the whole portfolio.
-        </p>
-        <p>
-          Live working copies (<code>workspace/&lt;name&gt;/</code>) are gitignored from the fork
-          itself; each is a real clone of the managed repo with its own branches, PRs, and CI.
         </p>
       </div>
 
@@ -618,8 +643,25 @@ a:hover { color: var(--accent); }
         </p>
       </div>
 
+      <h2>How does the portfolio model work?</h2>
+
+      <div class="note">
+        <h3>One fork, every project</h3>
+        <p>
+          You fork ApexYard once and treat the fork as your ops repo. Every project you want
+          governed gets a row in <code>apexyard.projects.yaml</code> and a folder under
+          <code>projects/&lt;name&gt;/</code>. Skills like <code>/inbox</code>,
+          <code>/status</code>, and <code>/tasks</code> aggregate across the registry — one
+          command surveys the whole portfolio.
+        </p>
+        <p>
+          Live working copies (<code>workspace/&lt;name&gt;/</code>) are gitignored from the fork
+          itself; each is a real clone of the managed repo with its own branches, PRs, and CI.
+        </p>
+      </div>
+
       <div class="note note--wide">
-        <h3>Optional private sibling</h3>
+        <h3>Optional private sibling repo</h3>
         <p>
           The <strong>dashed box on the right</strong> is opt-in. Adopters on GitHub Free who don't want
           portfolio names on a public fork put the registry, onboarding, <code>projects/</code>, <code>workspace/</code>,
