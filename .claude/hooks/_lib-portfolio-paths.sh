@@ -15,6 +15,7 @@
 #   ideas_backlog=$(portfolio_ideas_backlog)
 #   onboarding=$(portfolio_onboarding_path)         # framework ≥ #242
 #   workspace_dir=$(portfolio_workspace_dir)        # framework ≥ #242
+#   agent_routing=$(portfolio_agent_routing)        # framework ≥ #351
 #   portfolio_validate || echo "broken: $(portfolio_validate)"
 #
 # All resolvers output absolute paths. Relative config values resolve
@@ -38,6 +39,7 @@
 #   workspace_dir → ./workspace
 #   custom_skills_dir    → ./custom-skills      (split-portfolio v2 + #243)
 #   custom_handbooks_dir → ./custom-handbooks   (split-portfolio v2 + #243)
+#   agent_routing → ./agent-routing.yaml        (#351, may not exist)
 #
 # Caching: results cached per-process in shell vars to avoid repeat jq
 # calls. Same pattern as _CONFIG_CACHE in _lib-read-config.sh.
@@ -261,6 +263,44 @@ portfolio_custom_handbooks_dir() {
 }
 
 # ------------------------------------------------------------------------------
+# Public: portfolio_agent_routing
+#   Resolves the path to the adopter's agent-routing.yaml — the
+#   centralised per-agent model + endpoint override surface (AgDR-0050
+#   Axis 3, ticket #351).
+#
+#   Split-portfolio (v2) mode: the file lives in the sibling private
+#   repo and is resolved via .portfolio.agent_routing in
+#   .claude/project-config.json (e.g.
+#   ../<fork>-portfolio/agent-routing.yaml).
+#
+#   Single-fork mode: the file lives at the fork root and is gitignored
+#   (adopter-specific routing choices stay local; never leak to the
+#   public fork). The default resolves to ./agent-routing.yaml relative
+#   to the ops-fork root.
+#
+#   Unlike the other portfolio resolvers, this one is allowed to point
+#   at a non-existent file — the absence of agent-routing.yaml means
+#   "no overrides; framework defaults apply", which is the documented
+#   out-of-box behaviour. Callers that need "exists or empty" should
+#   test [ -f "$(portfolio_agent_routing)" ] themselves.
+#
+#   Returns: absolute path to agent-routing.yaml (may not exist yet).
+#
+#   Default: ./agent-routing.yaml (relative to ops-fork root)
+# ------------------------------------------------------------------------------
+_PORTFOLIO_AGENT_ROUTING_CACHE=""
+portfolio_agent_routing() {
+  if [ -n "$_PORTFOLIO_AGENT_ROUTING_CACHE" ]; then
+    echo "$_PORTFOLIO_AGENT_ROUTING_CACHE"
+    return 0
+  fi
+  local raw
+  raw=$(_portfolio_get '.portfolio.agent_routing' './agent-routing.yaml')
+  _PORTFOLIO_AGENT_ROUTING_CACHE=$(_portfolio_resolve "$raw")
+  echo "$_PORTFOLIO_AGENT_ROUTING_CACHE"
+}
+
+# ------------------------------------------------------------------------------
 # Public: portfolio_validate
 #   Sanity-check that resolved paths are actually usable.
 #   On success: prints nothing, returns 0.
@@ -386,6 +426,7 @@ portfolio_clear_cache() {
   _PORTFOLIO_WORKSPACE_DIR_CACHE=""
   _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=""
   _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=""
+  _PORTFOLIO_AGENT_ROUTING_CACHE=""
 }
 
 # ------------------------------------------------------------------------------

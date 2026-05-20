@@ -14,6 +14,11 @@
 workspace/*/
 !workspace/README.md
 
+# Adopter-specific agent routing (single-fork mode; split-portfolio mode
+# keeps this in the private repo). See docs/multi-project.md § "Centralised
+# agent routing" and docs/agdr/AgDR-0050-agent-runtime-overhaul.md.
+/agent-routing.yaml
+
 # Backups of framework skills that were overridden by an adopter's
 # private custom skill (link-custom-skills.sh moves the framework version
 # aside as <skill-name>.framework.bak so the symlink can take its place).
