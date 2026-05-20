@@ -37,9 +37,10 @@ Split-portfolio mode (introduced in AgDR-0010 / framework #145) moved the regist
 
 | Option | Pros | Cons |
 |---|---|---|
-| **`mv` (chosen)** | Atomic on the same filesystem; preserves inode, mtimes. No risk of stale copy left behind. | Cross-filesystem `mv` falls back to `cp+rm` under the hood (no guarantees mid-operation). For the v2 migration the public fork and the sibling repo are typically siblings on the same FS, so the atomic path is the common case. |
-| `cp` then `rm` (explicit two-step) | Operator-visible intermediate state. | Two failure points instead of one. Cross-FS this is what `mv` does anyway, but explicit `cp+rm` doesn't offer any advantage over letting `mv` do it. |
-| `rsync --remove-source-files` | Robust against interruption. | Heavy dependency for what `mv` does natively. Adds a tooling assumption. |
+| **`mv` for workspace/, `cp -p` + `git rm --cached` for onboarding.yaml (chosen — refined #317)** | Each file class gets the right semantics for its role. `workspace/` is gigabytes of clones — moving avoids doubling disk for no benefit. `onboarding.yaml` is small (KB) and acts as a legacy ops-root walk-up fallback, so a public-fork snapshot is a safety net rather than dead weight. Untracking via `git rm --cached` ensures the snapshot can't drift into commits. | Per-file-class semantics costs a sentence of doc explanation; the apparent inconsistency is intentional. |
+| `mv` for both (initial v2 design — superseded by #317) | Single recipe, atomic on common case. | Loses the legacy ops-root walk-up fallback if the marker is accidentally removed. Forces adopters to re-run `/update` if they need an `onboarding.yaml` snapshot back. Conflates "small config file" with "gigabytes of clones" — same hammer for two very different nails. |
+| `cp+rm` for both | Explicit two-step. | Doubles disk for `workspace/` (gigabytes); no compensating benefit. |
+| `rsync --remove-source-files` for both | Robust against interruption. | Heavy dependency for what `mv` does natively. Adds a tooling assumption. |
 
 ### E. v2-marker vs legacy-anchor precedence in `_lib-ops-root.sh`
 
@@ -70,7 +71,7 @@ Chosen — for all seven:
 **A.** Marker file `.apexyard-fork` at the public-fork root.
 **B.** Presence-only semantics; writers MAY include a one-line explanatory comment; readers MUST ignore content.
 **C.** Default-yes migration with per-file-class y/n confirmation + dry-run.
-**D.** `mv` (atomic on common case; cross-FS falls through to `cp+rm` via `mv` itself).
+**D.** Per-file-class semantics — `cp -p` + `git rm --cached` for `onboarding.yaml` (sibling becomes canonical, public-fork copy stays as a gitignored snapshot for the legacy ops-root fallback), `mv` for `workspace/` contents (gigabytes of clones — doubling disk has no benefit). Refined in #317; see § H below for the full rationale.
 **E.** v2-marker checked first; legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback for un-migrated forks.
 **F.** No symlink fallback for v2 additions; config block required (consistent with the framework-#145+ direction).
 **G.** `workspace/README.md` stays in the public fork during migration; both the skill and manual recipe special-case it.
@@ -82,6 +83,50 @@ Why this combination:
 3. **v2-precedence with legacy fallback** lets every adopter cohort work simultaneously. Single-fork adopters never touch the v2 path. v1-split-portfolio adopters work until they migrate. v2-migrated adopters benefit from the faster anchor.
 4. **No symlink for v2** keeps the surface small. Symlink mode is legacy from before the config block existed; pushing v2 there too would mean two parallel resolution paths forever.
 5. **`workspace/README.md` stays public** preserves the framework's documentation of its own convention without leaking adopter content.
+
+## H. v1→v2 migration semantics — per-file-class copy-vs-move (refined #317)
+
+The initial v2 implementation used `mv` for **both** `onboarding.yaml` and `workspace/`. In practice this had two problems:
+
+1. **Loss of the legacy ops-root fallback.** `_lib-ops-root.sh` checks the `.apexyard-fork` marker first, then falls back to the legacy `onboarding.yaml + apexyard.projects.yaml` pair for un-migrated forks. Moving `onboarding.yaml` out of the public fork removes the legacy anchor, so an operator who accidentally deletes `.apexyard-fork` after migration leaves the fork un-resolvable — until they manually `cp` the sibling-repo copy back.
+2. **`/split-portfolio` produces a v1 layout.** The single-fork → split-portfolio migration skill only handled the registry + `projects/` (the v1 file classes). Adopters who ran `/split-portfolio` after framework #242 landed in a fresh v1 layout, then had to run `/update` to reach v2 — a two-step migration where one was enough.
+
+### Refined semantics (per file class)
+
+| File class | Migration verb | Why |
+|---|---|---|
+| `onboarding.yaml` | **COPY** (`cp -p`) + `git rm --cached` from public fork + add to `.gitignore` | Small (KB). Legacy ops-root walk-up still reads it as a fallback anchor (`_lib-ops-root.sh`). The public-fork copy is left on disk as a snapshot — gitignored so it can't drift into commits, but available as a safety net if the sibling repo is unreachable or the `.apexyard-fork` marker is accidentally removed. The sibling-repo copy is the **canonical source of truth**; `/setup` writes to it, `/handover` reads from it. |
+| `workspace/<name>/` | **MOVE** (`mv`) | Clones are gigabytes. Doubling disk has no compensating benefit — there's no legacy code path that reads the public-fork copy, no safety net case that benefits, and the cost (gigabytes of duplicated git history) is real. `workspace/README.md` (framework artefact explaining the convention) stays in the public fork per § G. |
+
+### Post-state (after a clean v1→v2 migration)
+
+```
+PUBLIC FORK                                  SIBLING PRIVATE REPO
+.apexyard-fork                  ←─ marker    onboarding.yaml          ← canonical
+onboarding.yaml                 ←─ snapshot  workspace/
+  (gitignored, untracked)                      <project-1>/
+workspace/                                     <project-2>/
+  README.md (kept)                             ...
+.gitignore                      ← extended  apexyard.projects.yaml
+.claude/project-config.json     ← v2 keys   projects/
+                                              ...
+```
+
+The public fork has a snapshot of `onboarding.yaml` plus everything it needs to keep working under both the v2 anchor (`.apexyard-fork`) and the legacy fallback. The sibling repo has the canonical copies that every tool writes to going forward.
+
+### Where this refinement lands
+
+| File | Change |
+|---|---|
+| `.claude/skills/split-portfolio/SKILL.md` Steps 9a–9d | New sub-steps that produce the v2 layout in a single skill invocation. Without this, `/split-portfolio` landed adopters on v1 and they had to run `/update` to finish the migration. |
+| `.claude/skills/update/SKILL.md` Step 8a | `onboarding.yaml` switches from `mv` to `cp -p` + `git rm --cached`. `workspace/` stays as `mv`. The per-file-class confirmation prose updates accordingly. |
+| `.claude/hooks/tests/test_split_portfolio_v2_migration.sh` | Case 1 assertions extended (both copies of `onboarding.yaml` exist, contents are identical, public-fork copy is untracked, `.gitignore` carries the entry). New Case 4 explicitly pins the copy-not-move semantics. Case 2 (idempotence) extended to cover the new copy path. `workspace/` assertions unchanged. |
+
+### What we are explicitly NOT doing
+
+- **No re-tracking the public-fork `onboarding.yaml` later.** Once gitignored, it stays gitignored. The sibling-repo copy is canonical forever.
+- **No copy-semantics for other file classes** (`apexyard.projects.yaml`, `projects/`, etc.). Those went to the sibling under v1 already and there's no legacy fallback that wants them in the public fork.
+- **No symmetry-for-its-own-sake.** Adopters who think the two file classes should use the same verb are welcome to file an issue; the asymmetry is deliberate and we have artefact tests that pin it.
 
 ## Consequences
 
