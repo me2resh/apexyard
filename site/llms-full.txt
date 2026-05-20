@@ -1,0 +1,333 @@
+# ApexYard — Full Content
+
+> ApexYard is a multi-project ops repo framework for Claude Code that governs
+> a portfolio of repos under one fork — strict SDLC, persistent AgDR memory,
+> 52 skills, 24 hooks, 19 role definitions. MIT, plain markdown and shell,
+> no SaaS, no lock-in.
+
+This file is the LLM/agent-friendly concatenation of the apexyard marketing
+site (https://yard.apexscript.com/). Each page is a top-level section below.
+
+---
+
+# Home (https://yard.apexscript.com/)
+
+## apexyard — where projects get forged
+
+A multi-project ops repo where your projects reference each other, learn
+from shared experience, and ship production-ready under a strict SDLC.
+Built for founders who ship alone, or companies standing up AI-enabled
+squads.
+
+You don't *add* apexyard to a project — projects get forged *inside* it.
+One ops repo. Every product. Shared memory. Strict gates. Production-ready
+MVPs.
+
+Claude Code is the default driver, but the rules, hooks, and templates
+are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No
+lock-in.
+
+**Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps,
+Chrome extensions, and native Swift macOS desktop apps. The stack is
+process and guardrails — not a language or framework lock-in.
+
+## Get started in three steps
+
+### 1. Pull it to your machine
+
+Fork `me2resh/apexyard` on GitHub. Clone the fork. Treat the fork itself
+as your ops repo — no nested installs, no symlinks, no proprietary
+upgrade tool. Future upgrades flow through `git fetch upstream` and the
+`/update` skill.
+
+### 2. Adopt, or originate
+
+Register every repo you want under management in
+`apexyard.projects.yaml`. Adopt existing repos via `/handover <repo>`
+(which writes a per-project handover-assessment.md and scores
+harnessability across 5 codebase dimensions). Originate new repos by
+running `/setup`, then start filing tickets via `/feature`, `/bug`,
+`/task`.
+
+### 3. Ship under the gates
+
+Every change goes through a PR. Every PR gets reviewed by Rex (the code
+reviewer agent). Every merge requires explicit per-PR CEO approval
+recorded via `/approve-merge <pr>`. Plan-level "go" / "continue" /
+"ship it" does NOT authorize a merge — the discrete moment is the
+per-PR invocation of `/approve-merge`. Mechanically enforced by
+`block-unreviewed-merge.sh`.
+
+## What it actually feels like to use
+
+- **One inbox.** `/inbox` aggregates PRs, issues, comments, and blockers
+  across every registered project — single shell command, ~1 second.
+- **One status snapshot.** `/status` shows git + CI health per project.
+  `/status --briefing` collapses it to a 4-line "where am I" briefing.
+- **One decision log.** Every architectural choice lands as an AgDR
+  (Agent Decision Record) in `docs/agdr/`. `/agdr search <term>` finds
+  prior calls across the whole portfolio.
+- **One release rhythm.** Daily PRs merge to `dev`; releases cut to `main`
+  via the `/release` skill with semver tagging and a generated CHANGELOG.
+
+## What you can actually do
+
+### Activate by trigger
+
+Roles aren't reference docs — they're first-class participants. A ticket
+labelled `qa` activates the QA Engineer role automatically. A PR diff
+touching `**/auth/**` activates the Security Auditor. The
+`detect-role-trigger.sh` hook surfaces the activation as a banner so
+the operator can see who's driving each piece of work.
+
+### One prompt, one thing
+
+52 slash commands, each scoped to one capability. `/feature` files a
+structured feature ticket; `/migration` produces a labelled ticket + a
+migration AgDR; `/threat-model` runs the STRIDE 6-category audit on
+the current codebase.
+
+### Rules that fire themselves
+
+24 shell hooks mechanically enforce the SDLC: ticket-first (Edit/Write/
+Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO
++ design review), red-CI block, commit format, AgDR for architecture
+changes, branch / PR-title validation, secrets scanning, upstream-drift
+banner, leak protection.
+
+### Reviewers that don't rubber-stamp
+
+The code reviewer agent (Rex) reviews every commit and writes a
+SHA-bound approval marker. Pushing new commits invalidates the marker
+— you must re-review. The Security Auditor (Hatim) activates
+conditionally on auth / crypto / secrets diffs.
+
+### One inbox across everything
+
+`/inbox` cuts through tab-switching across 5 different GitHub repos.
+`/tasks` produces a prioritised, scored, deep-linkable task list.
+`/stakeholder-update weekly` writes a portfolio rollup with per-project
+sections.
+
+### Drop-in GitHub Actions
+
+`golden-paths/pipelines/` ships reusable workflows for combined CI,
+code quality (TypeScript / ESLint / tests / build), SAST + npm audit
++ secrets detection, weekly dependency-audit, PR title check, review
+check, and SEO check. Copy whichever you need.
+
+---
+
+# Architecture (https://yard.apexscript.com/architecture.html)
+
+## The 5-layer model
+
+ApexYard is a single ops fork organised into five conceptual layers,
+each owned by different parts of the framework:
+
+1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
+   `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
+   for the framework.
+2. **Capability layer** — the runnable spec: `.claude/skills/` (52
+   slash commands), `.claude/agents/` (5 sub-agents incl. Rex), and
+   `.claude/hooks/` (24 mechanical enforcement scripts).
+3. **Framework defaults layer** — `.claude/project-config.defaults.json`
+   ships the framework's opinions; adopters override per-repo in
+   `.claude/project-config.json` (shallow merge).
+4. **Customisation overlay** — adopter-authored `custom-skills/`,
+   `custom-handbooks/`, and `custom-templates/` (path-mirrored override
+   of framework templates). For split-portfolio adopters, this layer
+   lives in the private sibling repo.
+5. **Per-project data layer** — `apexyard.projects.yaml` registry,
+   `projects/<name>/` per-project docs, `workspace/<name>/` working
+   clones (gitignored).
+
+## One fork, every project
+
+The repo that holds `CLAUDE.md` is your "ops repo" — a fork of
+`me2resh/apexyard` cloned into your organisation (optionally renamed
+to `your-org/ops`). The registry file `apexyard.projects.yaml` lists
+every project under management.
+
+Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and
+`/stakeholder-update` aggregate across the registry. Even if you only
+have one repo to govern, you still fork apexyard and register that
+single repo — the skills work the same way, and future projects plug
+into the same registry.
+
+## Customisation overlay
+
+The customisation overlay sits between the framework defaults and the
+per-project data layer. Path-mirrored overrides: drop your version at
+`custom-templates/<path>` and it wins over the framework default at
+`templates/<path>`. No frontmatter, no config table, no registry —
+discovery IS the convention.
+
+Same shape applies to `custom-skills/<name>/SKILL.md` (custom slash
+commands) and `custom-handbooks/<dimension>/<name>.md` (custom Rex-
+consumed coding standards).
+
+## Optional private sibling
+
+Split-portfolio mode (v2) ships a separate private repo alongside the
+public fork. Public fork holds only framework files + adopter
+customisations to skills / hooks / rules. Private sibling holds
+`apexyard.projects.yaml`, `projects/<name>/`, `onboarding.yaml`,
+`workspace/<name>/`, plus the custom-skills and custom-handbooks dirs.
+
+The config block at `.claude/project-config.json → portfolio.*`
+resolves the paths transparently. Use this mode if you're on GitHub
+Free with any project you don't want named publicly (GitHub Free
+disallows changing a public fork's visibility after the fact).
+
+---
+
+# Skills (https://yard.apexscript.com/skills.html)
+
+The full ApexYard slash-command surface — 52 skills, organised by
+purpose. Each is a markdown SKILL.md file under `.claude/skills/<name>/`.
+
+## Setup & onboarding
+
+- `/setup` — first-run bootstrap. Configure `onboarding.yaml` in 3
+  exchanges (describe stack → defaults → accept/customize).
+- `/handover` — onboard an external repo via a structured handover
+  assessment + harnessability scoring across 5 codebase dimensions.
+- `/split-portfolio` — migrate a single-fork adopter to split-portfolio
+  mode via a gated destructive recovery flow.
+- `/onboard` — deprecated alias. Redirects to `/setup` or `/handover`.
+
+## Daily ops
+
+- `/projects` — list every managed project from the registry with
+  status, branch, open PRs, open issue counts.
+- `/inbox` — items needing your attention — PRs, assigned issues,
+  comments, blockers across the whole portfolio.
+- `/status` — git + CI snapshot per project. Use `--briefing` for the
+  compact 4-line shape.
+- `/tasks` — flat actionable task list across the portfolio with
+  direct URLs.
+- `/stakeholder-update` — generate a weekly / monthly / launch
+  update — synthesises PRs, closed issues, AgDRs, and roadmap into a
+  narrative.
+
+## Tickets & ideas
+
+- `/feature` — create a structured feature ticket (user story,
+  acceptance criteria, design notes) for a new user-facing feature.
+- `/bug` — create a structured bug ticket (Given/When/Then scenario,
+  repro steps, severity).
+- `/task` — create a structured technical task ticket (driver, scope,
+  ACs) for tech debt, infra, refactoring, or non-user-facing changes.
+- `/tickets-batch` — file 5–20 structured tickets in one flow —
+  shared-context Qs once, 3-Q micro-interview per ticket.
+- `/migration` — create a labelled migration ticket + matching
+  migration AgDR — required by the migration gate.
+- `/spike` — create a hypothesis-driven, time-boxed spike ticket
+  (Hypothesis/Budget/Kill Criteria/Disposition). Exempt from AgDR +
+  coverage gates.
+- `/spike-close` — close a spike via the disposition gate — `--promote`
+  files a feature follow-up, `--discard` writes a memo.
+- `/investigation` — create an investigation ticket + live-doc for
+  sustained root-cause work (retros, bug archaeology, regression hunts).
+- `/idea` — capture a new product idea / feature concept / internal
+  tool proposal to the ideas backlog (pre-triage).
+- `/validate-idea` — lightweight 5-question pre-spec gate between
+  `/idea` and `/write-spec`.
+
+## Specs & decisions
+
+- `/write-spec` — write a feature spec or PRD from a problem statement
+  or feature idea.
+- `/decide` — make a technical decision and create an Agent Decision
+  Record (AgDR).
+- `/agdr` — browse / search / show / stats AgDRs across the portfolio.
+  Recalls "have we decided this before?".
+
+## Code review & merge
+
+- `/code-review` — invoke the Code Reviewer agent (Rex) on a PR.
+- `/security-review` — invoke the Security Reviewer agent (Hatim) on
+  a PR.
+- `/approve-merge` — record per-PR CEO approval and merge in one turn.
+  ONLY on an explicit per-PR "approved".
+- `/approve-design` — record per-PR design-review approval (UI merge
+  gate). ONLY on an explicit per-PR designer approval.
+- `/audit-deps` — audit dependencies for vulnerabilities, outdated
+  packages, licences.
+
+## Architecture & dev tools
+
+- `/c4` — generate C4 L1 (Context) + L2 (Container) Mermaid diagrams
+  from a project's codebase.
+- `/dfd` — DFD with trust boundaries + data classifications (Mermaid
+  + optional Threat Dragon JSON). Source-of-truth for `/threat-model`.
+- `/tech-vision` — interactive author for the architecture vision
+  template — target / gap / migration / anti-scope / cadence.
+- `/extract-features` — six-axis Feature Inventory (routes / models /
+  jobs / tests / UI / docs) — a "what we must preserve" spec for
+  greenfield rewrites.
+- `/feature-diagram` — per-feature Mermaid flowchart of routes /
+  models / jobs / screens.
+- `/process` — extract a business process from registered repos via
+  7-axis code scan + gap-targeted interview, then emit lint-clean
+  BPMN 2.0.
+- `/journey` — self-contained HTML user-journey map (boxes/arrows with
+  per-page modals) — preview between PRD and tech-design.
+- `/debug` — hypothesis-driven debugging — architecture-first reading +
+  evidence-before-fix. For bugs that resisted naïve fix attempts.
+- `/pdf` — convert markdown/HTML/BPMN to PDF, destination-prompted;
+  graceful-degrades.
+
+## Production-readiness audits
+
+The `/launch-check` skill is the umbrella — 9-dimension go/no-go sweep
+at milestone boundaries. Each dimension also has a standalone deep-dive:
+
+- `/launch-check` — production readiness audit — 9-dimension go/no-go
+  sweep (security, a11y, compliance, analytics, SEO, GEO, perf,
+  monitoring, docs).
+- `/threat-model` — STRIDE threat modelling.
+- `/accessibility-audit` — WCAG 2.1 AA audit.
+- `/compliance-check` — GDPR + ePrivacy audit.
+- `/analytics-audit` — SDK config, event naming, funnel completeness.
+- `/seo-audit` — meta, OG, sitemap, robots.txt, structured data.
+- `/generative-engine-audit` — LLM/agent SEO (GEO + AEO) — `llms.txt`,
+  `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding.
+- `/performance-audit` — bundle size, image opt, lazy load, code split,
+  CWV.
+- `/monitoring-audit` — logging, error tracking, health endpoints,
+  alerting, runbooks.
+- `/docs-audit` — Diataxis docs audit.
+
+## Workflow primitives
+
+- `/start-ticket` — declare an active ticket so the ticket-first hook
+  lets code edits through.
+- `/codify-rule` — turn a review comment that caught a Rex-miss into
+  a draft handbook entry.
+- `/fan-out` — spawn N parallel Agent calls in one message (per-task
+  agent type, worktree isolation, background mode).
+
+## Framework ops
+
+- `/update` — sync the ApexYard fork with upstream — preview, merge-or-
+  rebase on a sync branch.
+- `/release` — cut an apexyard release — diff, semver bump, CHANGELOG,
+  release PR, tag + push after merge.
+- `/roadmap` — update / create / reprioritise the product roadmap.
+
+---
+
+## License
+
+MIT. See https://github.com/me2resh/apexyard/blob/main/LICENSE.
+
+## Repository
+
+https://github.com/me2resh/apexyard
+
+## Generated
+
+This file is hand-written and refreshed when `site/*.html` changes
+significantly. Last refresh: 2026-05-20.

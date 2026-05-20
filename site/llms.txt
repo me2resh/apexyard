@@ -1,0 +1,62 @@
+# ApexYard
+
+> ApexYard is a multi-project ops repo framework for Claude Code that governs
+> a portfolio of repos under one fork — 52 skills, 24 hooks, 19 role definitions,
+> strict SDLC gates, persistent AgDR memory. MIT, plain markdown and shell,
+> no SaaS, no lock-in.
+
+## Pages
+
+- [Home](https://yard.apexscript.com/) — what apexyard is, why fork it, daily workflow
+- [Architecture](https://yard.apexscript.com/architecture.html) — the 5-layer model + portfolio model
+- [Skills](https://yard.apexscript.com/skills.html) — full slash-command reference (52 skills)
+
+## Full-content companion
+
+- [llms-full.txt](https://yard.apexscript.com/llms-full.txt) — all page content in one markdown file for one-shot consumption
+
+## Key concepts
+
+- **One ops repo forks the upstream framework + governs every project.** You don't
+  add apexyard to a project — projects get forged inside it. The fork IS the ops
+  repo; no nested installs, no symlinks.
+- **Strict merge gates — two-marker (code-reviewer agent + per-PR CEO approval).**
+  Plan-level "go" doesn't authorize a merge; each PR requires explicit per-PR
+  approval recorded via `/approve-merge <pr>`. Mechanically enforced.
+- **Persistent AgDR (Agent Decision Record) memory across the portfolio.** Every
+  technical decision lands as a markdown file in `docs/agdr/`; the `/agdr`
+  skill searches across every managed project.
+- **Audit family — 9 production-readiness audits.** `/launch-check` fans out
+  to security (STRIDE), accessibility (WCAG 2.1 AA), GDPR/ePrivacy compliance,
+  analytics, SEO, GEO (LLM/agent discoverability), performance, monitoring,
+  and docs — each addressable individually.
+- **Portfolio model.** One registry (`apexyard.projects.yaml`) lists every repo
+  under management. Skills like `/inbox`, `/status`, `/tasks` aggregate
+  across the portfolio in ~1 second.
+- **52 slash commands** across audits, tickets, architecture, decisions,
+  portfolio aggregation, and framework ops. Each is a markdown SKILL.md file
+  under `.claude/skills/<name>/`.
+- **24 shell hooks** mechanically enforce SDLC rules — ticket-first, migration
+  gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
+  validation, upstream-drift banner, leak protection.
+- **19 role definitions** across 5 departments (Engineering, Product, Design,
+  Security, Data). Roles activate on triggers (label, diff path, prompt).
+
+## Adoption pattern
+
+- Fork [`me2resh/apexyard`](https://github.com/me2resh/apexyard) on GitHub
+- Clone the fork, treat it as your ops repo
+- Edit `onboarding.yaml` + `apexyard.projects.yaml` to register projects
+- Run `/projects`, `/inbox`, `/status` to confirm the portfolio is wired
+- Adopt external repos via `/handover <repo>`
+- Two setup modes: single-fork (everything in the fork) or split-portfolio
+  (public fork + private sibling repo for adopter-specific data)
+
+## License
+
+MIT — plain markdown and shell, no SaaS, no lock-in. Claude Code is the
+default driver, but the rules / hooks / templates are framework-agnostic.
+
+## Repository
+
+https://github.com/me2resh/apexyard
