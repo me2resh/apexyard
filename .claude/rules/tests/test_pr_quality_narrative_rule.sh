@@ -6,7 +6,7 @@
 #   - .claude/rules/pr-quality.md       — the rule + bad/good example pair
 #   - .claude/agents/code-reviewer.md   — Rex's advisory check + heuristic
 #   - workflows/code-review.md          — the cross-link from the workflow doc
-#   - docs/agdr/AgDR-0031-*.md          — the AgDR with the four canonical sections
+#   - docs/agdr/AgDR-0029-*.md          — the AgDR with the four canonical sections
 #
 # Style matches the hook tests (.claude/hooks/tests/*.sh) — plain bash + grep,
 # no external test framework, one PASS/FAIL line per assertion.
@@ -18,7 +18,7 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/pr-quality.md"
 AGENT_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
 WORKFLOW_FILE="$SRC_ROOT/workflows/code-review.md"
-AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0031-pr-summary-narrative-quality.md"
+AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0029-pr-summary-narrative-quality.md"
 
 PASS=0
 FAIL=0
@@ -110,7 +110,7 @@ assert "agdr:file-exists" test -f "$AGDR_FILE"
 
 # Body-H1-only shape — first non-blank line must be an H1, no YAML frontmatter.
 assert "agdr:no-yaml-frontmatter" \
-  bash -c "head -n1 \"$AGDR_FILE\" | grep -qE '^# AgDR-0031'"
+  bash -c "head -n1 \"$AGDR_FILE\" | grep -qE '^# AgDR-0029'"
 
 # The four canonical sections from templates/agdr.md.
 assert "agdr:section-context" \
