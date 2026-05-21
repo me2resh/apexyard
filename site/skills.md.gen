@@ -62,7 +62,7 @@ PRDs, AgDRs, and the rationale layer.
 Per-PR review + merge controls.
 
 - `/code-review` — Invoke the Code Reviewer agent (Rex) on a PR. Checks architecture, tests, AgDR links, glossary.
-- `/security-review` — Invoke the Security Reviewer agent (Hatim) on a PR. Flags auth / crypto / secrets / OWASP issues.
+- `/security-review` — Invoke the Security Reviewer agent (Hakim) on a PR. Flags auth / crypto / secrets / OWASP issues.
 - `/audit-deps` — Audit dependencies for vulnerabilities, outdated packages, licences.
 - `/approve-merge <pr>` — Record per-PR CEO approval and merge in one turn. Only on an explicit per-PR "approved" — never on umbrella "go".
 - `/approve-design <pr>` — Record per-PR design-review approval for UI PRs.

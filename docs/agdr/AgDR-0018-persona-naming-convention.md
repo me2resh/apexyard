@@ -35,7 +35,7 @@ Rationale for the choice of Arabic-name corpus:
 
 1. **Operator preference** — operator (CEO) explicitly approved the mapping table.
 2. **Adds team-identity character** without inventing a culturally-blank set.
-3. **Gender-mixed** — the 24 selected names include both male and female names (Yasmin, Mariam, Hanan, Maha, Nour, Iman, Nadia are female; Khalid, Hisham, Karim, Salim, Adel, Saif, Omar, Faisal, Hakim, Hamza, Khalil, Anwar, Hatim, Munir, Tariq, Idris are male; Rex remains as-is for brand continuity). This avoids a single-gender "everyone is named X" failure mode.
+3. **Gender-mixed** — the selected names include both male and female names (Yasmin, Mariam, Hanan, Maha, Nour, Iman, Nadia are female; Khalid, Hisham, Karim, Salim, Adel, Saif, Omar, Faisal, Hakim, Hamza, Khalil, Anwar, Munir, Tariq, Idris are male; Rex remains as-is for brand continuity). This avoids a single-gender "everyone is named X" failure mode. Note: the original 24-entry roster included Hatim alongside Hakim; PR #347 PR 3 consolidated the security-reviewer agent's persona into Hakim, retiring Hatim.
 4. **Avoids shell / vendor collisions** — none of the selected names collide with common shell keywords, vendor product names, or POSIX commands. (`Idris` is also a Linux distribution name and a programming language; in our framework context it's a persona name with no naming-resolution stake.)
 5. **Rex stays unchanged** — already-shipped brand equity. Renaming would invalidate PR markers, demo scripts, marketing copy, and downstream conversation history. The cost of renaming Rex outweighs the consistency gain.
 
@@ -54,7 +54,7 @@ The split is documented here so adopters can rely on it.
 |------|--------------|-------|
 | **Agents** | | |
 | code-reviewer | **Rex** (unchanged) | already-shipped brand |
-| security-reviewer | **Hatim** | resolute judge |
+| security-reviewer | **Hakim** (was: Hatim; consolidated with Security Auditor role in #347 PR 3) | wise judgement |
 | dependency-auditor | **Munir** | illuminator |
 | pr-manager | **Tariq** | "he who knocks" — PR metaphor |
 | ticket-manager | **Idris** | scribe / scholar |

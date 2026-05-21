@@ -59,10 +59,10 @@ PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. 
 
 Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.
 
-### Agents · 5 sub-agents
+### Agents · 23 sub-agents
 
 - **Rex** (code review) checks architecture + tests + AgDR links + glossary
-- **Hatim** (security) flags auth / crypto / secrets
+- **Hakim** (security) flags auth / crypto / secrets
 - **Munir** (deps) scans vulnerabilities + licences
 - **Tariq** (PR manager) and **Idris** (ticket manager) handle the orchestration
 

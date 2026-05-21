@@ -187,7 +187,7 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
-| Agents | `.claude/agents/` | 18 sub-agents (5 utility + 7 engineering + 6 product-design). Growing to 24 across Wave 1-3 per AgDR-0050. |
+| Agents | `.claude/agents/` | 23 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision. |
 | Skills | `.claude/skills/` | 53 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
@@ -215,7 +215,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
-| `/security-review` | Invoke the Security Reviewer agent (Hatim) on a PR |
+| `/security-review` | Invoke the Security Reviewer agent (Hakim) on a PR |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
 | `/validate-idea` | Lightweight 5-question pre-spec gate before `/write-spec` |

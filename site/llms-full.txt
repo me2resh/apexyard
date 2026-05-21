@@ -99,7 +99,7 @@ banner, leak protection.
 
 The code reviewer agent (Rex) reviews every commit and writes a
 SHA-bound approval marker. Pushing new commits invalidates the marker
-— you must re-review. The Security Auditor (Hatim) activates
+— you must re-review. The Security Auditor (Hakim) activates
 conditionally on auth / crypto / secrets diffs.
 
 ### One inbox across everything
@@ -129,7 +129,7 @@ each owned by different parts of the framework:
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
 2. **Capability layer** — the runnable spec: `.claude/skills/` (53
-   slash commands), `.claude/agents/` (12 sub-agents incl. Rex), and
+   slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
    `.claude/hooks/` (31 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
@@ -247,7 +247,7 @@ purpose. Each is a markdown SKILL.md file under `.claude/skills/<name>/`.
 ## Code review & merge
 
 - `/code-review` — invoke the Code Reviewer agent (Rex) on a PR.
-- `/security-review` — invoke the Security Reviewer agent (Hatim) on
+- `/security-review` — invoke the Security Reviewer agent (Hakim) on
   a PR.
 - `/approve-merge` — record per-PR CEO approval and merge in one turn.
   ONLY on an explicit per-PR "approved".
