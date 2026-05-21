@@ -549,6 +549,20 @@ The full reference lives in [`agent-routing.yaml.example`](../agent-routing.yaml
 
 Worked examples (single-agent override, multiple overrides, local routing via Ollama + LiteLLM, Bedrock with AWS env, timeout override) are in the example file.
 
+#### Local-model routing — Claude default, local opt-in
+
+**Claude is the framework default for every agent.** The schema supports routing through a LiteLLM proxy fronting Ollama (or any Anthropic-compatible endpoint), but the framework does **NOT** ship a recommended local model. Hardware varies too much across adopter machines — an Apple Silicon M2 Max with 32 GB unified memory runs different models well than a Linux box with a 12 GB GPU than a CPU-only laptop. Pre-loading a "framework-recommended" entry would mislead more adopters than it'd help.
+
+The pattern lives in `agent-routing.yaml.example` Example C as a commented-out template with four candidate models annotated by their RAM-at-load cost (`qwen2.5-coder:14b` ~10 GB, `llama3.1:8b` ~6 GB, `deepseek-coder-v2:16b` ~12 GB, `mistral-small3:24b` ~18 GB at q4 quantization). Adopters who want local routing:
+
+1. Pick a model that fits the machine (Ollama's `ollama run <model>` warm-load time is a good rough gauge — anything > 10s suggests the model is too big).
+2. Uncomment the chosen entry in their `agent-routing.yaml` (private repo for split-portfolio mode, gitignored fork file for single-fork).
+3. Start LiteLLM proxy: `litellm --config ~/litellm-config.yaml --port 4000`. `agent-routing.yaml.example`'s Example C uses `http://localhost:4000` as the proxy endpoint by convention.
+4. Validate the chosen model against representative workloads (ticket-creation via `/feature`, SQL via Nadia, AC verification via Salim) BEFORE relying on it for production work. Tool-call reliability via LiteLLM's Anthropic-shape translator is the load-bearing risk; treat the first dozen invocations as a smoke test.
+5. v1 is **session-scoped** — when the `endpoint:` field is set, ALL agents on that session share the configured `ANTHROPIC_BASE_URL`. Per-agent invocation-env scoping is deferred to v2 (depends on Claude Code surfacing per-invocation env, not on apexyard).
+
+Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist (hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix).
+
 > The `allowed_tools_override` field was advertised in early drafts of this schema but never wired through the parser. Dropped in #358 for v1; the per-agent allowed-tools list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter (same escape-hatch pattern that handles framework-default `model:` overrides).
 
 #### Config-block wiring (split-portfolio v2)
@@ -584,9 +598,9 @@ Two **drift-prevention guards** (PreToolUse on `git commit *` and `git push *`) 
 
 Per AgDR-0050 § Axis 4.
 
-#### What ships next
+#### Wave 2 complete
 
-- **#351 PR 4** — local-routing entries (Ollama endpoints) in the seeded template, gated on the **#348** feasibility spike's verdict. If the spike promotes, specific local-model entries land in the example; if it discards, the `endpoint:` field stays in the schema for adopter-author override only.
+The 4-PR wave from AgDR-0050 is fully landed: #353 (schema + resolver), #357 (SessionStart sync + drift guards), #363 (`/setup` integration), and #364's bundle alongside this PR (PR 4 — Claude-default + local-as-commented-examples). #348 (the spike that originally gated PR 4) was closed as out-of-scope when the design shifted to "framework ships the pattern, not the recommendation" — hardware variance across adopter machines makes a single recommended local model misleading more often than helpful. Adopters who want to validate specific models against their own hardware can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist.
 
 #### Out of scope (v1)
 

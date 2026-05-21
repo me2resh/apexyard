@@ -72,9 +72,14 @@ version: 1
 #                          the proxy. v1 is session-scoped — all agents
 #                          on a session share the endpoint. Per-agent
 #                          invocation env scoping is deferred to v2.
-#                          The specific local-model entries (Ollama
-#                          recommendations) are gated on the #348
-#                          feasibility spike and ship in #351 PR 4.
+#                          Claude is the framework default; local-model
+#                          routing is adopter-opt-in via Example C
+#                          below. Specific model fit depends on local
+#                          hardware (RAM / GPU / Apple Silicon vs
+#                          Linux), so the framework ships the pattern
+#                          but not a recommendation — adopters pick a
+#                          model that fits their machine + validate it
+#                          against their own workload before committing.
 #
 #   env                    OPTIONAL. Map of environment variables set
 #                          for the agent's invocations. Supports
@@ -113,15 +118,31 @@ agents: {}
 #     data-analyst:
 #       model: sonnet            # bump from haiku for richer SQL output
 #
-# Example C — local routing via LiteLLM proxy + Ollama:
+# Example C — local routing via LiteLLM proxy + Ollama (adopter-opt-in):
+#
+# Claude is the framework default. The framework does NOT ship a
+# recommended local model because hardware varies — pick one that fits
+# your machine + validate against your own workload before committing.
+# Four candidate models below (commented), with RAM-at-load estimates
+# at q4 quantization. Uncomment the entry that matches your hardware.
+# All four are reasonable starting points for ticket-manager + data-
+# analyst-style structured-output work; none is recommended over the
+# others by the framework.
 #
 #   agents:
 #     ticket-manager:
-#       model: ollama/qwen2.5-coder:14b
-#       endpoint: http://localhost:11434  # LiteLLM proxy
+#       # model: ollama/qwen2.5-coder:14b      # ~10 GB RAM, M1+ Pro / 12+ GB GPU
+#       # model: ollama/llama3.1:8b            # ~6 GB RAM, runs on most laptops
+#       # model: ollama/deepseek-coder-v2:16b  # ~12 GB RAM, M1+ Max / 14+ GB GPU
+#       # model: ollama/mistral-small3:24b     # ~18 GB RAM, M1+ Max / 20+ GB GPU
+#       endpoint: http://localhost:4000        # LiteLLM proxy fronting Ollama
 #     data-analyst:
-#       model: ollama/llama3.1:8b
-#       endpoint: http://localhost:11434
+#       # model: ollama/llama3.1:8b            # SQL / dashboard work, lightweight
+#       endpoint: http://localhost:4000
+#
+# Disk: each model is 5-13 GB to download. Ollama caches under ~/.ollama.
+# Tool-call reliability via LiteLLM is the load-bearing risk — validate
+# before relying on it for production work.
 #
 # Example D — Bedrock / Vertex routing with env vars:
 #
