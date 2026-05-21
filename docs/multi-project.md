@@ -546,9 +546,10 @@ The full reference lives in [`agent-routing.yaml.example`](../agent-routing.yaml
 | `endpoint` | no | Alternative inference endpoint (e.g. LiteLLM proxy URL); session-scoped — sets `ANTHROPIC_BASE_URL` at SessionStart |
 | `env` | no | Map of environment variables for the agent's invocations; supports `$VAR_NAME` refs |
 | `timeout_seconds` | no | Override the framework default invocation timeout |
-| `allowed_tools_override` | no (advanced) | Replace the agent's shipped `allowed-tools` list — use sparingly |
 
 Worked examples (single-agent override, multiple overrides, local routing via Ollama + LiteLLM, Bedrock with AWS env, timeout override) are in the example file.
+
+> The `allowed_tools_override` field was advertised in early drafts of this schema but never wired through the parser. Dropped in #358 for v1; the per-agent allowed-tools list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter (same escape-hatch pattern that handles framework-default `model:` overrides).
 
 #### Config-block wiring (split-portfolio v2)
 

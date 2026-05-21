@@ -83,11 +83,12 @@ version: 1
 #   timeout_seconds        OPTIONAL. Override the framework default
 #                          invocation timeout for this agent.
 #
-#   allowed_tools_override OPTIONAL (advanced). YAML list of tool names
-#                          that replaces the agent's shipped
-#                          allowed-tools list. Default = keep the
-#                          shipped list. Use sparingly — the shipped
-#                          list is curated per agent.
+# (Note: `allowed_tools_override` was advertised in earlier drafts of
+# this schema but never wired into the parser / consumer. Dropped in
+# #358 for v1; the shipped per-agent allowed-tools list in each
+# .claude/agents/<name>.md frontmatter is the source of truth. Edit
+# the agent file directly with a `# routing-config:override <reason>`
+# comment in the YAML frontmatter if you need a one-off override.)
 
 agents: {}
 
@@ -138,14 +139,3 @@ agents: {}
 #       model: opus
 #       timeout_seconds: 180     # framework default is 60s; allow
 #                                # deeper adversarial exploration
-#
-# Example F — advanced: tool-list override (use sparingly):
-#
-#   agents:
-#     qa-engineer:
-#       model: haiku
-#       allowed_tools_override:
-#         - Read
-#         - Grep
-#         - Glob
-#         - Bash
