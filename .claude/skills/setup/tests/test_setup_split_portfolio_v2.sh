@@ -117,6 +117,15 @@ company:
   mission: "ship test infrastructure"
 YAML
   mkdir -p "$sb/private/custom-skills" "$sb/private/custom-handbooks"
+
+  # Seed an agent-routing.yaml.example in the public fork — SKILL.md
+  # Step 5 copies this into the private repo as agent-routing.yaml.
+  cat > "$sb/public/agent-routing.yaml.example" <<'YAML'
+version: 1
+# Adopter routing config — overrides framework default models per agent.
+# Empty `agents: {}` block means zero overrides; framework defaults apply.
+agents: {}
+YAML
 }
 
 # ---------------------------------------------------------------------------
@@ -141,7 +150,8 @@ apply_setup_v2() {
       echo "workspace"
     } >> .gitignore
 
-    # 2. Write the v2 config block.
+    # 2. Write the v2 config block (8 keys including agent_routing
+    #    per #351 PR 3).
     cat > .claude/project-config.json <<JSON
 {
   "portfolio": {
@@ -151,13 +161,20 @@ apply_setup_v2() {
     "onboarding":           "$sibling_rel/onboarding.yaml",
     "workspace_dir":        "$sibling_rel/workspace",
     "custom_skills_dir":    "$sibling_rel/custom-skills",
-    "custom_handbooks_dir": "$sibling_rel/custom-handbooks"
+    "custom_handbooks_dir": "$sibling_rel/custom-handbooks",
+    "agent_routing":        "$sibling_rel/agent-routing.yaml"
   }
 }
 JSON
 
     # 3. Write the v2 presence marker.
     echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+
+    # 4. Seed agent-routing.yaml in the private repo by copying the
+    #    framework example (#351 PR 3).
+    if [ -f "agent-routing.yaml.example" ] && [ ! -f "$sibling_rel/agent-routing.yaml" ]; then
+      cp agent-routing.yaml.example "$sibling_rel/agent-routing.yaml"
+    fi
   )
 }
 
@@ -169,9 +186,9 @@ SB="$TMP_ROOT/case1"
 build_pre_setup_v2 "$SB"
 apply_setup_v2 "$SB/public" "../private"
 
-# Assertion 1: all 7 v2 portfolio keys exist in project-config.json
+# Assertion 1: all 8 v2 portfolio keys exist in project-config.json
 PCONFIG="$SB/public/.claude/project-config.json"
-EXPECTED_KEYS=(registry projects_dir ideas_backlog onboarding workspace_dir custom_skills_dir custom_handbooks_dir)
+EXPECTED_KEYS=(registry projects_dir ideas_backlog onboarding workspace_dir custom_skills_dir custom_handbooks_dir agent_routing)
 all_keys_present=1
 for k in "${EXPECTED_KEYS[@]}"; do
   v=$(jq -r ".portfolio.$k // empty" "$PCONFIG")
@@ -181,7 +198,17 @@ for k in "${EXPECTED_KEYS[@]}"; do
   fi
 done
 if [ "$all_keys_present" -eq 1 ]; then
-  mark_pass "all 7 v2 portfolio.* keys present in project-config.json"
+  mark_pass "all 8 v2 portfolio.* keys present in project-config.json (includes agent_routing per #351 PR 3)"
+fi
+
+# Assertion 1b: agent-routing.yaml was seeded into the private repo
+PRIVATE_ROUTING="$SB/private/agent-routing.yaml"
+if [ -f "$PRIVATE_ROUTING" ] && grep -q '^agents:' "$PRIVATE_ROUTING"; then
+  mark_pass "agent-routing.yaml seeded in private repo from framework example (#351 PR 3)"
+elif [ -f "$PRIVATE_ROUTING" ]; then
+  mark_fail "agent-routing.yaml content" "file exists but doesn't carry the 'agents:' key — example seed appears malformed"
+else
+  mark_fail "agent-routing.yaml present" "expected at $PRIVATE_ROUTING (Step 5 should copy from example)"
 fi
 
 # Assertion 2: .apexyard-fork marker exists with expected commented preamble
