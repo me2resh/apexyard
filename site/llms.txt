@@ -8,8 +8,8 @@
 ## Pages
 
 - [Home](https://yard.apexscript.com/) — what apexyard is, why fork it, daily workflow
-- [Architecture](https://yard.apexscript.com/architecture.html) — the 5-layer model + portfolio model
-- [Skills](https://yard.apexscript.com/skills.html) — full slash-command reference (53 skills)
+- [Architecture](https://yard.apexscript.com/architecture) — the 5-layer model + portfolio model
+- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (53 skills)
 
 ## Full-content companion
 

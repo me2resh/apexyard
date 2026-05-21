@@ -118,7 +118,7 @@ check, and SEO check. Copy whichever you need.
 
 ---
 
-# Architecture (https://yard.apexscript.com/architecture.html)
+# Architecture (https://yard.apexscript.com/architecture)
 
 ## The 5-layer model
 
@@ -182,7 +182,7 @@ disallows changing a public fork's visibility after the fact).
 
 ---
 
-# Skills (https://yard.apexscript.com/skills.html)
+# Skills (https://yard.apexscript.com/skills)
 
 The full ApexYard slash-command surface — 53 skills, organised by
 purpose. Each is a markdown SKILL.md file under `.claude/skills/<name>/`.
