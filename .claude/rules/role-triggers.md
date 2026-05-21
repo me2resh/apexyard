@@ -138,6 +138,17 @@ Self-discipline (the agent remembering to read the role file when the rule fires
 
 Same advisory shape as `check-upstream-drift.sh` — non-blocking, exit 0 always. The banner cannot force the agent to adopt the role, but it removes the "I forgot the rule applied here" failure mode.
 
+#### Class-aware banner (HYBRID, AgDR-0050 § Axis 6 — live since #347 PR 5)
+
+Each banner reads the matched role's `**Class**:` value from the `## Activation mode` section of the role file and emits one of two shapes:
+
+- **Isolated-work-class** (12 roles: Heads-of-X, Tech Lead, QA Engineer, SRE, Security Auditor, Pen Tester, Product Analyst, Data Analyst): the banner instructs the agent to **SPAWN the sub-agent via the Agent tool** with `subagent_type: <slug>`, naming both the canonical role file at `roles/<dept>/<role>.md` and the agent wrapper at `.claude/agents/<slug>.md`. Per AgDR-0050 § Axis 6, isolated work benefits from isolated context + tool restriction.
+- **In-flow-class** (7 roles: Backend / Frontend / Platform Engineer, Product Manager, UI / UX Designer, Data Engineer): the banner instructs the agent to **adopt the persona IN-THREAD** by reading `roles/<dept>/<role>.md`. Per AgDR-0050 § Axis 6, in-flow work loses too much shared context if spawned out-of-thread.
+
+One naming exception: the Security Auditor role (`roles/security/security-auditor.md`) maps to the `security-reviewer` agent slug, not `security-auditor`. This is the Hatim→Hakim consolidation from PR #360 — the agent filename was preserved so `/security-review` and the auto-fire trigger keep working. The hook handles the exception via `agent_slug_for()`.
+
+The class lookup is conservative: if the role file is missing or the `**Class**:` line can't be parsed, the banner falls back to in-flow-class shape. Better to under-trigger sub-agent spawn than to incorrectly suggest one for an unclassified role.
+
 Triggers wired in v1 (me2resh/apexyard#206):
 
 | Trigger family | Hook event | Detection | Role |

@@ -39,8 +39,86 @@ HOOK_EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/nul
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 
 # ---------------------------------------------------------------------------
-# Helper: emit one banner line. Multiple triggers in a single call can
-# fire multiple banners.
+# Resolve REPO_ROOT once — needed by lookup_role_class for the role-file
+# read. Set early so it's available to all helpers below.
+# ---------------------------------------------------------------------------
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+
+# ---------------------------------------------------------------------------
+# Look up the `**Class**:` value from a role file's `## Activation mode`
+# section. Returns one of:
+#   - isolated-work-class
+#   - in-flow-class
+#   - in-flow-class (fallback when the file is missing, the section is
+#     absent, or the Class line can't be parsed — conservative fail-open
+#     so a malformed role file doesn't break trigger detection)
+#
+# Per AgDR-0050 § Axis 6's HYBRID integration: isolated-work-class roles
+# spawn a sub-agent; in-flow-class roles adopt the persona in-thread.
+# ---------------------------------------------------------------------------
+lookup_role_class() {
+  local rel="$1"
+  local path
+  if [ -n "$REPO_ROOT" ]; then
+    path="$REPO_ROOT/$rel"
+  else
+    path="$rel"
+  fi
+  [ -f "$path" ] || { echo "in-flow-class"; return; }
+
+  local class
+  class=$(awk '
+    /^## Activation mode/ { in_section = 1; next }
+    in_section && /^\*\*Class\*\*:/ {
+      sub("^\\*\\*Class\\*\\*:[[:space:]]*", "")
+      print
+      exit
+    }
+  ' "$path")
+
+  case "$class" in
+    isolated-work-class|in-flow-class) echo "$class" ;;
+    *) echo "in-flow-class" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Map a role-file path to the matching sub-agent slug (the value to pass
+# as `subagent_type` when spawning via the Agent tool).
+#
+# 1:1 by default — `roles/<dept>/<slug>.md` → `.claude/agents/<slug>.md`.
+# Exception: the Hatim→Hakim consolidation (#360) means
+# `roles/security/security-auditor.md` maps to the `security-reviewer`
+# agent file (the consolidation preserved the filename so `/security-review`
+# and `auto-code-review.sh` keep working). See AgDR-0050 § Axis 2 line 49.
+# ---------------------------------------------------------------------------
+agent_slug_for() {
+  local file="$1"
+  local stem
+  stem=$(basename "$file" .md)
+  case "$stem" in
+    security-auditor) echo "security-reviewer" ;;
+    *) echo "$stem" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Helper: emit one class-aware banner line. Multiple triggers in a single
+# call can fire multiple banners.
+#
+# Per AgDR-0050 § Axis 6, the banner shape depends on the role's
+# Activation Class:
+#
+#   isolated-work-class → instructs the agent to SPAWN the sub-agent via
+#     the Agent tool with `subagent_type: <slug>`. Used for roles whose
+#     work benefits from isolated context + tool restriction (Head-of-X,
+#     Tech Lead, QA, SRE, Security Auditor, Pen Tester, Data Analyst,
+#     etc.).
+#
+#   in-flow-class → instructs the agent to ADOPT the persona in-thread.
+#     Used for roles that work tightly alongside the main thread
+#     (Backend / Frontend / Platform Engineer, Product Manager, UI / UX
+#     Designer, Data Engineer).
 #
 # Args:
 #   $1 — role display name (e.g. "Security Auditor")
@@ -49,8 +127,17 @@ TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 # ---------------------------------------------------------------------------
 emit_banner() {
   local role="$1" file="$2" reason="$3"
-  printf 'ROLE TRIGGER: %s activates per .claude/rules/role-triggers.md (%s). Read %s and adopt the role before continuing.\n' \
-    "$role" "$reason" "$file" >&2
+  local class agent_slug
+  class=$(lookup_role_class "$file")
+  agent_slug=$(agent_slug_for "$file")
+
+  if [ "$class" = "isolated-work-class" ]; then
+    printf 'ROLE TRIGGER: %s activates per .claude/rules/role-triggers.md (%s). Isolated-work-class — SPAWN the sub-agent via the Agent tool with subagent_type: %s. Canonical role at %s, agent wrapper at .claude/agents/%s.md. Per AgDR-0050 § Axis 6.\n' \
+      "$role" "$reason" "$agent_slug" "$file" "$agent_slug" >&2
+  else
+    printf 'ROLE TRIGGER: %s activates per .claude/rules/role-triggers.md (%s). In-flow-class — adopt the persona IN-THREAD. Read %s before continuing. Per AgDR-0050 § Axis 6.\n' \
+      "$role" "$reason" "$file" >&2
+  fi
 }
 
 # ---------------------------------------------------------------------------
