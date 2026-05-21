@@ -68,7 +68,7 @@ WRAPPER='r=$PWD;while [ ! -f "$r/.apexyard-fork" ] && [ ! -f "$r/onboarding.yaml
 OUT=$(mktemp)
 ERR=$(mktemp)
 (
-  cd /tmp
+  cd /tmp || exit 1
   echo '' | bash -c "$WRAPPER" >"$OUT" 2>"$ERR"
 )
 rc=$?
@@ -86,7 +86,7 @@ rm -f "$OUT" "$ERR"
 OUT=$(mktemp)
 ERR=$(mktemp)
 (
-  cd "$ROOT"
+  cd "$ROOT" || exit 1
   echo '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"src/utils/format.ts"}}' \
     | bash -c "$WRAPPER" >"$OUT" 2>"$ERR"
 )
