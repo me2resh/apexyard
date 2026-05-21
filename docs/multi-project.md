@@ -524,13 +524,13 @@ This sibling pattern to **Custom templates** (path-mirroring overrides; see AgDR
 | **Split-portfolio (v2)** | `<private_repo>/agent-routing.yaml` | Private — committed to the sibling repo, resolved via `.portfolio.agent_routing` in `.claude/project-config.json` |
 | **Single-fork** | `<fork>/agent-routing.yaml` | Local — gitignored by the framework (`/agent-routing.yaml` in `.gitignore`), never pushed to the public fork |
 
-Seed from the framework example:
+Seed from the framework example. **Split-portfolio adopters get this done automatically by `/setup --split-portfolio`** (#351 PR 3) — the skill copies the example into the private repo as part of Step 5 (private-repo init). Single-fork adopters do the `cp` manually when they want to start customising; the framework deliberately doesn't auto-seed for single-fork because an empty override file accumulating in the fork root before any overrides exist is more ceremony than value.
 
 ```bash
-# Split-portfolio:
+# Split-portfolio — `/setup --split-portfolio` does this for you. Manual fallback:
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard-portfolio/agent-routing.yaml
 
-# Single-fork:
+# Single-fork — always manual (and only when you're ready to customise):
 cp ~/ops/apexyard/agent-routing.yaml.example ~/ops/apexyard/agent-routing.yaml
 ```
 
@@ -585,7 +585,6 @@ Per AgDR-0050 § Axis 4.
 
 #### What ships next
 
-- **#351 PR 3** — `/setup` integration. Split-portfolio adopters get the YAML seeded in the private repo; single-fork adopters get `agent-routing.yaml` gitignored automatically.
 - **#351 PR 4** — local-routing entries (Ollama endpoints) in the seeded template, gated on the **#348** feasibility spike's verdict. If the spike promotes, specific local-model entries land in the example; if it discards, the `endpoint:` field stays in the schema for adopter-author override only.
 
 #### Out of scope (v1)

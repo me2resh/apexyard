@@ -139,6 +139,7 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    - **`onboarding.yaml`** seeded from the framework template — split-portfolio v2 (#242) moves company/team/stack config to the private repo too, so the public fork stays slim
    - empty **`custom-skills/`** dir + a one-paragraph `custom-skills/README.md` explaining the convention. Company-specific proprietary skills (`/file-internal-bug`, `/check-policy`, etc.) live as `custom-skills/<name>/SKILL.md` here; the public fork's `link-custom-skills.sh` SessionStart hook symlinks each into `.claude/skills/<name>/` so Claude Code discovers them. Custom skill names override framework skills of the same name (warning printed at SessionStart). See `docs/multi-project.md` § "Private custom skills + handbooks" for the full convention. (Added in #243.)
    - empty **`custom-handbooks/`** dir + a one-paragraph `custom-handbooks/README.md` explaining the convention. Company-confidential coding standards live as `custom-handbooks/{architecture,general,language/<lang>}/*.md` here, mirroring the public `handbooks/` path-convention. Rex consumes both layers during code review (advisory by default, blocking with `ENFORCEMENT: blocking` at the top of the file). See `handbooks/README.md` for the format. (Added in #243.)
+   - **`agent-routing.yaml`** seeded from `<fork>/agent-routing.yaml.example` (the framework's worked-examples file). This is the adopter-routing source-of-truth for split-portfolio mode — every adopter override (per-agent model, endpoint, env, timeout) lives here. The seeded file starts as the framework example so adopters see a working shape; the empty `agents: {}` block at the top means zero overrides until edited. The SessionStart sync hook (`apply-agent-routing.sh`, #357) reads it on every session start. See `docs/multi-project.md` § "Centralised agent routing — `agent-routing.yaml`" for the schema. (Added in #351 PR 3.)
    - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
    - initial commit + push
 6. **Configure path resolution in the fork** (recommended — v2 config-block mode):
@@ -155,12 +156,13 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
          "onboarding": "../apexyard-portfolio/onboarding.yaml",
          "workspace_dir": "../apexyard-portfolio/workspace",
          "custom_skills_dir": "../apexyard-portfolio/custom-skills",
-         "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks"
+         "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks",
+         "agent_routing": "../apexyard-portfolio/agent-routing.yaml"
        }
      }
      ```
 
-     The two `custom_*_dir` keys are optional — defaults match `./custom-skills` and `./custom-handbooks` resolved against the ops-fork root. Setting them explicitly here is the v2 split-portfolio shape and matches what step 5 just created in the private repo.
+     The two `custom_*_dir` keys are optional — defaults match `./custom-skills` and `./custom-handbooks` resolved against the ops-fork root. The `agent_routing` key is similarly optional — its default resolves to `./agent-routing.yaml` against the ops-fork root, so single-fork adopters who keep the file at the fork root don't need to set it explicitly. Setting all three explicitly here is the v2 split-portfolio shape and matches what step 5 just created in the private repo.
 
    - **Write the `.apexyard-fork` marker** at the public-fork root. This is the v2 ops-fork anchor — `_lib-ops-root.sh` and every hook that walks up to find the ops fork looks for this marker first (with the legacy `onboarding.yaml + apexyard.projects.yaml` pair as fallback). **Spec: presence-only — readers MUST ignore content; only file presence matters.** Writers MAY include a single explanatory line so `head .apexyard-fork` is informative for operators encountering it the first time. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B for the rationale.
 
@@ -570,6 +572,28 @@ I'll need: repo name (owner/repo) and a short project name.
 
 If yes → append to `apexyard.projects.yaml`, stage alongside `onboarding.yaml`.
 If no → skip. They can add projects later with `/handover`.
+
+### Step 7a: Single-fork agent-routing seeding (advisory)
+
+For **single-fork mode** only — split-portfolio adopters already got `agent-routing.yaml` seeded into the private repo in Step 5.
+
+The framework ships `<fork>/agent-routing.yaml.example` as the worked-examples file, and `.gitignore` already has `/agent-routing.yaml` excluded so adopters can edit locally without leaking overrides to the public fork. By default `/setup` does NOT auto-copy the example to `agent-routing.yaml` — single-fork adopters' overrides shouldn't accumulate before they've made any. Mention the path explicitly so the operator knows where to start when they want to customise:
+
+```
+Agent routing (model + endpoint per agent) is in agent-routing.yaml at the
+fork root. The framework ships `agent-routing.yaml.example` as a template;
+`.gitignore` already excludes the working `agent-routing.yaml` file so
+your overrides never leak to the public fork. When you're ready to
+customise, run:
+
+  cp agent-routing.yaml.example agent-routing.yaml
+  $EDITOR agent-routing.yaml
+
+The SessionStart sync hook (apply-agent-routing.sh) reads it on every
+session start. See docs/multi-project.md § "Centralised agent routing".
+```
+
+No file writes here — purely informational. Added in #351 PR 3.
 
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
