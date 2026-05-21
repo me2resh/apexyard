@@ -36,7 +36,7 @@
 - **53 slash commands** across audits, tickets, architecture, decisions,
   portfolio aggregation, and framework ops. Each is a markdown SKILL.md file
   under `.claude/skills/<name>/`.
-- **29 shell hooks** mechanically enforce SDLC rules — ticket-first, migration
+- **31 shell hooks** mechanically enforce SDLC rules — ticket-first, migration
   gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
   validation, upstream-drift banner, leak protection.
 - **19 role definitions** across 5 departments (Engineering, Product, Design,

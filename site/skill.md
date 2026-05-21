@@ -32,7 +32,7 @@ across 6 buckets:
   `/split-portfolio`, `/fan-out`, `/start-ticket`, `/approve-merge`,
   `/approve-design`)
 
-29 shell hooks enforce SDLC rules mechanically — ticket-first, migration
+31 shell hooks enforce SDLC rules mechanically — ticket-first, migration
 gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR
 title validation, AgDR-required-for-architecture, upstream-drift banner,
 leak protection. 19 role definitions activate on triggers (label, diff

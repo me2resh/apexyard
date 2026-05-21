@@ -119,6 +119,7 @@ for f in "${FILES_TO_SCAN[@]}"; do
   check_count "$f" "$actual_hooks"  "shell +scripts?"    "shell scripts (hook count)"
   check_count "$f" "$actual_hooks"  "shell +gates?"      "shell gates (hook count)"
   check_count "$f" "$actual_hooks"  "mechanical +gates?" "mechanical gates (hook count)"
+  check_count "$f" "$actual_hooks"  "shell +hooks?"      "shell hooks (hook count)"
   # `N roles`  (the role-count claim)
   check_count "$f" "$actual_roles"  "roles?"            "roles"
   check_count "$f" "$actual_roles"  "role +definitions" "role definitions"

@@ -89,7 +89,7 @@ the current codebase.
 
 ### Rules that fire themselves
 
-24 shell hooks mechanically enforce the SDLC: ticket-first (Edit/Write/
+31 shell hooks mechanically enforce the SDLC: ticket-first (Edit/Write/
 Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO
 + design review), red-CI block, commit format, AgDR for architecture
 changes, branch / PR-title validation, secrets scanning, upstream-drift
@@ -128,9 +128,9 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (52
-   slash commands), `.claude/agents/` (5 sub-agents incl. Rex), and
-   `.claude/hooks/` (24 mechanical enforcement scripts).
+2. **Capability layer** — the runnable spec: `.claude/skills/` (53
+   slash commands), `.claude/agents/` (12 sub-agents incl. Rex), and
+   `.claude/hooks/` (31 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
    `.claude/project-config.json` (shallow merge).
