@@ -204,6 +204,69 @@ else
   FAIL=$((FAIL+1)); FAILED="${FAILED}non-blocking "
 fi
 
+# --- (4) HYBRID class-aware banner — AgDR-0050 § Axis 6 (Wave 2 PR 5) --------
+# Each banner now includes either "Isolated-work-class — SPAWN the sub-agent"
+# or "In-flow-class — adopt the persona IN-THREAD" depending on the matched
+# role's **Class** value in its role file. Verifies the class lookup actually
+# fires + the security-auditor → security-reviewer slug exception.
+
+# 4a. Security Auditor (isolated-work-class) — banner instructs SPAWN with
+#     subagent_type: security-reviewer (NOT security-auditor; the
+#     Hatim→Hakim consolidation in PR #360 kept the filename).
+in=$(jq -nc \
+  --arg p "src/auth/login.ts" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "hybrid class-aware: Security Auditor → isolated-work-class banner" 0 \
+  "Isolated-work-class.*subagent_type: security-reviewer" "$in"
+
+# 4b. Platform Engineer (in-flow-class) — banner instructs in-thread
+#     adoption. The CI/CD diff path triggers this role.
+in=$(jq -nc \
+  --arg p ".github/workflows/ci.yml" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "hybrid class-aware: Platform Engineer → in-flow-class banner" 0 \
+  "Platform Engineer.*In-flow-class.*adopt the persona IN-THREAD" "$in"
+
+# 4c. Tech Lead (isolated-work-class) — banner instructs SPAWN with
+#     subagent_type: tech-lead. Triggered by edits under docs/agdr/.
+in=$(jq -nc \
+  --arg p "docs/agdr/AgDR-0099-example.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "hybrid class-aware: Tech Lead → isolated-work-class banner" 0 \
+  "Tech Lead.*Isolated-work-class.*subagent_type: tech-lead" "$in"
+
+# 4d. QA Engineer (isolated-work-class) — banner instructs SPAWN with
+#     subagent_type: qa-engineer. Triggered by `gh issue edit --add-label qa`.
+in=$(jq -nc \
+  --arg c "gh issue edit 42 --add-label qa" \
+  '{hook_event_name:"PreToolUse", tool_name:"Bash", tool_input:{command:$c}}')
+run_case "hybrid class-aware: QA Engineer → isolated-work-class banner" 0 \
+  "QA Engineer.*Isolated-work-class.*subagent_type: qa-engineer" "$in"
+
+# 4e. Prompted Backend Engineer (in-flow-class) — banner instructs
+#     in-thread adoption.
+in=$(jq -nc \
+  --arg prm "act as the backend engineer and refactor this handler" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "hybrid class-aware: Backend Engineer prompted → in-flow-class banner" 0 \
+  "Backend Engineer.*In-flow-class.*adopt the persona IN-THREAD" "$in"
+
+# 4f. Prompted UX Designer (in-flow-class) — banner instructs in-thread
+#     adoption.
+in=$(jq -nc \
+  --arg prm "put on your UX Designer hat for this flow review" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "hybrid class-aware: UX Designer prompted → in-flow-class banner" 0 \
+  "Ux Designer.*In-flow-class.*adopt the persona IN-THREAD" "$in"
+
+# 4g. Prompted Pen Tester (isolated-work-class) — banner instructs SPAWN
+#     with subagent_type: penetration-tester.
+in=$(jq -nc \
+  --arg prm "as the pen tester, dry-run an exploit on the new endpoint" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "hybrid class-aware: Pen Tester prompted → isolated-work-class banner" 0 \
+  "Pen Tester.*Isolated-work-class.*subagent_type: penetration-tester" "$in"
+
 # --- Summary -----------------------------------------------------------------
 
 echo ""
