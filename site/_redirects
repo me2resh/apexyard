@@ -9,3 +9,11 @@
 /index.md            /index.md.gen           200
 /architecture.md     /architecture.md.gen    200
 /skills.md           /skills.md.gen          200
+
+# Clean URLs — drop the .html suffix from /architecture and /skills.
+# Both forms work (200 rewrite preserves URL the user sees + backwards compat
+# for old bookmarks pointing at the .html form). Canonical is the clean form
+# per #327 + the SEO-audit S14 finding.
+
+/architecture        /architecture.html      200
+/skills              /skills.html            200
