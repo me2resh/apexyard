@@ -1,10 +1,11 @@
 ---
+# routing-config:override Munir bumped inherit → sonnet per AgDR-0050 § Axis 2 line 63 for pattern-matching across package files. Intentional framework-default change for Wave 2 PR 4 of #347.
 name: dependency-auditor
 persona_name: Munir
 description: Monitors dependencies for vulnerabilities, outdated packages, and license compliance. Run weekly or when package.json changes.
 tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit
-model: inherit
+model: sonnet
 ---
 
 # Dependency Auditor Agent

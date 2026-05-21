@@ -1,10 +1,11 @@
 ---
+# routing-config:override Rex bumped inherit → opus per AgDR-0050 § Axis 2 line 50 for PR diff review + handbook reasoning depth. Intentional framework-default change for Wave 2 PR 4 of #347.
 name: code-reviewer
 persona_name: Rex
 description: Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit
-model: inherit
+model: opus
 ---
 
 # Code Reviewer Agent
