@@ -1,0 +1,16 @@
+{
+  "schema_version": "v1",
+  "agents": {
+    "*": {
+      "allow": ["read"],
+      "rate_limit": null,
+      "preferred_endpoints": [
+        "https://yard.apexscript.com/llms.txt",
+        "https://yard.apexscript.com/llms-full.txt",
+        "https://yard.apexscript.com/index.md",
+        "https://yard.apexscript.com/architecture.md",
+        "https://yard.apexscript.com/skills.md"
+      ]
+    }
+  }
+}
