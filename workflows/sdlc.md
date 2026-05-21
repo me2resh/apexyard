@@ -167,6 +167,16 @@ RIGHT:
    - Testing: How to verify
 ```
 
+> **Sidebar — when to invoke `/debug` (and when NOT to).** The `/debug` skill is for bugs that **resisted naïve fix attempts**, not every bug. Three tiers, matched to bug class:
+>
+> | Class | Workflow |
+> |---|---|
+> | **Simple bug** — clear repro, obvious cause, one-line fix | `/bug` → fix → PR. **No `/debug`.** The cost of hypothesis-tree ceremony exceeds the fix cost. |
+> | **Resistant bug** — naïve fix didn't hold OR cause unclear after grep + Read | `/bug` → **`/debug`** → fix → PR. Forces architecture-first reading + evidence-before-fix. Prevents shotgun debugging. |
+> | **Sustained mystery** — multi-session archaeology, performance puzzle, regression hunt, incident retro | `/investigation` (live-doc workflow) — different skill entirely. Days of effort, cross-session continuity matters. See `.claude/skills/investigation/SKILL.md`. |
+>
+> Self-check before `/debug`: have I tried the obvious fix? Did it work? If NO → `/debug`. If didn't try yet → try the obvious thing first. Same shape as `/spike` from Phase 1 — file when you genuinely don't know; just code when you do.
+
 ### Exit Criteria
 
 - Code complete
