@@ -214,5 +214,56 @@ if [ "$DRIFT" -gt 0 ]; then
   exit 1
 fi
 
+# --- LLM payload-size meta tags (#333 item C) ---
+# Each main marketing page carries <meta name="llm:token-count" content="N">
+# and <meta name="llm:doc-length" content="M chars">. The token estimate is
+# chars/4 — a cross-vendor approximation. This check enforces the meta
+# values stay within 5% of the actual chars/4 (catches drift when a page
+# is edited without refreshing the meta tags). 5% tolerance handles:
+#   - The meta-tag self-impact (the tags themselves add ~150 bytes)
+#   - Small content edits that don't justify a meta refresh
+# Anything beyond 5% means the page has materially changed and the meta
+# should be re-measured.
+LLM_DRIFT=0
+echo
+echo "LLM payload-size meta tags (per-page token-count + doc-length):"
+for f in site/index.html site/architecture.html site/skills.html; do
+  [ -f "$f" ] || continue
+  actual_chars=$(wc -c < "$f" | tr -d ' ')
+  actual_tokens=$((actual_chars / 4))
+
+  meta_tokens=$(grep -oE 'name="llm:token-count" content="[0-9]+"' "$f" 2>/dev/null \
+    | grep -oE '[0-9]+' | head -1)
+  meta_chars=$(grep -oE 'name="llm:doc-length" content="[0-9]+ chars"' "$f" 2>/dev/null \
+    | grep -oE '[0-9]+' | head -1)
+
+  if [ -z "$meta_tokens" ] || [ -z "$meta_chars" ]; then
+    echo "  DRIFT: $f — missing llm:token-count or llm:doc-length meta tag"
+    LLM_DRIFT=$((LLM_DRIFT + 1))
+    continue
+  fi
+
+  # Tolerance: 5% in either direction. Use integer arithmetic.
+  diff_tokens=$(( actual_tokens > meta_tokens ? actual_tokens - meta_tokens : meta_tokens - actual_tokens ))
+  pct_tokens=$(( actual_tokens > 0 ? diff_tokens * 100 / actual_tokens : 0 ))
+
+  diff_chars=$(( actual_chars > meta_chars ? actual_chars - meta_chars : meta_chars - actual_chars ))
+  pct_chars=$(( actual_chars > 0 ? diff_chars * 100 / actual_chars : 0 ))
+
+  if [ "$pct_tokens" -gt 5 ] || [ "$pct_chars" -gt 5 ]; then
+    echo "  DRIFT: $f — meta token-count=$meta_tokens chars=$meta_chars vs actual tokens=$actual_tokens chars=$actual_chars (diff: ${pct_tokens}% tokens / ${pct_chars}% chars; >5% tolerance)"
+    LLM_DRIFT=$((LLM_DRIFT + 1))
+  else
+    echo "  ok   $f — meta=$meta_tokens tok / $meta_chars chars vs actual=$actual_tokens tok / $actual_chars chars (within 5%)"
+  fi
+done
+
+if [ "$LLM_DRIFT" -gt 0 ]; then
+  echo
+  echo "FAIL: $LLM_DRIFT LLM-meta mismatch(es). Refresh the <meta name=\"llm:*\"> tags."
+  echo "To recompute: wc -c < <file> for chars; tokens ≈ chars / 4."
+  exit 1
+fi
+
 echo "PASS: site framework counts match actuals across all scanned files."
 exit 0
