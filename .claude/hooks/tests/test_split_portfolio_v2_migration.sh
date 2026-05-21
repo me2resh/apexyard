@@ -125,13 +125,23 @@ run_migration() {
       git rm --cached onboarding.yaml >/dev/null 2>&1 || true
     fi
 
-    # Move workspace contents
+    # Move workspace contents — mirrors the live recipe in
+    # .claude/skills/update/SKILL.md Step 8a (lines ~540-557).
+    # Two edge cases the live recipe handles + this test now exercises:
+    #   1. workspace/README.md is a framework artefact — stays in the
+    #      public fork (per AgDR-0021 § G).
+    #   2. If a project already exists in the sibling, skip + WARN —
+    #      don't overwrite. Print to stderr so the operator sees it.
     if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
       mkdir -p "$SIBLING_ROOT/workspace"
       for entry in workspace/*; do
         [ -e "$entry" ] || continue
         name=$(basename "$entry")
-        if [ -e "$SIBLING_ROOT/workspace/$name" ]; then continue; fi
+        if [ "$name" = "README.md" ]; then continue; fi
+        if [ -e "$SIBLING_ROOT/workspace/$name" ]; then
+          echo "WARNING: workspace/$name exists in BOTH locations — skipped." >&2
+          continue
+        fi
         mv "$entry" "$SIBLING_ROOT/workspace/$name"
       done
     fi
@@ -365,6 +375,103 @@ else
   fi
 fi
 
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 5: multi-project workspace + conflict-skip + README preservation.
+#
+# Exercises the two `run_migration()` edge cases #320 names:
+#   1. Multi-project loop — alpha + beta + gamma all present in the public
+#      fork's workspace/.
+#   2. Conflict-skip — beta also pre-exists in the sibling's workspace.
+#      The migration must SKIP it (don't overwrite) and print a WARNING.
+#   3. README preservation — workspace/README.md is the framework artefact
+#      explaining the convention (AgDR-0021 § G). Must stay in the public
+#      fork during migration, not move with the project clones.
+# ---------------------------------------------------------------------------
+echo "== Case 5: multi-project workspace + conflict-skip + README preservation"
+SB=$(mktemp -d)
+SB=$(cd "$SB" && pwd -P)
+build_pre_v2 "$SB"
+
+# Extend the public fork's workspace with 2 more projects + the framework's
+# README.md artefact. build_pre_v2 already created workspace/demo; reuse it
+# as one of the three projects + add alpha and gamma alongside, then drop
+# the README.md framework artefact in the same dir.
+mkdir -p "$SB/public/workspace/alpha" "$SB/public/workspace/gamma"
+echo "alpha workspace content" > "$SB/public/workspace/alpha/README.md"
+echo "gamma workspace content" > "$SB/public/workspace/gamma/README.md"
+cat > "$SB/public/workspace/README.md" <<'README'
+# workspace/ — live working copies of managed projects
+
+This directory holds `git clone`d managed-project repos. Each subdirectory
+is its own git tree (their own remote, their own branches). This README
+is the framework artefact — it stays in the public fork across the v1→v2
+migration per AgDR-0021 § G.
+README
+
+# Pre-create one of the three project dirs in the sibling — this is the
+# conflict-skip path: build_pre_v2 named the registered project "demo",
+# so we pre-create "demo" in the sibling (it'll trigger the skip).
+mkdir -p "$SB/private/workspace/demo"
+echo "PRE-EXISTING sibling content for demo — do NOT overwrite" > "$SB/private/workspace/demo/README.md"
+
+# Run the migration and capture stderr for the WARNING assertion
+STDERR_OUT=$(mktemp)
+run_migration "$SB/public" 2>"$STDERR_OUT"
+RC=$?
+
+# Assertion 1: migration didn't abort despite the conflict (RC=0)
+if [ "$RC" = "0" ]; then
+  mark_pass "multi-project: migration RC=0 despite conflict (didn't abort on skip)"
+else
+  mark_fail "multi-project: migration RC=$RC" "expected 0; conflict-skip path should continue, not abort"
+fi
+
+# Assertion 2: alpha moved to sibling
+if [ -d "$SB/private/workspace/alpha" ] && [ -f "$SB/private/workspace/alpha/README.md" ]; then
+  mark_pass "multi-project: alpha moved to sibling"
+else
+  mark_fail "multi-project: alpha moved" "expected $SB/private/workspace/alpha/ with content"
+fi
+
+# Assertion 3: gamma moved to sibling (proves the loop continued PAST the conflict on demo)
+if [ -d "$SB/private/workspace/gamma" ] && [ -f "$SB/private/workspace/gamma/README.md" ]; then
+  mark_pass "multi-project: gamma moved to sibling (loop didn't abort on demo conflict)"
+else
+  mark_fail "multi-project: gamma moved" "expected $SB/private/workspace/gamma/ — the loop must continue past the conflict-skip"
+fi
+
+# Assertion 4: pre-existing demo in sibling NOT overwritten
+demo_content=$(cat "$SB/private/workspace/demo/README.md" 2>/dev/null)
+if echo "$demo_content" | grep -q "PRE-EXISTING"; then
+  mark_pass "multi-project: pre-existing demo preserved in sibling (not overwritten)"
+else
+  mark_fail "multi-project: demo preserved" "sibling demo content was overwritten: '$demo_content'"
+fi
+
+# Assertion 5: WARNING printed to stderr naming demo as the conflict
+if grep -qE "WARNING: workspace/demo exists in BOTH locations" "$STDERR_OUT"; then
+  mark_pass "multi-project: conflict-skip WARNING printed to stderr"
+else
+  mark_fail "multi-project: WARNING printed" "stderr did not include the expected WARNING — got: $(cat "$STDERR_OUT" 2>/dev/null)"
+fi
+
+# Assertion 6: workspace/README.md stayed in the public fork (framework artefact)
+if [ -f "$SB/public/workspace/README.md" ]; then
+  mark_pass "multi-project: workspace/README.md preserved in public fork (framework artefact)"
+else
+  mark_fail "multi-project: README preserved" "expected $SB/public/workspace/README.md — framework artefact must stay per AgDR-0021 § G"
+fi
+
+# Assertion 7: workspace/README.md was NOT also moved to sibling
+if [ ! -f "$SB/private/workspace/README.md" ]; then
+  mark_pass "multi-project: workspace/README.md was NOT moved to sibling (framework artefact stays)"
+else
+  mark_fail "multi-project: README not in sibling" "$SB/private/workspace/README.md exists — should never have moved"
+fi
+
+rm -f "$STDERR_OUT"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
