@@ -125,6 +125,83 @@ for f in "${FILES_TO_SCAN[@]}"; do
   check_count "$f" "$actual_roles"  "role +definitions" "role definitions"
 done
 
+# Helper: multi-line lookback. The per-line check_count misses claims where
+# the digit and noun straddle a line break (e.g. `<digits>\n   <noun>` —
+# the common shape in `site/llms-full.txt`'s wrapped layer-card prose).
+# This pass flattens consecutive whitespace (including newlines) and
+# re-scans. Reports `file:multiline` as the locus when a flattened-only
+# match fires; same-line matches are already covered by check_count and
+# de-duped here.
+#
+# Closes #342's § 2(b) (multiline-flatten pre-pass).
+check_multiline_count() {
+  local file="$1" expected="$2" noun_pattern="$3" label="$4"
+  [ -f "$file" ] || return 0
+
+  # Per-line numbers already reported (for any pattern in this file) —
+  # used to de-dupe so a same-line match doesn't get double-reported by
+  # the multiline pass.
+  local seen_same_line
+  seen_same_line=$(grep -oE "[0-9]+ +${noun_pattern}" "$file" 2>/dev/null \
+    | grep -oE '^[0-9]+' | sort -u | tr '\n' '|')
+
+  # Flatten + scan + dedupe.
+  local flat_matches
+  flat_matches=$(tr '\n' ' ' < "$file" | tr -s '[:space:]' ' ' \
+    | grep -oE "[0-9]+ +${noun_pattern}" 2>/dev/null | sort -u)
+
+  while IFS= read -r match; do
+    [ -z "$match" ] && continue
+    local num
+    num=$(echo "$match" | grep -oE '^[0-9]+')
+    [ -z "$num" ] && continue
+    # Skip small numbers (narrative copy; same heuristic as check_count).
+    [ "$num" -lt 10 ] && continue
+    # Skip if this digit already appeared on a single line (avoid
+    # double-counting — check_count's report has the line number).
+    case "|$seen_same_line" in
+      *"|$num|"*) continue ;;
+    esac
+    if [ "$num" != "$expected" ]; then
+      echo "DRIFT: $file:multiline — claims $num $label (across newline), actual is $expected"
+      DRIFT=$((DRIFT + 1))
+    fi
+  done <<< "$flat_matches"
+}
+
+for f in "${FILES_TO_SCAN[@]}"; do
+  check_multiline_count "$f" "$actual_skills" "skills"            "skills"
+  check_multiline_count "$f" "$actual_skills" "slash +commands?"   "slash commands"
+  check_multiline_count "$f" "$actual_hooks"  "hooks"             "hooks"
+  check_multiline_count "$f" "$actual_hooks"  "shell +scripts?"    "shell scripts (hook count)"
+  check_multiline_count "$f" "$actual_hooks"  "shell +gates?"      "shell gates (hook count)"
+  check_multiline_count "$f" "$actual_hooks"  "mechanical +gates?" "mechanical gates (hook count)"
+  check_multiline_count "$f" "$actual_hooks"  "shell +hooks?"      "shell hooks (hook count)"
+  check_multiline_count "$f" "$actual_roles"  "roles?"            "roles"
+  check_multiline_count "$f" "$actual_roles"  "role +definitions" "role definitions"
+done
+
+# --- Self-test: prove the multiline pass actually catches what the per-line
+# --- pass would miss. Synthesise a temp file with a known-bad cross-line
+# --- claim (`52\n   slash commands` — the exact shape #342 § 2(b) names)
+# --- and run the multiline detector against it inside a subshell so its
+# --- DRIFT++ stays isolated. Assert the expected output line; if absent,
+# --- the detector is broken — bump DRIFT to fail the suite.
+SYNTHETIC_FIXTURE=$(mktemp -t "test_site_counts_multiline.XXXXXX")
+cat > "$SYNTHETIC_FIXTURE" <<'FIXTURE'
+2. **Capability layer** — the runnable spec: `.claude/skills/` (52
+   slash commands), `.claude/agents/` (23 sub-agents).
+FIXTURE
+
+self_test_output=$(check_multiline_count "$SYNTHETIC_FIXTURE" "$actual_skills" "slash +commands?" "slash commands (self-test)" 2>&1)
+rm -f "$SYNTHETIC_FIXTURE"
+
+if ! echo "$self_test_output" | grep -qE 'DRIFT:.*:multiline — claims 52 slash commands'; then
+  echo "FAIL: multiline-detector self-test did not fire on a known-bad fixture"
+  echo "      output was: $self_test_output"
+  DRIFT=$((DRIFT + 1))
+fi
+
 # --- Verdict ------------------------------------------------------------------
 
 if [ "$DRIFT" -gt 0 ]; then
