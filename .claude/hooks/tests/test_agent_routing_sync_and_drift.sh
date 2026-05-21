@@ -135,6 +135,23 @@ persona_name: Karim
 # Karim — Backend Engineer
 MD
 
+    # Utility-agent fixture (Wave 2 PR 4 of #347). ticket-manager is the
+    # local-routing candidate per #348 spike. The routing mechanism doesn't
+    # distinguish utility vs role-derived agents — this fixture proves the
+    # SessionStart sync covers the utility class too.
+    cat > .claude/agents/ticket-manager.md <<'MD'
+---
+# routing-config:override Idris bumped inherit → sonnet per AgDR-0050 § Axis 2 line 65. Wave 2 PR 4 fixture.
+name: ticket-manager
+description: Ticket Manager wrapper.
+tools: Bash, Read
+model: sonnet
+persona_name: Idris
+---
+
+# Idris — Ticket Manager
+MD
+
     # Gitignore the framework-defaults snapshot + env dir (these are
     # adopter-local artefacts; the sync hook writes them on session start).
     cat > .gitignore <<'IGNORE'
@@ -379,6 +396,40 @@ if [ "$hook_exit" = "0" ]; then
   mark_pass "case 7: drift guard ACCEPTS clean-default commit (exit 0)"
 else
   mark_fail "case 7: drift guard clean default" "expected exit 0, got $hook_exit"
+fi
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 8 — utility-agent override: ticket-manager model sonnet → opus.
+# Verifies the routing mechanism doesn't distinguish utility from
+# role-derived agents (Wave 2 PR 4 of #347).
+# ===========================================================================
+SB=$(make_fork)
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: opus
+YAML
+
+banner_output=$(cd "$SB" && bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+
+after_tm=$(read_model_line "$SB/.claude/agents/ticket-manager.md")
+after_qa=$(read_model_line "$SB/.claude/agents/qa-engineer.md")
+defaults_snapshot_exists=0
+[ -f "$SB/.claude/agents/.framework-defaults.json" ] && defaults_snapshot_exists=1
+
+if [ "$after_tm" = "opus" ] && [ "$after_qa" = "haiku" ] \
+   && [ "$defaults_snapshot_exists" = "1" ] \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override'; then
+  # Confirm the snapshot recorded the framework default sonnet (not opus).
+  if grep -q '"ticket-manager":"sonnet"' "$SB/.claude/agents/.framework-defaults.json"; then
+    mark_pass "case 8: ticket-manager utility override sonnet→opus (qa-engineer untouched, snapshot records sonnet)"
+  else
+    mark_fail "case 8" "snapshot did not record ticket-manager=sonnet: $(cat "$SB/.claude/agents/.framework-defaults.json" 2>/dev/null)"
+  fi
+else
+  mark_fail "case 8: ticket-manager utility override" "after_tm=$after_tm qa=$after_qa snapshot=$defaults_snapshot_exists banner=[$banner_output]"
 fi
 rm -rf "$SB"
 

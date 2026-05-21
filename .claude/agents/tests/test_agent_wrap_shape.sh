@@ -78,6 +78,22 @@ ROLE_AGENTS=(
   "data-engineer:sonnet:Anwar:data"
 )
 
+# Utility agents — no canonical role file under roles/<dept>/, but the model
+# baseline is set by AgDR-0050 § Axis 2 and locked in by this PR (Wave 2 PR 4
+# of #347). Each entry carries a `# routing-config:override` comment in its
+# YAML frontmatter so block-agent-routing-drift.sh accepts the intentional
+# inherit→<model> framework-default change. security-reviewer.md is included
+# here because PR 3's Hatim→Hakim consolidation already promoted it to opus
+# with the same escape-hatch shape.
+# Format: "<slug>:<expected_model>:<expected_persona_name>"
+UTILITY_AGENTS=(
+  "code-reviewer:opus:Rex"
+  "security-reviewer:opus:Hakim"
+  "dependency-auditor:sonnet:Munir"
+  "pr-manager:sonnet:Tariq"
+  "ticket-manager:sonnet:Idris"
+)
+
 # All 19 role files (path under roles/) + expected Activation mode Class.
 # Per AgDR-0050 § Axis 6 (HYBRID integration table).
 ROLE_CLASSES=(
@@ -194,6 +210,61 @@ for entry in "${ROLE_AGENTS[@]}"; do
 done
 
 # -----------------------------------------------------------------------------
+# Invariant 4b — utility agents: model + persona + escape-hatch comment.
+# Per AgDR-0050 § Axis 2, the 5 utility agents have explicit model: values
+# (not `inherit`) and carry a `# routing-config:override` comment in YAML
+# frontmatter so the drift guard accepts the intentional framework-default
+# change.
+# -----------------------------------------------------------------------------
+echo
+echo "== Utility-agent model + escape-hatch comment (AgDR-0050 § Axis 2)"
+for entry in "${UTILITY_AGENTS[@]}"; do
+  IFS=':' read -r slug expected_model expected_persona <<<"$entry"
+  agent_file="$AGENTS_DIR/${slug}.md"
+
+  if [ ! -f "$agent_file" ]; then
+    red "  FAIL: missing utility-agent file $agent_file"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+
+  actual_model=$(get_frontmatter_value "$agent_file" "model")
+  if [ "$actual_model" = "inherit" ] || [ -z "$actual_model" ]; then
+    red "  FAIL: $slug — model=$actual_model (must be an explicit opus|sonnet|haiku per Axis 2; inherit is a regression)"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+  if [ "$actual_model" != "$expected_model" ]; then
+    red "  FAIL: $slug — model=$actual_model (expected $expected_model per matrix)"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+
+  actual_persona=$(get_frontmatter_value "$agent_file" "persona_name")
+  if [ "$actual_persona" != "$expected_persona" ]; then
+    red "  FAIL: $slug — persona_name=$actual_persona (expected $expected_persona)"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+
+  # Escape-hatch comment in the YAML frontmatter (between the two `---`
+  # markers, `#`-prefixed). The drift guard requires it for any agent file
+  # whose model: differs from the dev-baseline `inherit`. Uses POSIX char
+  # classes — \S isn't portable across awk implementations.
+  if ! awk '
+    /^---[[:space:]]*$/ { fm_count++; if (fm_count == 2) exit }
+    fm_count == 1 && /^[[:space:]]*#[[:space:]]*routing-config:override[[:space:]]+[^[:space:]]/ { found = 1 }
+    END { exit !found }
+  ' "$agent_file"; then
+    red "  FAIL: $slug — missing '# routing-config:override <reason>' comment in YAML frontmatter (drift guard will block any commit)"
+    FAIL=$((FAIL + 1))
+    continue
+  fi
+
+  green "  PASS: $slug (utility, model=$actual_model, persona=$actual_persona, escape-hatch present)"
+done
+
+# -----------------------------------------------------------------------------
 # Invariant 5 + 6 — every role file has `## Activation mode` and declares
 # the matrix-correct Class value.
 # -----------------------------------------------------------------------------
@@ -248,5 +319,5 @@ if [ "$FAIL" -gt 0 ]; then
   red "FAIL: $FAIL invariant(s) failed"
   exit 1
 fi
-green "PASS: role-derived agent wrap-shape + 19-role Activation mode coverage"
+green "PASS: role-derived agent wrap-shape + utility-agent Axis 2 baselines + 19-role Activation mode coverage"
 exit 0
