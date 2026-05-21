@@ -67,6 +67,15 @@ ROLE_AGENTS=(
   "head-of-design:sonnet:Maha:design"
   "ui-designer:sonnet:Nour:design"
   "ux-designer:sonnet:Iman:design"
+  # PR 3 — security dept (security-reviewer.md is the Hakim/Hatim consolidation,
+  # checked separately below — it keeps its non-standard filename so /security-review
+  # and the auto-fire hook keep working)
+  "head-of-security:sonnet:Faisal:security"
+  "penetration-tester:opus:Hamza:security"
+  # PR 3 — data dept
+  "head-of-data:sonnet:Khalil:data"
+  "data-analyst:haiku:Nadia:data"
+  "data-engineer:sonnet:Anwar:data"
 )
 
 # All 19 role files (path under roles/) + expected Activation mode Class.
