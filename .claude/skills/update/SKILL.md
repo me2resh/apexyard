@@ -550,7 +550,7 @@ if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
       continue
     fi
     if [ -e "$SIBLING_ROOT/workspace/$name" ]; then
-      echo "WARNING: workspace/$name exists in BOTH locations — skipped."
+      echo "WARNING: workspace/$name exists in BOTH locations — skipped." >&2
       continue
     fi
     mv "$entry" "$SIBLING_ROOT/workspace/$name"

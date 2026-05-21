@@ -450,11 +450,12 @@ else
   mark_fail "multi-project: demo preserved" "sibling demo content was overwritten: '$demo_content'"
 fi
 
-# Assertion 5: WARNING printed to stderr naming demo as the conflict
-if grep -qE "WARNING: workspace/demo exists in BOTH locations" "$STDERR_OUT"; then
-  mark_pass "multi-project: conflict-skip WARNING printed to stderr"
+# Assertion 5: WARNING printed to stderr in the EXACT format SKILL.md line 553
+# prescribes — including the "— skipped." tail (catches tail-drift regressions).
+if grep -qE "^WARNING: workspace/demo exists in BOTH locations — skipped\.$" "$STDERR_OUT"; then
+  mark_pass "multi-project: conflict-skip WARNING printed to stderr (full SKILL.md format)"
 else
-  mark_fail "multi-project: WARNING printed" "stderr did not include the expected WARNING — got: $(cat "$STDERR_OUT" 2>/dev/null)"
+  mark_fail "multi-project: WARNING printed" "stderr did not include the expected full WARNING line — got: $(cat "$STDERR_OUT" 2>/dev/null)"
 fi
 
 # Assertion 6: workspace/README.md stayed in the public fork (framework artefact)
