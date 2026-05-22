@@ -17,7 +17,7 @@ ApexYard governs a portfolio of repos as one organisation. The repo this `CLAUDE
 
 Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and `/stakeholder-update` aggregate across the registry. Even if you only have one repo to govern, you still fork apexyard and register that single repo — the skills work the same way, and future projects plug into the same registry.
 
-Full setup guide: @docs/multi-project.md
+Full setup guide: `docs/multi-project.md` (read on demand — large; not auto-imported)
 
 ---
 
