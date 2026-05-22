@@ -1,6 +1,6 @@
 # ApexYard
 
-> Multi-project ops-repo framework for Claude Code. One fork governs every project — 53 skills, 31 hooks, 19 roles, one inbox. MIT, plain markdown and shell.
+> Multi-project ops-repo framework for Claude Code. One fork governs every project — 54 skills, 31 hooks, 19 roles, one inbox. MIT, plain markdown and shell.
 
 ## What is it?
 
@@ -51,7 +51,7 @@ claude
 
 PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. Migration edit → Data Engineer + migration AgDR. Each role has CAN / CANNOT lists — it won't step outside its lane.
 
-### Skills · 53 slash commands
+### Skills · 54 slash commands
 
 `/handover` adopts a project. `/idea` captures a concept. `/inbox`, `/status`, `/tasks` triage the portfolio. `/decide` records a technical call as an AgDR. `/launch-check` runs a 10-dimension readiness audit. `/c4` generates L1 + L2 architecture diagrams from a codebase.
 
