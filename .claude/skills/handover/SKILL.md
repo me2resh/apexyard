@@ -753,6 +753,120 @@ Skipping the auto-append. If you want to add it later, copy this into apexyard.p
     roles: {derived list}
 ```
 
+### 7.5. Offer to file Next Steps as tracker tickets
+
+The assessment's `## Next Steps` section (written in step 5) enumerates concrete follow-up work derived from the risks found. By default those entries are static prose — the operator reads them in the markdown and translates each to a `/feature` / `/task` / `/bug` invocation by hand. Recommendations rot when that translation step has friction. This step closes the loop: surface each next-step entry inline, prompt y/n per item, and dispatch the right ticket-creation skill per accepted item.
+
+#### Skip conditions
+
+- **Zero next-step entries** (no risks found, no synthetic "calibrate review standards" / "stakeholder sync" entries either) → skip this step silently
+- **Project re-handover with no material change in the next-step list** since the prior run (assessment file pre-existed; the new list is byte-equivalent or only differs by date) → skip with a one-line note: `Next steps unchanged since YYYY-MM-DD — no new tickets offered.`
+- **Operator opted out of the registry append at step 7** (answered `n` to "Ready to add {name} to apexyard.projects.yaml?") → skip. The project isn't in the registry, so ticket-source links pointing at `projects/<name>/handover-assessment.md` won't reach a teammate context.
+
+#### Surface the entries
+
+Print the top 3-5 next-step entries from the assessment, numbered:
+
+```
+Found 5 follow-up tasks in the assessment. File any as tracker tickets?
+
+  1. /audit-deps <name> — triage the high-severity lodash CVE before any new feature work
+  2. Fix the 7 failing tests in src/api/orders before merging new PRs
+  3. Set up test coverage reporting (vitest coverage config) before the first feature
+  4. Triage the issue backlog with the previous owner before taking ownership
+  5. Write a minimum-viable README (what the project does, how to run it locally, where it deploys)
+
+Per-item y/n (or 'all', 'none', a comma-list like '1,3,5'):
+```
+
+Accept:
+
+- `all` or `y` — file every entry
+- `none` or `n` or empty input — skip all
+- Comma-separated indices (e.g. `1,3,5`) — file just those
+- Per-item y/n if the operator wants to walk through them one at a time — fall back to interactive if the response doesn't match the bulk shapes
+
+If the response is ambiguous, ask one clarification question; don't loop indefinitely. Default to skip-all on a second ambiguous answer.
+
+#### Route each accepted item to the right skill (heuristic)
+
+For each accepted entry, classify by shape + dispatch the matching ticket-creation skill:
+
+| Entry shape | Skill | Why |
+|-------------|-------|-----|
+| Mentions a fix to broken behaviour ("Fix the N failing tests", "Resolve the X regression") | `/bug` | The work is to fix something measurably broken |
+| Mentions triage / decision / strategy ("Triage the backlog", "`/decide` on observability") | `/task` | Investigative or decision-making work; no broken behaviour to fix |
+| Mentions a new capability or scaffolding ("Set up coverage reporting", "Write a README", "Enable CI") | `/task` | Tech-debt or infra-fix; not user-facing capability so `/task` fits better than `/feature` |
+| Mentions invoking another framework skill ("`/audit-deps` <name>", "`/code-review` the most-recent PR") | `/task` | The work is "run this skill against this project" — track as a task to do, not a feature to build |
+| Mentions a stakeholder action ("Stakeholder sync", "Onboard role X") | `/task` | Coordination work; `/task` fits |
+
+**Default to `/task` when in doubt.** The framework's `/feature` skill is reserved for user-facing capabilities, and handover-derived next-steps are almost never that shape. The heuristic above keeps the routing predictable rather than asking the operator to disambiguate per item.
+
+If the operator disagrees with the auto-route (e.g. they want a specific item filed as `/feature` instead of `/task`), they can say `1 as feature` / `3 as bug` etc. inline. Honour the override; default to the heuristic when no override is given.
+
+#### Dispatch with the assessment as the source
+
+For each accepted item, dispatch the chosen skill with these inputs:
+
+- **Title** pre-filled from the next-step entry — strip any leading skill-prefix (e.g. drop the `/audit-deps <name> —` lead to leave `triage the high-severity lodash CVE before any new feature work`), trim, capitalise the first letter
+- **Body** pre-filled with the source line as the last paragraph:
+
+  ```
+  _Source: handover deep-dive on YYYY-MM-DD — see [`projects/<name>/handover-assessment.md`](../<project>/handover-assessment.md) for the assessment that surfaced this work._
+  ```
+
+  The link is relative to the ticket creator's working dir; adjust the path if the dispatched skill is invoked from a different cwd (e.g. inside `workspace/<name>/`).
+
+- **Repo**: the just-adopted project's repo (the `repo:` field from the registry entry written in step 7)
+
+The dispatched skills (`/task`, `/bug`, `/feature`) handle the full ticket-creation flow including the `validate-issue-structure.sh` gate + the active-issue-skill marker (per AgDR-0030).
+
+#### Update the assessment doc post-filing
+
+After all dispatched tickets land, rewrite the assessment's `## Next Steps` section in-place:
+
+- Replace each prose entry that became a ticket with the ticket-link form: `1. ~~/audit-deps...~~ → Filed as [#42](https://github.com/<owner>/<repo>/issues/42)`
+- Leave unfiled entries as-is (un-strikethrough, un-linked)
+
+So a future reader of `handover-assessment.md` can see which next-steps became tickets and which are still TODO.
+
+#### Failure handling
+
+On the first ticket-creation failure (`validate-issue-structure.sh` exit, `gh` API error, network failure, etc.), STOP and report. Already-filed tickets stay (don't roll back); tell the operator exactly which ones did file:
+
+```
+[3/5] Filing "Triage the issue backlog with the previous owner before taking ownership"… ✗
+
+Error from /task:
+  {stderr from the dispatched skill}
+
+Filed so far: 2 tickets (<owner>/<repo>#41, #42).
+Remaining: 3 entries (not filed).
+
+What now?
+  1. Retry — re-run the same dispatch
+  2. Skip — drop this entry, continue with the next 2
+  3. Abort — stop here; the 2 already-filed tickets stay
+```
+
+Mirrors `/tickets-batch`'s failure-handling shape (see [`.claude/skills/tickets-batch/SKILL.md`](../tickets-batch/SKILL.md) § "Failure handling").
+
+#### Report
+
+Append to the step 10 summary:
+
+```
+Next-step tickets filed:   {N filed of M offered | none offered (zero risks) | declined (skipped all)}
+```
+
+If at least one was filed, also list them inline in the summary:
+
+```
+Filed follow-up tickets:
+  #41 — /task — Triage lodash CVE                  — <repo URL>
+  #42 — /bug  — Fix 7 failing tests in src/api/orders — <repo URL>
+```
+
 ### 8. Offer the clone-first deep-dive option (recommended)
 
 You've just produced a metadata-only handover. The next natural step is a deeper dive — security audit, threat model, code-quality assessment. Those skills benefit substantially from a local clone + LSP-aware tooling, so offer the clone-first path here, with the cost transparently disclosed. Default is **no clone** — the operator has to type `y` explicitly.
@@ -853,6 +967,7 @@ Handover assessment written: projects/{name}/handover-assessment.md
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
 Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
+Next-step tickets filed:     {N filed of M offered | none offered (zero risks) | declined (skipped all) | skipped (registry not appended)}
 Workspace clone:             workspace/{name}/ ({cloned | preserved | skipped (declined) | skipped (later) | failed: <reason>})
 Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
 
@@ -860,10 +975,16 @@ Tech stack: {one-liner}
 Build: {ok / failed}
 Risks: {N items} ({highest severity})
 Roles activated: {comma-separated}
-Top 3 next steps:
+Top 3 next steps (still TODO after step 7.5):
   1. {first dynamic step}
   2. {second dynamic step}
   3. {third dynamic step}
+
+{If next-step tickets were filed, append this block:}
+Filed follow-up tickets:
+  #41 — /task — Triage lodash CVE                  — <repo URL>
+  #42 — /bug  — Fix 7 failing tests in src/api/orders — <repo URL>
+  ...
 ```
 
 ## Rules
@@ -882,6 +1003,10 @@ Top 3 next steps:
 12. **Architecture stubs are starting points, not truths** — the auto-generated note at the top of the file explicitly tells the user to review and refine. Never claim the detector is authoritative.
 13. **Topology instantiation never overwrites** — step 5.5 copies files with `rsync --ignore-existing` / `cp -n`. Adopters who edited a topology handbook keep their edits across re-runs. Drift detection lives in `/update` (see AgDR-0048).
 14. **Default is no topology** — pick 4 (Skip / custom) is the default. The pre-topology flow is byte-for-byte preserved for adopters who don't want a bundle. Never auto-pick a topology based on tech-stack detection in v1 — let the operator choose.
+15. **Next-step tickets are opt-in, never auto-filed** — step 7.5 always prompts the operator before any `gh issue create`. Bulk shapes (`all` / `none` / comma-list) are conveniences, not defaults. `none` and empty input are equivalent — skip-all is the safe default if the operator's intent is unclear.
+16. **The routing heuristic is the default, not the law** — step 7.5's auto-route from next-step shape to `/feature` / `/task` / `/bug` is a sensible default. The operator can override per item (`1 as feature` / `3 as bug`). When in doubt, default to `/task` — handover-derived next-steps are almost never user-facing capabilities (`/feature` shape) and rarely strictly broken behaviour (`/bug` shape).
+17. **Source-link every filed ticket back to the assessment** — each ticket dispatched in step 7.5 carries a `_Source: handover deep-dive on YYYY-MM-DD — see projects/<name>/handover-assessment.md_` footer. Without that link, the assessment's context (risks, harnessability score, build status) is invisible to anyone working the ticket later, and the recommendation traceability rot is exactly the failure mode this step exists to prevent.
+18. **Re-runs surface deltas, not redundancy** — if the project already has a `handover-assessment.md` and the new next-step list is byte-equivalent to the prior run's, step 7.5 skips with a `Next steps unchanged since YYYY-MM-DD` note rather than re-prompting the operator on entries they've already seen.
 
 ## When to use this
 
