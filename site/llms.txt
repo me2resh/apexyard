@@ -1,7 +1,7 @@
 # ApexYard
 
 > ApexYard is a multi-project ops repo framework for Claude Code that governs
-> a portfolio of repos under one fork — 53 skills, 31 hooks, 19 role definitions,
+> a portfolio of repos under one fork — 54 skills, 31 hooks, 19 role definitions,
 > strict SDLC gates, persistent AgDR memory. MIT, plain markdown and shell,
 > no SaaS, no lock-in.
 
@@ -9,7 +9,7 @@
 
 - [Home](https://yard.apexscript.com/) — what apexyard is, why fork it, daily workflow
 - [Architecture](https://yard.apexscript.com/architecture) — the 5-layer model + portfolio model
-- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (53 skills)
+- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (54 skills)
 
 ## Full-content companion
 
@@ -33,7 +33,7 @@
 - **Portfolio model.** One registry (`apexyard.projects.yaml`) lists every repo
   under management. Skills like `/inbox`, `/status`, `/tasks` aggregate
   across the portfolio in ~1 second.
-- **53 slash commands** across audits, tickets, architecture, decisions,
+- **54 slash commands** across audits, tickets, architecture, decisions,
   portfolio aggregation, and framework ops. Each is a markdown SKILL.md file
   under `.claude/skills/<name>/`.
 - **31 shell hooks** mechanically enforce SDLC rules — ticket-first, migration

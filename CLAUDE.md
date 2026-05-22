@@ -188,10 +188,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 23 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision. |
-| Skills | `.claude/skills/` | 53 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 54 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (53)
+### Available skills (54)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -219,6 +219,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
 | `/validate-idea` | Lightweight 5-question pre-spec gate before `/write-spec` |
+| `/plan-initiative` | Initiative → milestones → tasks: Socratic interview, DAG, topo-sorted sequence, two-pass filing with `blocks`/`blocked by` cross-refs |
 | `/feature` | Create a structured feature ticket (user story + acceptance criteria) |
 | `/bug` | Create a structured bug ticket (Given/When/Then + repro + severity) |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
@@ -286,7 +287,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (53 slash commands) | `.claude/skills/` |
+| Skills (54 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
