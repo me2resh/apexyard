@@ -393,6 +393,8 @@ If no risks match a row, omit that row. If fewer than 3 actions come out, add:
 - `{next} /code-review the most-recent PR on this repo as Rex to calibrate review standards`
 - `{next} Stakeholder sync with the previous owner to cover context the static read couldn't surface`
 
+**Re-handover preservation.** On re-runs of `/handover`, the regenerated `## Next Steps` section MUST preserve any prior-run `~~strikethrough~~ → Filed as [#N](url)` markers on entries that recur in the new list. Detection rule: for each entry that would be emitted by the mapping table above, scan the prior `handover-assessment.md` (if present) for a matching entry by leading verb + key noun phrase (e.g. "Fix the N failing tests in {module}" matches the prior "Fix the M failing tests in {module}" regardless of the count). If matched and the prior version carries a `Filed as` link, preserve the link in the regenerated entry. This is the load-bearing input to step 7.5's filed-marker skip logic — without it, the operator gets re-prompted on every filed entry on every re-handover. See Rule 18.
+
 ## Cleanup (REQUIRED before exit)
 
 ```bash
@@ -760,15 +762,20 @@ The assessment's `## Next Steps` section (written in step 5) enumerates concrete
 #### Skip conditions
 
 - **Zero next-step entries** (no risks found, no synthetic "calibrate review standards" / "stakeholder sync" entries either) → skip this step silently
-- **Project re-handover with no material change in the next-step list** since the prior run (assessment file pre-existed; the new list is byte-equivalent or only differs by date) → skip with a one-line note: `Next steps unchanged since YYYY-MM-DD — no new tickets offered.`
+- **All next-step entries already carry a `Filed as #N` marker** from a prior run (re-handover with no NEW entries since the last filing pass) → skip with a one-line note: `All next steps were filed in prior runs — no new tickets offered.`. Detection: scan the regenerated `## Next Steps` list; if every entry either already-carries a `Filed as [#N](...)` link preserved through step 5's regeneration OR is a duplicate of a prior-run entry that did, skip. Mixed states (some filed, some new) do NOT skip — new entries get offered while filed-already entries are silently skipped at the per-item prompt loop (see § "Surface the entries" below).
 - **Operator opted out of the registry append at step 7** (answered `n` to "Ready to add {name} to apexyard.projects.yaml?") → skip. The project isn't in the registry, so ticket-source links pointing at `projects/<name>/handover-assessment.md` won't reach a teammate context.
 
 #### Surface the entries
 
-Print the top 3-5 next-step entries from the assessment, numbered:
+Scan the regenerated `## Next Steps` list. Partition into two buckets:
+
+- **Already-filed** — entries that carry a `Filed as [#N](...)` link from a prior step 7.5 run (preserved through step 5's regeneration; see § Next Steps "Re-handover preservation"). These are skipped silently — the operator never sees them in the prompt.
+- **Unfiled** — entries with no `Filed as` link. These are the only entries surfaced.
+
+If the unfiled bucket has zero entries, fall through to the skip-condition "All next-step entries already carry a `Filed as #N` marker" and emit the one-line note. Otherwise print the unfiled entries (top 3-5 by mapping-table order), numbered:
 
 ```
-Found 5 follow-up tasks in the assessment. File any as tracker tickets?
+Found 5 follow-up tasks in the assessment (2 were filed in a prior run — skipping). File any as tracker tickets?
 
   1. /audit-deps <name> — triage the high-severity lodash CVE before any new feature work
   2. Fix the 7 failing tests in src/api/orders before merging new PRs
@@ -778,6 +785,8 @@ Found 5 follow-up tasks in the assessment. File any as tracker tickets?
 
 Per-item y/n (or 'all', 'none', a comma-list like '1,3,5'):
 ```
+
+The leading `(N were filed in a prior run — skipping)` parenthetical only appears when at least one prior-filed entry was found and skipped; on first-handover runs, omit it.
 
 Accept:
 
@@ -812,10 +821,10 @@ For each accepted item, dispatch the chosen skill with these inputs:
 - **Body** pre-filled with the source line as the last paragraph:
 
   ```
-  _Source: handover deep-dive on YYYY-MM-DD — see [`projects/<name>/handover-assessment.md`](../<project>/handover-assessment.md) for the assessment that surfaced this work._
+  _Source: handover deep-dive on YYYY-MM-DD — see `projects/<name>/handover-assessment.md` in the ops fork (or in the private portfolio sibling repo for split-portfolio v2 adopters) for the assessment that surfaced this work._
   ```
 
-  The link is relative to the ticket creator's working dir; adjust the path if the dispatched skill is invoked from a different cwd (e.g. inside `workspace/<name>/`).
+  **Plain path, no markdown link.** The ticket is rendered against the TARGET repo's URL space on GitHub, but the assessment lives in the OPS FORK (or, for split-portfolio v2 adopters, the private sibling repo). A markdown link of any relative form would be dead-on-render. Naming the path as prose is honest about the cross-repo lookup the reader has to do, and survives the split-portfolio v2 case where the assessment isn't reachable from a public link at all.
 
 - **Repo**: the just-adopted project's repo (the `repo:` field from the registry entry written in step 7)
 
@@ -1006,7 +1015,7 @@ Filed follow-up tickets:
 15. **Next-step tickets are opt-in, never auto-filed** — step 7.5 always prompts the operator before any `gh issue create`. Bulk shapes (`all` / `none` / comma-list) are conveniences, not defaults. `none` and empty input are equivalent — skip-all is the safe default if the operator's intent is unclear.
 16. **The routing heuristic is the default, not the law** — step 7.5's auto-route from next-step shape to `/feature` / `/task` / `/bug` is a sensible default. The operator can override per item (`1 as feature` / `3 as bug`). When in doubt, default to `/task` — handover-derived next-steps are almost never user-facing capabilities (`/feature` shape) and rarely strictly broken behaviour (`/bug` shape).
 17. **Source-link every filed ticket back to the assessment** — each ticket dispatched in step 7.5 carries a `_Source: handover deep-dive on YYYY-MM-DD — see projects/<name>/handover-assessment.md_` footer. Without that link, the assessment's context (risks, harnessability score, build status) is invisible to anyone working the ticket later, and the recommendation traceability rot is exactly the failure mode this step exists to prevent.
-18. **Re-runs surface deltas, not redundancy** — if the project already has a `handover-assessment.md` and the new next-step list is byte-equivalent to the prior run's, step 7.5 skips with a `Next steps unchanged since YYYY-MM-DD` note rather than re-prompting the operator on entries they've already seen.
+18. **Re-runs surface deltas, not redundancy** — the filed-marker presence on each next-step entry is the source of truth for "already done". On re-handover, step 5's regeneration of `## Next Steps` MUST preserve any `~~strikethrough~~ → Filed as [#N](url)` markers from prior runs (don't blow away the operator's filing history). Step 7.5 then prompts only on the entries that lack a `Filed as` link, so the operator never re-sees what they've already filed. If every entry already carries a `Filed as` link, the whole step skips (see § Skip conditions). Byte-equivalence of the section text is NOT the test — only the per-entry marker presence is.
 
 ## When to use this
 
