@@ -450,13 +450,18 @@ When your verdict is APPROVED, and ONLY then, write the approval marker file so 
 
 The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
 
-Resolve the ops fork root by walking up for `onboarding.yaml` + `apexyard.projects.yaml`:
+**Resolve `MARKER_HOME` ONCE, at review start, from your initial working directory** — before any `cd`, `git clone`, `gh pr checkout`, or other tool call that might change where you are or what's anchored above you. The walk-up shape below is sensitive to `$PWD`: if you've cloned the fork into `/tmp` for inspection and `cd`'d into the clone first, the walk resolves to that throwaway tree, the marker lands in `/tmp`, and the merge gate (running from the real ops fork) cannot find it. Capture `MARKER_HOME` first; treat it as immutable for the rest of the review. This is the prose discipline; the mechanical safety net is `pin-ops-root.sh` (apexyard#381), which captures the launch-cwd ops root at SessionStart and feeds it to `_lib-ops-root.sh::resolve_ops_root` so adopters on framework versions that ship the hook get the pin automatically — the walk-up below remains as the safety net for older versions and as the resolution method when no pin exists.
+
+Resolve the ops fork root by walking up for `onboarding.yaml` + `apexyard.projects.yaml` (or the `.apexyard-fork` v2 marker):
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 OPS_ROOT=""
 r="$REPO_ROOT"
 while [ -n "$r" ] && [ "$r" != "/" ]; do
+  if [ -f "$r/.apexyard-fork" ]; then
+    OPS_ROOT="$r"; break
+  fi
   if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
     OPS_ROOT="$r"; break
   fi
