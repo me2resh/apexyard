@@ -1,7 +1,7 @@
 # ApexYard
 
 > ApexYard is a multi-project ops repo framework for Claude Code that governs
-> a portfolio of repos under one fork — 54 skills, 31 hooks, 19 role definitions,
+> a portfolio of repos under one fork — 54 skills, 32 hooks, 19 role definitions,
 > strict SDLC gates, persistent AgDR memory. MIT, plain markdown and shell,
 > no SaaS, no lock-in.
 
@@ -36,7 +36,7 @@
 - **54 slash commands** across audits, tickets, architecture, decisions,
   portfolio aggregation, and framework ops. Each is a markdown SKILL.md file
   under `.claude/skills/<name>/`.
-- **31 shell hooks** mechanically enforce SDLC rules — ticket-first, migration
+- **32 shell hooks** mechanically enforce SDLC rules — ticket-first, migration
   gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
   validation, upstream-drift banner, leak protection.
 - **19 role definitions** across 5 departments (Engineering, Product, Design,

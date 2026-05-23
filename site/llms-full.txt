@@ -2,7 +2,7 @@
 
 > ApexYard is a multi-project ops repo framework for Claude Code that governs
 > a portfolio of repos under one fork — strict SDLC, persistent AgDR memory,
-> 54 skills, 31 hooks, 19 role definitions. MIT, plain markdown and shell,
+> 54 skills, 32 hooks, 19 role definitions. MIT, plain markdown and shell,
 > no SaaS, no lock-in.
 
 This file is the LLM/agent-friendly concatenation of the apexyard marketing
@@ -89,7 +89,7 @@ the current codebase.
 
 ### Rules that fire themselves
 
-31 shell hooks mechanically enforce the SDLC: ticket-first (Edit/Write/
+32 shell hooks mechanically enforce the SDLC: ticket-first (Edit/Write/
 Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO
 + design review), red-CI block, commit format, AgDR for architecture
 changes, branch / PR-title validation, secrets scanning, upstream-drift
@@ -130,7 +130,7 @@ each owned by different parts of the framework:
    for the framework.
 2. **Capability layer** — the runnable spec: `.claude/skills/` (54
    slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
-   `.claude/hooks/` (31 mechanical enforcement scripts).
+   `.claude/hooks/` (32 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
    `.claude/project-config.json` (shallow merge).
