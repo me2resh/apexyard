@@ -92,6 +92,31 @@ if [ -z "$MATCHED" ]; then
   exit 0
 fi
 
+# Refinement for the `gh api` family — the configured `gh api repos/` pattern
+# is a pure substring prefix, which catches read-only GETs like
+# `gh api repos/<owner>/<repo>/contents/README.md` as well as ticket-create
+# POSTs. Downgrade the match to a no-op unless the command BOTH targets an
+# `/issues` endpoint AND carries a write signal (-X POST / --method POST / a
+# `-f` / `-F` / `--field` / `--raw-field` / `--input` flag — gh switches from
+# GET to POST when fields are supplied). Other patterns (gh issue create,
+# linear issue create, jira issue create, asana task create) keep their pure
+# substring-prefix matching. See me2resh/apexyard#382.
+case "$MATCHED" in
+  "gh api"*)
+    is_issues_endpoint=0
+    case "$NORM_CMD" in *"/issues"*) is_issues_endpoint=1 ;; esac
+    is_write=0
+    case "$NORM_CMD" in
+      *" -X POST"*|*" -XPOST"*|*" --method POST"*|*" --method=POST"*|\
+      *" -f "*|*" -F "*|*" --field "*|*" --raw-field "*|*" --input "*)
+        is_write=1 ;;
+    esac
+    if [ "$is_issues_endpoint" -ne 1 ] || [ "$is_write" -ne 1 ]; then
+      exit 0
+    fi
+    ;;
+esac
+
 # Bootstrap-skill exemption — same shape as require-active-ticket.sh.
 BOOTSTRAP_MARKER="$MARKER_HOME/.claude/session/active-bootstrap"
 if [ -f "$BOOTSTRAP_MARKER" ]; then
