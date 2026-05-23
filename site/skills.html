@@ -389,215 +389,38 @@ main {
     <div class="page-header__inner">
       <div class="page-header__eyebrow">
         <span class="pill">apexyard / skills</span>
-        <span>54 slash commands · invoke from any Claude Code session</span>
+        <span>54 slash commands — grouped by what you're trying to do</span>
         <button class="copy-for-ai" data-md-url="/skills.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
       </div>
       <h1>Skills</h1>
+      <p class="tagline" style="border-left: 3px solid var(--accent); padding-left: 1rem; margin-bottom: 1rem; background: var(--paper-2); padding: 0.75rem 1rem; font-weight: 500;">
+        <strong>In plain English:</strong> these are the commands you type into Claude Code to get ApexYard to do something. They're grouped by what you're trying to do — keep quality high, move work forward, see everything at once, onboard new code, run things — not by what's under the hood. If you'd rather see a real day with these, read <a href="/how-it-works" class="uline" style="border-bottom: 1px solid currentColor;">how it works</a>.
+      </p>
       <p class="tagline" id="ai-lead">
-        <strong>What is it?</strong> ApexYard ships 54 slash commands across six buckets (setup, daily ops, tickets &amp; ideas, specs &amp; decisions, review &amp; merge, architecture, production-readiness audits, workflow primitives, communications).
-        <strong>What can it do?</strong> Each <code>/&lt;name&gt;</code> is a structured workflow with guardrails — mechanical hooks in <code>.claude/hooks/</code> gate the effects on the rest of the SDLC, so <code>/approve-merge</code> writes a marker that <code>block-unreviewed-merge.sh</code> verifies before the merge actually runs.
+        <strong>What is it?</strong> ApexYard ships 54 slash commands grouped under outcome headings — Keep quality high, Move work forward, See everything at once, Onboard new code, Run things.
+        <strong>What can it do?</strong> Each <code>/&lt;name&gt;</code> is a structured workflow with safety rails — the right framework checks fire at the right moments, so <code>/approve-merge</code> writes a record that the merge gate verifies before the merge actually runs.
         <strong>What's needed to start?</strong> Browse below; invoke any from a Claude Code session inside an apexyard fork. Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code>.
       </p>
       <p class="meta">
-        New here? Start with <a href="#setup"><code>/setup</code></a> on a fresh fork, then
-        <a href="#tickets"><code>/feature</code></a> or <a href="#tickets"><code>/idea</code></a> to capture work,
-        then <a href="#review"><code>/code-review</code></a> + <a href="#review"><code>/approve-merge</code></a>
+        New here? Start with <a href="#onboard"><code>/setup</code></a> on a fresh fork, then
+        <a href="#move"><code>/feature</code></a> or <a href="#move"><code>/idea</code></a> to capture work,
+        then <a href="#quality"><code>/code-review</code></a> + <a href="#move"><code>/approve-merge</code></a>
         when a PR is ready to ship.
       </p>
       <nav class="toc" aria-label="Sections">
-        <a href="#setup">setup</a>
-        <a href="#daily">daily ops</a>
-        <a href="#tickets">tickets &amp; ideas</a>
-        <a href="#specs">specs &amp; decisions</a>
-        <a href="#review">review &amp; merge</a>
-        <a href="#architecture">architecture &amp; dev tools</a>
-        <a href="#audits">production-readiness audits</a>
-        <a href="#workflow">workflow primitives</a>
-        <a href="#comms">communications</a>
+        <a href="#quality">keep quality high</a>
+        <a href="#move">move work forward</a>
+        <a href="#see">see everything at once</a>
+        <a href="#onboard">onboard new code</a>
+        <a href="#run">run things</a>
         <a href="#deprecated">deprecated</a>
       </nav>
     </div>
   </section>
 
-  <section class="section" id="setup">
-    <h2>Which skills help me set up?</h2>
-    <p class="section__intro">Get a fresh fork running, adopt external repos into the portfolio, keep the framework in sync with upstream.</p>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/setup</code>
-        <code class="skill__args">[--reset]</code>
-      </header>
-      <p class="skill__desc">First-run framework bootstrap for a new ApexYard fork. Three exchanges — describe your stack, accept defaults, customize — and the fork is configured. Re-run anytime to update.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/handover</code>
-        <code class="skill__args">&lt;project name&gt; [path or url]</code>
-      </header>
-      <p class="skill__desc">Onboard an external repo into ApexYard management. Reads the target, synthesises a structured handover assessment, and tells you which roles, workflows, and hooks should activate.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/update</code>
-        <code class="skill__args">[--dry-run] [--rebase]</code>
-      </header>
-      <p class="skill__desc">Sync the ApexYard fork with upstream. Previews pending commits, creates a sync branch (direct push to main is blocked), merges or rebases, walks per-file conflicts, leaves the branch ready to push as a PR.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/split-portfolio</code>
-        <code class="skill__args">[--verify | --dry-run]</code>
-      </header>
-      <p class="skill__desc">Migrate a single-fork adopter to split-portfolio mode (public framework + private sibling portfolio). Automates the destructive recovery flow with explicit operator confirmation at every step.</p>
-    </article>
-  </section>
-
-  <section class="section" id="daily">
-    <h2>Which skills run during daily ops?</h2>
-    <p class="section__intro">Where am I, what needs my attention, what should I do next.</p>
-
-    <article class="skill">
-      <header class="skill__head"><code class="skill__name">/status</code></header>
-      <p class="skill__desc">Snapshot of the current project — git state, open PRs with CI, recent merges, in-progress issue. Multi-project aware. Use to orient yourself in a fresh session.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head"><code class="skill__name">/inbox</code></header>
-      <p class="skill__desc">Every item across managed projects that needs your attention — PRs to review, issues assigned to you, comments to respond to, blockers. Use to triage the day.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head"><code class="skill__name">/projects</code></header>
-      <p class="skill__desc">List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head"><code class="skill__name">/tasks</code></header>
-      <p class="skill__desc">A flat actionable task list with direct URLs for everything needing your action — PRs to review, issues to triage, comments to respond to, failing CI. Multi-project aware.</p>
-    </article>
-  </section>
-
-  <section class="section" id="tickets">
-    <h2>How do I file structured tickets and ideas?</h2>
-    <p class="section__intro">Capture work — from a half-formed idea through a structured ticket the team can pick up.</p>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/idea</code>
-        <code class="skill__args">&lt;short title of the idea&gt;</code>
-      </header>
-      <p class="skill__desc">Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/validate-idea</code>
-        <code class="skill__args">&lt;IDEA-NNN | project-name | free-form description&gt;</code>
-      </header>
-      <p class="skill__desc">Lightweight 5-question idea validation. Sits between <code>/idea</code> and <code>/write-spec</code> as a 10-minute gate that catches "this isn't worth speccing" without heavyweight strategy ceremony.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/feature</code>
-        <code class="skill__args">&lt;short title of the feature&gt;</code>
-      </header>
-      <p class="skill__desc">Create a structured feature request ticket with user story, acceptance criteria, and design notes. Use when proposing a new user-facing feature.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/bug</code>
-        <code class="skill__args">&lt;short description of the bug&gt;</code>
-      </header>
-      <p class="skill__desc">Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/task</code>
-        <code class="skill__args">&lt;short title of the task&gt;</code>
-      </header>
-      <p class="skill__desc">Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/migration</code>
-        <code class="skill__args">[&lt;project&gt;]</code>
-      </header>
-      <p class="skill__desc">Create a structured database-migration ticket and its matching migration AgDR in one guided flow. Use BEFORE touching any migration files — the <code>require-migration-ticket.sh</code> hook blocks edits otherwise.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/tickets-batch</code>
-        <code class="skill__args">[&lt;optional bulk description&gt;]</code>
-      </header>
-      <p class="skill__desc">File 5–20 structured GitHub Issues in one flow. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket. Output conforms to <code>.ticket.required_sections</code> by construction.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/spike</code>
-        <code class="skill__args">&lt;short title&gt;</code>
-      </header>
-      <p class="skill__desc">Create a hypothesis-driven, time-boxed, throw-away spike ticket — Hypothesis, Budget, Kill Criteria, Disposition. Spike PRs are exempt from the AgDR + 80% coverage gates; Rex + security auditor still apply.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/spike-close</code>
-        <code class="skill__args">&lt;ticket&gt; --promote | --discard</code>
-      </header>
-      <p class="skill__desc">Disposition gate for spikes. <code>--promote</code> files a follow-up <code>[Feature]</code> ticket with cross-references; <code>--discard</code> writes a memo to <code>docs/spike-memos/&lt;slug&gt;.md</code>. Closing without running this gate leaves no record of what was learned.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/investigation</code>
-        <code class="skill__args">&lt;short title&gt;</code>
-      </header>
-      <p class="skill__desc">Create a structured investigation ticket + live-doc for sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries, competitive analyses. Distinct from <code>/spike</code> (forward-looking hypothesis with a budget) and <code>/bug</code> (immediate-fix). Closes when every follow-up action lands, not on PR merge.</p>
-    </article>
-  </section>
-
-  <section class="section" id="specs">
-    <h2>How do I capture specs and technical decisions?</h2>
-    <p class="section__intro">Turn validated ideas into PRDs; record technical decisions as durable artefacts.</p>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/write-spec</code>
-        <code class="skill__args">&lt;feature or problem statement&gt;</code>
-      </header>
-      <p class="skill__desc">Write a feature spec or PRD from a problem statement or feature idea. Use when creating product requirements documents.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/decide</code>
-        <code class="skill__args">&lt;what you're deciding&gt;</code>
-      </header>
-      <p class="skill__desc">Make a technical decision with structured reasoning, creating an Agent Decision Record (AgDR). Use when choosing between libraries, frameworks, implementation approaches, or architectural patterns.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/agdr</code>
-        <code class="skill__args">browse | search &lt;term&gt; | show &lt;id&gt; | stats</code>
-      </header>
-      <p class="skill__desc">Searchable, categorised library of Agent Decision Records across the portfolio. Walks the registry, reads each project's <code>docs/agdr/*.md</code>, parses YAML frontmatter, answers "have we decided this before?" without grepping every project.</p>
-    </article>
-  </section>
-
-  <section class="section" id="review">
-    <h2>How does code review and merge get gated?</h2>
-    <p class="section__intro">The mechanical merge gate — Rex review, security audit, CEO approval, design review, dependency audit. Each writes a marker the merge hook verifies.</p>
+  <section class="section" id="quality">
+    <h2>Keep quality high</h2>
+    <p class="section__intro">The skills that catch mistakes before they reach customers — reviews, audits, security checks. Run <code>/launch-check</code> at milestone boundaries for the full sweep; the individual audits below are the deep-dive companions.</p>
 
     <article class="skill">
       <header class="skill__head">
@@ -617,93 +440,11 @@ main {
 
     <article class="skill">
       <header class="skill__head">
-        <code class="skill__name">/approve-merge</code>
-        <code class="skill__args">&lt;pr-number&gt; [--no-merge]</code>
-      </header>
-      <p class="skill__desc">Record per-PR CEO approval and merge the PR in a single turn. ONLY invoke on an explicit user message that names the PR and says "approved" / "merge" / "ship it" — never on an umbrella "go" / "continue". The marker is structured (<code>sha=</code>, <code>approved_by=user</code>, <code>skill_version=2</code>) so a raw <code>echo</code> bypass is mechanically rejected.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/approve-design</code>
-        <code class="skill__args">&lt;pr-number&gt;</code>
-      </header>
-      <p class="skill__desc">Record per-PR design-review approval so the design-review merge gate lets the PR through. Same per-PR-naming discipline as <code>/approve-merge</code>.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
         <code class="skill__name">/audit-deps</code>
         <code class="skill__args">[project-path]</code>
       </header>
       <p class="skill__desc">Audit dependencies for vulnerabilities, outdated packages, and license compliance.</p>
     </article>
-  </section>
-
-  <section class="section" id="architecture">
-    <h2>Which skills generate architecture and dev artefacts?</h2>
-    <p class="section__intro">Diagram the system; debug what's broken with structure rather than ad-hoc patching.</p>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/c4</code>
-        <code class="skill__args">[project-name] [--level=1|2|both] [--force]</code>
-      </header>
-      <p class="skill__desc">Generate C4 Level 1 (System Context) and Level 2 (Container) architecture diagrams for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexyard templates.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/debug</code>
-        <code class="skill__args">[symptom summary]</code>
-      </header>
-      <p class="skill__desc">Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/dfd</code>
-        <code class="skill__args">[project-name | . | --scope-all] [--format=mermaid|dragon|all]</code>
-      </header>
-      <p class="skill__desc">Extract a Data Flow Diagram from a codebase with trust boundaries and data classifications. Writes Mermaid markdown (renders on GitHub) as the canonical source-of-truth that <code>/threat-model</code> and <code>/compliance-check</code> consume. OWASP Threat Dragon v2 JSON available via <code>--format=dragon</code>.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/process</code>
-        <code class="skill__args">&lt;process-slug&gt; [--from-endpoint METHOD /path] [--from-machine ClassName] [--scope dir/]</code>
-      </header>
-      <p class="skill__desc">Extract the business process actually implemented by one or more registered repos (state machines, queue chains, cron, state-column transitions, API choreography, existing BPMN, documented steps), interview only on the gaps, then emit a lint-clean BPMN 2.0 file that opens in Camunda Modeler.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/tech-vision</code>
-        <code class="skill__args">[project-slug | . | --framework]</code>
-      </header>
-      <p class="skill__desc">Interactive section-by-section author for the technical / architecture vision template — Scope, Principles, Target-state, Current-vs-Target gap table, multi-quarter Migration path, explicit Anti-scope, Review cadence. Writes <code>projects/&lt;name&gt;/architecture/vision.md</code>.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/journey</code>
-        <code class="skill__args">&lt;feature-slug&gt; [--from-prd &lt;path&gt;]</code>
-      </header>
-      <p class="skill__desc">Generate a single self-contained HTML user-journey map — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact, surfacing flow-level logic gaps before any implementation begins.</p>
-    </article>
-
-    <article class="skill">
-      <header class="skill__head">
-        <code class="skill__name">/extract-features</code>
-        <code class="skill__args">[project-name | .]</code>
-      </header>
-      <p class="skill__desc">Scan an existing codebase and produce a structured Feature Inventory — six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) consolidated into a "what we must preserve" specification suitable for a greenfield rewrite.</p>
-    </article>
-  </section>
-
-  <section class="section" id="audits">
-    <h2>Which audits check production readiness?</h2>
-    <p class="section__intro"><code>/launch-check</code> runs the full sweep at milestone boundaries; the dimension-specific audits below are the deep-dive companions.</p>
 
     <article class="skill">
       <header class="skill__head">
@@ -718,7 +459,7 @@ main {
         <code class="skill__name">/threat-model</code>
         <code class="skill__args">[project-path]</code>
       </header>
-      <p class="skill__desc">Full STRIDE threat-modelling exercise — Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege.</p>
+      <p class="skill__desc">Threat-modelling exercise across six attack categories — spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege. Surfaces where your system is exposed before someone finds out the hard way.</p>
     </article>
 
     <article class="skill">
@@ -778,9 +519,9 @@ main {
     </article>
   </section>
 
-  <section class="section" id="workflow">
-    <h2>What workflow primitives are available?</h2>
-    <p class="section__intro">Enable, parallelise, release.</p>
+  <section class="section" id="move">
+    <h2>Move work forward</h2>
+    <p class="section__intro">Capture an idea, file a ticket, record a decision, approve a merge — everything that turns half-formed thoughts into shipped software.</p>
 
     <article class="skill">
       <header class="skill__head">
@@ -792,24 +533,140 @@ main {
 
     <article class="skill">
       <header class="skill__head">
-        <code class="skill__name">/fan-out</code>
-        <code class="skill__args">&lt;task1, task2, ...&gt; | &lt;path/to/tasks.md&gt; | --from-tickets &lt;ref1,ref2,...&gt;</code>
+        <code class="skill__name">/approve-merge</code>
+        <code class="skill__args">&lt;pr-number&gt; [--no-merge]</code>
       </header>
-      <p class="skill__desc">Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation for code-writing tasks and background mode for long runs. Use when the user's request decomposes into independent work items that share no files and have no sequential dependencies.</p>
+      <p class="skill__desc">Record per-PR CEO approval and merge the PR in a single turn. ONLY invoke on an explicit user message that names the PR and says "approved" / "merge" / "ship it" — never on an umbrella "go" / "continue". The marker is structured (<code>sha=</code>, <code>approved_by=user</code>, <code>skill_version=2</code>) so a raw <code>echo</code> bypass is mechanically rejected.</p>
     </article>
 
     <article class="skill">
       <header class="skill__head">
-        <code class="skill__name">/release</code>
-        <code class="skill__args">&lt;optional explicit version, e.g. v1.2.0&gt;</code>
+        <code class="skill__name">/approve-design</code>
+        <code class="skill__args">&lt;pr-number&gt;</code>
       </header>
-      <p class="skill__desc">Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG draft from conventional commits, open the release PR, and (after merge) tag + push. Framework-only.</p>
+      <p class="skill__desc">Record per-PR design-review approval so the design-review merge gate lets the PR through. Same per-PR-naming discipline as <code>/approve-merge</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/decide</code>
+        <code class="skill__args">&lt;what you're deciding&gt;</code>
+      </header>
+      <p class="skill__desc">Make a technical decision with structured reasoning and record it permanently — what you considered, what you picked, and why. Use when choosing between libraries, frameworks, implementation approaches, or architectural patterns; the record means the next person (or future you) doesn't have to re-litigate the call.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/idea</code>
+        <code class="skill__args">&lt;short title of the idea&gt;</code>
+      </header>
+      <p class="skill__desc">Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/validate-idea</code>
+        <code class="skill__args">&lt;IDEA-NNN | project-name | free-form description&gt;</code>
+      </header>
+      <p class="skill__desc">Lightweight 5-question idea validation. Sits between <code>/idea</code> and <code>/write-spec</code> as a 10-minute gate that catches "this isn't worth speccing" without heavyweight strategy ceremony.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/write-spec</code>
+        <code class="skill__args">&lt;feature or problem statement&gt;</code>
+      </header>
+      <p class="skill__desc">Write a feature spec or PRD from a problem statement or feature idea. Use when creating product requirements documents.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/feature</code>
+        <code class="skill__args">&lt;short title of the feature&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured feature request ticket with user story, acceptance criteria, and design notes. Use when proposing a new user-facing feature.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/bug</code>
+        <code class="skill__args">&lt;short description of the bug&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/task</code>
+        <code class="skill__args">&lt;short title of the task&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/spike</code>
+        <code class="skill__args">&lt;short title&gt;</code>
+      </header>
+      <p class="skill__desc">Create a hypothesis-driven, time-boxed, throw-away spike ticket — Hypothesis, Budget, Kill Criteria, Disposition. Spike PRs are exempt from the decision-record + 80% coverage gates; Rex + security auditor still apply.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/spike-close</code>
+        <code class="skill__args">&lt;ticket&gt; --promote | --discard</code>
+      </header>
+      <p class="skill__desc">Disposition gate for spikes. <code>--promote</code> files a follow-up <code>[Feature]</code> ticket with cross-references; <code>--discard</code> writes a memo to <code>docs/spike-memos/&lt;slug&gt;.md</code>. Closing without running this gate leaves no record of what was learned.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/migration</code>
+        <code class="skill__args">[&lt;project&gt;]</code>
+      </header>
+      <p class="skill__desc">Create a structured database-migration ticket and its matching decision record (rollback plan, downtime estimate, who's affected) in one guided flow. Use BEFORE touching any migration files — the framework blocks edits otherwise.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/investigation</code>
+        <code class="skill__args">&lt;short title&gt;</code>
+      </header>
+      <p class="skill__desc">Create a structured investigation ticket + live-doc for sustained root-cause work — incident retros, bug archaeology, regression hunts, performance mysteries, competitive analyses. Distinct from <code>/spike</code> (forward-looking hypothesis with a budget) and <code>/bug</code> (immediate-fix). Closes when every follow-up action lands, not on PR merge.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/tickets-batch</code>
+        <code class="skill__args">[&lt;optional bulk description&gt;]</code>
+      </header>
+      <p class="skill__desc">File 5–20 structured GitHub Issues in one flow. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket. Output conforms to <code>.ticket.required_sections</code> by construction.</p>
     </article>
   </section>
 
-  <section class="section" id="comms">
-    <h2>How do I generate roadmap and stakeholder communications?</h2>
-    <p class="section__intro">Roadmap planning + stakeholder updates synthesised from the activity stream.</p>
+  <section class="section" id="see">
+    <h2>See everything at once</h2>
+    <p class="section__intro">When you have more than one product going at the same time, the question that costs you the most is "what's waiting on me right now?" These skills answer it without you opening five different GitHub tabs.</p>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/projects</code></header>
+      <p class="skill__desc">List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/inbox</code></header>
+      <p class="skill__desc">Every item across managed projects that needs your attention — PRs to review, issues assigned to you, comments to respond to, blockers. Use to triage the day.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/status</code></header>
+      <p class="skill__desc">Snapshot of the current project — git state, open PRs with CI, recent merges, in-progress issue. Multi-project aware. Use to orient yourself in a fresh session.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head"><code class="skill__name">/tasks</code></header>
+      <p class="skill__desc">A flat actionable task list with direct URLs for everything needing your action — PRs to review, issues to triage, comments to respond to, failing CI. Multi-project aware.</p>
+    </article>
 
     <article class="skill">
       <header class="skill__head">
@@ -824,12 +681,134 @@ main {
         <code class="skill__name">/stakeholder-update</code>
         <code class="skill__args">weekly | monthly | launch</code>
       </header>
-      <p class="skill__desc">Generate a stakeholder update tailored to audience. Synthesises recent PRs, closed issues, AgDRs, and the roadmap into a narrative.</p>
+      <p class="skill__desc">Generate a stakeholder update tailored to audience. Synthesises recent PRs, closed issues, decisions, and the roadmap into a narrative — written from real activity, not from what you remember.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/agdr</code>
+        <code class="skill__args">browse | search &lt;term&gt; | show &lt;id&gt; | stats</code>
+      </header>
+      <p class="skill__desc">Searchable, categorised library of every technical decision ever recorded across your portfolio. Answers "have we decided this before?" without grepping every project.</p>
+    </article>
+  </section>
+
+  <section class="section" id="onboard">
+    <h2>Onboard new code</h2>
+    <p class="section__intro">Fresh fork, new project handed to you, codebase you want to understand. These skills get you oriented fast — generating diagrams, feature inventories, process flows from real code instead of from memory.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/setup</code>
+        <code class="skill__args">[--reset]</code>
+      </header>
+      <p class="skill__desc">First-run framework bootstrap for a new ApexYard fork. Three exchanges — describe your stack, accept defaults, customize — and the fork is configured. Re-run anytime to update.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/handover</code>
+        <code class="skill__args">&lt;project name&gt; [path or url]</code>
+      </header>
+      <p class="skill__desc">Onboard an external repo into ApexYard management. Reads the target, synthesises a structured handover assessment, and tells you which roles, workflows, and hooks should activate.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/c4</code>
+        <code class="skill__args">[project-name] [--level=1|2|both] [--force]</code>
+      </header>
+      <p class="skill__desc">Generate architecture diagrams (Level 1 system context + Level 2 container detail) for a project by reading its codebase. Detects external actors, deployable containers, and writes filled-in Mermaid diagrams using the apexyard templates.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/dfd</code>
+        <code class="skill__args">[project-name | . | --scope-all] [--format=mermaid|dragon|all]</code>
+      </header>
+      <p class="skill__desc">Extract a data-flow diagram from a codebase — what data moves where, what trust boundaries it crosses, what's sensitive. Renders on GitHub as a markdown diagram; feeds into <code>/threat-model</code> and <code>/compliance-check</code> automatically. Threat-Dragon JSON export available via <code>--format=dragon</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/process</code>
+        <code class="skill__args">&lt;process-slug&gt; [--from-endpoint METHOD /path] [--from-machine ClassName] [--scope dir/]</code>
+      </header>
+      <p class="skill__desc">Extract the business process actually implemented by your code — state machines, queue chains, cron jobs, API choreography — interview only on the gaps, then emit a standard business-process diagram file that opens in any process modeller.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/extract-features</code>
+        <code class="skill__args">[project-name | .]</code>
+      </header>
+      <p class="skill__desc">Scan an existing codebase and produce a structured Feature Inventory — six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) consolidated into a "what we must preserve" specification suitable for a greenfield rewrite.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/tech-vision</code>
+        <code class="skill__args">[project-slug | . | --framework]</code>
+      </header>
+      <p class="skill__desc">Interactive section-by-section author for the technical / architecture vision template — Scope, Principles, Target-state, Current-vs-Target gap table, multi-quarter Migration path, explicit Anti-scope, Review cadence. Writes <code>projects/&lt;name&gt;/architecture/vision.md</code>.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/journey</code>
+        <code class="skill__args">&lt;feature-slug&gt; [--from-prd &lt;path&gt;]</code>
+      </header>
+      <p class="skill__desc">Generate a single self-contained HTML user-journey map — boxes-and-arrows graph with a clickable modal per page. Sits between PRD and tech-design as a "preview before build" artifact, surfacing flow-level logic gaps before any implementation begins.</p>
+    </article>
+  </section>
+
+  <section class="section" id="run">
+    <h2>Run things</h2>
+    <p class="section__intro">Sync the framework when there's an update, parallelise independent work, cut a release, debug something hairy, share a PDF with a non-technical stakeholder.</p>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/update</code>
+        <code class="skill__args">[--dry-run] [--rebase]</code>
+      </header>
+      <p class="skill__desc">Sync the ApexYard fork with upstream. Previews pending commits, creates a sync branch (direct push to main is blocked), merges or rebases, walks per-file conflicts, leaves the branch ready to push as a PR.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/split-portfolio</code>
+        <code class="skill__args">[--verify | --dry-run]</code>
+      </header>
+      <p class="skill__desc">Migrate a single-fork adopter to split-portfolio mode (public framework + private sibling portfolio). Automates the destructive recovery flow with explicit operator confirmation at every step.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/release</code>
+        <code class="skill__args">&lt;optional explicit version, e.g. v1.2.0&gt;</code>
+      </header>
+      <p class="skill__desc">Cut a new apexyard release — diff dev against main, pick a semver bump, generate a CHANGELOG draft from conventional commits, open the release PR, and (after merge) tag + push. Framework-only.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/debug</code>
+        <code class="skill__args">[symptom summary]</code>
+      </header>
+      <p class="skill__desc">Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.</p>
+    </article>
+
+    <article class="skill">
+      <header class="skill__head">
+        <code class="skill__name">/fan-out</code>
+        <code class="skill__args">&lt;task1, task2, ...&gt; | &lt;path/to/tasks.md&gt; | --from-tickets &lt;ref1,ref2,...&gt;</code>
+      </header>
+      <p class="skill__desc">Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation for code-writing tasks and background mode for long runs. Use when the user's request decomposes into independent work items that share no files and have no sequential dependencies.</p>
     </article>
   </section>
 
   <section class="section" id="deprecated">
-    <h2>Which skills are deprecated?</h2>
+    <h2>Deprecated</h2>
     <p class="section__intro">Kept for redirect-only behaviour while in-flight invocations migrate.</p>
 
     <article class="skill is-deprecated">

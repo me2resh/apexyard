@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ApexYard — multi-project SDLC framework for Claude Code</title>
-<meta name="description" content="Multi-project ops-repo framework for Claude Code. One fork governs every project — 54 skills, 32 hooks, 19 roles, one inbox. MIT, plain markdown and shell.">
+<title>ApexYard — ship AI-built software like a real engineering team</title>
+<meta name="description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
 <link rel="canonical" href="https://yard.apexscript.com/">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -12,15 +12,15 @@
 <link rel="alternate" type="text/markdown" href="/index.md">
 
 <!-- LLM consumers: payload size hints (token estimate = chars / 4). #333 item C. -->
-<meta name="llm:token-count" content="20951">
-<meta name="llm:doc-length" content="83805 chars">
+<meta name="llm:token-count" content="23189">
+<meta name="llm:doc-length" content="92757 chars">
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/">
-<meta property="og:title" content="ApexYard — multi-project SDLC framework for Claude Code">
-<meta property="og:description" content="Multi-project ops-repo framework for Claude Code. One fork governs every project — 54 skills, 32 hooks, 19 roles, one inbox. MIT, plain markdown and shell.">
+<meta property="og:title" content="ApexYard — ship AI-built software like a real engineering team">
+<meta property="og:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
 <meta property="og:image" content="https://yard.apexscript.com/og/index.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -28,8 +28,8 @@
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/">
-<meta name="twitter:title" content="ApexYard — multi-project SDLC framework for Claude Code">
-<meta name="twitter:description" content="ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs every project — 54 skills, 32 hooks, 19 roles, one inbox.">
+<meta name="twitter:title" content="ApexYard — ship AI-built software like a real engineering team">
+<meta name="twitter:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
 
 <!-- Structured data: SoftwareApplication, Organization, WebSite -->
@@ -42,7 +42,7 @@
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Cross-platform",
   "url": "https://yard.apexscript.com/",
-  "description": "Multi-project ops-repo framework for Claude Code. One fork governs every project — 54 skills, 32 hooks, 19 roles, one inbox.",
+  "description": "Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.",
   "license": "https://opensource.org/licenses/MIT",
   "softwareVersion": "1.1.0",
   "downloadUrl": "https://github.com/me2resh/apexyard",
@@ -1314,6 +1314,107 @@ footer.foot {
 .skip:focus { left: 1rem; top: 1rem; }
 
 /* ============================================================
+   outcome tiles - the "what you get" row that sits above the
+   terminal animation. Same visual grammar as .layers but
+   simpler: plain-language, three columns, no metric numbers.
+   ============================================================ */
+
+.outcome-tiles {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid var(--rule);
+}
+@media (max-width: 900px) {
+  .outcome-tiles { grid-template-columns: 1fr; }
+}
+.outcome-tile {
+  padding: 2rem 1.75rem;
+  border-right: 1px solid var(--rule-faint);
+}
+.outcome-tile:last-child { border-right: none; }
+@media (max-width: 900px) {
+  .outcome-tile { border-right: none; border-bottom: 1px solid var(--rule-faint); }
+  .outcome-tile:last-child { border-bottom: none; }
+}
+.outcome-tile__num {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.6rem;
+  font-weight: 700;
+}
+.outcome-tile__title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.018em;
+  line-height: 1.2;
+}
+.outcome-tile__desc {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  max-width: 42ch;
+}
+
+/* "Who this is for" — three-card row, same border grammar */
+.audience {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid var(--rule);
+}
+@media (max-width: 900px) {
+  .audience { grid-template-columns: 1fr; }
+}
+.audience__card {
+  padding: 1.75rem 1.5rem;
+  border-right: 1px solid var(--rule-faint);
+}
+.audience__card:last-child { border-right: none; }
+@media (max-width: 900px) {
+  .audience__card { border-right: none; border-bottom: 1px solid var(--rule-faint); }
+  .audience__card:last-child { border-bottom: none; }
+}
+.audience__who {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+  line-height: 1.3;
+}
+.audience__detail {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+/* Plain-language intro paragraph that sits above the terminal demo
+   section so the brutalist screen reads as proof, not as primary
+   sales material. */
+.terminal-intro {
+  max-width: var(--max-w);
+  margin: 0 auto 1.75rem;
+  padding: 0 var(--gutter);
+  font-size: 14px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  max-width: 65ch;
+}
+.terminal-intro__inner {
+  max-width: 65ch;
+}
+
+/* ============================================================
    cookie consent banner - minimal, non-blocking.
    Gates Google Analytics (Consent Mode v2) for GDPR/ePrivacy.
    ============================================================ */
@@ -1406,6 +1507,7 @@ footer.foot {
       <span class="titlebar__path">~/<b>apexyard</b> <span class="dim">- main · v1.1</span></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
+      <a href="/how-it-works">how it works</a>
       <a href="/architecture">architecture</a>
       <a href="/skills">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
@@ -1424,7 +1526,7 @@ footer.foot {
 
     <div class="hero__eyebrow rise rise-1">
       <span class="pill">apexyard v1.1</span>
-      <span>open source · MIT · for founders forging multiple products</span>
+      <span>open source · MIT · built for founders shipping with AI</span>
       <button class="copy-for-ai" data-md-url="/index.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
     </div>
 
@@ -1437,7 +1539,7 @@ footer.foot {
     </p>
 
     <p class="hero__tagline rise rise-3">
-      Where projects get forged.
+      Ship AI-built software like a real engineering team — without hiring one.
     </p>
 
     <p class="hero__builtby rise rise-3">
@@ -1445,16 +1547,140 @@ footer.foot {
     </p>
 
     <p class="hero__sub rise rise-3" id="ai-lead">
-      <strong>What is it?</strong> ApexYard is a multi-project ops-repo framework for Claude Code. One fork governs every project under management with strict merge gates, persistent AgDR memory, and 53 audit-and-decision skills.
-      <strong>What can it do?</strong> Activate the right role on each ticket, run mechanical merge gates as shell hooks (not PDFs), aggregate every project's PRs, issues, and CI into one inbox, persist architectural decisions as AgDRs across the portfolio.
-      <strong>What's needed to start?</strong> Fork <code>github.com/me2resh/apexyard</code>, clone it, run <code>/setup</code>, register your projects. 19 roles, 54 skills, 32 mechanical gates, one inbox across the whole portfolio. Claude Code is the default driver; the rules, hooks, agents, and skills are plain markdown and shell — swap the AI, keep the forge.
+      ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. <a href="/how-it-works" class="uline">See what a day with it looks like →</a>
     </p>
 
     <div class="hero__cta rise rise-4">
       <a href="https://github.com/me2resh/apexyard" class="cta cta--primary" target="_blank" rel="noopener">★ Star &nbsp;·&nbsp; ⑂ Fork on GitHub</a>
       <span class="cta__sep" aria-hidden="true">·</span>
-      <a href="#quickstart" class="cta cta--ghost">or see the 3-step quickstart ↓</a>
+      <a href="/how-it-works" class="cta cta--ghost">or see what a day looks like →</a>
     </div>
+
+  </div>
+</section>
+
+<!-- ============================================================
+     WHAT YOU GET — three outcome tiles in plain language.
+     This is the first section a founder hits after the hero;
+     it sets expectations in their words, not ours.
+     ============================================================ -->
+<section class="section section--alt" id="what-you-get" aria-label="What you get with ApexYard">
+  <div class="section__head">
+    <span class="section__num">01 / WHAT YOU GET</span>
+    <h2 class="section__title">What it actually does for you</h2>
+    <p class="section__lede">
+      No setup beyond <code>/setup</code>. No new dashboards to learn. Three things you start getting from day one.
+    </p>
+  </div>
+
+  <div class="outcome-tiles">
+    <article class="outcome-tile">
+      <div class="outcome-tile__num">01</div>
+      <h3 class="outcome-tile__title">Automatic code review</h3>
+      <p class="outcome-tile__desc">
+        Every change you make — or that a contractor makes — gets reviewed by a senior-engineering-level reviewer before it ships. You see exactly what was caught and why, and decide what to do about it.
+      </p>
+    </article>
+
+    <article class="outcome-tile">
+      <div class="outcome-tile__num">02</div>
+      <h3 class="outcome-tile__title">Launch-readiness checks</h3>
+      <p class="outcome-tile__desc">
+        Before you push to customers, run one command and find out what's still missing — security, performance, accessibility, the lot. No surprise emails from users telling you about it.
+      </p>
+    </article>
+
+    <article class="outcome-tile">
+      <div class="outcome-tile__num">03</div>
+      <h3 class="outcome-tile__title">One place for all your products</h3>
+      <p class="outcome-tile__desc">
+        Every project you're building shows up in one inbox. Pull requests that need a look, issues someone's stuck on, anything that needs your attention — all in one screen, no tab-juggling.
+      </p>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================
+     WHO THIS IS FOR — explicit, so the right reader feels seen
+     ============================================================ -->
+<section class="section" id="who-this-is-for" aria-label="Who this is for">
+  <div class="section__head">
+    <span class="section__num">02 / WHO THIS IS FOR</span>
+    <h2 class="section__title">Who this is for</h2>
+    <p class="section__lede">
+      Three shapes of person we built this for. If you recognise yourself, keep reading.
+    </p>
+  </div>
+
+  <div class="audience">
+    <div class="audience__card">
+      <p class="audience__who">Solo founders shipping with AI</p>
+      <p class="audience__detail">
+        You're building the product alone, with Claude Code or Cursor doing most of the typing. You need the guardrails a real team would give you — without a real team.
+      </p>
+    </div>
+    <div class="audience__card">
+      <p class="audience__who">Non-technical founders running contractors</p>
+      <p class="audience__detail">
+        You're managing a small dev team or a contractor or two. You need to know the work is solid before it goes live, without reading every commit yourself.
+      </p>
+    </div>
+    <div class="audience__card">
+      <p class="audience__who">Small teams with no process yet</p>
+      <p class="audience__detail">
+        You've shipped your first version. Now you need real review, real testing, real release discipline — before things get harder to fix than they already are.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     PROOF / DOGFOOD — verifiable numbers from our own work
+     ============================================================ -->
+<section class="section section--alt" aria-label="Proof — our own engineering activity">
+  <div class="section__head">
+    <span class="section__num">03 / PROOF</span>
+    <h2 class="section__title">We use it on ourselves</h2>
+    <p class="section__lede">
+      ApexYard is built using ApexYard. These are real numbers from the framework's own GitHub history — every change you see here went through the same review and guardrails the tool installs in your fork.
+    </p>
+  </div>
+
+  <div class="hero__metrics" aria-label="ApexYard's own engineering activity" style="max-width: var(--max-w); margin: 0 auto; padding: 0 var(--gutter); border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);">
+    <div class="hero__metric">
+      <strong>175</strong>
+      <span>PRs reviewed &amp; merged · last 90 days</span>
+    </div>
+    <div class="hero__metric">
+      <strong>62</strong>
+      <span>Production releases shipped to date</span>
+    </div>
+    <div class="hero__metric">
+      <strong>51</strong>
+      <span>Technical decisions on record</span>
+    </div>
+    <div class="hero__metric">
+      <strong>13</strong>
+      <span>Bugs caught and fixed before users hit them</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     TERMINAL DEMO — moved below the fold. Excellent proof for
+     a technical evaluator who scrolls; would be intimidating
+     as a first impression for the target founder.
+     ============================================================ -->
+<section class="section" id="terminal-demo" aria-label="Terminal walkthrough">
+  <div class="section__head">
+    <span class="section__num">04 / FOR THE TECHNICALLY CURIOUS</span>
+    <h2 class="section__title">What one day looks like, in real terminal</h2>
+    <p class="section__lede">
+      If you'd rather skim the plain-English version, read <a href="/how-it-works" class="uline">how it works</a>. The replay below is for the technical friend you'll show this to.
+    </p>
+  </div>
+
+  <div class="hero__inner">
 
     <div class="shell-demo shell-demo--tall rise rise-4" id="shell-lifecycle" aria-label="Demo of apexyard flows — one ticket lifecycle, /handover, /setup, /fan-out">
       <div class="shell-demo__chrome">
@@ -1492,7 +1718,7 @@ footer.foot {
         <div class="line ok">&nbsp;&nbsp;✓ tests pass locally</div>
         <div class="line">&nbsp;</div>
         <div class="line sys">Detected decision: papaparse vs csv-stringify</div>
-        <div class="line muted">&nbsp;&nbsp;AgDR-0014 · chose csv-stringify (zero deps)</div>
+        <div class="line muted">&nbsp;&nbsp;Decision recorded · chose csv-stringify (zero deps)</div>
         <div class="line">&nbsp;</div>
         <div class="line sys">Local checks:</div>
         <div class="line ok">&nbsp;&nbsp;✓ lint&nbsp;&nbsp;✓ types&nbsp;&nbsp;✓ 147 tests&nbsp;&nbsp;✓ 1.2mb build</div>
@@ -1505,7 +1731,7 @@ footer.foot {
         <div class="line sys">Rex reviewing a3f9c21...</div>
         <div class="line muted">&nbsp;&nbsp;Architecture · PASS (domain clean)</div>
         <div class="line muted">&nbsp;&nbsp;Tests&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· 94% coverage</div>
-        <div class="line muted">&nbsp;&nbsp;AgDR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· AgDR-0014 linked</div>
+        <div class="line muted">&nbsp;&nbsp;Decision log · linked</div>
         <div class="line muted">&nbsp;&nbsp;Glossary&nbsp;&nbsp;&nbsp;&nbsp;· 5 terms</div>
         <div class="line ok">&nbsp;&nbsp;Verdict&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;· APPROVE - deferring to CEO</div>
         <div class="line">&nbsp;</div>
@@ -1545,30 +1771,11 @@ footer.foot {
     </div>
 
     <p class="install__caveat rise rise-4">
-      One command forks apexyard into your org and clones the fork locally. The fork <strong>is</strong> your ops repo - no nested installs, no symlinks. Full walkthrough in the <a href="#quickstart" class="uline">quickstart</a> below. Rename the fork to <code>your-org/ops</code> if you prefer - GitHub handles the rename cleanly.
+      One command forks apexyard into your org and clones the fork locally. The fork <strong>is</strong> your ops repo — no nested installs, no symlinks. Want the plain-English version of what happens next? Read <a href="/how-it-works" class="uline">how it works</a>. Want the technical setup? Jump to the <a href="#quickstart" class="uline">quickstart</a>.
     </p>
 
-    <div class="hero__metrics rise rise-5" aria-label="What you get">
-      <div class="hero__metric">
-        <strong>19</strong>
-        <span>Role definitions across 5 departments</span>
-      </div>
-      <div class="hero__metric">
-        <strong>54</strong>
-        <span>Skills (slash commands)</span>
-      </div>
-      <div class="hero__metric">
-        <strong>29</strong>
-        <span>Mechanical gates (shell hooks)</span>
-      </div>
-      <div class="hero__metric">
-        <strong>1</strong>
-        <span>Fork · your ops repo in one command</span>
-      </div>
-    </div>
-
-    <p class="hero__proof rise rise-5" aria-label="Stacks proven in production">
-      Proven shipping · <span class="kw">TypeScript</span> + AWS Lambda backends · <span class="kw">Next.js</span> web apps · <span class="kw">Chrome</span> extensions · native <span class="kw">Swift</span> macOS apps
+    <p class="hero__proof rise rise-5" aria-label="What apexyard works with">
+      Works with what you already use · <span class="kw">TypeScript</span> + AWS Lambda · <span class="kw">Next.js</span> web apps · <span class="kw">Chrome</span> extensions · native <span class="kw">Swift</span> macOS apps. The framework cares about review, gates, and process — not your stack.
     </p>
 
   </div>
@@ -1577,7 +1784,7 @@ footer.foot {
 <!-- ============================================================
      MANIFESTO - the SDLC loop, in one line
      ============================================================ -->
-<section class="manifesto" aria-label="What apexyard mechanically enforces">
+<section class="manifesto" aria-label="The simple rules everything else flows from">
   <div class="manifesto__inner">
     <p class="manifesto__text">
       Every pull request ties to a ticket.<br>
@@ -1593,10 +1800,10 @@ footer.foot {
 <section class="section section--alt" id="quickstart">
 
   <div class="section__head">
-    <span class="section__num">01 / QUICKSTART</span>
+    <span class="section__num">05 / QUICKSTART</span>
     <h2 class="section__title">How do I get started?</h2>
     <p class="section__lede">
-      From fork to first command. Everything is public; no invite needed.
+      From fork to first command. Everything is public; no invite needed. If you'd rather see a day with it before installing, read <a href="/how-it-works" class="uline">how it works</a> first.
     </p>
   </div>
 
@@ -1625,7 +1832,7 @@ claude
     <article class="step step--wide" style="grid-column: 1 / -1;">
       <div class="step__num">03 - bring a project in, or capture an idea</div>
       <h3 class="step__title">Adopt, or originate</h3>
-      <p class="step__desc">Two entry points depending on what you walked in with. <code>/handover</code> takes an existing repo and generates an assessment + C4 L2 stub + registry entry. <code>/idea</code> captures a new product concept to the shared backlog so it doesn't evaporate.</p>
+      <p class="step__desc">Two entry points depending on what you walked in with. <code>/handover</code> takes an existing repo and generates an assessment of its shape, plus a starter architecture diagram, plus the registry entry. <code>/idea</code> captures a new product concept to the shared backlog so it doesn't evaporate.</p>
       <pre class="step__code"><span class="acc">/handover</span> &lt;repo-url&gt;   <span class="cm"># existing project → assessment + registry + architecture stub</span>
 <span class="acc">/idea</span>                  <span class="cm"># new concept → ideas-backlog.md, optional GitHub issue</span></pre>
     </article>
@@ -1640,10 +1847,10 @@ claude
 <section class="section" id="examples">
 
   <div class="section__head">
-    <span class="section__num">02 / WALKTHROUGHS</span>
-    <h2 class="section__title">What does using apexyard look like in practice?</h2>
+    <span class="section__num">06 / WALKTHROUGHS</span>
+    <h2 class="section__title">Three real situations, three real outcomes</h2>
     <p class="section__lede">
-      Three flows - one for a feature, one for the portfolio, one for a risky change. Each starts with a specific pain and ends with the exact gates that handled it.
+      Each walkthrough starts with a moment you'll recognise — and shows what apexyard does about it. Below the screens are technical captions for the friend who's vetting this with you.
     </p>
   </div>
 
@@ -1657,7 +1864,7 @@ claude
       <pre class="demo__body"><span class="muted"># "I have an idea. Ship it without forgetting a step."</span>
 
 <span class="you">› /idea  →  /write-spec  →  /decide</span>
-<span class="ok">  ideas-backlog.md · PRD-0012 · AgDR-0021</span>
+<span class="ok">  Idea captured · spec drafted · decision recorded</span>
 
 <span class="you">› /start-ticket 178     <span class="muted">(labels the session)</span></span>
 <span class="muted"># code, tests, push…</span>
@@ -1671,7 +1878,7 @@ claude
 <span class="you">› /approve-merge 178     <span class="muted">(per-PR CEO nod)</span></span>
 <span class="you">› gh pr merge 178</span>
 <span class="ok">  ✓ merged · #178 → QA state, not Done yet</span></pre>
-      <div class="demo__caption">One trail: 6 skills · 2 agents · 4 hooks · 1 AgDR · 1 PRD. Two independent approvals (Rex + CEO), both SHA-bound. The marker-based merge gate is a shell hook, not a social convention.</div>
+      <div class="demo__caption">From idea to live feature, with a real code review and a real launch sign-off in the middle. The reviewer is a senior-engineering-level AI agent (Rex) and the sign-off is yours — both have to happen before anything ships, and the framework refuses to merge until they do.</div>
     </article>
 
     <article class="demo">
@@ -1697,7 +1904,7 @@ claude
 <span class="you">› /stakeholder-update weekly</span>
 <span class="ok">  Drafted projects/updates/2026-04-17.md
   - rollup across all 5 projects</span></pre>
-      <div class="demo__caption">6 skills read one registry file. Five products surface from a single prompt. Portfolio isn't a view on top of separate repos - it IS the registry.</div>
+      <div class="demo__caption">One screen for every project you're building. No tab-juggling, no five different GitHub repos. The same registry powers the Friday stakeholder update — generated from the actual week's activity, not from what you remember.</div>
     </article>
 
     <article class="demo demo--wide">
@@ -1708,24 +1915,24 @@ claude
       <pre class="demo__body"><span class="muted"># "Just drop a column. Can't be that hard."</span>
 
 <span class="you">› edit prisma/schema.prisma</span>
-<span class="blk">BLOCKED:</span> migration files need a labelled ticket
-<span class="ag">  hook: require-migration-ticket.sh</span>
+<span class="blk">BLOCKED:</span> database changes need a real plan first
+<span class="ag">  apexyard: rollback plan + tested first</span>
 
-<span class="you">› /migration curios-dog</span>
+<span class="you">› /migration billing-api</span>
 <span class="ai">  → rollback plan? (required, non-empty)
   → estimated downtime?
-  → cross-service consumers?
+  → other services that read this?
   → data volume?
-  → observability?</span>
-<span class="ok">  ✓ AgDR-0047 · issue #214 labelled `migration`
-  ✓ body refs AgDR - gate 3 satisfied</span>
+  → how will you know it worked?</span>
+<span class="ok">  ✓ Decision recorded · ticket #214 created
+  ✓ Plan is complete — edit allowed</span>
 
 <span class="you">› /start-ticket #214 · retry the edit</span>
-<span class="ok">  ✓ all 3 gates pass · edit allowed</span>
+<span class="ok">  ✓ all checks pass · safe to proceed</span>
 
-<span class="ag">Rex: "analytics ETL reads user_profiles nightly -
-confirm it skips the missing column before merge."</span></pre>
-      <div class="demo__caption">3 hooks, 2 skills, 1 AgDR - all before a single byte of schema changed. Questions that would surface at 2am during rollback get forced upfront, when your team is awake.</div>
+<span class="ag">Rex: "analytics job reads this column every night —
+confirm it skips the missing column before you ship."</span></pre>
+      <div class="demo__caption">The "I forgot to think about rollback" mistake gets caught at 5pm on Friday instead of at 2am on Saturday. The framework refuses to let you touch the database until the plan is real — and the reviewer catches the downstream system you forgot about.</div>
     </article>
 
   </div>
@@ -1739,60 +1946,60 @@ confirm it skips the missing column before merge."</span></pre>
 <section class="section" id="in-the-box">
 
   <div class="section__head">
-    <span class="section__num">04 / WHAT'S IN THE BOX</span>
-    <h2 class="section__title">What can apexyard do?</h2>
+    <span class="section__num">07 / WHAT'S IN THE BOX</span>
+    <h2 class="section__title">What you actually get when you fork it</h2>
     <p class="section__lede">
-      Everything below is already wired in your fork. Nothing to install, nothing to configure beyond <code>/setup</code>.
+      Everything below is already wired in your fork. Nothing to install, nothing to configure beyond <code>/setup</code>. Layered: outcome first, the technical detail (counts, names, file paths) below.
     </p>
   </div>
 
   <div class="layers">
 
     <article class="layer">
-      <div class="layer__num">roles · 19</div>
-      <h3 class="layer__title">Activate by trigger</h3>
+      <div class="layer__num">reviews like a real team</div>
+      <h3 class="layer__title">Reviews from a full engineering team — without hiring one</h3>
       <p class="layer__desc">
-        PR touches auth → Security Auditor activates. Ticket hits QA → QA Engineer. Migration edit → Data Engineer + migration AgDR. Each role has CAN / CANNOT lists - it won't step outside its lane.
+        The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. <span class="dim">Behind the scenes: 19 role definitions across 5 departments, each with its own checklist and boundaries.</span>
       </p>
     </article>
 
     <article class="layer">
-      <div class="layer__num">skills · 54 slash commands</div>
-      <h3 class="layer__title">One prompt, one thing</h3>
+      <div class="layer__num">one prompt, one job</div>
+      <h3 class="layer__title">Tools for every step of shipping software</h3>
       <p class="layer__desc">
-        <code>/handover</code> adopts a project. <code>/idea</code> captures a concept. <code>/inbox</code>, <code>/status</code>, <code>/tasks</code> triage the portfolio. <code>/decide</code> records a technical call as an AgDR. <code>/launch-check</code> runs a 10-dimension readiness audit. <code>/c4</code> generates L1 + L2 architecture diagrams from a codebase.
+        Want to adopt a project you've inherited? <code>/handover</code>. Want to capture an idea before it evaporates? <code>/idea</code>. Want to know what's waiting on you across every product? <code>/inbox</code>. Want a launch-readiness check before customers see it? <code>/launch-check</code>. <span class="dim">54 of these in total — each one is a focused workflow with safety rails.</span>
       </p>
     </article>
 
     <article class="layer">
-      <div class="layer__num">hooks · 32 shell scripts</div>
-      <h3 class="layer__title">Rules that fire themselves</h3>
+      <div class="layer__num">guardrails that fire themselves</div>
+      <h3 class="layer__title">Guardrails that stop bad code from shipping — automatically</h3>
       <p class="layer__desc">
-        Ticket-first on every edit. Migration gate on schema paths. Two-marker merge (Rex + CEO), SHA-bound, invalidates on every commit. Red CI block. Secrets scanner. Design-review gate on UI PRs. Upstream-drift banner at session start.
+        Every edit needs a real ticket behind it. Every database change needs a rollback plan. Every merge needs a real review. Secrets in code get caught before they're committed. <span class="dim">Mechanically enforced — 32 small scripts that fire at the right moments, so you don't have to remember to check.</span>
       </p>
     </article>
 
     <article class="layer">
-      <div class="layer__num">agents · 23 sub-agents</div>
-      <h3 class="layer__title">Reviewers that don't rubber-stamp</h3>
+      <div class="layer__num">reviewers that don't rubber-stamp</div>
+      <h3 class="layer__title">A real code review on every change</h3>
       <p class="layer__desc">
-        Rex (code review) checks architecture + tests + AgDR links + glossary. Hakim (security) flags auth / crypto / secrets. Munir (deps) scans vulnerabilities + licences. Tariq (PR manager) and Idris (ticket manager) handle the orchestration.
+        The reviewer reads what changed and how the rest of the system reacts to it — not just the diff. It flags missing tests, surfaces decisions you made silently, and refuses to approve work that bypasses the team's standards. Pushing new code invalidates the previous approval, so nothing slips through after the review is done. <span class="dim">Powered by 23 specialised reviewer agents under the hood.</span>
       </p>
     </article>
 
     <article class="layer layer--wide layer--split" style="grid-column: 1 / -1;">
       <div class="layer__half">
-        <div class="layer__num">portfolio &middot; one fork, N products</div>
-        <h3 class="layer__title">One inbox across everything</h3>
+        <div class="layer__num">one inbox across everything</div>
+        <h3 class="layer__title">Every product, one screen</h3>
         <p class="layer__desc">
-          <code>apexyard.projects.yaml</code> at your fork root lists every repo you manage. Skills like <code>/inbox</code>, <code>/status</code>, <code>/tasks</code>, <code>/stakeholder-update</code> aggregate across it. One prompt, every project. Add a project with <code>/handover</code>; sync with upstream via <code>/update</code>.
+          Run <code>/inbox</code> and see every pull request waiting on you, every issue stuck, every comment unanswered — across every product you're building. Run <code>/stakeholder-update weekly</code> on Friday and the rollup writes itself from the actual week's activity. <span class="dim">Backed by a one-file registry at your fork root; add a project with <code>/handover</code>, sync the framework with <code>/update</code>.</span>
         </p>
       </div>
       <div class="layer__half">
-        <div class="layer__num">CI &middot; 7 golden-path workflows</div>
-        <h3 class="layer__title">Drop-in GitHub Actions</h3>
+        <div class="layer__num">ready-made CI</div>
+        <h3 class="layer__title">CI pipelines that just work</h3>
         <p class="layer__desc">
-          At <code>golden-paths/pipelines/</code>: <code>ci.yml</code>, <code>code-quality.yml</code>, <code>security.yml</code>, <code>dependency-audit.yml</code>, <code>pr-title-check.yml</code>, <code>review-check.yml</code>, <code>seo-check.yml</code>. Copy what you need into each project's <code>.github/workflows/</code>.
+          Seven ready-made GitHub Actions pipelines you can drop into any project — code quality, security scans, dependency audits, PR-title and review checks, SEO checks. No starting from scratch, no copy-pasting from someone else's repo. <span class="dim">Lives at <code>golden-paths/pipelines/</code>.</span>
         </p>
       </div>
     </article>
@@ -1807,12 +2014,16 @@ confirm it skips the missing column before merge."</span></pre>
 <section class="final">
   <div class="final__inner">
     <div>
-      <h2>Fork it, clone it,<br>run <span class="acc">claude</span>.</h2>
+      <h2>Ship like you finally<br>have <span class="acc">the team</span>.</h2>
       <p>
-        MIT. Plain markdown and shell. Fork freely, edit any rule, hook, or skill to match your team.
+        Fork it, run <code>/setup</code>, start your first day. Free and open source — fork freely, change anything to match how you work. No SaaS, no monthly fee, no lock-in.
       </p>
     </div>
     <div class="final__actions">
+      <a href="/how-it-works" class="final__btn">
+        <span>see what a day looks like</span>
+        <span class="arrow">→</span>
+      </a>
       <a href="https://github.com/me2resh/apexyard" class="final__btn" target="_blank" rel="noopener">
         <span>view on github</span>
         <span class="arrow">→</span>
@@ -1820,10 +2031,6 @@ confirm it skips the missing column before merge."</span></pre>
       <a href="#quickstart" class="final__btn">
         <span>back to quickstart</span>
         <span class="arrow">↑</span>
-      </a>
-      <a href="https://github.com/me2resh/apexyard/issues" class="final__btn" target="_blank" rel="noopener">
-        <span>report an issue</span>
-        <span class="arrow">→</span>
       </a>
     </div>
   </div>
@@ -1975,7 +2182,7 @@ confirm it skips the missing column before merge."</span></pre>
       ['ok',    '  ✓ tests pass locally',                                                    700, 0],
       ['blank', '',                                                                          200, 0],
       ['sys',   'Detected decision: papaparse vs csv-stringify',                             400, 0],
-      ['muted', '  AgDR-0014 · chose csv-stringify (zero deps)',                             800, 0],
+      ['muted', '  Decision recorded · chose csv-stringify (zero deps)',                     800, 0],
       ['blank', '',                                                                          200, 0],
       ['sys',   'Local checks:',                                                             350, 0],
       ['ok',    '  ✓ lint  ✓ types  ✓ 147 tests  ✓ 1.2mb build',                             800, 0],
@@ -1988,7 +2195,7 @@ confirm it skips the missing column before merge."</span></pre>
       ['sys',   'Rex reviewing a3f9c21...',                                                  500, 0],
       ['muted', '  Architecture · PASS (domain clean)',                                      250, 0],
       ['muted', '  Tests        · 94% coverage',                                             250, 0],
-      ['muted', '  AgDR         · AgDR-0014 linked',                                         250, 0],
+      ['muted', '  Decision log · linked',                                                  250, 0],
       ['muted', '  Glossary     · 5 terms',                                                  300, 0],
       ['ok',    '  Verdict      · APPROVE - deferring to CEO',                               800, 0],
       ['blank', '',                                                                          200, 0],
@@ -2091,11 +2298,11 @@ confirm it skips the missing column before merge."</span></pre>
       ['muted', '  [#44] reading auth/* (35 files)...',                                      700, 0],
       ['blank', '',                                                                          200, 0],
       ['muted', '  [#42] webhook handler · idempotency key · 8 tests · all green',           350, 0],
-      ['muted', '  [#43] migration AgDR-0042 · rollback steps · staging tested',             350, 0],
+      ['muted', '  [#43] migration plan recorded · rollback tested on staging',             350, 0],
       ['muted', '  [#44] findings: token rotation gap · no session timeout',                 500, 0],
       ['blank', '',                                                                          200, 0],
       ['ok',    '  [#42] PR #91 opened · Rex auto-review running',                           300, 0],
-      ['ok',    '  [#43] PR #92 opened · migration label + AgDR linked',                     300, 0],
+      ['ok',    '  [#43] PR #92 opened · migration plan linked',                            300, 0],
       ['ok',    '  [#44] audit report at projects/web/audit-2026-05.md',                     650, 0],
       ['blank', '',                                                                          200, 0],
       ['ok',    'Done · 3 tickets · 2 PRs · 1 audit report',                                 350, 0],

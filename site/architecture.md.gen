@@ -2,6 +2,10 @@
 
 > Five layers (governance, capability, defaults, customisation, per-project data) inside one ops fork — plus an optional split-portfolio private sibling repo. The canonical mental model for ApexYard adopters.
 
+## In plain English
+
+ApexYard is one place that holds the rules, the tools, and the history for every product you build. The 5-layer model below shows how that works — useful if you want the technical detail; you don't need it to start. If you'd rather see a day with it, read [how it works](https://yard.apexscript.com/how-it-works.md).
+
 ## What is it?
 
 ApexYard governs a portfolio of repos as one organisation. The architecture is a 5-layer model inside a single fork of `me2resh/apexyard`, plus an optional private-sibling repo for adopters who don't want portfolio names on a public GitHub.
@@ -81,6 +85,7 @@ Read [`docs/multi-project.md`](https://github.com/me2resh/apexyard/blob/main/doc
 ## Links
 
 - Home: <https://yard.apexscript.com/index.md>
+- How it works: <https://yard.apexscript.com/how-it-works.md>
 - Skills: <https://yard.apexscript.com/skills.md>
 - GitHub: <https://github.com/me2resh/apexyard>
 - Setup guide: <https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md>
