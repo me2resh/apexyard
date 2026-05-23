@@ -1,0 +1,11 @@
+{
+  "portfolio": {
+    "registry": "../apexyard-portfolio/apexyard.projects.yaml",
+    "projects_dir": "../apexyard-portfolio/projects",
+    "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md",
+    "onboarding": "../apexyard-portfolio/onboarding.yaml",
+    "workspace_dir": "../apexyard-portfolio/workspace",
+    "custom_skills_dir": "../apexyard-portfolio/custom-skills",
+    "custom_handbooks_dir": "../apexyard-portfolio/custom-handbooks"
+  }
+}

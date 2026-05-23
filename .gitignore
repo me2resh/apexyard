@@ -2,9 +2,10 @@
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
-# ApexYard per-project config written by /onboard. Contains deploy URLs and
-# sensitive-topic notes that should not leak to git — keep it local.
-.claude/project-config.json
+# ApexYard per-machine local overrides (deploy URLs, sensitive notes).
+# Note: .claude/project-config.json is committed when it contains the
+# portfolio: path block required for split-portfolio v2 mode.
+.claude/settings.local.json
 
 # Claude Code per-machine settings (permission overrides, local tool config)
 .claude/settings.local.json
@@ -27,3 +28,10 @@ workspace/*/
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+
+# Split-portfolio v2: portfolio data lives in a separate private repo.
+# See docs/multi-project.md.
+apexyard.projects.yaml
+projects
+onboarding.yaml
+workspace
