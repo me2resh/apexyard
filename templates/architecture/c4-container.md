@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/c4-container.md · github.com/me2resh/apexyard · MIT -->
+
 # Container Diagram — {Project Name}
 
 > **C4 Level 2** — the system broken down into deployable/runnable containers. Audience: the dev team. One diagram per managed project; usually zoomed in from the L1 context diagram.

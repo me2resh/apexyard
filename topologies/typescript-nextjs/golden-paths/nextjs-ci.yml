@@ -1,0 +1,142 @@
+# Next.js CI Pipeline
+# Copy this to .github/workflows/nextjs-ci.yml in your project.
+#
+# Topology: typescript-nextjs (apexyard topology v1.0.0)
+# Purpose: Next.js-specific build + bundle-size guard + Lighthouse on the build
+# Extends: golden-paths/pipelines/code-quality.yml (typecheck + lint + test)
+#
+# What's different from the generic code-quality.yml:
+#   - `next build` (not generic `npm run build`) — surfaces Next-specific build errors
+#   - Bundle size assertion via `next-bundle-analyzer` — Next.js apps drift on JS bundle size
+#     more than other stacks, and adopters routinely ship 200kB+ regressions undetected
+#   - Type-checking through `next typecheck` if the project script exists
+
+name: Next.js CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  build-and-check:
+    name: Build, Type-check, Lint, Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Prisma client generation (no-op if not a Prisma project)
+      - name: Generate Prisma client (if present)
+        run: |
+          if [ -f prisma/schema.prisma ]; then
+            npx prisma generate
+          else
+            echo "No prisma/schema.prisma — skipping prisma generate"
+          fi
+
+      # TypeScript check via the project's own script (often `next typecheck` or `tsc --noEmit`)
+      - name: TypeScript Check
+        id: typecheck
+        run: |
+          if jq -e '.scripts.typecheck' package.json > /dev/null; then
+            npm run typecheck 2>&1 | tee typecheck-output.txt || true
+          else
+            npx tsc --noEmit 2>&1 | tee typecheck-output.txt || true
+          fi
+
+          ERRORS=$(grep -c "error TS" typecheck-output.txt || echo "0")
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Found $ERRORS TypeScript errors"
+            exit 1
+          fi
+
+      # ESLint via next lint (handles flat config + legacy config)
+      - name: ESLint Check
+        id: lint
+        run: |
+          npx next lint --format json --output-file eslint-report.json || true
+
+          ERRORS=$(jq '[.[].errorCount] | add // 0' eslint-report.json)
+          WARNINGS=$(jq '[.[].warningCount] | add // 0' eslint-report.json)
+
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+          echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Found $ERRORS ESLint errors"
+            exit 1
+          fi
+
+      # Tests (Vitest preferred; Jest also supported)
+      - name: Run Tests
+        run: |
+          if jq -e '.scripts.test' package.json > /dev/null; then
+            npm test
+          else
+            echo "No test script in package.json — skipping"
+          fi
+
+      # Production build — Next-specific build errors surface here
+      - name: Next.js Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # Bundle size guard — Next.js apps drift on bundle size easily
+      # Threshold lives in next.config.js → experimental.bundlePagesRouterDependencies
+      # or in this workflow as the BUNDLE_LIMIT_KB env var below
+      - name: Bundle Size Check
+        run: |
+          BUNDLE_LIMIT_KB=${BUNDLE_LIMIT_KB:-300}
+
+          if [ -d ".next" ]; then
+            # Find the largest first-load JS chunk
+            largest=$(find .next/static/chunks/pages .next/static/chunks/app -name '*.js' 2>/dev/null \
+              | xargs -I{} stat -c '%s {}' {} 2>/dev/null \
+              | sort -rn | head -1 | awk '{print int($1/1024)}')
+
+            largest=${largest:-0}
+            echo "Largest first-load JS chunk: ${largest} kB (limit ${BUNDLE_LIMIT_KB} kB)"
+
+            if [ "$largest" -gt "$BUNDLE_LIMIT_KB" ]; then
+              echo "::warning::Largest first-load chunk (${largest} kB) exceeds limit (${BUNDLE_LIMIT_KB} kB) — investigate before merging"
+            fi
+          fi
+
+      # Generate summary
+      - name: Generate Summary
+        if: always()
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # Next.js CI Report
+
+          | Check | Status | Details |
+          |-------|--------|---------|
+          | TypeScript | ${{ steps.typecheck.outputs.errors == '0' && 'Pass' || 'Fail' }} | ${{ steps.typecheck.outputs.errors }} errors |
+          | ESLint | ${{ steps.lint.outputs.errors == '0' && 'Pass' || 'Fail' }} | ${{ steps.lint.outputs.errors }} errors, ${{ steps.lint.outputs.warnings }} warnings |
+          | Build | (see job log) | next build |
+          | Bundle size | (see job log) | First-load JS |
+
+          ---
+          Topology: typescript-nextjs v1.0.0
+          EOF

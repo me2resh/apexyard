@@ -1,6 +1,6 @@
 ---
 name: seo-audit
-description: Technical SEO audit — meta tags, Open Graph, sitemap, robots.txt, structured data, mobile-friendliness, Core Web Vitals readiness. Deep-dive companion to /launch-check's SEO dimension.
+description: Technical SEO audit — meta, OG, sitemap, robots.txt, structured data, mobile, CWV readiness. Deep-dive for /launch-check SEO.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: medium
@@ -9,6 +9,8 @@ effort: medium
 # /seo-audit — Technical SEO Analysis
 
 Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technical SEO, and social sharing metadata. Invoke when `/launch-check`'s SEO row shows WARN or FAIL.
+
+> **See also**: `/geo-audit` for the LLM/agent-discoverability sibling check — `llms.txt`, `AGENTS.md`, AI-crawler directives in `robots.txt`, JSON-LD citation metadata, token economics. `/seo-audit` covers the Googlebot audience; `/geo-audit` covers the LLM-crawler and coding-agent audience. The two run independently; `/launch-check` fans out to both at milestone boundaries.
 
 ## Process
 
@@ -64,9 +66,60 @@ SEO AUDIT — <project> @ <sha>
 SEO readiness: GOOD (1 fail, 2 warnings — fix sitemap before launch)
 ```
 
+## Persist the run + render trend
+
+After printing the findings table, persist via the shared audit-history lib so the SEO trend across runs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md`.
+
+### Resolve project name + score + verdict
+
+`<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
+
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "SEO readiness" two-state (GOOD/NEEDS WORK) maps via finding count: any high → `fail`/`conditional` per the table, none → `pass`.
+
+### Persist + render
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+
+# Lowercase severity in the payload — the lib expects critical/high/medium/low/info.
+payload=$(mktemp); cat > "$payload" <<'EOF'
+{
+  "schema_version": 1,
+  "findings": [
+    {"id": "S3", "severity": "high",   "status": "open", "summary": "og:image missing on /blog/* templates"},
+    {"id": "S4", "severity": "high",   "status": "open", "summary": "sitemap.xml not found at /sitemap.xml"},
+    {"id": "S6", "severity": "medium", "status": "open", "summary": "robots.txt allows everything; missing Sitemap: directive"}
+  ]
+}
+EOF
+
+# Body: per templates/audits/seo-audit.md
+body=$(mktemp); cat > "$body" <<'EOF'
+... (filled-in body — findings table + Recommended priority) ...
+EOF
+
+ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+audit_run_persist "<project-name>" "seo-audit" "$ts" "fail" 60 "$body" < "$payload"
+rm -f "$payload" "$body"
+
+audit_render_trend "<project-name>" "seo-audit" 5
+```
+
+### Opt-in commit
+
+```bash
+touch projects/<name>/audits/seo-audit/.audit-history-tracked
+```
+
 ## Rules
 
 1. **Auto-PASS for non-web projects.** APIs, CLIs, libraries, backend-only services don't need SEO.
 2. **Focus on technical SEO**, not content strategy. Don't audit keyword targeting or content quality — that's a marketing call, not a technical check.
 3. **Check the built output** if available (`dist/`, `build/`, `.next/`), not just source — SSR frameworks may generate meta tags at build time.
 4. **Prioritize by indexing impact.** Missing sitemap > missing og:image > missing structured data.
+5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
+6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

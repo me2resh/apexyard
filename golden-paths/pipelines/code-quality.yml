@@ -43,7 +43,7 @@ jobs:
         run: |
           npm run typecheck 2>&1 | tee typecheck-output.txt || true
 
-          ERRORS=$(grep -c "error TS" typecheck-output.txt || echo "0")
+          ERRORS=$(grep -c "error TS" typecheck-output.txt || true)
           echo "errors=$ERRORS" >> $GITHUB_OUTPUT
 
           if [ "$ERRORS" -gt 0 ]; then
@@ -72,7 +72,7 @@ jobs:
         run: |
           npx prettier --check "**/*.{ts,tsx,js,jsx,json,md}" 2>&1 | tee format-output.txt || true
 
-          UNFORMATTED=$(grep -c "would be reformatted" format-output.txt || echo "0")
+          UNFORMATTED=$(grep -c "would be reformatted" format-output.txt || true)
           echo "unformatted=$UNFORMATTED" >> $GITHUB_OUTPUT
 
       # Run tests
@@ -82,7 +82,7 @@ jobs:
           npm run test 2>&1 | tee test-output.txt || true
 
           if grep -q "Tests:.*failed" test-output.txt; then
-            FAILED=$(grep "Tests:" test-output.txt | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
+            FAILED=$(grep "Tests:" test-output.txt | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || true)
             echo "failed=$FAILED" >> $GITHUB_OUTPUT
             echo "::error::$FAILED tests failed"
           else

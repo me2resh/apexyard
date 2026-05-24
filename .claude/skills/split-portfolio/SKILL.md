@@ -1,6 +1,6 @@
 ---
 name: split-portfolio
-description: Migrate a single-fork apexyard adopter to split-portfolio mode (public framework + private sibling portfolio). Automates the destructive recovery flow — force-push history rewrite, GitHub Issue/PR body redaction, private repo creation, and config-block writing — with explicit operator-confirmation gates at every destructive step. ONLY invoke when the adopter has actively asked to migrate, OR is using `--verify` to inspect state without destructive ops. Refuses on a paid GitHub plan, a clean working tree, or an already-migrated fork.
+description: Migrate single-fork to split-portfolio mode (public framework + private portfolio) via gated destructive recovery flow.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 argument-hint: "[--verify | --dry-run]"
 effort: high
@@ -102,6 +102,9 @@ Changes you will see:
   - This fork's main branch force-pushed
   - GitHub Issue / PR bodies on this fork that named registered projects redacted
   - .claude/project-config.json updated with a `portfolio:` block pointing at the sibling
+  - onboarding.yaml COPIED to the sibling (canonical) + untracked from the public fork
+  - workspace/<name>/ contents MOVED to the sibling (gigabytes — no point doubling disk)
+  - .apexyard-fork marker written + v2 portfolio keys added (split-portfolio v2 layout)
 
 Reversibility:
   - A backup-pre-rewrite branch is pushed before any rewrite (recoverable for 7 days)
@@ -260,7 +263,7 @@ EOF
 # Untrack any framework projects/README.md from upstream (it'll be replaced by the private sibling's content)
 git rm --cached -r projects 2>/dev/null || true
 
-# Write portfolio: block to project-config
+# Write portfolio: block to project-config (v2 keys added in Steps 9a–9d below)
 PRIVATE_REPO_REL="../<private-repo-name>"
 cat > .claude/project-config.json <<JSON
 {
@@ -279,6 +282,119 @@ git commit -m "chore: configure split-portfolio mode (#143 / #145)"
 If `.claude/project-config.json` already has a non-portfolio block, **merge** rather than overwrite — preserve existing keys.
 
 If it has a `portfolio:` block already, refuse and ask the operator to manually reconcile.
+
+#### Step 9a — Produce the v2 layout (onboarding.yaml + workspace + marker + v2 config keys)
+
+Steps 9a–9d extend the migration so the final fork is split-portfolio **v2**, not v1. Without these, adopters would land on the v1 layout and need a follow-up `/update` to migrate again. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § "v1→v2 migration semantics" for the copy-vs-move rationale per file class.
+
+Resolve the sibling repo dir from the existing `portfolio.registry` path (the parent dir of the registry file is the sibling repo root):
+
+```bash
+SIBLING_ROOT=$(dirname "$(jq -r '.portfolio.registry' .claude/project-config.json)")
+# e.g. SIBLING_ROOT=../<private-repo-name>
+```
+
+Per-file-class confirmation — ask separately so the operator can defer either:
+
+```
+Copy onboarding.yaml to sibling private repo? [Y/n]
+Move workspace/<name>/ contents to sibling private repo? [Y/n]   # surfaces disk size: du -sh workspace
+```
+
+`onboarding.yaml` is **copied** (not moved): the file is small, the legacy tracker fallback at `_lib-ops-root.sh` still reads it as part of the legacy ops-root walk-up, and keeping a snapshot in the public fork is a safety net while the sibling-repo copy becomes the canonical source of truth. `workspace/<name>/` is **moved**: clones are gigabytes; doubling disk makes no sense.
+
+##### Copy onboarding.yaml (not move — see AgDR-0021 § H)
+
+```bash
+if [ -f onboarding.yaml ] && [ ! -f "$SIBLING_ROOT/onboarding.yaml" ]; then
+  # COPY (cp -p preserves mtimes/permissions). Sibling becomes canonical;
+  # public-fork copy is left as a snapshot and untracked below.
+  cp -p onboarding.yaml "$SIBLING_ROOT/onboarding.yaml"
+  ( cd "$SIBLING_ROOT" && git add onboarding.yaml )
+
+  # Untrack from the public fork so future commits don't ship it. The file
+  # is left on disk (gitignored by Step 9c) as a legacy-tool snapshot.
+  git rm --cached onboarding.yaml 2>/dev/null || true
+elif [ -f "$SIBLING_ROOT/onboarding.yaml" ] && [ -f onboarding.yaml ]; then
+  # Both present — surface and stop; operator reconciles.
+  printf 'WARNING: onboarding.yaml exists in BOTH the public fork and the sibling repo.\n' >&2
+  printf '  Reconcile manually (the sibling-repo copy is canonical) before re-running.\n' >&2
+  exit 1
+fi
+```
+
+Idempotence: if `onboarding.yaml` is already only in the sibling repo (and untracked in the public fork), this block is a no-op.
+
+#### Step 9b — Move workspace/<name>/ contents to the sibling
+
+```bash
+if [ -d workspace ] && [ "$(ls -A workspace 2>/dev/null)" ]; then
+  mkdir -p "$SIBLING_ROOT/workspace"
+  for entry in workspace/*; do
+    [ -e "$entry" ] || continue
+    name=$(basename "$entry")
+    # workspace/README.md is a framework artefact explaining the convention —
+    # it stays in the public fork. See AgDR-0021 § G.
+    if [ "$name" = "README.md" ]; then
+      continue
+    fi
+    if [ -e "$SIBLING_ROOT/workspace/$name" ]; then
+      echo "WARNING: workspace/$name exists in BOTH locations — skipped."
+      continue
+    fi
+    mv "$entry" "$SIBLING_ROOT/workspace/$name"
+  done
+fi
+```
+
+Idempotence: empty `workspace/` (no entries to move, or only `README.md` left) is a no-op.
+
+#### Step 9c — Extend .gitignore for v2 file classes
+
+```bash
+NEEDS=()
+grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
+grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+
+if [ "${#NEEDS[@]}" -gt 0 ]; then
+  {
+    echo ""
+    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace live in the private sibling repo."
+    for n in "${NEEDS[@]}"; do echo "$n"; done
+  } >> .gitignore
+  git add .gitignore
+fi
+```
+
+#### Step 9d — Write the .apexyard-fork marker + v2 config-block keys
+
+The marker is **presence-only**: readers (every ops-root walk) MUST ignore content; only file presence matters. Writers MAY include a single explanatory line so `head .apexyard-fork` is informative — both `echo "# comment" > .apexyard-fork` and `touch .apexyard-fork` are valid. See [AgDR-0021](../../../docs/agdr/AgDR-0021-split-portfolio-v2-path-resolution.md) § B.
+
+```bash
+if [ ! -f .apexyard-fork ]; then
+  echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
+  git add .apexyard-fork
+fi
+```
+
+Add the four v2 keys to `.claude/project-config.json` — `onboarding`, `workspace_dir`, `custom_skills_dir`, `custom_handbooks_dir`. Use `jq` to merge so existing keys (Step 9's registry / projects_dir / ideas_backlog) are preserved, and `// $x` short-circuits if the operator already added a key by hand:
+
+```bash
+PCONFIG=.claude/project-config.json
+TMP=$(mktemp)
+jq --arg onb "$SIBLING_ROOT/onboarding.yaml" \
+   --arg ws  "$SIBLING_ROOT/workspace" \
+   --arg cs  "$SIBLING_ROOT/custom-skills" \
+   --arg ch  "$SIBLING_ROOT/custom-handbooks" \
+   '.portfolio.onboarding         = (.portfolio.onboarding         // $onb)
+    | .portfolio.workspace_dir    = (.portfolio.workspace_dir    // $ws)
+    | .portfolio.custom_skills_dir    = (.portfolio.custom_skills_dir    // $cs)
+    | .portfolio.custom_handbooks_dir = (.portfolio.custom_handbooks_dir // $ch)' \
+   "$PCONFIG" > "$TMP" && mv "$TMP" "$PCONFIG"
+git add "$PCONFIG"
+```
+
+Idempotence: re-running 9d is a no-op (existing key values are preserved via `// $x`; the marker write skips when present).
 
 #### Step 10 — Verify + cleanup
 
@@ -336,6 +452,10 @@ Re-running the skill on a partially-migrated fork picks up where it left off:
 | `backup-pre-rewrite` branch exists | Skip step 5 |
 | HEAD on main has no registry/projects | Skip steps 6 + 7 |
 | `.claude/project-config.json` already has portfolio block matching new layout | Skip step 9 |
+| `onboarding.yaml` already in sibling AND untracked in public fork | Skip step 9a |
+| `workspace/` empty (or only `README.md` left) in public fork | Skip step 9b |
+| `.gitignore` already lists both v2 entries | Skip step 9c |
+| `.apexyard-fork` present AND all four v2 config keys set | Skip step 9d |
 | All complete | Run --verify only and exit 0 |
 
 The `--dry-run` flag walks through every step printing the commands but executes none. Useful for the operator to preview the destructive ops before running real.
@@ -356,3 +476,7 @@ Run on every exit path (successful migration, confirmed abort, refusal-in-flight
 4. **Surface the timeline-API caveat verbatim** at step 8. Adopters must see it. No abstraction.
 5. **Refuse on already-migrated.** Detection covers config-block mode, symlink mode, and mixed-drift. Re-run with `--verify` is fine; full re-run requires manual cleanup first.
 6. **Resolve paths via the helper.** Step 8 + step 9 + step 10 all use `portfolio_registry`, `portfolio_projects_dir`, `portfolio_validate` from `_lib-portfolio-paths.sh`. No literal `apexyard.projects.yaml` references in bash blocks (the snapshot's path is passed as a separate variable).
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

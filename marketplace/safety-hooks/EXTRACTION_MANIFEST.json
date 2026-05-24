@@ -1,0 +1,20 @@
+{
+  "subpack": "safety-hooks",
+  "upstream_repo": "me2resh/apexyard",
+  "upstream_sha": "8089198eb7fb134477529f6628c2c0569faac7ec",
+  "extracted_at": "2026-05-20T13:10:36Z",
+  "extracted_by": "bin/extract-subpacks.sh",
+  "files": [
+    ".claude/hooks/_lib-extract-pr.sh",
+    ".claude/hooks/_lib-ops-root.sh",
+    ".claude/hooks/_lib-read-config.sh",
+    ".claude/hooks/_lib-tracker.sh",
+    ".claude/hooks/block-git-add-all.sh",
+    ".claude/hooks/block-main-push.sh",
+    ".claude/hooks/check-secrets.sh",
+    ".claude/hooks/pre-push-gate.sh",
+    ".claude/hooks/validate-branch-name.sh",
+    ".claude/hooks/validate-pr-create.sh",
+    ".claude/hooks/verify-commit-refs.sh"
+  ]
+}

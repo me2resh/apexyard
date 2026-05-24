@@ -1,0 +1,428 @@
+# ApexYard — Full Content
+
+> ApexYard lets founders ship AI-built software like a real engineering team —
+> without hiring one. Automatic code review, launch-readiness checks, and
+> one place for all your products, built on top of Claude Code. 54 skills,
+> 32 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
+> no lock-in.
+
+This file is the LLM/agent-friendly concatenation of the apexyard marketing
+site (https://yard.apexscript.com/). Each page is a top-level section below.
+
+---
+
+# Home (https://yard.apexscript.com/)
+
+## Ship AI-built software like a real engineering team — without hiring one.
+
+ApexYard adds the reviews, guardrails, and process behind every change you
+make with Claude Code. Catch the mistakes before your customers do —
+automatically, without checking every commit yourself.
+
+## What you get
+
+### 1. Automatic code review
+
+Every change you make — or that a contractor makes — gets reviewed by a
+senior-engineering-level reviewer before it ships. You see exactly what
+was caught and why, and decide what to do about it.
+
+### 2. Launch-readiness checks
+
+Before you push to customers, run one command and find out what's still
+missing — security, performance, accessibility, the lot. No surprise
+emails from users telling you about it.
+
+### 3. One place for all your products
+
+Every project you're building shows up in one inbox. Pull requests that
+need a look, issues someone's stuck on, anything that needs your attention
+— all in one screen, no tab-juggling.
+
+## Who this is for
+
+- **Solo founders shipping with AI** — you're building the product alone,
+  with Claude Code or Cursor doing most of the typing. You need the
+  guardrails a real team would give you — without a real team.
+- **Non-technical founders managing contractors or a small dev team** —
+  you need to know the work is solid before it goes live, without reading
+  every commit yourself.
+- **Small teams with no engineering process yet** — you've shipped your
+  first version. Now you need real review, real testing, real release
+  discipline before things get harder to fix.
+
+## Proof — verifiable from our own GitHub activity
+
+ApexYard is built using ApexYard. These are real numbers from the
+framework's own GitHub history — every change went through the same
+review and guardrails the tool installs in your fork.
+
+- **176 PRs reviewed and merged in the last 90 days**
+- **8 production releases shipped to date** (v0.1.0 through v2.0.0)
+- **51 technical decisions recorded** (released to main; every meaningful
+  choice in an audit trail)
+- **13 bugs caught and fixed** before users hit them
+- 195 issues closed all-time
+
+## Get started in three steps
+
+### 1. Pull it to your machine
+
+Fork `me2resh/apexyard` on GitHub. Clone the fork. Treat the fork itself
+as your ops repo — no nested installs, no symlinks, no proprietary
+upgrade tool. Future upgrades flow through `git fetch upstream` and the
+`/update` skill.
+
+### 2. Adopt, or originate
+
+Register every repo you want under management in
+`apexyard.projects.yaml`. Adopt existing repos via `/handover <repo>`
+(which writes a per-project handover-assessment.md and scores
+harnessability across 5 codebase dimensions). Originate new repos by
+running `/setup`, then start filing tickets via `/feature`, `/bug`,
+`/task`.
+
+### 3. Ship under the gates
+
+Every change goes through a PR. Every PR gets reviewed by Rex (the code
+reviewer agent). Every merge requires explicit per-PR approval recorded
+via `/approve-merge <pr>`. Plan-level "go" / "continue" / "ship it" does
+NOT authorize a merge — the discrete moment is the per-PR invocation of
+`/approve-merge`. Mechanically enforced.
+
+## Three realistic situations
+
+**Idea to production.** From a half-formed idea through a real code
+review and a real launch sign-off in the middle. The reviewer is a
+senior-engineering-level AI agent (Rex) and the sign-off is yours —
+both have to happen before anything ships.
+
+**Five products, one inbox.** One screen for every project you're
+building. No tab-juggling, no five different GitHub repos. The same
+registry powers the Friday stakeholder update — generated from the
+actual week's activity, not from what you remember.
+
+**Risky change, 5pm Friday.** The "I forgot to think about rollback"
+mistake gets caught at 5pm on Friday instead of at 2am on Saturday. The
+framework refuses to let you touch the database until the plan is real
+— and the reviewer catches the downstream system you forgot about.
+
+## What you actually get when you fork it
+
+### Reviews from a full engineering team — without hiring one
+
+The reviewer changes based on what you're working on. Touching auth code?
+A security reviewer takes a look. Touching the database? Someone who
+specialises in database changes walks you through the rollback plan.
+Behind the scenes: 19 role definitions across 5 departments, each with
+its own checklist and boundaries.
+
+### Tools for every step of shipping software
+
+Want to adopt a project you've inherited? `/handover`. Want to capture
+an idea before it evaporates? `/idea`. Want to know what's waiting on
+you across every product? `/inbox`. Want a launch-readiness check before
+customers see it? `/launch-check`. 54 of these in total — each one is a
+focused workflow with safety rails.
+
+### Guardrails that stop bad code from shipping — automatically
+
+Every edit needs a real ticket behind it. Every database change needs a
+rollback plan. Every merge needs a real review. Secrets in code get
+caught before they're committed. Mechanically enforced — 32 small
+scripts that fire at the right moments, so you don't have to remember
+to check.
+
+### A real code review on every change
+
+The reviewer reads what changed and how the rest of the system reacts
+to it — not just the diff. It flags missing tests, surfaces decisions
+you made silently, and refuses to approve work that bypasses the team's
+standards. Pushing new code invalidates the previous approval, so
+nothing slips through after the review is done. Powered by 23
+specialised reviewer agents under the hood.
+
+### Every product, one screen
+
+Run `/inbox` and see every pull request waiting on you, every issue
+stuck, every comment unanswered — across every product you're building.
+Run `/stakeholder-update weekly` on Friday and the rollup writes itself
+from the actual week's activity. Backed by a one-file registry at your
+fork root.
+
+### CI pipelines that just work
+
+Seven ready-made GitHub Actions pipelines you can drop into any project
+— code quality, security scans, dependency audits, PR-title and review
+checks, SEO checks.
+
+---
+
+# How it works (https://yard.apexscript.com/how-it-works)
+
+A walkthrough of one realistic day using ApexYard, written for someone
+who isn't an engineer.
+
+## Morning — open your inbox
+
+You open Claude Code with a coffee. The first thing you do is ask it
+for your inbox. One screen comes back with every product you're
+building. The pull request that's waiting on your approval. The issue
+your contractor commented on yesterday. The bug a customer reported
+that nobody's picked up yet.
+
+You don't open five GitHub tabs. You pick the highest-priority item and
+tell Claude Code to keep working on it.
+
+## Mid-morning — the AI writes, the framework reviews
+
+You describe the change you want. The AI writes the code. When the AI
+is done, ApexYard automatically runs a real code review against
+everything that changed. Not a checklist — a senior-engineering-level
+review.
+
+This morning's review catches three things. One is a missing test for
+an edge case. One is a security issue. One is a question for you. You
+look at each one, decide what to do, and hit approve.
+
+## Lunch — a contractor finishes their piece
+
+A contractor opens a new PR on a different product. Before you click on
+it, ApexYard has already reviewed it. You see what was flagged. The
+contractor has already responded to the quality issues. You weigh in on
+the product question, they push the fix, the review re-runs, you
+approve.
+
+You didn't have to read every line yourself to know the work was solid.
+
+## Afternoon — getting ready to launch
+
+You're getting close to launching. You ask for a launch-readiness check.
+It comes back with a structured report: is the site secure, accessible,
+fast, monitored, documented. Today the report flags three things — a
+missing privacy policy, no error monitoring, an accessibility issue.
+
+You fix all three. You re-run the readiness check. Three greens. You
+ship.
+
+## End of day — nothing gets lost
+
+Every technical decision you made today is recorded automatically. The
+reviews are saved. The launch checks are stored. Next time anyone needs
+to understand why something is the way it is, the answer is there.
+
+On Friday, you ask for a stakeholder update. The framework writes it
+from real activity. You tweak a sentence and send it.
+
+## What you don't have to do
+
+You don't have to remember to run a code review. You don't have to
+remember to check security. You don't have to remember to think about
+rollback before a database change. You don't have to remember to write
+down why you made a decision.
+
+The framework does it. You make the calls — the product decisions, the
+priority calls, the trade-offs. The engineering process happens whether
+you remember it or not.
+
+---
+
+# Architecture (https://yard.apexscript.com/architecture)
+
+In plain English: ApexYard is one place that holds the rules, the
+tools, and the history for every product you build. The 5-layer model
+below shows how that works — useful if you want the technical detail;
+you don't need it to start.
+
+## The 5-layer model
+
+ApexYard is a single ops fork organised into five conceptual layers,
+each owned by different parts of the framework:
+
+1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
+   `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
+   for the framework.
+2. **Capability layer** — the runnable spec: `.claude/skills/` (54
+   slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
+   `.claude/hooks/` (32 mechanical enforcement scripts).
+3. **Framework defaults layer** — `.claude/project-config.defaults.json`
+   ships the framework's opinions; adopters override per-repo in
+   `.claude/project-config.json` (shallow merge).
+4. **Customisation overlay** — adopter-authored `custom-skills/`,
+   `custom-handbooks/`, and `custom-templates/` (path-mirrored override
+   of framework templates). For split-portfolio adopters, this layer
+   lives in the private sibling repo.
+5. **Per-project data layer** — `apexyard.projects.yaml` registry,
+   `projects/<name>/` per-project docs, `workspace/<name>/` working
+   clones (gitignored).
+
+## One fork, every project
+
+The repo that holds `CLAUDE.md` is your "ops repo" — a fork of
+`me2resh/apexyard` cloned into your organisation. The registry file
+`apexyard.projects.yaml` lists every project under management.
+
+Skills like `/projects`, `/inbox`, `/status`, `/tasks`, and
+`/stakeholder-update` aggregate across the registry. Even if you only
+have one repo to govern, you still fork apexyard and register that
+single repo.
+
+## Customisation overlay
+
+The customisation overlay sits between the framework defaults and the
+per-project data layer. Path-mirrored overrides: drop your version at
+`custom-templates/<path>` and it wins over the framework default at
+`templates/<path>`. Discovery IS the convention.
+
+Same shape applies to `custom-skills/<name>/SKILL.md` (custom slash
+commands) and `custom-handbooks/<dimension>/<name>.md` (custom Rex-
+consumed coding standards).
+
+## Optional private sibling
+
+Split-portfolio mode (v2) ships a separate private repo alongside the
+public fork. Public fork holds only framework files + adopter
+customisations. Private sibling holds `apexyard.projects.yaml`,
+`projects/<name>/`, `onboarding.yaml`, `workspace/<name>/`, plus the
+custom-skills and custom-handbooks dirs.
+
+The config block at `.claude/project-config.json → portfolio.*`
+resolves the paths transparently. Use this mode if you're on GitHub
+Free with any project you don't want named publicly.
+
+---
+
+# Skills (https://yard.apexscript.com/skills)
+
+54 slash commands grouped by what you're trying to do — not by what's
+under the hood. Each is a markdown SKILL.md file under
+`.claude/skills/<name>/`.
+
+## Keep quality high
+
+The skills that catch mistakes before they reach customers — reviews,
+audits, security checks.
+
+- `/code-review` — invoke the Code Reviewer agent (Rex) on a PR.
+- `/security-review` — invoke the Security Reviewer agent (Hakim) on a PR.
+- `/audit-deps` — audit dependencies for vulnerabilities, outdated
+  packages, licences.
+- `/launch-check` — production readiness audit — 9-dimension go/no-go
+  sweep at milestone boundaries.
+- `/threat-model` — threat modelling across 6 attack categories
+  (spoofing, tampering, repudiation, disclosure, denial of service,
+  elevation of privilege).
+- `/accessibility-audit` — WCAG 2.1 AA audit.
+- `/compliance-check` — GDPR + ePrivacy audit.
+- `/analytics-audit` — SDK config, event naming, funnel completeness.
+- `/seo-audit` — meta, OG, sitemap, robots.txt, structured data.
+- `/geo-audit` — AI/LLM discoverability — `llms.txt`, `AGENTS.md`,
+  AI-crawler robots, JSON-LD citation grounding.
+- `/performance-audit` — bundle size, image opt, lazy load, code split,
+  Core Web Vitals.
+- `/monitoring-audit` — logging, error tracking, health endpoints,
+  alerting, runbooks.
+- `/docs-audit` — Diataxis docs audit.
+- `/mutation-test` — mutation-testing sensor; milestone cadence.
+
+## Move work forward
+
+Capture an idea, file a ticket, record a decision, approve a merge —
+everything that turns half-formed thoughts into shipped software.
+
+- `/start-ticket` — declare an active ticket so the ticket-first hook
+  lets code edits through.
+- `/approve-merge` — record per-PR CEO approval and merge in one turn.
+- `/approve-design` — record per-PR design-review approval (UI merge
+  gate).
+- `/decide` — make a technical decision and record it permanently.
+- `/idea` — capture a new product idea to the shared backlog.
+- `/validate-idea` — lightweight 5-question pre-spec gate.
+- `/write-spec` — write a feature spec or PRD from a problem statement.
+- `/plan-initiative` — initiative → milestones → tasks with
+  dependency-aware sequencing.
+- `/feature` — create a structured feature ticket.
+- `/bug` — create a structured bug ticket.
+- `/task` — create a structured technical task ticket.
+- `/spike` — create a hypothesis-driven, time-boxed spike ticket.
+- `/spike-close` — disposition gate for spikes — `--promote` files a
+  feature follow-up, `--discard` writes a memo.
+- `/migration` — create a labelled migration ticket + matching decision
+  record. Required by the migration gate.
+- `/investigation` — create an investigation ticket + live-doc for
+  sustained root-cause work.
+- `/tickets-batch` — file 5–20 structured tickets in one flow.
+
+## See everything at once
+
+When you have more than one product going at the same time, the
+question that costs you the most is "what's waiting on me right now?"
+
+- `/projects` — list every managed project with status, branch, open
+  PRs, open issue counts.
+- `/inbox` — items needing your attention across the portfolio.
+- `/status` — git + CI snapshot per project. Use `--briefing` for the
+  compact 4-line shape.
+- `/tasks` — flat actionable task list across the portfolio with direct
+  URLs.
+- `/roadmap` — update / create / reprioritise the product roadmap.
+- `/stakeholder-update` — generate a weekly / monthly / launch update.
+- `/agdr` — searchable library of every technical decision ever
+  recorded across your portfolio.
+
+## Onboard new code
+
+Fresh fork, new project handed to you, codebase you want to understand.
+
+- `/setup` — first-run framework bootstrap. 3 exchanges.
+- `/handover` — onboard an external repo via a structured handover
+  assessment + harnessability scoring.
+- `/c4` — generate architecture diagrams (Level 1 system context +
+  Level 2 container detail) from a project's codebase.
+- `/dfd` — data-flow diagram with trust boundaries + data
+  classifications. Source-of-truth for `/threat-model`.
+- `/process` — extract a business process from registered repos and
+  emit a standard process diagram file.
+- `/extract-features` — six-axis Feature Inventory (routes / models /
+  jobs / tests / UI / docs).
+- `/feature-diagram` — per-feature flowchart of routes / models / jobs
+  / screens.
+- `/tech-vision` — interactive author for the architecture vision
+  template.
+- `/journey` — self-contained HTML user-journey map.
+- `/codify-rule` — turn a review comment that caught a Rex-miss into a
+  draft handbook entry.
+
+## Run things
+
+Sync the framework, parallelise independent work, cut a release, debug
+something hairy, share a PDF.
+
+- `/update` — sync the apexyard fork with upstream.
+- `/split-portfolio` — migrate single-fork → split-portfolio mode.
+- `/release` — cut an apexyard release. Framework-only.
+- `/debug` — hypothesis-driven debugging for bugs that resisted naïve
+  fix attempts.
+- `/pdf` — convert markdown / HTML / process-diagram to PDF.
+- `/fan-out` — spawn N parallel Agent calls in one message.
+
+## Deprecated
+
+- `/onboard` — use `/setup` for framework configuration, `/handover`
+  for adding a project to the portfolio.
+
+---
+
+## License
+
+MIT. See https://github.com/me2resh/apexyard/blob/main/LICENSE.
+
+## Repository
+
+https://github.com/me2resh/apexyard
+
+## Generated
+
+This file is hand-written and refreshed when `site/*.html` changes
+significantly. Last refresh: 2026-05-23 (tone rewrite for non-technical
+founders — outcomes-first, layered with technical detail below).

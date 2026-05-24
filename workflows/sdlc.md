@@ -40,6 +40,31 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 - Tickets created and prioritized
 - Work scheduled in sprint/cycle
 
+> **Sidebar — when to file a `/spike` instead of a `/feature`.** If you can answer the technical question through reasoning alone (will library X work, does this approach scale, does this UX make sense), feel free to draft the feature directly. If you genuinely don't know, file a `[Spike]` first via `/spike` — a 1-3 day, hypothesis-driven, throw-away-by-default ticket. The spike's output is the answer, not shippable code; once the answer is in, run `/spike-close --promote` (file a fresh `[Feature]` for production-shaped delivery) or `/spike-close --discard` (write a memo to `docs/spike-memos/<slug>.md` so future-us doesn't re-explore the same ground). Spike PRs are exempt from the AgDR + 80% coverage gates; code review (Rex) and the security auditor still apply. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
+
+---
+
+## Phase 1.5: Journey Preview (optional, recommended for UI-heavy features)
+
+> **Primary role**: [UX Designer](../roles/design/ux-designer.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md) (PRD source), [UI Designer](../roles/design/ui-designer.md) (visual review) · **Skill**: `/journey`
+>
+> Slots between an approved PRD and the tech-design phase. Optional — skip for tiny features and pure-backend changes; use it when the feature has a multi-page user flow that will benefit from a "preview before build" check.
+
+A PRD describes a feature in prose. A tech design describes the architecture. Neither answers *"what does the flow actually look like?"* — and that's where logic gaps hide (missing empty states, ambiguous back-navigation, unhandled error transitions). The `/journey` skill closes that gap by emitting a single self-contained HTML file mapping the user journey as clickable boxes (each opening a modal with the page's content).
+
+```
+/journey checkout-v2 --from-prd projects/example-app/prds/checkout.md
+```
+
+Output: `projects/<name>/journeys/<feature-slug>.html` (preview) + `<feature-slug>.yaml` (source of truth). The HTML opens in any browser, shares as an attachment, and renders without a build step.
+
+### Entry / exit
+
+- **Entry**: PRD approved, multi-page flow involved.
+- **Exit**: stakeholders have reviewed the journey HTML, missing states / transitions filed back into the PRD or a backlog item, journey YAML committed alongside the PRD.
+
+Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0016-journey-html-rendering.md`.
+
 ---
 
 ## Phase 2: Technical Design
@@ -50,6 +75,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 - Feature in sprint
 - Requirements clear
+- Journey preview reviewed (if Phase 1.5 ran)
 
 ### Activities
 
@@ -59,6 +85,8 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 | Architecture review | Head of Engineering (if needed) | Approval |
 | Break into tasks | Tech Lead | Task list with estimates |
 | Identify risks | Tech Lead | Risk register |
+
+> **"Have we decided this before?"** Before drafting a design, run `/agdr search <term>` (or `/agdr browse --category architecture`) to scan the portfolio's existing Agent Decision Records. The skill walks every managed project and the apexyard fork itself, so prior calls on auth, data layers, or vendor choices surface in seconds rather than getting silently re-litigated.
 
 ### Exit Criteria
 
@@ -138,6 +166,16 @@ RIGHT:
    - How: Technical approach
    - Testing: How to verify
 ```
+
+> **Sidebar — when to invoke `/debug` (and when NOT to).** The `/debug` skill is for bugs that **resisted naïve fix attempts**, not every bug. Three tiers, matched to bug class:
+>
+> | Class | Workflow |
+> |---|---|
+> | **Simple bug** — clear repro, obvious cause, one-line fix | `/bug` → fix → PR. **No `/debug`.** The cost of hypothesis-tree ceremony exceeds the fix cost. |
+> | **Resistant bug** — naïve fix didn't hold OR cause unclear after grep + Read | `/bug` → **`/debug`** → fix → PR. Forces architecture-first reading + evidence-before-fix. Prevents shotgun debugging. |
+> | **Sustained mystery** — multi-session archaeology, performance puzzle, regression hunt, incident retro | `/investigation` (live-doc workflow) — different skill entirely. Days of effort, cross-session continuity matters. See `.claude/skills/investigation/SKILL.md`. |
+>
+> Self-check before `/debug`: have I tried the obvious fix? Did it work? If NO → `/debug`. If didn't try yet → try the obvious thing first. Same shape as `/spike` from Phase 1 — file when you genuinely don't know; just code when you do.
 
 ### Exit Criteria
 
@@ -313,7 +351,7 @@ In Progress --> In Review --> QA --> Done
 
 ## Roles Summary
 
-Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate, hand off, or exit a phase's role, print the single-line marker from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" (e.g. `▸ Activating Hisham (Tech Lead) for #42 (trigger: planning phase)`) so operators can see the phase transition in the conversation.
 
 | Phase | Primary role | Supporting roles |
 |-------|--------------|------------------|
@@ -324,3 +362,7 @@ Every phase has a primary role that activates automatically when the phase start
 | QA | [QA Engineer](../roles/engineering/qa-engineer.md) | Engineers (bug fixes) |
 | Deploy | [Platform Engineer](../roles/engineering/platform-engineer.md) | [SRE](../roles/engineering/sre.md) |
 | Monitor | [SRE](../roles/engineering/sre.md) | [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation) |
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

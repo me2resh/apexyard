@@ -10,7 +10,9 @@
       "Refactor",
       "Testing",
       "CI",
-      "Docs"
+      "Docs",
+      "Spike",
+      "Investigation"
     ],
     "label_priority_scheme": "P0,P1,P2,P3",
     "required_sections": {
@@ -20,7 +22,9 @@
       "Testing": ["Driver", "Scope", "Acceptance Criteria"],
       "CI": ["Driver", "Scope", "Acceptance Criteria"],
       "Docs": ["Driver", "Acceptance Criteria"],
-      "Bug": ["Given / When / Then", "Repro"]
+      "Bug": ["Given / When / Then", "Repro"],
+      "Spike": ["Hypothesis", "Budget", "Kill Criteria", "Disposition"],
+      "Investigation": ["Trigger", "Hypothesis being tested", "Method", "Findings", "Conclusion", "Follow-up actions"]
     },
     "skip_marker": "<!-- validate-issue-structure: skip -->",
     "_bootstrap_skills_comment": "Skills that run BEFORE any ticket can exist (fork bootstrap, project handover, framework upstream-sync). When one of these is active (marker at .claude/session/active-bootstrap), require-active-ticket.sh exempts the gate. The marker is written by the skill itself on entry, cleared on completion, AND reset at SessionStart so a stale marker can't carry over. See AgDR-0011-bootstrap-skill-exemption.md and me2resh/apexyard#150.",
@@ -29,6 +33,15 @@
       "handover",
       "update",
       "split-portfolio"
+    ],
+    "_create_command_patterns_comment": "Raw ticket-create CLI shapes that require-skill-for-issue-create.sh blocks unless a structured ticket skill (/task, /feature, /bug, /spike, /migration, /investigation, /idea) is in flight (marker at .claude/session/active-issue-skill). Tracker-agnostic: extend this list in .claude/project-config.json for Linear, Jira, Asana, or custom trackers. Patterns are matched as substrings of the (whitespace-collapsed) bash command. See AgDR-0030 and me2resh/apexyard#268.",
+    "create_command_patterns": [
+      "gh issue create",
+      "gh api repos/",
+      "linear issue create",
+      "jira issue create",
+      "jira create",
+      "asana task create"
     ]
   },
 
@@ -59,7 +72,8 @@
       "perf",
       "build",
       "ci",
-      "revert"
+      "revert",
+      "spike"
     ]
   },
 
@@ -76,7 +90,8 @@
       "ci",
       "chore",
       "revert",
-      "release"
+      "release",
+      "spike"
     ],
     "required_sections": [
       "Testing",
@@ -133,9 +148,40 @@
   ],
 
   "portfolio": {
-    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing onboarding.yaml + apexyard.projects.yaml). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md.",
+    "_comment": "Path resolution for the portfolio registry + per-project docs + ideas backlog + onboarding config + workspace dir + private custom skills/handbooks. Defaults match single-fork mode (paths inside the fork). Override in .claude/project-config.json for split-portfolio mode (e.g. \"../portfolio/apexyard.projects.yaml\"). Relative paths resolve against the ops-fork root (the dir containing the .apexyard-fork marker, or the legacy onboarding.yaml + apexyard.projects.yaml pair). See docs/multi-project.md and AgDR-0010-portfolio-config-and-self-healing.md. The `onboarding` and `workspace_dir` keys were added in framework #242 (split-portfolio v2). The `custom_skills_dir` and `custom_handbooks_dir` keys were added in framework #243 — see docs/multi-project.md § 'Private custom skills + handbooks'.",
     "registry": "./apexyard.projects.yaml",
     "projects_dir": "./projects",
-    "ideas_backlog": "./projects/ideas-backlog.md"
+    "ideas_backlog": "./projects/ideas-backlog.md",
+    "onboarding": "./onboarding.yaml",
+    "workspace_dir": "./workspace",
+    "custom_skills_dir": "./custom-skills",
+    "custom_handbooks_dir": "./custom-handbooks"
+  },
+
+  "tracker": {
+    "_comment": "Tracker dispatch — selects which CLI verifies that ticket-IDs reference real tickets. Default is GH (GitHub Issues via `gh issue view`), matching today's behaviour exactly. Supported `kind` values: gh, linear, jira, asana, custom, none. `view_command` is a template with `{id}` and `{owner_repo}` placeholders — the lib substitutes them and runs the result. `id_pattern` is the regex `validate-branch-name.sh` and `validate-pr-create.sh` use to shape-check ticket IDs (covers GH `#123` / `GH-123` plus enterprise prefixes like `LIN-456` / `JIRA-789` by default). Set `kind = none` to disable existence verification entirely (shape-only). See AgDR-0033 and `.claude/hooks/_lib-tracker.sh`.",
+    "kind": "gh",
+    "view_command": "gh issue view {id} --repo {owner_repo} --json state,title,url,labels",
+    "id_pattern": "^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$"
+  },
+
+  "pdf": {
+    "_comment": "Config for the /pdf skill. preferred_converter picks between pandoc / md-to-pdf / wkhtmltopdf when multiple are installed (null = first available in the dispatch order). pdf_engine is passed to pandoc as --pdf-engine; common values are xelatex (best Unicode), pdflatex (smaller install), wkhtmltopdf (no LaTeX needed but degraded typography). default_destination is used when /pdf is invoked with --no-prompt — one of 'workspace' (project repo docs/), 'projects' (ops fork projects/<name>/pdfs/), 'keep' (next to source), or 'ask' (require the interactive prompt; passing --no-prompt with this value is an error). See AgDR-0034.",
+    "preferred_converter": "pandoc",
+    "pdf_engine": "xelatex",
+    "default_destination": "ask"
+  },
+
+  "mutation": {
+    "_comment": "Config for the /mutation-test skill. runner maps a detected language to its mutation-test tool; threshold is the mutation-score % below which /launch-check WARNs (not FAILs — mutation is a leading indicator, not a launch blocker). timeout_minutes caps a single run so a stuck runner can't hold up the whole milestone-boundary audit. See AgDR-0045.",
+    "runner": {
+      "ts": "stryker",
+      "js": "stryker",
+      "python": "mutpy",
+      "go": "go-mutesting",
+      "ruby": "mutant"
+    },
+    "threshold": 60,
+    "timeout_minutes": 90
   }
 }

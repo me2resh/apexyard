@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/adr.md · github.com/me2resh/apexyard · MIT -->
+
 # ADR-[NUMBER]: [Title]
 
 **Status**: Proposed | Accepted | Deprecated | Superseded

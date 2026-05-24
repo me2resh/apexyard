@@ -1,6 +1,6 @@
 ---
 name: roadmap
-description: Update, create, or reprioritise the product roadmap. Supports adding, removing, and reordering milestones, then renders a markdown table per milestone.
+description: Update / create / reprioritise the product roadmap — add, remove, reorder milestones; renders a markdown table per milestone.
 argument-hint: "[add|remove|reorder|show] [item]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 ---
@@ -200,3 +200,7 @@ Owner: @octocat
 - `/write-spec` — once a roadmap item is approved, write its PRD
 - `/stakeholder-update` — pulls "Now" and "Done" sections to summarise progress
 - `/idea` — for ideas not yet on the roadmap
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

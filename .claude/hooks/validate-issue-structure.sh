@@ -61,29 +61,45 @@ extract_flag_value() {
   # to consume stdin as a single record (`RS="\0"` triggers paragraph mode
   # on BSD awk), so we build up one big string line-by-line in awk and run
   # match() against it in END.
+  #
+  # Quoted-value regex is GREEDY and anchored on the next flag boundary
+  # (whitespace + `--<letter>`) or end-of-string. The earlier non-greedy
+  # form `"([^"]*)"` truncated values at the first embedded double quote
+  # (me2resh/apexyard#227), so bodies that quoted prose like "admin notice"
+  # in a `## Scope` bullet lost every `##` heading that lived past the
+  # first internal `"`. Greedy + boundary anchor matches the closing `"`
+  # of the FLAG argument, not the first internal `"` inside the body.
+  # Backslash-escaped quotes (`\"...\"`) are not detected — they pass
+  # through as content, which is fine because shell-quoted heredoc bodies
+  # (the `$(cat <<'EOF' ... EOF)` shape Claude generates) don't produce
+  # backslash escapes.
   local flag_re="$1"
   local cmd="$2"
   printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      # Try double-quoted value first.
-      re = "(" FLAG_RE ")[[:space:]]+\"([^\"]*)\""
+      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"$", "", chunk)
+        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "([^" SQ "]*)" SQ
+      # Single-quoted value: same greedy + anchor treatment.
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "$", "", chunk)
+        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
+      # Unquoted value: single token, embedded quotes irrelevant.
       re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
@@ -151,7 +167,7 @@ fi
 # Inline defaults for bare checkouts predating apexyard#109. Mirror the
 # shipped .claude/project-config.defaults.json so behaviour is identical.
 if [ -z "$PREFIX_WHITELIST" ]; then
-  PREFIX_WHITELIST="Feature Bug Chore Refactor Testing CI Docs"
+  PREFIX_WHITELIST="Feature Bug Chore Refactor Testing CI Docs Spike"
 fi
 SKIP_MARKER="${SKIP_MARKER:-<!-- validate-issue-structure: skip -->}"
 
@@ -231,6 +247,7 @@ if [ -z "$REQUIRED_SECTIONS" ] && [ "$HAVE_CONFIG_LIB" = "0" ]; then
     Chore)   REQUIRED_SECTIONS=$(printf 'Driver\nScope\nAcceptance Criteria\n') ;;
     Bug)     REQUIRED_SECTIONS=$(printf 'Given / When / Then\nRepro\n') ;;
     Docs)    REQUIRED_SECTIONS=$(printf 'Driver\nAcceptance Criteria\n') ;;
+    Spike)   REQUIRED_SECTIONS=$(printf 'Hypothesis\nBudget\nKill Criteria\nDisposition\n') ;;
     *)       REQUIRED_SECTIONS="" ;;
   esac
 fi
@@ -251,10 +268,11 @@ fi
 # ---------------------------------------------------------------------------
 
 # Skill suggestion per prefix. Chore / Refactor / Testing / CI / Docs all
-# use /task; Feature uses /feature; Bug uses /bug.
+# use /task; Feature uses /feature; Bug uses /bug; Spike uses /spike.
 case "$CANONICAL_PREFIX" in
   Feature)                              SUGGESTED_SKILL="/feature" ;;
   Bug)                                  SUGGESTED_SKILL="/bug" ;;
+  Spike)                                SUGGESTED_SKILL="/spike" ;;
   Chore|Refactor|Testing|CI|Docs)       SUGGESTED_SKILL="/task" ;;
   *)                                    SUGGESTED_SKILL="" ;;
 esac

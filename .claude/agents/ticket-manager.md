@@ -1,8 +1,10 @@
 ---
+# routing-config:override Idris bumped inherit → sonnet per AgDR-0050 § Axis 2 line 65 for schema-conforming output + interactive ticket-interview work. Intentional framework-default change for Wave 2 PR 4 of #347. Local-model routing candidate per #348 spike.
 name: ticket-manager
+persona_name: Idris
 description: Creates and manages GitHub Issues in the project's own repo for all work tracking. Use when a new task is starting, a PR is being created, or work needs tracking.
 tools: Bash, Read
-model: inherit
+model: sonnet
 ---
 
 # Ticket Manager Agent
@@ -160,3 +162,7 @@ If your team has chosen Linear, Jira, or another tracker as a deliberate deviati
 - Update the branch name pattern in `.claude/hooks/validate-branch-name.sh` and `validate-pr-create.sh` to accept your prefix
 - The validators already accept `[A-Z]+-[0-9]+` for any uppercase prefix — no code change needed for Linear/Jira-style IDs
 - Document the deviation in `onboarding.yaml` under `project_management.tool`
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

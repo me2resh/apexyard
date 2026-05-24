@@ -97,6 +97,73 @@ if [ -z "$TOUCHED_ARCH" ]; then
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# Spike exemption (apexyard#180).
+#
+# Spike work is hypothesis-driven, time-boxed, throw-away exploration; AgDRs
+# capture decisions that should persist, while spikes write disposition memos
+# instead. Exempt the commit-time AgDR check if ANY of:
+#
+#   (a) the active ticket marker references a `[Spike]`-prefixed ticket
+#   (b) the current branch is named `spike/<TICKET-ID>-...`
+#
+# See .claude/rules/workflow-gates.md § Spike work.
+# ---------------------------------------------------------------------------
+spike_commit_exempt() {
+  # Walk up from REPO_ROOT to find the ops root. Honours both the v2
+  # `.apexyard-fork` marker and the legacy v1 anchor.
+  local marker_home="$REPO_ROOT"
+  local hook_dir
+  hook_dir="$(cd "$(dirname "$0")" && pwd)"
+  if [ -f "$hook_dir/_lib-ops-root.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$hook_dir/_lib-ops-root.sh"
+    local resolved
+    resolved=$(resolve_ops_root "$REPO_ROOT")
+    [ -n "$resolved" ] && marker_home="$resolved"
+  else
+    local r="$REPO_ROOT"
+    while [ -n "$r" ] && [ "$r" != "/" ]; do
+      if [ -f "$r/.apexyard-fork" ]; then
+        marker_home="$r"
+        break
+      fi
+      if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+        marker_home="$r"
+        break
+      fi
+      r=$(dirname "$r")
+    done
+  fi
+
+  if [ -f "$marker_home/.claude/session/current-ticket" ]; then
+    if grep -qE '^title=\[Spike\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  if [ -d "$marker_home/.claude/session/tickets" ]; then
+    for marker in "$marker_home/.claude/session/tickets"/*; do
+      [ -f "$marker" ] || continue
+      if grep -qE '^title=\[Spike\]' "$marker" 2>/dev/null; then
+        return 0
+      fi
+    done
+  fi
+
+  local branch
+  branch=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)
+  if echo "$branch" | grep -qE '^spike/'; then
+    return 0
+  fi
+
+  return 1
+}
+
+if spike_commit_exempt; then
+  echo "WARN: spike commit detected — require-agdr-for-arch-changes bypassed. AgDRs not required for hypothesis-driven throw-away work; ship a memo on /spike-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  exit 0
+fi
+
 # An AgDR is required. Check two paths:
 #   (1) The staged files include a new AgDR at docs/agdr/AgDR-*.md
 #   (2) The commit message references an existing AgDR

@@ -1,6 +1,6 @@
 ---
 name: projects
-description: List all active projects under ApexYard management with their status, branch, open PRs, and open issue counts. Use when you need a portfolio-level view.
+description: List all managed projects with status, branch, open PRs, and open issue counts — portfolio-level view.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
@@ -123,3 +123,7 @@ And, if relevant, flag rows that need attention:
 - `/status` — per-project deep dive (current branch, recent commits)
 - `/tasks` — actionable list with URLs
 - `/handover` — onboard a new repo into the registry
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

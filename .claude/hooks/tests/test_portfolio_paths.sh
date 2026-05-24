@@ -316,6 +316,332 @@ exit 1
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
+# Case 10 (v2): portfolio_onboarding_path resolves to in-fork default
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2: portfolio_onboarding_path defaults to in-fork onboarding.yaml" "$SB" '
+r=$(portfolio_onboarding_path)
+expected="'"$SB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 11 (v2): portfolio_workspace_dir resolves to in-fork default
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2: portfolio_workspace_dir defaults to in-fork workspace" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SB"'/workspace"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 12 (v2): explicit override for onboarding + workspace_dir wins
+# (split-portfolio v2 mode — both keys point at sibling private repo)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/workspace"
+cat > "$SIB/onboarding.yaml" <<'YAML'
+company:
+  name: "Test Co"
+YAML
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "onboarding": "$SIB/onboarding.yaml",
+    "workspace_dir": "$SIB/workspace"
+  }
+}
+JSON
+run_case "v2: portfolio_onboarding_path override → sibling repo path" "$SB" '
+r=$(portfolio_onboarding_path)
+expected="'"$SIB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2: portfolio_workspace_dir override → sibling repo path" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIB"'/workspace"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2: validate is OK against sibling-dir onboarding + workspace" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 13 (v2): override pointing at non-existent onboarding → broken
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "onboarding": "/nowhere/onboarding.yaml"
+  }
+}
+JSON
+run_case "v2: validate catches missing onboarding override" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"onboarding"*"file does not exist"*) [ "$rc" -ne 0 ] && exit 0 ;;
+esac
+echo "got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 14 (v2): override pointing at non-existent workspace_dir → broken
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "/nowhere/workspace"
+  }
+}
+JSON
+run_case "v2: validate catches missing workspace_dir override" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"workspace_dir"*"directory does not exist"*) [ "$rc" -ne 0 ] && exit 0 ;;
+esac
+echo "got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 15 (v2): missing in-fork workspace dir is OK (no managed projects yet)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+# Default workspace dir is $SB/workspace; don't create it.
+run_case "v2: validate tolerates missing in-fork workspace (creatable)" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 16 (v2): portfolio_is_v2 detects the .apexyard-fork marker
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+# Without marker — should be v1.
+run_case "v2: portfolio_is_v2 returns false without .apexyard-fork marker" "$SB" '
+if portfolio_is_v2; then echo "expected non-zero exit"; exit 1; else exit 0; fi
+'
+# Add the marker — now v2.
+touch "$SB/.apexyard-fork"
+run_case "v2: portfolio_is_v2 returns true when .apexyard-fork present" "$SB" '
+if portfolio_is_v2; then exit 0; else echo "expected zero exit"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 17 (custom-templates): seed templates/ in the sandbox so the
+# framework-default branch has something to find. Then test override
+# semantics.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates/architecture"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+cat > "$SB/templates/agdr.md" <<'MD'
+# Framework AgDR
+MD
+cat > "$SB/templates/architecture/c4-context.md" <<'MD'
+# Framework C4 Context
+MD
+run_case "custom-templates: framework default returned when no override" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: framework default returned for nested path" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SB"'/templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: missing both → empty + nonzero exit" "$SB" '
+r=$(portfolio_resolve_template does-not-exist.md)
+rc=$?
+if [ -z "$r" ] && [ "$rc" -ne 0 ]; then exit 0; else echo "got=$r rc=$rc"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 18 (custom-templates): single-fork adopter with custom-templates
+# next to the registry — override wins over framework default.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates/architecture"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+cat > "$SB/templates/architecture/c4-context.md" <<'MD'
+# Framework C4 Context
+MD
+mkdir -p "$SB/custom-templates/architecture"
+cat > "$SB/custom-templates/prd.md" <<'MD'
+# Custom PRD
+MD
+cat > "$SB/custom-templates/architecture/c4-context.md" <<'MD'
+# Custom C4 Context
+MD
+run_case "custom-templates: custom prd.md wins over framework default" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/custom-templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: nested custom override wins over framework default" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SB"'/custom-templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 19 (custom-templates): split-portfolio v2 — custom-templates
+# lives in the sibling private repo (next to the registry override).
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/templates"
+cat > "$SB/templates/prd.md" <<'MD'
+# Framework PRD
+MD
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+cat > "$SIB/apex.yaml" <<'YAML'
+version: 1
+projects: []
+YAML
+mkdir -p "$SIB/proj"
+mkdir -p "$SIB/custom-templates/architecture"
+cat > "$SIB/custom-templates/prd.md" <<'MD'
+# Sibling Custom PRD
+MD
+cat > "$SIB/custom-templates/architecture/c4-context.md" <<'MD'
+# Sibling Custom C4 Context
+MD
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "registry": "$SIB/apex.yaml",
+    "projects_dir": "$SIB/proj"
+  }
+}
+JSON
+run_case "custom-templates: split-portfolio sibling override wins" "$SB" '
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SIB"'/custom-templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: split-portfolio sibling nested override wins" "$SB" '
+r=$(portfolio_resolve_template architecture/c4-context.md)
+expected="'"$SIB"'/custom-templates/architecture/c4-context.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "custom-templates: split-portfolio falls through to framework when no override" "$SB" '
+# Remove the sibling override for prd.md, leave c4-context.md custom.
+rm -f "'"$SIB"'/custom-templates/prd.md"
+r=$(portfolio_resolve_template prd.md)
+expected="'"$SB"'/templates/prd.md"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 20 (custom-templates): empty input → nonzero exit
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "custom-templates: empty input → nonzero exit" "$SB" '
+r=$(portfolio_resolve_template "")
+rc=$?
+if [ -z "$r" ] && [ "$rc" -ne 0 ]; then exit 0; else echo "got=$r rc=$rc"; exit 1; fi
+'
+rm -rf "$SB"
+
+
+# Case 21 (#243): portfolio_custom_skills_dir defaults to in-fork path
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2/#243: portfolio_custom_skills_dir defaults to in-fork ./custom-skills" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SB"'/custom-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 22 (#243): portfolio_custom_handbooks_dir defaults to in-fork path
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v2/#243: portfolio_custom_handbooks_dir defaults to in-fork ./custom-handbooks" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SB"'/custom-handbooks"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 23 (#243): explicit overrides for the new keys win (split-portfolio v2 mode)
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/custom-skills" "$SIB/custom-handbooks"
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "custom_skills_dir": "$SIB/custom-skills",
+    "custom_handbooks_dir": "$SIB/custom-handbooks"
+  }
+}
+JSON
+run_case "v2/#243: portfolio_custom_skills_dir override → sibling repo path" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SIB"'/custom-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2/#243: portfolio_custom_handbooks_dir override → sibling repo path" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SIB"'/custom-handbooks"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 24 (#243): relative override resolves against fork root
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/elsewhere-skills" "$SB/elsewhere-hb"
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "custom_skills_dir": "./elsewhere-skills",
+    "custom_handbooks_dir": "./elsewhere-hb"
+  }
+}
+JSON
+run_case "v2/#243: relative-override custom_skills_dir resolves against fork root" "$SB" '
+r=$(portfolio_custom_skills_dir)
+expected="'"$SB"'/elsewhere-skills"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "v2/#243: relative-override custom_handbooks_dir resolves against fork root" "$SB" '
+r=$(portfolio_custom_handbooks_dir)
+expected="'"$SB"'/elsewhere-hb"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

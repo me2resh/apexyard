@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
+  <!-- ApexYard favicon — terminal-native brutalist AY monogram.
+       Tokens: cream #F4EFE6 on warning-red #C8321A. Sharp corners. -->
+  <rect width="100" height="100" fill="#C8321A"/>
+  <text x="50" y="46"
+        font-family="'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace"
+        font-size="46" font-weight="800" letter-spacing="-3"
+        fill="#F4EFE6" text-anchor="middle" dominant-baseline="central">AY</text>
+  <!-- terminal cursor underline stamp -->
+  <rect x="26" y="72" width="48" height="8" fill="#F4EFE6"/>
+</svg>

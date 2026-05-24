@@ -1,6 +1,6 @@
 ---
 name: fan-out
-description: Spawn N parallel Agent calls in a single assistant message, optionally with worktree isolation for code-writing tasks and background mode for long runs. Use when the user's request decomposes into independent work items that share no files and have no sequential dependencies.
+description: Spawn N parallel Agent calls in one message (per-task agent type, worktree isolation, background mode).
 disable-model-invocation: false
 argument-hint: "<task1, task2, ...> | <path/to/tasks.md> | --from-tickets <ref1,ref2,...>"
 effort: medium
@@ -184,3 +184,7 @@ Background tasks running: <ids>. They'll surface results when done.
 8. **Refuse a read-only agent type for an editing task.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest `general-purpose`.
 9. **Active-ticket check happens at step 3, not step 6.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

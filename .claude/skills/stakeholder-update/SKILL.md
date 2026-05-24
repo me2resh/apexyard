@@ -1,6 +1,6 @@
 ---
 name: stakeholder-update
-description: Generate a stakeholder update (weekly, monthly, or launch) tailored to audience. Synthesises recent PRs, closed issues, AgDRs, and the roadmap into a narrative.
+description: Generate a weekly / monthly / launch stakeholder update — synthesises PRs, closed issues, AgDRs, and roadmap into a narrative.
 argument-hint: "weekly | monthly | launch"
 allowed-tools: Bash, Read, Grep, Glob
 ---
@@ -247,3 +247,7 @@ marketing-site — Weekly
 - `/projects` — portfolio table
 - `/roadmap` — what's planned
 - `/decide` — produces AgDRs that this skill cites
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

@@ -1,6 +1,6 @@
 ---
 name: start-ticket
-description: Declare an active ticket for this session so the ticket-first hook lets code edits through. Accepts either a plain issue number (resolves against the current repo's origin) or a fully-qualified `<owner>/<repo>#<number>` reference. Run this at the start of any coding work.
+description: Declare an active ticket so the ticket-first hook lets code edits through. Accepts `<N>` or `<owner>/<repo>#<N>`.
 disable-model-invocation: false
 argument-hint: "<issue-number> | <owner/repo>#<number>"
 effort: low
@@ -49,15 +49,25 @@ If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
 
 ### 2. Verify the Issue Exists
 
-Run:
+Source the tracker library and call `tracker_view`. The library dispatches the right CLI based on `.tracker.kind` in `.claude/project-config.{defaults,}.json` — `gh` (default), `linear`, `jira`, `asana`, `custom`, or `none`. See `.claude/hooks/_lib-tracker.sh` and AgDR-0033.
 
 ```bash
-gh issue view <number> --repo <owner/repo> --json number,title,state,url,labels
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
+
+issue_json=$(tracker_view "<number>" "<owner/repo>")
+state=$(echo "$issue_json" | jq -r '.state // empty')
+title=$(echo "$issue_json" | jq -r '.title // empty')
+url=$(echo "$issue_json" | jq -r '.url // empty')
 ```
 
-If `state` is not `OPEN`, warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+The lib emits normalised JSON: `{state, title, url, labels}`. Each tracker adapter parses the underlying CLI's JSON into this common shape, so the skill doesn't need to branch per-CLI.
 
-If the issue does not exist, stop and report the error — do not write the marker.
+If the lib exits non-zero with empty stdout, the issue does not exist (or the CLI isn't installed / authenticated). Stop and report the error — do not write the marker.
+
+If `state` indicates the ticket is closed (gh: `CLOSED`; linear/jira/asana: `Done` / `Closed` / `Resolved` / `Cancelled`), warn the user and confirm before continuing (sometimes you do want to resume work on a re-opened issue).
+
+**`tracker.kind = none` adopters:** the lib returns no data. Skip the existence check entirely; trust the user's input. Re-verify the shape against `tracker_id_pattern` so obvious typos still block.
 
 ### 3. Derive a Branch Suggestion
 
@@ -164,3 +174,7 @@ Do NOT create the branch automatically. The user may already be on a branch, or 
 - To clear the ops-level fallback: `rm <ops_root>/.claude/session/current-ticket`.
 - Exempt paths (`.claude/`, `docs/`, `projects/*/docs/`, any `*.md`) don't need a ticket — the skill is only required before touching source / config / infra.
 - **Migration from pre-#41 layout**: if your workflow still has a `.claude/session/current-ticket` inside a managed-project clone (`workspace/<name>/.claude/session/current-ticket`), it's harmless but no longer read by the hook. Delete it or re-run `/start-ticket` to have the new marker written under the ops fork's `.claude/session/tickets/<name>`.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

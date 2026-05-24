@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "description": "v1 AI-crawler list consumed by /geo-audit. Each entry names a crawler user-agent token, its scope (training vs retrieval-at-inference vs both), and the primary vendor / use case. Single source of truth — the audit's robots.txt-directive check iterates this list.",
+  "see_also": [
+    "docs/agdr/AgDR-0043-geo-audit-skill.md",
+    ".claude/skills/geo-audit/SKILL.md"
+  ],
+  "crawlers": [
+    {
+      "name": "GPTBot",
+      "user_agent": "GPTBot",
+      "scope": "training",
+      "primary_use": "OpenAI — trains foundation models on the open web. Robots.txt-honouring crawler distinct from ChatGPT-User (which fires at inference time)."
+    },
+    {
+      "name": "ChatGPT-User",
+      "user_agent": "ChatGPT-User",
+      "scope": "retrieval",
+      "primary_use": "OpenAI — fetches a URL on demand when a ChatGPT user (or a ChatGPT plugin / browsing action) asks the model to read it. Inference-time, not training."
+    },
+    {
+      "name": "OAI-SearchBot",
+      "user_agent": "OAI-SearchBot",
+      "scope": "retrieval",
+      "primary_use": "OpenAI — indexer behind SearchGPT / ChatGPT Search. Distinct from GPTBot (training) and ChatGPT-User (per-conversation fetch)."
+    },
+    {
+      "name": "ClaudeBot",
+      "user_agent": "ClaudeBot",
+      "scope": "training",
+      "primary_use": "Anthropic — primary web-crawler user agent for training Claude foundation models."
+    },
+    {
+      "name": "Claude-Web",
+      "user_agent": "Claude-Web",
+      "scope": "retrieval",
+      "primary_use": "Anthropic — older identifier sometimes seen for inference-time fetches; retained for backward-compat in robots.txt."
+    },
+    {
+      "name": "anthropic-ai",
+      "user_agent": "anthropic-ai",
+      "scope": "training",
+      "primary_use": "Anthropic — generic identifier some operators apply to Anthropic-originated traffic; retain for robots.txt rules that pre-date ClaudeBot."
+    },
+    {
+      "name": "Google-Extended",
+      "user_agent": "Google-Extended",
+      "scope": "training",
+      "primary_use": "Google — opt-out token (set via robots.txt) that excludes a site from Bard / Gemini training without affecting Googlebot search indexing. Disallowing this does NOT remove the site from Google Search."
+    },
+    {
+      "name": "PerplexityBot",
+      "user_agent": "PerplexityBot",
+      "scope": "both",
+      "primary_use": "Perplexity AI — crawls and cites pages in answer panels with source links. High traffic for documentation-shaped content."
+    },
+    {
+      "name": "CCBot",
+      "user_agent": "CCBot",
+      "scope": "training",
+      "primary_use": "Common Crawl — foundational open web corpus used by many model labs. Disallowing CCBot is the broadest opt-out signal."
+    },
+    {
+      "name": "Bytespider",
+      "user_agent": "Bytespider",
+      "scope": "training",
+      "primary_use": "ByteDance — heavy crawler historically associated with training data collection. Often listed alongside the major LLM crawlers in robots.txt opt-outs."
+    },
+    {
+      "name": "Applebot-Extended",
+      "user_agent": "Applebot-Extended",
+      "scope": "training",
+      "primary_use": "Apple — opt-out token analogous to Google-Extended, gating Apple Intelligence training without affecting Spotlight / Siri search indexing via Applebot."
+    },
+    {
+      "name": "cohere-ai",
+      "user_agent": "cohere-ai",
+      "scope": "training",
+      "primary_use": "Cohere — crawler identifier for Cohere's foundation-model training pipeline."
+    }
+  ]
+}

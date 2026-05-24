@@ -1,6 +1,6 @@
 ---
 name: tickets-batch
-description: File 5–20 structured GitHub Issues in one flow without dropping to raw `gh issue create` or running `/feature` 20 times serially. Asks shared-context questions ONCE for the whole batch, then runs a 3-question micro-interview per ticket, confirms the full batch, and files each via specific `gh issue create` calls. Output conforms to `.ticket.required_sections` by construction.
+description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `gh issue create`.
 argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write
 ---
@@ -371,3 +371,7 @@ As a {persona}, I want {goal} so that {benefit}.
 10. **Leak protection still applies.** When the target repo is the public framework repo (e.g. `me2resh/apexyard`), never let a ticket title or body reference a registered private project name. The `block-private-refs-in-public-repos.sh` hook will reject such calls; the skill's job is to not produce them in the first place.
 11. **No silent edits to existing tickets.** This skill creates only. To modify an existing ticket, use `gh issue edit` directly or open a follow-up.
 12. **Defaults are sane, not magical.** If the inference produces a placeholder (`TBD: …`), say so in the summary table — don't pretend the body is complete. The user can `edit N` to refine before filing.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

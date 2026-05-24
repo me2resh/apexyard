@@ -164,6 +164,51 @@ run_case "gh api issues leak" \
   2 "project name: curios-dog" \
   "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during curios-dog rebuild'"
 
+# 11. Embedded double quotes in body — me2resh/apexyard#227.
+#     Pre-227 the sed-based extractor's `[^"]*` truncated the body at the
+#     first internal `"`, which had a security tail: private refs that
+#     appeared in the BACK half of the body (past the truncation) slipped
+#     past the leak gate. Post-fix the awk extractor is greedy + anchored
+#     on next-flag-or-EOS, so a private project name in the back half is
+#     correctly detected.
+LEAK_AFTER_QUOTE_BODY='## Driver
+The "admin notice" string is shown to users.
+
+## Scope
+- Mention the "current state" label
+
+## Acceptance Criteria
+- [ ] discovered during curios-dog rebuild'
+
+run_case "leak in back half of body with embedded quote in front → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body \"$LEAK_AFTER_QUOTE_BODY\""
+
+# 12. Same but for repo-slug ref past the embedded quote.
+LEAK_REPO_AFTER_QUOTE='Description of the issue.
+
+The "needs attention" flag is wrong.
+
+See me2resh/SharpPick#42 for similar.'
+
+run_case "repo-slug leak past embedded quote → block" \
+  2 "project repo: me2resh/SharpPick" \
+  "gh pr create --repo me2resh/apexyard --title 'fix' --body \"$LEAK_REPO_AFTER_QUOTE\""
+
+# 13. Clean body (no leak) with embedded quotes — should pass.
+CLEAN_WITH_QUOTES='## Driver
+The "admin notice" feature.
+
+## Scope
+- Updated to show "current state".
+
+## Acceptance Criteria
+- [ ] Updated.'
+
+run_case "clean body with embedded quotes → pass (no false positive)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body \"$CLEAN_WITH_QUOTES\""
+
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------

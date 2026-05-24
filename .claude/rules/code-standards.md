@@ -48,3 +48,7 @@ Pick the testing tools that fit your stack. Vitest + Playwright is one common co
 - Global state: only when justified (e.g. Zustand, Redux)
 - Forms: schema-validated (e.g. React Hook Form + Zod)
 - Always export the interface for component props
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

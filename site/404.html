@@ -1,0 +1,169 @@
+<!doctype html>
+<!--
+  ApexYard · © 2026 me2resh
+  yard.apexscript.com · github.com/me2resh/apexyard · MIT
+  Multi-project SDLC framework for Claude Code.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>404 — page not found · ApexYard</title>
+<meta name="author" content="me2resh">
+<meta name="copyright" content="© 2026 ApexYard · MIT">
+<meta name="description" content="The page you were looking for doesn't exist. Try the homepage, quickstart, or any of the docs.">
+<meta name="robots" content="noindex, follow">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --paper:    #F4EFE6;
+  --paper-2:  #ECE5D2;
+  --ink:       #1A1612;
+  --ink-soft:  #4A4239;
+  --ink-faint: #877E70;
+  --accent:    #C8321A;
+  --rule:      #1A1612;
+  --rule-faint:#B6AD9B;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --max-w: 720px;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:    #15120D;
+    --paper-2:  #1C1813;
+    --ink:       #F2EBD9;
+    --ink-soft:  #C5BEAA;
+    --ink-faint: #847C68;
+    --accent:    #FF6E4A;
+    --rule:      #F2EBD9;
+    --rule-faint:#4A4338;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  font-family: var(--mono);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 1.55;
+}
+a { color: var(--accent); border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+a:hover { color: var(--ink); }
+
+.bar {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.75rem var(--gutter);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.bar b { color: var(--ink); }
+
+main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem var(--gutter);
+}
+
+.box {
+  max-width: var(--max-w);
+  width: 100%;
+}
+
+.code {
+  font-size: clamp(4rem, 12vw, 7rem);
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 1rem;
+}
+.code::after {
+  content: '_';
+  animation: blink 1.1s steps(1, end) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+h1 {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--ink);
+}
+
+p {
+  color: var(--ink-soft);
+  margin-bottom: 1.5rem;
+  max-width: 60ch;
+}
+
+.nav-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+  margin-top: 2rem;
+}
+.nav-grid a {
+  display: block;
+  border: 1px solid var(--rule);
+  padding: 0.65rem 0.9rem;
+  text-align: left;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--paper-2);
+}
+.nav-grid a:hover { border-color: var(--accent); color: var(--accent); }
+.nav-grid a .label { display: block; font-weight: 700; }
+.nav-grid a .desc { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 1rem var(--gutter);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+footer a { color: var(--ink-soft); border-bottom: 1px dotted currentColor; }
+footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="bar">~/<b>apexyard</b> <span style="color: var(--ink-faint);">· 404</span></div>
+
+<main>
+  <div class="box">
+    <div class="code">404</div>
+    <h1>Page not found</h1>
+    <p>
+      The URL you tried doesn't exist on this site. It may have been moved, renamed, or never existed. Try one of these.
+    </p>
+
+    <nav class="nav-grid" aria-label="Where to go from here">
+      <a href="/"><span class="label">/</span><span class="desc">homepage</span></a>
+      <a href="/#quickstart"><span class="label">quickstart</span><span class="desc">fork &amp; /setup in minutes</span></a>
+      <a href="/how-it-works"><span class="label">how it works</span><span class="desc">one day with apexyard</span></a>
+      <a href="/architecture"><span class="label">architecture</span><span class="desc">5-layer model</span></a>
+      <a href="/skills"><span class="label">skills</span><span class="desc">53 active slash commands</span></a>
+      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener"><span class="label">github ↗</span><span class="desc">source repo</span></a>
+    </nav>
+  </div>
+</main>
+
+<footer>
+  © 2026 <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · ApexYard · open source · plain markdown · zero dependencies
+</footer>
+
+</body>
+</html>

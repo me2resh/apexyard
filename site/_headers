@@ -1,0 +1,30 @@
+# Netlify response headers for ApexYard marketing site.
+#
+# Advertise the Markdown alternate via the HTTP Link header (per RFC 8288).
+# Agents that read response headers — most do; it's cheap — discover the
+# markdown route without parsing HTML. Belt-and-braces: the same alternate
+# also appears as a <link rel="alternate" type="text/markdown"> tag inside
+# each HTML's <head>.
+
+/
+  Link: </index.md>; rel="alternate"; type="text/markdown"
+
+/index.html
+  Link: </index.md>; rel="alternate"; type="text/markdown"
+
+/architecture.html
+  Link: </architecture.md>; rel="alternate"; type="text/markdown"
+
+/skills.html
+  Link: </skills.md>; rel="alternate"; type="text/markdown"
+
+# Serve the markdown alternates with the right MIME type so curl / agents
+# see Content-Type: text/markdown instead of the default text/plain.
+/index.md
+  Content-Type: text/markdown; charset=utf-8
+
+/architecture.md
+  Content-Type: text/markdown; charset=utf-8
+
+/skills.md
+  Content-Type: text/markdown; charset=utf-8

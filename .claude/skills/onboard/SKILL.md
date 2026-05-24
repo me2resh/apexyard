@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: "DEPRECATED — use /setup for framework configuration, /handover for adding a project to the portfolio. This skill redirects to the correct flow."
+description: "DEPRECATED — use /setup (framework config) or /handover (adopt a project). This skill redirects."
 disable-model-invocation: false
 argument-hint: ""
 effort: low
@@ -27,3 +27,7 @@ The per-project discovery questions (tracker repo, CI checks, architecture paths
 ## If you got here from the SessionStart hook
 
 The `onboarding-check.sh` hook now checks `onboarding.yaml` for placeholder values, not a session marker. Run `/setup` to configure your fork.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

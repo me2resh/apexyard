@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Structured hypothesis-driven debugging for issues whose cause isn't immediately obvious. Forces architecture-first reading and evidence-before-fix to prevent ad-hoc patching loops. Invoke when a bug has resisted one or more naïve fix attempts.
+description: Hypothesis-driven debugging — architecture-first reading + evidence-before-fix. For bugs that resisted naïve fix attempts.
 disable-model-invocation: false
 argument-hint: "[symptom summary]"
 effort: medium
@@ -279,3 +279,7 @@ When updating an existing appendix:
 - A row points at deprecated tooling — replace with the current best tool, don't keep both
 
 Don't add an appendix until you have a real session's worth of patterns to seed it. A speculative "Mobile" appendix with three half-formed rows is worse than no Mobile appendix.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

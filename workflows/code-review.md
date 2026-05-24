@@ -6,7 +6,7 @@ Ensure code quality, share knowledge, and catch issues before they reach product
 
 ## Roles
 
-Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate one of these roles for a review, signal it with the single-line marker convention from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" — e.g. `▸ Activating Hakim (Security Auditor) for PR #42 (trigger: diff touches **/auth/**)`.
 
 | Role | Responsibility | Role file |
 |------|----------------|-----------|
@@ -45,6 +45,8 @@ Fixes #[ticket-id]
 |------|------------|
 | [Term] | [What it means in this context] |
 ```
+
+**Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.claude/rules/pr-quality.md`](../.claude/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (`nit:` / `suggestion:`, non-blocking).
 
 **Why a Glossary?** Every PR is a learning opportunity. Explaining concepts helps:
 
@@ -189,3 +191,7 @@ Track these to improve:
 - Review time (aim for < 24h)
 - Review cycles (aim for < 3)
 - Post-merge bugs (aim for < 5%)
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

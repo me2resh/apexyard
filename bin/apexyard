@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# apexyard — tiny CLI shim that exposes a subset of ApexYard skills as
+# shell-runnable commands. Today: only `apexyard status` (slide 6).
+#
+# Install: symlink this script into a directory on your PATH.
+#
+#   ln -s "$(pwd)/bin/apexyard" ~/.local/bin/apexyard
+#
+# Usage:
+#   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
+#   apexyard --help
+#
+# The script delegates to .claude/skills/status/briefing.sh inside the
+# nearest apexyard fork (it walks up from $PWD looking for a directory
+# that contains both onboarding.yaml AND apexyard.projects.yaml). This
+# means `apexyard status` works from anywhere inside the fork or any of
+# its workspace/<name>/ clones — the same scope rules as /start-ticket
+# and the portfolio-aware skills.
+
+set -u
+
+# ---------------------------------------------------------------------------
+# Resolve the ops-fork root from $PWD by walking up. Honours both the
+# v2 `.apexyard-fork` marker (split-portfolio v2, framework ≥ #242) and
+# the legacy v1 anchor (onboarding.yaml + apexyard.projects.yaml). Same
+# algorithm as the briefing helper itself; we replicate it here so the
+# shim stays a single self-contained file.
+# ---------------------------------------------------------------------------
+find_ops_root() {
+  local cur="$PWD"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    # v2 anchor (cheap presence test).
+    if [ -e "$cur/.apexyard-fork" ]; then
+      printf '%s' "$cur"
+      return 0
+    fi
+    # Legacy v1 anchor.
+    if [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; then
+      printf '%s' "$cur"
+      return 0
+    fi
+    cur=$(dirname "$cur")
+  done
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: apexyard <command> [args]
+
+Commands:
+  status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
+                           branch, role. Defaults to --briefing today (the
+                           full /status report runs inside Claude Code).
+
+Run from inside an apexyard fork or any of its workspace/<name>/ clones.
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  ""|-h|--help|help)
+    usage
+    exit 0
+    ;;
+  status)
+    if ! ops_root=$(find_ops_root); then
+      echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
+      exit 1
+    fi
+
+    helper="$ops_root/.claude/skills/status/briefing.sh"
+    if [ ! -x "$helper" ] && [ ! -f "$helper" ]; then
+      echo "apexyard: briefing helper not found at $helper" >&2
+      echo "  Update your fork: git pull upstream dev (or run /update)." >&2
+      exit 1
+    fi
+
+    # Today the only flag is --briefing/-b, which is also the default.
+    # We accept it explicitly for forward-compat with `apexyard status
+    # --full` etc. Anything unknown gets a helpful error.
+    case "${1:-}" in
+      ""|-b|--briefing) ;;
+      *)
+        echo "apexyard status: unknown flag '$1' (try --briefing)" >&2
+        exit 2
+        ;;
+    esac
+
+    exec bash "$helper"
+    ;;
+  *)
+    echo "apexyard: unknown command '$cmd'" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

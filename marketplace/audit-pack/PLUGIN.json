@@ -1,0 +1,44 @@
+{
+  "name": "apexyard/audit-pack",
+  "version": "0.1.0",
+  "description": "Production-readiness audit suite for Claude Code — /launch-check + 8 deep-dive expert skills (SEO, GEO, a11y, GDPR, analytics, monitoring, docs, performance). One tooth of the ApexYard governance comb; extracted from upstream on every framework release.",
+  "license": "MIT",
+  "homepage": "https://github.com/me2resh/apexyard",
+  "source": {
+    "type": "extraction",
+    "upstream_repo": "me2resh/apexyard",
+    "extraction_script": "bin/extract-subpacks.sh",
+    "see": "EXTRACTION_MANIFEST.json"
+  },
+  "keywords": [
+    "audit",
+    "launch-readiness",
+    "seo",
+    "geo",
+    "accessibility",
+    "gdpr",
+    "compliance",
+    "analytics",
+    "monitoring",
+    "documentation",
+    "performance",
+    "apexyard"
+  ],
+  "skills": [
+    { "name": "launch-check",        "path": ".claude/skills/launch-check/SKILL.md" },
+    { "name": "seo-audit",           "path": ".claude/skills/seo-audit/SKILL.md" },
+    { "name": "geo-audit",           "path": ".claude/skills/geo-audit/SKILL.md" },
+    { "name": "accessibility-audit", "path": ".claude/skills/accessibility-audit/SKILL.md" },
+    { "name": "compliance-check",    "path": ".claude/skills/compliance-check/SKILL.md" },
+    { "name": "analytics-audit",     "path": ".claude/skills/analytics-audit/SKILL.md" },
+    { "name": "monitoring-audit",    "path": ".claude/skills/monitoring-audit/SKILL.md" },
+    { "name": "docs-audit",          "path": ".claude/skills/docs-audit/SKILL.md" },
+    { "name": "performance-audit",   "path": ".claude/skills/performance-audit/SKILL.md" }
+  ],
+  "graduation_path": {
+    "name": "apexyard (full framework)",
+    "url": "https://github.com/me2resh/apexyard",
+    "what_you_get": "19 role definitions, portfolio registry, AgDR memory, two-marker merge gate, migration enforcement, stakeholder updates, cross-project /inbox + /tasks + /status",
+    "delivery": "fork-based ops repo (not a plugin)"
+  }
+}

@@ -76,3 +76,7 @@ Both are backstops against routine-but-damaging leaks. Self-discipline is the pr
 ## Rationale for mechanical enforcement
 
 Self-discipline doesn't prevent this class of leak. The private project's name is *right there* in the working context while the agent is writing the upstream ticket — not referencing it takes active suppression. Mechanical enforcement is the right shape, same pattern as `check-secrets.sh` and the commit-format hooks.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

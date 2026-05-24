@@ -1,6 +1,6 @@
 ---
 name: approve-design
-description: Record per-PR design-review approval so the design-review merge gate lets the PR through. ONLY invoke this on an explicit designer/user message that names the PR and says the UI changes are approved. NEVER invoke on an umbrella "looks good" about a Figma file, a mockup, or a conversation that didn't name a specific PR. The whole point is to make design approval a discrete, auditable moment tied to a specific PR at a specific commit SHA.
+description: Record per-PR design-review approval (UI merge gate). ONLY on an explicit per-PR designer "approved".
 disable-model-invocation: false
 argument-hint: "<pr-number>"
 effort: low
@@ -143,3 +143,7 @@ The merge flow for a UI PR requires **three** markers before the merge-gate hook
 1. `<pr>-rex.approved` — from the code-reviewer agent
 2. `<pr>-design.approved` — from this skill
 3. `<pr>-ceo.approved` — from `/approve-merge`
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

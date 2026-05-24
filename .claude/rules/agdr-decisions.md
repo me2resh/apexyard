@@ -61,3 +61,7 @@ Creates an **Agent Decision Record** (AgDR) that captures:
 2. **Workflow gate** — AgDR required before the Build phase for new features
 3. **Code Reviewer** — flags PRs with architecture changes that don't link an AgDR
 4. **Pre-commit hook** — warns if architecture files changed without an AgDR reference
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

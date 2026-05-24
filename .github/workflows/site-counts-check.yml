@@ -1,0 +1,25 @@
+name: site-counts-check
+
+# Fail the PR if the framework counts quoted in site/*.html drift from the
+# actual counts on disk (skills, hooks, roles). Catches drift at the moment
+# it's introduced rather than after it has compounded.
+#
+# See docs/agdr/AgDR-0046-site-counts-drift-prevention.md for the rationale.
+
+on:
+  pull_request:
+    paths:
+      - '.claude/skills/**'
+      - '.claude/hooks/**'
+      - 'roles/**'
+      - 'site/**'
+
+jobs:
+  site-counts-check:
+    name: site-counts drift detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the drift-detection smoke test
+        run: bash .claude/hooks/tests/test_site_counts.sh

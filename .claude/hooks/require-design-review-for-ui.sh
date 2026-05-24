@@ -19,7 +19,15 @@
 #   - design-tokens.* (design systems)
 #
 # Projects that want a broader/narrower list can override via
-# .claude/project-config.json `.ui_paths` (JSON array of regex patterns).
+# .claude/project-config.json:
+#   `.ui_paths`         — REPLACE the default UI_GLOBS entirely (JSON array of regex patterns)
+#   `.ui_paths_exclude` — ADDITIVE: paths matching any pattern here are removed
+#                         from the touched-UI set AFTER UI_GLOBS matching. Mirrors
+#                         the `migration_paths`-exclude precedent (#275).
+#
+# Use `ui_paths_exclude` when you want to keep the default broad matching but
+# carve out a specific dir (e.g. `^docs/examples/`, `^wiki/artifacts/`) where
+# `.jsx`/`.tsx` files are documentation samples rather than real UI.
 #
 # How the marker gets written: the design-reviewer records approval by
 # writing the marker file. There is no /approve-design skill yet — the
@@ -64,6 +72,17 @@ if [ -z "$PR_NUMBER" ]; then
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# Resolve the ops fork root (where session markers live), not the
+# workspace clone's git toplevel. Inside `workspace/<project>/`,
+# REPO_ROOT is the project clone — markers live in the ops fork
+# above it. See me2resh/apexyard#229 + #230.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
+fi
+MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
 # Default UI path patterns (regex). Note: .tsx$ / .jsx$ are EXACT — they must
 # not match plain .ts / .js, which are often backend/server files. The
@@ -105,13 +124,31 @@ while IFS= read -r FILE; do
   done <<< "$UI_GLOBS"
 done <<< "$CHANGED"
 
+# Apply `.ui_paths_exclude` — additive override that REMOVES paths from the
+# touched-UI set even when UI_GLOBS matched. Lets adopters keep the broad
+# defaults while carving out specific directories (e.g. `^docs/examples/`,
+# `^wiki/artifacts/`) where `.jsx`/`.tsx` files are doc samples not UI (#275).
+if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
+  EXCLUDE=$(jq -r '.ui_paths_exclude // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
+  if [ -n "$EXCLUDE" ] && [ "$EXCLUDE" != "null" ] && [ -n "$TOUCHED_UI" ]; then
+    FILTERED=""
+    for FILE in $TOUCHED_UI; do
+      if ! echo "$FILE" | grep -qE "$EXCLUDE"; then
+        FILTERED="${FILTERED}${FILE} "
+      fi
+    done
+    TOUCHED_UI="$FILTERED"
+  fi
+fi
+
 if [ -z "$TOUCHED_UI" ]; then
   # Not a UI PR — nothing to enforce, merge-gate will continue
   exit 0
 fi
 
 # UI PR detected — require a design approval marker
-APPROVAL="${REPO_ROOT:-.}/.claude/session/reviews/${PR_NUMBER}-design.approved"
+# Marker lives at the ops fork root (MARKER_HOME), not the workspace clone.
+APPROVAL="${MARKER_HOME}/.claude/session/reviews/${PR_NUMBER}-design.approved"
 
 if [ ! -f "$APPROVAL" ]; then
   cat >&2 <<MSG
@@ -135,8 +172,15 @@ To unblock:
        git rev-parse HEAD > .claude/session/reviews/${PR_NUMBER}-design.approved
   3. Retry the merge
 
-To customize which file patterns count as "UI", set
-\`.ui_paths\` in .claude/project-config.json (JSON array of regex patterns).
+To customize which file patterns count as "UI":
+
+  \`.ui_paths\`         — REPLACE the default list entirely (JSON array of regex)
+  \`.ui_paths_exclude\` — ADDITIVE carve-out: keep the broad defaults but skip
+                          specific dirs (e.g. ["^docs/examples/", "^wiki/"]).
+                          Useful when .jsx/.tsx files are doc samples not UI
+                          (#275).
+
+Both keys live in .claude/project-config.json.
 
 For projects that deliberately ship UI without design review (e.g. admin tools,
 internal dashboards), touch the marker file manually — that's a visible,

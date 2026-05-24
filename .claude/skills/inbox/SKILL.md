@@ -1,6 +1,6 @@
 ---
 name: inbox
-description: Show every item across managed projects that needs the user's attention — PRs to review, issues assigned to them, comments to respond to, blockers. Use to triage the day.
+description: Show every item across managed projects needing the user's attention — PRs, assigned issues, comments, blockers.
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
@@ -178,3 +178,7 @@ If everything is empty:
 - `/tasks` — same data but flattened into a single ordered TODO list
 - `/status` — current project's git/CI snapshot
 - `/projects` — portfolio-level health snapshot
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

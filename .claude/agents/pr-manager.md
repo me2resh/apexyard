@@ -1,8 +1,10 @@
 ---
+# routing-config:override Tariq bumped inherit → sonnet per AgDR-0050 § Axis 2 line 64 for tool-call-heavy + narrative-quality PR body work. Intentional framework-default change for Wave 2 PR 4 of #347.
 name: pr-manager
+persona_name: Tariq
 description: Coordinates PR lifecycle from creation to merge. Enforces 2-review workflow, commit SHA verification, and auto-merge on human approval.
 tools: Bash, Read, Grep, Glob
-model: inherit
+model: sonnet
 ---
 
 # PR Manager Agent
@@ -153,3 +155,7 @@ Ticket: ENG-123
 
 Please review when available.
 ```
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

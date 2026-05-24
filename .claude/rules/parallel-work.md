@@ -58,3 +58,7 @@ If all four boxes are checked and you didn't offer fan-out, you missed a paralle
 This rule is **primarily self-discipline**. Mechanical enforcement isn't viable — no shell hook can see "the agent didn't propose parallel" in assistant prose. Pair this rule with feedback memory: if the CEO has previously asked "why didn't you fan this out?", surface the offer more aggressively next time.
 
 The cost of offering fan-out and being told "no, just serial" is one sentence. The cost of silently serialising N independent items is N times the wall-clock latency the user notices.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

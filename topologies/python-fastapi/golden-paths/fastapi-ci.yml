@@ -1,0 +1,163 @@
+# FastAPI CI Pipeline
+# Copy this to .github/workflows/fastapi-ci.yml in your project.
+#
+# Topology: python-fastapi (apexyard topology v1.0.0)
+# Purpose: Python-specific quality + Alembic migration check + uvicorn boot smoke
+#
+# Tools assumed:
+#   - uv OR pip for installation (uv preferred — much faster)
+#   - ruff for linting + formatting
+#   - mypy --strict for type checking
+#   - pytest + pytest-cov for tests
+#   - alembic for migrations
+
+name: FastAPI CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  quality:
+    name: Quality + Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e ".[dev,test]"
+          echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
+          echo "$(pwd)/.venv/bin" >> $GITHUB_PATH
+
+      # Ruff — lint + format check (replaces flake8 + black + isort)
+      - name: Ruff Lint
+        id: lint
+        run: |
+          ruff check . --output-format=github 2>&1 | tee ruff-output.txt || true
+
+          ERRORS=$(ruff check . --output-format=json 2>/dev/null | jq 'length' || echo "0")
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Found $ERRORS ruff errors"
+            exit 1
+          fi
+
+      - name: Ruff Format Check
+        run: ruff format --check .
+
+      # mypy --strict
+      - name: Type Check (mypy --strict)
+        id: typecheck
+        run: |
+          mypy --strict app/ 2>&1 | tee mypy-output.txt || true
+
+          ERRORS=$(grep -c "error:" mypy-output.txt || echo "0")
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Found $ERRORS mypy errors"
+            exit 1
+          fi
+
+      # Alembic migration check — every PR's migrations must apply cleanly
+      - name: Alembic Migration Check
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app_test
+        run: |
+          if [ -d alembic ]; then
+            alembic upgrade head
+            # Verify there are no pending model changes not reflected in migrations
+            alembic check || {
+              echo "::error::Alembic detected schema changes not captured in migrations. Run 'alembic revision --autogenerate' locally and commit the migration."
+              exit 1
+            }
+          else
+            echo "No alembic/ dir — skipping migration check"
+          fi
+
+      # pytest with coverage threshold
+      - name: Tests + Coverage
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app_test
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-fail-under=80
+
+      # Boot smoke — does the app actually start?
+      - name: Uvicorn Boot Smoke
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/app_test
+        run: |
+          # Start uvicorn in the background; check it responds to /health
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          UVICORN_PID=$!
+
+          # Wait for boot (max 15s)
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Uvicorn booted successfully"
+              kill $UVICORN_PID
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::Uvicorn failed to boot within 15s"
+          kill $UVICORN_PID 2>/dev/null || true
+          exit 1
+
+      # Generate summary
+      - name: Generate Summary
+        if: always()
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # FastAPI CI Report
+
+          | Check | Status |
+          |-------|--------|
+          | Ruff (lint) | ${{ steps.lint.outputs.errors == '0' && 'Pass' || 'Fail' }} |
+          | mypy --strict | ${{ steps.typecheck.outputs.errors == '0' && 'Pass' || 'Fail' }} |
+          | Alembic | (see job log) |
+          | pytest (>= 80% coverage) | (see job log) |
+          | Uvicorn boot | (see job log) |
+
+          ---
+          Topology: python-fastapi v1.0.0
+          EOF

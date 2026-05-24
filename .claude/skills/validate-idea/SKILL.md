@@ -1,6 +1,6 @@
 ---
 name: validate-idea
-description: Lightweight 5-question idea validation. Sits between `/idea` and `/write-spec` as a 10-minute gate that catches "this isn't worth speccing" without heavyweight strategy ceremony. Invokable standalone or as an offered follow-up inside `/idea` and `/handover`.
+description: Lightweight 5-question pre-spec gate between /idea and /write-spec — catches "this isn't worth speccing" in 10 minutes.
 argument-hint: "<IDEA-NNN | project-name | free-form description>"
 allowed-tools: Bash, Read, Write
 ---
@@ -232,3 +232,7 @@ Wrong. Batching defeats the validation purpose — the user gives surface-level 
 - `/write-spec` — authors the PRD post-validation (only on GREEN)
 - `/decide` — captures the technical decision once the spec is in flight
 - The Mom Test (Rob Fitzpatrick) — companion reading; covers Q1 and Q2 in much more depth for live customer interviews
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

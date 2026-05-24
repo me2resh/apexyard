@@ -1,0 +1,89 @@
+# ApexYard
+
+> ApexYard lets founders ship AI-built software like a real engineering team —
+> without hiring one. Automatic code review, launch-readiness checks, and one
+> place for all your products, built on top of Claude Code. 54 skills,
+> 32 hooks, 19 role definitions. Open source, plain markdown and shell,
+> no SaaS, no lock-in.
+
+## Pages
+
+- [Home](https://yard.apexscript.com/) — what apexyard does for non-technical founders, who it's for, how to get started
+- [How it works](https://yard.apexscript.com/how-it-works) — a plain-English walkthrough of one realistic day with apexyard
+- [Architecture](https://yard.apexscript.com/architecture) — the technical 5-layer model + portfolio model
+- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (54 skills) grouped by outcome
+
+## Full-content companion
+
+- [llms-full.txt](https://yard.apexscript.com/llms-full.txt) — all page content in one markdown file for one-shot consumption
+
+## Who this is for
+
+- **Solo founders shipping with AI** (Claude Code, Cursor, etc.) — needing the
+  guardrails a real team would give them, without a real team
+- **Non-technical founders running contractors or a small dev team** — needing
+  to know the work is solid without reading every commit themselves
+- **Small teams with no engineering process yet** — needing real review, real
+  testing, real release discipline before things get harder to fix
+
+## What you get
+
+- **Automatic code review.** Every change you make — or that a contractor makes
+  — gets reviewed by a senior-engineering-level AI reviewer before it ships.
+- **Launch-readiness checks.** Before customers see it, find out what's still
+  missing across security, performance, accessibility, monitoring, docs, SEO.
+- **One place for all your products.** Every project in one inbox — PRs,
+  issues, comments, blockers — all in one screen across N products.
+
+## Key concepts (the under-the-hood story for the technical evaluator)
+
+- **One ops repo forks the upstream framework + governs every project.** You
+  don't add apexyard to a project — projects get forged inside it. The fork
+  IS the ops repo; no nested installs, no symlinks.
+- **Strict merge gates — two-marker (code-reviewer agent + per-PR CEO approval).**
+  Plan-level "go" doesn't authorize a merge; each PR requires explicit per-PR
+  approval recorded via `/approve-merge <pr>`. Mechanically enforced.
+- **Persistent decision-log across the portfolio.** Every technical decision
+  lands as a markdown file in `docs/agdr/`; the `/agdr` skill searches
+  across every managed project.
+- **Audit family — 9 production-readiness audits.** `/launch-check` fans out
+  to security, accessibility, GDPR/ePrivacy compliance, analytics, SEO,
+  AI/LLM discoverability, performance, monitoring, and docs.
+- **Portfolio model.** One registry (`apexyard.projects.yaml`) lists every repo
+  under management. Skills like `/inbox`, `/status`, `/tasks` aggregate
+  across the portfolio in ~1 second.
+- **54 slash commands** grouped by outcome: keep quality high, move work
+  forward, see everything at once, onboard new code, run things.
+- **32 shell hooks** mechanically enforce the rules — ticket-first, migration
+  gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
+  validation, upstream-drift banner, leak protection.
+- **19 role definitions** across 5 departments (Engineering, Product, Design,
+  Security, Data). Roles activate on triggers (label, diff path, prompt).
+
+## Proof — verifiable from our own GitHub activity
+
+- 176 PRs reviewed and merged in the last 90 days, under the same guardrails
+  apexyard installs in your fork
+- 8 production releases shipped (v0.1.0 through v2.0.0)
+- 51 technical decisions recorded (released to main)
+- 13 bugs caught and fixed before users hit them
+- All visible at [github.com/me2resh/apexyard](https://github.com/me2resh/apexyard)
+
+## Adoption pattern
+
+- Fork [`me2resh/apexyard`](https://github.com/me2resh/apexyard) on GitHub
+- Clone the fork, treat it as your ops repo
+- Edit `onboarding.yaml` + `apexyard.projects.yaml` to register projects
+- Run `/projects`, `/inbox`, `/status` to confirm the portfolio is wired
+- Adopt external repos via `/handover <repo>`
+- Two setup modes: single-fork (everything in the fork) or split-portfolio
+  (public fork + private sibling repo for adopter-specific data)
+
+## License
+
+MIT — plain markdown and shell, no SaaS, no lock-in. Claude Code is the
+default driver, but the rules / hooks / templates are framework-agnostic.
+
+## Repository
+
+https://github.com/me2resh/apexyard

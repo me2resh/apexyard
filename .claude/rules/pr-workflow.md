@@ -148,3 +148,7 @@ claude --from-pr 123
 ```
 
 This loads the PR context (diff, comments, review state) so you can continue work without re-explaining.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

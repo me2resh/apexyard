@@ -1,6 +1,6 @@
 ---
 name: decide
-description: Make a technical decision with structured reasoning, creating an Agent Decision Record (AgDR). Use when choosing between libraries, frameworks, implementation approaches, or architectural patterns.
+description: Make a technical decision with structured reasoning and create an Agent Decision Record (AgDR).
 disable-model-invocation: true
 argument-hint: "<what you're deciding>"
 ---
@@ -56,7 +56,17 @@ Create file at `{project-root}/docs/agdr/AgDR-{NNNN}-{slug}.md`.
 
 **Important**: AgDRs live in the **current project's repository**, not centralised. Each project has its own `docs/agdr/` folder and its own ID sequence.
 
-Use the AgDR template at `templates/agdr.md`:
+Resolve the AgDR template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template agdr.md)   # → custom-templates/agdr.md if present, else templates/agdr.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/agdr.md`. Adopters who want a customised AgDR shape drop their version at `<private_repo>/custom-templates/agdr.md`. See `templates/README.md` for the path-mirroring convention.
+
+The skeleton:
 
 ```markdown
 ---
@@ -114,3 +124,7 @@ Proceeding with: {brief action}
 4. **Justification required** — `because` clause is mandatory
 5. **Timestamp precise** — full ISO-8601 with time
 6. **Slug from title** — lowercase, hyphens, max 50 chars
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

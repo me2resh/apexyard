@@ -1,6 +1,6 @@
 ---
 name: task
-description: Create a structured technical task ticket with driver, scope, and acceptance criteria. Use for tech debt, infrastructure work, refactoring, or non-user-facing changes.
+description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes.
 argument-hint: "<short title of the task>"
 allowed-tools: Bash, Read, Write
 ---
@@ -30,6 +30,24 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 ```
 
 ## Process
+
+### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+
+Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
+
+```bash
+ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+mkdir -p "$ops_root/.claude/session"
+echo "task" > "$ops_root/.claude/session/active-issue-skill"
+```
+
+Remove the marker on **every** exit path (success, early-exit, user cancel, error):
+
+```bash
+rm -f "$ops_root/.claude/session/active-issue-skill"
+```
+
+The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from killed sessions, but a clean exit should never leave one behind. See AgDR-0030.
 
 ### 1. Resolve the target repo
 
@@ -86,9 +104,23 @@ Priority?
 Any risks or dependencies? (what could block this, what depends on it, or Enter to skip)
 ```
 
-### 4. Show the formatted ticket for confirmation
+### 4. Resolve the task body template
 
-Display the full ticket:
+Resolve the task body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template tickets/task.md)   # → custom-templates/tickets/task.md if present, else templates/tickets/task.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/task.md`. Adopters who want a customised task-body shape drop their version at `<private_repo>/custom-templates/tickets/task.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/task.md template missing — using inline fallback`).
+
+### 5. Show the formatted ticket for confirmation
+
+Substitute the gathered inputs into the resolved template (or the inline heredoc fallback), then display the full ticket using the resolved shape (the default `templates/tickets/task.md` shape is reproduced below):
 
 ```
 Here's the ticket I'll create:
@@ -109,6 +141,11 @@ Here's the ticket I'll create:
 
 ## Risks / Dependencies
 {risks or "None identified"}
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| {term} | {definition} |
 ---
 
 Labels: {type}, {P0|P1|P2}
@@ -127,13 +164,13 @@ The title prefix is derived from the content, and must come from the project's c
 
 A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]`) automatically gains the option here — the skill reads the live config, it does not hardcode the list. See apexyard#109 for the schema and how to extend.
 
-### 5. Handle response
+### 6. Handle response
 
 - **yes** / **looks good** / **go** → create the issue
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 6. Create the GitHub Issue
+### 7. Create the GitHub Issue
 
 ```bash
 gh issue create --repo {owner/repo} \
@@ -142,7 +179,7 @@ gh issue create --repo {owner/repo} \
   --body "{formatted body}"
 ```
 
-### 7. Return the URL
+### 8. Return the URL
 
 ```
 Created: {owner/repo}#{number} — {title}
@@ -157,3 +194,7 @@ Created: {owner/repo}#{number} — {title}
 4. **At least one acceptance criterion.** Don't create tasks with empty ACs.
 5. **Labels auto-applied.** Priority label always applied.
 6. **Title prefix.** Derived from the nature of the work: Testing, CI, Refactor, or Chore.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

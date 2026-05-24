@@ -212,3 +212,7 @@ Before promoting to production:
 | Latency p99 | > 2s | Investigate |
 | CPU/Memory | > 80% | Scale or optimize |
 | Failed health checks | Any | Auto-rollback or page on-call |
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

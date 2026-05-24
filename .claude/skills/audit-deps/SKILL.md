@@ -68,3 +68,7 @@ Generates a report with:
 Optionally creates tickets in the team's tracker for Critical / High vulnerabilities.
 
 Invokes: Dependency Auditor Agent (Guardian)
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

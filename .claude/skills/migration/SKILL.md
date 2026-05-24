@@ -1,6 +1,6 @@
 ---
 name: migration
-description: Create a structured database-migration ticket and its matching migration AgDR in one guided flow. Use BEFORE touching any migration files (migrate-*.ts, migrations/*, Prisma / TypeORM / Alembic dirs, infrastructure DB resources) — the require-migration-ticket.sh hook blocks edits to those paths until both artefacts exist.
+description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
 argument-hint: "[<project>]"
 allowed-tools: Bash, Read, Write
 ---
@@ -43,6 +43,24 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 - Generally: BEFORE the first `Write` on anything the migration-gate hook blocks
 
 ## Process
+
+### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+
+Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
+
+```bash
+ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+mkdir -p "$ops_root/.claude/session"
+echo "migration" > "$ops_root/.claude/session/active-issue-skill"
+```
+
+Remove the marker on **every** exit path (success, early-exit, user cancel, error):
+
+```bash
+rm -f "$ops_root/.claude/session/active-issue-skill"
+```
+
+The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from killed sessions, but a clean exit should never leave one behind. See AgDR-0030.
 
 ### 1. Resolve the target project
 
@@ -94,7 +112,18 @@ Ask "Create ticket + AgDR? [y/N]". Only proceed on explicit `y`.
 
 ### 4. Create the AgDR first (local write, reversible)
 
-Copy `templates/agdr-migration.md` to the resolved path, filling in:
+Resolve the migration AgDR template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template agdr-migration.md)   # → custom-templates/agdr-migration.md if present
+cp "$template" "$resolved_agdr_path"
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/agdr-migration.md`. Adopters who want a customised migration-AgDR shape drop their version at `<private_repo>/custom-templates/agdr-migration.md`. See `templates/README.md` for the path-mirroring convention.
+
+Fill in:
 
 - Frontmatter (`id`, `timestamp`, `agent`, `model`, `trigger: user-prompt`, `status: draft`, `ticket` — left as `TBD` until step 5 creates the issue and we know the number)
 - The title, one-sentence summary, and every Section (Context, Options, Decision, Rollback Plan, Cross-Service Consumers, Testing Plan, Observability, Consequences) with the user's answers
@@ -114,7 +143,19 @@ Title: `[Migration] <type>: <summary>`
 
 Labels: `migration` (or whatever the project configures as its migration label — check `.claude/project-config.json` key `migration_label`, default `migration`), plus the priority label (`P0` / `P1` / `P2` / `P3`).
 
-Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh` can verify it):
+Body — resolve the migration ticket body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+ticket_template=$(portfolio_resolve_template tickets/migration.md)   # → custom-templates/tickets/migration.md if present
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/migration.md`. Adopters who want a customised migration-ticket shape drop their version at `<private_repo>/custom-templates/tickets/migration.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/migration.md template missing — using inline fallback`).
+
+Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh` can verify it) — the default `templates/tickets/migration.md` shape is reproduced below:
 
 ```markdown
 ## Migration
@@ -150,6 +191,12 @@ Body (CommonMark, must include a ref to the AgDR so `require-migration-ticket.sh
 ## Agent Decision Record
 
 Migration AgDR: `<relative-path-to-AgDR>`
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| <term> | <definition> |
 
 ---
 
@@ -211,3 +258,7 @@ Next step:        run /start-ticket <owner/repo>#<number>, then begin editing th
 | Fail message | Points at this skill with the exact invocation to run |
 
 The skill and the gate are two halves of the same mechanism: gate detects the situation and blocks, skill builds the artefacts needed to unblock.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

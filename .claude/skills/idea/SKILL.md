@@ -1,6 +1,6 @@
 ---
 name: idea
-description: Submit a new product idea, feature concept, or internal tool proposal to the ideas backlog. Use when capturing a new product concept that hasn't been triaged yet.
+description: Capture a new product idea / feature concept / internal tool proposal to the ideas backlog (pre-triage).
 argument-hint: "<short title of the idea>"
 allowed-tools: Bash, Read, Edit, Write
 ---
@@ -36,6 +36,24 @@ Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (yo
 If the file doesn't exist yet, create it with a header and a table.
 
 ## Process
+
+### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+
+Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
+
+```bash
+ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+mkdir -p "$ops_root/.claude/session"
+echo "idea" > "$ops_root/.claude/session/active-issue-skill"
+```
+
+Remove the marker on **every** exit path (success, early-exit, user cancel, error):
+
+```bash
+rm -f "$ops_root/.claude/session/active-issue-skill"
+```
+
+The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from killed sessions, but a clean exit should never leave one behind. See AgDR-0030.
 
 ### 1. Parse the title
 
@@ -137,7 +155,19 @@ Would you like me to create a tracking GitHub Issue for IDEA-NNN? (y/n)
 
 If the user says no, skip this step entirely — the backlog entry is already saved, and that's enough.
 
-If yes, create one with the `enhancement` and `idea` labels (creating the labels if needed):
+If yes, resolve the idea body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template tickets/idea.md)   # → custom-templates/tickets/idea.md if present, else templates/tickets/idea.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/idea.md`. Adopters who want a customised idea-tracking-issue shape drop their version at `<private_repo>/custom-templates/tickets/idea.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/idea.md template missing — using inline fallback`).
+
+Substitute the gathered values into the resolved template (or the fallback heredoc below), then create with the `enhancement` and `idea` labels (creating the labels if needed):
 
 ```bash
 gh issue create \
@@ -157,6 +187,11 @@ IDEA-NNN — see backlog file.
 
 ## Next Step
 Triage. Decide whether to spec, schedule, or close.
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| {term} | {definition} |
 EOF
 )" \
   --label "idea,needs-triage"
@@ -231,3 +266,7 @@ Next: triage with the team, then `/write-spec` if it survives.
 | SHIPPED | Built and released |
 | WONTDO | Triaged out — not pursuing |
 | SUPERSEDED | Replaced by a different idea |
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

@@ -1,0 +1,751 @@
+<!doctype html>
+<!--
+  ApexYard · © 2026 me2resh
+  yard.apexscript.com · github.com/me2resh/apexyard · MIT
+  Multi-project SDLC framework for Claude Code.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ApexYard — what a day with it actually looks like</title>
+<meta name="author" content="me2resh">
+<meta name="copyright" content="© 2026 ApexYard · MIT">
+<meta name="description" content="A walkthrough of one realistic day using ApexYard — for non-technical founders. No terminal output, no jargon. Open your inbox, work the morning, ship by evening.">
+<link rel="canonical" href="https://yard.apexscript.com/how-it-works">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<!-- LLM consumers: payload size hints (token estimate = chars / 4). -->
+<meta name="llm:token-count" content="6572">
+<meta name="llm:doc-length" content="26291 chars">
+
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="ApexYard">
+<meta property="og:url" content="https://yard.apexscript.com/how-it-works">
+<meta property="og:title" content="ApexYard — what a day with it actually looks like">
+<meta property="og:description" content="A walkthrough of one realistic day using ApexYard — for non-technical founders. No jargon, no terminal output. Open your inbox in the morning, ship by evening.">
+<meta property="og:image" content="https://yard.apexscript.com/og/index.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:url" content="https://yard.apexscript.com/how-it-works">
+<meta name="twitter:title" content="ApexYard — what a day with it actually looks like">
+<meta name="twitter:description" content="A walkthrough of one realistic day using ApexYard — for non-technical founders. No jargon.">
+<meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
+
+<!-- Structured data: BreadcrumbList -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "ApexYard",
+      "item": "https://yard.apexscript.com/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "How it works",
+      "item": "https://yard.apexscript.com/how-it-works"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "url": "https://yard.apexscript.com/how-it-works",
+  "name": "ApexYard — what a day with it actually looks like",
+  "description": "A walkthrough of one realistic day using ApexYard, written for a non-technical founder.",
+  "datePublished": "2026-05-23",
+  "dateModified": "2026-05-24",
+  "copyrightYear": "2026",
+  "copyrightHolder": { "@type": "Person", "name": "me2resh", "url": "https://me2resh.com" },
+  "author": { "@type": "Person", "name": "me2resh", "url": "https://me2resh.com" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "ApexYard",
+    "url": "https://yard.apexscript.com/",
+    "logo": "https://yard.apexscript.com/favicon.svg"
+  },
+  "license": "https://opensource.org/licenses/MIT"
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   ApexYard — how-it-works page
+   Mirrors site/index.html design tokens (terminal-native
+   brutalism — JetBrains Mono, cream paper, single warning-red
+   accent). Heavier on prose; lighter on visual chrome. The
+   page tells one narrative — a day with ApexYard — in plain
+   English, for a non-technical founder.
+   ============================================================ */
+
+:root {
+  --paper:    #F4EFE6;
+  --paper-2:  #ECE5D2;
+  --paper-3:  #E0D7BD;
+  --ink:       #1A1612;
+  --ink-soft:  #4A4239;
+  --ink-faint: #877E70;
+  --ink-ghost: #B6AD9B;
+  --accent:      #C8321A;
+  --accent-soft: #E07050;
+  --rule:        #1A1612;
+  --rule-faint:  #B6AD9B;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --max-w:  1280px;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:    #15120D;
+    --paper-2:  #1C1813;
+    --paper-3:  #25201A;
+    --ink:       #F2EBD9;
+    --ink-soft:  #C5BEAA;
+    --ink-faint: #847C68;
+    --ink-ghost: #4A4338;
+    --accent:      #FF6E4A;
+    --accent-soft: #FFA180;
+    --rule:        #F2EBD9;
+    --rule-faint:  #4A4338;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--paper);
+  scroll-behavior: smooth;
+  font-feature-settings: 'calt', 'ss01', 'ss03';
+}
+
+body {
+  font-family: var(--mono);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 400;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+::selection { background: var(--accent); color: var(--paper); }
+
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.skip {
+  position: absolute; left: -10000px; top: auto;
+  width: 1px; height: 1px; overflow: hidden;
+}
+.skip:focus {
+  position: fixed; top: 0.5rem; left: 0.5rem; width: auto; height: auto;
+  background: var(--ink); color: var(--paper); padding: 0.5rem 0.75rem;
+  z-index: 200;
+}
+
+.dim { color: var(--ink-faint); }
+.kw { color: var(--accent); font-weight: 600; }
+.uline { border-bottom: 1px solid currentColor; padding-bottom: 1px; }
+
+/* ============================================================
+   shared titlebar — identical shape + nav set on every page
+   ============================================================ */
+.titlebar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.75rem 0;
+  font-size: 12px;
+}
+.titlebar__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.titlebar__left { display: flex; align-items: center; gap: 0.65rem; }
+.titlebar__dots { display: inline-flex; gap: 0.35rem; }
+.titlebar__dot {
+  width: 11px; height: 11px;
+  border: 1px solid var(--rule);
+  display: inline-block;
+}
+.titlebar__dot.is-warn { background: var(--accent); border-color: var(--accent); }
+.titlebar__path { color: var(--ink-soft); font-family: var(--mono); }
+.titlebar__path a { color: inherit; }
+.titlebar__path a:hover { color: var(--accent); }
+.titlebar__path b { color: var(--ink); font-weight: 700; }
+.titlebar__right { display: flex; gap: 1.25rem; align-items: center; font-size: 12px; }
+.titlebar__right a { color: var(--ink-faint); transition: color 0.15s ease; }
+.titlebar__right a:hover { color: var(--accent); }
+.titlebar__right a.is-current { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 2px; pointer-events: none; }
+.titlebar__right a.is-cta {
+  border: 1px solid var(--rule);
+  padding: 0.35rem 0.75rem;
+  color: var(--ink);
+}
+.titlebar__right a.is-cta:hover { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 720px) {
+  .titlebar__right { gap: 0.7rem; font-size: 11px; }
+  .titlebar__right a:not(.is-cta):not(.always) { display: none; }
+  .titlebar__right a.always { display: inline; }
+}
+
+/* ============================================================
+   page header — shared shape with architecture.html / skills.html
+   ============================================================ */
+.page-header {
+  border-bottom: 1px solid var(--rule);
+  padding: clamp(2rem, 5vw, 3.5rem) 0 clamp(1.5rem, 3vw, 2.5rem);
+}
+.page-header__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+.page-header__eyebrow {
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+}
+.page-header__eyebrow .pill {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 0.2rem 0.6rem;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+@media (max-width: 700px) {
+  /* On mobile, drop the copy-for-ai button to a new line below the pill + subtitle so it
+     doesn't compete with the page-header rhythm. Inline margin-left:auto already pushes it
+     right on desktop. */
+  .page-header__eyebrow .copy-for-ai { margin-left: 0; flex-basis: 100%; }
+}
+
+/* GEO-content block visually hidden from sighted users but kept in the DOM for AI
+   crawlers + screen readers. The block exists to satisfy /geo-audit G12 (first-500-tokens
+   structured lead — what-is / what-can / needed-to-start). On this page (how-it-works) the
+   block visibly duplicates the tagline ("a walkthrough of one realistic day"), so we drop
+   it from the human render but preserve the markup for citation grounding. Per #393 finding #4. */
+.ai-lead-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.page-header h1 {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  margin-bottom: 0.65rem;
+}
+.page-header h1::after {
+  content: '_';
+  color: var(--accent);
+  animation: blink 1.1s steps(1, end) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.page-header .tagline {
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  color: var(--ink-soft);
+  max-width: 72ch;
+  line-height: 1.55;
+  margin-bottom: 0.5rem;
+}
+.page-header .meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 1.25rem;
+}
+.page-header .meta a {
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule-faint);
+  padding-bottom: 1px;
+}
+.page-header .meta a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-header h1::after { animation: none; }
+}
+
+/* ============================================================
+   day section — the heart of the page
+   one large narrative block per time-of-day chapter
+   ============================================================ */
+
+main { background: var(--paper); }
+
+.day {
+  border-bottom: 1px solid var(--rule-faint);
+}
+.day:last-of-type { border-bottom: 1px solid var(--rule); }
+.day__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: clamp(2.5rem, 5vw, 4rem) var(--gutter);
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 2rem 3rem;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .day__inner { grid-template-columns: 1fr; gap: 1rem; }
+}
+.day__time {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  border-top: 2px solid var(--accent);
+  padding-top: 0.75rem;
+}
+.day__time h2 {
+  display: block;
+  color: var(--ink);
+  font-size: 1.5rem;
+  letter-spacing: -0.015em;
+  font-weight: 800;
+  margin-top: 0.5rem;
+  text-transform: none;
+  line-height: 1.1;
+  font-family: var(--mono);
+}
+.day__body {
+  max-width: 60ch;
+}
+.day__body p {
+  font-size: 15px;
+  color: var(--ink);
+  line-height: 1.7;
+  margin-bottom: 1.1rem;
+}
+.day__body p:last-child { margin-bottom: 0; }
+.day__body p.lede {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.55;
+  margin-bottom: 1.25rem;
+}
+.day__body .aside {
+  border-left: 3px solid var(--accent);
+  background: var(--paper-2);
+  padding: 0.85rem 1.1rem;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 1.25rem 0;
+  line-height: 1.6;
+}
+.day__body .aside strong { color: var(--ink); }
+
+.day--alt { background: var(--paper-2); }
+
+/* ============================================================
+   intro and outro panels
+   ============================================================ */
+
+.intro-panel,
+.outro-panel {
+  padding: clamp(2.5rem, 5vw, 4rem) 0;
+}
+.intro-panel { background: var(--paper-2); border-bottom: 1px solid var(--rule); }
+.outro-panel { background: var(--paper-3); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+
+.intro-panel__inner,
+.outro-panel__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+.intro-panel h2,
+.outro-panel h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: 1rem;
+  line-height: 1.2;
+  max-width: 30ch;
+}
+.intro-panel p,
+.outro-panel p {
+  font-size: 15px;
+  color: var(--ink-soft);
+  line-height: 1.7;
+  max-width: 65ch;
+  margin-bottom: 1rem;
+}
+.intro-panel p:last-child,
+.outro-panel p:last-child { margin-bottom: 0; }
+
+/* ============================================================
+   final CTA — matches the index final block
+   ============================================================ */
+.final {
+  padding: clamp(4rem, 8vw, 7rem) 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+.final__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 3rem;
+  align-items: end;
+}
+@media (max-width: 900px) {
+  .final__inner { grid-template-columns: 1fr; gap: 2rem; }
+}
+.final h2 {
+  font-size: clamp(2rem, 5vw, 3.75rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  color: var(--ink);
+}
+.final h2 .acc { color: var(--accent); }
+.final p {
+  font-size: 14px;
+  color: var(--ink-soft);
+  max-width: 50ch;
+  line-height: 1.65;
+  margin-top: 1.25rem;
+}
+.final__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-self: end;
+}
+.final__btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--rule);
+  padding: 1rem 1.25rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+}
+.final__btn:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.final__btn .arrow { font-weight: 800; }
+
+/* ============================================================
+   footer
+   ============================================================ */
+.page-footer {
+  padding: 1.5rem 0 2rem;
+  font-size: 12px;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule-faint);
+  margin-top: 4rem;
+}
+.page-footer__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.page-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+}
+.page-footer__meta {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.page-footer a { color: var(--ink-soft); border-bottom: 1px dotted currentColor; padding-bottom: 1px; }
+.page-footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<a href="#main" class="skip">Skip to content</a>
+
+<header class="titlebar">
+  <div class="titlebar__inner">
+    <div class="titlebar__left">
+      <span class="titlebar__dots" aria-hidden="true">
+        <span class="titlebar__dot"></span>
+        <span class="titlebar__dot"></span>
+        <span class="titlebar__dot is-warn"></span>
+      </span>
+      <span class="titlebar__path">~/<a href="/"><b>apexyard</b></a> <span class="dim">· how it works</span></span>
+    </div>
+    <nav class="titlebar__right" aria-label="Primary">
+      <a href="/how-it-works" class="is-current always">how it works</a>
+      <a href="/#quickstart" class="is-cta always">quickstart</a>
+      <a href="/architecture" class="always">architecture</a>
+      <a href="/skills" class="always">skills</a>
+      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
+      <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <section class="page-header">
+    <div class="page-header__inner">
+      <div class="page-header__eyebrow">
+        <span class="pill">apexyard / how it works</span>
+        <span>one realistic day, in plain English</span>
+        <button class="copy-for-ai" data-md-url="/how-it-works.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
+      </div>
+      <h1>How it works</h1>
+      <p class="tagline">
+        A walkthrough of one realistic day using ApexYard, written for someone who isn't an engineer. No terminal output, no jargon. By the end you'll know exactly what using the tool feels like.
+      </p>
+      <p class="tagline ai-lead-hidden" id="ai-lead" aria-hidden="false">
+        <strong>What is it?</strong> ApexYard is a walkthrough of one realistic day: open your inbox, work on a change while the framework auto-reviews, approve a contractor's PR, run a launch-readiness check, ship by evening.
+        <strong>What can it do?</strong> Adds review, guardrails, and process around every change you make with Claude Code — so the work that ships is the work a real engineering team would have shipped.
+        <strong>What's needed to start?</strong> Fork apexyard, run <code>/setup</code>, register your projects. The page below is a narrative; see <a href="/#quickstart" class="uline">quickstart</a> for the install steps.
+      </p>
+      <p class="meta">
+        See also: <a href="/">overview</a> · <a href="/skills">skills</a> · <a href="/architecture">architecture</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="intro-panel">
+    <div class="intro-panel__inner">
+      <h2>The shape of a day with ApexYard</h2>
+      <p>
+        You're a founder. You're building software with an AI assistant — Claude Code, Cursor, something similar. You may have a contractor or two helping. You don't have a traditional engineering team to lean on for reviews, releases, and quality control.
+      </p>
+      <p>
+        ApexYard plugs into the AI you already use. It quietly adds a layer of <strong>review, guardrails, and process</strong> around everything you (or your contractors) do, so the work that ships is the work a real engineering team would have shipped. Below is what a typical day with it feels like.
+      </p>
+    </div>
+  </section>
+
+  <article class="day">
+    <div class="day__inner">
+      <div class="day__time">
+        Morning
+        <h2>Open your inbox</h2>
+      </div>
+      <div class="day__body">
+        <p class="lede">
+          You open Claude Code with a coffee. The first thing you do is ask it for your inbox.
+        </p>
+        <p>
+          One screen comes back with every product you're building. The pull request that's waiting on your approval. The issue your contractor commented on yesterday. The bug a customer reported that nobody's picked up yet. The launch checklist you started last week and forgot about.
+        </p>
+        <p>
+          You don't open five GitHub tabs. You don't flip between three Slack channels. Everything that needs your attention is in one place, sorted by what's most overdue.
+        </p>
+        <div class="aside">
+          <strong>What's new here:</strong> the inbox is generated from real data — the actual PRs, issues, and comments across every product you've registered, not a separate list you have to maintain.
+        </div>
+        <p>
+          You pick the highest-priority item: a change to your billing system you started yesterday. You tell Claude Code to keep working on it.
+        </p>
+      </div>
+    </div>
+  </article>
+
+  <article class="day day--alt">
+    <div class="day__inner">
+      <div class="day__time">
+        Mid-morning
+        <h2>The AI writes — the framework reviews</h2>
+      </div>
+      <div class="day__body">
+        <p class="lede">
+          You describe the change you want. The AI writes the code. So far, nothing different — that's how you've always worked.
+        </p>
+        <p>
+          The difference: when the AI is done, ApexYard automatically runs a real code review against everything that changed. Not a checklist. A senior-engineering-level review that reads the code, looks at how it fits with the rest of the system, and flags things you'd want someone competent to flag.
+        </p>
+        <p>
+          This morning's review catches three things. One is a missing test for an edge case. One is a security issue — the change accidentally exposes a customer's email address in an error log. One is just a question: "are you sure you want this to be public, or should it require login?"
+        </p>
+        <p>
+          You look at each one. The missing test, you have the AI add. The security issue, you fix on the spot. The question, you confirm — yes, public, that's the point. You hit approve.
+        </p>
+        <div class="aside">
+          <strong>What's new here:</strong> the review happens before the change goes live, not after a customer reports a problem.
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="day">
+    <div class="day__inner">
+      <div class="day__time">
+        Lunch
+        <h2>A contractor finishes their piece</h2>
+      </div>
+      <div class="day__body">
+        <p class="lede">
+          Your inbox pings: a contractor has finished work on a different product. There's a new pull request waiting for you.
+        </p>
+        <p>
+          Before you even click on it, ApexYard has already reviewed the contractor's work. The same kind of review it did for you this morning. You see what was flagged: a couple of small quality issues, a question about the user-facing copy, no security concerns.
+        </p>
+        <p>
+          The contractor has already responded to the quality issues. The copy question is something you need to weigh in on — it's a product decision, not an engineering one. You think about it for a minute, write a one-line answer, and ask them to make the change.
+        </p>
+        <p>
+          A short while later, the contractor pushes the fix. The review re-runs automatically against the new version. Clean. You hit approve.
+        </p>
+        <div class="aside">
+          <strong>What's new here:</strong> you didn't have to read every line yourself to trust the work — the review caught what an experienced engineer would have, freeing you for the product decision only you could make.
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="day day--alt">
+    <div class="day__inner">
+      <div class="day__time">
+        Afternoon
+        <h2>Getting ready to launch</h2>
+      </div>
+      <div class="day__body">
+        <p class="lede">
+          You're getting close to launching the new billing system. Before customers see it, you want to know what's still missing.
+        </p>
+        <p>
+          You ask Claude Code to run a launch-readiness check. It comes back with a structured report across every dimension that matters: is the site secure, is it accessible, does it load fast enough, is there a privacy policy, is there error monitoring set up, is there a way to know when something breaks.
+        </p>
+        <p>
+          Today the report says you're nearly ready — three things still missing. One is a privacy policy you forgot to publish. One is that you don't have error monitoring set up, so if something breaks at 2am you won't know until a customer emails you. The third is a small accessibility issue with a contrast level on one button.
+        </p>
+        <p>
+          The privacy policy you fix in ten minutes — there's a generator that handles the boilerplate. The error monitoring you ask Claude Code to wire up; that's a half-hour job. The accessibility issue is a one-line change in the design.
+        </p>
+        <p>
+          You re-run the readiness check. Three greens. You're good to ship.
+        </p>
+        <div class="aside">
+          <strong>What's new here:</strong> the things that usually surface a week after launch — privacy holes, no monitoring, accessibility complaints from real users — get caught the day before instead.
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="day">
+    <div class="day__inner">
+      <div class="day__time">
+        End of day
+        <h2>Nothing gets lost</h2>
+      </div>
+      <div class="day__body">
+        <p class="lede">
+          You shut down. Before you do, the framework has already quietly recorded everything that mattered today.
+        </p>
+        <p>
+          The technical decisions you made — why you picked one library over another, why you chose to handle a feature this way and not that way — are written down with the reasoning. The reviews are saved. The launch checks are stored. The contractor's work, with its approvals, is part of the history.
+        </p>
+        <p>
+          The next time you (or anyone you bring in) needs to understand <em>why</em> something is the way it is, the answer is there. No "what was I thinking?" three months from now. No re-deciding the same thing because you forgot you'd already decided it.
+        </p>
+        <p>
+          On Friday, you ask the framework for a stakeholder update. It writes one for you — what shipped this week, across every product, with the highlights. You skim it, tweak a sentence, and send it to your investor. Five minutes total. The hardest part was deciding which font to use in the email.
+        </p>
+        <div class="aside">
+          <strong>What's new here:</strong> the framework is your engineering memory — today's work is searchable next year, and Friday's update writes itself from what actually happened.
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <section class="final">
+    <div class="final__inner">
+      <div>
+        <h2>Fork apexyard.<br>Run <span class="acc">/setup</span>.<br>Start your first day.</h2>
+        <p>
+          Free and open source. Plain markdown and shell. No SaaS, no monthly fee, no lock-in. Fork it, edit anything to match how you work, and ship like you finally have the team.
+        </p>
+      </div>
+      <div class="final__actions">
+        <a href="https://github.com/me2resh/apexyard" class="final__btn" target="_blank" rel="noopener">
+          <span>fork on github</span>
+          <span class="arrow">→</span>
+        </a>
+        <a href="/#quickstart" class="final__btn">
+          <span>see the technical quickstart</span>
+          <span class="arrow">→</span>
+        </a>
+        <a href="/" class="final__btn">
+          <span>back to overview</span>
+          <span class="arrow">↑</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="page-footer" role="contentinfo">
+  <div class="page-footer__inner">
+    <div class="page-footer__brand">yard.apexscript.com — fork the framework, register your repos, ship.</div>
+    <nav class="page-footer__nav" aria-label="Footer">
+      <a href="/how-it-works">how it works</a>
+      <a href="/#quickstart">quickstart</a>
+      <a href="/architecture">architecture</a>
+      <a href="/skills">skills</a>
+      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog ↗</a>
+      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a>
+    </nav>
+    <div class="page-footer__meta">© 2026 <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · ApexYard · open source · plain markdown · zero dependencies</div>
+  </div>
+</footer>
+
+<script src="/copy-for-ai.js" defer></script>
+</body>
+</html>

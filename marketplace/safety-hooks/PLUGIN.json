@@ -1,0 +1,42 @@
+{
+  "name": "apexyard/safety-hooks",
+  "version": "0.1.0",
+  "description": "Production-grade safety hooks for Claude Code — secrets scanning, main-push block, git-add-all block, pre-push gate, commit-ref verification, PR-title + branch-name validation. Tracker-agnostic (gh / linear / jira / asana / custom). One tooth of the ApexYard governance comb; extracted from upstream on every framework release.",
+  "license": "MIT",
+  "homepage": "https://github.com/me2resh/apexyard",
+  "source": {
+    "type": "extraction",
+    "upstream_repo": "me2resh/apexyard",
+    "extraction_script": "bin/extract-subpacks.sh",
+    "see": "EXTRACTION_MANIFEST.json"
+  },
+  "keywords": [
+    "git-hooks",
+    "secrets-scanning",
+    "pr-validation",
+    "branch-naming",
+    "commit-message-validation",
+    "tracker-agnostic",
+    "github",
+    "linear",
+    "jira",
+    "asana",
+    "apexyard"
+  ],
+  "hooks": [
+    { "name": "check-secrets",        "path": ".claude/hooks/check-secrets.sh",        "event": "PreToolUse", "matcher": "Bash", "purpose": "Block staged secrets in git commits" },
+    { "name": "block-main-push",      "path": ".claude/hooks/block-main-push.sh",      "event": "PreToolUse", "matcher": "Bash", "purpose": "Block direct push to main/master" },
+    { "name": "block-git-add-all",    "path": ".claude/hooks/block-git-add-all.sh",    "event": "PreToolUse", "matcher": "Bash", "purpose": "Block git add -A / . / --all" },
+    { "name": "pre-push-gate",        "path": ".claude/hooks/pre-push-gate.sh",        "event": "PreToolUse", "matcher": "Bash", "purpose": "Remind to run lint/test/build before pushing" },
+    { "name": "verify-commit-refs",   "path": ".claude/hooks/verify-commit-refs.sh",   "event": "PreToolUse", "matcher": "Bash", "purpose": "Verify Closes/Refs/Fixes #N references real tracker issues" },
+    { "name": "validate-pr-create",   "path": ".claude/hooks/validate-pr-create.sh",   "event": "PreToolUse", "matcher": "Bash", "purpose": "Validate PR title format + ticket ID existence" },
+    { "name": "validate-branch-name", "path": ".claude/hooks/validate-branch-name.sh", "event": "PreToolUse", "matcher": "Bash", "purpose": "Validate branch names match {type}/{TICKET}-{slug}" }
+  ],
+  "settings_snippet": ".claude/settings.snippet.json",
+  "graduation_path": {
+    "name": "apexyard (full framework)",
+    "url": "https://github.com/me2resh/apexyard",
+    "what_you_get": "Two-marker merge gate (Rex + CEO), migration gate, active-ticket gate, leak protection, AgDR memory, 19 role definitions, portfolio registry",
+    "delivery": "fork-based ops repo (not a plugin)"
+  }
+}

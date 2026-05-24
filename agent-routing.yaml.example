@@ -1,0 +1,162 @@
+# =============================================================================
+# ApexYard agent-routing config — adopter's per-agent model + endpoint overrides
+# =============================================================================
+#
+# This file is the **adopter customisation surface** for ApexYard's 24
+# Claude Code sub-agents (19 role-derived personas + 5 utility agents).
+# It lets you override the framework's shipped per-agent model defaults
+# (e.g. switch the QA Engineer from Haiku to Sonnet, or route the Data
+# Analyst through a local Ollama endpoint) in ONE central file kept in
+# your private portfolio repo.
+#
+# See docs/agdr/AgDR-0050-agent-runtime-overhaul.md § Axis 3 for the
+# design and docs/multi-project.md § "Centralised agent routing" for
+# the adopter setup guide.
+#
+# -----------------------------------------------------------------------------
+# File location
+# -----------------------------------------------------------------------------
+#
+#   Split-portfolio (v2): <private_repo>/agent-routing.yaml
+#                         (committed to your private sibling repo;
+#                         resolved via .portfolio.agent_routing in
+#                         .claude/project-config.json)
+#
+#   Single-fork:          <fork>/agent-routing.yaml
+#                         (gitignored — adopter-specific routing
+#                         choices stay local to the machine)
+#
+# Rename this file from `.example` to `agent-routing.yaml` at the
+# resolved location once you've filled it in.
+#
+# -----------------------------------------------------------------------------
+# Semantics
+# -----------------------------------------------------------------------------
+#
+# - An empty `agents: {}` block is identical to "no file" — the public
+#   fork ships with framework default models that work out-of-box.
+# - Omitted agents inherit the framework default from
+#   .claude/agents/<name>.md frontmatter.
+# - At SessionStart, the sync hook (ships in PR 2) rewrites the affected
+#   .claude/agents/*.md frontmatter in-place. Pre-commit + pre-push
+#   guards (PR 2) catch accidental commits of the rewritten frontmatter
+#   so adopter routing choices never leak to the public fork.
+#
+# Until PR 2 lands, authoring this file is documented but inert — the
+# YAML is parsed by the schema validator and `portfolio_agent_routing`
+# resolver, but no hook applies it yet.
+#
+
+# Schema version. Bump if breaking changes are introduced.
+version: 1
+
+# -----------------------------------------------------------------------------
+# Agents
+# -----------------------------------------------------------------------------
+# Map of agent name → override entry. Agent names match the filename
+# (without `.md`) under .claude/agents/, e.g. `qa-engineer`, `tech-lead`,
+# `code-reviewer`, `backend-engineer`.
+#
+# Per-entry fields:
+#
+#   model                  REQUIRED for an override entry. The model
+#                          specifier (e.g. `opus`, `sonnet`, `haiku`,
+#                          `ollama/qwen2.5-coder:14b`, or
+#                          `bedrock/anthropic.claude-opus-4-7`).
+#
+#   endpoint               OPTIONAL. URL of an alternative inference
+#                          endpoint (e.g. a LiteLLM proxy fronting
+#                          Ollama). At SessionStart the sync hook sets
+#                          ANTHROPIC_BASE_URL to this value so Claude
+#                          Code routes the agent's invocations through
+#                          the proxy. v1 is session-scoped — all agents
+#                          on a session share the endpoint. Per-agent
+#                          invocation env scoping is deferred to v2.
+#                          Claude is the framework default; local-model
+#                          routing is adopter-opt-in via Example C
+#                          below. Specific model fit depends on local
+#                          hardware (RAM / GPU / Apple Silicon vs
+#                          Linux), so the framework ships the pattern
+#                          but not a recommendation — adopters pick a
+#                          model that fits their machine + validate it
+#                          against their own workload before committing.
+#
+#   env                    OPTIONAL. Map of environment variables set
+#                          for the agent's invocations. Supports
+#                          $VAR_NAME refs to the parent shell's env.
+#
+#   timeout_seconds        OPTIONAL. Override the framework default
+#                          invocation timeout for this agent.
+#
+# (Note: `allowed_tools_override` was advertised in earlier drafts of
+# this schema but never wired into the parser / consumer. Dropped in
+# #358 for v1; the shipped per-agent allowed-tools list in each
+# .claude/agents/<name>.md frontmatter is the source of truth. Edit
+# the agent file directly with a `# routing-config:override <reason>`
+# comment in the YAML frontmatter if you need a one-off override.)
+
+agents: {}
+
+# -----------------------------------------------------------------------------
+# Examples (commented — copy + edit one of these to override an agent)
+# -----------------------------------------------------------------------------
+#
+# Example A — single-agent model override (remote Claude API):
+#
+#   agents:
+#     qa-engineer:
+#       model: sonnet            # framework default is haiku; override
+#                                # to sonnet for a higher-recall AC run
+#
+# Example B — multiple model overrides:
+#
+#   agents:
+#     tech-lead:
+#       model: opus              # framework default; rarely overridden
+#     backend-engineer:
+#       model: sonnet            # framework default; explicit pin
+#     data-analyst:
+#       model: sonnet            # bump from haiku for richer SQL output
+#
+# Example C — local routing via LiteLLM proxy + Ollama (adopter-opt-in):
+#
+# Claude is the framework default. The framework does NOT ship a
+# recommended local model because hardware varies — pick one that fits
+# your machine + validate against your own workload before committing.
+# Four candidate models below (commented), with RAM-at-load estimates
+# at q4 quantization. Uncomment the entry that matches your hardware.
+# All four are reasonable starting points for ticket-manager + data-
+# analyst-style structured-output work; none is recommended over the
+# others by the framework.
+#
+#   agents:
+#     ticket-manager:
+#       # model: ollama/qwen2.5-coder:14b      # ~10 GB RAM, M1+ Pro / 12+ GB GPU
+#       # model: ollama/llama3.1:8b            # ~6 GB RAM, runs on most laptops
+#       # model: ollama/deepseek-coder-v2:16b  # ~12 GB RAM, M1+ Max / 14+ GB GPU
+#       # model: ollama/mistral-small3:24b     # ~18 GB RAM, M1+ Max / 20+ GB GPU
+#       endpoint: http://localhost:4000        # LiteLLM proxy fronting Ollama
+#     data-analyst:
+#       # model: ollama/llama3.1:8b            # SQL / dashboard work, lightweight
+#       endpoint: http://localhost:4000
+#
+# Disk: each model is 5-13 GB to download. Ollama caches under ~/.ollama.
+# Tool-call reliability via LiteLLM is the load-bearing risk — validate
+# before relying on it for production work.
+#
+# Example D — Bedrock / Vertex routing with env vars:
+#
+#   agents:
+#     security-auditor:
+#       model: bedrock/anthropic.claude-opus-4-7
+#       env:
+#         AWS_REGION: eu-west-2
+#         AWS_PROFILE: $APEXYARD_AWS_PROFILE
+#
+# Example E — invocation timeout override:
+#
+#   agents:
+#     pen-tester:
+#       model: opus
+#       timeout_seconds: 180     # framework default is 60s; allow
+#                                # deeper adversarial exploration

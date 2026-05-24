@@ -1,6 +1,6 @@
 ---
 name: bug
-description: Create a structured bug report with Given/When/Then scenario, repro steps, and severity. Use when reporting a bug or unexpected behavior.
+description: Create a structured bug ticket (Given/When/Then scenario, repro steps, severity).
 argument-hint: "<short description of the bug>"
 allowed-tools: Bash, Read, Write
 ---
@@ -30,6 +30,24 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 ```
 
 ## Process
+
+### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
+
+Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
+
+```bash
+ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+mkdir -p "$ops_root/.claude/session"
+echo "bug" > "$ops_root/.claude/session/active-issue-skill"
+```
+
+Remove the marker on **every** exit path (success, early-exit, user cancel, error):
+
+```bash
+rm -f "$ops_root/.claude/session/active-issue-skill"
+```
+
+The `clear-issue-skill-marker.sh` SessionStart hook sweeps stale markers from killed sessions, but a clean exit should never leave one behind. See AgDR-0030.
 
 ### 1. Resolve the target repo
 
@@ -92,9 +110,23 @@ Any environment details? (browser, device, staging/prod, or Enter to skip)
 Any initial investigation? (root cause hypothesis, relevant code paths, or Enter to skip)
 ```
 
-### 4. Show the formatted ticket for confirmation
+### 4. Resolve the bug body template
 
-Display the full ticket:
+Resolve the bug body template via the portfolio helper so adopter overrides win when present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+template=$(portfolio_resolve_template tickets/bug.md)   # → custom-templates/tickets/bug.md if present, else templates/tickets/bug.md
+```
+
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/bug.md`. Adopters who want a customised bug-body shape drop their version at `<private_repo>/custom-templates/tickets/bug.md`. See `templates/README.md` for the path-mirroring convention.
+
+**Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/bug.md template missing — using inline fallback`). This preserves the pre-refactor behaviour for adopters whose installations don't yet have the new template files.
+
+### 5. Show the formatted ticket for confirmation
+
+Substitute the gathered inputs into the resolved template (or the inline heredoc fallback), then display the full ticket using the resolved shape (the default `templates/tickets/bug.md` shape is reproduced below):
 
 ```
 Here's the ticket I'll create:
@@ -119,8 +151,16 @@ Here's the ticket I'll create:
 ## Severity
 {P0-critical / P1-important / P2-later}
 
+## Mitigation
+{workaround or "—"}
+
 ## Investigation Notes
 {notes or "—"}
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| {term} | {definition} |
 ---
 
 Labels: bug, {P0|P1|P2}
@@ -129,13 +169,13 @@ Repo: {owner/repo}
 Create this ticket? (yes / edit / cancel)
 ```
 
-### 5. Handle response
+### 6. Handle response
 
 - **yes** / **looks good** / **go** → create the issue
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 6. Create the GitHub Issue
+### 7. Create the GitHub Issue
 
 ```bash
 gh issue create --repo {owner/repo} \
@@ -144,7 +184,7 @@ gh issue create --repo {owner/repo} \
   --body "{formatted body}"
 ```
 
-### 7. Return the URL
+### 8. Return the URL
 
 ```
 Created: {owner/repo}#{number} — {title}
@@ -159,3 +199,7 @@ Created: {owner/repo}#{number} — {title}
 4. **At least one repro step.** Don't create bugs without repro.
 5. **Labels auto-applied.** `bug` always, plus the severity label. Severity label scheme reads from `.claude/project-config.*.json` → `.ticket.label_priority_scheme` (default `P0,P1,P2,P3`).
 6. **Title prefix.** The accepted prefix list reads from `.claude/project-config.*.json` → `.ticket.prefix_whitelist`; `[Bug]` must be in that list. Some teams prefer `[Bug]` prefix with the severity as a label (the default); others embed severity in the title (`[P0]`, `[P1]`). Skill respects whichever is configured. See apexyard#109.
+
+---
+
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

@@ -1,0 +1,21 @@
+# Netlify rewrite rules for ApexYard marketing site.
+#
+# Markdown alternates — coding agents (Claude Code / Cursor / Aider / Cline)
+# fetching a page for context pay the full HTML-chrome cost. The hand-written
+# clean-markdown alternates at /foo.md.gen serve as the lower-token version.
+# 200 = rewrite (URL stays /foo.md, content from /foo.md.gen) — NOT a redirect.
+# See site/index.md.gen, site/architecture.md.gen, site/skills.md.gen.
+
+/index.md            /index.md.gen           200
+/architecture.md     /architecture.md.gen    200
+/skills.md           /skills.md.gen          200
+/how-it-works.md     /how-it-works.md.gen    200
+
+# Clean URLs — drop the .html suffix from /architecture, /skills, /how-it-works.
+# Both forms work (200 rewrite preserves URL the user sees + backwards compat
+# for old bookmarks pointing at the .html form). Canonical is the clean form
+# per #327 + the SEO-audit S14 finding.
+
+/architecture        /architecture.html      200
+/skills              /skills.html            200
+/how-it-works        /how-it-works.html      200

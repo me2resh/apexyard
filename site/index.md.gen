@@ -1,0 +1,108 @@
+# ApexYard
+
+> Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code. Open source, plain markdown and shell.
+
+## What is it?
+
+ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. 54 skills grouped by what you're trying to do, plus a persistent decision-log across the whole portfolio.
+
+## What can it do?
+
+- **Automatic code review.** Every change — yours or your contractor's — gets a senior-engineering-level review before it ships
+- **Launch-readiness checks.** Find out what's missing across security, performance, accessibility, monitoring, docs before customers tell you
+- **One inbox across all your products.** Every PR, issue, comment, blocker in one screen, no tab-juggling
+- **A real engineering team's worth of reviewers.** Touch auth code → a security reviewer takes a look. Touch the database → someone walks you through the rollback plan. 19 role definitions, 23 specialised reviewer agents
+- **Guardrails that fire themselves.** 32 small scripts catch ticket-first edits, missing rollback plans, secrets in code, red CI before merge — so you don't have to remember
+- **A decision-log that follows you.** Every meaningful technical decision is recorded with reasoning — search it next year, the answer's there
+
+## Who this is for
+
+- **Solo founders shipping with AI** — building alone, need the guardrails a team would give you
+- **Non-technical founders managing contractors** — need to know the work is solid without reading every commit
+- **Small teams with no engineering process yet** — first version shipped, now you need real review + testing + release discipline
+
+## What's needed to start?
+
+1. Fork `github.com/me2resh/apexyard` on GitHub
+2. Clone the fork locally — it IS your ops repo, no nested installs, no symlinks
+3. Run `/setup` in Claude Code — three exchanges to configure company, team, and tech stack
+4. Register projects via `/handover <repo>` for adoption, or `/idea` to capture new concepts
+
+## Proof — from our own GitHub history
+
+ApexYard is built using ApexYard. Verifiable from `github.com/me2resh/apexyard`:
+
+- **176 PRs reviewed and merged in the last 90 days**, under the same guardrails the tool installs in your fork
+- **8 production releases shipped** (v0.1.0 through v2.0.0)
+- **51 technical decisions recorded** (released to main) — every meaningful call in an audit trail
+- **13 bugs caught and fixed** before users hit them
+
+## See a day with it
+
+Read [how it works](https://yard.apexscript.com/how-it-works) for a plain-English walkthrough of one realistic day — open the inbox in the morning, ship by evening, nothing gets lost.
+
+## Get started in three steps
+
+### 1. Star, fork, clone
+
+```bash
+gh repo fork me2resh/apexyard --clone
+cd apexyard
+git remote add upstream https://github.com/me2resh/apexyard.git
+```
+
+### 2. Claude, /setup
+
+```bash
+cd apexyard
+claude
+/setup
+# three questions → onboarding.yaml is configured
+```
+
+### 3. Adopt, or originate
+
+- `/handover <repo-url>` — existing project → assessment + registry + architecture stub
+- `/idea` — new concept → ideas-backlog.md, optional GitHub issue
+
+## What you actually get when you fork it
+
+### Reviews from a full engineering team — without hiring one
+
+The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. Behind the scenes: 19 role definitions across 5 departments, each with its own checklist and boundaries.
+
+### Tools for every step of shipping software · 54 slash commands
+
+Want to adopt a project you've inherited? `/handover`. Want to capture an idea before it evaporates? `/idea`. Want to know what's waiting on you across every product? `/inbox`. Want a launch-readiness check before customers see it? `/launch-check`. 54 of these in total — each one is a focused workflow with safety rails.
+
+### Guardrails that stop bad code from shipping · 32 hooks
+
+Every edit needs a real ticket behind it. Every database change needs a rollback plan. Every merge needs a real review. Secrets in code get caught before they're committed. Mechanically enforced — 32 small scripts that fire at the right moments.
+
+### Reviewers that don't rubber-stamp · 23 agents
+
+- **Rex** (code review) reads what changed and how the rest of the system reacts to it
+- **Hakim** (security) flags auth / crypto / secrets
+- **Munir** (deps) scans vulnerabilities + licences
+- **Tariq** (PR manager) and **Idris** (ticket manager) handle the orchestration
+
+### One inbox across everything
+
+`apexyard.projects.yaml` at your fork root lists every repo you manage. Skills like `/inbox`, `/status`, `/tasks`, `/stakeholder-update` aggregate across it. One prompt, every project. Add a project with `/handover`; sync with upstream via `/update`.
+
+### Drop-in GitHub Actions · 7 ready-made pipelines
+
+At `golden-paths/pipelines/`: `ci.yml`, `code-quality.yml`, `security.yml`, `dependency-audit.yml`, `pr-title-check.yml`, `review-check.yml`, `seo-check.yml`. Copy what you need into each project's `.github/workflows/`.
+
+## Manifesto
+
+Every pull request ties to a ticket. Every ticket has acceptance criteria. Code review validates against those criteria, and QA verifies the result in a separate pass before the ticket closes.
+
+## Links
+
+- GitHub: <https://github.com/me2resh/apexyard>
+- How it works: <https://yard.apexscript.com/how-it-works.md>
+- Architecture: <https://yard.apexscript.com/architecture.md>
+- Skills: <https://yard.apexscript.com/skills.md>
+- Releases: <https://github.com/me2resh/apexyard/releases>
+- Setup guide: <https://github.com/me2resh/apexyard/blob/main/docs/multi-project.md>
