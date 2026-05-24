@@ -250,21 +250,24 @@ case "$chosen" in
 
   md-to-pdf)
     # Markdown → PDF via the md-to-pdf npm package (chromium-backed).
-    # --as-html-only off → emit the PDF directly.
-    # Use a tmp output then move so md-to-pdf doesn't fight us on cwd.
-    tmp_out="$WORK/out.pdf"
-    if npx -y md-to-pdf --pdf-output-folder "$WORK" --dest-name out.pdf "$FROM_ABS" >&2; then
+    #
+    # md-to-pdf removed --pdf-output-folder and --dest-name in a breaking
+    # change (see me2resh/apexyard#404).  The current CLI writes
+    # <source-basename>.pdf in the same directory as the source file.
+    #
+    # Strategy: copy the source into a private temp dir under the desired
+    # output stem, invoke md-to-pdf there, then mv the result to TO_ABS.
+    # This avoids any cwd or output-name fighting.
+    out_stem="$(basename "${TO_ABS%.*}")"
+    tmp_src="$WORK/${out_stem}.md"
+    tmp_out="$WORK/${out_stem}.pdf"
+    cp "$FROM_ABS" "$tmp_src"
+    if npx -y md-to-pdf "$tmp_src" >&2; then
       if [ -f "$tmp_out" ]; then
         mv "$tmp_out" "$TO_ABS"
         exit 0
       fi
-      # Some versions of md-to-pdf output as <basename>.pdf in the folder.
-      basename_pdf="$WORK/$(basename "${FROM_ABS%.*}").pdf"
-      if [ -f "$basename_pdf" ]; then
-        mv "$basename_pdf" "$TO_ABS"
-        exit 0
-      fi
-      echo "convert.sh: md-to-pdf ran but no PDF appeared in $WORK" >&2
+      echo "convert.sh: md-to-pdf ran but no PDF appeared at $tmp_out" >&2
       exit 1
     fi
     echo "convert.sh: md-to-pdf conversion failed for $FROM_ABS" >&2
@@ -292,20 +295,21 @@ case "$chosen" in
     ;;
 
   md-to-pdf-html)
-    # md-to-pdf accepts HTML when --as-pdf and a chromium backend are
-    # configured. We use it as a last-resort HTML→PDF path.
-    tmp_out="$WORK/out.pdf"
-    if npx -y md-to-pdf --pdf-output-folder "$WORK" --dest-name out.pdf "$FROM_ABS" >&2; then
+    # md-to-pdf accepts HTML as a last-resort HTML→PDF path.
+    #
+    # Same staging strategy as the md-to-pdf (markdown) branch — copy
+    # source into temp dir under desired output stem, let md-to-pdf write
+    # <stem>.pdf next to it, then mv to TO_ABS.
+    out_stem="$(basename "${TO_ABS%.*}")"
+    tmp_src="$WORK/${out_stem}.html"
+    tmp_out="$WORK/${out_stem}.pdf"
+    cp "$FROM_ABS" "$tmp_src"
+    if npx -y md-to-pdf "$tmp_src" >&2; then
       if [ -f "$tmp_out" ]; then
         mv "$tmp_out" "$TO_ABS"
         exit 0
       fi
-      basename_pdf="$WORK/$(basename "${FROM_ABS%.*}").pdf"
-      if [ -f "$basename_pdf" ]; then
-        mv "$basename_pdf" "$TO_ABS"
-        exit 0
-      fi
-      echo "convert.sh: md-to-pdf produced no PDF for HTML input" >&2
+      echo "convert.sh: md-to-pdf produced no PDF at $tmp_out for HTML input" >&2
       exit 1
     fi
     echo "convert.sh: md-to-pdf HTML→PDF conversion failed for $FROM_ABS" >&2
