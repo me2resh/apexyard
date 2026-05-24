@@ -149,4 +149,4 @@ Drift banner on adopters' forks will fire on next session.
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

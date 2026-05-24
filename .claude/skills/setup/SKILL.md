@@ -618,4 +618,4 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

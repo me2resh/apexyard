@@ -272,4 +272,4 @@ The shim walks up from `$PWD` looking for the apexyard fork root (`onboarding.ya
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

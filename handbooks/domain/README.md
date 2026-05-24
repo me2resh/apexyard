@@ -112,4 +112,4 @@ If you find yourself writing a domain handbook that has no `paths:` field AND no
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

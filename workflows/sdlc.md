@@ -365,4 +365,4 @@ Every phase has a primary role that activates automatically when the phase start
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

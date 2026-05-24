@@ -42,4 +42,4 @@ for t in .claude/skills/setup/tests/test_*.sh; do bash "$t" || exit 1; done
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

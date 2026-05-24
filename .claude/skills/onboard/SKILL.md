@@ -30,4 +30,4 @@ The `onboarding-check.sh` hook now checks `onboarding.yaml` for placeholder valu
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

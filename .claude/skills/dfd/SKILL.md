@@ -333,4 +333,4 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

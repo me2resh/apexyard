@@ -41,4 +41,4 @@ The `_lib-multi-repo-trace.sh` helper is also exercised by Fixture 2. The helper
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

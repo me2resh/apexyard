@@ -221,4 +221,4 @@ Design rationale: [`docs/agdr/AgDR-0043-geo-audit-skill.md`](../../../docs/agdr/
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

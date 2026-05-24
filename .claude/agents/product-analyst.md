@@ -16,4 +16,4 @@ This agent activates per `.claude/rules/role-triggers.md` — auto-triggers on t
 
 ---
 
-_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
+*Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
