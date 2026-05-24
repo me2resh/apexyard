@@ -33,3 +33,7 @@ The skill itself (run inside Claude Code) builds the per-feature diagram with a 
 - The smoke test does NOT require Node/npx — the Mermaid lint graceful-skips on exit 3 if `mmdc` isn't installable. CI environments without Node will still see all five fixtures pass.
 - The smoke test does NOT require the apexyard fork's full registry — it builds its own fixture inventory inline. No portfolio dependency.
 - The helper is deliberately conservative: when a row's `Source` column doesn't mention an axis, that subgraph is rendered as `(none)`. Re-runs in Claude Code may populate axes that pure-grep misses; that's the point of the LLM-driven path.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

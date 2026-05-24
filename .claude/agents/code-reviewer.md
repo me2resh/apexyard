@@ -592,3 +592,7 @@ Report the failure in plain text with the exact command the caller needs to run.
 ```
 Review PR #1 in your-org/your-repo
 ```
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

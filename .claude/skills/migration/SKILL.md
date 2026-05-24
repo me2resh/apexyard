@@ -258,3 +258,7 @@ Next step:        run /start-ticket <owner/repo>#<number>, then begin editing th
 | Fail message | Points at this skill with the exact invocation to run |
 
 The skill and the gate are two halves of the same mechanism: gate detects the situation and blocks, skill builds the artefacts needed to unblock.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

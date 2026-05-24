@@ -362,3 +362,7 @@ Every phase has a primary role that activates automatically when the phase start
 | QA | [QA Engineer](../roles/engineering/qa-engineer.md) | Engineers (bug fixes) |
 | Deploy | [Platform Engineer](../roles/engineering/platform-engineer.md) | [SRE](../roles/engineering/sre.md) |
 | Monitor | [SRE](../roles/engineering/sre.md) | [Head of Engineering](../roles/engineering/head-of-engineering.md) (escalation) |
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

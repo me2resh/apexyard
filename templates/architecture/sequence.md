@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/sequence.md · github.com/me2resh/apexyard · MIT -->
+
 # Sequence Diagram — {Flow Name}
 
 > **Use a sequence diagram for request-flow walkthroughs** (auth handshake, payment flow, webhook callback, async job dispatch, etc.) where the *time-ordered interaction between components* is the load-bearing detail. Sibling: [`c4-container.md`](c4-container.md) for static container topology — same components, different question (*who talks to whom* vs *in what order*).

@@ -39,3 +39,7 @@ for t in .claude/skills/setup/tests/test_*.sh; do bash "$t" || exit 1; done
    - Exit 0 on all-pass, 1 on any fail
 3. Source `_lib-portfolio-paths.sh` from the sandbox's `.claude/hooks/` copy (NOT the live fork's) — copying the libs into the sandbox via the `cp "$LIB_*"` lines keeps the test hermetic.
 4. Call `portfolio_clear_cache` before each new assertion that re-resolves portfolio paths; otherwise the per-process cache will return stale state from an earlier case.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

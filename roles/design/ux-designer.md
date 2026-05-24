@@ -123,3 +123,7 @@ Error states:
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; once PR 2 lands, the sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 
 **Rationale**: user flow + IA is iterative.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

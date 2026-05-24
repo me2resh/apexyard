@@ -102,3 +102,7 @@ When reviewing UI implementations:
 **On trigger**: once PR 2 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/head-of-design.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
 
 **Rationale**: design-system decisions; sparse.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

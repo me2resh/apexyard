@@ -300,3 +300,7 @@ Re-run /feature-diagram <slug> --force when the feature's surfaces change.
 - **Don't run `/feature-diagram` for every row on every PR.** It's refresh-on-arch-change, not per-PR. The whole inventory only changes when features ship; the per-feature diagrams only change when the feature's routes / models / jobs / screens change.
 - **Don't hand-edit a generated diagram and lose the footer.** Re-runs detect the footer; without it the skill can't tell if a file is regenerable. If you must hand-edit, keep the footer line in place.
 - **Don't treat coverage gaps as failures.** The inventory has gaps by design (the scanner can't see business rules, permission matrices, or implicit features). Per-feature diagrams inherit those gaps — that's a feature, not a bug; the gaps are surfaced explicitly so a human can fill them in.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

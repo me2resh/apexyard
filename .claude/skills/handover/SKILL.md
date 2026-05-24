@@ -1026,3 +1026,7 @@ Filed follow-up tickets:
 | Adopted an open-source project as a dependency | No — that's `/audit-deps` |
 | Forked an internal tool you wrote yesterday | No — it's already yours |
 | Importing a side project into the org | Yes |
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

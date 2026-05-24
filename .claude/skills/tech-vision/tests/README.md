@@ -63,3 +63,7 @@ hardcode the section list. So adding a section to the template
 automatically extends the interview without code changes to the skill — but
 the smoke test does need updating since it asserts the framework default's
 exact section list.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -165,3 +165,7 @@ JSON (`--json`):
 - `/inbox` — same data, grouped by category instead of flattened
 - `/status` — current project state
 - `/projects` — portfolio table
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

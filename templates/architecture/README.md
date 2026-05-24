@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/README.md · github.com/me2resh/apexyard · MIT -->
+
 # Architecture Templates
 
 ApexYard ships five architecture-document templates. All diagrams are [Mermaid](https://mermaid.js.org/) — GitHub renders them inline, no build step. Decision rationale: [AgDR-0003](../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md).

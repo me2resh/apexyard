@@ -76,3 +76,7 @@ Refs #218
 ```
 
 The diff alone wouldn't tell you why this matters. The message does.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

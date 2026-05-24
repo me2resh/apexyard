@@ -38,3 +38,7 @@ The skill itself dispatches richer logic via LSP when enabled and presents a can
 ## Shared trace helper
 
 The `_lib-multi-repo-trace.sh` helper is also exercised by Fixture 2. The helper is shared with `/process` (#256) — if `/process` ships its own version, the consumer that lands later should consolidate to a single file.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

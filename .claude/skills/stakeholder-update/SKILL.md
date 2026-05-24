@@ -247,3 +247,7 @@ marketing-site — Weekly
 - `/projects` — portfolio table
 - `/roadmap` — what's planned
 - `/decide` — produces AgDRs that this skill cites
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

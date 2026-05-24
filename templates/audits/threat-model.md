@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/audits/threat-model.md · github.com/me2resh/apexyard · MIT -->
+
 # Threat Model — {project} @ {short-sha}
 
 > Persisted by `/threat-model` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. Edit the body freely; keep the frontmatter parseable. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.

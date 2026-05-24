@@ -162,3 +162,7 @@ If your team has chosen Linear, Jira, or another tracker as a deliberate deviati
 - Update the branch name pattern in `.claude/hooks/validate-branch-name.sh` and `validate-pr-create.sh` to accept your prefix
 - The validators already accept `[A-Z]+-[0-9]+` for any uppercase prefix — no code change needed for Linear/Jira-style IDs
 - Document the deviation in `onboarding.yaml` under `project_management.tool`
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

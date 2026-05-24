@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/prd.md · github.com/me2resh/apexyard · MIT -->
+
 # PRD: [Feature/Product Name]
 
 **Status**: Draft | In Review | Approved | In Development | Complete

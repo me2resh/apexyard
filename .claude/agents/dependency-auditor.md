@@ -188,3 +188,7 @@ References:
 | Critical / High | Realtime (Slack / pager) | Head of Security, Tech Lead |
 | Moderate | Weekly report | Engineering team |
 | Low | Weekly report | Engineering team |
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

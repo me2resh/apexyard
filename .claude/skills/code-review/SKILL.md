@@ -102,3 +102,7 @@ Posts a GitHub review comment with:
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
 
 Invokes: Code Reviewer Agent (Rex)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

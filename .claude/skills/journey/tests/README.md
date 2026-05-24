@@ -60,3 +60,7 @@ identically and handle modals correctly.
 PyYAML if available; falls back to a minimal YAML subset parser sufficient for
 the fixture if PyYAML is absent. No other runtime dependencies — vanilla Python
 3.8+.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -232,3 +232,7 @@ Wrong. Batching defeats the validation purpose — the user gives surface-level 
 - `/write-spec` — authors the PRD post-validation (only on GREEN)
 - `/decide` — captures the technical decision once the spec is in flight
 - The Mom Test (Rob Fitzpatrick) — companion reading; covers Q1 and Q2 in much more depth for live customer interviews
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

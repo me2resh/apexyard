@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/c4-context.md · github.com/me2resh/apexyard · MIT -->
+
 # System Context — {Project Name}
 
 > **C4 Level 1** — the system and everyone/everything it talks to. Audience: everyone. One diagram per managed project.

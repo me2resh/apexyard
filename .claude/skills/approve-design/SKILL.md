@@ -143,3 +143,7 @@ The merge flow for a UI PR requires **three** markers before the merge-gate hook
 1. `<pr>-rex.approved` — from the code-reviewer agent
 2. `<pr>-design.approved` — from this skill
 3. `<pr>-ceo.approved` — from `/approve-merge`
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -55,3 +55,7 @@ If you spot a violation in code that's already shipped:
 5. Tests for the domain now mock the port, not the SDK.
 
 The refactor is mechanical once you see the shape. The hard part is noticing the violation in the first place — which is what this handbook is for.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

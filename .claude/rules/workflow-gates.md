@@ -106,3 +106,7 @@ In Progress → In Review → QA → Done
                     MANDATORY STOP
                     QA must verify
 ```
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

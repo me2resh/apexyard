@@ -95,3 +95,7 @@ After generating the draft: ask if sections need adjustment, offer follow-ups.
 ### 6. Create the Tracking Ticket
 
 Offer to create an epic / feature ticket in the team's tracker with the PRD content.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

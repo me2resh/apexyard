@@ -197,3 +197,7 @@ touch projects/<name>/audits/security-review/.audit-history-tracked
 ```
 
 The MD artefacts at `<dim_dir>/<ts>.md` are committed regardless — they are the durable human-readable artefact of every PR's security review.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

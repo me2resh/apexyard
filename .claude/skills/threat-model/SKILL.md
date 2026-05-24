@@ -409,3 +409,7 @@ The lib re-evaluates the marker on every persist; the operator can toggle freely
 - **Don't fall back to "inline discovery" when the DFD is missing.** That was the pre-#270 behaviour; it produced low-quality artefacts that couldn't be re-validated later. Refuse instead.
 - **Don't extract from `dfd.md` programmatically beyond the three sections named in Step 1b.** The contract is: Mermaid block + trust boundaries + classifications. Adding more (e.g. provenance) bloats the artefact; adding less breaks the audit's self-containment.
 - **Don't skip the Mermaid lint after persistence.** If the live DFD has broken Mermaid, the snapshot inherits it. Surfacing that here is cheaper than discovering it on GitHub.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

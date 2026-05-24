@@ -476,3 +476,7 @@ Run on every exit path (successful migration, confirmed abort, refusal-in-flight
 4. **Surface the timeline-API caveat verbatim** at step 8. Adopters must see it. No abstraction.
 5. **Refuse on already-migrated.** Detection covers config-block mode, symlink mode, and mixed-drift. Re-run with `--verify` is fine; full re-run requires manual cleanup first.
 6. **Resolve paths via the helper.** Step 8 + step 9 + step 10 all use `portfolio_registry`, `portfolio_projects_dir`, `portfolio_validate` from `_lib-portfolio-paths.sh`. No literal `apexyard.projects.yaml` references in bash blocks (the snapshot's path is passed as a separate variable).
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

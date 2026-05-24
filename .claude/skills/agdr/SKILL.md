@@ -324,3 +324,7 @@ The cache stores enough metadata for browse/stats but not full bodies — search
 - **Frontmatter migration helper** (`/agdr migrate`) — currently the skill prints "N AgDRs lack `category:`" and the operator edits manually; a guided migrator is a separate ticket
 - **Cross-AgDR linking** — "AgDR-0007 supersedes AgDR-0003" relationships aren't surfaced; the schema doesn't carry them yet
 - **Full-text relevance ranking** — current search is grep-style match presence, not BM25/TF-IDF; fine for portfolios in the hundreds, not thousands
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

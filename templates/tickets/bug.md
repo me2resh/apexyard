@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/tickets/bug.md · github.com/me2resh/apexyard · MIT -->
+
 **[{{severity}}] {{title}}**
 
 ## Bug Scenario

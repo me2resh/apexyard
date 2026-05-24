@@ -200,3 +200,7 @@ Owner: @octocat
 - `/write-spec` — once a roadmap item is approved, write its PRD
 - `/stakeholder-update` — pulls "Now" and "Done" sections to summarise progress
 - `/idea` — for ideas not yet on the roadmap
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

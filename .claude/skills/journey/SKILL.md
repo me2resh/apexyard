@@ -465,3 +465,7 @@ If this was a `--from-prd` run, append a one-line tip:
 | `/c4` | Sibling preview-before-build skill. `/c4` shows architecture; `/journey` shows user flow. |
 | `/threat-model` | Sibling skill. `/threat-model` shows attack surface; `/journey` shows user flow. |
 | `/feature` / `/bug` / `/task` | Tracker creation. `/journey` is sometimes attached to a feature ticket as a flow preview. |
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

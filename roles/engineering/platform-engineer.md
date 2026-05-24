@@ -139,3 +139,7 @@ Before deploying infrastructure:
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 
 **Rationale**: CI / golden-path edits happen in-flight as part of build phases.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -269,3 +269,7 @@ The shim walks up from `$PWD` looking for the apexyard fork root (`onboarding.ya
 - `/inbox` — what's waiting on you across projects
 - `/tasks` — actionable TODOs with URLs
 - `/projects` — portfolio table view
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

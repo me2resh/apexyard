@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/initiative.md · github.com/me2resh/apexyard · MIT -->
+
 # Initiative: {Initiative Name}
 
 **Status**: Draft | Active | Paused | Done | Cancelled

@@ -128,3 +128,7 @@ Earlier versions of these hooks were origin-only, which forced the cross-repo wo
 Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response — which is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision wouldn't happen in the first place.
 
 For adversarial trust beyond self-discipline, rely on GitHub branch protection, CODEOWNERS, and required status checks — those are a separate layer this rule does not replace.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

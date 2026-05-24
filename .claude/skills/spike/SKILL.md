@@ -260,3 +260,7 @@ A spike PR is exempt from the production SDLC subset listed below; everything el
 | Disposition decision before close | N/A | Required — operator must declare PROMOTE or DISCARD via `/spike-close` |
 
 See `.claude/rules/workflow-gates.md` § Spike work for the rule statement, and AgDR-NNNN-spike-skill-schema-and-exemptions.md for the rationale.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

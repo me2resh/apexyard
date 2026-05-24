@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/tickets/migration.md · github.com/me2resh/apexyard · MIT -->
+
 **[Migration] {{type}}: {{summary}}**
 
 ## Migration

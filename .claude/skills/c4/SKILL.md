@@ -282,3 +282,7 @@ Re-run /c4 <project> --force when the architecture changes.
 - **Multi-system canvases** — single-system per invocation
 - **Auto-PR creation** — the skill writes files; the user commits via the normal PR flow (apexyard hooks ensure that)
 - **Sequence / deployment / data-flow diagrams** — different DSLs, different audiences, different skills if needed
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

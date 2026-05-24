@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/agdr.md · github.com/me2resh/apexyard · MIT -->
+
 ---
 id: AgDR-{NNNN}
 timestamp: {ISO-8601: YYYY-MM-DDTHH:MM:SSZ}

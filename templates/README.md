@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/README.md · github.com/me2resh/apexyard · MIT -->
+
 # Templates
 
 ApexYard ships markdown templates under `templates/` that consuming skills read at invocation time — `/decide` reads `agdr.md`, `/write-spec` reads `prd.md`, `/c4` reads `architecture/c4-context.md` and `architecture/c4-container.md`, `/migration` reads `agdr-migration.md` (for the AgDR) AND `tickets/migration.md` (for the ticket body), `/spike` reads `tickets/spike.md`, `/investigation` reads `tickets/investigation.md`, `/feature` / `/bug` / `/task` / `/idea` read their matching files under `tickets/`, `/handover` reads `architecture/c4-container.md`. The full inventory is in [`CLAUDE.md` § "Templates"](../CLAUDE.md).

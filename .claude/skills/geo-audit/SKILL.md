@@ -218,3 +218,7 @@ touch projects/<name>/audits/geo-audit/.audit-history-tracked
 | `.claude/skills/launch-check/SKILL.md` | Fans out to both this skill and `/seo-audit` at milestone boundaries |
 
 Design rationale: [`docs/agdr/AgDR-0043-geo-audit-skill.md`](../../../docs/agdr/AgDR-0043-geo-audit-skill.md).
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

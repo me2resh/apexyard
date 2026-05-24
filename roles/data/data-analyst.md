@@ -129,3 +129,7 @@ Every analysis should have:
 **On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/data-analyst.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
 
 **Rationale**: SQL / dashboard runs — Haiku-cheap, isolated.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

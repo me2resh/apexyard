@@ -232,3 +232,7 @@ Next steps:
 - **Spike PR didn't merge.** Fine — the memo / follow-up feature is the disposition artefact, not the spike code itself. PROMOTE: file the new feature, close the spike, abandon the branch. DISCARD: write the memo, close the spike, abandon the branch.
 - **Spike's hypothesis was partially confirmed.** Treat the partial confirmation as PROMOTE — file the [Feature] for the part that worked; cover the part that didn't in the "What is NOT being carried over" section. Don't try to split the disposition.
 - **Multiple spikes feeding one feature.** PROMOTE each spike individually with the same target [Feature] title; the feature ticket's body lists all promoting spikes in the "Spike findings" section.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

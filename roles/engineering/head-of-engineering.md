@@ -119,3 +119,7 @@ Before shipping, ensure:
 **On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/head-of-engineering.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
 **Rationale**: strategy / architecture review — sparse triggers, deep reasoning, sub-agent isolation fits.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

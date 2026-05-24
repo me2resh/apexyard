@@ -27,3 +27,7 @@ The per-project discovery questions (tracker repo, CI checks, architecture paths
 ## If you got here from the SessionStart hook
 
 The `onboarding-check.sh` hook now checks `onboarding.yaml` for placeholder values, not a session marker. Run `/setup` to configure your fork.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

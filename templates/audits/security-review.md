@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/audits/security-review.md · github.com/me2resh/apexyard · MIT -->
+
 # Security Review — {project} @ {short-sha}
 
 > Persisted by `/security-review` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. Edit the body freely; keep the frontmatter parseable. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.

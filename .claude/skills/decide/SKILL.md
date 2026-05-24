@@ -124,3 +124,7 @@ Proceeding with: {brief action}
 4. **Justification required** — `because` clause is mandatory
 5. **Timestamp precise** — full ISO-8601 with time
 6. **Slug from title** — lowercase, hyphens, max 50 chars
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

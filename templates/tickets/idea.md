@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/tickets/idea.md · github.com/me2resh/apexyard · MIT -->
+
 **[Idea] {{title}}**
 
 ## Idea

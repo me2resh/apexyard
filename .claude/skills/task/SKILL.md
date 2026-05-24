@@ -194,3 +194,7 @@ Created: {owner/repo}#{number} — {title}
 4. **At least one acceptance criterion.** Don't create tasks with empty ACs.
 5. **Labels auto-applied.** Priority label always applied.
 6. **Title prefix.** Derived from the nature of the work: Testing, CI, Refactor, or Chore.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

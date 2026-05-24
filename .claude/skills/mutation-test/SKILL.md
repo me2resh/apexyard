@@ -344,3 +344,7 @@ Design rationale: see [`docs/agdr/AgDR-0045-mutation-test-skill.md`](../../../do
 - `.claude/skills/pdf/SKILL.md` — the graceful-degrade shape this skill mirrors
 - `.claude/skills/process/SKILL.md` — sibling skill with the same exit-3 install-advisory pattern
 - `.claude/rules/workflow-gates.md` — the existing > 80% coverage gate that this skill complements (coverage = was-it-executed; mutation = does-it-constrain)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -155,3 +155,7 @@ Invoked when a PR needs security review, especially for:
 ```
 Security review PR #42 in your-org/your-repo
 ```
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

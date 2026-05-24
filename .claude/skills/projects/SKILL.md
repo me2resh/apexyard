@@ -123,3 +123,7 @@ And, if relevant, flag rows that need attention:
 - `/status` — per-project deep dive (current branch, recent commits)
 - `/tasks` — actionable list with URLs
 - `/handover` — onboard a new repo into the registry
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

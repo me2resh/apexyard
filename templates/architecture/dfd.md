@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/dfd.md · github.com/me2resh/apexyard · MIT -->
+
 # Data Flow Diagram — {Project Name / Feature}
 
 > **Use a DFD when you need to identify trust boundaries + data crossings** — most often as input to a STRIDE threat model (see [`../audits/threat-model.md`](../audits/threat-model.md)). Sibling: [`c4-context.md`](c4-context.md) for L1 system context (different shape, less data-flow-focused).

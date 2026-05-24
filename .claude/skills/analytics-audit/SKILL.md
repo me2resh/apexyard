@@ -120,3 +120,7 @@ touch projects/<name>/audits/analytics-audit/.audit-history-tracked
 4. **Privacy-aware.** Flag if PII (email, name, IP) is being sent in event properties.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state.
 6. **Severity vocabulary in the JSON is lowercase.** The lib expects `critical`/`high`/`medium`/`low`/`info`.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

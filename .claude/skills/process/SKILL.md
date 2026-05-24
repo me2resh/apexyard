@@ -511,3 +511,7 @@ For microservice architectures, the cross-repo trace via the registry replaces t
 - Live syncing across runs
 - DSL output for Cadence / Temporal / Step Functions
 - Multi-process canvases (one process per invocation)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

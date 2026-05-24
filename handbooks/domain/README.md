@@ -109,3 +109,7 @@ Neither is shipping in this MVP. The path-glob discovery is the foundation; the 
 - A skill spec. → `.claude/skills/<name>/SKILL.md`
 
 If you find yourself writing a domain handbook that has no `paths:` field AND no obvious domain boundary, it probably belongs in `architecture/` or `general/` instead.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

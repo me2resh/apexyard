@@ -576,3 +576,7 @@ The inventory is the single artefact that cuts both. It's not a spec, it's not a
 - **Don't skip the human review step.** Prior-art bias is real — the matrix can feel authoritative even when it's missing 20% of the picture. Always reconcile with the previous owner / stakeholders before treating the inventory as canonical.
 - **Don't strip the disclaimer header from `--with-mockups` wireframes.** The header is the trust contract for the artefact — the reader sees `AI-inferred sketch — verify before relying on` and treats it as a sketch. Without the header, an ASCII box looks more authoritative than it should. See [`AgDR-0036`](../../../docs/agdr/AgDR-0036-inferred-mockups-honesty.md).
 - **Don't upgrade `--with-mockups` to PNG/SVG.** The format is ASCII by design — visual fidelity should match epistemic confidence. A pixel-perfect render of a model's guess at a screen is exactly the failure mode the flag was designed to avoid.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

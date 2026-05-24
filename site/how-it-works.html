@@ -1,9 +1,16 @@
 <!doctype html>
+<!--
+  ApexYard · © 2026 me2resh
+  yard.apexscript.com · github.com/me2resh/apexyard · MIT
+  Multi-project SDLC framework for Claude Code.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ApexYard — what a day with it actually looks like</title>
+<meta name="author" content="me2resh">
+<meta name="copyright" content="© 2026 ApexYard · MIT">
 <meta name="description" content="A walkthrough of one realistic day using ApexYard — for non-technical founders. No terminal output, no jargon. Open your inbox, work the morning, ship by evening.">
 <link rel="canonical" href="https://yard.apexscript.com/how-it-works">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -11,8 +18,8 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
 <!-- LLM consumers: payload size hints (token estimate = chars / 4). -->
-<meta name="llm:token-count" content="6344">
-<meta name="llm:doc-length" content="25378 chars">
+<meta name="llm:token-count" content="6572">
+<meta name="llm:doc-length" content="26291 chars">
 
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="ApexYard">
@@ -48,6 +55,27 @@
       "item": "https://yard.apexscript.com/how-it-works"
     }
   ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "url": "https://yard.apexscript.com/how-it-works",
+  "name": "ApexYard — what a day with it actually looks like",
+  "description": "A walkthrough of one realistic day using ApexYard, written for a non-technical founder.",
+  "datePublished": "2026-05-23",
+  "dateModified": "2026-05-24",
+  "copyrightYear": "2026",
+  "copyrightHolder": { "@type": "Person", "name": "me2resh", "url": "https://me2resh.com" },
+  "author": { "@type": "Person", "name": "me2resh", "url": "https://me2resh.com" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "ApexYard",
+    "url": "https://yard.apexscript.com/",
+    "logo": "https://yard.apexscript.com/favicon.svg"
+  },
+  "license": "https://opensource.org/licenses/MIT"
 }
 </script>
 
@@ -287,7 +315,7 @@ main { background: var(--paper); }
   border-top: 2px solid var(--accent);
   padding-top: 0.75rem;
 }
-.day__time strong {
+.day__time h2 {
   display: block;
   color: var(--ink);
   font-size: 1.5rem;
@@ -296,6 +324,7 @@ main { background: var(--paper); }
   margin-top: 0.5rem;
   text-transform: none;
   line-height: 1.1;
+  font-family: var(--mono);
 }
 .day__body {
   max-width: 60ch;
@@ -475,7 +504,7 @@ main { background: var(--paper); }
       <a href="/architecture">architecture</a>
       <a href="/skills">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
-      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github →</a>
+      <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
   </div>
 </header>
@@ -487,10 +516,16 @@ main { background: var(--paper); }
       <div class="page-header__eyebrow">
         <span class="pill">apexyard / how it works</span>
         <span>one realistic day, in plain English</span>
+        <button class="copy-for-ai" data-md-url="/how-it-works.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
       </div>
       <h1>How it works</h1>
       <p class="tagline">
         A walkthrough of one realistic day using ApexYard, written for someone who isn't an engineer. No terminal output, no jargon. By the end you'll know exactly what using the tool feels like.
+      </p>
+      <p class="tagline" id="ai-lead">
+        <strong>What is it?</strong> ApexYard is a walkthrough of one realistic day: open your inbox, work on a change while the framework auto-reviews, approve a contractor's PR, run a launch-readiness check, ship by evening.
+        <strong>What can it do?</strong> Adds review, guardrails, and process around every change you make with Claude Code — so the work that ships is the work a real engineering team would have shipped.
+        <strong>What's needed to start?</strong> Fork apexyard, run <code>/setup</code>, register your projects. The page below is a narrative; see <a href="/#quickstart" class="uline">quickstart</a> for the install steps.
       </p>
       <p class="meta">
         See also: <a href="/">overview</a> · <a href="/skills">skills</a> · <a href="/architecture">architecture</a>
@@ -514,7 +549,7 @@ main { background: var(--paper); }
     <div class="day__inner">
       <div class="day__time">
         Morning
-        <strong>Open your inbox</strong>
+        <h2>Open your inbox</h2>
       </div>
       <div class="day__body">
         <p class="lede">
@@ -540,7 +575,7 @@ main { background: var(--paper); }
     <div class="day__inner">
       <div class="day__time">
         Mid-morning
-        <strong>The AI writes — the framework reviews</strong>
+        <h2>The AI writes — the framework reviews</h2>
       </div>
       <div class="day__body">
         <p class="lede">
@@ -566,7 +601,7 @@ main { background: var(--paper); }
     <div class="day__inner">
       <div class="day__time">
         Lunch
-        <strong>A contractor finishes their piece</strong>
+        <h2>A contractor finishes their piece</h2>
       </div>
       <div class="day__body">
         <p class="lede">
@@ -592,7 +627,7 @@ main { background: var(--paper); }
     <div class="day__inner">
       <div class="day__time">
         Afternoon
-        <strong>Getting ready to launch</strong>
+        <h2>Getting ready to launch</h2>
       </div>
       <div class="day__body">
         <p class="lede">
@@ -621,7 +656,7 @@ main { background: var(--paper); }
     <div class="day__inner">
       <div class="day__time">
         End of day
-        <strong>Nothing gets lost</strong>
+        <h2>Nothing gets lost</h2>
       </div>
       <div class="day__body">
         <p class="lede">
@@ -681,9 +716,10 @@ main { background: var(--paper); }
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog ↗</a>
       <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a>
     </nav>
-    <div class="page-footer__meta">Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · open source · plain markdown · zero dependencies</div>
+    <div class="page-footer__meta">© 2026 <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · ApexYard · open source · plain markdown · zero dependencies</div>
   </div>
 </footer>
 
+<script src="/copy-for-ai.js" defer></script>
 </body>
 </html>

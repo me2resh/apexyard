@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/custom-templates.README.example.md · github.com/me2resh/apexyard · MIT -->
+
 # Custom Templates
 
 This directory holds **adopter-authored overrides** for the framework's markdown templates. Overrides are **framework-wide** (not per-project) and **replace** the framework default in full (not additive).

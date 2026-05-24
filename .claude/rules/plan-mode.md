@@ -50,3 +50,7 @@ Anthropic's `opusplan` model alias is a related prior-art pattern: Opus runs dur
 This rule is **primarily self-discipline**. Mechanical enforcement isn't viable — plan mode is harness-owned (the harness owns `EnterPlanMode` / `ExitPlanMode`), so no shell hook can see "the agent should have entered plan mode but didn't" in assistant prose. Pair this rule with feedback memory: if the CEO has previously asked "why didn't you plan this first?", surface plan mode more aggressively next time.
 
 The cost of entering plan mode and being told "skip the plan, just do it" is a quick `ExitPlanMode`. The cost of jumping into tool calls on a multi-step task with an unclear path is the visible rework the user has to watch you do.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

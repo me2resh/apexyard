@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/audits/geo-audit.md · github.com/me2resh/apexyard · MIT -->
+
 # GEO Audit — {project} @ {short-sha}
 
 > Persisted by `/geo-audit` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.

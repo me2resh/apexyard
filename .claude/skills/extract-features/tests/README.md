@@ -56,3 +56,7 @@ Edit `../SKILL.md` to document the new signature, then either:
 2. Leave it to the skill's runtime dispatch otherwise (the smoke test is
    sampling, not exhaustive — it covers two or three signatures per axis to
    catch regressions, not every signature in the matrix)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

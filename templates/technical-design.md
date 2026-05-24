@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/technical-design.md · github.com/me2resh/apexyard · MIT -->
+
 # Technical Design: [Feature Name]
 
 **Status**: Draft | In Review | Approved

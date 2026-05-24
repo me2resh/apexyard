@@ -184,3 +184,7 @@ Background tasks running: <ids>. They'll surface results when done.
 8. **Refuse a read-only agent type for an editing task.** `Explore`, `code-reviewer`, `security-reviewer`, and `Plan` cannot write. If the task verb says "implement" / "fix" / "add" / "refactor", suggest `general-purpose`.
 9. **Active-ticket check happens at step 3, not step 6.** Failing at plan-time is kinder than failing mid-spawn.
 10. **Pause on merge-back conflict — never auto-resolve.** The user owns the merge.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

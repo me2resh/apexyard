@@ -266,3 +266,7 @@ Next: triage with the team, then `/write-spec` if it survives.
 | SHIPPED | Built and released |
 | WONTDO | Triaged out — not pursuing |
 | SUPERSEDED | Replaced by a different idea |
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

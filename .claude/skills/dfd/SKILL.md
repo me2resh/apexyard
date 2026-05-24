@@ -330,3 +330,7 @@ Run `/dfd billing-api` against a small Express + Prisma + BullMQ service that in
 - **Don't run `/dfd --scope-all` on every PR.** It's a one-off baseline + on-significant-change refresh. Single-service `/dfd` is the per-PR cadence.
 - **Don't classify by guessing.** If neither the annotation, env-var, schema, nor explicit-registry pathways fire on a field, leave it unclassified and surface in coverage gaps. False classifications are worse than missing ones (they create false confidence in compliance output).
 - **Don't skip the operator review step.** Heuristic discovery has false positives; the operator's "yes, those are real boundaries; no, that field is not PII" pass is load-bearing for downstream consumers.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

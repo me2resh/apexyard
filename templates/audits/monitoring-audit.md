@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/audits/monitoring-audit.md · github.com/me2resh/apexyard · MIT -->
+
 # Monitoring & Observability Audit — {project} @ {short-sha}
 
 > Persisted by `/monitoring-audit` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.

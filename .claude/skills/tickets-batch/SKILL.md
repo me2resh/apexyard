@@ -371,3 +371,7 @@ As a {persona}, I want {goal} so that {benefit}.
 10. **Leak protection still applies.** When the target repo is the public framework repo (e.g. `me2resh/apexyard`), never let a ticket title or body reference a registered private project name. The `block-private-refs-in-public-repos.sh` hook will reject such calls; the skill's job is to not produce them in the first place.
 11. **No silent edits to existing tickets.** This skill creates only. To modify an existing ticket, use `gh issue edit` directly or open a follow-up.
 12. **Defaults are sane, not magical.** If the inference produces a placeholder (`TBD: …`), say so in the summary table — don't pretend the body is complete. The user can `edit N` to refine before filing.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

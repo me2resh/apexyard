@@ -1,10 +1,17 @@
 <!doctype html>
+<!--
+  ApexYard · © 2026 me2resh
+  yard.apexscript.com · github.com/me2resh/apexyard · MIT
+  Multi-project SDLC framework for Claude Code.
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ApexYard — ship AI-built software like a real engineering team</title>
-<meta name="description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
+<meta name="author" content="me2resh">
+<meta name="copyright" content="© 2026 ApexYard · MIT">
+<meta name="description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, one inbox for every product — on Claude Code.">
 <link rel="canonical" href="https://yard.apexscript.com/">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -20,7 +27,7 @@
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/">
 <meta property="og:title" content="ApexYard — ship AI-built software like a real engineering team">
-<meta property="og:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
+<meta property="og:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, one inbox for every product — on Claude Code.">
 <meta property="og:image" content="https://yard.apexscript.com/og/index.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -29,7 +36,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/">
 <meta name="twitter:title" content="ApexYard — ship AI-built software like a real engineering team">
-<meta name="twitter:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.">
+<meta name="twitter:description" content="Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, one inbox for every product — on Claude Code.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
 
 <!-- Structured data: SoftwareApplication, Organization, WebSite -->
@@ -42,14 +49,28 @@
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Cross-platform",
   "url": "https://yard.apexscript.com/",
-  "description": "Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, and one place for all your products — built on top of Claude Code.",
+  "description": "Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, one inbox for every product — on Claude Code.",
   "license": "https://opensource.org/licenses/MIT",
-  "softwareVersion": "1.1.0",
+  "softwareVersion": "1.3.0",
   "downloadUrl": "https://github.com/me2resh/apexyard",
+  "datePublished": "2026-04-09",
+  "dateModified": "2026-05-24",
+  "copyrightYear": "2026",
+  "copyrightHolder": {
+    "@type": "Person",
+    "name": "me2resh",
+    "url": "https://me2resh.com"
+  },
   "author": {
     "@type": "Person",
-    "name": "Ahmed Abdelaliem",
+    "name": "me2resh",
     "url": "https://me2resh.com"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "ApexYard",
+    "url": "https://yard.apexscript.com/",
+    "logo": "https://yard.apexscript.com/favicon.svg"
   },
   "offers": {
     "@type": "Offer",
@@ -260,6 +281,12 @@ a:hover { color: var(--accent); }
   background: var(--ink);
   color: var(--paper);
   border-color: var(--ink);
+}
+@media (max-width: 700px) {
+  /* On mobile, collapse the nav to only the CTA chips + always-on items.
+     Keeps quickstart + github visible; hides how-it-works / architecture /
+     skills / changelog (still reachable via footer nav). */
+  .titlebar__right a:not(.is-cta):not(.always) { display: none; }
 }
 
 /* ============================================================
@@ -1514,7 +1541,7 @@ a:hover { color: var(--accent); }
       <a href="/architecture">architecture</a>
       <a href="/skills">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
-      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github →</a>
+      <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
   </div>
 </header>
@@ -1554,11 +1581,9 @@ a:hover { color: var(--accent); }
     </p>
 
     <div class="hero__cta rise rise-4">
-      <a href="#quickstart" class="cta cta--primary">Quickstart — fork &amp; <code>/setup</code> in 5 min →</a>
+      <a href="#quickstart" class="cta cta--primary">Quickstart — fork &amp; <code>/setup</code> in minutes →</a>
       <span class="cta__sep" aria-hidden="true">·</span>
       <a href="https://github.com/me2resh/apexyard" class="cta cta--ghost" target="_blank" rel="noopener">⑂ Fork on GitHub ↗</a>
-      <span class="cta__sep" aria-hidden="true">·</span>
-      <a href="/how-it-works" class="cta cta--ghost">see what a day looks like →</a>
     </div>
 
   </div>
@@ -2057,7 +2082,7 @@ confirm it skips the missing column before you ship."</span></pre>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog ↗</a>
       <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a>
     </nav>
-    <div class="page-footer__meta">Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · open source · plain markdown · zero dependencies</div>
+    <div class="page-footer__meta">© 2026 <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · ApexYard · open source · plain markdown · zero dependencies</div>
   </div>
 </footer>
 

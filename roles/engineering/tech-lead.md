@@ -141,3 +141,7 @@ Decisions still needed.
 **On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/tech-lead.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
 **Rationale**: architectural design + AgDR authoring needs isolated context; the operator drives implementation in-thread.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -1016,3 +1016,7 @@ Always remove the bootstrap marker on a clean exit (after the sync branch is rea
 - `.claude/migrations/README.md` — convention for authoring a new per-version migration script.
 - `.claude/rules/pr-workflow.md` — the PR workflow the sync branch will follow.
 - `.claude/hooks/block-main-push.sh` — the hook that motivates the sync-branch approach.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/agdr-migration.md · github.com/me2resh/apexyard · MIT -->
+
 # {Short Title}
 
 > In the context of {context}, facing {concern}, I decided to execute {migration type} affecting {tables/entities} to achieve {goal}, accepting {tradeoff}.

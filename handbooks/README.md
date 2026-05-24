@@ -124,3 +124,7 @@ No skill scaffolding — handbook authoring is intentionally raw markdown editin
 Adopters can keep, edit, or replace any of these. They're not load-bearing for the framework — just demonstrative of the convention.
 
 The `domain/` bucket ships **without samples** — domain handbooks are by definition adopter-specific (one team's "GitHub EMU" is another team's irrelevant noise), and the framework can't seed a generic example without dragging in unrelated content. See [`handbooks/domain/README.md`](domain/README.md) for the convention + a worked-example shape; add your first domain handbook by copying the shape into `handbooks/domain/<your-area>/<rule>.md`.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

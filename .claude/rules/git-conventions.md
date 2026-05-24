@@ -65,3 +65,7 @@ No API keys, passwords, tokens, or credentials in code. Use environment variable
 - Private keys or certificates
 
 Enforced by the `check-secrets.sh` hook.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

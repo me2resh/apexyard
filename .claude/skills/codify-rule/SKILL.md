@@ -434,3 +434,7 @@ Without `/codify-rule`, the handbook layer stays at "rules an operator thought t
 Industry harness-engineering articulates this as the **steering loop**: "whenever an issue happens multiple times, the feedforward and feedback controls should be improved". `/codify-rule` is the operator-side hook into that loop. Stage 3 (`/enrich-domain`) automates the discovery side; this skill (Stage 2) handles the capture side. The two together close the loop.
 
 See AgDR-0040 for the design rationale and trade-offs.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -52,3 +52,7 @@ Exit code: `0` on success, `1` if any contract check fails.
 
 Those run end-to-end every time an operator invokes `/investigation`; if
 they break, the failure surfaces in the next real invocation.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

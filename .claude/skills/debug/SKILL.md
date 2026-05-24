@@ -279,3 +279,7 @@ When updating an existing appendix:
 - A row points at deprecated tooling — replace with the current best tool, don't keep both
 
 Don't add an appendix until you have a real session's worth of patterns to seed it. A speculative "Mobile" appendix with three half-formed rows is worse than no Mobile appendix.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/investigation.md · github.com/me2resh/apexyard · MIT -->
+
 # [Investigation] {short title}
 
 > In the context of {what kicked this off}, facing {the unknown we needed to resolve}, I investigated {hypothesis or scope} to achieve {what we needed to learn}, accepting {time / scope tradeoffs}.

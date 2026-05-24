@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/architecture/vision.md · github.com/me2resh/apexyard · MIT -->
+
 # Architecture Vision — {Project Name}
 
 > **North-star architecture.** Use `vision.md` for *target-state* + the *current → target migration path*. Use [`c4-context.md`](c4-context.md) for the as-is system context. Use [`c4-container.md`](c4-container.md) for the as-is container topology. Vision is the only template here that explicitly addresses *where the architecture is going* and *what we are choosing not to build*.

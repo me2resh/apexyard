@@ -503,3 +503,7 @@ Next:
 - [`templates/initiative.md`](../../../templates/initiative.md) — the master initiative-doc template
 - [`.claude/skills/write-spec/SKILL.md`](../write-spec/SKILL.md) — the per-feature PRD skill that each milestone naturally flows into after filing
 - [`.claude/skills/validate-idea/SKILL.md`](../validate-idea/SKILL.md) — the pre-spec gate that sometimes runs BEFORE `/plan-initiative` (when the initiative starts as a raw idea)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

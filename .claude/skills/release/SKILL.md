@@ -146,3 +146,7 @@ Drift banner on adopters' forks will fire on next session.
 - `AgDR-0007` — the decision record this skill enacts
 - `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
 - `.claude/skills/update/SKILL.md` — the inverse skill, used by adopters pulling new releases into their fork
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

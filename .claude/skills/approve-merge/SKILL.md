@@ -217,3 +217,7 @@ You: *invokes /approve-merge X*  ← writes marker AND merges in one turn
 ```
 
 The discrete approval moment is **the invocation of /approve-merge**, not a separate "now do the merge" message. Treat the invocation with the seriousness the merge warrants.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

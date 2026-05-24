@@ -152,3 +152,7 @@ The MD artefacts are committed regardless; the marker controls whether the per-r
 4. **Check third-party SDKs.** Analytics, error tracking, and ad SDKs often set cookies and process data — they need consent too.
 5. **Always persist via the lib.** The persist step runs regardless of opt-in commit state. The marker only controls whether the JSON is committed.
 6. **Severity vocabulary in the JSON is lowercase.** The lib's `stats.by_severity` derivation expects `critical`/`high`/`medium`/`low`/`info`. The human-readable findings table can use whatever capitalisation reads best.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

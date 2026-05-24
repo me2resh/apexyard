@@ -191,3 +191,7 @@ Track these to improve:
 - Review time (aim for < 24h)
 - Review cycles (aim for < 3)
 - Post-merge bugs (aim for < 5%)
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

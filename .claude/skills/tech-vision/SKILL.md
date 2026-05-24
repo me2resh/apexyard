@@ -231,3 +231,7 @@ Surface the natural next-steps the operator likely wants:
 - **Vision enforcement** (Rex checking whether new code matches the vision) — that's a `/decide` + AgDR concern, not a vision-doc one.
 - **Multi-team vision composition** — one vision per system / domain.
 - **Vision-doc trend tracking** across quarterly reviews — use `git log projects/<name>/architecture/vision.md` and the AgDR history instead.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

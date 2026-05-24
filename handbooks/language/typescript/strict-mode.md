@@ -55,3 +55,7 @@ If you spot bare `any`s in code you're already touching:
 4. If the codebase has a domain value object that fits, use it (e.g. `UserId` instead of `string`).
 
 The first two are usually 30 seconds. The schema-at-boundary path takes 5 minutes per boundary but eliminates an entire class of "request shape changed and nobody noticed" bugs.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

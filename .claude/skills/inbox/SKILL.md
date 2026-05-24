@@ -178,3 +178,7 @@ If everything is empty:
 - `/tasks` — same data but flattened into a single ordered TODO list
 - `/status` — current project's git/CI snapshot
 - `/projects` — portfolio-level health snapshot
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

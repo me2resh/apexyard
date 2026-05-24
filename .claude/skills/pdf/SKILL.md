@@ -250,3 +250,7 @@ Adopters override in `.claude/project-config.json`:
 - `docs/multi-project.md` § "Architecture diagrams" — the "would it follow the code?" rule extended to PDF outputs
 - `.claude/skills/process/lint.sh` — graceful-degrade-on-missing-dep pattern that this skill mirrors for converter detection
 - `.claude/skills/_lib-mermaid-lint.sh` — same pattern, npx-fallback case
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._

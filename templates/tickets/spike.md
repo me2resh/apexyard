@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/tickets/spike.md · github.com/me2resh/apexyard · MIT -->
+
 **[Spike] {title}**
 
 ## Hypothesis

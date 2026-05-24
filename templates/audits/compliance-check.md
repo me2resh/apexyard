@@ -1,3 +1,5 @@
+<!-- Source: ApexYard · templates/audits/compliance-check.md · github.com/me2resh/apexyard · MIT -->
+
 # Compliance Check — {project} @ {short-sha}
 
 > Persisted by `/compliance-check` via `_lib-audit-history.sh`. Frontmatter (above) is structured; the body is freeform per dimension. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.

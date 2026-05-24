@@ -291,3 +291,7 @@ Suggested follow-up skills depending on what the investigation surfaces:
 | `/migration` | Migration ticket + AgDR | If the investigation's remediation is a migration, file via `/migration` (which itself produces a ticket + AgDR pair) |
 
 The bidirectional summary: investigations are usually **upstream** of other ticket types (they reveal what needs to happen); they're rarely downstream of them.
+
+---
+
+_Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT._
