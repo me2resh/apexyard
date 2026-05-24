@@ -131,6 +131,20 @@ N tickets auto-closed via the release PR.
 Drift banner on adopters' forks will fire on next session.
 ```
 
+### 9. Open the main→dev sync PR (MANDATORY after every release)
+
+Squash-merging dev→main creates SHA divergence: the squash commit on `main` is absent from `dev`, causing the next release PR to accumulate conflicts. Every release must be followed immediately by a sync-back PR.
+
+Invoke:
+
+```
+/release-sync vA.B.C
+```
+
+This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/main` into `upstream/dev` with `-X ours`, making the squash commit an ancestor of `dev`. The skill is idempotent — if main and dev are already in sync it exits 0 without creating a PR.
+
+**Do not skip this step.** The v2.0.0 release suffered 99 merge conflicts because accumulated sync-back skips were not addressed for multiple release cycles (#403).
+
 ## Rules
 
 1. **Framework-only.** Refuse to run on a managed project. The dev/main split is apexyard-the-framework's pattern, not the portfolio's.
@@ -146,6 +160,7 @@ Drift banner on adopters' forks will fire on next session.
 - `AgDR-0007` — the decision record this skill enacts
 - `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
 - `.claude/skills/update/SKILL.md` — the inverse skill, used by adopters pulling new releases into their fork
+- `.claude/skills/release-sync/SKILL.md` — the mandatory follow-up skill that syncs main back to dev after every release, preventing squash-divergence accumulation
 
 ---
 
