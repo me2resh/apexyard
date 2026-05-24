@@ -2,6 +2,24 @@
 
 All notable changes to ApexYard are documented here.
 
+## [2.1.0] — 2026-05-24
+
+### `/release-sync` closes the dev/main divergence loop + one small bug fix
+
+Minor release. Adds a new `/release-sync` skill that automates the main→dev sync after each release-PR merge, so the squash-merge divergence stops compounding from one release to the next. After this release, the next `dev → main` release cycle can run the canonical flow instead of cherry-picking.
+
+### Added
+
+- `feat(#403)` **`/release-sync` skill** — runs as Step 9 of `/release`. Creates a sync branch from `upstream/dev`, merges `upstream/main` with `--no-ff -X ours` (dev wins on conflicts because dev already has the un-squashed equivalents), opens a sync PR. Stops at PR creation; normal Rex + CEO merge gate applies. Framework-only (refuses on managed projects). Defensive cases handled: already-in-sync (no-op exit 0), going-backwards (refuse exit 1). 11 unit tests, AgDR-0052 documents the design trade-offs.
+
+### Fixed
+
+- `fix(#404)` **`/pdf` `convert.sh` fallback path** — removed stale `--pdf-output-folder` and `--dest-name` flags from the md-to-pdf dispatch branch (md-to-pdf removed both flags in a breaking API change). New strategy: stage source into a temp dir under the desired output stem, run `npx md-to-pdf`, move the result to the requested destination. Pandoc preferred-path unchanged; graceful-degrade (exit 3) on no converter installed preserved. New regression test (`test_md_to_pdf_fallback.sh`) pinned against npm `latest` to catch future upstream API drift.
+
+### Compatibility
+
+No breaking changes. Adopters using `/pdf` on systems without pandoc see the fallback path work again. Adopters using `/release` get a new optional Step 9; existing release flow unchanged unless `/release-sync` is invoked.
+
 ## [2.0.2] — 2026-05-24
 
 ### GA4 + consent banner on all 4 site pages
