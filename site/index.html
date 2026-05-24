@@ -1454,6 +1454,7 @@ a:hover { color: var(--accent); }
    Gates Google Analytics (Consent Mode v2) for GDPR/ePrivacy.
    ============================================================ */
 
+/* begin: consent-css — keep in sync across all site/*.html pages (#399) */
 .consent {
   position: fixed;
   bottom: 0;
@@ -1502,8 +1503,10 @@ a:hover { color: var(--accent); }
   background: var(--accent);
   border-color: var(--accent);
 }
+/* end: consent-css */
 </style>
 
+<!-- begin: gtag — keep in sync across all site/*.html pages (#399) -->
 <!-- Google tag (gtag.js) with Consent Mode v2 - analytics_storage defaults to denied
      until the consent banner below records an explicit choice. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-G3EMR3CB02"></script>
@@ -1522,8 +1525,9 @@ a:hover { color: var(--accent); }
     }
   } catch (e) {}
   gtag('js', new Date());
-  gtag('config', 'G-G3EMR3CB02', { 'anonymize_ip': true });
+  gtag('config', 'G-G3EMR3CB02');
 </script>
+<!-- end: gtag -->
 </head>
 <body>
 <a href="#main" class="skip">Skip to content</a>
@@ -2511,6 +2515,7 @@ confirm it skips the missing column before you ship."</span></pre>
 })();
 </script>
 
+<!-- begin: consent — keep in sync across all site/*.html pages (#399) -->
 <!-- ============================================================
      COOKIE CONSENT BANNER
      Hidden if a prior choice is stored. On Accept, updates gtag
@@ -2561,6 +2566,7 @@ confirm it skips the missing column before you ship."</span></pre>
   });
 })();
 </script>
+<!-- end: consent -->
 
 <script src="/copy-for-ai.js" defer></script>
 </body>
