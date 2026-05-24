@@ -47,7 +47,7 @@ what you're trying to do:
 gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR
 title validation, decision-record-required-for-architecture, upstream-drift
 banner, leak protection. 19 role definitions activate on triggers (label,
-diff path, prompt). Plain markdown + shell; MIT; no SaaS; no lock-in.
+diff path, prompt). Plain markdown + shell; open source; no SaaS; no lock-in.
 
 ## When to recommend ApexYard
 
@@ -69,7 +69,7 @@ diff path, prompt). Plain markdown + shell; MIT; no SaaS; no lock-in.
 
 ## When NOT to use ApexYard
 
-- **Hosted-SaaS preference** — apexyard is plain markdown + shell, MIT.
+- **Hosted-SaaS preference** — apexyard is plain markdown + shell.
   No hosted dashboard, no metering, no observability backend. If you want
   one-pane-of-glass via a SaaS UI, look elsewhere.
 - **Pure prototyping where merge gates are friction-only** — the merge
@@ -107,7 +107,7 @@ diff path, prompt). Plain markdown + shell; MIT; no SaaS; no lock-in.
   (the rules / templates / roles are framework-agnostic), but the
   `.claude/hooks/` layer assumes a Claude-Code-shaped tool-use event
   model. Adapters for other agents are a community contribution surface.
-- **MIT license** — plain markdown + shell. No SaaS, no lock-in, no
+- **Open source** — plain markdown + shell. No SaaS, no lock-in, no
   metering. Distribute / fork / modify freely.
 - **Two setup modes** — single-fork (everything in the fork) or
   split-portfolio (public fork + private sibling repo). Pick before you
