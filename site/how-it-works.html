@@ -428,21 +428,31 @@ main { background: var(--paper); }
    footer
    ============================================================ */
 .page-footer {
-  padding: 1.5rem 0;
+  padding: 1.5rem 0 2rem;
   font-size: 12px;
   color: var(--ink-faint);
+  border-top: 1px solid var(--rule-faint);
+  margin-top: 4rem;
 }
 .page-footer__inner {
   max-width: var(--max-w);
   margin: 0 auto;
   padding: 0 var(--gutter);
   display: flex;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.5rem;
 }
-.page-footer a { color: var(--ink-soft); }
-.page-footer a:hover { color: var(--accent); }
+.page-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+}
+.page-footer__meta {
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+.page-footer a { color: var(--ink-soft); border-bottom: 1px dotted currentColor; padding-bottom: 1px; }
+.page-footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -674,14 +684,17 @@ main { background: var(--paper); }
 
 </main>
 
-<footer class="page-footer">
+<footer class="page-footer" role="contentinfo">
   <div class="page-footer__inner">
-    <div>yard.apexscript.com · fork the framework, register your repos, ship.</div>
-    <div>
-      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a> ·
-      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">releases ↗</a> ·
-      <a href="/">home</a>
-    </div>
+    <div class="page-footer__brand">yard.apexscript.com — fork the framework, register your repos, ship.</div>
+    <nav class="page-footer__nav" aria-label="Footer">
+      <a href="/how-it-works">how it works</a>
+      <a href="/architecture">architecture</a>
+      <a href="/skills">skills</a>
+      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog ↗</a>
+      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a>
+    </nav>
+    <div class="page-footer__meta">Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · MIT · plain markdown · zero dependencies</div>
   </div>
 </footer>
 

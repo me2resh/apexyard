@@ -58,7 +58,7 @@ framework's own GitHub history — every change went through the same
 review and guardrails the tool installs in your fork.
 
 - **175 PRs reviewed and merged in the last 90 days**
-- **62 production releases shipped to date**
+- **7 production releases shipped to date** (v0.1.0 through v1.3.0)
 - **51 technical decisions recorded** (every meaningful choice in an
   audit trail)
 - **13 bugs caught and fixed** before users hit them

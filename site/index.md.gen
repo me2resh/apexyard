@@ -33,7 +33,7 @@ ApexYard adds the reviews, guardrails, and process behind every change you make 
 ApexYard is built using ApexYard. Verifiable from `github.com/me2resh/apexyard`:
 
 - **175 PRs reviewed and merged in the last 90 days**, under the same guardrails the tool installs in your fork
-- **62 production releases shipped**
+- **7 production releases shipped** (v0.1.0 through v1.3.0)
 - **51 technical decisions recorded** — every meaningful call in an audit trail
 - **13 bugs caught and fixed** before users hit them
 

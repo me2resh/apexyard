@@ -1249,31 +1249,33 @@ a:hover { color: var(--accent); }
    footer
    ============================================================ */
 
-footer.foot {
-  padding: 2rem 0 2.5rem;
+.page-footer {
+  padding: 1.5rem 0 2rem;
+  font-size: 12px;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--rule-faint);
+  margin-top: 4rem;
   background: var(--paper);
 }
-.foot__inner {
+.page-footer__inner {
   max-width: var(--max-w);
   margin: 0 auto;
   padding: 0 var(--gutter);
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.page-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+}
+.page-footer__meta {
   font-size: 11px;
   color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
-.foot__inner a {
-  color: var(--ink-soft);
-  border-bottom: 1px solid var(--rule-faint);
-  padding-bottom: 1px;
-}
-.foot__inner a:hover {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
+.page-footer a { color: var(--ink-soft); border-bottom: 1px dotted currentColor; padding-bottom: 1px; }
+.page-footer a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* ============================================================
    page-load reveal - staggered, restrained
@@ -1504,7 +1506,7 @@ footer.foot {
         <span class="titlebar__dot"></span>
         <span class="titlebar__dot is-warn"></span>
       </span>
-      <span class="titlebar__path">~/<b>apexyard</b> <span class="dim">- main · v1.1</span></span>
+      <span class="titlebar__path">~/<b>apexyard</b></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
       <a href="/how-it-works">how it works</a>
@@ -1652,8 +1654,8 @@ footer.foot {
       <span>PRs reviewed &amp; merged · last 90 days</span>
     </div>
     <div class="hero__metric">
-      <strong>62</strong>
-      <span>Production releases shipped to date</span>
+      <strong>7</strong>
+      <span>Production releases shipped (v0.1 → v1.3)</span>
     </div>
     <div class="hero__metric">
       <strong>51</strong>
@@ -1947,9 +1949,9 @@ confirm it skips the missing column before you ship."</span></pre>
 
   <div class="section__head">
     <span class="section__num">07 / WHAT'S IN THE BOX</span>
-    <h2 class="section__title">What you actually get when you fork it</h2>
+    <h2 class="section__title">What's in the toolbox</h2>
     <p class="section__lede">
-      Everything below is already wired in your fork. Nothing to install, nothing to configure beyond <code>/setup</code>. Layered: outcome first, the technical detail (counts, names, file paths) below.
+      Section 01 told you what ApexYard does for you. This section is the inventory — the actual reviews, audits, ticketing, and portfolio surfaces you get when you fork it. Outcome on the left of each row, technical detail (counts, names, file paths) on the right.
     </p>
   </div>
 
@@ -2041,14 +2043,17 @@ confirm it skips the missing column before you ship."</span></pre>
 <!-- ============================================================
      FOOTER
      ============================================================ -->
-<footer class="foot" role="contentinfo">
-  <div class="foot__inner">
-    <span>Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · MIT · plain markdown · zero dependencies</span>
-    <span>
-      <a href="https://github.com/me2resh" target="_blank" rel="noopener">github</a> ·
-      <a href="https://twitter.com/me2resh" target="_blank" rel="noopener">twitter</a> ·
-      <a href="https://me2resh.com" target="_blank" rel="noopener">blog</a>
-    </span>
+<footer class="page-footer" role="contentinfo">
+  <div class="page-footer__inner">
+    <div class="page-footer__brand">yard.apexscript.com — fork the framework, register your repos, ship.</div>
+    <nav class="page-footer__nav" aria-label="Footer">
+      <a href="/how-it-works">how it works</a>
+      <a href="/architecture">architecture</a>
+      <a href="/skills">skills</a>
+      <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog ↗</a>
+      <a href="https://github.com/me2resh/apexyard" target="_blank" rel="noopener">github ↗</a>
+    </nav>
+    <div class="page-footer__meta">Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a> · MIT · plain markdown · zero dependencies</div>
   </div>
 </footer>
 
