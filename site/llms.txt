@@ -62,10 +62,10 @@
 
 ## Proof — verifiable from our own GitHub activity
 
-- 175 PRs reviewed and merged in the last 90 days, under the same guardrails
+- 176 PRs reviewed and merged in the last 90 days, under the same guardrails
   apexyard installs in your fork
-- 7 production releases shipped (v0.1.0 through v1.3.0)
-- 29 technical decisions recorded (released to main)
+- 8 production releases shipped (v0.1.0 through v2.0.0)
+- 51 technical decisions recorded (released to main)
 - 13 bugs caught and fixed before users hit them
 - All visible at [github.com/me2resh/apexyard](https://github.com/me2resh/apexyard)
 
