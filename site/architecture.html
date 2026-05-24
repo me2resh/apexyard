@@ -299,11 +299,8 @@ a:hover { color: var(--accent); }
   margin: 0 auto;
   padding: 0 var(--gutter);
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: clamp(1rem, 2vw, 1.75rem);
-}
-@media (max-width: 900px) {
-  .notes__inner { grid-template-columns: 1fr; }
 }
 .notes__inner h2 {
   grid-column: 1 / -1;
@@ -451,7 +448,7 @@ a:hover { color: var(--accent); }
     <div class="diagram-section__inner">
 
       <div class="diagram-stage">
-<svg viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg" font-family="'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="ApexYard architecture: five layers (governance, capability, framework defaults, customisation, per-project data) inside the ops fork, plus an optional private sibling repo on the right.">
+<svg viewBox="40 120 1880 925" xmlns="http://www.w3.org/2000/svg" font-family="'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace" role="img" aria-label="ApexYard architecture: five layers (governance, capability, framework defaults, customisation, per-project data) inside the ops fork, plus an optional private sibling repo on the right.">
 
   <defs>
     <marker id="arrow-solid" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -463,11 +460,31 @@ a:hover { color: var(--accent); }
     <marker id="arrow-override" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#C8321A"/>
     </marker>
+    <style>
+      /* Dark-mode adaptation — swap paper background + ink text only.
+         Per-layer accent colors keep their identity in both themes. */
+      @media (prefers-color-scheme: dark) {
+        rect[fill="#F4EFE6"] { fill: #1C1813; }
+        rect[fill="#FFFFFF"] { fill: #25201A; }
+        text[fill="#1A1612"] { fill: #E8E2D6; }
+        text[fill="#4A4239"] { fill: #A89E8E; }
+        text[fill="#877E70"] { fill: #8C8175; }
+        #arrow-solid path { fill: #E8E2D6; }
+        #arrow-dashed path { fill: #A89E8E; }
+        /* Lift layer background fills slightly so they read against the dark page bg */
+        rect[fill="#E0E8F0"] { fill: #2A3A50; }
+        rect[fill="#DDE9DD"] { fill: #2A4A3A; }
+        rect[fill="#EFE6CA"] { fill: #4A4030; }
+        rect[fill="#FBE7E1"] { fill: #5A2A20; }
+        rect[fill="#E8E0EA"] { fill: #3A2D45; }
+        /* Section labels — keep the accent hue but lift saturation for dark contrast */
+        text[fill="#1E3A5F"] { fill: #7AA0CC; }
+        text[fill="#2D6A4F"] { fill: #7DC79A; }
+        text[fill="#8B6914"] { fill: #D4B560; }
+        text[fill="#5B3E70"] { fill: #B795D0; }
+      }
+    </style>
   </defs>
-
-  <!-- HEADER -->
-  <text x="60" y="60" font-size="40" font-weight="800" fill="#1A1612" letter-spacing="-2">ApexYard</text>
-  <text x="60" y="95" font-size="16" fill="#4A4239">A multi-project forge for Claude Code — governance, capability, customisation, and per-project data in one fork.</text>
 
   <!-- ============================================================ -->
   <!-- MAIN FORK BOX (LEFT)                                         -->
@@ -624,31 +641,6 @@ a:hover { color: var(--accent); }
 
   <line x1="1380" y1="475" x2="1304" y2="475" stroke="#4A4239" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arrow-dashed)"/>
   <text x="1310" y="465" font-size="10" fill="#4A4239" font-style="italic" text-anchor="end">resolves into fork</text>
-
-  <!-- ============================================================ -->
-  <!-- LEGEND — six layer swatches                                  -->
-  <!-- ============================================================ -->
-  <g font-size="12" fill="#1A1612">
-    <rect x="60" y="1050" width="14" height="14" fill="#E0E8F0" stroke="#2C4E70"/>
-    <text x="82" y="1062">Governance</text>
-
-    <rect x="190" y="1050" width="14" height="14" fill="#DDE9DD" stroke="#2D6A4F"/>
-    <text x="212" y="1062">Capability</text>
-
-    <rect x="305" y="1050" width="14" height="14" fill="#EFE6CA" stroke="#8B6914"/>
-    <text x="327" y="1062">Framework defaults</text>
-
-    <rect x="475" y="1050" width="14" height="14" fill="#FBE7E1" stroke="#C8321A" stroke-width="1.3"/>
-    <text x="497" y="1062" fill="#C8321A">Customisation (overrides)</text>
-
-    <rect x="690" y="1050" width="14" height="14" fill="#E8E0EA" stroke="#5B3E70"/>
-    <text x="712" y="1062">Per-project data</text>
-
-    <rect x="855" y="1050" width="14" height="14" fill="#F4EFE6" stroke="#4A4239" stroke-dasharray="3 2"/>
-    <text x="877" y="1062">Optional private sibling</text>
-  </g>
-
-  <text x="1860" y="1062" font-size="11" fill="#877E70" text-anchor="end" font-style="italic">yard.apexscript.com  ·  fork the framework, register your repos, ship.</text>
 
 </svg>
       </div>

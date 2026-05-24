@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>ApexYard Skills — 54 slash commands for Claude Code</title>
+<title>ApexYard Skills — 53 active slash commands for Claude Code</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="ApexYard ships 54 slash commands across audits, tickets, architecture, decisions, portfolio, and framework ops. Drop into any Claude Code session.">
+<meta name="description" content="ApexYard ships 53 active slash commands across audits, tickets, architecture, decisions, portfolio, and framework ops. Drop into any Claude Code session.">
 <link rel="canonical" href="https://yard.apexscript.com/skills">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -15,8 +15,8 @@
 <meta name="llm:token-count" content="10658">
 <meta name="llm:doc-length" content="42632 chars">
 
-<meta property="og:title" content="ApexYard Skills — 54 slash commands for Claude Code">
-<meta property="og:description" content="54 slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
+<meta property="og:title" content="ApexYard Skills — 53 active slash commands for Claude Code">
+<meta property="og:description" content="53 active slash commands available in any apexyard-managed project. Run any of these in a Claude Code session inside your fork.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://yard.apexscript.com/skills">
 <meta property="og:site_name" content="ApexYard">
@@ -26,7 +26,7 @@
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://yard.apexscript.com/skills">
-<meta name="twitter:title" content="ApexYard Skills — 54 slash commands for Claude Code">
+<meta name="twitter:title" content="ApexYard Skills — 53 active slash commands for Claude Code">
 <meta name="twitter:description" content="The full ApexYard slash-command surface — 54 skills, what each one does, and how to invoke it.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/skills.png">
 
@@ -430,7 +430,7 @@ main {
     <div class="page-header__inner">
       <div class="page-header__eyebrow">
         <span class="pill">apexyard / skills</span>
-        <span>54 slash commands — grouped by what you're trying to do</span>
+        <span>53 active slash commands — grouped by what you're trying to do</span>
         <button class="copy-for-ai" data-md-url="/skills.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
       </div>
       <h1>Skills</h1>
@@ -438,7 +438,7 @@ main {
         <strong>In plain English:</strong> these are the commands you type into Claude Code to get ApexYard to do something. They're grouped by what you're trying to do — keep quality high, move work forward, see everything at once, onboard new code, run things — not by what's under the hood. If you'd rather see a real day with these, read <a href="/how-it-works" class="uline" style="border-bottom: 1px solid currentColor;">how it works</a>.
       </p>
       <p class="tagline" id="ai-lead">
-        <strong>What is it?</strong> ApexYard ships 54 slash commands grouped under outcome headings — Keep quality high, Move work forward, See everything at once, Onboard new code, Run things.
+        <strong>What is it?</strong> ApexYard ships 53 active slash commands grouped under outcome headings — Keep quality high, Move work forward, See everything at once, Onboard new code, Run things.
         <strong>What can it do?</strong> Each <code>/&lt;name&gt;</code> is a structured workflow with safety rails — the right framework checks fire at the right moments, so <code>/approve-merge</code> writes a record that the merge gate verifies before the merge actually runs.
         <strong>What's needed to start?</strong> Browse below; invoke any from a Claude Code session inside an apexyard fork. Every skill ships in <code>.claude/skills/&lt;name&gt;/SKILL.md</code>.
       </p>
@@ -454,7 +454,6 @@ main {
         <a href="#see">see everything at once</a>
         <a href="#onboard">onboard new code</a>
         <a href="#run">run things</a>
-        <a href="#deprecated">deprecated</a>
       </nav>
     </div>
   </section>
@@ -893,16 +892,6 @@ main {
         <code class="skill__args">&lt;input-path&gt;</code>
       </header>
       <p class="skill__desc">Convert any framework-generated document (markdown, HTML, BPMN) to PDF for sharing with stakeholders, board members, or auditors. Destination-prompted at export time (per-project, ApexYard view, custom path, or next-to-source). Dispatches across pandoc / md-to-pdf / wkhtmltopdf / bpmn-to-image; graceful-degrades when no converter is installed.</p>
-    </article>
-  </section>
-
-  <section class="section" id="deprecated">
-    <h2>Deprecated</h2>
-    <p class="section__intro">Kept for redirect-only behaviour while in-flight invocations migrate.</p>
-
-    <article class="skill is-deprecated">
-      <header class="skill__head"><code class="skill__name">/onboard</code></header>
-      <p class="skill__desc">Use <code>/setup</code> for framework configuration, <code>/handover</code> for adding a project to the portfolio. This skill redirects to the correct flow.</p>
     </article>
   </section>
 
