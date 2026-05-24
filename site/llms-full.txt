@@ -59,8 +59,8 @@ review and guardrails the tool installs in your fork.
 
 - **175 PRs reviewed and merged in the last 90 days**
 - **7 production releases shipped to date** (v0.1.0 through v1.3.0)
-- **51 technical decisions recorded** (every meaningful choice in an
-  audit trail)
+- **29 technical decisions recorded** (released to main; every meaningful
+  choice in an audit trail)
 - **13 bugs caught and fixed** before users hit them
 - 195 issues closed all-time
 
