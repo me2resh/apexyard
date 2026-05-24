@@ -322,6 +322,12 @@ a:hover { color: var(--accent); }
   letter-spacing: 0.06em;
   font-size: 11px;
 }
+@media (max-width: 700px) {
+  /* Drop the copy-for-ai button to its own line on mobile so the pill + subtitle row
+     stays as a single coherent group. Inline margin-left:auto already pushes it right
+     on desktop. */
+  .hero__eyebrow .copy-for-ai { margin-left: 0; flex-basis: 100%; }
+}
 
 .hero__title {
   font-family: var(--mono);
@@ -1536,10 +1542,10 @@ a:hover { color: var(--accent); }
       <span class="titlebar__path">~/<b>apexyard</b></span>
     </div>
     <nav class="titlebar__right" aria-label="Primary">
-      <a href="/how-it-works">how it works</a>
+      <a href="/how-it-works" class="always">how it works</a>
       <a href="#quickstart" class="is-cta always">quickstart</a>
-      <a href="/architecture">architecture</a>
-      <a href="/skills">skills</a>
+      <a href="/architecture" class="always">architecture</a>
+      <a href="/skills" class="always">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
       <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
@@ -1562,7 +1568,7 @@ a:hover { color: var(--accent); }
 
     <h1 class="hero__title rise rise-2">apexyard</h1>
 
-    <p class="hero__version rise rise-2" style="margin:-0.5em 0 0.5em;font-size:14px;opacity:0.7;letter-spacing:0.05em;">
+    <p class="hero__version rise rise-2" style="margin:-0.5em 0 0.5em;font-size:13px;opacity:0.55;letter-spacing:0.05em;">
       <a href="https://github.com/me2resh/apexyard/releases/tag/v1.1.0" style="color:inherit;text-decoration:none;" target="_blank" rel="noopener">v1.1.0</a>
       &nbsp;·&nbsp;
       <a href="https://github.com/me2resh/apexyard/blob/main/CHANGELOG.md" style="color:inherit;text-decoration:underline;text-underline-offset:3px;" target="_blank" rel="noopener">changelog</a>
@@ -1572,12 +1578,8 @@ a:hover { color: var(--accent); }
       Ship AI-built software like a real engineering team — without hiring one.
     </p>
 
-    <p class="hero__builtby rise rise-3">
-      Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a>
-    </p>
-
     <p class="hero__sub rise rise-3" id="ai-lead">
-      ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. <a href="/how-it-works" class="uline">See what a day with it looks like →</a>
+      ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. <a href="/how-it-works" class="uline" style="white-space:nowrap;">See a day with it →</a>
     </p>
 
     <div class="hero__cta rise rise-4">
@@ -1585,6 +1587,10 @@ a:hover { color: var(--accent); }
       <span class="cta__sep" aria-hidden="true">·</span>
       <a href="https://github.com/me2resh/apexyard" class="cta cta--ghost" target="_blank" rel="noopener">⑂ Fork on GitHub ↗</a>
     </div>
+
+    <p class="hero__builtby rise rise-4">
+      Built by <a href="https://me2resh.com" target="_blank" rel="noopener">me2resh</a>
+    </p>
 
   </div>
 </section>

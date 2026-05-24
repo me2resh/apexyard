@@ -236,6 +236,10 @@ a:hover { color: var(--accent); }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
 }
 .page-header__eyebrow .pill {
   border: 1px solid var(--accent);
@@ -243,7 +247,29 @@ a:hover { color: var(--accent); }
   padding: 0.2rem 0.6rem;
   font-size: 11px;
   letter-spacing: 0.06em;
-  margin-right: 0.5rem;
+}
+@media (max-width: 700px) {
+  /* On mobile, drop the copy-for-ai button to a new line below the pill + subtitle so it
+     doesn't compete with the page-header rhythm. Inline margin-left:auto already pushes it
+     right on desktop. */
+  .page-header__eyebrow .copy-for-ai { margin-left: 0; flex-basis: 100%; }
+}
+
+/* GEO-content block visually hidden from sighted users but kept in the DOM for AI
+   crawlers + screen readers. The block exists to satisfy /geo-audit G12 (first-500-tokens
+   structured lead — what-is / what-can / needed-to-start). On this page (how-it-works) the
+   block visibly duplicates the tagline ("a walkthrough of one realistic day"), so we drop
+   it from the human render but preserve the markup for citation grounding. Per #393 finding #4. */
+.ai-lead-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .page-header h1 {
   font-family: var(--mono);
@@ -501,8 +527,8 @@ main { background: var(--paper); }
     <nav class="titlebar__right" aria-label="Primary">
       <a href="/how-it-works" class="is-current always">how it works</a>
       <a href="/#quickstart" class="is-cta always">quickstart</a>
-      <a href="/architecture">architecture</a>
-      <a href="/skills">skills</a>
+      <a href="/architecture" class="always">architecture</a>
+      <a href="/skills" class="always">skills</a>
       <a href="https://github.com/me2resh/apexyard/releases" target="_blank" rel="noopener">changelog →</a>
       <a href="https://github.com/me2resh/apexyard" class="is-cta" target="_blank" rel="noopener">github →</a>
     </nav>
@@ -522,7 +548,7 @@ main { background: var(--paper); }
       <p class="tagline">
         A walkthrough of one realistic day using ApexYard, written for someone who isn't an engineer. No terminal output, no jargon. By the end you'll know exactly what using the tool feels like.
       </p>
-      <p class="tagline" id="ai-lead">
+      <p class="tagline ai-lead-hidden" id="ai-lead" aria-hidden="false">
         <strong>What is it?</strong> ApexYard is a walkthrough of one realistic day: open your inbox, work on a change while the framework auto-reviews, approve a contractor's PR, run a launch-readiness check, ship by evening.
         <strong>What can it do?</strong> Adds review, guardrails, and process around every change you make with Claude Code — so the work that ships is the work a real engineering team would have shipped.
         <strong>What's needed to start?</strong> Fork apexyard, run <code>/setup</code>, register your projects. The page below is a narrative; see <a href="/#quickstart" class="uline">quickstart</a> for the install steps.
