@@ -79,6 +79,22 @@ projects:
       - revenue
     ticket_prefix: GH
 
+  - name: elite-telegram
+    repo: Dr-kersho/elite-telegram
+    docs: projects/elite-telegram
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - product-manager
+      - backend-engineer
+      - frontend-engineer
+    tags:
+      - new-product
+      - planning
+      - telegram
+    ticket_prefix: GH
+
 defaults:
   status: active
   tier: P1
