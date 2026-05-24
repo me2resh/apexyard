@@ -77,8 +77,10 @@ Refs #403" upstream/main
 **Why `-X ours` and not `-X theirs`?**
 
 We are ON a branch rooted in `dev`. When we run `git merge upstream/main`:
+
 - "ours" = the current branch (dev-based) — this is what we want to win
 - "theirs" = the incoming side (main's squash commit)
+
 
 Dev already has the un-squashed versions of all content in the squash commit. Any conflict means dev's version is the correct authoritative one. `-X ours` preserves dev's content everywhere there's a conflict, which is semantically correct.
 

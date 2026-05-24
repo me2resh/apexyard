@@ -2,7 +2,7 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
-> one place for all your products, built on top of Claude Code. 54 skills,
+> one place for all your products, built on top of Claude Code. 55 skills,
 > 32 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
@@ -122,7 +122,7 @@ its own checklist and boundaries.
 Want to adopt a project you've inherited? `/handover`. Want to capture
 an idea before it evaporates? `/idea`. Want to know what's waiting on
 you across every product? `/inbox`. Want a launch-readiness check before
-customers see it? `/launch-check`. 54 of these in total — each one is a
+customers see it? `/launch-check`. 55 of these in total — each one is a
 focused workflow with safety rails.
 
 ### Guardrails that stop bad code from shipping — automatically
@@ -242,7 +242,7 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (54
+2. **Capability layer** — the runnable spec: `.claude/skills/` (55
    slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
    `.claude/hooks/` (32 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
@@ -294,7 +294,7 @@ Free with any project you don't want named publicly.
 
 # Skills (https://yard.apexscript.com/skills)
 
-54 slash commands grouped by what you're trying to do — not by what's
+55 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
 `.claude/skills/<name>/`.
 

@@ -23,7 +23,7 @@ organisation. Three load-bearing outcomes:
    surfaced from every registered project in one prompt.
 
 Persistent decision-log across every managed project; strict merge gates
-(code-reviewer agent + per-PR CEO approval); 54 slash commands grouped by
+(code-reviewer agent + per-PR CEO approval); 55 slash commands grouped by
 what you're trying to do:
 
 - **Keep quality high** (`/code-review`, `/security-review`, `/audit-deps`,

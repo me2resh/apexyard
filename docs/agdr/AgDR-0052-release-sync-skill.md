@@ -33,8 +33,10 @@ Option C (merge-commit instead of squash) was considered carefully. It eliminate
 **Merge strategy direction:**
 
 When `/release-sync` creates a sync branch from `upstream/dev` and runs `git merge upstream/main`:
+
 - `-X ours` = our branch (dev-based) wins conflicts — **correct choice**
 - `-X theirs` = incoming (main's squash commit) wins conflicts — wrong; would overwrite dev's un-squashed equivalents with the squash
+
 
 The common confusion is that the issue description (#403) initially frames this as "dev wins" and associates it with `-X theirs`, but that framing is from the wrong perspective. In git merge semantics: "ours" = the branch you're on when you run `git merge`; "theirs" = the branch you're merging in. Since we branch from dev and merge main, "ours" = dev = the correct winner.
 

@@ -4,7 +4,7 @@
 
 ## What is it?
 
-ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. 54 skills grouped by what you're trying to do, plus a persistent decision-log across the whole portfolio.
+ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. 55 skills grouped by what you're trying to do, plus a persistent decision-log across the whole portfolio.
 
 ## What can it do?
 
@@ -71,7 +71,7 @@ claude
 
 The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. Behind the scenes: 19 role definitions across 5 departments, each with its own checklist and boundaries.
 
-### Tools for every step of shipping software · 54 slash commands
+### Tools for every step of shipping software · 55 slash commands
 
 Want to adopt a project you've inherited? `/handover`. Want to capture an idea before it evaporates? `/idea`. Want to know what's waiting on you across every product? `/inbox`. Want a launch-readiness check before customers see it? `/launch-check`. 54 of these in total — each one is a focused workflow with safety rails.
 
