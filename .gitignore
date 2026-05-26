@@ -2,17 +2,17 @@
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
-# ApexYard per-project config written by /onboard. Contains deploy URLs and
-# sensitive-topic notes that should not leak to git — keep it local.
-.claude/project-config.json
+# ApexYard per-fork config — in split-portfolio mode this contains only
+# non-sensitive portfolio path pointers and IS committed so all clones
+# resolve the private sibling repo correctly.
+# .claude/project-config.json  ← intentionally NOT ignored in this fork
 
 # Claude Code per-machine settings (permission overrides, local tool config)
 .claude/settings.local.json
 
 # Live working copies of managed projects. Each is its own git repo — they
 # must not be double-tracked from the ops repo.
-workspace/*/
-!workspace/README.md
+workspace/
 
 # Adopter-specific agent routing (single-fork mode; split-portfolio mode
 # keeps this in the private repo). See docs/multi-project.md § "Centralised
@@ -44,3 +44,10 @@ workspace/*/
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+
+# split-portfolio v2 — registry, per-project docs, and company config
+# live in the private sibling repo (ops-portfolio). Ignore here so a
+# stray git add never stages them in the public fork.
+apexyard.projects.yaml
+projects/
+onboarding.yaml
