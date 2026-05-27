@@ -70,12 +70,14 @@ Clear the marker on completion (Step "Post-Handover Checklist" below). If the sk
 ### Bootstrap scope — what IS and IS NOT exempt
 
 The bootstrap exemption covers ONLY these writes:
+
 - `apexyard.projects.yaml` — registry append (step 7)
 - `projects/<name>/` — assessment, architecture stub, README (steps 5, 6)
 - `.claude/session/active-bootstrap` — the marker itself (step 0)
 - Topology instantiation files (step 5.5, if a topology is picked)
 
 It does NOT cover:
+
 - Palette changes, UI work, or any other user request made during the session
 - Creating or pushing new repositories
 - Commits to branches without a ticket
