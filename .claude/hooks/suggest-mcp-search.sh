@@ -26,7 +26,7 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/nul
 is_search_command=false
 
 case "$COMMAND" in
-  grep\ -r*|grep\ -rn*|grep\ --include*|grep\ -l*)
+  grep\ -rn*|grep\ -r*|grep\ --include*|grep\ -l*)
     is_search_command=true ;;
   *"| grep"*)
     is_search_command=true ;;
