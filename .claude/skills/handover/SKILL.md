@@ -113,13 +113,6 @@ fi
 
 In single-fork mode `WORKSPACE_DIR` resolves to `<ops-root>/workspace`; in split-portfolio v2 mode it resolves to the sibling private repo (e.g. `../<fork>-portfolio/workspace`). Don't hardcode `workspace/<name>/`.
 
-After a successful clone, trigger an MCP reindex immediately so `search_code` returns results during the deep-dive phases that follow. The reindex is best-effort — skip silently if the MCP server is not available.
-
-```
-# Best-effort reindex — don't block the handover on MCP availability
-mcp__apexyard-search__reindex(scope="project", project="<name>")
-```
-
 #### On clone failure
 
 If the clone fails (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone <repo-url> "$WORKSPACE_DIR/<name>"` as the recovery, and continue with the local-path fallback. Do **not** retry or invent an alternative URL. The operator picks up from there.
@@ -133,6 +126,28 @@ CLONE_STATUS="cloned"   # or "preserved" | "declined" | "failed: <reason>"
 ```
 
 All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo root whenever `$CLONE_STATUS` is `cloned` or `preserved`. When `$CLONE_STATUS` is `declined` or `failed`, fall back to GitHub API reads via `gh api` / `gh -R <owner/name> …` (degraded but functional).
+
+### 1.5-reindex. Reindex the cloned repo in MCP (default: always attempt)
+
+After a successful clone (`$CLONE_STATUS=cloned`), trigger an MCP reindex so `search_code` and `search_docs` return results during the deep-dive phases that follow (steps 2–6). Without this step those queries return empty against the just-cloned repo, and the agent silently falls back to `find` + `cat` + `Bash` — defeating the token-cost benefit of cloning early.
+
+```
+mcp__apexyard-search__reindex(scope="project", project="<name>")
+```
+
+**On MCP unavailable:** the call will error. Catch the error, print a single-line warning, set the marker, and continue. **Do not skip silently** — silent skips are indistinguishable between "server down" and "agent forgot the step", and the second failure mode is what this step exists to prevent.
+
+```
+⚠ MCP reindex unavailable — falling back to grep + Read for steps 2–6
+```
+
+```bash
+REINDEX_STATUS="indexed"   # or "unavailable" | "skipped" (when $CLONE_STATUS != cloned)
+```
+
+When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` over `grep` + `Read` for the assessment reads in steps 2–6 (per the MCP-search-first rule). When `unavailable` or `skipped`, fall back to `grep` + `Read` without further apology.
+
+A `PostToolUse` hook (`suggest-mcp-reindex-after-clone.sh`) fires after the clone command and emits a one-line reminder of this step. Same advisory shape as `detect-role-trigger.sh` — exit 0, non-blocking, removes the "I forgot the rule applied here" failure mode.
 
 ### 1.5. Pick a topology (default: skip / custom)
 
