@@ -36,6 +36,8 @@ projects_dir=$(portfolio_projects_dir)
 
 Defaults match today's single-fork layout (`./projects`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir}` keys in `.claude/project-config.json` — the helper resolves whichever mode they're in. See `docs/multi-project.md`.
 
+**Write targets** (see me2resh/apexyard#373): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+
 ## Usage
 
 ```

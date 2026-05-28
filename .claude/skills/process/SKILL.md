@@ -38,6 +38,8 @@ workspace_dir=$(portfolio_workspace_dir)
 
 Defaults match the single-fork layout. Split-portfolio v2 adopters get the resolved sibling-repo paths transparently. Do not hardcode `apexyard.projects.yaml` or `projects/` literals — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
+**Write targets** (see me2resh/apexyard#373): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+
 ## Usage
 
 ```

@@ -167,10 +167,10 @@ bash .claude/skills/dfd/discover.sh "$target_dir" "$scope_hint"   > "$discovery_
 bash .claude/skills/dfd/classify.sh "$target_dir"                 > "$classifications_yaml"
 
 bash .claude/skills/dfd/generate-mermaid.sh "$PROJECT" "$discovery_yaml" "$classifications_yaml" \
-  > "projects/${PROJECT}/architecture/dfd.md"
+  > "${projects_dir}/${PROJECT}/architecture/dfd.md"
 
 # Persist the source-of-truth combined report for re-run diffs
-cat "$discovery_yaml" "$classifications_yaml" > "projects/${PROJECT}/architecture/dfd-source.yaml"
+cat "$discovery_yaml" "$classifications_yaml" > "${projects_dir}/${PROJECT}/architecture/dfd-source.yaml"
 ```
 
 The generator replaces placeholders in the template skeleton with real actors / processes / stores / flows from the in-memory model. Every cross-boundary arrow MUST carry a payload label.
@@ -182,7 +182,7 @@ Build a JSON document with the in-memory model and pipe through `generate-dragon
 ```bash
 echo "$model_json" \
   | bash .claude/skills/dfd/generate-dragon.sh \
-  > "projects/${PROJECT}/architecture/dfd.json"
+  > "${projects_dir}/${PROJECT}/architecture/dfd.json"
 ```
 
 `generate-dragon.sh` is a **pure function over the in-memory model** — `/threat-model --format=dragon` (#255) will import the same serialiser when it lands. If `#255` ships first with the serialiser inside `/threat-model`, switch this skill to import from there during code review.
