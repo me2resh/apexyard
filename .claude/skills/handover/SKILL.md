@@ -956,10 +956,18 @@ If any of these aren't surfaced in the offer, the adopter accepts a deal they do
 
 3. On clone failure (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone` as the recovery, and continue to the final summary. Do **not** retry, do **not** fall back to a different URL — the operator picks up from there.
 
-4. On clone success, suggest the next skill as a single follow-up question:
+4. On clone success, trigger an MCP reindex for the new project so `search_code` returns results immediately (without waiting for the next session start). The reindex is best-effort — if the MCP server isn't running or the tool isn't available, skip silently.
+
+   ```
+   # Best-effort reindex — don't block the handover on MCP availability
+   mcp__apexyard-search__reindex(scope="project", project="<name>")
+   ```
+
+5. After clone + reindex, suggest the next skill as a single follow-up question:
 
    ```
    ✓ Cloned into $WORKSPACE_DIR/<name>/.
+     MCP index updated — search_code now covers <name>.
      Want to run /threat-model against the new clone now? (y/n)
    ```
 
