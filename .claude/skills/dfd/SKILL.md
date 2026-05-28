@@ -160,6 +160,15 @@ Single-fork adopters with no override fall through to `templates/architecture/df
 Build the in-memory DFD model (actors / processes / stores / flows / boundaries / classifications) from the approved candidate. Pipe through `generate-mermaid.sh` to assemble the markdown file:
 
 ```bash
+# Helper preamble — REQUIRED in every bash block that writes to a
+# projects/<name>/ path. The Path resolution section above shows the
+# pattern at file scope, but Claude executes each ```bash``` block as
+# a separate shell invocation, so the variable assignment from the top
+# of the file doesn't carry into this block. See me2resh/apexyard#443.
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+
 discovery_yaml="/tmp/dfd-discovery-${PROJECT}.yaml"
 classifications_yaml="/tmp/dfd-classifications-${PROJECT}.yaml"
 
@@ -180,6 +189,11 @@ The generator replaces placeholders in the template skeleton with real actors / 
 Build a JSON document with the in-memory model and pipe through `generate-dragon.sh`:
 
 ```bash
+# Helper preamble — REQUIRED per block. See me2resh/apexyard#443.
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+
 echo "$model_json" \
   | bash .claude/skills/dfd/generate-dragon.sh \
   > "${projects_dir}/${PROJECT}/architecture/dfd.json"
