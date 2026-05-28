@@ -3,7 +3,7 @@
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
 > one place for all your products, built on top of Claude Code. 55 skills,
-> 35 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
+> 36 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
 This file is the LLM/agent-friendly concatenation of the apexyard marketing
@@ -244,7 +244,7 @@ each owned by different parts of the framework:
    for the framework.
 2. **Capability layer** — the runnable spec: `.claude/skills/` (55
    slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
-   `.claude/hooks/` (35 mechanical enforcement scripts).
+   `.claude/hooks/` (36 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
    `.claude/project-config.json` (shallow merge).

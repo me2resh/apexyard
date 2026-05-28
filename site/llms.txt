@@ -3,7 +3,7 @@
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and one
 > place for all your products, built on top of Claude Code. 55 skills,
-> 35 hooks, 19 role definitions. Open source, plain markdown and shell,
+> 36 hooks, 19 role definitions. Open source, plain markdown and shell,
 > no SaaS, no lock-in.
 
 ## Pages
@@ -54,7 +54,7 @@
   across the portfolio in ~1 second.
 - **55 slash commands** grouped by outcome: keep quality high, move work
   forward, see everything at once, onboard new code, run things.
-- **35 shell hooks** mechanically enforce the rules — ticket-first, migration
+- **36 shell hooks** mechanically enforce the rules — ticket-first, migration
   gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
   validation, upstream-drift banner, leak protection.
 - **19 role definitions** across 5 departments (Engineering, Product, Design,
