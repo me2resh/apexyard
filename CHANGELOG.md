@@ -2,6 +2,45 @@
 
 All notable changes to ApexYard are documented here.
 
+## [2.2.0] — 2026-05-29
+
+### Local agent routing + split-portfolio v2 hardening + release-cycle plumbing
+
+Minor release bundling three themes:
+
+1. **Local agent routing pipeline** — when `agent-routing.yaml` configures an Ollama/LiteLLM endpoint, the framework now verifies reachability and model availability at SessionStart, exports `ANTHROPIC_BASE_URL` session-wide so routed traffic actually lands on the local endpoint, and warns at SessionStart when routing is configured but INACTIVE (shell-profile snippet not yet sourced).
+2. **Split-portfolio v2 hardening** — partial-config detection (registry pointing at sibling but `workspace_dir` falling back to in-fork default is now a structured SessionStart error, not a silent split), SETUP step 1 routed through the portfolio helper, and 10 prompt-based skills tightened to source the helper inline before any write block so `projects_dir` never falls back to literal paths.
+3. **Release-cycle plumbing** — `/release-sync` now carries forward `CHANGELOG.md` from `main` to `dev` as a separate atomic commit on top of the `-X ours` merge, closing the silent drift gap that previously required occasional manual resync PRs.
+
+Plus a handful of correctness fixes around hook walkers, merge-gate parsing, branch protection on split-portfolio sibling repos, and a regression guard against legacy v1 walker hooks.
+
+### Added
+
+- `feat(#417)` **`/handover` clones the target repo at step 1.5** — when given a Git URL, the skill clones immediately before any reads, so steps 2–6 run against a local checkout instead of the GitHub API. Subsequent reads are 3–15× cheaper per query; failure paths preserved. (PR #432)
+- `feat(#438)` **Ollama / LiteLLM local agent routing** — single source of truth replaces three ad-hoc env-var setups across skills. SessionStart verifies endpoint reachability (a), confirms each configured model is pulled (b), exports `ANTHROPIC_BASE_URL` session-wide (c) so routed traffic actually lands on the local endpoint. (PR #440)
+- `feat(#448)` **`/release-sync` carries forward `CHANGELOG.md` from main to dev** — adds a step 5b that runs after the existing `-X ours` merge: if dev's CHANGELOG drifted from main's, restore main's version via a separate atomic commit on the sync branch. Path-specific (only `CHANGELOG.md`), idempotent via `git diff --quiet upstream/main -- CHANGELOG.md` guard, audit-trail-visible in the sync PR. Closes the silent drift gap that required occasional manual chore PRs to resync. 14/14 tests pass (11 original + 3 new). (PR #451)
+- `feat(#449)` **Rex handbook discovery — additive supplement** — opt-in, fail-soft enhancement to the path-convention handbook matching Rex already performs. When unavailable or unconfigured, Rex's review behaviour is byte-for-byte unchanged. Adopters who don't configure it see zero impact. (PR #450)
+
+### Fixed
+
+- `fix(#373)` **Split-portfolio v2 partial-config detection** — when adopters' `.claude/project-config.json` has the registry / projects / onboarding keys pointing at a sibling repo but leaves `workspace_dir` falling back to the in-fork default, `portfolio_validate()` now emits a structured SessionStart error naming `.portfolio.workspace_dir` and the fix instead of letting clones silently accumulate in the public ops fork. Plus 9 prompt-based skills (`/extract-features`, `/feature-diagram`, `/handover`, `/journey`, `/plan-initiative`, `/process`, `/roadmap`, `/stakeholder-update`, `/tech-vision`, and `/dfd`) tightened to source the portfolio helper before any write block so they cannot drift back to literal `projects/<name>/...` paths. (PR #441)
+- `fix(#414)` **Regression guard against v1 walker hooks** — adds a wrapper-test that asserts no v1 hook surfaces in CI, covering the `gh issue edit` / `gh issue create` blockers that v1 walker hooks reintroduced if a stale install was layered on top of v2. (PR #430)
+- `fix(#415)` **`/split-portfolio` configures branch protection on the private portfolio repo** — after a fresh split, the private sibling repo's `main` branch is now protected (required reviews, no force-push) instead of being left wide open. (PR #431)
+- `fix(#419)` **Bootstrap exemption scope guard** — narrows `require-active-ticket.sh`'s bootstrap exemption to `/handover` only (was previously broad enough to leak through to other bootstrap-listed skills mid-session). (PR #423)
+- `fix(#424)` **Hook walker reads session pin first** — the hook walker now checks the `CLAUDE_CODE_SESSION_ID` session pin before walking the cwd up the tree, so edits made inside `workspace/<project>/` correctly resolve to the project's marker file under the ops fork. Closes a class of "ticket marker not found" failures for managed-project work. (PR #425)
+- `fix(#426)` **Merge hook handles compound marker-write + merge commands** — the merge-gate hook now correctly parses `cmd_a && cmd_b` shapes where the first half writes the CEO marker and the second half is the actual `gh pr merge`. Previously the marker write was treated as the gated command and the merge slipped through unguarded. (PR #427)
+- `fix(#434)` **SETUP step 1 routes `onboarding.yaml` through portfolio helper** — first-run `/setup` was reading the in-fork copy unconditionally; split-portfolio v2 adopters now correctly see the sibling repo's copy on SETUP step 1 without manual workaround. (PR #437)
+- `fix(#442)` **SessionStart warns when local agent routing is INACTIVE** — when `agent-routing.yaml` configures a local endpoint but the current shell has not exported `ANTHROPIC_BASE_URL` (e.g. shell-profile snippet not yet sourced), SessionStart now prints an INACTIVE warning naming the missing env vars and the shell-profile step. (PR #444)
+- `fix(#443)` **Per-block helper-source preamble across 10 skills** — each `bash` write block in `/dfd`, `/extract-features`, `/feature-diagram`, `/handover`, `/journey`, `/plan-initiative`, `/process`, `/roadmap`, `/stakeholder-update`, `/tech-vision` now sources the portfolio helper at the top of the block. Eliminates the cross-block scoping bug where `projects_dir` from an earlier block was undefined in a later one and writes silently fell back to literal `projects/<name>/...`. The Write-targets rule in each SKILL is strengthened with a "REQUIRED per-block preamble" note. (PR #445)
+
+### Changed
+
+- `chore(#446)` **`CHANGELOG.md` on `dev` resynced with `main`** — v1.3.0 → v2.1.0 release-notes entries were missing on dev due to accumulated `-X ours` merge drift over 5 release cycles. One-off content fix; the follow-up #448 closes the underlying mechanism so this won't recur. (PR #447)
+
+### Compatibility
+
+No breaking changes. Adopters running purely on Anthropic's hosted API see no behaviour change. Adopters who use local agent routing get correctness improvements (reachability checks, INACTIVE warnings) instead of silent fallbacks. Split-portfolio v2 adopters whose configs are complete see no behaviour change; those whose configs are partial now get a clear SessionStart error directing them to set `.portfolio.workspace_dir`.
+
 ## [2.1.0] — 2026-05-24
 
 ### `/release-sync` closes the dev/main divergence loop + one small bug fix
