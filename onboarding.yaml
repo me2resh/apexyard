@@ -29,22 +29,23 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "Your Company Name"
-  mission: "What you're building and why"
-  vision: "Where you're headed long-term"
-  website: "https://yourcompany.com"
+  name: "marsa-cloud"
+  mission: "Build an open-source, self-hostable PaaS that gives developers a Heroku/Railway-style experience on their own Kubernetes infrastructure."
+  vision: "A simple, no-lock-in developer platform that makes self-hosting applications as easy as a managed cloud."
+  website: "https://github.com/marsa-cloud"
 
   # Core values that guide decision-making
   values:
-    - "Quality over speed"
-    - "Ship and learn"
-    - "Keep it simple"
+    - "Open-source core, no vendor lock-in"
+    - "Simple developer experience"
+    - "Self-hostable by default"
+    - "Lead with ecosystem best practice"
 
   # What kind of software you build
   products:
-    - name: "Main Product"
-      description: "Brief description of what it does"
-      type: "web-app"  # web-app, mobile-app, api, cli, library, saas
+    - name: "Marsa"
+      description: "Self-hostable Platform as a Service (PaaS) that deploys and manages applications on Kubernetes (K3s)."
+      type: "saas"  # web-app, mobile-app, api, cli, library, saas
 
 # -----------------------------------------------------------------------------
 # Team Structure
@@ -61,26 +62,18 @@ company:
 #   Data:        head-of-data, data-analyst, data-engineer
 #
 team:
-  - name: "Team Lead"
+  - name: "Mohammad Gomaa"
     role: "tech-lead"
     department: "engineering"
 
-  - name: "Developer 1"
-    role: "backend-engineer"
-    department: "engineering"
-
-  - name: "Developer 2"
-    role: "frontend-engineer"
-    department: "engineering"
-
-  # Uncomment and add more team members as needed:
+  # Solo project today. Uncomment and add more team members as the team grows:
+  # - name: "Developer"
+  #   role: "backend-engineer"
+  #   department: "engineering"
+  #
   # - name: "PM"
   #   role: "product-manager"
   #   department: "product"
-  #
-  # - name: "Designer"
-  #   role: "ux-designer"
-  #   department: "design"
 
 # -----------------------------------------------------------------------------
 # Tech Stack
@@ -90,19 +83,21 @@ team:
 tech_stack:
   language: "TypeScript"          # Primary language
   runtime: "Node.js"              # Runtime environment
-  framework: "React"              # Frontend framework (React, Vue, Svelte, etc.)
-  backend: "Express"              # Backend framework (Express, Fastify, NestJS, etc.)
+  framework: "Nuxt 4 (Vue 3)"     # Frontend framework (React, Vue, Svelte, etc.)
+  backend: "NestJS 11 on Fastify" # Backend framework (Express, Fastify, NestJS, etc.)
   database: "PostgreSQL"          # Primary database
-  hosting: "AWS"                  # Cloud provider (AWS, GCP, Azure, Vercel, etc.)
+  hosting: "Kubernetes (K3s), self-hosted"  # Cloud provider (AWS, GCP, Azure, Vercel, etc.)
   ci_cd: "GitHub Actions"         # CI/CD platform
   testing: "Vitest"               # Test framework
   e2e_testing: "Playwright"       # E2E test framework
 
   # Additional tools (uncomment what you use):
-  # orm: "Prisma"
-  # state_management: "Zustand"
-  # styling: "Tailwind CSS"
-  # api_style: "REST"             # REST, GraphQL, gRPC
+  orm: "MikroORM"
+  ui_library: "Nuxt UI"
+  styling: "Tailwind CSS 4"
+  api_style: "REST"             # REST, GraphQL, gRPC; OpenAPI is the single source of truth
+  package_manager: "pnpm (monorepo, catalog)"
+  runtime_orchestration: "Kubernetes (K3s)"
   # iac: "Terraform"              # Infrastructure as Code tool
   # monitoring: "Datadog"
   # error_tracking: "Sentry"
@@ -159,6 +154,6 @@ workflows:
 # Where your team communicates (helps Claude know where to suggest updates)
 #
 communication:
-  primary: "Slack"                # Slack, Discord, Teams, etc.
-  documentation: "GitHub Wiki"    # GitHub Wiki, Notion, Confluence, etc.
-  design: "Figma"                 # Figma, Sketch, code-first, etc.
+  primary: "GitHub (issues / PRs)"   # Slack, Discord, Teams, etc.
+  documentation: "In-repo docs/ + CLAUDE.md + GitHub"  # GitHub Wiki, Notion, Confluence, etc.
+  design: "code-first (Nuxt UI)"     # Figma, Sketch, code-first, etc.
