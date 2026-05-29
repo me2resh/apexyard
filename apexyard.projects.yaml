@@ -1,0 +1,80 @@
+# =============================================================================
+# ApexYard Portfolio Registry — marsa-cloud
+# =============================================================================
+#
+# Source of truth for what ApexYard manages across the marsa-cloud org.
+# Read by /projects, /inbox, /status, /tasks, /stakeholder-update, /handover.
+#
+# Note: apexyard itself (this ops repo) is intentionally NOT listed — it is
+# the governance repo, not a managed project.
+#
+# `workspace` is set on entries whose repo has been cloned locally into
+# the ops repo's workspace/ dir; skills then use real git state for those
+# entries. Entries without `workspace` fall back to GitHub-only data and
+# mark git fields as "(not cloned)". Add `workspace: workspace/<name>`
+# once you clone a new repo.
+
+# Schema version. Bump if breaking changes are introduced.
+version: 1
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+projects:
+  # The core PaaS — the product.
+  - name: marsa
+    repo: marsa-cloud/marsa
+    workspace: workspace/marsa
+    docs: projects/marsa
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+      - platform-engineer
+      - sre
+    tags:
+      - core
+      - customer-facing
+    ticket_prefix: GH
+
+  # Helm charts for deploying Marsa — infrastructure/packaging.
+  - name: marsa-charts
+    repo: marsa-cloud/marsa-charts
+    workspace: workspace/marsa-charts
+    docs: projects/marsa-charts
+    status: active
+    tier: P1
+    roles:
+      - platform-engineer
+      - sre
+    tags:
+      - internal
+      - infra
+    ticket_prefix: GH
+
+  # Sample app used to demo / dogfood Marsa deployments.
+  - name: example-todo-app
+    repo: marsa-cloud/example-todo-app
+    docs: projects/example-todo-app
+    status: active
+    tier: P2
+    roles:
+      - frontend-engineer
+      - backend-engineer
+    tags:
+      - example
+      - demo
+    ticket_prefix: GH
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead
