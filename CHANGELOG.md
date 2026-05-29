@@ -2,6 +2,142 @@
 
 All notable changes to ApexYard are documented here.
 
+## [2.1.0] — 2026-05-24
+
+### `/release-sync` closes the dev/main divergence loop + one small bug fix
+
+Minor release. Adds a new `/release-sync` skill that automates the main→dev sync after each release-PR merge, so the squash-merge divergence stops compounding from one release to the next. After this release, the next `dev → main` release cycle can run the canonical flow instead of cherry-picking.
+
+### Added
+
+- `feat(#403)` **`/release-sync` skill** — runs as Step 9 of `/release`. Creates a sync branch from `upstream/dev`, merges `upstream/main` with `--no-ff -X ours` (dev wins on conflicts because dev already has the un-squashed equivalents), opens a sync PR. Stops at PR creation; normal Rex + CEO merge gate applies. Framework-only (refuses on managed projects). Defensive cases handled: already-in-sync (no-op exit 0), going-backwards (refuse exit 1). 11 unit tests, AgDR-0052 documents the design trade-offs.
+
+### Fixed
+
+- `fix(#404)` **`/pdf` `convert.sh` fallback path** — removed stale `--pdf-output-folder` and `--dest-name` flags from the md-to-pdf dispatch branch (md-to-pdf removed both flags in a breaking API change). New strategy: stage source into a temp dir under the desired output stem, run `npx md-to-pdf`, move the result to the requested destination. Pandoc preferred-path unchanged; graceful-degrade (exit 3) on no converter installed preserved. New regression test (`test_md_to_pdf_fallback.sh`) pinned against npm `latest` to catch future upstream API drift.
+
+### Compatibility
+
+No breaking changes. Adopters using `/pdf` on systems without pandoc see the fallback path work again. Adopters using `/release` get a new optional Step 9; existing release flow unchanged unless `/release-sync` is invoked.
+
+## [2.0.2] — 2026-05-24
+
+### GA4 + consent banner on all 4 site pages
+
+Patch-only release. v2.0.0 + v2.0.1 left Google Analytics + the cookie consent banner only on `site/index.html`. Any visitor landing directly on `/how-it-works`, `/architecture`, or `/skills` (Twitter/LinkedIn shares, search results, LLM citations from `llms.txt`) was invisible to GA4 — and worse, never saw the consent UI at all, a GDPR gap. This release closes that. No framework changes — site-only.
+
+### Fixed
+
+- `fix(#399)` **GA4 tag on all 4 site pages** — copied gtag.js + Consent Mode v2 default block from `index.html` to `how-it-works.html`, `architecture.html`, `skills.html`. Each block wrapped in `<!-- begin: gtag --> ... <!-- end: gtag -->` markers for greppable future sync (static site, no build step). Every share-driven visit now tracked (subject to consent).
+- `fix(#399)` **Cookie consent banner on all 4 site pages** — same Accept/Decline/Escape flow + `localStorage.ay-consent` persistence as the existing index.html implementation. A user landing on `/how-it-works` first now gets the consent choice; the choice is honoured site-wide on subsequent navigation.
+- `fix(#399)` **Removed dead `anonymize_ip: true` config** — no-op in GA4 (Universal Analytics carryover; GA4 anonymizes all IPs by default).
+- `fix(#399)` **Refreshed `<meta name="llm:token-count">` + `<meta name="llm:doc-length">`** on all 4 pages to reflect new sizes after the GA4 block additions.
+
+### Compatibility
+
+No breaking changes. No framework code touched. Adopters see no changes to hooks, skills, rules, agents, templates, or workflows — only `site/` files modified.
+
+## [2.0.1] — 2026-05-24
+
+### Mobile UX hotfix for the v2.0.0 marketing site
+
+Patch-only release fixing 7 mobile UX regressions surfaced after v2.0.0 shipped. No framework changes — site-only.
+
+### Fixed
+
+- `fix(#393)` **Main-page nav restored on mobile** — `architecture`, `skills`, and `how it works` links were hidden by the `<700px` collapse rule on all 4 site pages. Added `class="always"` so they stay visible. Mobile readers can move between sections again.
+- `fix(#393)` **Eyebrow row wraps cleanly** — the "Copy as Markdown for AI" button no longer crowds the pill+subtitle row at narrow widths. Drops to its own line below the eyebrow on mobile.
+- `fix(#393)` **Duplicated lead text hidden from sighted users on `/how-it-works`** — the `#ai-lead` block (added in v2.0.0 to satisfy `/geo-audit` G12) is now visually-hidden via clip+position trick. AI crawlers and screen readers still consume it; sighted users no longer see the same prose twice.
+- `fix(#393)` **Homepage hero polish** — "Built by me2resh" moved from between tagline and subhead to below the CTAs; version line dimmed further (14px→13px, opacity 0.7→0.55); hero inline link shortened and `white-space:nowrap` so it doesn't wrap mid-phrase.
+- `fix(#393)` **Subtitles trimmed on `/architecture` and `/skills`** so they don't wrap awkwardly on mobile.
+
+### Compatibility
+
+No breaking changes. No framework code touched. Adopters see no changes to hooks, skills, rules, agents, templates, or workflows — only `site/` files were modified.
+
+## [2.0.0] — 2026-05-24
+
+### Six new skills, agent runtime overhaul, marketing site repositioned
+
+v2.0.0 adds six slash commands (planning, audit, PDF, handbook-feedback), ships per-agent model routing via `agent-routing.yaml`, introduces class-aware role activation (spawn vs in-thread), and renames the security-reviewer agent (Hatim → Hakim). The marketing site is repositioned for the founder audience.
+
+**6 new skills (54 total) · 5 adopter-friction fixes · 1 breaking change.**
+
+### Highlights
+
+- **`/plan-initiative`** — interview-driven decomposition into milestones + tasks, dependency-aware sequencing, optional bulk-file each milestone as a Feature ticket with cross-refs
+- **`/mutation-test`** — mutation-testing sensor (Stryker / MutPy / go-mutesting / mutant); milestone cadence, graceful degrade if no language tool installed
+- **`/geo-audit`** — LLM- and agent-discoverability audit; 17 checks across discovery, capability-signaling, content-format, token economics (sibling to `/seo-audit`)
+- **`/codify-rule`** — turn a code-review comment that caught a Rex-miss into a draft handbook entry, auto-routed by domain bucket
+- **`/feature-diagram`** — per-feature Mermaid flowchart of routes / models / jobs / screens (consumes `/extract-features` inventory)
+- **`/pdf`** — export any framework-generated doc (markdown / HTML / BPMN) to PDF with destination prompt
+- **Agent routing layer** (`agent-routing.yaml`) — per-agent model / endpoint / env / timeout overrides without forking the framework agent files
+- **Class-aware role activation** — role triggers now distinguish isolated-work (spawn sub-agent) from in-flow (adopt persona in-thread) per the role's `Class` field
+
+### Added
+
+- `feat(#377)` `/plan-initiative` — initiative → milestones → tasks with DAG topo-sort + two-pass filing
+- `feat(#299)` `/mutation-test` — language-dispatched mutation testing, milestone cadence, exit-3 graceful degrade
+- `feat(#311)` `/geo-audit` — LLM/agent discoverability audit (renamed from `/generative-engine-audit` in #334)
+- `feat(#296)` `/codify-rule` — review comment → handbook entry, Y/N gated, source-PR footer
+- `feat(#288)` `/feature-diagram` — per-feature Mermaid flowchart
+- `feat(#284)` `/pdf` — destination-prompted PDF export (pandoc / md-to-pdf / wkhtmltopdf / bpmn-to-image dispatch)
+- `feat(#351)` `agent-routing.yaml` — per-agent model / endpoint / env / timeout overrides + SessionStart sync hook + drift guards
+- `feat(#347)` Class-aware role-trigger banner — HYBRID spawn-vs-in-thread per role's `Class` field
+- `feat(#298)` `/handover` scores harnessability across 5 codebase dimensions and offers to file Next Steps as tracker tickets
+- `feat(#293)` Rex domain-aware code review — `handbooks/domain/` Stage 1
+- `feat(#297)` Harness templates by topology — TS NextJS / Python FastAPI / Go data pipeline scaffolds
+- `feat(#321)` Audit-pack + safety-hooks marketplace plugins
+- `feat(#386)` Marketing site rewritten for outcomes-led positioning — new `/how-it-works` page, attribution layer across 156 framework markdown files
+
+### Breaking
+
+- **Security-reviewer agent renamed `Hatim → Hakim`** (#347, PR #360) — consolidates the prior Hatim persona into the canonical Hakim security-review agent. Stock-agent adopters have nothing to do. Adopters with custom prompts / hooks that explicitly referenced `Hatim` must grep and update.
+
+### Fixed
+
+- `fix(#382)` `gh api repos/...` GETs no longer blocked by the ticket-create gate (was over-broad prefix match)
+- `fix(#381)` Code-reviewer agent's approval marker now pin-resolves to the ops fork via SessionStart, not the throwaway clone
+- `fix(#370)` Hook wrappers silent no-op when launched outside an apexyard fork
+- `perf(#372)` `docs/multi-project.md` (70k chars) no longer auto-imported into every session — ~18k tokens reclaimed
+- `fix(#310)` Config resolves from ops-fork root, not the workspace clone
+- `fix(#317)` `/split-portfolio` produces v2 layout with copy-onboarding semantics
+
+### Changed
+
+- `feat(#280)` `jq` is now a hard dependency — `/setup` refuses to proceed without it (was advisory)
+- `feat(#283)` Tracker-aware hooks via `_lib-tracker.sh` dispatcher (`gh` / `linear` / `jira` / `asana` / `custom` / `none`)
+- `feat(#282)` `/update` walks intermediate-release migration chain — safe to skip versions and re-sync
+- `feat(#312)` PR summary narrative-quality rule + Rex advisory check — label-only bullets flagged
+- `feat(#295)` Self-correction guidance standardised across 5 blocking hooks
+
+### Notable behaviour changes
+
+1. **Agent renamed: `Hatim → Hakim`** — see Breaking above.
+2. **`jq` required for `/setup`** — first-run refuses without `jq` on PATH (was silent default-fallback). See AgDR-0038.
+3. **`agent-routing.yaml` SessionStart sync** — overrides applied on every session start. Edit the file; no manual reload needed.
+4. **Class-aware role activation** — custom roles should declare `**Class**: isolated-work-class` or `**Class**: in-flow-class` per AgDR-0050.
+5. **`docs/multi-project.md` no longer auto-loaded** — setup-relevant content still on demand via `Read`.
+
+---
+
+## [1.3.0] — 2026-05-18
+
+### Architecture-doc family + audit persistence + split-portfolio v2 + multi-tracker gate
+
+v1.3.0 added the **architecture-doc family** — read-the-code-and-produce-an-artefact skills (`/c4`, `/dfd`, `/process`, `/tech-vision`, `/journey`, `/extract-features`, `/agdr`, plus `/threat-model --format=dragon`), canonical audit-artefact persistence (paired JSON + MD per run, dated subdirs), split-portfolio v2 (workspace + onboarding moved to private sibling repo), and skill-gated ticket-create across multiple trackers.
+
+Full release notes: [PR #279](https://github.com/me2resh/apexyard/pull/279). Highlights:
+
+- 9 new skills, 4 new hooks (28 total at the time), 16 new AgDRs (0014 → 0030, excluding 0029 parked)
+- Audit-artefact persistence (#218, AgDR-0019) — `projects/<name>/audits/<dim>/<ts>.md` + `runs/<ts>.json`
+- Split-portfolio v2 (#242, AgDR-0021) — `onboarding.yaml` + `workspace/` move to private sibling repo
+- Custom templates layer (#244, AgDR-0023) and private custom skills + handbooks (#243, AgDR-0022)
+- Skill-gated ticket-create across `gh` / `linear` / `jira` / `asana` (#268, AgDR-0030)
+- Mermaid lint per emitting skill (`/c4`, `/dfd`, `/tech-vision`) (#266)
+
+---
+
 ## [1.2.0] — 2026-05-04
 
 ### Mechanical-enforcement hardening + portfolio polish + landing-site refresh
