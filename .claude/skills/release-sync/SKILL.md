@@ -86,6 +86,52 @@ Dev already has the un-squashed versions of all content in the squash commit. An
 
 **Important:** `-X ours` resolves conflicts automatically. It does NOT mean we wholesale replace main's content. Git will only apply this strategy to the conflict regions, not to content that differs cleanly. The merge will preserve any genuine new content introduced in the release commit that wasn't already in dev.
 
+### 5b. Carry forward `CHANGELOG.md` from main (apexyard#448)
+
+The `-X ours` strategy is correct for *code* — dev already has the un-squashed equivalents and should win on every conflict. But `CHANGELOG.md` is the one file where the opposite is true: every release writes new entries on `main`, and `dev` should track those entries forward. Without this step the release-notes history accumulates only on `main`, and the next `/release` run prepends a new entry on a stale `dev` CHANGELOG and the squash-merge silently truncates the prior releases on `main` (see apexyard#446 / #447 for the symptom this caused for v2.2.0).
+
+After the `-X ours` merge above, **check whether `CHANGELOG.md` on the sync branch differs from `upstream/main`'s copy. If yes, replace it with main's copy and commit it as a separate atomic commit on top of the merge.**
+
+```bash
+# Compare the sync branch's CHANGELOG to main's. Use --quiet so the exit
+# code is the load-bearing signal: 0 = same, 1 = different.
+if ! git diff --quiet upstream/main -- CHANGELOG.md; then
+  echo "Carrying forward CHANGELOG.md from main..."
+  git checkout upstream/main -- CHANGELOG.md
+  # Re-check: did the checkout actually change anything in the working tree?
+  if ! git diff --quiet --cached -- CHANGELOG.md \
+      || ! git diff --quiet -- CHANGELOG.md; then
+    git add CHANGELOG.md
+    git commit -m "sync: carry forward CHANGELOG.md from main after <version> release
+
+The -X ours merge above kept dev's CHANGELOG.md, which lacks the entries
+written on main during the <version> release flow. This commit restores
+main's CHANGELOG so dev tracks the full release history forward.
+
+Without this step the next /release run would prepend the new version
+entry on a stale dev CHANGELOG, and the squash-merge to main would silently
+truncate the prior releases — the exact pre-v2.2.0 regression captured in
+apexyard#446 and root-caused in apexyard#448.
+
+Refs #448"
+  fi
+fi
+```
+
+**Path-specific by design (v1).** This step is hardcoded to `CHANGELOG.md` — the one file the release flow writes on `main`. Generalising to other "main-leads" files is deferred until a second one shows up (and would warrant the YAML config knob mentioned in #448 § "Design Notes").
+
+**Why a separate commit rather than amending the merge.** The carry-forward is a deliberate, audit-trail-visible step. Leaving it as its own commit makes the operation reviewable in the sync PR (Rex sees two commits and can sanity-check each); amending would hide the carry-forward inside the merge commit and obscure the audit trail.
+
+**Idempotent.** Re-running `/release-sync` on an already-synced repo finds `git diff --quiet upstream/main -- CHANGELOG.md` returns 0, the `if` block is skipped, and no commit is created. The existing "already in sync" guard in step 2 still catches the all-empty case; this guard handles the narrower "code is synced but CHANGELOG drifted in a prior unfixed run" case.
+
+**What this step does NOT do.**
+
+- Does **not** touch any file other than `CHANGELOG.md`.
+- Does **not** modify `main`'s tree — only updates the sync branch's `CHANGELOG.md` to match.
+- Does **not** rewrite history — the carry-forward is a fresh commit on top of the merge commit.
+- Does **not** run if `main`'s `CHANGELOG.md` equals dev's (post-merge) — the `if` guard skips the entire block.
+- Does **not** preserve in-flight `CHANGELOG.md` edits on `dev`. Under the release-cut model `dev` does NOT add CHANGELOG entries between releases — only `/release` writes there — so this is the expected steady-state. If an adopter has hand-edited `CHANGELOG.md` on `dev`, the carry-forward overwrites those edits. The right shape for that case is to land the edits via the `/release` skill (or a chore PR) before invoking `/release-sync`.
+
 ### 6. Push and open the PR
 
 ```bash
@@ -109,6 +155,9 @@ gh pr create \
 - **Merge strategy: `-X ours`** — dev wins on every conflict because dev already
   carries the un-squashed equivalents of all content in the squash commit; the
   strategy is semantically safe and correct in this direction
+- **`CHANGELOG.md` is carried forward separately** — `-X ours` would drop the release-notes
+  entries written on main, so a second commit on top of the merge restores `main`'s
+  `CHANGELOG.md` verbatim. Path-specific, audit-trail-visible, idempotent. See apexyard#448.
 - **No functional changes** — this is a bookkeeping merge that reconciles SHA
   divergence introduced by the squash-merge release flow; no logic is added or removed
 
@@ -129,9 +178,10 @@ See [#403](https://github.com/me2resh/apexyard/issues/403) for full root-cause a
 
 1. After merging, verify: `git log upstream/dev..upstream/main --oneline` returns empty
 2. Verify: `git log upstream/main..upstream/dev --oneline` shows only commits newer than <version>
-3. Open a test release PR from dev → main — confirm only new work appears in the diff
+3. Verify CHANGELOG is in sync: `diff <(git show upstream/main:CHANGELOG.md) <(git show upstream/dev:CHANGELOG.md)` returns empty (apexyard#448)
+4. Open a test release PR from dev → main — confirm only new work appears in the diff and the next `/release` v<next-version> prepends cleanly on top of <version>
 
-Refs #403
+Refs #403, #448
 
 ---
 
@@ -142,6 +192,7 @@ Refs #403
 | Squash divergence | When a release PR is squash-merged to main, the resulting commit has a different SHA than the equivalent dev history, so dev still carries the un-squashed commits as "unsynced" |
 | `-X ours` | Git merge strategy option that resolves conflicts in favour of "our" side — when on a dev-based branch merging main, "ours" = dev, which is correct because dev already has the un-squashed equivalents |
 | `sync/main-to-dev-after-<version>` | Short-lived branch used to carry the merge commit from main into dev; deleted after the PR merges |
+| CHANGELOG carry-forward | Path-specific step 5b that restores `main`'s `CHANGELOG.md` on the sync branch after the `-X ours` merge would otherwise drop the release-notes entries written on `main`. Atomic separate commit, idempotent re-run. See apexyard#448. |
 ```
 
 ### 7. Stop at PR creation
@@ -167,6 +218,8 @@ After merge: git log upstream/dev..upstream/main should return empty.
 | Merge produces zero diff (all conflicts resolved to identical content) | Proceed — the merge commit itself is the artefact, even if the tree is identical to dev HEAD |
 | Skill invoked on a managed project | Exit 1 with error "release-sync is framework-only" |
 | Version not provided | Exit 1 with usage hint |
+| Code is synced but `CHANGELOG.md` drifted (prior unfixed `/release-sync` run, manual main edit, etc.) | Step 2's `git log dev..main` may be empty yet step 5b's `git diff upstream/main -- CHANGELOG.md` is not. In that case create the sync branch from `upstream/dev`, skip the `-X ours` merge in step 5 (nothing to merge), run only step 5b's carry-forward commit, and open the PR with the body trimmed to the CHANGELOG-only summary. The PR is still useful — it surfaces the drift to a reviewer rather than letting the next `/release` silently truncate history. |
+| Dev has in-flight edits to `CHANGELOG.md` between releases (unusual) | Carry-forward overwrites them. This is a recognised trade-off — under the release-cut model `dev` only receives CHANGELOG edits via `/release`. If you genuinely need a between-release CHANGELOG edit, land it via a chore PR before running `/release-sync` so the file is identical on `main` and `dev` by the time this skill runs. |
 
 ## Rules
 
