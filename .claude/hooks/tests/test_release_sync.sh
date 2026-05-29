@@ -274,6 +274,161 @@ validate_version "latest"  && mark_fail "version validation reject" "'latest' ac
                            || mark_pass "version validation: 'latest' rejected"
 
 # ---------------------------------------------------------------------------
+# Helper: build a sync branch already in the post-state we want to test
+# step 5b against. The contract of step 5b is:
+#
+#   "If CHANGELOG.md on the sync branch differs from main's CHANGELOG.md,
+#    replace it with main's and commit as a separate atomic commit."
+#
+# How that drift came about isn't part of the contract — multiple mechanics
+# can produce it (a prior `/release-sync` run that didn't carry forward,
+# a manual main edit between releases, divergence from a hand-written
+# CHANGELOG bump on dev that doesn't match main, etc). The test sets up
+# the drift state directly so the carry-forward step is exercised against
+# the condition it's documented to handle, not against one specific path
+# that led there. See apexyard#448 for the design notes.
+#
+# build_sync_branch_with_changelog_drift <root>
+#   Creates a repo with:
+#     - main: CHANGELOG with v2.1.0 + v2.0.0 + v1.0.0 entries
+#     - sync branch: CHANGELOG stuck at v1.0.0 (the drift), plus an
+#       unrelated code commit on top (so step 5b's commit lands above it
+#       and we can assert "only CHANGELOG.md touched in step 5b's commit").
+# ---------------------------------------------------------------------------
+build_sync_branch_with_changelog_drift() {
+  local root="$1"
+  mkdir -p "$root"
+  (
+    cd "$root" || exit 1
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "test"
+
+    # Base commit: shared CHANGELOG with only v1.0.0.
+    printf '%s\n' "# Changelog" "" "## [1.0.0] — 2026-01-01" "" "- initial release" > CHANGELOG.md
+    echo "base" > README.md
+    git add CHANGELOG.md README.md
+    git commit -q -m "chore: base commit"
+
+    # main branch: advance CHANGELOG with v2.0.0 then v2.1.0 entries.
+    git checkout -q -b main
+    printf '%s\n' "# Changelog" "" \
+      "## [2.1.0] — 2026-05-24" "" "- latest release" "" \
+      "## [2.0.0] — 2026-05-24" "" "- previous release" "" \
+      "## [1.0.0] — 2026-01-01" "" "- initial release" > CHANGELOG.md
+    git add CHANGELOG.md
+    git commit -q -m "chore: advance CHANGELOG to v2.1.0"
+    git tag v2.1.0
+
+    # Sync branch: simulate the post-step-5 state where the sync branch's
+    # CHANGELOG drifted from main's. We branch from base (so CHANGELOG is
+    # still at v1.0.0), then add an unrelated code commit on top so step
+    # 5b's commit lands above it.
+    git checkout -q -b "sync/main-to-dev-after-v2.1.0" main~1
+    echo "feature-b" > feature-b.md
+    git add feature-b.md
+    git commit -q -m "feat(#1): add feature B"
+  ) || return 1
+}
+
+# Run step 5b's carry-forward logic against the current working tree. The
+# function returns 0 if a carry-forward commit was created, 1 if no commit
+# was needed (idempotent path). Echoes the new commit SHA on stdout when
+# a commit is created. Mirrors the SKILL.md bash exactly so the test is
+# verifying the prescribed contract, not a re-implementation.
+run_carry_forward() {
+  if ! git diff --quiet main -- CHANGELOG.md; then
+    git checkout main -- CHANGELOG.md
+    if ! git diff --quiet --cached -- CHANGELOG.md \
+        || ! git diff --quiet -- CHANGELOG.md; then
+      git add CHANGELOG.md
+      git commit -q -m "sync: carry forward CHANGELOG.md from main after vX.Y.Z release
+
+Refs #448"
+      git rev-parse HEAD
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Case 8 (apexyard#448): CHANGELOG drift → carry-forward creates a commit
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_sync_branch_with_changelog_drift "$SB"
+(
+  cd "$SB" || exit 99
+  # Pre-condition: sync branch's CHANGELOG drifts from main's.
+  if git diff --quiet main -- CHANGELOG.md; then
+    echo "pre-condition failed: sync branch CHANGELOG already matches main" >&2
+    exit 1
+  fi
+  # Run the carry-forward (step 5b).
+  CF_SHA=$(run_carry_forward) || { echo "carry-forward returned no-op when drift existed" >&2; exit 1; }
+  # Post-condition: CHANGELOG now matches main exactly.
+  if ! git diff --quiet main -- CHANGELOG.md; then
+    echo "post-condition failed: CHANGELOG still drifts from main after carry-forward" >&2
+    exit 1
+  fi
+  # Post-condition: the carry-forward commit IS the most-recent commit that touched CHANGELOG.
+  if [ "$(git log -1 --format=%H -- CHANGELOG.md)" != "$CF_SHA" ]; then
+    echo "post-condition failed: carry-forward SHA is not the last CHANGELOG-touching commit" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "carry-forward (apexyard#448): creates a commit when CHANGELOG drifted from main" \
+              || mark_fail "carry-forward drift case" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 9 (apexyard#448): idempotent — no commit when CHANGELOG already matches
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_sync_branch_with_changelog_drift "$SB"
+(
+  cd "$SB" || exit 99
+  # First run: should create a commit (drift exists).
+  run_carry_forward > /dev/null || { echo "first run unexpectedly no-op" >&2; exit 1; }
+  COMMITS_AFTER_FIRST=$(git rev-list HEAD | wc -l | tr -d ' ')
+  # Second run: should be a no-op (CHANGELOG now matches main).
+  if run_carry_forward > /dev/null; then
+    echo "second run unexpectedly created a commit (idempotency broken)" >&2
+    exit 1
+  fi
+  COMMITS_AFTER_SECOND=$(git rev-list HEAD | wc -l | tr -d ' ')
+  if [ "$COMMITS_AFTER_FIRST" != "$COMMITS_AFTER_SECOND" ]; then
+    echo "commit count changed on idempotent re-run: $COMMITS_AFTER_FIRST → $COMMITS_AFTER_SECOND" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "carry-forward (apexyard#448): idempotent — second run is no-op" \
+              || mark_fail "carry-forward idempotency" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 10 (apexyard#448): carry-forward only touches CHANGELOG.md
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_sync_branch_with_changelog_drift "$SB"
+(
+  cd "$SB" || exit 99
+  CF_SHA=$(run_carry_forward) || { echo "carry-forward unexpectedly no-op" >&2; exit 1; }
+  # The commit's name-only diff must be CHANGELOG.md and nothing else.
+  TOUCHED=$(git show --name-only --format="" "$CF_SHA" | grep -v '^$')
+  if [ "$TOUCHED" != "CHANGELOG.md" ]; then
+    echo "carry-forward touched files other than CHANGELOG.md: '$TOUCHED'" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "carry-forward (apexyard#448): touches only CHANGELOG.md" \
+              || mark_fail "carry-forward scope" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

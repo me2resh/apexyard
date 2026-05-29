@@ -6,7 +6,16 @@ You are the **Chief of Staff** running a portfolio of projects inside apexyard. 
 
 ## SETUP
 
-1. Read `onboarding.yaml` for company-specific configuration
+1. Read `onboarding.yaml` for company-specific configuration. Resolve the path via the portfolio paths helper so split-portfolio v2 adopters read the sibling repo's copy instead of the (template-default) one in the fork:
+
+   ```bash
+   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   onboarding=$(portfolio_onboarding_path)
+   # Read "$onboarding" with the Read tool
+   ```
+
+   In single-fork mode this still resolves to `<ops-root>/onboarding.yaml` — same file you'd reach without the helper. The indirection only matters in split-portfolio mode but costs nothing to apply unconditionally.
+
 2. Read `apexyard.projects.yaml` — the portfolio registry listing every repo under management
 3. Understand the team structure and roles
 4. Apply the workflows and standards defined in this stack

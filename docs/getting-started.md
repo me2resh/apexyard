@@ -266,6 +266,14 @@ Cargo workspaces with many crates have a slow first index — see the caveat bel
 - **No new failure mode.** Skills that benefit from LSP (`/code-review`, `/threat-model`, `/security-review`) fall back to grep + Read transparently when LSP is absent. There is no "broken without LSP" path — only a faster one with it.
 - **Plugin marketplace links may move.** The plugin ecosystem is young. If a marketplace search turns up multiple options for one language, prefer the one maintained by the language's own community (e.g. official `tsserver` over a third-party wrapper).
 
+## Optional: Local agent routing
+
+Agents can optionally route through a locally-running Ollama instance via a LiteLLM proxy — useful when you want to keep prompts off any cloud API for specific sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing). See [`local-model-setup.md`](local-model-setup.md) for the install + configuration walkthrough.
+
+**Opt-in only.** Absence of an `endpoint:` field in your `agent-routing.yaml` keeps every agent on its framework default. Nothing in the default `/setup` output enables this.
+
+Before opting in, read the [local-model-routing spike memo](spikes/local-model-routing.md) — it measured cold-start latency and tool-call reliability against real workloads and recommends bounded use, not whole-portfolio routing.
+
 ---
 
 ## Customization

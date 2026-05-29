@@ -13,6 +13,16 @@
 #   - Silently exit 0 if no routing file exists (zero-config zero-
 #     behaviour-change — the documented out-of-box experience)
 #   - Parse the YAML (yq preferred; python3 fallback)
+#   - Local-routing prep (me2resh/apexyard#438):
+#       a. For each unique endpoint, probe `<endpoint>/v1/models` or
+#          `/health` with a 2s timeout. Mark reachable/unreachable.
+#          Unreachable endpoints have their per-agent rows filtered out
+#          BEFORE the apply loop — a downed proxy doesn't poison the
+#          session.
+#       b. For `model: ollama/<name>` rows whose endpoint is reachable,
+#          query `<endpoint>/api/tags` for the model name. On miss emit
+#          a warning naming `ollama pull <name>`. The model rewrite still
+#          applies.
 #   - For each entry in agents:
 #       1. Locate .claude/agents/<name>.md — silently skip if missing
 #          (adopter may have a stale entry; harmless, not an error)
@@ -21,14 +31,18 @@
 #          so the drift guard has a baseline regardless of whether the
 #          adopter committed the rewrite
 #       3. Rewrite the model: line in the agent file to the override
-#       4. If endpoint: set, write to .claude/session/agent-env/<name>.env
-#          (per-agent endpoint env file; if Claude Code doesn't expose
-#          per-agent env, the adopter falls back to manual export of
-#          ANTHROPIC_BASE_URL — banner caveat below)
+#       4. If endpoint: set AND reachable, write to .claude/session/
+#          agent-env/<name>.env (per-agent endpoint env file — informational
+#          in v1 until Claude Code exposes per-agent env scoping)
 #       5. If env: block set, append KEY=VALUE lines to that env file
 #          (resolving $VAR_NAME refs against the parent env)
+#   - Write session-wide .claude/session/agent-env/__session__.env with
+#     ANTHROPIC_BASE_URL=<first-reachable-endpoint> (the routing mechanism
+#     that actually works in v1, per AgDR-0050 § Axis 5). Multi-endpoint
+#     declarations warn and use the first.
 #   - Print a single one-line summary banner: silent on N=0; else
-#       "ApexYard: applied N agent-routing override(s) from agent-routing.yaml"
+#       "ApexYard: applied N agent-routing override(s) from agent-routing.yaml [M Ollama, K warning(s)]"
+#     The Ollama / warning suffix is omitted when both counts are 0.
 #   - Idempotent: running twice with the same config produces the same
 #     state, no compounding writes (env files are truncated, not appended,
 #     when written; the framework-defaults snapshot is keyed by agent
@@ -258,6 +272,106 @@ if [ -z "$ROWS" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Local-routing prep — extends the v1 schema's `endpoint:` + `model: ollama/*`
+# semantics into actually-applied state. See me2resh/apexyard#438.
+#
+# Two non-blocking checks (warnings to stderr; model rewrite proceeds):
+#
+#   1. Reachability — for each unique endpoint declared by any agent, probe
+#      `<endpoint>/v1/models` (LiteLLM healthcheck) with a 2s timeout. If
+#      neither it nor `/health` responds 2xx, mark the endpoint unreachable.
+#      Endpoint rows pointing at unreachable proxies are filtered out of
+#      $ROWS BEFORE the apply loop, so per-agent .env file's
+#      ANTHROPIC_BASE_URL is NOT written when the proxy is down — a downed
+#      proxy can't poison the session.
+#
+#   2. Model-pulled — for `model: ollama/<name>` rows whose endpoint is
+#      reachable, query `<endpoint>/api/tags` and grep for the model name.
+#      On miss: warn the adopter to run `ollama pull <name>`. The model
+#      rewrite still applies; Ollama may pull on first call with cold-start
+#      cost — that's an adopter-visible cost, not a hook concern.
+#
+# After the apply loop we also write a session-wide `__session__.env`
+# containing ANTHROPIC_BASE_URL=<first-reachable-endpoint>. This is the only
+# routing mechanism that works in v1 — per AgDR-0050 § Axis 5, Claude Code
+# doesn't consume per-agent env files yet. The per-agent files keep being
+# written for forward-compat. Multi-endpoint declarations warn and pick
+# the first.
+# -----------------------------------------------------------------------------
+
+ollama_applied=0
+warnings=0
+
+EP_REACH=$(mktemp 2>/dev/null) || { exit 0; }
+AGENT_MODELS=$(mktemp 2>/dev/null) || { rm -f "$EP_REACH"; exit 0; }
+AGENT_ENDPOINTS=$(mktemp 2>/dev/null) || { rm -f "$EP_REACH" "$AGENT_MODELS"; exit 0; }
+
+# Build agent → model and agent → endpoint maps from $ROWS.
+printf '%s\n' "$ROWS" | awk -F'\t' '$2=="model" {print $1 "\t" $3}' > "$AGENT_MODELS"
+printf '%s\n' "$ROWS" | awk -F'\t' '$2=="endpoint" && $3!="" {print $1 "\t" $3}' > "$AGENT_ENDPOINTS"
+
+# 1. Reachability probe — one curl per unique endpoint, 2s timeout each.
+UNIQUE_EPS=$(awk -F'\t' '{print $2}' "$AGENT_ENDPOINTS" | sort -u)
+while IFS= read -r ep; do
+  [ -z "$ep" ] && continue
+  reachable=0
+  if command -v curl >/dev/null 2>&1; then
+    if curl --max-time 2 --silent --fail -o /dev/null "$ep/v1/models" 2>/dev/null; then
+      reachable=1
+    elif curl --max-time 2 --silent --fail -o /dev/null "$ep/health" 2>/dev/null; then
+      reachable=1
+    fi
+  else
+    # No curl available — skip reachability check entirely, treat as reachable.
+    # The model rewrite + per-agent env file still apply; the adopter just
+    # doesn't get the "your proxy is down" warning. Better than blocking.
+    reachable=1
+  fi
+  printf '%s\t%s\n' "$ep" "$reachable" >> "$EP_REACH"
+  if [ "$reachable" -eq 0 ]; then
+    echo "⚠ agent-routing: endpoint $ep not reachable; skipping endpoint override (model rewrite still applies)" >&2
+    warnings=$((warnings + 1))
+  fi
+done <<EOF
+$UNIQUE_EPS
+EOF
+
+# 2. Model-pulled check — for ollama/* models whose endpoint is reachable.
+while IFS=$'\t' read -r agent model; do
+  [ -z "$agent" ] && continue
+  case "$model" in
+    ollama/*)
+      ollama_applied=$((ollama_applied + 1))
+      ep=$(awk -F'\t' -v a="$agent" '$1==a {print $2; exit}' "$AGENT_ENDPOINTS")
+      [ -z "$ep" ] && continue
+      reach=$(awk -F'\t' -v e="$ep" '$1==e {print $2; exit}' "$EP_REACH")
+      [ "${reach:-0}" = "1" ] || continue
+      model_name="${model#ollama/}"
+      if command -v curl >/dev/null 2>&1; then
+        if ! curl --max-time 2 --silent --fail "$ep/api/tags" 2>/dev/null | grep -q "\"name\":\"$model_name\""; then
+          echo "⚠ agent-routing: $agent — model $model_name not in local Ollama; run: ollama pull $model_name" >&2
+          warnings=$((warnings + 1))
+        fi
+      fi
+      ;;
+  esac
+done < "$AGENT_MODELS"
+
+# 3. Filter $ROWS — drop endpoint rows pointing at unreachable endpoints.
+#    The apply loop downstream will not see those rows, so per-agent env
+#    files keep their existing ANTHROPIC_BASE_URL untouched.
+ROWS=$(printf '%s\n' "$ROWS" | awk -F'\t' -v reach="$EP_REACH" '
+  BEGIN {
+    while ((getline line < reach) > 0) {
+      split(line, p, "\t")
+      r[p[1]] = p[2]
+    }
+  }
+  $2 == "endpoint" && r[$3] == "0" { next }
+  { print }
+')
+
+# -----------------------------------------------------------------------------
 # Snapshot framework defaults BEFORE any rewrite — so the drift guard
 # has a baseline regardless of whether the adopter committed the rewrite
 # to the fork.
@@ -387,6 +501,69 @@ done < "$TMP_ROWS"
 rm -f "$TMP_ROWS"
 
 # -----------------------------------------------------------------------------
+# Session-wide ANTHROPIC_BASE_URL — write __session__.env using the first
+# reachable endpoint declared in agent-routing.yaml. Per AgDR-0050 § Axis 5,
+# v1 supports one endpoint per session because Claude Code doesn't consume
+# per-agent env files yet. If multiple distinct reachable endpoints were
+# declared, warn the adopter and use the first-declared.
+# -----------------------------------------------------------------------------
+
+# Reachable endpoints in declaration order (NOT sorted — first agent wins).
+REACHABLE_EPS=""
+while IFS=$'\t' read -r agent ep; do
+  [ -z "$ep" ] && continue
+  reach=$(awk -F'\t' -v e="$ep" '$1==e {print $2; exit}' "$EP_REACH")
+  if [ "${reach:-0}" = "1" ]; then
+    # De-dup while preserving order
+    if ! echo "$REACHABLE_EPS" | grep -Fxq "$ep"; then
+      REACHABLE_EPS="${REACHABLE_EPS}${ep}
+"
+    fi
+  fi
+done < "$AGENT_ENDPOINTS"
+
+REACHABLE_COUNT=$(printf '%s' "$REACHABLE_EPS" | grep -c .)
+if [ "$REACHABLE_COUNT" -ge 1 ]; then
+  FIRST_EP=$(printf '%s' "$REACHABLE_EPS" | head -1)
+  if [ "$REACHABLE_COUNT" -gt 1 ]; then
+    EP_LIST=$(printf '%s' "$REACHABLE_EPS" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+    echo "⚠ agent-routing: multiple endpoints declared ($EP_LIST); v1 supports one endpoint per session; using $FIRST_EP. See AgDR-0050 § Axis 5." >&2
+    warnings=$((warnings + 1))
+  fi
+  SESSION_ENV="$ENV_DIR/__session__.env"
+  if [ -f "$SESSION_ENV" ]; then
+    grep -v '^ANTHROPIC_BASE_URL=' "$SESSION_ENV" > "${SESSION_ENV}.tmp" 2>/dev/null || true
+    mv "${SESSION_ENV}.tmp" "$SESSION_ENV"
+  else
+    : > "$SESSION_ENV"
+  fi
+  printf 'ANTHROPIC_BASE_URL=%s\n' "$FIRST_EP" >> "$SESSION_ENV"
+
+  # -----------------------------------------------------------------------------
+  # Routing-active check — see me2resh/apexyard#442.
+  # __session__.env is written above, but Claude Code's process env was set
+  # when Claude was launched — SessionStart hooks run in child shells and
+  # can't mutate the parent. So unless the adopter sources __session__.env
+  # in their shell profile BEFORE launching Claude Code, the routing won't
+  # actually take effect even though the banner reports overrides applied.
+  # Detect the mismatch and warn explicitly so the adopter sees the gap
+  # at SessionStart rather than discovering it via "why is my proxy log
+  # empty?" later.
+  # -----------------------------------------------------------------------------
+  if [ -z "${ANTHROPIC_BASE_URL:-}" ] || [ "${ANTHROPIC_BASE_URL:-}" != "$FIRST_EP" ]; then
+    cat >&2 <<EOF
+⚠ agent-routing: ANTHROPIC_BASE_URL=$FIRST_EP was written to $SESSION_ENV but is NOT set in this Claude session's process env. Routing is INACTIVE — every agent call still hits the Anthropic API. To activate, add this line to your shell profile (~/.zshrc / ~/.bashrc) and relaunch Claude Code from a fresh terminal:
+    [ -f "$SESSION_ENV" ] && . "$SESSION_ENV" && export ANTHROPIC_BASE_URL
+See docs/local-model-setup.md § "Before you start" and me2resh/apexyard#442.
+EOF
+    warnings=$((warnings + 1))
+  fi
+fi
+
+# Clean up local-routing scratch files.
+rm -f "$EP_REACH" "$AGENT_MODELS" "$AGENT_ENDPOINTS"
+
+# -----------------------------------------------------------------------------
 # Write the framework-defaults snapshot. The drift guard reads this to
 # decide whether a committed model: line is the framework default or a
 # leaked override.
@@ -406,7 +583,11 @@ fi
 # Wave-1-invariant 600-char SessionStart budget.
 # -----------------------------------------------------------------------------
 if [ "$applied" -gt 0 ]; then
-  echo "ApexYard: applied $applied agent-routing override(s) from agent-routing.yaml" >&2
+  suffix=""
+  if [ "$ollama_applied" -gt 0 ] || [ "$warnings" -gt 0 ]; then
+    suffix=" [${ollama_applied} Ollama, ${warnings} warning(s)]"
+  fi
+  echo "ApexYard: applied $applied agent-routing override(s) from agent-routing.yaml${suffix}" >&2
 fi
 
 exit 0
