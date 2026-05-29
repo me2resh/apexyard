@@ -429,6 +429,39 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}non-sync-squash-unaffected "
 fi
 
+# Case S4: sync PR + `gh api ... merge_method=squash` → BLOCKED
+# (the gh-api bypass shape — the gap that motivated #47; must be caught too)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 303
+write_ceo_marker_structured "$sb" 303
+cmd="gh api repos/me2resh/apexyard/pulls/303/merge -X PUT -f merge_method=squash"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
+  echo "PASS [sync PR + gh-api merge_method=squash → blocked (apexyard#459, #47 bypass class)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + gh-api merge_method=squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-squash-blocked "
+fi
+
+# Case S5: sync PR + `gh api ... merge_method=merge` → PASSES (correct gh-api path)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 304
+write_ceo_marker_structured "$sb" 304
+cmd="gh api repos/me2resh/apexyard/pulls/304/merge -X PUT -f merge_method=merge"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [sync PR + gh-api merge_method=merge → passes (apexyard#459)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + gh-api merge_method=merge → passes]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-merge-passes "
+fi
+
 # --- Summary ----------------------------------------------------------
 
 echo ""

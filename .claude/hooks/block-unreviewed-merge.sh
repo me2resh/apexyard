@@ -85,13 +85,16 @@ fi
 # squash-divergence the skill exists to fix is silently re-introduced.
 #
 # Detection: if the PR's head branch starts with `sync/main-to-dev-after-`,
-# refuse --squash or --rebase on the merge command.
-#
-# We resolve the branch from GitHub (same gh call as the HEAD-SHA lookup
-# below) so the guard fires on both the `gh pr merge` and `gh api .../merge`
-# shapes. On network failure we skip the guard and let the merge proceed —
-# an unavailable gh API is not a reason to permanently block all syncs.
-if echo "$COMMAND" | grep -qE '(--squash|--rebase)'; then
+# refuse a squash/rebase merge on BOTH command shapes:
+#   - `gh pr merge <N> --squash` / `--rebase`
+#   - `gh api .../pulls/<N>/merge -f merge_method=squash` (or rebase)
+# The `gh api` shape is the silent-bypass route that motivated #47, so the
+# guard must match `merge_method=squash|rebase` as well as the `--squash`
+# flag. (We make our own `gh pr view --json headRefName` call here — it is a
+# separate API call from the HEAD-SHA lookup further down, not the same one.)
+# On network failure we skip the guard and let the merge proceed — an
+# unavailable gh API is not a reason to permanently block all syncs.
+if echo "$COMMAND" | grep -qE '(--squash|--rebase|merge_method=squash|merge_method=rebase)'; then
   _SYNC_BRANCH=""
   if [ -n "$CMD_REPO" ]; then
     _SYNC_BRANCH=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" \
@@ -110,7 +113,7 @@ squash commit on main), so the release squash is NOT made an ancestor of dev —
 defeating the entire purpose of /release-sync.
 
 Use --merge instead:
-  gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-me2resh/apexyard} --merge --delete-branch
+  gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>} --merge --delete-branch
 
 Or invoke /approve-merge ${PR_NUMBER} — it auto-detects sync PRs and uses --merge.
 
