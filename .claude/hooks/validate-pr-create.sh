@@ -150,6 +150,16 @@ if [ -n "$TICKET_REF" ]; then
   #
   # The upstream fallback only makes sense for the gh kind — Linear / Jira /
   # Asana don't have a fork-of-a-tracker concept.
+  #
+  # Cross-repo guard (me2resh/apexyard#464): when `--repo` is set and the PR
+  # targets a repo that is NOT a fork of the current git tree's upstream, the
+  # fallback would resolve to an UNRELATED repo (e.g. session pinned to the
+  # ops-fork; --repo points at a sibling repo; upstream remote of the ops-fork
+  # returns me2resh/apexyard, which has no relation to the sibling PR). Suppress
+  # the upstream fallback in that case by checking whether TRACKER_REPO shares
+  # the upstream lineage (either it IS the upstream, or the upstream IS a fork
+  # of it). If TRACKER_REPO matches neither origin nor upstream → cross-repo
+  # context → no fallback.
   UPSTREAM_REPO=""
   if [ "$TRACKER_KIND" = "gh" ] && git remote get-url upstream >/dev/null 2>&1; then
     UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
@@ -159,6 +169,35 @@ if [ -n "$TICKET_REF" ]; then
     # --repo on the gh command points at upstream directly).
     if [ "$UPSTREAM_REPO" = "$TRACKER_REPO" ]; then
       UPSTREAM_REPO=""
+    fi
+    # Cross-repo guard (#464): if the primary TRACKER_REPO was set via the
+    # --repo flag (CMD_REPO is non-empty), it means the operator explicitly
+    # named the target repo. Only allow the upstream fallback when the
+    # explicitly-named target is "related" to this git tree's remotes —
+    # i.e. TRACKER_REPO equals the current origin slug OR equals the
+    # upstream slug. When it matches neither, the `upstream` remote of the
+    # current working tree belongs to a completely different project lineage
+    # and must not be consulted as a ticket-existence fallback.
+    if [ -n "$CMD_REPO" ] && [ -n "$UPSTREAM_REPO" ]; then
+      ORIGIN_SLUG_VAL=""
+      if [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$HOOK_DIR/_lib-pr-repo.sh"
+        ORIGIN_SLUG_VAL=$(git_origin_repo "$REPO_ROOT")
+      else
+        _RAW_ORIGIN=$(git remote get-url origin 2>/dev/null)
+        ORIGIN_SLUG_VAL=$(echo "$_RAW_ORIGIN" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
+      fi
+      # Normalise to lowercase for comparison (GitHub repos are case-insensitive).
+      CMD_REPO_LC=$(printf '%s' "$CMD_REPO" | tr '[:upper:]' '[:lower:]')
+      ORIGIN_LC=$(printf '%s' "$ORIGIN_SLUG_VAL" | tr '[:upper:]' '[:lower:]')
+      UPSTREAM_LC=$(printf '%s' "$UPSTREAM_REPO" | tr '[:upper:]' '[:lower:]')
+      # Allow fallback only when the PR targets the origin or its upstream.
+      if [ "$CMD_REPO_LC" != "$ORIGIN_LC" ] && [ "$CMD_REPO_LC" != "$UPSTREAM_LC" ]; then
+        # The PR is targeting a completely different repo lineage.
+        # Suppress the upstream fallback to avoid cross-repo false lookups.
+        UPSTREAM_REPO=""
+      fi
     fi
   fi
 
