@@ -60,6 +60,18 @@
 #      B4. --repo = ops-fork origin: ticket in origin → PASS [regression]
 #      B5. --repo = ops-fork upstream (me2resh/apexyard): ticket in upstream →
 #          PASS, upstream fallback allowed [regression: #207 still works]
+#          NOTE: B5 does NOT reach the new cross-repo guard (CMD_REPO==UPSTREAM_REPO
+#          is deduped before the guard block). See B6 for guard coverage.
+#      B6. --repo = ops-fork origin (fork-org/apexyard), ticket in upstream only →
+#          PASS: the guard's allow-path (CMD_REPO_LC == ORIGIN_LC) runs and correctly
+#          permits the upstream fallback. A deliberate bug in the guard makes B6 FAIL.
+#          [new — finding 2 from PR #465 review]
+#
+#   C. missing _lib-pr-repo.sh → WARN, not silent
+#      C1. require-agdr-for-arch-pr.sh, lib absent, --repo=sibling → WARN + exit 0
+#          (no silent revert to ops-fork diffing)
+#      C2. validate-pr-create.sh, lib absent, --repo=sibling + upstream → WARN emitted
+#          [new — finding 1 from PR #465 review]
 #
 # To run:  ./.claude/hooks/tests/test_pr_hooks_cross_repo.sh
 # Exit 0 = all pass, 1 = at least one failure.
@@ -316,6 +328,10 @@ assert_case "B4: --repo=origin (framework PR), ticket in origin → PASS (regres
 
 # B5: --repo = ops-fork upstream (me2resh/apexyard), ticket in upstream → PASS
 # The fork-→-upstream case from #207 must still work after this fix.
+# NOTE: B5 does NOT exercise the new cross-repo guard because CMD_REPO equals
+# UPSTREAM_REPO, which is deduped to UPSTREAM_REPO="" at line ~170, so the
+# guard block (CMD_REPO non-empty AND UPSTREAM_REPO non-empty) is never reached.
+# The guard's allow-path is tested in B6 below.
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-upstream")
 mock_gh_install "$SB"
 # Issue #207 exists in upstream (me2resh/apexyard) only — the fork doesn't have it.
@@ -329,6 +345,90 @@ STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>
 RC=$?
 rm -rf "$SB"
 assert_case "B5: --repo=upstream (fork→upstream PR), ticket in upstream → PASS (#207 regression)" "$RC" 0 "$STDERR"
+
+# B6: --repo = origin (fork-org/apexyard), ticket in upstream only → PASS
+#
+# This is the test that GENUINELY exercises the new cross-repo guard's allow-path
+# (me2resh/apexyard#464 review finding 2).
+#
+# Why B5 doesn't cover it: in B5, CMD_REPO == UPSTREAM_REPO == me2resh/apexyard.
+# The pre-existing dedup at the top of the upstream-resolve block zeros UPSTREAM_REPO
+# when it equals TRACKER_REPO, so the guard block (both CMD_REPO and UPSTREAM_REPO
+# non-empty) is never reached. B5 passes regardless of whether the new guard is correct.
+#
+# B6 sets CMD_REPO = origin (fork-org/apexyard) ≠ upstream (me2resh/apexyard).
+# TRACKER_REPO = fork-org/apexyard.  UPSTREAM_REPO = me2resh/apexyard ≠ TRACKER_REPO
+# → dedup does NOT zero UPSTREAM_REPO → the guard block runs.
+# The guard checks: CMD_REPO_LC == ORIGIN_LC → true → allow fallback.
+# The ticket exists in upstream only → upstream fallback finds it → PASS.
+#
+# A deliberate bug in the guard (e.g. comparing CMD_REPO_LC to a wrong value
+# so the allow-path condition fails) makes this test FAIL:
+#   UPSTREAM_REPO would be zeroed prematurely → ticket-not-found → exit 2.
+SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-b6")
+mock_gh_install "$SB"
+# Ticket #300 lives only in upstream; fork/origin doesn't have it.
+mock_gh_set_repo_existence "$SB" 300 me2resh/apexyard yes
+mock_gh_set_repo_existence "$SB" 300 fork-org/apexyard no
+BODY_FILE="$SB/body.md"
+printf '%s' "$VALID_BODY" > "$BODY_FILE"
+# PR targets the fork origin — this is the CMD_REPO == ORIGIN_LC allow-path.
+CMD="gh pr create --repo fork-org/apexyard --base dev --title 'fix(#300): upstream-only ticket, targeting fork origin' --body-file $BODY_FILE --head fix/GH-464-b6"
+INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
+STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+RC=$?
+rm -rf "$SB"
+assert_case "B6: --repo=origin, ticket in upstream only → PASS (new guard allow-path, CMD_REPO==ORIGIN_LC)" "$RC" 0 "$STDERR"
+
+# ---------------------------------------------------------------------------
+# Section C — missing _lib-pr-repo.sh emits a visible WARN (finding 1)
+# ---------------------------------------------------------------------------
+
+echo "--- Section C: missing _lib-pr-repo.sh → WARN, not silent ---"
+
+# C1: require-agdr-for-arch-pr.sh — lib absent, --repo=sibling present → WARN on stderr
+# The hook must NOT silently proceed as if the guard ran successfully; it must
+# emit a WARN naming the missing lib so the degraded state is visible.
+# The hook still exits 0 (cannot evaluate the diff; safe default), but the
+# operator sees the warning.
+DIR_C1=$(make_agdr_sandbox "fork-org/apexyard")
+# Remove _lib-pr-repo.sh from the sandbox's hook dir to simulate a partial checkout.
+# The hook resolves HOOK_DIR_AGDR from its own path → the repo's .claude/hooks.
+# Since $AGDR_HOOK already points there, just temporarily rename the lib.
+LIB_PATH_C1="$REPO_ROOT/.claude/hooks/_lib-pr-repo.sh"
+LIB_BACKUP_C1="$REPO_ROOT/.claude/hooks/_lib-pr-repo.sh.bak.$$"
+mv "$LIB_PATH_C1" "$LIB_BACKUP_C1"
+STDERR_C1=$( cd "$DIR_C1" && \
+  printf '{"tool_input":{"command":"gh pr create --repo me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'No AgDR, cross-repo'"'"'"}}' \
+  | "$AGDR_HOOK" 2>&1 >/dev/null )
+RC_C1=$?
+mv "$LIB_BACKUP_C1" "$LIB_PATH_C1"
+rm -rf "$DIR_C1"
+# With lib absent, the hook emits a WARN but still evaluates the diff against
+# the ops-fork working tree (degraded mode). The ops-fork sandbox has arch paths
+# (src/domain/widget.ts) that trigger the arch check, so the hook exits 2 (BLOCK).
+# The critical assertion is that WARN is emitted — degradation is visible, not silent.
+# rc=2 confirms the hook didn't silently pass as if cross-repo guarding had worked.
+assert_case "C1: agdr hook, lib missing, --repo=sibling → WARN + BLOCK (degraded, not silent)" "$RC_C1" 2 "$STDERR_C1" "WARN"
+
+# C2: validate-pr-create.sh — lib absent, --repo=sibling + upstream configured → WARN on stderr
+# Same shape as C1: the guard's inline fallback runs but must emit a visible WARN.
+SB_C2=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-c2")
+mock_gh_install "$SB_C2"
+# Issue #99 exists in sibling, not upstream/origin.
+mock_gh_set_repo_existence "$SB_C2" 99 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB_C2" 99 me2resh/apexyard no
+mock_gh_set_repo_existence "$SB_C2" 99 fork-org/apexyard no
+BODY_FILE_C2="$SB_C2/body.md"
+printf '%s' "$VALID_BODY" > "$BODY_FILE_C2"
+CMD_C2="gh pr create --repo me2resh/apexyard-premium --base main --title 'fix(#99): sibling' --body-file $BODY_FILE_C2 --head fix/GH-464-c2"
+INPUT_C2=$(jq -nc --arg c "$CMD_C2" '{tool_input:{command:$c}}')
+# Remove the lib from the sandbox copy.
+rm -f "$SB_C2/.claude/hooks/_lib-pr-repo.sh"
+STDERR_C2=$(cd "$SB_C2" && echo "$INPUT_C2" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+RC_C2=$?
+rm -rf "$SB_C2"
+assert_case "C2: validate hook, lib missing, --repo=sibling + upstream → WARN emitted (no silent degradation)" "$RC_C2" 0 "$STDERR_C2" "WARN"
 
 # ---------------------------------------------------------------------------
 # Summary

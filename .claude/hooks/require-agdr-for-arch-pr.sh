@@ -176,6 +176,16 @@ if [ -f "$HOOK_DIR_AGDR/_lib-pr-repo.sh" ]; then
     # own CI context will gate this correctly.
     exit 0
   fi
+else
+  # _lib-pr-repo.sh is missing (partial checkout or manual hook copy without
+  # the lib). The cross-repo guard cannot run, which means a `gh pr create
+  # --repo <sibling>` command will fall through to the ops-fork diff — exactly
+  # the false-positive bug #464 this guard was introduced to prevent.
+  # Emit a loud warning so the degradation is visible; do NOT silently revert.
+  CMD_REPO_PRESENT=$(echo "$COMMAND" | grep -cE '\-\-repo[[:space:]]+' || true)
+  if [ "${CMD_REPO_PRESENT:-0}" -gt 0 ]; then
+    echo "WARN: require-agdr-for-arch-pr.sh: _lib-pr-repo.sh not found at $HOOK_DIR_AGDR — cross-repo guard DEGRADED. A \`gh pr create --repo <sibling>\` command will be evaluated against the current working tree's diff, which may produce false-positive blocks (me2resh/apexyard#464). Ensure _lib-pr-repo.sh is present alongside this hook." >&2
+  fi
 fi
 
 # ---------------------------------------------------------------------------

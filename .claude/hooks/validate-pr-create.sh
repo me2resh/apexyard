@@ -185,6 +185,13 @@ if [ -n "$TICKET_REF" ]; then
         . "$HOOK_DIR/_lib-pr-repo.sh"
         ORIGIN_SLUG_VAL=$(git_origin_repo "$REPO_ROOT")
       else
+        # _lib-pr-repo.sh is missing (partial checkout or manual hook copy
+        # without the lib). Fall back to inline slug extraction. This is a
+        # degraded state — emit a visible warning so the operator knows the
+        # cross-repo guard is running without its purpose-built library
+        # (me2resh/apexyard#464). The inline fallback preserves the guard
+        # logic, so the protection is not silently lost.
+        echo "WARN: validate-pr-create.sh: _lib-pr-repo.sh not found at $HOOK_DIR — cross-repo guard running with inline fallback. Ensure _lib-pr-repo.sh is present alongside this hook for full coverage." >&2
         _RAW_ORIGIN=$(git remote get-url origin 2>/dev/null)
         ORIGIN_SLUG_VAL=$(echo "$_RAW_ORIGIN" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
       fi

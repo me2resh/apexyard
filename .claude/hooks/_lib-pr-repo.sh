@@ -110,8 +110,10 @@ pr_repo_matches_cwd() {
   origin_slug=$(git_origin_repo "$git_dir")
 
   # If we can't resolve the origin, assume match (safe default — don't block
-  # when we can't determine context).
+  # when we can't determine context). Emit a WARN so this degraded state is
+  # visible rather than silent (me2resh/apexyard#464 review finding 3).
   if [ -z "$origin_slug" ]; then
+    echo "WARN: _lib-pr-repo.sh: could not resolve origin remote for $git_dir — pr_repo_matches_cwd treating as same-repo (safe default, but cross-repo guard DEGRADED)." >&2
     return 0
   fi
 
