@@ -201,6 +201,22 @@ Refs #403, #448
 
 Do **NOT** merge the sync PR. Rex + CEO approval applies to this PR the same as any other. The skill's job is to open the PR; the operator drives the merge gate.
 
+**CRITICAL — merge strategy for this PR:**
+
+> The sync PR **MUST** be merged with a **true merge (`--merge`)**, never `--squash` or `--rebase`.
+
+The merge commit produced by step 5 above is the artefact that closes ancestry. It carries **two parents**: (1) the dev branch head, and (2) the release squash commit on main. That two-parent relationship is exactly what makes `git merge-base --is-ancestor <release-squash> dev` return true — i.e., what makes future release PRs conflict-free.
+
+Squash-merging this sync PR collapses the two-parent merge commit into a single-parent commit. The second parent (pointing at main's release squash) is permanently discarded. Dev gets main's *content* but the release squash is NOT an ancestor of dev. The `git log upstream/dev..upstream/main` divergence check will still show commits after squash — the exact failure this skill exists to prevent.
+
+`/approve-merge` auto-detects `sync/`-prefixed PRs and uses `--merge` automatically. If merging via the CLI directly, pass `--merge` (not `--squash`, not `--rebase`):
+
+```bash
+gh pr merge <sync-pr-number> --repo me2resh/apexyard --merge --delete-branch
+```
+
+A guard in `block-unreviewed-merge.sh` will also refuse `--squash` on a `sync/`-prefixed PR to prevent accidental regression. See `AgDR-0053`.
+
 Print:
 
 ```
@@ -208,7 +224,9 @@ Sync PR opened: <URL>
 Branch: sync/main-to-dev-after-<version> → dev
 Commits on main not yet on dev: N
 Next step: /code-review, then /approve-merge once Rex approves.
+IMPORTANT: /approve-merge will use --merge (not --squash) automatically for this sync PR.
 After merge: git log upstream/dev..upstream/main should return empty.
+After merge: git merge-base --is-ancestor <release-squash-sha> upstream/dev should return true.
 ```
 
 ## Edge Cases
@@ -228,15 +246,17 @@ After merge: git log upstream/dev..upstream/main should return empty.
 1. **Framework-only.** Refuse on managed projects.
 2. **No auto-merge.** The PR must go through Rex + CEO approval like every other PR.
 3. **Branch base is always `upstream/dev`.** Never branch from main for this operation.
-4. **Merge strategy is always `-X ours`.** Dev wins on conflicts, always. Do not offer to flip this.
-5. **No-op on already-synced repos.** Idempotent: if main has nothing dev doesn't, exit 0.
-6. **Version argument is required.** The version labels the sync branch and PR body for auditability.
+4. **`-X ours` merge strategy during branch build.** Dev wins on conflicts, always. Do not offer to flip this.
+5. **`--merge` (true merge) on PR merge.** Never `--squash` or `--rebase`. The merge commit IS the ancestry-closure artefact; destroying it defeats the skill's purpose. `/approve-merge` enforces this automatically on `sync/`-prefixed PRs; a guard in `block-unreviewed-merge.sh` refuses `--squash` on them as a mechanical backstop.
+6. **No-op on already-synced repos.** Idempotent: if main has nothing dev doesn't, exit 0.
+7. **Version argument is required.** The version labels the sync branch and PR body for auditability.
 
 ## Related
 
 - `/release` — the upstream skill that creates the squash divergence; invoke `/release-sync` as its final step
 - `AgDR-0007` — the release-cut branch model this skill stabilises
-- `AgDR-0052` — the decision record for this skill's design choices
+- `AgDR-0052` — the original design decisions for this skill
+- `AgDR-0053` — the decision to use `--merge` (not `--squash`) for sync PRs, and the auto-detect + guard design
 - `docs/release-process.md` — the prose runbook
 
 ---

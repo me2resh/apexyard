@@ -337,6 +337,131 @@ EOF
 gh pr merge 42 --repo me2resh/apexyard --squash"
 run_case_custom_cmd "compound-old-skill-version" 2 "no CEO approval marker" "$sb" "$cmd"
 
+# --- Sync-PR squash guard tests (apexyard#459) -------------------------
+#
+# The guard in block-unreviewed-merge.sh refuses --squash on PRs whose
+# head branch starts with `sync/main-to-dev-after-`. The guard fires on
+# both merge shapes (gh pr merge + gh api .../merge).
+#
+# The gh mock in make_sandbox already handles `gh pr view ... headRefOid`
+# calls. We extend it per-sandbox to also handle `headRefName` calls so
+# the guard's branch-lookup gets a deterministic branch name.
+
+make_sandbox_with_sync_branch() {
+  local sb branch_name
+  branch_name="${1:-sync/main-to-dev-after-v2.3.0}"
+  sb=$(make_sandbox)
+  # Rewrite the gh shim to handle both headRefOid (SHA) and headRefName (branch).
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr view"*"headRefOid"*) echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*) echo "$branch_name" ;;
+  *) ;;
+esac
+exit 0
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+make_sandbox_non_sync() {
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr view"*"headRefOid"*) echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*) echo "feature/GH-99-something" ;;
+  *) ;;
+esac
+exit 0
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+# Case S1: sync PR + --squash → BLOCKED (the core guard)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 300
+write_ceo_marker_structured "$sb" 300
+cmd="gh pr merge 300 --repo me2resh/apexyard --squash --delete-branch"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
+  echo "PASS [sync PR + --squash → blocked (apexyard#459)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + --squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-squash-blocked "
+fi
+
+# Case S2: sync PR + --merge + valid markers → PASSES (the correct path)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 301
+write_ceo_marker_structured "$sb" 301
+cmd="gh pr merge 301 --repo me2resh/apexyard --merge --delete-branch"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [sync PR + --merge + valid markers → passes (apexyard#459)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + --merge + valid markers → passes]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-merge-passes "
+fi
+
+# Case S3: non-sync PR + --squash + valid markers → PASSES (guard narrowly scoped)
+sb=$(make_sandbox_non_sync)
+write_rex_marker "$sb" 302
+write_ceo_marker_structured "$sb" 302
+cmd="gh pr merge 302 --repo me2resh/apexyard --squash --delete-branch"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [non-sync PR + --squash still passes (guard narrowly scoped, apexyard#459)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [non-sync PR + --squash guard scope]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}non-sync-squash-unaffected "
+fi
+
+# Case S4: sync PR + `gh api ... merge_method=squash` → BLOCKED
+# (the gh-api bypass shape — the gap that motivated #47; must be caught too)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 303
+write_ceo_marker_structured "$sb" 303
+cmd="gh api repos/me2resh/apexyard/pulls/303/merge -X PUT -f merge_method=squash"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
+  echo "PASS [sync PR + gh-api merge_method=squash → blocked (apexyard#459, #47 bypass class)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + gh-api merge_method=squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-squash-blocked "
+fi
+
+# Case S5: sync PR + `gh api ... merge_method=merge` → PASSES (correct gh-api path)
+sb=$(make_sandbox_with_sync_branch "sync/main-to-dev-after-v2.3.0")
+write_rex_marker "$sb" 304
+write_ceo_marker_structured "$sb" 304
+cmd="gh api repos/me2resh/apexyard/pulls/304/merge -X PUT -f merge_method=merge"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [sync PR + gh-api merge_method=merge → passes (apexyard#459)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [sync PR + gh-api merge_method=merge → passes]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-merge-passes "
+fi
+
 # --- Summary ----------------------------------------------------------
 
 echo ""
