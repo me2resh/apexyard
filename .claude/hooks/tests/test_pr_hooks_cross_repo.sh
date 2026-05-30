@@ -47,6 +47,19 @@
 #          [regression: framework PR with AgDR still passes]
 #      A4. No --repo flag (implicit same-repo): arch paths present → BLOCK
 #          [regression: implicit-origin PR still gated]
+#      A5. --repo=VALUE (equals form): sibling → PASS (cross-repo guard fires)
+#          [F1: equals form was previously un-parsed → guard skipped → false-block]
+#      A6. -R VALUE (short alias, space): sibling → PASS
+#          [F1: short alias was previously un-parsed]
+#      A7. -R=VALUE (short alias, equals): sibling → PASS
+#          [F1: short alias+equals was previously un-parsed]
+#
+#   B. validate-pr-create.sh
+#      (existing B1–B6 unchanged)
+#      B7. --repo=VALUE (equals form): sibling, ticket in sibling → PASS
+#          [F1: equals form was previously un-parsed → CMD_REPO empty → wrong guard]
+#      B8. -R VALUE (short alias, space): sibling, ticket in sibling → PASS
+#      B9. -R=VALUE (short alias, equals): sibling, ticket in sibling → PASS
 #
 #   B. validate-pr-create.sh
 #      B1. --repo sibling, ticket in sibling → PASS
@@ -68,8 +81,8 @@
 #          [new — finding 2 from PR #465 review]
 #
 #   C. missing _lib-pr-repo.sh → WARN, not silent
-#      C1. require-agdr-for-arch-pr.sh, lib absent, --repo=sibling → WARN + exit 0
-#          (no silent revert to ops-fork diffing)
+#      C1. require-agdr-for-arch-pr.sh, lib absent, --repo=sibling → WARN + BLOCK (rc=2)
+#          (guard degraded: falls through to ops-fork diff which has arch paths → blocked)
 #      C2. validate-pr-create.sh, lib absent, --repo=sibling + upstream → WARN emitted
 #          [new — finding 1 from PR #465 review]
 #
@@ -256,6 +269,37 @@ RC=$?
 rm -rf "$DIR"
 assert_case "A4: no --repo flag (implicit origin), no AgDR → BLOCK (regression)" "$RC" 2 "$STDERR" "no AgDR reference"
 
+# A5: --repo=VALUE (equals form), sibling → PASS
+# F1: the previous parser only matched `--repo SPACE VALUE`, so `--repo=VALUE`
+# produced an empty CMD_REPO, making the cross-repo guard a no-op.  The hook
+# would then fall through to the ops-fork diff, which has arch paths, and
+# produce a false-positive block.  After the fix the guard fires correctly.
+DIR=$(make_agdr_sandbox "fork-org/apexyard")
+STDERR=$( cd "$DIR" && \
+  printf '{"tool_input":{"command":"gh pr create --repo=me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  | "$AGDR_HOOK" 2>&1 >/dev/null )
+RC=$?
+rm -rf "$DIR"
+assert_case "A5: --repo=VALUE (equals form), sibling → PASS (cross-repo guard, F1)" "$RC" 0 "$STDERR"
+
+# A6: -R VALUE (short alias, space), sibling → PASS
+DIR=$(make_agdr_sandbox "fork-org/apexyard")
+STDERR=$( cd "$DIR" && \
+  printf '{"tool_input":{"command":"gh pr create -R me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  | "$AGDR_HOOK" 2>&1 >/dev/null )
+RC=$?
+rm -rf "$DIR"
+assert_case "A6: -R VALUE (short alias, space), sibling → PASS (cross-repo guard, F1)" "$RC" 0 "$STDERR"
+
+# A7: -R=VALUE (short alias, equals), sibling → PASS
+DIR=$(make_agdr_sandbox "fork-org/apexyard")
+STDERR=$( cd "$DIR" && \
+  printf '{"tool_input":{"command":"gh pr create -R=me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  | "$AGDR_HOOK" 2>&1 >/dev/null )
+RC=$?
+rm -rf "$DIR"
+assert_case "A7: -R=VALUE (short alias, equals), sibling → PASS (cross-repo guard, F1)" "$RC" 0 "$STDERR"
+
 # ---------------------------------------------------------------------------
 # Section B — validate-pr-create.sh cross-repo tracker guard
 # ---------------------------------------------------------------------------
@@ -380,6 +424,54 @@ RC=$?
 rm -rf "$SB"
 assert_case "B6: --repo=origin, ticket in upstream only → PASS (new guard allow-path, CMD_REPO==ORIGIN_LC)" "$RC" 0 "$STDERR"
 
+# B7: --repo=VALUE (equals form), sibling, ticket in sibling → PASS
+# F1: the previous CMD_REPO parser missed the equals form, so CMD_REPO was
+# empty → TRACKER_REPO fell back to the ops-fork origin → wrong tracker
+# queried.  After the fix, CMD_REPO=me2resh/apexyard-premium → correct.
+SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b7")
+mock_gh_install "$SB"
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
+mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
+BODY_FILE="$SB/body.md"
+printf '%s' "$VALID_BODY" > "$BODY_FILE"
+CMD="gh pr create --repo=me2resh/apexyard-premium --base main --title 'fix(#88): equals form ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b7"
+INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
+STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+RC=$?
+rm -rf "$SB"
+assert_case "B7: --repo=VALUE (equals form), ticket in sibling → PASS (F1)" "$RC" 0 "$STDERR"
+
+# B8: -R VALUE (short alias, space), sibling, ticket in sibling → PASS
+SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b8")
+mock_gh_install "$SB"
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
+mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
+BODY_FILE="$SB/body.md"
+printf '%s' "$VALID_BODY" > "$BODY_FILE"
+CMD="gh pr create -R me2resh/apexyard-premium --base main --title 'fix(#88): short alias ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b8"
+INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
+STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+RC=$?
+rm -rf "$SB"
+assert_case "B8: -R VALUE (short alias, space), ticket in sibling → PASS (F1)" "$RC" 0 "$STDERR"
+
+# B9: -R=VALUE (short alias, equals), sibling, ticket in sibling → PASS
+SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b9")
+mock_gh_install "$SB"
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
+mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
+BODY_FILE="$SB/body.md"
+printf '%s' "$VALID_BODY" > "$BODY_FILE"
+CMD="gh pr create -R=me2resh/apexyard-premium --base main --title 'fix(#88): short-alias-equals ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b9"
+INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
+STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+RC=$?
+rm -rf "$SB"
+assert_case "B9: -R=VALUE (short alias+equals), ticket in sibling → PASS (F1)" "$RC" 0 "$STDERR"
+
 # ---------------------------------------------------------------------------
 # Section C — missing _lib-pr-repo.sh emits a visible WARN (finding 1)
 # ---------------------------------------------------------------------------
@@ -389,26 +481,38 @@ echo "--- Section C: missing _lib-pr-repo.sh → WARN, not silent ---"
 # C1: require-agdr-for-arch-pr.sh — lib absent, --repo=sibling present → WARN on stderr
 # The hook must NOT silently proceed as if the guard ran successfully; it must
 # emit a WARN naming the missing lib so the degraded state is visible.
-# The hook still exits 0 (cannot evaluate the diff; safe default), but the
-# operator sees the warning.
+# With lib absent, the hook evaluates the diff against the ops-fork working
+# tree (degraded mode). The sandbox has arch paths (src/domain/widget.ts) that
+# trigger the arch check, so the hook exits 2 (BLOCK).
+# The critical assertion is that WARN is emitted — degradation is visible, not silent.
+# rc=2 confirms the hook correctly blocks when cross-repo guard is missing.
+#
+# SAFETY: we copy the hook + lib into a temp sandbox and remove the lib FROM
+# THE SANDBOX, never touching $REPO_ROOT/.claude/hooks/ (the live hooks dir).
+# Mutating the live dir without a trap risks permanently losing the lib if the
+# test is killed between the two mv calls (CI timeout, Ctrl+C, OOM).
 DIR_C1=$(make_agdr_sandbox "fork-org/apexyard")
-# Remove _lib-pr-repo.sh from the sandbox's hook dir to simulate a partial checkout.
-# The hook resolves HOOK_DIR_AGDR from its own path → the repo's .claude/hooks.
-# Since $AGDR_HOOK already points there, just temporarily rename the lib.
-LIB_PATH_C1="$REPO_ROOT/.claude/hooks/_lib-pr-repo.sh"
-LIB_BACKUP_C1="$REPO_ROOT/.claude/hooks/_lib-pr-repo.sh.bak.$$"
-mv "$LIB_PATH_C1" "$LIB_BACKUP_C1"
+# Build a sandbox with the hook and all its deps, then remove just the lib.
+SB_C1=$(mktemp -d)
+mkdir -p "$SB_C1/.claude/hooks"
+cp "$AGDR_HOOK" "$SB_C1/.claude/hooks/require-agdr-for-arch-pr.sh"
+chmod +x "$SB_C1/.claude/hooks/require-agdr-for-arch-pr.sh"
+for lib in \
+  _lib-read-config.sh \
+  _lib-ops-root.sh \
+  _lib-pr-repo.sh; do
+  [ -f "$REPO_ROOT/.claude/hooks/$lib" ] && cp "$REPO_ROOT/.claude/hooks/$lib" "$SB_C1/.claude/hooks/$lib"
+done
+[ -f "$REPO_ROOT/.claude/project-config.defaults.json" ] && \
+  cp "$REPO_ROOT/.claude/project-config.defaults.json" "$SB_C1/.claude/project-config.defaults.json"
+# Remove the lib from the SANDBOX COPY (not the live hooks dir).
+rm -f "$SB_C1/.claude/hooks/_lib-pr-repo.sh"
+AGDR_HOOK_C1="$SB_C1/.claude/hooks/require-agdr-for-arch-pr.sh"
 STDERR_C1=$( cd "$DIR_C1" && \
   printf '{"tool_input":{"command":"gh pr create --repo me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'No AgDR, cross-repo'"'"'"}}' \
-  | "$AGDR_HOOK" 2>&1 >/dev/null )
+  | "$AGDR_HOOK_C1" 2>&1 >/dev/null )
 RC_C1=$?
-mv "$LIB_BACKUP_C1" "$LIB_PATH_C1"
-rm -rf "$DIR_C1"
-# With lib absent, the hook emits a WARN but still evaluates the diff against
-# the ops-fork working tree (degraded mode). The ops-fork sandbox has arch paths
-# (src/domain/widget.ts) that trigger the arch check, so the hook exits 2 (BLOCK).
-# The critical assertion is that WARN is emitted — degradation is visible, not silent.
-# rc=2 confirms the hook didn't silently pass as if cross-repo guarding had worked.
+rm -rf "$DIR_C1" "$SB_C1"
 assert_case "C1: agdr hook, lib missing, --repo=sibling → WARN + BLOCK (degraded, not silent)" "$RC_C1" 2 "$STDERR_C1" "WARN"
 
 # C2: validate-pr-create.sh — lib absent, --repo=sibling + upstream configured → WARN on stderr

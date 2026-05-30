@@ -182,7 +182,8 @@ else
   # --repo <sibling>` command will fall through to the ops-fork diff — exactly
   # the false-positive bug #464 this guard was introduced to prevent.
   # Emit a loud warning so the degradation is visible; do NOT silently revert.
-  CMD_REPO_PRESENT=$(echo "$COMMAND" | grep -cE '\-\-repo[[:space:]]+' || true)
+  # Match all four flag forms: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
+  CMD_REPO_PRESENT=$(printf '%s' "$COMMAND" | grep -cE '(^|[[:space:]])(--repo[=[:space:]]|-R[=[:space:]])' || true)
   if [ "${CMD_REPO_PRESENT:-0}" -gt 0 ]; then
     echo "WARN: require-agdr-for-arch-pr.sh: _lib-pr-repo.sh not found at $HOOK_DIR_AGDR — cross-repo guard DEGRADED. A \`gh pr create --repo <sibling>\` command will be evaluated against the current working tree's diff, which may produce false-positive blocks (me2resh/apexyard#464). Ensure _lib-pr-repo.sh is present alongside this hook." >&2
   fi

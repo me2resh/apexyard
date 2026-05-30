@@ -16,8 +16,35 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Parse --repo from the gh command for cross-repo PR creation
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+# Parse --repo / -R from the gh command for cross-repo PR creation.
+# Handles: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
+# Source _lib-pr-repo.sh when available (DRY — it owns the canonical parser).
+# Inline fallback preserved for partial checkouts without the lib.
+CMD_REPO=""
+_VPC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$_VPC_HOOK_DIR/_lib-pr-repo.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_VPC_HOOK_DIR/_lib-pr-repo.sh"
+  CMD_REPO=$(pr_cmd_target_repo "$COMMAND")
+else
+  # Inline fallback: handles all four forms without the lib.
+  # Uses greedy `.*[[:space:]]<FLAG>` — see _lib-pr-repo.sh for the BSD-sed
+  # rationale (alternation capture groups don't work reliably on macOS sed).
+  CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]--repo=([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-R[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-R=([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  # Strip optional host prefix.
+  if [ -n "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$CMD_REPO" | sed -E 's|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/||')
+  fi
+fi
 
 # Only check on gh pr create
 if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
