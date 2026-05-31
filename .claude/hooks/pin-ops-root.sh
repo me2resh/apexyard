@@ -23,14 +23,14 @@
 # session start — BEFORE any sub-agent or skill has had a chance to
 # `cd` somewhere unrelated — and writing it to a per-session pin file:
 #
-#   ${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-<SESSION_ID>
+#   ${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}/ops-root-<SESSION_ID>
 #
 # `resolve_ops_root` then consults the pin BEFORE walking up. Stale
 # pins self-heal because the pinned path is re-validated against the
 # anchor conditions on read.
 #
 # Silent no-ops:
-#   - CLAUDE_CODE_SESSION_ID unset                    → exit 0 (no pin)
+#   - no supported session id env                        → exit 0 (no pin)
 #   - walk-up from $PWD fails to find an ops root     → exit 0 (no pin)
 #   - pin already exists with the same path           → exit 0 (no-op)
 #
@@ -65,7 +65,8 @@ fi
 
 # No session id → no per-session pin to write. Common in scripted /
 # CI contexts; the walk-up fallback handles those just fine.
-if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+session_id="$(apexyard_session_id)"
+if [ -z "$session_id" ]; then
   exit 0
 fi
 
@@ -77,8 +78,8 @@ if [ -z "$ops_root" ]; then
   exit 0
 fi
 
-pin_dir="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
-pin_file="$pin_dir/ops-root-${CLAUDE_CODE_SESSION_ID}"
+pin_dir="$(apexyard_ops_pin_dir)"
+pin_file="$pin_dir/ops-root-${session_id}"
 
 # Create the pin directory if missing. mkdir -p is idempotent.
 mkdir -p "$pin_dir" 2>/dev/null || exit 0

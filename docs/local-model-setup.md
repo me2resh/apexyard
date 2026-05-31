@@ -1,6 +1,8 @@
-# Local model routing — agents via LiteLLM proxy + Ollama
+# Legacy local model routing — Claude Code compatibility via LiteLLM proxy + Ollama
 
-Route specific Claude Code sub-agents through a locally-running Ollama instance instead of the Claude API. Useful when you want to keep prompts off any cloud API for bounded sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing).
+Route specific Claude Code compatibility sub-agents through a locally-running Ollama instance instead of the Claude API. Useful when you want to keep prompts off any cloud API for bounded sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing).
+
+Codex users usually do not need this path. The Codex-native entrypoint is `CODEX.md` plus `.codex/hooks.json`; keep this guide only if you are maintaining the Claude compatibility layer or need local-routing behavior for legacy adopters.
 
 This is **opt-in**. The default `agent-routing.yaml` shape is empty; absence of an `endpoint:` field keeps every agent on its framework default. Nothing in this setup changes the out-of-box experience.
 

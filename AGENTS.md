@@ -1,12 +1,13 @@
 # AGENTS.md
 
-Entry point for AI coding agents (Cursor, Claude Code, Aider, Cline, etc.) working inside this repository.
+Entry point for AI coding agents (Codex, Cursor, Claude Code, Aider, Cline, etc.) working inside this repository.
 
-This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-level instruction set the apexyard framework loads when an adopter runs Claude Code inside their ops fork. `AGENTS.md` is the universal coding-agent convention (one entry doc per repo, regardless of which agent is driving) that points a visiting agent at structure, key files, and constraints.
+This file is **distinct from `CODEX.md` and `CLAUDE.md`** — `CODEX.md` is the Codex-first framework entrypoint, `CLAUDE.md` is the Claude Code compatibility layer, and `AGENTS.md` is the universal coding-agent convention (one entry doc per repo, regardless of which agent is driving) that points a visiting agent at structure, key files, and constraints.
 
 ## Project structure
 
-- `.claude/` — framework hooks, agents, rules, skills, settings.json
+- `.codex/` — Codex-native hooks/config scaffolding (`config.toml`, `hooks.json`)
+- `.claude/` — legacy compatibility layer for Claude Code users
   - `.claude/hooks/` — 31 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 53 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 5 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Tariq PR-manager, Idris ticket-manager) + 18 dept-aligned agents across engineering / product / design / security / data
@@ -25,7 +26,8 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 
 ## Key files
 
-- `CLAUDE.md` — framework-level instructions for Claude Code adopters (always loaded by Claude Code at session start)
+- `CODEX.md` — framework-level instructions for Codex adopters
+- `CLAUDE.md` — framework-level instructions for Claude Code adopters
 - `AGENTS.md` — this file (universal coding-agent entry doc; AI-agent-agnostic)
 - `onboarding.yaml` — company / team / tech-stack config (adopter customises)
 - `apexyard.projects.yaml` — portfolio registry listing every repo under management
@@ -49,7 +51,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 ## Rate limits / constraints
 
 - **Two-marker merge gate** — every merge requires Rex (code-reviewer agent) AND explicit per-PR CEO approval. Plan-level "go" does NOT authorize a merge. Mechanically enforced by `block-unreviewed-merge.sh`.
-- **Ticket-first hook** — code edits are blocked without an active ticket marker at `.claude/session/current-ticket`. Bootstrap-class skills (`/setup`, `/handover`, `/update`, `/split-portfolio`) are exempt.
+- **Ticket-first hook** — code edits are blocked without an active ticket marker at `.claude/session/current-ticket`. Bootstrap-class skills (`/setup`, `/handover`, `/update`, `/split-portfolio`) are exempt. Codex loads the same enforcement through `.codex/hooks.json`.
 - **AgDR required for architectural decisions** — `require-agdr-for-arch-changes.sh` and `require-agdr-for-arch-pr.sh` block PRs that touch architecture without a matching `docs/agdr/AgDR-NNNN-*.md` reference.
 - **No direct pushes to `main`** — every change goes through a PR. Enforced by `block-main-push.sh`.
 - **No `git add -A`** — staging must be explicit. Enforced by `block-git-add-all.sh`.
@@ -72,7 +74,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 
 If you're an AI agent landing in this repo for the first time:
 
-1. Read `CLAUDE.md` (framework spec — even if you're not Claude Code, the rules transfer)
+1. Read `CODEX.md` first (Codex-native framework spec), then `CLAUDE.md` only if you need legacy compatibility notes
 2. Skim `docs/multi-project.md` (full setup guide, directory layout, daily workflow)
 3. Browse `.claude/skills/` for the 53 slash commands (each `SKILL.md` is one capability)
 4. Browse `roles/` to understand the role-activation model

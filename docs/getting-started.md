@@ -7,10 +7,10 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 ## Prerequisites
 
 - A GitHub account and an org you can fork into
-- [Claude Code](https://claude.com/claude-code) installed
+- [Codex CLI](https://developers.openai.com/codex/) installed
 - [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
 - [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
-- Basic familiarity with Claude Code's `CLAUDE.md` system
+- Basic familiarity with Codex's `AGENTS.md` / `CODEX.md` instruction model
 
 ---
 
@@ -95,13 +95,13 @@ projects:
 
 Even if you have just one repo, register it — the skills work the same whether you have 1 or 20.
 
-The `CLAUDE.md` at the root of your fork is the stack entry point. Claude Code reads it automatically when you start a session inside the fork — no additional wiring needed.
+The `CODEX.md` at the root of your fork is the stack entry point. Codex reads it automatically when you start a session inside the fork — no additional wiring needed.
 
 ---
 
 ## Step 4: Start Using It
 
-### Ask Claude Code to act as a role
+### Ask Codex to act as a role
 
 ```
 Review this PR as the QA Engineer
@@ -136,6 +136,8 @@ Create an AgDR.
 
 ---
 
+> **Legacy note:** the optional LSP section below is written for the Claude Code compatibility layer. Codex users can skip it and use Codex's own config, plugins, and MCP flows instead.
+
 ## Optional: LSP-aware code navigation
 
 Claude Code v2.0.74+ ships a built-in **LSP (Language Server Protocol) tool** that answers semantic queries — *"where is this defined?"*, *"where is this used?"*, *"what does this symbol resolve to?"* — by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`, etc.) instead of grepping the file tree. It is **off by default** and **opt-in per session**.
@@ -153,13 +155,13 @@ Run `/setup` (first run) or `/setup --enable-lsp` (retrofit on an already-config
 1. **Detects your language** from the `tech_stack` you described in `/setup` (or from the existing `onboarding.yaml` if you're retrofitting).
 2. **Installs the language server** (`typescript-language-server`, `pyright`, `gopls`, or `rust-analyzer`) using the right package manager for the detected language. Refuses gracefully if the prerequisite runtime (`node`, `python`, `go`, `rustup`) is missing — it never auto-installs runtimes.
 3. **Sets `ENABLE_LSP_TOOL=1` in your shell rc** (`~/.zshrc`, `~/.bashrc`, or `~/.profile` depending on `$SHELL`) — idempotently, so re-running is a no-op.
-4. **Prints the verified plugin-install copy-paste block** for your language. Three commands to run *inside Claude Code* (not the shell): `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill substitutes the right `<plugin-name>` for your detected language (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). The marketplace add is always emitted because the docs' auto-load claim for `claude-plugins-official` doesn't always fire on fresh installs.
+4. **Prints the verified plugin-install copy-paste block** for your language. This is a legacy Claude Code path, not part of the Codex-native harness: three commands to run *inside Claude Code* (not the shell): `/plugin marketplace add anthropics/claude-plugins-official`, `/plugin install <plugin-name>@claude-plugins-official`, and `/reload-plugins`. The skill substitutes the right `<plugin-name>` for your detected language (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). The marketplace add is always emitted because the docs' auto-load claim for `claude-plugins-official` doesn't always fire on fresh installs.
 
 The skill defaults to **on** for typical machines (≥ 4 cores AND ≥ 8 GB RAM) and **off** for constrained machines, with the operator free to override either way. Re-running `/setup --enable-lsp` is idempotent: if the env var and server binary are already in place, it reports "already enabled" and exits.
 
 Windows is out of scope for v1 of the LSP automation — `/setup` prints a manual-install pointer back to this section and continues without LSP.
 
-### Opt-in path — manual fallback (two pieces)
+### Legacy opt-in path — manual fallback (two pieces)
 
 If you'd rather skip the skill and wire it up yourself — or you're on Windows and `/setup` declined to automate it — LSP is enabled by **two** things:
 

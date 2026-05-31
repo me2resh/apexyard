@@ -50,7 +50,7 @@
 # Escape hatches:
 #   - APEXYARD_OPS_DISABLE_PIN=1     → ignore the pin, use walk-up only
 #   - APEXYARD_OPS_PIN_DIR=<dir>     → override the pin directory
-#   - CLAUDE_CODE_SESSION_ID unset   → no pin lookup, walk-up only
+#   - no supported session id env    → no pin lookup, walk-up only
 #
 # Spaced-path safety: the pin file is written by `pin-ops-root.sh` with
 # `printf '%s\n' "$path"` and read here with `IFS= read -r` so paths
@@ -80,6 +80,31 @@
 
 [ -n "${_LIB_OPS_ROOT_SOURCED:-}" ] && return 0
 _LIB_OPS_ROOT_SOURCED=1
+
+# Return the current Codex or Claude session/thread id, whichever is
+# available in the current runtime.
+apexyard_session_id() {
+  if [ -n "${CODEX_THREAD_ID:-}" ]; then
+    printf '%s' "$CODEX_THREAD_ID"
+    return 0
+  fi
+  if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    printf '%s' "$CLAUDE_CODE_SESSION_ID"
+    return 0
+  fi
+  return 0
+}
+
+# Choose the default pin directory for the current runtime. Codex gets a
+# Codex-local cache by default; Claude keeps its existing location for
+# compatibility.
+apexyard_ops_pin_dir() {
+  if [ -n "${CODEX_THREAD_ID:-}" ] && [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    printf '%s' "${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}"
+    return 0
+  fi
+  printf '%s' "${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
+}
 
 # Pure walk-up. Recognises BOTH the v2 .apexyard-fork marker AND the
 # legacy v1 (onboarding.yaml + apexyard.projects.yaml) pair. Never
@@ -128,9 +153,12 @@ resolve_ops_root() {
 
   # Pin check — only when the session id is available and the escape
   # hatch isn't set. Any failure here silently falls through to walk-up.
-  if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
-    local pin_dir="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
-    local pin_file="$pin_dir/ops-root-${CLAUDE_CODE_SESSION_ID}"
+  local session_id
+  session_id=$(apexyard_session_id)
+  if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "$session_id" ]; then
+    local pin_dir
+    pin_dir=$(apexyard_ops_pin_dir)
+    local pin_file="$pin_dir/ops-root-${session_id}"
     if [ -f "$pin_file" ]; then
       local pinned=""
       # Read one line preserving spaces. IFS= so leading/trailing

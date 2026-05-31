@@ -1,0 +1,68 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh pin-ops-root.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh onboarding-check.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh check-upstream-drift.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh check-jq-installed.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh check-portfolio-config.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh clear-bootstrap-marker.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh clear-issue-skill-marker.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh link-custom-skills.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh apply-agent-routing.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh remind-mcp-tools.sh" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh require-migration-ticket.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh require-active-ticket.sh" },
+          { "type": "command", "command": "bash .claude/hooks/_run-in-ops-root.sh detect-role-trigger.sh" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(git add *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-git-add-all.sh" },
+          { "type": "command", "if": "Bash(git push *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-main-push.sh" },
+          { "type": "command", "if": "Bash(git push *)", "command": "bash .claude/hooks/_run-in-ops-root.sh validate-branch-name.sh" },
+          { "type": "command", "if": "Bash(git push *)", "command": "bash .claude/hooks/_run-in-ops-root.sh pre-push-gate.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh check-secrets.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh verify-commit-refs.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh validate-commit-format.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh require-agdr-for-arch-changes.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-agent-routing-drift.sh" },
+          { "type": "command", "if": "Bash(git commit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh warn-bootstrap-scope.sh" },
+          { "type": "command", "if": "Bash(gh issue create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh require-skill-for-issue-create.sh" },
+          { "type": "command", "if": "Bash(gh issue create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh suggest-ticket-template.sh" },
+          { "type": "command", "if": "Bash(gh issue create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh validate-issue-structure.sh" },
+          { "type": "command", "if": "Bash(gh issue create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-private-refs-in-public-repos.sh" },
+          { "type": "command", "if": "Bash(gh pr create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh validate-pr-create.sh" },
+          { "type": "command", "if": "Bash(gh pr create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-private-refs-in-public-repos.sh" },
+          { "type": "command", "if": "Bash(gh pr create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh require-agdr-for-arch-pr.sh" },
+          { "type": "command", "if": "Bash(gh issue comment *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-private-refs-in-public-repos.sh" },
+          { "type": "command", "if": "Bash(gh pr comment *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-private-refs-in-public-repos.sh" },
+          { "type": "command", "if": "Bash(gh api *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-private-refs-in-public-repos.sh" },
+          { "type": "command", "if": "Bash(gh pr merge *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-unreviewed-merge.sh" },
+          { "type": "command", "if": "Bash(gh pr merge *)", "command": "bash .claude/hooks/_run-in-ops-root.sh require-design-review-for-ui.sh" },
+          { "type": "command", "if": "Bash(gh pr merge *)", "command": "bash .claude/hooks/_run-in-ops-root.sh block-merge-on-red-ci.sh" },
+          { "type": "command", "if": "Bash(gh issue edit *)", "command": "bash .claude/hooks/_run-in-ops-root.sh detect-role-trigger.sh" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "if": "Bash(gh pr create *)", "command": "bash .claude/hooks/_run-in-ops-root.sh auto-code-review.sh" }
+        ]
+      }
+    ]
+  }
+}

@@ -6,7 +6,7 @@ A multi-project ops repo where your projects reference each other, learn from sh
 
 You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
-Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+Codex CLI is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
@@ -14,7 +14,8 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 ```
 apexyard/
-├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
+├── CODEX.md               # Stack entry point -- Codex reads this first
+├── CLAUDE.md              # Legacy Claude Code compatibility layer
 ├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
 │
 ├── roles/                 # AI agent role definitions
@@ -37,8 +38,12 @@ apexyard/
 │   ├── agdr-migration.md  # Migration-specific AgDR (rollback, downtime, consumers)
 │   └── architecture/      # C4 diagram templates — Context (L1) + Container (L2), Mermaid
 │
-├── .claude/               # Claude Code primitives (the runnable layer)
-│   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
+├── .codex/                # Codex-native primitives (the runnable layer)
+│   ├── config.toml        # Codex project config (hooks, features, profiles)
+│   ├── hooks.json         # Codex hook wiring (PreToolUse, PostToolUse, SessionStart)
+│
+├── .claude/               # Legacy compatibility layer for Claude Code
+│   ├── settings.json      # Claude Code hook wiring (compatibility only)
 │   ├── hooks/             # 18 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, upstream-drift banner
 │   ├── rules/             # 8 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
 │   ├── agents/            # 5 sub-agents — Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
@@ -67,7 +72,7 @@ apexyard/
     └── og/                # Open Graph share-preview PNGs
 ```
 
-> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline. `site/skill.md` (lowercase, distinct from `.claude/skills/<name>/SKILL.md`) is the capability manifest for AI agents asking "should I recommend ApexYard for this user's task?".
+> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Codex / Cursor / Claude Code / Aider / Cline. `site/skill.md` (lowercase, distinct from `.claude/skills/<name>/SKILL.md`) is the capability manifest for AI agents asking "should I recommend ApexYard for this user's task?".
 
 ## Quick Start — fork and go
 
@@ -142,7 +147,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 ## Why ApexYard?
 
-**The problem**: Claude Code is powerful, but without structure it produces inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
+**The problem**: coding agents are powerful, but without structure they produce inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
 
 **The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 19 role definitions to use, battle-tested workflows to follow, and 18 shell hooks that enforce the rules mechanically.
 
@@ -278,4 +283,4 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-Built with real-world experience shipping software with Claude Code.
+Built with real-world experience shipping software with Codex and the OpenAI API.

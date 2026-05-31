@@ -1,13 +1,18 @@
 # =============================================================================
-# ApexYard agent-routing config — adopter's per-agent model + endpoint overrides
+# Legacy ApexYard agent-routing config — Claude compatibility per-agent model + endpoint overrides
 # =============================================================================
 #
-# This file is the **adopter customisation surface** for ApexYard's 24
-# Claude Code sub-agents (19 role-derived personas + 5 utility agents).
-# It lets you override the framework's shipped per-agent model defaults
-# (e.g. switch the QA Engineer from Haiku to Sonnet, or route the Data
-# Analyst through a local Ollama endpoint) in ONE central file kept in
-# your private portfolio repo.
+# This file is the **legacy adopter customisation surface** for
+# ApexYard's Claude Code compatibility sub-agents (19 role-derived
+# personas + 5 utility agents). It lets you override the framework's
+# shipped per-agent model defaults (e.g. switch the QA Engineer from
+# Haiku to Sonnet, or route the Data Analyst through a local Ollama
+# endpoint) in ONE central file kept in your private portfolio repo.
+#
+# Codex-native local experimentation lives in `.codex/config.toml` and
+# Codex's own runtime flags (`--oss`, `--local-provider`). Use this file
+# only when you are maintaining the Claude compatibility layer or
+# migrating a legacy adopter.
 #
 # See docs/agdr/AgDR-0050-agent-runtime-overhaul.md § Axis 3 for the
 # design and docs/multi-project.md § "Centralised agent routing" for
@@ -34,7 +39,8 @@
 # -----------------------------------------------------------------------------
 #
 # - An empty `agents: {}` block is identical to "no file" — the public
-#   fork ships with framework default models that work out-of-box.
+#   fork ships with framework default models that work out-of-box for
+#   the legacy compatibility layer.
 # - Omitted agents inherit the framework default from
 #   .claude/agents/<name>.md frontmatter.
 # - At SessionStart, the sync hook (`apply-agent-routing.sh`) rewrites
@@ -71,26 +77,26 @@ version: 1
 # Per-entry fields:
 #
 #   model                  REQUIRED for an override entry. The model
-#                          specifier (e.g. `opus`, `sonnet`, `haiku`,
+#                          specifier for the compatibility layer (e.g.
+#                          `opus`, `sonnet`, `haiku`,
 #                          `ollama/qwen2.5-coder:14b`, or
 #                          `bedrock/anthropic.claude-opus-4-7`).
 #
 #   endpoint               OPTIONAL. URL of an alternative inference
 #                          endpoint (e.g. a LiteLLM proxy fronting
 #                          Ollama). At SessionStart the sync hook sets
-#                          ANTHROPIC_BASE_URL to this value so Claude
-#                          Code routes the agent's invocations through
-#                          the proxy. v1 is session-scoped — all agents
-#                          on a session share the endpoint. Per-agent
-#                          invocation env scoping is deferred to v2.
-#                          Claude is the framework default; local-model
-#                          routing is adopter-opt-in via Example C
-#                          below. Specific model fit depends on local
-#                          hardware (RAM / GPU / Apple Silicon vs
-#                          Linux), so the framework ships the pattern
-#                          but not a recommendation — adopters pick a
-#                          model that fits their machine + validate it
-#                          against their own workload before committing.
+#                          ANTHROPIC_BASE_URL to this value so the
+#                          Claude compatibility layer routes the
+#                          agent's invocations through the proxy. v1 is
+#                          session-scoped — all agents on a session
+#                          share the endpoint. Per-agent invocation env
+#                          scoping is deferred to v2. Specific model fit
+#                          depends on local hardware (RAM / GPU / Apple
+#                          Silicon vs Linux), so the framework ships
+#                          the pattern but not a recommendation —
+#                          adopters pick a model that fits their
+#                          machine + validate it against their own
+#                          workload before committing.
 #
 #   env                    OPTIONAL. Map of environment variables set
 #                          for the agent's invocations. Supports
@@ -112,7 +118,7 @@ agents: {}
 # Examples (commented — copy + edit one of these to override an agent)
 # -----------------------------------------------------------------------------
 #
-# Example A — single-agent model override (remote Claude API):
+# Example A — single-agent model override (legacy compatibility):
 #
 #   agents:
 #     qa-engineer:
@@ -129,11 +135,12 @@ agents: {}
 #     data-analyst:
 #       model: sonnet            # bump from haiku for richer SQL output
 #
-# Example C — local routing via LiteLLM proxy + Ollama (adopter-opt-in):
+# Example C — local routing via LiteLLM proxy + Ollama (legacy adopter-opt-in):
 #
-# Claude is the framework default. The framework does NOT ship a
-# recommended local model because hardware varies — pick one that fits
-# your machine + validate against your own workload before committing.
+# Claude is the legacy framework default for this compatibility layer.
+# The framework does NOT ship a recommended local model because
+# hardware varies — pick one that fits your machine + validate against
+# your own workload before committing.
 # Four candidate models below (commented), with RAM-at-load estimates
 # at q4 quantization. Uncomment the entry that matches your hardware.
 # All four are reasonable starting points for ticket-manager + data-
@@ -155,7 +162,7 @@ agents: {}
 # Tool-call reliability via LiteLLM is the load-bearing risk — validate
 # before relying on it for production work.
 #
-# Example D — Bedrock / Vertex routing with env vars:
+# Example D — Bedrock / Vertex routing with env vars (legacy shim):
 #
 #   agents:
 #     security-auditor:

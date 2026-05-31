@@ -1,0 +1,4 @@
+[features]
+hooks = true
+child_agents_md = true
+
