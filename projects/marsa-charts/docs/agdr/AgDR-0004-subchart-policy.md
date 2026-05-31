@@ -2,6 +2,10 @@
 
 > In the context of deciding what infrastructure the Marsa chart provides vs. what operators must supply, facing K3s + local-network + MVP-scope constraints, I decided that **v0.1 bundles Postgres and Redis as thin in-chart templates with no BYO option**, accepting that production-grade adopters who want managed databases will be blocked until v1.0 adds the BYO axis.
 
+> **Amendment (2026-05-31, Hisham):** **Redis is NOT bundled.** Marsa does not use Redis, so the "bundle Redis" portion of this decision is moot — no Redis Deployment / Service / PVC ships in the chart. The summary line above and the **Redis** row in the Decision table are retained as the original record but are **superseded by this note**. If Marsa later adopts Redis (caching, queues, sessions), revisit and bundle it then under the same thin-in-chart-template approach this AgDR established for Postgres. Net effect for v0.1: the bundled-component scope is **Postgres only**.
+
+> **Amendment (2026-05-31, Hisham):** This record's references to "TLS" / "cert-manager / TLS" were written with **in-cluster, service-to-service** TLS in mind (e.g. marsa-api ↔ Postgres over the private network) — the concern a service mesh (Linkerd et al.) would address. That concern remains **out of scope** and unaddressed here. **Public-facing ingress HTTPS** (browser → `marsa.<domain>`, certs from a public CA like Let's Encrypt) is a **separate axis** this AgDR did NOT intend to govern; it is decided in [[AgDR-0005-public-ingress-tls]]. The Decision table's TLS row and the "Trigger to revisit (Ingress / TLS)" section below are re-scoped accordingly. **Net effect: bundling public-ingress TLS in the chart does not contradict this record.** The original Context bullets are left as-written — they record the assumptions at decision time, now superseded by this note.
+
 ## Context
 
 - Marsa targets **K3s** specifically (not generic Kubernetes). K3s users are typically self-hosting on a VPS or homelab, single-node, often first-time chart deployers, no managed Postgres on hand.
@@ -26,9 +30,10 @@ Chosen: **Bundle-only, no BYO axis in v0.1.**
 | Component | v0.1 shape |
 |-----------|------------|
 | **Postgres** | Bundled. Thin chart templates derived from the spike: StatefulSet running `postgres:18.3-alpine`, PVC via `volumeClaimTemplates`, init ConfigMap creating only the `marsa` database + user, Secret holding chart-generated passwords. Re-installs reuse the existing Secret to preserve the password. Additional databases (e.g. for an auth provider) get added when those subsystems land. |
-| **Redis** | Bundled. Thin chart templates: Deployment running `redis:7-alpine` (or current LTS at v0.1 cut), PVC for AOF persistence, Service. |
+| **Redis** | ~~Bundled. Thin chart templates: Deployment running `redis:7-alpine`, PVC for AOF persistence, Service.~~ **SUPERSEDED (2026-05-31): not bundled — Marsa does not use Redis. See Amendment.** |
 | **Ingress controller** | Use K3s built-in **Traefik**. No bundled controller, no BYO values exposed. The chart's `Ingress` resource uses the default ingressClassName Traefik registers. |
-| **cert-manager / TLS** | Not bundled, not configured. MVP local-network assumption removes the need. |
+| **In-cluster (service-to-service) TLS** | Out of scope (see Amendment). marsa ↔ Postgres/Redis traffic stays plaintext on the private network for v0.1; encrypting it would mean a service mesh (Linkerd et al.), which is not v0.1 work. |
+| **Public-ingress HTTPS** | Not governed here — decided separately in [[AgDR-0005-public-ingress-tls]]. (Originally this row read "cert-manager / TLS: not bundled"; that wording conflated the two axes — see Amendment.) |
 | **Auth provider** | Out of scope for this AgDR. Zitadel was explored in a prior spike but not adopted; the auth-stack decision lives in a future AgDR. When the auth provider is chosen, the bundled Postgres init script extends to provision its database. |
 
 **Anti-scope (explicit, to prevent scope creep):**
@@ -57,19 +62,21 @@ Add the BYO axis when ANY of:
 - Marsa adoption pattern shifts off K3s onto general k8s clusters
 - A bundled-component CVE requires emergency operator intervention, exposing the lack of "just point at a managed service" escape valve
 
-## Trigger to revisit (Ingress / TLS)
+## Trigger to revisit (Ingress / in-cluster TLS)
 
-Add cert-manager + ingress configurability when ANY of:
+> Public-ingress HTTPS is **no longer a revisit trigger here** — it was split out into [[AgDR-0005-public-ingress-tls]] (see Amendment 2026-05-31). What remains in this AgDR's scope:
 
-- Public-internet deployments enter the roadmap (any HTTPS-from-public-CA need)
+Revisit when ANY of:
+
 - An operator wants non-Traefik ingress (likelier on managed k8s, less likely on K3s)
 - Multi-node K3s clusters with separate ingress nodes become a supported topology
+- In-cluster service-to-service encryption becomes a requirement (compliance, hostile-network, multi-tenant) → evaluate a service mesh
 
 ## Artifacts
 
 - Ticket: [marsa-cloud/marsa-charts#7](https://github.com/marsa-cloud/marsa-charts/issues/7)
 - Spike source: prior Postgres-only spike (provided in conversation 2026-05-29) — Namespace + Secret + ConfigMap init script + StatefulSet on `postgres:18.3-alpine` + Service + PVC
-- Related AgDRs: [[AgDR-0001-chart-structure]] (umbrella chart contains all of this), [[AgDR-0002-chart-versioning]] (chart version bumps when subchart bumps)
+- Related AgDRs: [[AgDR-0001-chart-structure]] (umbrella chart contains all of this), [[AgDR-0002-chart-versioning]] (chart version bumps when subchart bumps), [[AgDR-0005-public-ingress-tls]] (public-ingress HTTPS — split out per the 2026-05-31 amendment)
 - Related open tickets: [#3](https://github.com/marsa-cloud/marsa-charts/issues/3) (CI), [#4](https://github.com/marsa-cloud/marsa-charts/issues/4) (README — document anti-scope explicitly)
 - Author: Hisham (Tech Lead) on behalf of Mohammad Gomaa
 - Date: 2026-05-29
