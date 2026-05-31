@@ -1,0 +1,10 @@
+{
+  "portfolio": {
+    "registry": "../apexyard-portfolio/apexyard.projects.yaml",
+    "projects_dir": "../apexyard-portfolio/projects",
+    "ideas_backlog": "../apexyard-portfolio/projects/ideas-backlog.md"
+  },
+  "tracker": {
+    "kind": "none"
+  }
+}
