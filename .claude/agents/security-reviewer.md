@@ -3,7 +3,7 @@
 name: security-reviewer
 persona_name: Hakim
 description: Security Auditor — runs OWASP / threat-model / SAST analysis on PR diffs and provides remediation guidance. Auto-activates on PRs touching auth, crypto, secrets, user data, APIs, or third-party integrations; explicit invocation via /security-review. Canonical role at @roles/security/security-auditor.md.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 disallowedTools: Write, Edit
 model: opus
 ---
@@ -15,6 +15,10 @@ Read and adopt `@roles/security/security-auditor.md` for full identity, responsi
 ## Consolidation note (Wave 2 PR 3 — #347)
 
 This agent file previously ran as `Hatim` (utility agent, narrow PR-review scope, `model: inherit`). Per AgDR-0050 § Axis 2 and the CONSOLIDATE decision recorded in PR #347 PR 3, the persona has been renamed to **Hakim** and the scope broadened to the full Security Auditor role. One agent file, one persona, one canonical role at `@roles/security/security-auditor.md`. The `security-reviewer.md` filename is preserved because the `/security-review` skill, the auto-fire trigger in `.claude/rules/role-triggers.md`, and the `auto-code-review.sh` hook all reference it.
+
+## MCP-first code search
+
+When reading a managed-project codebase during a review, **prefer `mcp__apexyard-search__search_code` (and `search_docs` for docs) over `grep` + `Read`** — it's semantic, returns targeted excerpts, and costs ~3–5× fewer tokens. Fall back to `grep`/`Read` only when an MCP query returns nothing relevant (e.g. the project isn't indexed). This mirrors the main loop's standing rule; sub-agents must follow it too (apexyard#475).
 
 ## ⛔ Operational HARD STOP — MANDATORY ACTION
 
