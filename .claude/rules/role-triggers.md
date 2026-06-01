@@ -1,6 +1,6 @@
 # Role Triggers — When to Activate Which Role
 
-ApexYard ships **19 role definitions** in `roles/{department}/`. They are not all loaded into every session (context efficiency — 19 files × ~120 lines averages out to ~22k tokens, most of which are idle during any given task). Instead, a role is **activated** when a specific condition is met: you read the role file, adopt its identity, responsibilities, and constraints for the duration of the task, then hand off to the next role in the chain.
+ApexYard ships **20 role definitions** in `roles/{department}/`. They are not all loaded into every session (context efficiency — 20 files × ~120 lines averages out to ~23k tokens, most of which are idle during any given task). Instead, a role is **activated** when a specific condition is met: you read the role file, adopt its identity, responsibilities, and constraints for the duration of the task, then hand off to the next role in the chain.
 
 ## Activation Table
 
@@ -8,6 +8,7 @@ ApexYard ships **19 role definitions** in `roles/{department}/`. They are not al
 |------|------|----------------|
 | **Head of Engineering** | `roles/engineering/head-of-engineering.md` | Architecture review requested · new tech stack addition · cross-project engineering call · escalation from a Tech Lead |
 | **Tech Lead** | `roles/engineering/tech-lead.md` | Technical design for a new feature · planning phase in SDLC · code review approval gate · implementation task breakdown |
+| **Solution Architect** | `roles/architecture/solution-architect.md` | A technical design / migration AgDR / feature spec is ready for review (before Build) · `/design-review` invoked · a PR carries a design artifact |
 | **Backend Engineer** | `roles/engineering/backend-engineer.md` | Implementation phase on backend code (domain / application / infrastructure layers) · API work · database schema changes |
 | **Frontend Engineer** | `roles/engineering/frontend-engineer.md` | Implementation phase on UI code · component work · design-system integration · accessibility review |
 | **QA Engineer** | `roles/engineering/qa-engineer.md` | **Ticket enters QA state after merge** · acceptance-criteria verification · bug triage · regression testing |
@@ -82,6 +83,7 @@ This is a **prose convention**, not a mechanically-enforced format. The sibling 
 | PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*` | Security Auditor |
 | PR diff touches `.github/workflows/**`, `golden-paths/pipelines/**` | Platform Engineer |
 | PR diff touches `docs/agdr/**` or adds a new dependency | Tech Lead |
+| Edit/PR touches a design artifact (technical design, migration AgDR, feature spec / PRD) | Solution Architect |
 | Production incident / SLO breach mentioned | SRE |
 | New PRD or spec being drafted | Product Manager |
 | Roadmap question or prioritization call | Head of Product |
@@ -117,6 +119,8 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 | From → To | Artefact |
 |-----------|----------|
 | Product Manager → Tech Lead | Approved PRD with acceptance criteria |
+| Tech Lead → Solution Architect | Authored technical design / migration AgDR / feature spec to review |
+| Solution Architect → Tech Lead / Engineers | Design review + sign-off (the Design→Build gate) |
 | Head of Design → UX/UI Designer | Design system tokens + principles |
 | UX Designer → UI Designer | User flows + wireframes |
 | UI Designer → Frontend Engineer | Component specs + design tokens |
@@ -157,7 +161,10 @@ Triggers wired in v1 (me2resh/apexyard#206):
 | Diff/path    | `PreToolUse` on `Edit` / `Write` / `MultiEdit` | path contains `auth/`, `crypto/`, `secrets/`, `.env*` | Security Auditor |
 | Diff/path    | same | path under `.github/workflows/` or `golden-paths/pipelines/` | Platform Engineer |
 | Diff/path    | same | path under `docs/agdr/` | Tech Lead |
+| Diff/path    | same | path matches a design artifact (`*technical-design*.md`, `*tech-design*.md`, `**/designs/**`, `**/prds/**`, `*prd*.md`, `*feature-spec*.md`, `docs/agdr/*migration*.md`) | Solution Architect |
 | Prompted     | `UserPromptSubmit` | "act as the X" / "as the X" / "put on your X hat" (case-insensitive, X matches any role in the activation table) | the named role |
+
+A migration AgDR fires **both** the Tech Lead trigger (`docs/agdr/**`, author) and the Solution Architect trigger (`docs/agdr/*migration*.md`, reviewer) — the two are additive by design: Hisham authors, Tariq reviews.
 
 Triggers from the table above that are **not** yet mechanically detected (e.g. "production incident mentioned" → SRE, "new PRD drafted" → Product Manager) still rely on self-discipline; the hook can be extended without changing the surrounding wiring.
 

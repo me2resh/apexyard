@@ -4,14 +4,14 @@
 
 ## What is it?
 
-ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. 55 skills grouped by what you're trying to do, plus a persistent decision-log across the whole portfolio.
+ApexYard adds the reviews, guardrails, and process behind every change you make with Claude Code. Catch the mistakes before your customers do — automatically, without checking every commit yourself. 57 skills grouped by what you're trying to do, plus a persistent decision-log across the whole portfolio.
 
 ## What can it do?
 
 - **Automatic code review.** Every change — yours or your contractor's — gets a senior-engineering-level review before it ships
 - **Launch-readiness checks.** Find out what's missing across security, performance, accessibility, monitoring, docs before customers tell you
 - **One inbox across all your products.** Every PR, issue, comment, blocker in one screen, no tab-juggling
-- **A real engineering team's worth of reviewers.** Touch auth code → a security reviewer takes a look. Touch the database → someone walks you through the rollback plan. 19 role definitions, 23 specialised reviewer agents
+- **A real engineering team's worth of reviewers.** Touch auth code → a security reviewer takes a look. Touch the database → someone walks you through the rollback plan. 20 role definitions, 24 specialised reviewer agents
 - **Guardrails that fire themselves.** 32 small scripts catch ticket-first edits, missing rollback plans, secrets in code, red CI before merge — so you don't have to remember
 - **A decision-log that follows you.** Every meaningful technical decision is recorded with reasoning — search it next year, the answer's there
 
@@ -69,13 +69,13 @@ claude
 
 ### Reviews from a full engineering team — without hiring one
 
-The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. Behind the scenes: 19 role definitions across 5 departments, each with its own checklist and boundaries.
+The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. Behind the scenes: 20 role definitions across 5 departments, each with its own checklist and boundaries.
 
-### Tools for every step of shipping software · 55 slash commands
+### Tools for every step of shipping software · 57 slash commands
 
 Want to adopt a project you've inherited? `/handover`. Want to capture an idea before it evaporates? `/idea`. Want to know what's waiting on you across every product? `/inbox`. Want a launch-readiness check before customers see it? `/launch-check`. 54 of these in total — each one is a focused workflow with safety rails.
 
-### Guardrails that stop bad code from shipping · 36 hooks
+### Guardrails that stop bad code from shipping · 37 hooks
 
 Every edit needs a real ticket behind it. Every database change needs a rollback plan. Every merge needs a real review. Secrets in code get caught before they're committed. Mechanically enforced — 32 small scripts that fire at the right moments.
 

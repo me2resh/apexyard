@@ -204,6 +204,32 @@ detect_path_triggers() {
         "edit touches docs/agdr/ (architecture decision)"
       ;;
   esac
+
+  # Solution Architect — design artifacts (technical design / migration AgDR /
+  # feature spec / PRD). Reviews the design before Build. Patterns mirror the
+  # require-architecture-review.sh DESIGN_GLOBS (kept narrow on purpose — the
+  # reviewer no-ops cheaply on a false positive). The migration-AgDR case
+  # below is intentionally additive to the Tech Lead docs/agdr/ trigger above:
+  # a migration AgDR fires BOTH (Hisham authors, Tariq reviews).
+  case "$rel" in
+    *technical-design*.md|*tech-design*.md|\
+    designs/*|*/designs/*|\
+    prds/*|*/prds/*|*prd*.md|\
+    *feature-spec*.md)
+      emit_banner \
+        "Solution Architect" \
+        "roles/architecture/solution-architect.md" \
+        "edit touches a design artifact (technical design / feature spec)"
+      ;;
+  esac
+  case "$rel" in
+    docs/agdr/*migration*.md|*/docs/agdr/*migration*.md)
+      emit_banner \
+        "Solution Architect" \
+        "roles/architecture/solution-architect.md" \
+        "edit touches a migration AgDR (design to review before Build)"
+      ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -268,6 +294,7 @@ penetration tester|roles/security/penetration-tester.md
 pen tester|roles/security/penetration-tester.md
 head of security|roles/security/head-of-security.md
 tech lead|roles/engineering/tech-lead.md
+solution architect|roles/architecture/solution-architect.md
 head of engineering|roles/engineering/head-of-engineering.md
 backend engineer|roles/engineering/backend-engineer.md
 frontend engineer|roles/engineering/frontend-engineer.md

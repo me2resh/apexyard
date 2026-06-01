@@ -47,6 +47,7 @@ Each role has a **persona name** — a short identifier used in conversation, PR
 | Department | Roles (with persona names) | Path |
 |------------|----------------------------|------|
 | Engineering | Khalid (Head), Hisham (Tech Lead), Karim (Backend), Yasmin (Frontend), Salim (QA), Adel (Platform), Saif (SRE) | `roles/engineering/` |
+| Architecture | Tariq (Solution Architect) | `roles/architecture/` |
 | Product | Omar (Head), Mariam (PM), Hanan (Product Analyst) | `roles/product/` |
 | Design | Maha (Head), Nour (UI Designer), Iman (UX Designer) | `roles/design/` |
 | Security | Faisal (Head), Hakim (Security Auditor), Hamza (Pen Tester) | `roles/security/` |
@@ -193,14 +194,14 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 24 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
+| Hooks | `.claude/hooks/` | 25 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, upstream-drift banner, leak protection, bootstrap-skill exemption |
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
-| Agents | `.claude/agents/` | 23 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision. |
-| Skills | `.claude/skills/` | 54 slash commands — see the full list below |
+| Agents | `.claude/agents/` | 24 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect). |
+| Skills | `.claude/skills/` | 57 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (54)
+### Available skills (57)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -225,6 +226,8 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
 | `/security-review` | Invoke the Security Reviewer agent (Hakim) on a PR |
+| `/design-review` | Invoke the Solution Architect agent (Tariq) on a technical design / migration AgDR / feature spec (the non-code analog of `/code-review`) |
+| `/approve-architecture` | Record per-PR architecture-review approval for design-artifact PRs (required by the architecture gate) |
 | `/audit-deps` | Audit dependencies for vulnerabilities, outdated packages, licences |
 | `/write-spec` | Generate a PRD or feature spec from a problem statement |
 | `/validate-idea` | Lightweight 5-question pre-spec gate before `/write-spec` |
@@ -296,7 +299,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (54 slash commands) | `.claude/skills/` |
+| Skills (57 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

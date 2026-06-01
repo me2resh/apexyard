@@ -2,8 +2,8 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
-> one place for all your products, built on top of Claude Code. 55 skills,
-> 36 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
+> one place for all your products, built on top of Claude Code. 57 skills,
+> 37 hooks, 20 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
 This file is the LLM/agent-friendly concatenation of the apexyard marketing
@@ -114,7 +114,7 @@ framework refuses to let you touch the database until the plan is real
 The reviewer changes based on what you're working on. Touching auth code?
 A security reviewer takes a look. Touching the database? Someone who
 specialises in database changes walks you through the rollback plan.
-Behind the scenes: 19 role definitions across 5 departments, each with
+Behind the scenes: 20 role definitions across 5 departments, each with
 its own checklist and boundaries.
 
 ### Tools for every step of shipping software
@@ -242,9 +242,9 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (55
-   slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
-   `.claude/hooks/` (36 mechanical enforcement scripts).
+2. **Capability layer** — the runnable spec: `.claude/skills/` (57
+   slash commands), `.claude/agents/` (24 sub-agents incl. Rex), and
+   `.claude/hooks/` (37 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
    `.claude/project-config.json` (shallow merge).
@@ -294,7 +294,7 @@ Free with any project you don't want named publicly.
 
 # Skills (https://yard.apexscript.com/skills)
 
-55 slash commands grouped by what you're trying to do — not by what's
+57 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
 `.claude/skills/<name>/`.
 

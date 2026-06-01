@@ -267,6 +267,67 @@ in=$(jq -nc \
 run_case "hybrid class-aware: Pen Tester prompted → isolated-work-class banner" 0 \
   "Pen Tester.*Isolated-work-class.*subagent_type: penetration-tester" "$in"
 
+# --- (5) Solution Architect (Tariq) — design-artifact triggers --------------
+
+# 5a. Edit on a technical-design doc → Solution Architect banner.
+in=$(jq -nc \
+  --arg p "projects/foo/docs/technical-design-checkout.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "path trigger: technical-design doc fires Solution Architect" 0 \
+  "ROLE TRIGGER: Solution Architect.*roles/architecture/solution-architect\\.md" "$in"
+
+# 5b. Edit under a designs/ dir → Solution Architect.
+in=$(jq -nc \
+  --arg p "projects/foo/designs/payments.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Write", tool_input:{file_path:$p}}')
+run_case "path trigger: designs/ dir fires Solution Architect" 0 \
+  "ROLE TRIGGER: Solution Architect" "$in"
+
+# 5c. Edit on a PRD → Solution Architect.
+in=$(jq -nc \
+  --arg p "projects/foo/prds/onboarding.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "path trigger: prds/ fires Solution Architect" 0 \
+  "ROLE TRIGGER: Solution Architect" "$in"
+
+# 5d. A migration AgDR fires BOTH Tech Lead (author) AND Solution Architect
+#     (reviewer) — the two triggers are additive by design.
+in=$(jq -nc \
+  --arg p "workspace/foo/docs/agdr/AgDR-0032-cognito-fresh-pool-migration.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "path trigger: migration AgDR fires Tech Lead" 0 \
+  "ROLE TRIGGER: Tech Lead" "$in"
+run_case "path trigger: migration AgDR also fires Solution Architect" 0 \
+  "ROLE TRIGGER: Solution Architect" "$in"
+
+# 5e. Solution Architect is isolated-work-class — banner instructs SPAWN with
+#     subagent_type: solution-architect.
+in=$(jq -nc \
+  --arg p "projects/foo/docs/technical-design-x.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "hybrid class-aware: Solution Architect → isolated-work-class banner" 0 \
+  "Solution Architect.*Isolated-work-class.*subagent_type: solution-architect" "$in"
+
+# 5f. Prompted "as the Solution Architect" → Solution Architect banner.
+in=$(jq -nc \
+  --arg prm "as the solution architect, review the proposed design" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'as the solution architect' fires Solution Architect" 0 \
+  "Solution Architect.*Isolated-work-class.*subagent_type: solution-architect" "$in"
+
+# 5g. An ordinary source file does NOT fire the Solution Architect.
+in=$(jq -nc \
+  --arg p "src/handlers/checkout.ts" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+got=$(printf '%s' "$in" | bash "$HOOK" 2>&1 >/dev/null)
+if echo "$got" | grep -q "Solution Architect"; then
+  echo "FAIL [path trigger: source file must not fire Solution Architect]" >&2
+  FAIL=$((FAIL+1)); FAILED="${FAILED}sa-source-noise "
+else
+  echo "PASS [path trigger: source file does not fire Solution Architect]"
+  PASS=$((PASS+1))
+fi
+
 # --- Summary -----------------------------------------------------------------
 
 echo ""

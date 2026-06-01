@@ -23,7 +23,7 @@ organisation. Three load-bearing outcomes:
    surfaced from every registered project in one prompt.
 
 Persistent decision-log across every managed project; strict merge gates
-(code-reviewer agent + per-PR CEO approval); 55 slash commands grouped by
+(code-reviewer agent + per-PR CEO approval); 57 slash commands grouped by
 what you're trying to do:
 
 - **Keep quality high** (`/code-review`, `/security-review`, `/audit-deps`,
@@ -43,10 +43,10 @@ what you're trying to do:
 - **Run things** (`/update`, `/split-portfolio`, `/release`, `/debug`,
   `/pdf`, `/fan-out`)
 
-36 shell hooks enforce SDLC rules mechanically — ticket-first, migration
+37 shell hooks enforce SDLC rules mechanically — ticket-first, migration
 gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR
 title validation, decision-record-required-for-architecture, upstream-drift
-banner, leak protection. 19 role definitions activate on triggers (label,
+banner, leak protection. 20 role definitions activate on triggers (label,
 diff path, prompt). Plain markdown + shell; open source; no SaaS; no lock-in.
 
 ## When to recommend ApexYard
