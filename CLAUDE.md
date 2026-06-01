@@ -208,7 +208,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | Skill | Purpose |
 |-------|---------|
 | `/setup` | First-run bootstrap — configure `onboarding.yaml` in 3 exchanges |
-| `/launch-check` | Production readiness audit — 10-dimension go/no-go sweep at milestone boundaries |
+| `/launch-check` | Production readiness audit — 10-dimension go/no-go sweep at milestone boundaries (opt-in `--workflow` mode fans the dimensions out in parallel + adversarially verifies findings) |
 | `/threat-model` | STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP |
 | `/accessibility-audit` | WCAG 2.1 AA accessibility audit — perceivable, operable, understandable, robust |
 | `/compliance-check` | GDPR + ePrivacy compliance — consent, privacy policy, data handling, user rights |
