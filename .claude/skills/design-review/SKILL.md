@@ -42,31 +42,40 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 ## Review Lens
 
 ### Quality attributes / NFRs
+
 - NFRs stated and addressed; targets concrete, not vague.
 
 ### Design patterns & structure
+
 - Pattern fits the problem; fits the established architecture; dependencies point the right way.
 
 ### Technical debt
+
 - Incurred debt is explicit, justified, and has a paydown path — no silent debt.
 
 ### Decisions (AgDR linkage) — BLOCKING
+
 - Every significant technical decision (library, framework, storage, integration, pattern) is captured in an AgDR.
 - A real decision with no AgDR → REQUEST CHANGES (run `/decide` first).
 
 ### Risk
+
 - Failure modes, blast radius, and rollback addressed.
 
 ### Trade-off analysis
+
 - Alternatives genuinely considered; trade-offs of the chosen path stated.
 
 ### Requirements traceability
+
 - Design satisfies the PRD / acceptance criteria; no scope creep, no uncovered requirement.
 
 ### Migration safety (migration AgDRs)
+
 - Data-loss risk, downtime, lock contention, cross-service consumers, observability, reversible cutover.
 
 ### Adopter Handbooks
+
 - Discover + apply the public `handbooks/**` tree and the private `custom-handbooks/**` layer (framework defaults unless overridden in the sibling portfolio repo). Blocking handbooks turn a finding into a required change.
 
 ## Output

@@ -57,37 +57,45 @@ Explicit invocation: `/design-review <pr-or-path>`.
 Review the design against each competency. Mark each Pass / Concern / Fail with a one-line rationale citing the specific section of the design.
 
 ### 1. Quality attributes / NFRs
+
 - [ ] NFRs stated (performance, scalability, availability, security posture, observability)
 - [ ] Targets are concrete, not vague ("p99 < 200ms", not "should be fast")
 - [ ] The design actually addresses each stated NFR
 
 ### 2. Design patterns & structure
+
 - [ ] Pattern fits the problem (no over- / under-engineering)
 - [ ] Fits the established architecture (layering, separation of concerns)
 - [ ] Dependencies point the right way (domain has no infra deps)
 
 ### 3. Technical debt
+
 - [ ] Any incurred debt is explicit, justified, and has a paydown path
 - [ ] No silent debt smuggled in as "we'll fix it later" with no ticket
 
 ### 4. Decisions (AgDR linkage) — ⛔ BLOCKING
+
 - [ ] Every significant technical decision (library, framework, storage, integration, pattern) is captured in an AgDR
 - [ ] The linked AgDR(s) actually cover the decisions in the design
 - A real decision with no AgDR → **CHANGES REQUESTED** (run `/decide` first)
 
 ### 5. Risk
+
 - [ ] Failure modes + blast radius addressed
 - [ ] Rollback path stated (and, for migrations, rehearsed)
 
 ### 6. Trade-off analysis
+
 - [ ] Alternatives genuinely considered (not a single option dressed as a decision)
 - [ ] Trade-offs of the chosen path are stated
 
 ### 7. Requirements traceability
+
 - [ ] Design satisfies the PRD / acceptance criteria it claims to
 - [ ] No requirement without design coverage; no design without a requirement (scope creep)
 
 ### 8. Migration safety (when the artifact is a migration AgDR)
+
 - [ ] Data-loss risk, downtime, lock contention addressed
 - [ ] Cross-service consumers identified
 - [ ] Observability during cutover + dormant-data handling
