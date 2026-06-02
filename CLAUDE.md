@@ -198,10 +198,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 11 modular rule files (AgDR triggers, code standards, git conventions, leak protection, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 24 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect). |
-| Skills | `.claude/skills/` | 57 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 59 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (57)
+### Available skills (59)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -234,6 +234,8 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/plan-initiative` | Initiative → milestones → tasks: Socratic interview, DAG, topo-sorted sequence, two-pass filing with `blocks`/`blocked by` cross-refs |
 | `/feature` | Create a structured feature ticket (user story + acceptance criteria) |
 | `/bug` | Create a structured bug ticket (Given/When/Then + repro + severity) |
+| `/report-apexyard-bug` | Report a bug in the apexyard **framework itself** upstream to `me2resh/apexyard` (leak-scrubbed) — distinct from `/bug` |
+| `/request-apexyard-feature` | Request a feature/enhancement for the apexyard **framework itself** upstream to `me2resh/apexyard` — distinct from `/feature` |
 | `/task` | Create a structured technical task ticket (driver + scope + ACs) |
 | `/tickets-batch` | Bulk-file 5–20 structured tickets in one shared-context flow |
 | `/migration` | Create a labelled migration ticket + migration AgDR (required by migration gate) |
@@ -299,7 +301,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (57 slash commands) | `.claude/skills/` |
+| Skills (59 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
