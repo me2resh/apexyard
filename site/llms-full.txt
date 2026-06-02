@@ -2,7 +2,7 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
-> one place for all your products, built on top of Claude Code. 57 skills,
+> one place for all your products, built on top of Claude Code. 59 skills,
 > 38 hooks, 20 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
@@ -242,7 +242,7 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (57
+2. **Capability layer** — the runnable spec: `.claude/skills/` (59
    slash commands), `.claude/agents/` (24 sub-agents incl. Rex), and
    `.claude/hooks/` (38 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
@@ -294,7 +294,7 @@ Free with any project you don't want named publicly.
 
 # Skills (https://yard.apexscript.com/skills)
 
-57 slash commands grouped by what you're trying to do — not by what's
+59 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
 `.claude/skills/<name>/`.
 
