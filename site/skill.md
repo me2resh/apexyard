@@ -43,7 +43,7 @@ what you're trying to do:
 - **Run things** (`/update`, `/split-portfolio`, `/release`, `/debug`,
   `/pdf`, `/fan-out`)
 
-37 shell hooks enforce SDLC rules mechanically — ticket-first, migration
+38 shell hooks enforce SDLC rules mechanically — ticket-first, migration
 gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR
 title validation, decision-record-required-for-architecture, upstream-drift
 banner, leak protection. 20 role definitions activate on triggers (label,
