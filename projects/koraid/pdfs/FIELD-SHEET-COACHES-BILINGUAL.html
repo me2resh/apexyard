@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>KoraID Coach Field Sheet — Calibration Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    @page { size: A4; margin: 14mm 12mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.45;
+      color: #111;
+      max-width: 210mm;
+      margin: 0 auto;
+      padding: 8mm;
+    }
+    .ar { font-family: "Noto Sans Arabic", Tahoma, sans-serif; direction: rtl; text-align: right; }
+    h1 { font-size: 18pt; margin: 0 0 4px; color: #0d3b2e; }
+    .subtitle { font-size: 10pt; color: #444; margin-bottom: 12px; }
+    h2 {
+      font-size: 12pt;
+      margin: 16px 0 8px;
+      padding: 6px 10px;
+      background: #0d3b2e;
+      color: #fff;
+      border-radius: 4px;
+      page-break-after: avoid;
+    }
+    h3 { font-size: 10.5pt; margin: 12px 0 6px; color: #0d3b2e; page-break-after: avoid; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #bbb;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+    th { background: #e8f0ec; font-weight: 700; }
+    tr:nth-child(even) td { background: #f8faf9; }
+    .col-en { width: 48%; }
+    .col-ar { width: 48%; }
+    .badge {
+      display: inline-block;
+      background: #c9a227;
+      color: #111;
+      font-weight: 700;
+      font-size: 9pt;
+      padding: 2px 8px;
+      border-radius: 3px;
+      margin-left: 6px;
+    }
+    .warn {
+      background: #fff3cd;
+      border: 1px solid #e6c200;
+      padding: 8px 10px;
+      border-radius: 4px;
+      margin: 8px 0;
+      font-size: 9.5pt;
+    }
+    .diagram {
+      font-family: ui-monospace, monospace;
+      font-size: 9pt;
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre;
+      line-height: 1.3;
+      margin: 8px 0;
+    }
+    .check { font-size: 11pt; }
+    ul { margin: 4px 0 8px; padding-left: 18px; }
+    .cover {
+      text-align: center;
+      padding: 24mm 8mm 16mm;
+      page-break-after: always;
+    }
+    .cover h1 { font-size: 22pt; }
+    .cover .ar-title { font-size: 20pt; margin-top: 12px; }
+    .footer-note { font-size: 8.5pt; color: #555; margin-top: 16px; border-top: 1px solid #ccc; padding-top: 8px; }
+    @media print {
+      body { padding: 0; }
+      h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>KoraID — Coach Field Sheet</h1>
+  <p class="ar ar-title">كورا آي دي — ورقة الملعب للمدربين</p>
+  <p><strong>Calibration study</strong> · Pitch IQ / 076 sprint first</p>
+  <p class="ar"><strong>دراسة المعايرة</strong> · سباق 20 متر (076) أولاً</p>
+  <p style="margin-top:20px;font-size:11pt"><strong>Target:</strong> ≥ 40 valid trials per drill · <span class="ar">40+ محاولة صحيحة لكل تمرين</span></p>
+  <p>Tickets: 076 sprint · 080 jump · 081 agility · 082 gold (×5)</p>
+</section>
+
+<h2>1 — Why we are doing this | لماذا</h2>
+<table>
+  <tr><th class="col-en">English</th><th class="col-ar ar">العربية</th></tr>
+  <tr>
+    <td>Prove Pitch IQ (AI from phone video) is accurate enough before we say <strong>“verified”</strong> in the app or to scouts.</td>
+    <td class="ar">نثبت إن Pitch IQ (الذكاء الاصطناعي من فيديو الموبايل) دقيق كفاية قبل «تم التحقق» في التطبيق أو للكشافين.</td>
+  </tr>
+  <tr>
+    <td><strong>Sprint (076) is first</strong> — 40+ trials unlock the next product phase.</td>
+    <td class="ar"><strong>سباق 20 م (076) أولاً</strong> — 40+ محاولة تفتح المرحلة الجاية.</td>
+  </tr>
+  <tr>
+    <td><strong>You are ground truth</strong> — stopwatch, photocells, or coach count. App records the AI estimate.</td>
+    <td class="ar"><strong>أنت مصدر الحقيقة</strong> — ساعة، فوتوسيل، أو عدّ المدرب. التطبيق يسجّل تقدير AI.</td>
+  </tr>
+</table>
+
+<h2>2 — Who does what | الأدوار</h2>
+<table>
+  <tr><th>Role</th><th class="col-en">English</th><th class="col-ar ar">العربية</th></tr>
+  <tr><td><strong>Coach</strong></td><td>Runs drill, measures GT, fills CSV, checks filming</td><td class="ar">يشغّل التمرين، يقيس الحقيقة، يملأ CSV، يتأكد من التصوير</td></tr>
+  <tr><td><strong>Player</strong></td><td>Completes drill in KoraID + uploads video</td><td class="ar">يكمّل التمرين في التطبيق ويرفع الفيديو</td></tr>
+  <tr><td><strong>Engineer</strong></td><td>Pulls AI columns, runs report scripts (office)</td><td class="ar">يسحب أعمدة AI ويشغّل التقارير (مكتب)</td></tr>
+</table>
+
+<h2>3 — Equipment (every session) | المعدات</h2>
+<table>
+  <tr><th class="check">☐</th><th class="col-en">Item</th><th class="col-ar ar">البند</th></tr>
+  <tr><td>☐</td><td>20 m tape + cones (0 m and 20 m marks)</td><td class="ar">شريط 20 م + أقماع (0 م و 20 م)</td></tr>
+  <tr><td>☐</td><td>Tripod, hip height (~1 m)</td><td class="ar">حامل ثلاثي (~ارتفاع الورك)</td></tr>
+  <tr><td>☐</td><td>Filming phone — <strong>60 fps</strong> if possible</td><td class="ar">موبايل تصوير — <strong>60 fps</strong></td></tr>
+  <tr><td>☐</td><td><strong>Photocells</strong> OR high-fps phone for frame review</td><td class="ar"><strong>فوتوسيل</strong> أو موبايل 60 fps لمراجعة الإطارات</td></tr>
+  <tr><td>☐</td><td>Stopwatch</td><td class="ar">ساعة إيقاف</td></tr>
+  <tr><td>☐</td><td>CSV template (one file per drill)</td><td class="ar">ملف CSV (ملف لكل تمرين)</td></tr>
+  <tr><td>☐</td><td>Contrast kit; note lighting (AM / indoor / floodlights)</td><td class="ar">لبس واضح؛ سجّل الإضاءة</td></tr>
+</table>
+<p><strong>Jump:</strong> force plate or jump mat if available · <span class="ar">القفز: بلاتة قوة إن وُجدت</span><br />
+<strong>Agility:</strong> 4×5 m cones per app · <span class="ar">الرشاقة: 4×5 م حسب التطبيق</span></p>
+
+<h2>4 — Every trial (7 steps) | كل محاولة</h2>
+<table>
+  <tr><th>#</th><th class="col-en">English</th><th class="col-ar ar">العربية</th></tr>
+  <tr><td>1</td><td>Player opens the <strong>correct drill</strong> in KoraID.</td><td class="ar">اللاعب يفتح <strong>التمرين الصح</strong> في التطبيق.</td></tr>
+  <tr><td>2</td><td>Setup: cones, 20 m, tripod, <strong>side view ~90°</strong>.</td><td class="ar">أقماع، 20 م، حامل، <strong>تصوير جانبي ~90°</strong>.</td></tr>
+  <tr><td>3</td><td>Player performs at <strong>full effort</strong>.</td><td class="ar">تنفيذ <strong>بجهد كامل</strong>.</td></tr>
+  <tr><td>4</td><td>Player enters <strong>self-reported result</strong> in app.</td><td class="ar">يدخل <strong>نتيجته</strong> في التطبيق.</td></tr>
+  <tr><td>5</td><td>Player <strong>uploads video</strong> (wait for upload + CV if shown).</td><td class="ar"><strong>يرفع الفيديو</strong> (استنى الرفع وCV).</td></tr>
+  <tr><td>6</td><td>Coach records <strong>ground truth</strong> immediately.</td><td class="ar">المدرب يسجّل <strong>الحقيقة</strong> فوراً.</td></tr>
+  <tr><td>7</td><td>Fill <strong>one CSV row</strong> (no <code>EXAMPLE_</code> in trial_id).</td><td class="ar"><strong>صف CSV واحد</strong> (ممنوع EXAMPLE_).</td></tr>
+</table>
+<div class="warn">
+  <strong>Do NOT</strong> · <span class="ar"><strong>ممنوع:</strong></span>
+  front-only shaky video · one video for many players · YouTube clips as trials
+</div>
+
+<h2>5 — Sprint 20 m (076) <span class="badge">START HERE</span></h2>
+<table>
+  <tr><th></th><th class="col-en">English</th><th class="col-ar ar">العربية</th></tr>
+  <tr><td><strong>Need</strong></td><td><strong>≥ 40 trials</strong> (e.g. 15 players × 3)</td><td class="ar"><strong>40+ محاولة</strong></td></tr>
+  <tr><td><strong>Film</strong></td><td>Side 90°; player visible start→finish; tripod hip height; 60 fps</td><td class="ar">جانبي 90°؛ لاعب واضح؛ حامل؛ 60 fps</td></tr>
+  <tr><td><strong>Ground truth</strong></td><td>Photocell OR frame review at 20 m (seconds, e.g. 3.45)</td><td class="ar">فوتوسيل أو مراجعة إطار عند 20 م</td></tr>
+  <tr><td><strong>CSV</strong></td><td colspan="2"><code>sprint-calibration-v1.csv</code> — <code>ground_truth_seconds</code>, <code>ai_seconds</code>, <code>cv_method</code>, <code>cv_confidence</code></td></tr>
+</table>
+<div class="diagram">        [Tripod + phone]
+              |
+       side view ~90°
+              v
+    0m -------- 20m --------&gt;  lane
+              ^
+         player runs --&gt;</div>
+
+<h2>6 — Jump (080) · Agility (081) · Gold (082)</h2>
+<table>
+  <tr><th>Drill</th><th class="col-en">Film + ground truth</th><th class="col-ar ar">التصوير + الحقيقة</th><th>CSV</th></tr>
+  <tr><td><strong>Jump</strong></td><td>Side CMJ; feet visible; GT height cm (plate/mat/manual)</td><td class="ar">قفزة جانبية؛ ارتفاع بالسم</td><td>jump-calibration-v1.csv</td></tr>
+  <tr><td><strong>Agility</strong></td><td>Full shuttle 12–18 s; stopwatch; valid 8–25 s</td><td class="ar">شاتل كامل؛ 8–25 ث</td><td>agility-calibration-v1.csv</td></tr>
+  <tr><td><strong>Juggling</strong></td><td>Ball visible; coach counts touches</td><td class="ar">عدّ اللمسات</td><td>gold-juggling-…</td></tr>
+  <tr><td><strong>Passing</strong></td><td>All passes in frame; coach count</td><td class="ar">عدّ التمريرات</td><td>gold-passing-…</td></tr>
+  <tr><td><strong>Shooting</strong></td><td>Protocol shots; coach count</td><td class="ar">عدّ التسديد</td><td>gold-shooting-…</td></tr>
+  <tr><td><strong>Dribbling</strong></td><td>Slalom; stopwatch seconds</td><td class="ar">ساعة — ثواني</td><td>gold-dribbling-…</td></tr>
+  <tr><td><strong>Position</strong></td><td>App drill; coach rubric score</td><td class="ar">تقييم المدرب</td><td>gold-position-…</td></tr>
+</table>
+
+<h2>7 — CSV row · Sign-off | الاعتماد</h2>
+<p><strong>Write:</strong> <code>trial_id</code> (e.g. ALX-S01-P03-T2), <code>player_uid</code>, <code>age_band</code>, <code>device</code>, <code>lighting</code>, <code>ground_truth_*</code>, <code>notes</code>. Engineer fills <code>ai_*</code> if needed.</p>
+<p class="ar"><strong>اكتب:</strong> رقم المحاولة، اللاعب، العمر، الموبايل، الإضاءة، قياس الحقيقة، ملاحظات.</p>
+<ul>
+  <li>☐ ≥ 40 valid rows (no EXAMPLE_*) · <span class="ar">40+ صف</span></li>
+  <li>☐ Report run · PM approves copy · <span class="ar">تقرير + موافقة المنتج</span></li>
+  <li>☐ <code>npm run calibrate:field-status</code> shows 40/40</li>
+</ul>
+
+<div class="footer-note">
+  KoraID · FIELD STUDY (not YouTube) · Worker health: koraid-cv-worker.onrender.com/health<br />
+  Full runbook: docs/research/calibration/FIELD-STUDY-RUNBOOK.md · Print date: June 2026
+</div>
+
+</body>
+</html>
