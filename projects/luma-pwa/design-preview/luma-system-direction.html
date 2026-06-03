@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LUMA — System design direction (Mobbin-informed)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --luma-black: #1a1a1a;
+      --luma-ivory: #f8f6f1;
+      --luma-card: #fcfbf9;
+      --luma-warm: #f2eee8;
+      --luma-gold: #b8a47e;
+      --luma-cherry: #8b1a1a;
+      --luma-cherry-wash: rgba(139, 26, 26, 0.08);
+      --luma-gold-wash: rgba(184, 164, 126, 0.18);
+      --luma-text: #1a1a1a;
+      --luma-text-secondary: #5c5650;
+      --luma-text-tertiary: #6f6a63;
+      --luma-border: #e5dfd5;
+      --luma-navy: #1b2a3b;
+      --font-display: 'Bodoni Moda', Georgia, serif;
+      --font-serif: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', system-ui, sans-serif;
+      --radius-card: 12px;
+      --radius-ui: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: var(--font-body);
+      background: #ebe6dc;
+      color: var(--luma-text);
+      line-height: 1.5;
+    }
+
+    .board {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .board-header {
+      margin-bottom: 48px;
+    }
+    .board-header .kicker {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--luma-cherry);
+      font-weight: 600;
+    }
+    .board-header h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 500;
+      margin: 8px 0 12px;
+      line-height: 1.15;
+    }
+    .board-header .lede {
+      max-width: 62ch;
+      color: var(--luma-text-secondary);
+      font-size: 15px;
+    }
+    .board-header .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--luma-border);
+      background: var(--luma-card);
+      color: var(--luma-text-secondary);
+    }
+    .tag--cherry { background: var(--luma-cherry-wash); border-color: rgba(139,26,26,.2); color: var(--luma-cherry); }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 56px;
+    }
+    .principle {
+      background: var(--luma-card);
+      border: 1px solid var(--luma-border);
+      border-radius: var(--radius-card);
+      padding: 20px;
+    }
+    .principle h3 {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+    .principle p { font-size: 13px; color: var(--luma-text-secondary); }
+
+    .section {
+      margin-bottom: 64px;
+    }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .section-head h2 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+    }
+    .section-head span {
+      font-size: 12px;
+      color: var(--luma-text-tertiary);
+    }
+
+    .frames {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 32px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    /* Phone chrome */
+    .phone {
+      width: 320px;
+      background: var(--luma-ivory);
+      border-radius: 28px;
+      border: 1px solid var(--luma-border);
+      box-shadow: 0 24px 48px rgba(26,26,26,.12);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .phone-notch {
+      height: 28px;
+      background: var(--luma-ivory);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--luma-text-tertiary);
+      letter-spacing: 0.08em;
+    }
+    .phone-screen {
+      min-height: 520px;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-label {
+      text-align: center;
+      font-size: 11px;
+      color: var(--luma-text-tertiary);
+      margin-top: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Tablet admin */
+    .tablet {
+      width: 720px;
+      max-width: 100%;
+      background: var(--luma-warm);
+      border-radius: 16px;
+      border: 1px solid var(--luma-border);
+      box-shadow: 0 20px 40px rgba(26,26,26,.1);
+      overflow: hidden;
+      display: flex;
+      min-height: 420px;
+    }
+    .tablet-sidebar {
+      width: 200px;
+      background: var(--luma-navy);
+      color: #e8e4dc;
+      padding: 20px 0;
+      font-size: 13px;
+    }
+    .tablet-sidebar .brand {
+      padding: 0 16px 20px;
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      color: #fff;
+    }
+    .tablet-sidebar nav a {
+      display: block;
+      padding: 10px 16px;
+      color: rgba(255,255,255,.65);
+      text-decoration: none;
+    }
+    .tablet-sidebar nav a.active {
+      background: rgba(255,255,255,.08);
+      color: #fff;
+      border-inline-start: 3px solid var(--luma-gold);
+    }
+    .tablet-main {
+      flex: 1;
+      padding: 20px 24px;
+      background: var(--luma-ivory);
+    }
+
+    /* Desktop ops */
+    .desktop {
+      width: 100%;
+      max-width: 960px;
+      background: var(--luma-card);
+      border: 1px solid var(--luma-border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 16px 32px rgba(26,26,26,.08);
+    }
+    .desktop-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--luma-border);
+      background: var(--luma-ivory);
+    }
+    .desktop-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 12px 20px 0;
+      border-bottom: 1px solid var(--luma-border);
+    }
+    .desktop-tabs button {
+      font-family: var(--font-body);
+      font-size: 13px;
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: var(--luma-text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .desktop-tabs button.active {
+      color: var(--luma-cherry);
+      border-bottom-color: var(--luma-cherry);
+      font-weight: 600;
+    }
+    .desktop-body { padding: 20px; }
+
+    /* Shared UI bits */
+    .topnav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--luma-border);
+      font-size: 12px;
+    }
+    .topnav-links { display: flex; gap: 14px; color: var(--luma-text-secondary); }
+    .hero-band {
+      padding: 20px 16px;
+      background: linear-gradient(180deg, var(--luma-gold-wash), var(--luma-ivory));
+      border-bottom: 1px solid var(--luma-border);
+    }
+    .hero-band h2 {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 500;
+      line-height: 1.2;
+    }
+    .hero-band h2 em { font-family: var(--font-serif); font-style: italic; color: var(--luma-cherry); }
+    .hero-band .meta { font-size: 11px; color: var(--luma-text-tertiary); margin-top: 6px; }
+    .search-bar {
+      height: 40px;
+      margin-top: 14px;
+      border-radius: var(--radius-ui);
+      border: 1px solid var(--luma-border);
+      background: var(--luma-card);
+    }
+    .chips { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; }
+    .chip {
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--luma-border);
+      background: var(--luma-card);
+      white-space: nowrap;
+      color: var(--luma-text-secondary);
+    }
+    .chip--on {
+      background: var(--luma-cherry-wash);
+      border-color: rgba(139,26,26,.25);
+      color: var(--luma-cherry);
+      font-weight: 500;
+    }
+    .clinic-card {
+      margin: 0 16px 12px;
+      border: 1px solid var(--luma-border);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      background: var(--luma-card);
+    }
+    .clinic-card .img {
+      height: 120px;
+      background: linear-gradient(135deg, #d4cfc4, #ebe6dc);
+    }
+    .clinic-card .body { padding: 12px 14px; }
+    .clinic-card .name { font-family: var(--font-display); font-size: 1.05rem; }
+    .clinic-card .sub { font-size: 11px; color: var(--luma-text-tertiary); margin-top: 4px; }
+    .badge-gold {
+      display: inline-block;
+      font-size: 10px;
+      padding: 3px 8px;
+      background: var(--luma-gold-wash);
+      color: var(--luma-text);
+      border-radius: 4px;
+      margin-top: 8px;
+      letter-spacing: 0.04em;
+    }
+    .btn-primary {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      text-align: center;
+      background: var(--luma-cherry);
+      color: #f8f6f1;
+      border: none;
+      border-radius: var(--radius-ui);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+    .bottom-nav {
+      margin-top: auto;
+      display: flex;
+      border-top: 1px solid var(--luma-border);
+      padding: 8px 0 12px;
+      background: var(--luma-ivory);
+    }
+    .bottom-nav span {
+      flex: 1;
+      text-align: center;
+      font-size: 10px;
+      color: var(--luma-text-tertiary);
+      padding: 6px;
+    }
+    .bottom-nav span.on { color: var(--luma-cherry); background: var(--luma-cherry-wash); border-radius: 8px; margin: 0 4px; }
+
+    .clinic-hero { height: 140px; background: #2a2520; position: relative; }
+    .clinic-hero .back {
+      position: absolute;
+      top: 12px;
+      inset-inline-start: 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(0,0,0,.4);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .clinic-detail { padding: 16px; flex: 1; }
+    .slot-rail { display: flex; gap: 8px; margin: 12px 0; }
+    .slot-rail .d {
+      padding: 10px 12px;
+      border-radius: var(--radius-ui);
+      border: 1px solid var(--luma-border);
+      font-size: 12px;
+      background: var(--luma-card);
+    }
+    .slot-rail .d.on { background: var(--luma-cherry-wash); border-color: rgba(139,26,26,.3); color: var(--luma-cherry); }
+    .sticky-cta {
+      padding: 12px 16px 16px;
+      border-top: 1px solid var(--luma-border);
+      background: var(--luma-card);
+    }
+
+    .kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .kpi {
+      padding: 16px;
+      border: 1px solid var(--luma-border);
+      border-radius: var(--radius-ui);
+      background: var(--luma-card);
+    }
+    .kpi .val { font-family: var(--font-display); font-size: 1.5rem; }
+    .kpi .lbl { font-size: 11px; color: var(--luma-text-tertiary); margin-top: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--luma-border);
+    }
+    th { color: var(--luma-text-tertiary); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .status { font-size: 11px; padding: 4px 8px; border-radius: 6px; background: var(--luma-warm); }
+    .status.ok { background: var(--luma-gold-wash); }
+    .funnel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .funnel .f {
+      padding: 14px;
+      border: 1px solid var(--luma-border);
+      border-radius: var(--radius-ui);
+      text-align: center;
+    }
+    .funnel .f strong { display: block; font-size: 1.25rem; font-family: var(--font-display); }
+    .funnel .f small { font-size: 10px; color: var(--luma-text-tertiary); }
+
+    .swatches {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+    .swatch {
+      width: 72px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--luma-text-tertiary);
+    }
+    .swatch div {
+      height: 48px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      border: 1px solid var(--luma-border);
+    }
+
+    .mobbin-note {
+      background: #fff;
+      border: 1px dashed var(--luma-gold);
+      border-radius: var(--radius-card);
+      padding: 16px 20px;
+      font-size: 13px;
+      color: var(--luma-text-secondary);
+      margin-bottom: 40px;
+    }
+    .mobbin-note a { color: var(--luma-cherry); }
+
+    @media (max-width: 800px) {
+      .tablet { flex-direction: column; }
+      .tablet-sidebar { width: 100%; display: flex; flex-wrap: wrap; gap: 0; }
+      .tablet-sidebar nav { display: flex; flex-wrap: wrap; }
+      .funnel { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="board">
+    <header class="board-header">
+      <p class="kicker">LUMA · System direction · Mobbin-informed</p>
+      <h1>Quiet luxury concierge — one system, three densities</h1>
+      <p class="lede">
+        Extends your live colorize tokens (ivory, cherry, gold). Patient stays photo-first and editorial;
+        clinic + ops become a shared workbench kit. Inspired by Fresha booking flows on Mobbin — not a clone.
+      </p>
+      <div class="tags">
+        <span class="tag tag--cherry">Patient PWA</span>
+        <span class="tag">Clinic admin</span>
+        <span class="tag">Platform ops</span>
+        <span class="tag">EN + AR</span>
+      </div>
+    </header>
+
+    <div class="mobbin-note">
+      <strong>Mobbin references:</strong>
+      <a href="https://mobbin.com/explore/flows/0ae100c9-f9bb-4a81-8837-772fd8ac330c">Fresha book flow</a> ·
+      <a href="https://mobbin.com/explore/screens/daa7dd6f-8d5c-4ebe-b82c-a8838d417d80">Salon detail</a> ·
+      <a href="https://mobbin.com/explore/screens/f2d209cf-f76d-4efd-b50e-845928c1cf7e">Review &amp; confirm</a>
+      — borrow structure; keep LUMA serif + GCC trust cues (DHA, verified).
+    </div>
+
+    <div class="swatches">
+      <div class="swatch"><div style="background:#f8f6f1"></div>Ivory</div>
+      <div class="swatch"><div style="background:#8b1a1a"></div>Cherry</div>
+      <div class="swatch"><div style="background:#b8a47e"></div>Gold</div>
+      <div class="swatch"><div style="background:#1b2a3b"></div>Navy</div>
+      <div class="swatch"><div style="background:#1a1a1a"></div>Ink</div>
+    </div>
+
+    <div class="principles">
+      <div class="principle">
+        <h3>Photo-first discovery</h3>
+        <p>Explore cards lead with clinic imagery, one CTA — Mobbin Fresha pattern.</p>
+      </div>
+      <div class="principle">
+        <h3>Cherry = choice</h3>
+        <p>Active chips, nav, deposit CTA. Gold = verified &amp; proof only.</p>
+      </div>
+      <div class="principle">
+        <h3>Workbench admin</h3>
+        <p>Navy sidebar + tables; no marketing hero on clinic/ops surfaces.</p>
+      </div>
+      <div class="principle">
+        <h3>One component kit</h3>
+        <p>Extract opsUi → shared Button, Input, Table for all dashboards.</p>
+      </div>
+    </div>
+
+    <!-- PATIENT -->
+    <section class="section">
+      <div class="section-head">
+        <h2>Patient PWA</h2>
+        <span>Marketing density · max 430px · Bodoni + Outfit</span>
+      </div>
+      <div class="frames">
+        <div>
+          <div class="phone">
+            <div class="phone-notch">Explore</div>
+            <div class="phone-screen">
+              <div class="topnav">
+                <strong style="font-family:var(--font-display)">LUMA</strong>
+                <div class="topnav-links"><span>Discover</span><span>Bookings</span></div>
+              </div>
+              <div class="hero-band">
+                <p class="meta">Verified clinics · Dubai</p>
+                <h2>Your aesthetic <em>concierge</em></h2>
+                <div class="search-bar"></div>
+              </div>
+              <div class="chips">
+                <span class="chip chip--on">All Dubai</span>
+                <span class="chip">Marina</span>
+                <span class="chip">Downtown</span>
+              </div>
+              <div class="clinic-card">
+                <div class="img"></div>
+                <div class="body">
+                  <div class="name">Glow Dubai</div>
+                  <div class="sub">4.8 · DIFC · From AED 650</div>
+                  <span class="badge-gold">LUMA VERIFIED</span>
+                  <button type="button" class="btn-primary">View clinic</button>
+                </div>
+              </div>
+              <nav class="bottom-nav" aria-hidden="true">
+                <span class="on">Discover</span>
+                <span>Analysis</span>
+                <span>Bookings</span>
+                <span>Profile</span>
+              </nav>
+            </div>
+          </div>
+          <p class="phone-label">Explore — direction</p>
+        </div>
+
+        <div>
+          <div class="phone">
+            <div class="phone-notch">Clinic + book</div>
+            <div class="phone-screen">
+              <div class="clinic-hero"><span class="back">→</span></div>
+              <div class="clinic-detail">
+                <h2 style="font-family:var(--font-display);font-size:1.2rem">Glow Dubai</h2>
+                <p style="font-size:11px;color:var(--luma-text-tertiary);margin-top:4px">4.8 · 89 reviews · DIFC</p>
+                <p style="font-size:12px;margin-top:12px;color:var(--luma-text-secondary)">Available sessions</p>
+                <div class="slot-rail">
+                  <span class="d on">21 May</span>
+                  <span class="d">23 May</span>
+                  <span class="d">27 May</span>
+                </div>
+                <div style="font-size:12px;padding:10px;border:1px solid var(--luma-border);border-radius:10px;margin-bottom:8px">
+                  <strong>9:00 AM</strong> · Chemical peel VI · AED 650
+                </div>
+                <div style="font-size:12px;padding:10px;border:1px solid var(--luma-border);border-radius:10px">
+                  11:30 AM · Lip filler · AED 1,600
+                </div>
+              </div>
+              <div class="sticky-cta">
+                <button type="button" class="btn-primary">Book session</button>
+              </div>
+            </div>
+          </div>
+          <p class="phone-label">Clinic detail — sticky CTA</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLINIC ADMIN -->
+    <section class="section">
+      <div class="section-head">
+        <h2>Clinic admin</h2>
+        <span>Workbench density · navy rail</span>
+      </div>
+      <div class="frames">
+        <div class="tablet">
+          <aside class="tablet-sidebar">
+            <div class="brand">Glow Dubai</div>
+            <nav>
+              <a href="#" class="active">Bookings</a>
+              <a href="#">Listing</a>
+              <a href="#">Slots</a>
+              <a href="#">Earnings</a>
+              <a href="#">Reviews</a>
+            </nav>
+          </aside>
+          <main class="tablet-main">
+            <h3 style="font-family:var(--font-display);font-size:1.25rem;margin-bottom:16px">Today</h3>
+            <div class="kpi-row">
+              <div class="kpi"><div class="val">4</div><div class="lbl">Appointments</div></div>
+              <div class="kpi"><div class="val">AED 8.2k</div><div class="lbl">Deposits captured</div></div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Patient</th><th>Service</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>09:00</td><td>Sara M.</td><td>Peel VI</td><td><span class="status ok">Confirmed</span></td></tr>
+                <tr><td>11:30</td><td>Layla K.</td><td>Lip filler</td><td><span class="status">Pending</span></td></tr>
+              </tbody>
+            </table>
+          </main>
+        </div>
+      </div>
+    </section>
+
+    <!-- OPS -->
+    <section class="section">
+      <div class="section-head">
+        <h2>Platform operations</h2>
+        <span>Monitor / Manage / Create · Growth funnel</span>
+      </div>
+      <div class="desktop">
+        <div class="desktop-top">
+          <strong style="font-family:var(--font-display)">LUMA Operations</strong>
+          <span style="font-size:11px;padding:4px 10px;background:var(--luma-cherry-wash);color:var(--luma-cherry);border-radius:6px">Production</span>
+        </div>
+        <div class="desktop-tabs">
+          <button type="button" class="active">Growth</button>
+          <button type="button">Overview</button>
+          <button type="button">Bookings</button>
+          <button type="button">Clinics</button>
+        </div>
+        <div class="desktop-body">
+          <div class="funnel">
+            <div class="f"><strong>1.2k</strong><small>OTP sent</small></div>
+            <div class="f"><strong>890</strong><small>Verified</small></div>
+            <div class="f"><strong>412</strong><small>BOOK_START</small></div>
+            <div class="f"><strong>186</strong><small>Paid deposit</small></div>
+          </div>
+          <table style="margin-top:20px">
+            <thead>
+              <tr><th>Event</th><th>Count (May)</th><th>Δ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>otp_verified</td><td>890</td><td>+12%</td></tr>
+              <tr><td>book_start</td><td>412</td><td>+8%</td></tr>
+              <tr><td>deposit_paid</td><td>186</td><td>+5%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Recommended next build</h2>
+        <span>Phase A → B in DESIGN-DIRECTION-SYSTEM-2026.md</span>
+      </div>
+      <p style="font-size:14px;color:var(--luma-text-secondary);max-width:56ch">
+        <strong>Phase A:</strong> Shared <code>luma-ui</code> primitives (Button, Input, Table, Chip) from <code>opsUi</code>.<br />
+        <strong>Phase B:</strong> Explore + clinic card refresh (photo ratio, single CTA).<br />
+        Live mocks: <code>/en/design-preview</code> and <code>/en/admin/design-preview</code> in the app repo.
+      </p>
+    </section>
+  </div>
+</body>
+</html>

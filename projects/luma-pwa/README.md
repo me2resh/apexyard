@@ -14,6 +14,8 @@ Aesthetic clinic booking marketplace PWA (patient app + clinic admin under one d
 
 PRDs, technical notes, and AgDRs for this product live under `projects/luma-pwa/` in the ops repo. Implementation truth is always the **luma-pwa** git repo.
 
+**Ops PR hygiene:** Open apexyard PRs that touch LUMA docs should change only `projects/luma-pwa/` (branch name should reference a LUMA ticket, e.g. `docs/GH-476-…`). Do not commit LUMA docs on KoraID or other portfolio branches.
+
 ## Local clone (optional)
 
 From the ops repo root, convention is `workspace/luma-pwa` (gitignored). You can also keep a sibling clone at `D:\projects\luma-pwa` and point tools at it; hooks resolve the ops root via `onboarding.yaml` + `apexyard.projects.yaml`.
