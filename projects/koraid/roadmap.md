@@ -27,6 +27,8 @@ Living summary — detail and acceptance criteria are in [docs/koraid-full-prd.m
 | G Coins earn + spend | Done | #45, #46 |
 | Kora Reels | Done | #36 |
 | Physical card printing | **Deferred** — see [FEASIBILITY-047-physical-card-printing.md](./FEASIBILITY-047-physical-card-printing.md) | #47 |
+| CV field calibration (076/080/081/082) | **In progress** — Lane A trust gate | Ops; [PLAN-PARALLEL-LANE-A-B-2026.md](./PLAN-PARALLEL-LANE-A-B-2026.md) |
+| Pitch IQ Scout Index (AI shortlist) | **DRAFT** — Lane B; **no code** until 076 sign-off | [ADR-DRAFT-0005-ai-scout-index.md](./ADR-DRAFT-0005-ai-scout-index.md) |
 | Goals of the week, diamond tier, etc. | Backlog | #37–51 |
 
 ## Ops (manual)
