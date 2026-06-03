@@ -1,7 +1,8 @@
 #!/bin/bash
-# Shared PR-number extraction for the three merge-gate hooks:
+# Shared PR-number and repo extraction for the merge-gate hooks:
 #   - block-unreviewed-merge.sh
 #   - require-design-review-for-ui.sh
+#   - require-architecture-review.sh
 #   - block-merge-on-red-ci.sh
 #
 # Not a hook itself (prefixed with `_lib-` so it's never wired as one). Sourced
@@ -112,4 +113,38 @@ resolve_pr_head() {
   fi
 
   echo "$sha"
+}
+
+# Echoes the owner/repo extracted from the merge command, or empty if not found.
+#
+# This is a SIBLING function to extract_pr_number — same parsing approach,
+# repo-extraction only. Kept separate so the existing extract_pr_number
+# contract is not disturbed (it is used widely; callers that don't need the
+# repo are unaffected).
+#
+# Recognises:
+#   1. `gh api repos/<owner>/<repo>/pulls/<N>/merge ...`  — repo from URL path
+#   2. `gh pr merge ... --repo <owner>/<repo> ...`        — repo from --repo flag
+#   3. Falls back to `gh pr view --json headRepository`   — current branch's PR
+#
+# Returns empty if the repo cannot be determined.
+extract_repo_from_command() {
+  local cmd="$1"
+  local repo=""
+
+  # 1. gh api path extraction.
+  repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' \
+    | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+
+  # 2. --repo flag on gh pr merge.
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  fi
+
+  # 3. Last resort: ask gh which repo the current branch's PR belongs to.
+  if [ -z "$repo" ]; then
+    repo=$(gh pr view --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+  fi
+
+  echo "$repo"
 }

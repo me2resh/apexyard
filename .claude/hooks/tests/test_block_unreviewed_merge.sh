@@ -17,13 +17,18 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/block-unreviewed-merge.sh"
 LIB_PR="$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh"
+LIB_MARKERS="$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
 
-for f in "$HOOK_SRC" "$LIB_PR"; do
+for f in "$HOOK_SRC" "$LIB_PR" "$LIB_MARKERS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
   fi
 done
+
+# Load the marker lib so test helpers use the same path logic as the hook.
+# shellcheck source=/dev/null
+. "$LIB_MARKERS"
 
 PASS=0
 FAIL=0
@@ -46,20 +51,22 @@ make_sandbox() {
     git commit -q -m "init"
   )
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews" "$sb/bin"
-  cp "$HOOK_SRC" "$sb/.claude/hooks/block-unreviewed-merge.sh"
-  cp "$LIB_PR"   "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$HOOK_SRC"    "$sb/.claude/hooks/block-unreviewed-merge.sh"
+  cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
 
   # Mock `gh` so resolve_pr_head returns FIXED_SHA. The hook calls
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
   # shape) — return the fixed SHA on stdout, no network involved.
+  # Also handles headRefName (sync-PR guard) and headRepository (repo extraction, #485).
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
-# Minimal gh shim for test_block_unreviewed_merge. Returns FIXED_SHA for
-# any 'gh pr view ... headRefOid' call; pass-through everything else as
-# a no-op (exit 0, no stdout). Real test invocations only need pr-view.
+# Minimal gh shim for test_block_unreviewed_merge.
 case "\$*" in
-  *"pr view"*"headRefOid"*) echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
+  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
   *) ;;
 esac
 exit 0
@@ -69,18 +76,28 @@ EOF
   echo "$sb"
 }
 
+# Default test repo — matches the --repo flag used in run_case().
+TEST_REPO="me2resh/apexyard"
+
 # Marker writers -------------------------------------------------------
+# All writers use review_marker_path (from _lib-review-markers.sh, sourced
+# at top) so the test markers land at the same repo-qualified paths the
+# hook will look for. The default repo matches the --repo flag in run_case().
 
 write_rex_marker() {
   # Bare SHA on line 1 — Rex's format is unchanged.
-  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}"
-  echo "$sha" > "$sb/.claude/session/reviews/${pr}-rex.approved"
+  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}" repo="${4:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" rex "$sb")
+  echo "$sha" > "$path"
 }
 
 write_ceo_marker_structured() {
   # Valid v2 structured marker.
-  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}"
-  cat > "$sb/.claude/session/reviews/${pr}-ceo.approved" <<EOF
+  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}" repo="${4:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" ceo "$sb")
+  cat > "$path" <<EOF
 sha=${sha}
 approved_by=user
 approved_at=2026-05-03T20:00:00Z
@@ -91,14 +108,18 @@ EOF
 
 write_ceo_marker_legacy_bare() {
   # Pre-#48 format: bare SHA, single line.
-  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}"
-  echo "$sha" > "$sb/.claude/session/reviews/${pr}-ceo.approved"
+  local sb="$1" pr="$2" sha="${3:-$FIXED_SHA}" repo="${4:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" ceo "$sb")
+  echo "$sha" > "$path"
 }
 
 write_ceo_marker_missing_field() {
   # Has sha= and skill_version but NO approved_by.
-  local sb="$1" pr="$2"
-  cat > "$sb/.claude/session/reviews/${pr}-ceo.approved" <<EOF
+  local sb="$1" pr="$2" repo="${3:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" ceo "$sb")
+  cat > "$path" <<EOF
 sha=${FIXED_SHA}
 skill_version=2
 EOF
@@ -106,8 +127,10 @@ EOF
 
 write_ceo_marker_wrong_approved_by() {
   # Has approved_by=robot instead of approved_by=user.
-  local sb="$1" pr="$2"
-  cat > "$sb/.claude/session/reviews/${pr}-ceo.approved" <<EOF
+  local sb="$1" pr="$2" repo="${3:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" ceo "$sb")
+  cat > "$path" <<EOF
 sha=${FIXED_SHA}
 approved_by=robot
 skill_version=2
@@ -116,8 +139,10 @@ EOF
 
 write_ceo_marker_old_version() {
   # skill_version=1 (legacy format that should be rejected).
-  local sb="$1" pr="$2"
-  cat > "$sb/.claude/session/reviews/${pr}-ceo.approved" <<EOF
+  local sb="$1" pr="$2" repo="${3:-$TEST_REPO}"
+  local path
+  path=$(review_marker_path "$repo" "$pr" ceo "$sb")
+  cat > "$path" <<EOF
 sha=${FIXED_SHA}
 approved_by=user
 skill_version=1
@@ -132,7 +157,9 @@ run_case() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  # APEXYARD_OPS_DISABLE_PIN=1: force walk-up resolution so the sandbox's ops root
+  # is used, not the real session pin (avoids marker-home mismatch in CI/worktrees).
+  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
 
@@ -206,7 +233,7 @@ run_case "rex sha mismatch → blocks" 2 "Code-reviewer approved commit" "$sb" 2
 # 10. Non-merge command (e.g. gh pr view) → no-op exit 0
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr view 209 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -222,7 +249,7 @@ write_rex_marker "$sb" 210
 # No CEO marker — should still block.
 input=$(jq -nc --arg c "gh api repos/me2resh/apexyard/pulls/210/merge -X PUT" \
   '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no CEO approval marker"; then
@@ -235,7 +262,8 @@ fi
 # 12. Quoted approval_summary (with spaces) doesn't break the parser.
 sb=$(make_sandbox)
 write_rex_marker "$sb" 211
-cat > "$sb/.claude/session/reviews/211-ceo.approved" <<EOF
+ceo_path=$(review_marker_path "$TEST_REPO" 211 ceo "$sb")
+cat > "$ceo_path" <<EOF
 sha=${FIXED_SHA}
 approved_by=user
 approved_at=2026-05-03T20:00:00Z
@@ -253,8 +281,9 @@ run_case "structured marker with quoted multi-word summary → allows" 0 "" "$sb
 sb=$(make_sandbox)
 # Add the apexyard.projects.yaml that resolve_ops_root requires.
 : > "$sb/apexyard.projects.yaml"
-# Copy _lib-ops-root.sh into the sandbox's hook dir.
-cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
+# Copy required libs into the sandbox's hook dir.
+cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"      "$sb/.claude/hooks/_lib-ops-root.sh"
+cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
 # Build a workspace clone underneath, with its own git toplevel.
 mkdir -p "$sb/workspace/demo"
 ( cd "$sb/workspace/demo" && git init -q )
@@ -262,8 +291,10 @@ mkdir -p "$sb/workspace/demo"
 write_rex_marker "$sb" 212
 write_ceo_marker_structured "$sb" 212
 # Run the hook from inside workspace/demo cwd (not the ops fork).
+# APEXYARD_OPS_DISABLE_PIN=1 forces walk-up resolution so the sandbox's
+# ops root is used, not the real session pin (mirrors test_require_architecture_review.sh).
 input=$(jq -nc --arg c "gh pr merge 212 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb/workspace/demo" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash $sb/.claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb/workspace/demo" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash $sb/.claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -281,7 +312,7 @@ run_case_custom_cmd() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
   if [ "$got_rc" != "$want_rc" ]; then
@@ -351,12 +382,13 @@ make_sandbox_with_sync_branch() {
   local sb branch_name
   branch_name="${1:-sync/main-to-dev-after-v2.3.0}"
   sb=$(make_sandbox)
-  # Rewrite the gh shim to handle both headRefOid (SHA) and headRefName (branch).
+  # Rewrite the gh shim to handle headRefOid, headRefName, and headRepository.
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 case "\$*" in
-  *"pr view"*"headRefOid"*) echo "$FIXED_SHA" ;;
-  *"pr view"*"headRefName"*) echo "$branch_name" ;;
+  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)    echo "$branch_name" ;;
+  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
   *) ;;
 esac
 exit 0
@@ -371,8 +403,9 @@ make_sandbox_non_sync() {
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 case "\$*" in
-  *"pr view"*"headRefOid"*) echo "$FIXED_SHA" ;;
-  *"pr view"*"headRefName"*) echo "feature/GH-99-something" ;;
+  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)    echo "feature/GH-99-something" ;;
+  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
   *) ;;
 esac
 exit 0
@@ -387,7 +420,7 @@ write_rex_marker "$sb" 300
 write_ceo_marker_structured "$sb" 300
 cmd="gh pr merge 300 --repo me2resh/apexyard --squash --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
@@ -403,7 +436,7 @@ write_rex_marker "$sb" 301
 write_ceo_marker_structured "$sb" 301
 cmd="gh pr merge 301 --repo me2resh/apexyard --merge --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -419,7 +452,7 @@ write_rex_marker "$sb" 302
 write_ceo_marker_structured "$sb" 302
 cmd="gh pr merge 302 --repo me2resh/apexyard --squash --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -436,7 +469,7 @@ write_rex_marker "$sb" 303
 write_ceo_marker_structured "$sb" 303
 cmd="gh api repos/me2resh/apexyard/pulls/303/merge -X PUT -f merge_method=squash"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
@@ -452,7 +485,7 @@ write_rex_marker "$sb" 304
 write_ceo_marker_structured "$sb" 304
 cmd="gh api repos/me2resh/apexyard/pulls/304/merge -X PUT -f merge_method=merge"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -461,6 +494,83 @@ else
   echo "FAIL [sync PR + gh-api merge_method=merge → passes]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-merge-passes "
 fi
+
+# --- Cross-repo collision regression test (#485) ----------------------
+#
+# Proves that a marker for repo A's PR #N is DISTINCT from a marker for
+# repo B's PR #N — they must never collide, and one must not satisfy the
+# gate for the other.
+
+# Helper: make a sandbox whose gh shim returns a specific repo for headRepository.
+make_sandbox_for_repo() {
+  local repo="${1:-me2resh/apexyard}"
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)    echo "feature/test" ;;
+  *"pr view"*"headRepository"*) echo "$repo" ;;
+  *) ;;
+esac
+exit 0
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+# Case R1: marker for repo-A's PR #100 does NOT satisfy gate for repo-B's PR #100.
+sb=$(make_sandbox_for_repo "org-b/project-b")
+# Write markers for repo-A's PR #100 (different repo slug → different filename).
+write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+# Run the gate for repo-B's PR #100 — it should be BLOCKED (markers are for the wrong repo).
+input=$(jq -nc --arg c "gh pr merge 100 --repo org-b/project-b --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qE "no recorded code-reviewer|no CEO approval marker"; then
+  echo "PASS [cross-repo: repo-A PR#100 markers do NOT satisfy repo-B PR#100 gate (#485)]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [cross-repo: repo-A PR#100 markers must not satisfy repo-B PR#100 gate]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cross-repo-collision-blocked "
+fi
+
+# Case R2: marker for repo-B's PR #100 DOES satisfy gate for repo-B's PR #100.
+sb=$(make_sandbox_for_repo "org-b/project-b")
+write_rex_marker "$sb" 100 "$FIXED_SHA" "org-b/project-b"
+write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-b/project-b"
+input=$(jq -nc --arg c "gh pr merge 100 --repo org-b/project-b --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [cross-repo: repo-B PR#100 markers DO satisfy repo-B PR#100 gate (#485)]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [cross-repo: correct markers must satisfy same-repo gate]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cross-repo-same-repo-passes "
+fi
+
+# Case R3: both repo-A and repo-B have PR #100 with markers — they coexist without collision.
+sb=$(make_sandbox_for_repo "org-a/project-a")
+write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+write_rex_marker "$sb" 100 "$FIXED_SHA" "org-b/project-b"
+write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-b/project-b"
+# Verify both marker files exist with distinct names.
+marker_a=$(review_marker_path "org-a/project-a" 100 rex "$sb")
+marker_b=$(review_marker_path "org-b/project-b" 100 rex "$sb")
+if [ "$marker_a" != "$marker_b" ] && [ -f "$marker_a" ] && [ -f "$marker_b" ]; then
+  echo "PASS [cross-repo: same PR# in two repos produces distinct, coexisting marker files (#485)]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [cross-repo: distinct markers for same PR# in two repos]: a=$marker_a b=$marker_b" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cross-repo-distinct-files "
+fi
+rm -rf "$sb"
 
 # --- Summary ----------------------------------------------------------
 

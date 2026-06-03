@@ -8,7 +8,7 @@ effort: low
 
 # /approve-merge — Record CEO Approval and Merge
 
-Writes a structured marker at `.claude/session/reviews/<pr>-ceo.approved`, then runs `gh pr merge <pr> --squash --delete-branch` in the same turn. The marker contains required key/value fields (not just a bare SHA) so a raw `echo SHA > file` from the model is mechanically rejected by `block-unreviewed-merge.sh`.
+Writes a structured marker at `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` (repo-qualified path, see AgDR-0060), then runs `gh pr merge <pr> --squash --delete-branch` in the same turn. The marker contains required key/value fields (not just a bare SHA) so a raw `echo SHA > file` from the model is mechanically rejected by `block-unreviewed-merge.sh`.
 
 This is the **mechanical enforcement** of the "plan-level 'go' is not merge approval" rule in `.claude/rules/pr-workflow.md`. The load-bearing semantic is "every merge needs an explicit per-PR approval", **not** "every merge needs two user messages."
 
@@ -80,13 +80,19 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 OPS_ROOT=""
 r="$REPO_ROOT"
 while [ -n "$r" ] && [ "$r" != "/" ]; do
+  if [ -f "$r/.apexyard-fork" ]; then OPS_ROOT="$r"; break; fi
   if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
     OPS_ROOT="$r"; break
   fi
   r=$(dirname "$r")
 done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
-REX="$MARKER_HOME/.claude/session/reviews/<pr>-rex.approved"
+
+# Source the marker path helper — repo-qualified naming (#485, AgDR-0060).
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
+PR_REPO=$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+REX=$(review_marker_path "$PR_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
 
@@ -119,17 +125,18 @@ Optional fields the gate stores but doesn't validate:
 | `approved_at=<ISO>` | Audit-log timestamp. Helpful when reviewing past merges. |
 | `approval_summary=<text>` | First ≤200 chars of the user's approval message, sanitised (no shell metachars). Audit trail for "what did the user say when they approved this." |
 
-Use the **ops fork root** as the path anchor (NOT git toplevel — see #229 + #230 for the workspace-clone bug this avoids). Reuse the same MARKER_HOME computed in step 4:
+Use the **ops fork root** as the path anchor (NOT git toplevel — see #229 + #230 for the workspace-clone bug this avoids). Reuse the same MARKER_HOME and the `_lib-review-markers.sh` helper (already sourced in step 4):
 
 ```bash
-# (MARKER_HOME already resolved in step 4 — reuse it here.)
+# (MARKER_HOME and PR_REPO already resolved in step 4 — reuse them here.)
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
 ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Sanitise: drop newlines, drop shell-special chars, truncate to 200.
 summary=$(echo "<user approval message>" | tr '\n' ' ' | tr -d '"`$\\' | cut -c1-200)
 
-cat > "$MARKER_HOME/.claude/session/reviews/<pr>-ceo.approved" <<EOF
+CEO=$(review_marker_path "$PR_REPO" <pr> ceo "$MARKER_HOME")
+cat > "$CEO" <<EOF
 sha=<headRefOid>
 approved_by=user
 approved_at=${ts}
@@ -193,7 +200,7 @@ or for sync PRs:
 If the merge gate blocked, surface the exact error and tell the user how to retry:
 
 ```
-✗ Merge blocked: <reason from gate>. Marker still on disk at .claude/session/reviews/<pr>-ceo.approved — run `gh pr merge <pr> --repo <owner/repo> <strategy> --delete-branch` once the issue is fixed (no need to re-invoke /approve-merge).
+✗ Merge blocked: <reason from gate>. Marker still on disk at <CEO path from review_marker_path> — run `gh pr merge <pr> --repo <owner/repo> <strategy> --delete-branch` once the issue is fixed (no need to re-invoke /approve-merge).
 ```
 
 ### 9. Optional: post-merge child-issue closure

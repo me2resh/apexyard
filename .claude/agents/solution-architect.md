@@ -142,7 +142,7 @@ When your verdict is APPROVED, and ONLY then, write the architecture-review appr
 
 ### Path: ops fork root, not git toplevel
 
-The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-architecture.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Resolve `MARKER_HOME` ONCE, at review start, before any `cd` / `gh pr checkout`:
+The marker MUST land at `<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__{number}-architecture.approved` (repo-qualified path, AgDR-0060 / #485). Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Resolve `MARKER_HOME` ONCE, at review start, before any `cd` / `gh pr checkout`, then source the marker path helper:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -154,14 +154,19 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
+# Resolve the repo for the qualified marker name.
+PR_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+ARCH_MARKER=$(review_marker_path "$PR_REPO" {number} architecture "$MARKER_HOME")
 ```
 
 ### The command
 
 ```bash
 # Option B (preferred) — the PR's HEAD on GitHub
-gh pr view {number} --json headRefOid --jq .headRefOid > "$MARKER_HOME/.claude/session/reviews/{number}-architecture.approved"
+gh pr view {number} --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
 ```
 
 ### Content — MUST be bare SHA + newline
