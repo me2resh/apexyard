@@ -24,6 +24,8 @@ Digital identity layer for Egyptian grassroots football — FIFA-style player ca
 
 Roadmap, handover notes, and cross-repo AgDRs for KoraID live under `projects/koraid/` in the ops repo. Implementation truth is always the **koraid** git repo.
 
+**Ops PR hygiene:** Open apexyard PRs that touch KoraID docs should change only `projects/koraid/` (branch name should reference a KoraID ticket, e.g. `docs/GH-47-…` or `docs/#47-…`). Do not commit KoraID docs on Luma or pharma branches.
+
 ## Local clone
 
 From the ops repo root (`~/Documents/apexyard`):

@@ -2,27 +2,38 @@
 
 Living summary — detail and acceptance criteria are in [docs/koraid-full-prd.md](https://github.com/Dr-kersho/koraid/blob/main/docs/koraid-full-prd.md) and GitHub Issues.
 
-## Phase 1 — MVP (weeks 1–6)
+## Phase 1 — MVP
 
 | Area | Status | GitHub |
 |------|--------|--------|
-| Auth, profile, FIFA card | Done | #2–12 closed |
+| Auth, profile, FIFA card | Done | #2–12 |
 | Courts + Paymob booking | Done | — |
 | Silver/gold drills + stats | Done | — |
-| Training hub | Done | — |
-| Match board + join | Done | #26–27 |
-| Peer ratings | Done | #28 |
-| Squads + challenge export | Done | #29 |
-| Trials toggle | Done | #30 |
-| Parent mode + deletion | In PR | #31 → PR #76 |
-| Court submission flow | Open | #32 |
-| RTL polish | Open | #33 |
-| PWA install/offline polish | Open | #34 |
-| Pre-launch checklist | Open | #35 |
+| Training hub, match board, ratings, squads | Done | #26–30 |
+| Parent mode + deletion | Done | #31 |
+| Court submission, RTL, PWA, pre-launch | Done | #32–35 |
+| Pitch IQ CV (software) | Shipped | #48 epic open; #83 deploy closed |
+| Architecture stores + competition | Done | #172 umbrella closed (#171–#176) |
+| Public product catalogue | Done | #170 |
+| Dynamo GSI index guard | Done | #98 |
 
-## Phase 2+
+## Phase 2 — in progress
 
-Tracked as GitHub issues **#36–51** (scouts, leagues, notifications, etc.).
+| Area | Status | GitHub |
+|------|--------|--------|
+| Scout player search | Done | #42 |
+| Scout watchlist | MVP shipped | #43 |
+| Scout contact request | MVP shipped | #44 |
+| G Coins earn + spend | Done | #45, #46 |
+| Kora Reels | Done | #36 |
+| Physical card printing | **Deferred** — see [FEASIBILITY-047-physical-card-printing.md](./FEASIBILITY-047-physical-card-printing.md) | #47 |
+| Goals of the week, diamond tier, etc. | Backlog | #37–51 |
+
+## Ops (manual)
+
+| Step | Doc |
+|------|-----|
+| DrillCompletedIndex deploy + backfill | `docs/infra/drill-completed-index.md` |
 
 ## How to update
 
