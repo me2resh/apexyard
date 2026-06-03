@@ -1,0 +1,6 @@
+{
+  "files": ["index.html", "product.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}
