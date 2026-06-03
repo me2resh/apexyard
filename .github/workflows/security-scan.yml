@@ -1,0 +1,244 @@
+# Security Scan — apexyard framework self-scan (dog-food the Shield pipeline)
+#
+# Runs gitleaks (secrets) + Semgrep OSS (SAST over shell scripts) on every
+# release, tag push, and manual dispatch. NOT on every PR — this is intentionally
+# release-gated because the framework is mostly markdown + shell; a per-PR scan
+# would add latency for low incremental value. Adopters' copies of the golden-path
+# pipeline (golden-paths/pipelines/security.yml) can run on every PR.
+#
+# Surface coverage — honest accounting for a markdown/shell framework:
+#   Secrets     : gitleaks — full tree scan. Real risk: API keys in examples/configs.
+#   SAST        : Semgrep r/bash — shell hook scripts under .claude/hooks/**
+#                 No JS/TS source (site/ is static HTML; copy-for-ai.js is a
+#                 client-side snippet). CodeQL/ESLint would have nothing to scan.
+#   Dep audits  : N/A — no package.json, requirements.txt, or pyproject.toml
+#                 in this repo. Marked explicitly so adopters aren't confused.
+#   SBOM/licence: N/A — no third-party deps. Trivial SBOM = not worth generating.
+#
+# Fail threshold: WARNING+ (equivalent to "medium+"). INFO findings are reported
+# in the step summary but do not block.
+#
+# Free/OSS tools only, no account/token required.
+
+name: Security Scan
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      fail_on_severity:
+        description: 'Minimum Semgrep severity that fails the job (WARNING or ERROR)'
+        required: false
+        default: 'WARNING'
+
+permissions:
+  contents: read
+
+env:
+  # Semgrep: fail on WARNING (= medium) and above
+  SEMGREP_FAIL_SEVERITY: ${{ inputs.fail_on_severity || 'WARNING' }}
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Job 1: Secrets scan — gitleaks over the full tree
+  # --------------------------------------------------------------------------
+  secrets-scan:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history for gitleaks git-log scan)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE not required for public repos / OSS use
+
+      - name: Report result to step summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Secrets scan: CLEAN" >> "$GITHUB_STEP_SUMMARY"
+            echo "gitleaks found no secrets in the full commit history." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Secrets scan: FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "gitleaks detected one or more potential secrets. See the job log for file:line details." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # --------------------------------------------------------------------------
+  # Job 2: SAST — Semgrep OSS over shell scripts (the mechanical hook layer)
+  # --------------------------------------------------------------------------
+  sast-shell:
+    name: SAST shell scripts (Semgrep r/bash)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep OSS
+        run: pip install semgrep
+
+      - name: Run Semgrep — bash security rules
+        id: semgrep
+        run: |
+          set +e
+          semgrep scan \
+            --config=r/bash \
+            --metrics=off \
+            --no-autofix \
+            --include="*.sh" \
+            --json \
+            --output semgrep-results.json \
+            .
+          SEMGREP_EXIT=$?
+          set -e
+
+          # Parse results — count by severity
+          ERRORS=$(python3 -c "
+          import json
+          data = json.load(open('semgrep-results.json'))
+          r = data.get('results', [])
+          counts = {}
+          for finding in r:
+              sev = finding.get('extra', {}).get('severity', 'UNKNOWN')
+              counts[sev] = counts.get(sev, 0) + 1
+          print(json.dumps(counts))
+          ")
+
+          echo "severity_counts=$ERRORS" >> "$GITHUB_OUTPUT"
+
+          WARNING_COUNT=$(python3 -c "
+          import json; d=json.loads('$ERRORS'); print(d.get('WARNING', 0))")
+          ERROR_COUNT=$(python3 -c "
+          import json; d=json.loads('$ERRORS'); print(d.get('ERROR', 0))")
+          INFO_COUNT=$(python3 -c "
+          import json; d=json.loads('$ERRORS'); print(d.get('INFO', 0))")
+
+          echo "## SAST (Semgrep r/bash) Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Severity | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ERROR    | $ERROR_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| WARNING  | $WARNING_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| INFO     | $INFO_COUNT |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Print medium+ findings with file:line
+          python3 -c "
+          import json
+          data = json.load(open('semgrep-results.json'))
+          medium_plus = [r for r in data.get('results', [])
+                         if r.get('extra', {}).get('severity', '') in ('ERROR', 'WARNING')]
+          if medium_plus:
+              print('### Medium+ Findings')
+              for r in medium_plus:
+                  sev = r['extra']['severity']
+                  path = r['path']
+                  line = r['start']['line']
+                  rule = r['check_id'].split('.')[-1]
+                  msg = r['extra']['message'].split('\n')[0][:120]
+                  print(f'- [{sev}] \`{path}:{line}\` ({rule}): {msg}')
+          else:
+              print('No medium+ findings.')
+          " >> "$GITHUB_STEP_SUMMARY"
+
+          # Note: JS/TS, CodeQL, ESLint are N/A — no JS/TS source in this repo
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Note**: JS/TS SAST (CodeQL/ESLint) is N/A — the framework" \
+               "contains no JS/TS source files. \`site/copy-for-ai.js\` is a" \
+               "static client snippet with no npm install surface." >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail if medium+ findings exist (WARNING or ERROR)
+          FAIL_SEV="${{ env.SEMGREP_FAIL_SEVERITY }}"
+          if [ "$FAIL_SEV" = "WARNING" ] && [ "$WARNING_COUNT" -gt 0 -o "$ERROR_COUNT" -gt 0 ]; then
+            echo "::error::Semgrep found $ERROR_COUNT ERROR and $WARNING_COUNT WARNING findings. Fix or suppress with a comment before release."
+            exit 1
+          elif [ "$FAIL_SEV" = "ERROR" ] && [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "::error::Semgrep found $ERROR_COUNT ERROR findings."
+            exit 1
+          fi
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 30
+
+  # --------------------------------------------------------------------------
+  # Job 3: Dependency audit — N/A notice
+  # --------------------------------------------------------------------------
+  dep-audit-na:
+    name: Dependency audit (N/A)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Note — no dependency manifests in this repo
+        run: |
+          echo "## Dependency Audit: N/A" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This repository contains no \`package.json\`, \`requirements.txt\`," \
+               "\`pyproject.toml\`, or other dependency manifests." >> "$GITHUB_STEP_SUMMARY"
+          echo "There are no third-party runtime deps to audit." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "When this changes (e.g. a site build step is added), replace this" \
+               "job with \`npm audit --audit-level=moderate\` or \`pip-audit\`." >> "$GITHUB_STEP_SUMMARY"
+
+          echo "No dependency manifests — dep audit skipped (N/A for this repo)."
+
+  # --------------------------------------------------------------------------
+  # Job 4: SBOM / licence — N/A notice
+  # --------------------------------------------------------------------------
+  sbom-na:
+    name: SBOM + licence check (N/A)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Note — no third-party deps; SBOM is trivial
+        run: |
+          echo "## SBOM + Licence Check: N/A" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "No third-party runtime dependencies exist in this repo." >> "$GITHUB_STEP_SUMMARY"
+          echo "A CycloneDX SBOM would be empty. Add CycloneDX generation here" \
+               "if deps are introduced." >> "$GITHUB_STEP_SUMMARY"
+
+          echo "No deps — SBOM generation skipped (N/A for this repo)."
+
+  # --------------------------------------------------------------------------
+  # Summary gate — all jobs must pass
+  # --------------------------------------------------------------------------
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, sast-shell, dep-audit-na, sbom-na]
+    if: always()
+
+    steps:
+      - name: Evaluate gate
+        run: |
+          SECRETS="${{ needs.secrets-scan.result }}"
+          SAST="${{ needs.sast-shell.result }}"
+
+          echo "## Security Gate Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Job | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Secrets (gitleaks) | $SECRETS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SAST — shell (Semgrep) | $SAST |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Dep audit | N/A — no manifests |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SBOM/licence | N/A — no deps |" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$SECRETS" != "success" ] || [ "$SAST" != "success" ]; then
+            echo "::error::Security gate FAILED — one or more security jobs did not pass. A release cannot proceed until all findings are resolved."
+            exit 1
+          fi
+
+          echo "Security gate PASSED — framework is clear for release."
