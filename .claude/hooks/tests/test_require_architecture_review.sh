@@ -15,11 +15,18 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/require-architecture-review.sh"
+LIB_MARKERS="$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
 
-if [ ! -f "$HOOK_SRC" ]; then
-  echo "FAIL: hook missing: $HOOK_SRC" >&2
-  exit 1
-fi
+for f in "$HOOK_SRC" "$LIB_MARKERS"; do
+  if [ ! -f "$f" ]; then
+    echo "FAIL: required source missing: $f" >&2
+    exit 1
+  fi
+done
+
+# Load the marker lib so test helpers use the same path logic as the hook.
+# shellcheck source=/dev/null
+. "$LIB_MARKERS"
 
 PASS=0
 FAIL=0
@@ -89,15 +96,22 @@ make_sandbox() {
   # Make it a git repo so `git rev-parse --show-toplevel` resolves to $sb.
   git -C "$sb" init -q
   git -C "$sb" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
-  mkdir -p "$sb/.claude/session/reviews"
+  mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews"
+  # Copy libs needed by the hook.
+  cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
+  if [ -f "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" ]; then
+    cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
+  fi
   echo "$sb"
 }
 
 # Install a mock gh that answers:
-#   gh pr diff <N> ... --name-only   -> file list from $MOCK_DIFF_FILES
-#   gh pr view <N> ... headRefOid    -> $MOCK_HEAD_SHA
+#   gh pr diff <N> ... --name-only      -> file list from $MOCK_DIFF_FILES
+#   gh pr view <N> ... headRefOid       -> $MOCK_HEAD_SHA
+#   gh pr view <N> ... headRepository   -> "o/r" (from the merge command repo)
 install_mock_gh() {
-  local sb="$1" diff_files="$2" head_sha="$3"
+  local sb="$1" diff_files="$2" head_sha="$3" repo="${4:-o/r}"
   mkdir -p "$sb/bin"
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
@@ -108,6 +122,9 @@ case "\$args" in
     ;;
   *"pr view"*headRefOid*)
     printf '%s\n' "$head_sha"
+    ;;
+  *"pr view"*headRepository*)
+    printf '%s\n' "$repo"
     ;;
   *) exit 0 ;;
 esac
@@ -140,7 +157,8 @@ echo ""
 echo "B) design-artifact PR + matching marker -> ALLOW (exit 0)"
 sb=$(make_sandbox)
 install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
-printf '%s\n' "$SHA" > "$sb/.claude/session/reviews/77-architecture.approved"
+# Use the repo-qualified marker path (AgDR-0060/#485).
+printf '%s\n' "$SHA" > "$(review_marker_path "o/r" 77 architecture "$sb")"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "allows with matching marker" "0" "$code"
 rm -rf "$sb"
@@ -149,7 +167,7 @@ echo ""
 echo "B) design-artifact PR + STALE marker (SHA mismatch) -> BLOCK (exit 2)"
 sb=$(make_sandbox)
 install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
-printf '%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$sb/.claude/session/reviews/77-architecture.approved"
+printf '%s\n' "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" > "$(review_marker_path "o/r" 77 architecture "$sb")"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "blocks on stale marker SHA" "2" "$code"
 rm -rf "$sb"
@@ -176,6 +194,28 @@ sb=$(make_sandbox)
 install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA"
 code=$(run_gate "$sb" "gh api repos/o/r/pulls/77/merge -X PUT")
 assert_eq "blocks via gh api shape too" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "C) Cross-repo collision regression (#485) — same PR# in two repos"
+
+echo ""
+echo "C) architecture marker for repo-A's PR#77 does NOT satisfy repo-B's PR#77 gate"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA" "repo-b/project-b"
+# Write marker for repo-A's PR#77 only.
+printf '%s\n' "$SHA" > "$(review_marker_path "repo-a/project-a" 77 architecture "$sb")"
+code=$(run_gate "$sb" "gh pr merge 77 --repo repo-b/project-b --squash")
+assert_eq "cross-repo: repo-A marker blocks repo-B gate (#485)" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "C) architecture marker for repo-B's PR#77 DOES satisfy repo-B's PR#77 gate"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA" "repo-b/project-b"
+printf '%s\n' "$SHA" > "$(review_marker_path "repo-b/project-b" 77 architecture "$sb")"
+code=$(run_gate "$sb" "gh pr merge 77 --repo repo-b/project-b --squash")
+assert_eq "cross-repo: correct repo marker allows gate (#485)" "0" "$code"
 rm -rf "$sb"
 
 echo ""

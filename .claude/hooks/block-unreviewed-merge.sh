@@ -56,6 +56,8 @@ fi
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
 . "$(dirname "$0")/_lib-extract-pr.sh"
+# Repo-qualified marker path helper (#485).
+. "$(dirname "$0")/_lib-review-markers.sh"
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
@@ -72,6 +74,11 @@ if [ -z "$CMD_REPO" ]; then
 fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
+# Also extract the repo so markers are scoped to (repo, pr) — #485.
+# CMD_REPO already parsed above; resolve via helper if blank (e.g. current-branch fallback).
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(extract_repo_from_command "$COMMAND")
+fi
 
 if [ -z "$PR_NUMBER" ]; then
   echo "BLOCKED: Could not determine PR number for merge. Run from a PR branch or pass an explicit PR number." >&2
@@ -135,9 +142,10 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
-REVIEWS_DIR="${MARKER_HOME}/.claude/session/reviews"
-REX_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-rex.approved"
-CEO_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-ceo.approved"
+# Repo-qualified marker paths — scoped to (CMD_REPO, PR_NUMBER) so same-numbered
+# PRs in different repos never collide. See AgDR-0060 + me2resh/apexyard#485.
+REX_APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" rex "$MARKER_HOME")
+CEO_APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" ceo "$MARKER_HOME")
 
 # Resolve the PR's real HEAD via GitHub, not local git (see #55). The local
 # HEAD is rarely the PR's HEAD — usually main or an unrelated feature
@@ -196,8 +204,11 @@ _INLINE_CEO_MARKER=""
 if [ ! -f "$CEO_APPROVAL" ]; then
   # Look for inline marker content in the command targeting this PR's
   # approval file. Match heredoc, printf, or echo writing to *-ceo.approved.
-  CEO_BASENAME="${PR_NUMBER}-ceo.approved"
-  if echo "$COMMAND" | grep -q "$CEO_BASENAME"; then
+  # Match both the new repo-qualified basename and the bare-number legacy form
+  # so compound commands from /approve-merge are recognised correctly. The
+  # SHA-match check below provides the safety backstop.
+  CEO_BASENAME=$(basename "$CEO_APPROVAL")
+  if echo "$COMMAND" | grep -qE "(${CEO_BASENAME}|${PR_NUMBER}-ceo\.approved)"; then
     # Extract sha=, approved_by=, skill_version= from the command string.
     _inline_sha=$(echo "$COMMAND" | grep -oE 'sha=[0-9a-f]{40}' | head -1 | cut -d= -f2)
     _inline_approved_by=$(echo "$COMMAND" | grep -oE 'approved_by=[a-z]+' | head -1 | cut -d= -f2)

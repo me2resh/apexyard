@@ -47,6 +47,8 @@ fi
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
 . "$(dirname "$0")/_lib-extract-pr.sh"
+# Repo-qualified marker path helper (#485).
+. "$(dirname "$0")/_lib-review-markers.sh"
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
@@ -65,6 +67,11 @@ if [ -n "$CMD_REPO" ]; then
 fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
+# Resolve the repo for qualified marker paths (#485).
+# CMD_REPO already parsed above; fall back via helper if blank.
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(extract_repo_from_command "$COMMAND")
+fi
 
 if [ -z "$PR_NUMBER" ]; then
   # Let block-unreviewed-merge.sh handle the "no PR number" error — we skip
@@ -147,8 +154,8 @@ if [ -z "$TOUCHED_UI" ]; then
 fi
 
 # UI PR detected — require a design approval marker
-# Marker lives at the ops fork root (MARKER_HOME), not the workspace clone.
-APPROVAL="${MARKER_HOME}/.claude/session/reviews/${PR_NUMBER}-design.approved"
+# Marker lives at the ops fork root (MARKER_HOME), repo-qualified (#485).
+APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" design "$MARKER_HOME")
 
 if [ ! -f "$APPROVAL" ]; then
   cat >&2 <<MSG

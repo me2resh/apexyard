@@ -1,6 +1,6 @@
 # /approve-architecture — Record Per-PR Design-Review Approval
 
-Writes `.claude/session/reviews/<pr>-architecture.approved` with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.
+Writes `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.
 
 This skill is the architecture-review analog of `/approve-design` (UI gate) and `/approve-merge` (CEO gate). Same pattern, different gate. The reviewer is **Tariq (the Solution Architect)**.
 
@@ -53,7 +53,7 @@ gh pr view <pr> --json state,isDraft,mergeable,headRefOid
 
 ### 4. Verify the Rex marker exists at current HEAD
 
-Architecture sign-off is a stamp on top of a Rex-approved HEAD (the design PR still gets a normal code review for its prose / diff), not parallel to it. Resolve the ops fork root (NOT git toplevel — inside `workspace/<project>/` the markers live in the ops fork above):
+Architecture sign-off is a stamp on top of a Rex-approved HEAD (the design PR still gets a normal code review for its prose / diff), not parallel to it. Resolve the ops fork root (NOT git toplevel — inside `workspace/<project>/` the markers live in the ops fork above) and source the marker path helper:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -65,7 +65,10 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
-REX="$MARKER_HOME/.claude/session/reviews/<pr>-rex.approved"
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
+PR_REPO=$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+REX=$(review_marker_path "$PR_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
 
@@ -81,9 +84,13 @@ gh pr diff <pr> --name-only | grep -qiE '(docs/agdr/.*migration.*\.md|technical-
 
 ### 6. Write the architecture marker
 
+Use the repo-qualified path via `_lib-review-markers.sh` (already sourced in step 4):
+
 ```bash
+# (MARKER_HOME and PR_REPO already resolved in step 4 — reuse them here.)
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
-printf '%s\n' "<headRefOid>" > "$MARKER_HOME/.claude/session/reviews/<pr>-architecture.approved"
+ARCH=$(review_marker_path "$PR_REPO" <pr> architecture "$MARKER_HOME")
+printf '%s\n' "<headRefOid>" > "$ARCH"
 ```
 
 The file contains exactly one line: the 40-character HEAD SHA + newline. No labels, no JSON.
@@ -122,11 +129,11 @@ You: *invokes /approve-architecture 42*  ← CORRECT
 
 ## Relationship to other approval skills
 
-| Skill | Marker | Gate hook | Who invokes |
-|-------|--------|-----------|-------------|
-| `/approve-merge` | `<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
-| `/approve-design` | `<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
-| **`/approve-architecture`** | **`<pr>-architecture.approved`** | **`require-architecture-review.sh`** | On explicit architect per-PR design-review nod (or Tariq writes it on APPROVED) |
+| Skill | Marker (repo-qualified, see AgDR-0060) | Gate hook | Who invokes |
+|-------|----------------------------------------|-----------|-------------|
+| `/approve-merge` | `<owner>__<repo>__<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
+| `/approve-design` | `<owner>__<repo>__<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
+| **`/approve-architecture`** | **`<owner>__<repo>__<pr>-architecture.approved`** | **`require-architecture-review.sh`** | On explicit architect per-PR design-review nod (or Tariq writes it on APPROVED) |
 
 All follow the same pattern: verify PR state → verify Rex marker → write marker at ops fork root → confirm → stop. None runs `gh pr merge`.
 

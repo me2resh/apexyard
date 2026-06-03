@@ -524,7 +524,7 @@ The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.ap
 
 **Resolve `MARKER_HOME` ONCE, at review start, from your initial working directory** — before any `cd`, `git clone`, `gh pr checkout`, or other tool call that might change where you are or what's anchored above you. The walk-up shape below is sensitive to `$PWD`: if you've cloned the fork into `/tmp` for inspection and `cd`'d into the clone first, the walk resolves to that throwaway tree, the marker lands in `/tmp`, and the merge gate (running from the real ops fork) cannot find it. Capture `MARKER_HOME` first; treat it as immutable for the rest of the review. This is the prose discipline; the mechanical safety net is `pin-ops-root.sh` (apexyard#381), which captures the launch-cwd ops root at SessionStart and feeds it to `_lib-ops-root.sh::resolve_ops_root` so adopters on framework versions that ship the hook get the pin automatically — the walk-up below remains as the safety net for older versions and as the resolution method when no pin exists.
 
-Resolve the ops fork root by walking up for `onboarding.yaml` + `apexyard.projects.yaml` (or the `.apexyard-fork` v2 marker):
+Resolve the ops fork root by walking up for `onboarding.yaml` + `apexyard.projects.yaml` (or the `.apexyard-fork` v2 marker), then source the marker path helper (AgDR-0060 / #485):
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -540,25 +540,30 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
+# Resolve the repo this PR belongs to — required for the qualified marker name.
+PR_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+REX_MARKER=$(review_marker_path "$PR_REPO" {number} rex "$MARKER_HOME")
 ```
 
 ### The command
 
-Once `MARKER_HOME` is resolved (see above), use exactly one of these forms:
+Once `MARKER_HOME`, `PR_REPO`, and `REX_MARKER` are resolved (see above), use exactly one of these forms:
 
 ```bash
 # Option A — from the local HEAD of the PR branch
-git rev-parse HEAD > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
+git rev-parse HEAD > "$REX_MARKER"
 
 # Option B — from the PR's HEAD on GitHub (preferred for cross-repo / detached HEAD)
-gh pr view {number} --json headRefOid --jq .headRefOid > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
+gh pr view {number} --json headRefOid --jq .headRefOid > "$REX_MARKER"
 
 # Option C — literal SHA write (when you've already captured the SHA in a variable)
-printf '%s\n' "$SHA" > "$MARKER_HOME/.claude/session/reviews/{number}-rex.approved"
+printf '%s\n' "$SHA" > "$REX_MARKER"
 ```
 
-Where `{number}` is the PR number.
+Where `{number}` is the PR number and `$REX_MARKER` was computed via `review_marker_path` above.
 
 ### Content — MUST be bare SHA + newline
 
@@ -595,7 +600,7 @@ All of these fail the hook's whitespace-strip-then-compare check. The merge gate
 
 ### Where to write
 
-`<ops_fork_root>/.claude/session/reviews/` per the MARKER_HOME resolution above. The merge-gate hook (`block-unreviewed-merge.sh`) resolves the same path via `_lib-ops-root.sh`. Inside a workspace clone (`workspace/<project>/`), this is NOT the project clone's `.claude/session/reviews/` — it's the ops fork above. If running in a nested worktree of the ops fork, the worktree shares the ops fork's session state (worktrees see the parent's tree below `.claude/`).
+The marker lands at `$REX_MARKER` — the repo-qualified path returned by `review_marker_path` above. Its form is `<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` (AgDR-0060). The merge-gate hook resolves the same path via the same helper. Inside a workspace clone (`workspace/<project>/`), this is NOT the project clone's `.claude/session/reviews/` — it's the ops fork above. If running in a nested worktree of the ops fork, the worktree shares the ops fork's session state (worktrees see the parent's tree below `.claude/`).
 
 ### On REQUEST CHANGES or COMMENT verdicts
 
@@ -656,7 +661,7 @@ Report the failure in plain text with the exact command the caller needs to run.
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
    - The PR author must run `/decide` and link the AgDR before re-review
-8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `.claude/session/reviews/{pr}-rex.approved` containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
+8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `$REX_MARKER` (the repo-qualified path from `review_marker_path`; form: `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved`) containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
 9. **Handbooks layer on top of framework rules** — discover and apply handbooks from BOTH the public `handbooks/**/*.md` tree AND (for split-portfolio adopters) the private custom-handbooks dir resolved via `portfolio_custom_handbooks_dir`. See § 8 for the path-convention rules and the discovery shape. Advisory handbooks generate `nit:` / `suggestion:` comments; blocking handbooks (containing `ENFORCEMENT: blocking` at the top of the file) become REQUEST CHANGES verdicts regardless of whether they live in the public or private layer. Adopters extend the standards by adding handbook files; you don't need a code change to teach Rex a new rule.
 
 ## Example Invocation

@@ -87,7 +87,7 @@ Posts a GitHub review comment with:
 - Blocking findings + handbook findings
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
 
-On APPROVED, Tariq writes `<pr>-architecture.approved` so the `require-architecture-review.sh` gate lets the design PR merge.
+On APPROVED, Tariq writes `<owner>__<repo>__<pr>-architecture.approved` (repo-qualified, see AgDR-0060) so the `require-architecture-review.sh` gate lets the design PR merge.
 
 Invokes: Solution Architect Agent (Tariq)
 
