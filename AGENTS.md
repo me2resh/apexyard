@@ -18,7 +18,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 - `handbooks/` — adopter-authored Rex-consumed standards (architecture / general / language buckets, path-convention discovery)
 - `docs/` — adopter docs (`getting-started.md`, `multi-project.md`, `release-process.md`, `agdr/`)
 - `projects/<name>/` — per-managed-project docs (committed to the ops fork)
-- `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote)
+- `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote). **Cursor:** root `.cursorignore` excludes all of `workspace/` from the index (see `docs/cursor-agent-performance.md`)
 - `site/` — marketing site (HTML, deployed via Netlify to `yard.apexscript.com`)
 - `golden-paths/pipelines/` — reusable GitHub Actions workflows for adopter projects
 - `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing)
@@ -32,6 +32,8 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 - `.claude/settings.json` — hook wiring (which scripts fire on which tool events)
 - `.claude/project-config.defaults.json` — framework defaults (immutable from the framework's side; adopters override via `.claude/project-config.json`)
 - `README.md` — public-facing project description + Quick Start
+- `.cursorignore` — Cursor index exclusions (`workspace/` and build artefacts); template at `templates/cursorignore`
+- `docs/cursor-agent-performance.md` — operator checklist for fast Cursor sessions on multi-project forks
 - `LICENSE` — MIT
 
 ## Sandbox & test environments

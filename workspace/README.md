@@ -61,6 +61,15 @@ workspace/*/
 !workspace/README.md
 ```
 
+## Cursor / IDE indexing
+
+Gitignore does **not** stop Cursor from indexing `workspace/` — that still loads every clone (often 100k+ files and heavy `node_modules`), which slows search and burns context tokens.
+
+The ops repo ships **`.cursorignore`** at the root with the same `workspace/` exclusion. Keep it committed. When you need to work inside a clone, either:
+
+- open `workspace/<name>/` as the Cursor workspace root, or
+- temporarily remove that project from `.cursorignore` (then restore it when done)
+
 ## Running skills against the workspace
 
 Portfolio skills iterate the registry; project-specific ones use the current working directory.

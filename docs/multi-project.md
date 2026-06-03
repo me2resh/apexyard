@@ -140,6 +140,8 @@ git clone github.com/your-org/example-app workspace/example-app
 
 `workspace/*/` is already gitignored in apexyard, so the nested clone won't be double-tracked.
 
+**Cursor users:** gitignore alone does not exclude clones from the IDE index. The framework root includes **`.cursorignore`** (same `workspace/` pattern) so agents stay scoped to the ~2k-file ops layer instead of every `node_modules` tree. Open `workspace/<name>/` as its own workspace when you are doing deep work in one app.
+
 ### Verify
 
 ```
@@ -255,10 +257,13 @@ cat > .gitignore <<'IGNORE'
 workspace/*/
 IGNORE
 
+# Cursor: same exclusion as git (see docs/cursor-agent-performance.md)
+cp ~/ops/apexyard/templates/cursorignore .cursorignore
+
 # Keep the dirs alive across the initial commit.
 touch projects/.gitkeep workspace/.gitkeep
 
-git add apexyard.projects.yaml onboarding.yaml projects workspace .gitignore
+git add apexyard.projects.yaml onboarding.yaml projects workspace .gitignore .cursorignore
 git commit -m "chore: initialise private portfolio (split-portfolio v2)"
 git push
 ```

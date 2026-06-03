@@ -891,7 +891,9 @@ and the post-handover discovery skills (~3-15× cheaper than grep on
 shallow semantic queries; ~1.4-5× on multi-hop traces).
 
 Cost: ~tens of MB on disk + a one-time clone. The clone is gitignored
-from your fork (workspace/*/).
+from your fork (workspace/*/). Cursor users: committed `.cursorignore`
+excludes all of `workspace/` from the IDE index — safe to add many
+projects without reconfiguring Cursor (reload once after first commit).
 
 Note: LSP requires `ENABLE_LSP_TOOL=1` and a per-language Claude Code
 LSP plugin installed (the plugin install is your problem — it's not
@@ -911,6 +913,7 @@ The offer **must** explicitly disclose:
 3. **Disk cost** (~tens of MB) and gitignored status (`workspace/*/`)
 4. **Cross-project queries still need grep** — LSP is per-workspace
 5. **Cold-start cost on large monorepos** — 30+ seconds is realistic per the spike
+6. **Cursor index** — `.cursorignore` at the ops root excludes every `workspace/<name>/` clone (scales with portfolio size); open `workspace/<name>/` as its own Cursor root when editing that app
 
 If any of these aren't surfaced in the offer, the adopter accepts a deal they don't understand. Don't compress the prompt past these five.
 

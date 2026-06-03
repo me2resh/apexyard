@@ -323,6 +323,12 @@ After setup, Claude Code will:
 
 ---
 
+## Cursor (ops repo)
+
+If you use **Cursor** on this fork with `workspace/<name>/` clones, keep the committed **`.cursorignore`** (from `templates/cursorignore`). It excludes every clone under `workspace/` from the index so agents stay fast as the portfolio grows. Reload Cursor after the first commit; open `workspace/<name>/` as its own workspace when editing app code. Full checklist: [`cursor-agent-performance.md`](cursor-agent-performance.md).
+
+---
+
 ## Troubleshooting
 
 ### Claude Code doesn't seem to know about the stack

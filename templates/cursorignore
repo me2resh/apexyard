@@ -1,0 +1,23 @@
+# Cursor index exclusions — faster agents and lower token burn.
+# Copy to the repo root as `.cursorignore` (framework ships this file committed).
+# Git ignores workspace clones (.gitignore); Cursor still indexes gitignored
+# paths unless they are listed here.
+#
+# Scales to any number of projects: every clone under workspace/ is excluded
+# automatically — no per-project Cursor config required.
+
+# Managed-project clones (node_modules, builds, often 100k+ files)
+workspace/
+!workspace/README.md
+
+# Local / vendored tool trees (usually untracked)
+.agents/
+.gstack/
+.impeccable/
+
+# Common dependency and build artefacts (if present outside workspace/)
+**/node_modules/
+**/dist/
+**/.next/
+**/target/
+**/__pycache__/

@@ -597,6 +597,30 @@ session start. See docs/multi-project.md § "Centralised agent routing".
 
 No file writes here — purely informational. Added in #351 PR 3.
 
+### Step 7b: Ensure `.cursorignore` for Cursor (REQUIRED when missing)
+
+Cursor indexes gitignored `workspace/` clones unless the ops root ships **`.cursorignore`**. The pattern excludes **all** projects under `workspace/` — no per-project Cursor config as the portfolio grows.
+
+If `.cursorignore` is missing or has no `workspace/` line, install from the template and stage:
+
+```bash
+if [ ! -f .cursorignore ] || ! grep -qE '^[[:space:]]*workspace/' .cursorignore 2>/dev/null; then
+  cp templates/cursorignore .cursorignore
+  git add .cursorignore
+fi
+```
+
+Tell the operator:
+
+```
+.cursorignore staged (or already present). It keeps every workspace/<name>/
+clone out of Cursor's index. After your first /setup commit, reload the
+Cursor window once. When you edit app code, open workspace/<name>/ as its
+own Cursor root. See docs/cursor-agent-performance.md.
+```
+
+In **split-portfolio v2**, also copy `templates/cursorignore` to `.cursorignore` in the **private portfolio repo** if `workspace/` lives there — the public fork file does not cover a sibling path.
+
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
 ```bash

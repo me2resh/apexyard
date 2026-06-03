@@ -22,6 +22,10 @@
           },
           {
             "type": "command",
+            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-cursorignore.sh\"'"
+          },
+          {
+            "type": "command",
             "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
           },
           {

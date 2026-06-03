@@ -1,0 +1,11 @@
+---
+description: Keep Cursor agents fast on ApexYard ops forks (index scope + token discipline)
+alwaysApply: true
+---
+
+# Agent performance (Cursor)
+
+- Prefer in-thread work; avoid subagents and MCP unless the task needs them.
+- Read `.claude/skills/<name>/SKILL.md` on demand — do not preload the skill catalog.
+- The ops repo must ship `.cursorignore` excluding `workspace/` so all managed clones stay out of the index (scales to N projects). See `docs/cursor-agent-performance.md`.
+- When editing code inside a managed project, the operator should open `workspace/<name>/` as the Cursor root, not rely on indexing clones from the ops root.
