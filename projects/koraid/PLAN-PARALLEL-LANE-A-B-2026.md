@@ -75,6 +75,8 @@ npm run calibrate:online-probe -- --remote --analyze-only
 
 Label online runs **`ONLINE-PILOT`** in notes — do **not** mix into 076 sign-off CSV as field truth.
 
+**Latest run (2026-06-03):** 46 YouTube clips — results + sprint/agility reference links in koraid `docs/research/calibration/ONLINE-PROBE-RESULTS-2026-06-03.md` (PR on `koraid` app repo). Pilot sprint MAE ~3.2 s on title-GT only; **no** clip passed `withinTolerance`.
+
 **Literature already in repo:** [cv-accuracy-literature.md](https://github.com/Dr-kersho/koraid/blob/main/docs/research/cv-accuracy-literature.md) (Photo Finish®, MediaPipe sprint, MMPose jump, COD apps).
 
 ---
