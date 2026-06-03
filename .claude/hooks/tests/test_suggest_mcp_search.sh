@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for suggest-mcp-search.sh advisory hook (#418, #469).
+# Tests for suggest-mcp-search.sh advisory hook (#418, #469, #489).
 # Run: bash .claude/hooks/tests/test_suggest_mcp_search.sh
 #
 # #469: the hook now (a) emits its advisory as hookSpecificOutput.additional
@@ -7,6 +7,10 @@
 # and (b) is install-gated — it only fires when `apexyard-search` is configured
 # in a resolvable .mcp.json. These tests inject the gate via a temp
 # $APEXYARD_PORTFOLIO_ROOT/.mcp.json fixture.
+#
+# #489: the hook also fires on Read/Glob/Grep when the target path is inside
+# a managed-project workspace clone (workspace/<project>/). The install-gate
+# applies equally — free adopters without apexyard-search see nothing.
 
 set -u
 
@@ -95,11 +99,58 @@ assert_silent "non-search command (ls)" \
 assert_silent "search but not a framework/workspace path" \
   '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"grep -r \"TODO\" src/"}}' "$MCP_DIR"
 
-assert_silent "non-Bash tool" \
+assert_silent "Bash: non-grep command (ls)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls workspace/"}}' "$MCP_DIR"
+
+assert_silent "Bash: non-grep bash command (npm)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' "$MCP_DIR"
+
+# --- Read / Glob / Grep: fire on workspace/ paths (gate OPEN) ---------------
+
+assert_advisory "Read on workspace/<proj> path" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"workspace/example-app/src/index.ts"}}'
+
+assert_advisory "Glob on workspace/<proj> path" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Glob","tool_input":{"path":"workspace/example-app/src/","pattern":"**/*.ts"}}'
+
+assert_advisory "Grep on workspace/<proj> path" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"path":"workspace/example-app/","pattern":"export"}}'
+
+# --- Read / Glob / Grep: gate CLOSED (free adopter) → silent ----------------
+
+assert_silent "Read: gate closed (no apexyard-search)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"workspace/example-app/src/index.ts"}}' \
+  "$NO_MCP_DIR"
+
+assert_silent "Glob: gate closed (no apexyard-search)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Glob","tool_input":{"path":"workspace/example-app/src/","pattern":"**/*.ts"}}' \
+  "$NO_MCP_DIR"
+
+assert_silent "Grep: gate closed (no apexyard-search)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"path":"workspace/example-app/","pattern":"export"}}' \
+  "$NO_MCP_DIR"
+
+# --- Read / Glob / Grep: paths OUTSIDE workspace/ → silent even gate open ---
+
+assert_silent "Read: path outside workspace/ (framework file)" \
   '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"roles/engineering/tech-lead.md"}}' "$MCP_DIR"
 
-assert_silent "non-grep bash command (npm)" \
-  '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"npm test"}}' "$MCP_DIR"
+assert_silent "Read: path outside workspace/ (src/)" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"src/something.ts"}}' "$MCP_DIR"
+
+assert_silent "Glob: path outside workspace/" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Glob","tool_input":{"path":"src/","pattern":"**/*.ts"}}' "$MCP_DIR"
+
+assert_silent "Grep: path outside workspace/" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Grep","tool_input":{"path":"src/","pattern":"export"}}' "$MCP_DIR"
+
+# --- Other tool types → always silent --------------------------------------
+
+assert_silent "Write tool: not triggered" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"workspace/example-app/src/foo.ts","content":"x"}}' "$MCP_DIR"
+
+assert_silent "Edit tool: not triggered" \
+  '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"workspace/example-app/src/foo.ts","old_string":"x","new_string":"y"}}' "$MCP_DIR"
 
 # --- Report ----------------------------------------------------------------
 echo ""

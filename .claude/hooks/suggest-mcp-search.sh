@@ -2,8 +2,15 @@
 # Advisory hook: reminds the agent to try MCP search tools (search_docs,
 # search_code) before falling back to grep+Read for codebase exploration.
 #
-# Fires on PreToolUse for Bash when the command matches grep/find patterns
-# that target framework or project paths. Non-blocking (exit 0 always).
+# Fires on PreToolUse for:
+#   - Bash: when the command matches grep/find patterns that target framework
+#     or project paths (original behaviour, unchanged).
+#   - Read/Glob/Grep: when the target path resolves inside a managed-project
+#     workspace clone (workspace/<project>/) — closes the bypass where an
+#     agent can sidestep the nudge by using native read tools instead of Bash.
+#     (#489)
+#
+# Non-blocking (exit 0 always).
 #
 # The MCP vector search returns targeted excerpts from indexed chunks,
 # saving ~3-5x tokens compared to reading full files via grep+Read.
@@ -14,68 +21,108 @@
 # invisible to the agent — the exact failure this hook exists to prevent.
 # It is also install-gated: it only nudges when the `apexyard-search` MCP
 # server is actually configured, so adopters without the premium search
-# component fall back to plain grep silently.
+# component fall back to plain grep silently. FREE ADOPTERS SEE NOTHING.
 #
-# Wired to: PreToolUse → Bash (no `if` matcher — checks command internally)
-# See: me2resh/apexyard#418 (original), #469 (additionalContext + install-gate)
+# Wired to: PreToolUse → Bash|Read|Glob|Grep (checks paths/commands internally)
+# See: me2resh/apexyard#418 (original), #469 (additionalContext + install-gate),
+#      #489 (Read/Glob/Grep workspace-path extension)
 
 set -u
 
 INPUT=$(cat)
 
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
-[ "$TOOL_NAME" = "Bash" ] || exit 0
 
-COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-[ -n "$COMMAND" ] || exit 0
+# ---------------------------------------------------------------------------
+# Branch on tool type. Bash uses the original grep/find command scanner.
+# Read/Glob/Grep use a simpler workspace-path check on their input paths.
+# Any other tool exits immediately.
+# ---------------------------------------------------------------------------
 
-# --- Detect grep/find patterns that MCP could serve better ----------------
-
-is_search_command=false
-
-case "$COMMAND" in
-  grep\ -rn*|grep\ -r*|grep\ --include*|grep\ -l*)
-    is_search_command=true ;;
-  *"| grep"*)
-    is_search_command=true ;;
+case "$TOOL_NAME" in
+  Bash) ;;
+  Read|Glob|Grep) ;;
+  *) exit 0 ;;
 esac
 
-if echo "$COMMAND" | grep -qE '^find .+ -name .+\.(md|yaml|yml|ts|tsx|js|py)'; then
-  is_search_command=true
-fi
+if [ "$TOOL_NAME" = "Bash" ]; then
+  # -------------------------------------------------------------------------
+  # BASH BRANCH: original behaviour, unchanged.
+  # -------------------------------------------------------------------------
 
-$is_search_command || exit 0
+  COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  [ -n "$COMMAND" ] || exit 0
 
-# --- Check if the search targets framework or project paths ---------------
+  # --- Detect grep/find patterns that MCP could serve better ---------------
 
-targets_framework=false
+  is_search_command=false
 
-framework_patterns=(
-  ".claude/"
-  "roles/"
-  "workflows/"
-  "templates/"
-  "docs/agdr"
-  "handbooks/"
-  "skills/"
-  "hooks/"
-  "topologies/"
-  "golden-paths/"
-)
+  case "$COMMAND" in
+    grep\ -rn*|grep\ -r*|grep\ --include*|grep\ -l*)
+      is_search_command=true ;;
+    *"| grep"*)
+      is_search_command=true ;;
+  esac
 
-for pattern in "${framework_patterns[@]}"; do
-  if echo "$COMMAND" | grep -q "$pattern"; then
-    targets_framework=true
-    break
+  if echo "$COMMAND" | grep -qE '^find .+ -name .+\.(md|yaml|yml|ts|tsx|js|py)'; then
+    is_search_command=true
   fi
-done
 
-# Also check for workspace/ or projects/ (managed project code)
-if echo "$COMMAND" | grep -qE '(workspace/|projects/)'; then
-  targets_framework=true
+  $is_search_command || exit 0
+
+  # --- Check if the search targets framework or project paths ---------------
+
+  targets_framework=false
+
+  framework_patterns=(
+    ".claude/"
+    "roles/"
+    "workflows/"
+    "templates/"
+    "docs/agdr"
+    "handbooks/"
+    "skills/"
+    "hooks/"
+    "topologies/"
+    "golden-paths/"
+  )
+
+  for pattern in "${framework_patterns[@]}"; do
+    if echo "$COMMAND" | grep -q "$pattern"; then
+      targets_framework=true
+      break
+    fi
+  done
+
+  # Also check for workspace/ or projects/ (managed project code)
+  if echo "$COMMAND" | grep -qE '(workspace/|projects/)'; then
+    targets_framework=true
+  fi
+
+  $targets_framework || exit 0
+
+else
+  # -------------------------------------------------------------------------
+  # READ / GLOB / GREP BRANCH (#489): fire when the target path is inside a
+  # managed-project workspace clone (workspace/<project>/).
+  #
+  # Field layout per Claude Code tool_input schema:
+  #   Read  → .tool_input.file_path
+  #   Glob  → .tool_input.path  (directory to glob in; pattern in .tool_input.pattern)
+  #   Grep  → .tool_input.path  (directory to search in; pattern in .tool_input.pattern)
+  # We use file_path // path to cover all three shapes in one jq query.
+  # -------------------------------------------------------------------------
+
+  TARGET_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+  [ -n "$TARGET_PATH" ] || exit 0
+
+  # Only proceed when the path is inside a workspace clone.
+  case "$TARGET_PATH" in
+    *workspace/*) ;;
+    *) exit 0 ;;
+  esac
+
 fi
-
-$targets_framework || exit 0
 
 # --- Install-gate: only nudge if apexyard-search is actually configured -----
 # Resolve the ops fork from this hook's own location, and also honour
