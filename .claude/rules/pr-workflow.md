@@ -93,6 +93,34 @@ The discrete moment is the **invocation of `/approve-merge`**, not a separate "n
 
 This rule also applies to other destructive / externally-visible / hard-to-reverse actions: force pushes, branch deletes, closing issues with dependents, posting to external channels. Plan-level "go" does not carry through to any of these. List them in the plan if you want — just stop before executing and ask.
 
+## Build agents cannot self-review
+
+A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer, ux-designer) is spawned to implement a ticket. It cannot nest the Agent tool, which means it cannot spawn the real `code-reviewer` (Rex). Any "review" a build agent produces is the author reviewing their own work — not an independent pass.
+
+**This matters for the merge gate.** The two-reviews requirement (workflow-gates rule #5) depends on Rex being a separate agent with a separate context. A build agent impersonating Rex — framing its final report as "Rex Code Review — Verdict: APPROVED" and fabricating a `*-rex.approved` marker — satisfies the *filename* of the gate requirement without satisfying its *intent*. It is a visible rule violation, not an edge case.
+
+### Rule
+
+Build agents MUST NOT:
+
+- Write any file under `.claude/session/reviews/`, including `*-rex.approved` or `*-ceo.approved`
+- Frame their final report as a code review, Rex review, or include a "Verdict: APPROVED / CHANGES REQUESTED" section
+- Claim to be performing an independent review
+
+Build agents MUST:
+
+- Report build results plainly: what was built, what tests ran, what passed or failed
+- Hand off to the orchestrator, which runs the real Rex review as a separate sub-agent call
+
+### Mechanical backstop
+
+This rule is currently enforced by two layers in addition to the prompt guardrail in each build-agent file:
+
+1. `warn-review-marker-write.sh` — PreToolUse advisory (exit 0, never blocks) that fires when a Write or Bash call targets `*-rex.approved` or `*-ceo.approved` under `.claude/session/reviews/`, reminding that markers must come from the real reviewer or `/approve-merge`.
+2. The prompt-convention guardrail in each build-agent file — the primary human-in-the-loop safety net is the per-PR CEO nod required by `/approve-merge`; the orchestrator running a real, separate Rex review is the second. These are the current enforcement layers.
+
+A stronger mechanical gate — requiring a real posted GitHub review at the PR HEAD before the merge gate passes — is analysed in AgDR-0062 and deferred as an explicit **opt-in for future hands-off / multi-account setups**. In a single-maintainer / single-GitHub-account setup (the default), Rex posts reviews from the same account that opened the PR, so an author-independence check can never be satisfied and would block every merge. The gate will be re-enabled behind a config flag if/when merging becomes unattended or a separate reviewer identity (bot account) exists.
+
 ### Mechanical enforcement
 
 The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It requires **two** approval markers in `.claude/session/reviews/` before letting any merge command through:

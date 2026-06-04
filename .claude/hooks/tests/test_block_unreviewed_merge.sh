@@ -572,6 +572,65 @@ else
 fi
 rm -rf "$sb"
 
+# --- warn-review-marker-write.sh tests (#494) -------------------------
+#
+# The advisory hook fires when a Write or Bash command targets a
+# *-rex.approved or *-ceo.approved file. It must always exit 0.
+
+WARN_HOOK_SRC="$SRC_ROOT/.claude/hooks/warn-review-marker-write.sh"
+if [ ! -f "$WARN_HOOK_SRC" ]; then
+  echo "FAIL: warn-review-marker-write.sh not found at $WARN_HOOK_SRC" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-missing "
+else
+  # W1: Write to a rex.approved path → advisory fires, exit 0
+  input=$(jq -nc --arg fp ".claude/session/reviews/me2resh__apexyard__42-rex.approved" \
+    '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+    echo "PASS [warn-hook: Write to rex.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: Write to rex.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-write-rex "
+  fi
+
+  # W2: Bash echo redirect to ceo.approved → advisory fires, exit 0
+  input=$(jq -nc --arg c "echo 'sha=abc' > .claude/session/reviews/me2resh__apexyard__42-ceo.approved" \
+    '{tool_name:"Bash", tool_input:{command:$c}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+    echo "PASS [warn-hook: Bash echo to ceo.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: Bash echo to ceo.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-bash-ceo "
+  fi
+
+  # W3: Write to an unrelated path → no advisory, exit 0
+  input=$(jq -nc --arg fp "src/some-other-file.ts" \
+    '{tool_name:"Write", tool_input:{file_path:$fp, content:"x"}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+    echo "PASS [warn-hook: unrelated Write → no advisory, exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: unrelated Write → must be silent]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-unrelated-path "
+  fi
+
+  # W4: Bash command with no marker path → no advisory, exit 0
+  input=$(jq -nc --arg c "gh pr view 42" \
+    '{tool_name:"Bash", tool_input:{command:$c}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+    echo "PASS [warn-hook: non-marker Bash → silent, exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: non-marker Bash → must be silent]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-nonmarker-bash "
+  fi
+fi
+
 # --- Summary ----------------------------------------------------------
 
 echo ""
