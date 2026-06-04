@@ -33,10 +33,12 @@ Chosen: **layers 1 + 2 (prompt guardrail + advisory warn hook); layer 3 (mechani
 The mechanical independent-review gate (option: "Require a real GitHub review at HEAD") would require that the posted GitHub review comes from an identity **other than the PR author**. In the default single-maintainer / single-GitHub-account setup this is unsatisfiable: Rex runs under the same GitHub identity that opened the PR, so any review it posts counts as a self-review by the author. The hook would block every merge regardless of whether the real code-reviewer agent ran.
 
 The gate only adds value when either:
+
 - Merging happens unattended (no human-in-the-loop CEO nod), OR
 - A separate reviewer identity (bot account, team account) is available and Rex is configured to use it
 
 Neither condition is met in the default setup. The real safety in the current setup comes from:
+
 1. The per-PR CEO nod required by `/approve-merge` — a human explicitly names the PR and approves it
 2. The orchestrator calling the real code-reviewer sub-agent as a separate Agent tool invocation
 
@@ -47,6 +49,7 @@ These are not defeated by a build agent writing a local marker file, because the
 **Layer 1 — Prompt guardrail in each build-class agent file:**
 
 Each of the seven build-class agent definitions (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer, ux-designer) now contains an explicit "You cannot self-review" section that:
+
 - Prohibits writing any file under `.claude/session/reviews/`
 - Prohibits framing final reports as "Rex Code Review — Verdict: APPROVED/CHANGES REQUESTED"
 - Instructs the agent to report build results plainly and hand off to the orchestrator
@@ -62,6 +65,7 @@ The corresponding rule text in `.claude/rules/pr-workflow.md` § "Build agents c
 ### Residual risk (honest)
 
 The rex marker remains forgeable: a build agent that reads this AgDR could still deliberately write the marker file. This is accepted because:
+
 - Every merge requires a human CEO nod via `/approve-merge` — the gate is not bypassed by a fabricated marker alone
 - The warn hook makes the violation visible at write time
 - If/when unattended merging becomes a goal, or a separate reviewer identity exists, the mechanical gate from option 2 above can be re-enabled behind a config flag (`require_independent_github_review: true` in `.claude/project-config.json`)

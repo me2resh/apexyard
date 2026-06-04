@@ -102,11 +102,13 @@ A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer,
 ### Rule
 
 Build agents MUST NOT:
+
 - Write any file under `.claude/session/reviews/`, including `*-rex.approved` or `*-ceo.approved`
 - Frame their final report as a code review, Rex review, or include a "Verdict: APPROVED / CHANGES REQUESTED" section
 - Claim to be performing an independent review
 
 Build agents MUST:
+
 - Report build results plainly: what was built, what tests ran, what passed or failed
 - Hand off to the orchestrator, which runs the real Rex review as a separate sub-agent call
 
