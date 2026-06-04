@@ -34,13 +34,21 @@ Chosen: **all three layers**, because they address three distinct failure modes:
 
 3. **Real-GitHub-review gate** (added to `block-unreviewed-merge.sh`) — the merge gate now also calls `gh pr view --json reviews` and rejects the merge if there is no review at the PR HEAD SHA. This is independently verifiable evidence: Rex posted a human-visible review comment to GitHub. A build agent writing a local file cannot satisfy this check.
 
+### Author-independence as the checked property
+
+The gate checks not only that a review exists at HEAD, but that the review was posted by someone **other than the PR author**. GitHub blocks a PR author from formally self-approving their own PR, but it does **not** block self-comments — a build sub-agent can post a `COMMENTED`-type review via `gh pr review --comment` while running as the same GitHub account that opened the PR. Without the author-independence check, a build agent could self-post a COMMENTED review at HEAD, write the local marker, and satisfy the gate — the exact behaviour observed in PR #504 where `atlas-apex` posted three `COMMENTED` self-reviews to demonstrate the vulnerability.
+
+The hook fetches the PR author's login via `gh pr view --json author -q '.author.login'`, then filters reviews to only count those where `.author.login != <pr_author>`. A self-review by the PR author at HEAD — regardless of state — does not count as satisfying the gate.
+
 ### The COMMENT-type review edge case
 
-GitHub's PR review API has three states: `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`. GitHub blocks a PR author from formally approving their own PR — if the `code-reviewer` agent owns the same GitHub account as the PR author, it cannot post an `APPROVED` review. Rex typically posts a `COMMENTED` review (a review comment without a formal verdict). The gate therefore accepts **any review state** (APPROVED, COMMENTED, CHANGES_REQUESTED) at HEAD — the invariant is that a review exists in the GitHub audit trail, not that it carries a specific verdict.
+GitHub's PR review API has three states: `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`. Rex typically posts a `COMMENTED` review (a review comment without a formal verdict). The gate accepts **any review state** (APPROVED, COMMENTED, CHANGES_REQUESTED) at HEAD — the invariant is that an **independent** review exists in the GitHub audit trail, not that it carries a specific verdict. "Independent" means the review author is someone other than the PR author; a self-comment does not satisfy the gate regardless of its state.
 
 ### Graceful degrade on gh unavailability
 
 If the `gh pr view --json reviews` call fails (network outage, auth expiry, `gh` not installed), the hook warns on stderr and falls back to the prior SHA-only behaviour. This mirrors the existing graceful-degrade pattern for `resolve_pr_head` (introduced in #55): an infrastructure failure must not permanently block merges. The warning is visible in the session log, so the operator knows the real-review check was skipped and why.
+
+Note the deliberate-bypass risk: a determined actor could force a gh-failure (e.g. by revoking or corrupting auth credentials mid-session) to reach this weaker SHA-only path. The stderr warning surfaces the skip explicitly, allowing an operator reviewing the session log to decide whether the merge is safe. The degrade is designed for genuine infrastructure outages, not as a loophole — operators should keep `gh` authenticated in all sessions.
 
 ## Consequences
 
@@ -51,7 +59,7 @@ If the `gh pr view --json reviews` call fails (network outage, auth expiry, `gh`
 
 ## Artifacts
 
-- PR: me2resh/apexyard#495 — the three-layer fix
+- PR: me2resh/apexyard#504 — the three-layer fix (author-independence iteration)
 - Issue: me2resh/apexyard#494 — the bug report with observed platform-engineer self-review behaviour
 - Changed files:
   - `.claude/agents/backend-engineer.md` — guardrail section

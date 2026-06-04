@@ -60,8 +60,11 @@ make_sandbox() {
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
   # shape) — return the fixed SHA on stdout, no network involved.
   # Also handles headRefName (sync-PR guard), headRepository (repo extraction, #485),
-  # and reviews (real-GitHub-review gate, #494). The default shim returns a
-  # single COMMENTED review at FIXED_SHA so "happy path" tests keep passing.
+  # reviews (real-GitHub-review gate, #494), and author (author-independence
+  # gate, #494 B1 fix). The default shim:
+  #   - PR author = "atlas-apex" (the build agent / PR author)
+  #   - review author = "rex-bot" (independent reviewer, != PR author)
+  # This ensures happy-path tests pass the author-independence check.
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 # Minimal gh shim for test_block_unreviewed_merge.
@@ -69,7 +72,8 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
-  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
+  *"pr view"*"--json author"*)  echo "atlas-apex" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"},"author":{"login":"rex-bot"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -386,14 +390,15 @@ make_sandbox_with_sync_branch() {
   branch_name="${1:-sync/main-to-dev-after-v2.3.0}"
   sb=$(make_sandbox)
   # Rewrite the gh shim to handle headRefOid, headRefName, headRepository,
-  # and reviews (#494 real-review gate).
+  # author (author-independence gate), and reviews (#494 real-review gate).
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "$branch_name" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
-  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
+  *"pr view"*"--json author"*)  echo "atlas-apex" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"},"author":{"login":"rex-bot"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -411,7 +416,8 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-something" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
-  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
+  *"pr view"*"--json author"*)  echo "atlas-apex" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"},"author":{"login":"rex-bot"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -518,7 +524,8 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/test" ;;
   *"pr view"*"headRepository"*) echo "$repo" ;;
-  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
+  *"pr view"*"--json author"*)  echo "atlas-apex" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"},"author":{"login":"rex-bot"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -581,17 +588,24 @@ rm -rf "$sb"
 
 # --- Real-GitHub-review gate tests (#494) -----------------------------
 #
-# The hook now also calls `gh pr view --json reviews` and requires at
-# least one review at the PR HEAD SHA. These cases extend the gh shim to
-# return synthetic reviews JSON so we can exercise all three branches:
-#   (a) marker present + real review at HEAD → PASS
+# The hook now also calls `gh pr view --json reviews` and requires at least
+# one review at the PR HEAD SHA by an INDEPENDENT reviewer (not the PR
+# author). These cases extend the gh shim to return synthetic reviews JSON
+# so we can exercise all branches:
+#   (a) marker present + independent review at HEAD → PASS
 #   (b) marker present + NO review at HEAD → BLOCK
-#   (c) gh unavailable (shim exits non-zero) → warn + fall back to SHA-only → PASS
+#   (c) marker present + review at DIFFERENT SHA → BLOCK
+#   (d) gh unavailable (shim exits non-zero) → warn + fall back → PASS
+#   (e) marker present + ONLY self-review by PR author at HEAD → BLOCK  (B1 fix)
+#   (f) marker present + independent review at HEAD (explicit) → PASS
 
-# make_sandbox_with_reviews <reviews_json>
-# Returns a sandbox where `gh pr view ... --json reviews` outputs the given JSON.
+# make_sandbox_with_reviews <reviews_json> [pr_author]
+# Returns a sandbox where `gh pr view ... --json reviews` outputs the given JSON
+# and `gh pr view ... --json author` returns the given pr_author login (default:
+# "atlas-apex"). Pass a custom pr_author to test author-independence scenarios.
 make_sandbox_with_reviews() {
   local reviews_json="$1"
+  local pr_author="${2:-atlas-apex}"
   local sb
   sb=$(make_sandbox)
   cat > "$sb/bin/gh" <<EOF
@@ -600,6 +614,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"--json author"*)  echo "${pr_author}" ;;
   *"pr view"*"--json reviews"*) echo '${reviews_json}' ;;
   *) ;;
 esac
@@ -622,25 +637,27 @@ EOF
   echo "$sb"
 }
 
-# Case G1: marker present + real review at HEAD → PASS (#494)
-sb=$(make_sandbox_with_reviews "[{\"state\":\"COMMENTED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"}}]")
+# Case G1: marker present + INDEPENDENT review at HEAD → PASS (#494)
+# PR author = "atlas-apex", review author = "rex-bot" (different login).
+# This is the correct happy path — an independent reviewer posted at HEAD.
+sb=$(make_sandbox_with_reviews "[{\"state\":\"COMMENTED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"},\"author\":{\"login\":\"rex-bot\"}}]" "atlas-apex")
 write_rex_marker "$sb" 400
 write_ceo_marker_structured "$sb" 400
-run_case "rex marker + real GitHub review at HEAD → passes (#494)" 0 "" "$sb" 400
+run_case "rex marker + independent GitHub review at HEAD → passes (#494)" 0 "" "$sb" 400
 
 # Case G2: marker present + NO review at HEAD → BLOCK (#494)
 # Reviews JSON is empty array — no review exists.
 sb=$(make_sandbox_with_reviews "[]")
 write_rex_marker "$sb" 401
 write_ceo_marker_structured "$sb" 401
-run_case "rex marker + NO GitHub review at HEAD → blocks (#494)" 2 "no posted GitHub review at HEAD" "$sb" 401
+run_case "rex marker + NO GitHub review at HEAD → blocks (#494)" 2 "no INDEPENDENT GitHub review at HEAD" "$sb" 401
 
 # Case G3: marker present + review at DIFFERENT SHA → BLOCK (#494)
 # The review was posted for an older commit, not the current HEAD.
-sb=$(make_sandbox_with_reviews "[{\"state\":\"APPROVED\",\"commit\":{\"oid\":\"${WRONG_SHA}\"}}]")
+sb=$(make_sandbox_with_reviews "[{\"state\":\"APPROVED\",\"commit\":{\"oid\":\"${WRONG_SHA}\"},\"author\":{\"login\":\"rex-bot\"}}]" "atlas-apex")
 write_rex_marker "$sb" 402
 write_ceo_marker_structured "$sb" 402
-run_case "rex marker + review at WRONG SHA (not HEAD) → blocks (#494)" 2 "no posted GitHub review at HEAD" "$sb" 402
+run_case "rex marker + review at WRONG SHA (not HEAD) → blocks (#494)" 2 "no INDEPENDENT GitHub review at HEAD" "$sb" 402
 
 # Case G4: gh unavailable → WARN + fall back to SHA-only → PASS (#494 graceful-degrade)
 # gh shim exits non-zero for all calls. HEAD resolution also fails, so the
@@ -683,6 +700,26 @@ else
   echo "FAIL [gh-unavailable → must not block, got rc=$got_rc]: stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}gh-unavailable-degrade "
 fi
+
+# Case G5: ONLY a self-review by the PR author at HEAD → BLOCK (B1 fix)
+# This is the exact attack vector #494 demonstrates: the build sub-agent
+# posts its own COMMENTED review via `gh pr review --comment` (GitHub
+# permits self-comment but not self-approval), then writes the marker.
+# The author-independence check must reject this.
+# PR author = "atlas-apex", review author = "atlas-apex" (same login).
+sb=$(make_sandbox_with_reviews "[{\"state\":\"COMMENTED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"},\"author\":{\"login\":\"atlas-apex\"}}]" "atlas-apex")
+write_rex_marker "$sb" 405
+write_ceo_marker_structured "$sb" 405
+run_case "self-review by PR author at HEAD → BLOCK (author-independence, B1 fix)" 2 "no INDEPENDENT GitHub review at HEAD" "$sb" 405
+
+# Case G6: independent review at HEAD alongside a self-review → PASS
+# Both the PR author and an independent reviewer have posted reviews at HEAD.
+# The gate requires AT LEAST ONE independent review — presence of a self-review
+# alongside it must not cause a false-positive block.
+sb=$(make_sandbox_with_reviews "[{\"state\":\"COMMENTED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"},\"author\":{\"login\":\"atlas-apex\"}},{\"state\":\"APPROVED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"},\"author\":{\"login\":\"rex-bot\"}}]" "atlas-apex")
+write_rex_marker "$sb" 406
+write_ceo_marker_structured "$sb" 406
+run_case "self-review + independent review at HEAD → PASS (independent review satisfies gate)" 0 "" "$sb" 406
 
 # --- warn-review-marker-write.sh tests (#494) -------------------------
 #

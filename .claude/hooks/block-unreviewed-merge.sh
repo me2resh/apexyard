@@ -204,19 +204,40 @@ MSG
 fi
 
 # --- Rex real-GitHub-review check (#494) ---
-# Require a real posted GitHub review at the PR HEAD, not just a local file.
+# Require a real posted GitHub review at the PR HEAD by an INDEPENDENT
+# reviewer (not the PR author), not just a local file.
+#
 # This prevents build agents fabricating a *-rex.approved file without the
-# real code-reviewer agent ever posting a review on GitHub.
+# real code-reviewer agent ever posting a review on GitHub. It also prevents
+# a build sub-agent self-posting a COMMENT-type review via `gh pr review
+# --comment` (GitHub only blocks self-*approval*, not self-*comment*) and
+# then writing the marker. An independent review must exist.
 #
 # Rex posts a COMMENT-type review (GitHub blocks self-approval on own PR)
-# so we accept any review state — APPROVED, COMMENTED, CHANGES_REQUESTED.
-# The invariant is that a human-visible review exists in the GitHub audit
-# trail at HEAD, not that it has a particular verdict.
+# so we accept any review state — APPROVED, COMMENTED, CHANGES_REQUESTED —
+# but the review MUST come from someone other than the PR author.
 #
-# Graceful degrade: if gh is unavailable, warn and skip this check so an
-# infra outage does not permanently block merges. The SHA-match above still
-# applies — the local marker must exist and match HEAD.
+# Graceful degrade: if gh is unavailable (non-zero exit or unparseable JSON),
+# warn and fall back to the prior SHA-only behaviour. An infrastructure
+# failure must not permanently block merges. Note: a determined actor could
+# deliberately trigger a gh-failure (e.g. by revoking auth mid-session) to
+# reach this weaker path — the warning on stderr surfaces that the check was
+# skipped so the operator can decide whether the merge is safe.
 _GH_REVIEW_CHECK_SKIPPED=0
+
+# Fetch the PR author's login so we can exclude self-reviews.
+_PR_AUTHOR=""
+if [ -n "$CMD_REPO" ]; then
+  _PR_AUTHOR=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" \
+    --json author -q '.author.login' 2>/dev/null)
+else
+  _PR_AUTHOR=$(gh pr view "$PR_NUMBER" \
+    --json author -q '.author.login' 2>/dev/null)
+fi
+# A missing author is non-fatal — we will still filter on it below, but
+# if gh failed here it will also fail on the reviews call and we will
+# gracefully degrade from there.
+
 if [ -n "$CMD_REPO" ]; then
   _REVIEWS_JSON=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" \
     --json reviews -q '.reviews' 2>/dev/null)
@@ -232,13 +253,17 @@ if [ -z "$_REVIEWS_JSON" ]; then
 fi
 
 if [ "$_GH_REVIEW_CHECK_SKIPPED" = "0" ] && [ -n "$CURRENT_SHA" ]; then
-  # Look for any review submitted at or after CURRENT_SHA.
+  # Look for any review at CURRENT_SHA by an author OTHER THAN the PR author.
   # GitHub's reviews array contains objects with at least:
-  #   { "state": "APPROVED|COMMENTED|CHANGES_REQUESTED", "commit": { "oid": "<sha>" } }
-  # We accept any review whose commit.oid matches the HEAD SHA.
+  #   { "state": "APPROVED|COMMENTED|CHANGES_REQUESTED",
+  #     "commit": { "oid": "<sha>" },
+  #     "author": { "login": "<login>" } }
+  # We require at least one review where:
+  #   - commit.oid == HEAD sha, AND
+  #   - author.login != the PR author (independent reviewer)
   _REVIEW_AT_HEAD=$(echo "$_REVIEWS_JSON" | \
-    jq -r --arg sha "$CURRENT_SHA" \
-      '[.[] | select(.commit.oid == $sha)] | length' 2>/dev/null)
+    jq -r --arg sha "$CURRENT_SHA" --arg author "$_PR_AUTHOR" \
+      '[.[] | select(.commit.oid == $sha and .author.login != $author)] | length' 2>/dev/null)
 
   if [ -z "$_REVIEW_AT_HEAD" ]; then
     # jq unavailable or parse failed — degrade gracefully.
@@ -246,12 +271,12 @@ if [ "$_GH_REVIEW_CHECK_SKIPPED" = "0" ] && [ -n "$CURRENT_SHA" ]; then
     _GH_REVIEW_CHECK_SKIPPED=1
   elif [ "$_REVIEW_AT_HEAD" = "0" ]; then
     cat >&2 <<MSG
-BLOCKED: rex marker present for PR #${PR_NUMBER} but no posted GitHub review at HEAD ${CURRENT_SHA:0:7}.
+BLOCKED: rex marker present but no INDEPENDENT GitHub review at HEAD ${CURRENT_SHA:0:7} — a self-review by the PR author does not count.
 
-A fabricated local marker file is not sufficient — the real code-reviewer
-(Rex) must post an actual GitHub review on this PR before the merge gate
-can be satisfied. A file written by a build agent (platform-engineer,
-backend-engineer, etc.) does not count.
+A fabricated local marker file is not sufficient, and a review posted by
+the PR author themselves does not satisfy the gate. The real code-reviewer
+(Rex) — running as a different GitHub identity — must post an actual GitHub
+review on this PR before the merge gate can be satisfied.
 
 To unblock:
   1. Invoke the real code-reviewer agent on this PR:
