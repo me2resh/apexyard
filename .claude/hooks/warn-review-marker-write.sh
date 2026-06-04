@@ -9,8 +9,12 @@
 # agent that just finished building the thing being reviewed.
 #
 # This hook NEVER blocks (exit 0 always). It is an advisory nudge, not a gate.
-# The hard enforcement is in block-unreviewed-merge.sh, which requires a real
-# posted GitHub review at HEAD in addition to the local marker file (#494).
+# The real safety is the per-PR human CEO nod (via /approve-merge) plus the
+# orchestrator running the independent review — NOT a mechanical lock. A stronger
+# mechanical gate (requiring a posted, author-independent GitHub review at HEAD)
+# is DEFERRED as a config opt-in for hands-off / multi-account setups (#494) —
+# see AgDR-0062 for why it isn't on by default (single-account maintainers would
+# be locked out).
 #
 # Wired in .claude/settings.json PreToolUse for:
 #   matcher: Write    (catches direct file writes)
@@ -57,9 +61,10 @@ Review markers must only be written by:
   - The /approve-merge skill — writes *-ceo.approved on explicit CEO approval
 
 Build-class agents (backend-engineer, frontend-engineer, platform-engineer,
-product-manager, etc.) MUST NOT write these files. A fabricated marker will
-be rejected at merge time — block-unreviewed-merge.sh requires a real posted
-GitHub review at HEAD in addition to the local marker file (#494).
+product-manager, etc.) MUST NOT write these files. The merge is gated by an
+explicit human CEO nod (/approve-merge) and the orchestrator running the real,
+independent review — a self-written marker substitutes for neither. (A
+mechanical review-authenticity gate is a deferred opt-in — see AgDR-0062.)
 
 If you are a build agent: report your results plainly and hand off to the
 orchestrator. Do not self-review.
