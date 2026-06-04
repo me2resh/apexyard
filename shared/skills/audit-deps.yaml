@@ -1,0 +1,3 @@
+name: audit-deps
+description: Audit dependencies for vulnerabilities, outdated packages, and license compliance.
+body_file: .claude/skills/audit-deps/SKILL.md

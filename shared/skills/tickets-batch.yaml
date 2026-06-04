@@ -1,0 +1,3 @@
+name: tickets-batch
+description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `gh issue create`.
+body_file: .claude/skills/tickets-batch/SKILL.md

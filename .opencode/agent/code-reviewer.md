@@ -5,8 +5,8 @@ model: openai/gpt-5
 permission:
   edit: deny
   bash: ask
-  webfetch: deny
-  websearch: deny
+  webfetch: allow
+  websearch: allow
 ---
 
 # Code Reviewer Agent

@@ -1,56 +1,53 @@
 #!/usr/bin/env bun
 /**
- * check-secrets hook
+ * check-secrets hook — auto-generated wrapper.
  *
- * Scans staged files for common secret patterns (API keys, tokens, passwords)
- * before `git commit`. Blocks the commit if any pattern matches.
- * Mirrors .claude/hooks/check-secrets.sh
+ * Wraps the original bash implementation in .claude/hooks/check-secrets.sh as an
+ * OpenCode TypeScript plugin. The bash logic is the source of truth (100%
+ * preserved); this wrapper just shells out to it and bridges the JSON I/O.
+ *
+ * OpenCode plugin event: tool.execute.before
  */
 
-import { execSync } from "node:child_process"
+import { spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { join, dirname } from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
 
-const PATTERNS: { name: string; regex: RegExp }[] = [
-  { name: "AWS access key", regex: /AKIA[0-9A-Z]{16}/ },
-  { name: "AWS secret key", regex: /aws_secret_access_key\s*=\s*["'][A-Za-z0-9/+=]{40}["']/i },
-  { name: "GitHub token", regex: /gh[pousr]_[A-Za-z0-9]{36,}/ },
-  { name: "OpenAI key", regex: /sk-[A-Za-z0-9]{20,}/ },
-  { name: "Generic API key", regex: /(?:api[_-]?key|apikey)\s*[:=]\s*["'][A-Za-z0-9_\-]{20,}["']/i },
-  { name: "Private key block", regex: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/ },
-  { name: "Slack token", regex: /xox[abposr]-[A-Za-z0-9-]{10,}/ },
-  { name: "Stripe key", regex: /sk_(?:live|test)_[A-Za-z0-9]{24,}/ },
-  { name: "Google API key", regex: /AIza[0-9A-Za-z\-_]{35}/ },
-]
+const REPO_ROOT = join(import.meta.dir, "..", "..")
+const BASH_SCRIPT = join(REPO_ROOT, ".claude", "hooks", "check-secrets.sh")
 
-const checkSecrets: Plugin = async ({ directory }) => {
+interface BashInput {
+  tool: string
+  args: Record<string, any>
+}
+
+function runBashHook(input: BashInput): { ok: boolean; stderr: string } {
+  if (!existsSync(BASH_SCRIPT)) {
+    return { ok: true, stderr: `[check-secrets] bash script not found, skipping` }
+  }
+  const payload = JSON.stringify({ tool_name: input.tool, tool_input: input.args })
+  const result = spawnSync("bash", [BASH_SCRIPT], {
+    input: payload,
+    encoding: "utf-8",
+    maxBuffer: 50 * 1024 * 1024,
+  })
+  if (result.status === 0) return { ok: true, stderr: "" }
+  if (result.status === 2) {
+    return { ok: false, stderr: result.stderr || "blocked" }
+  }
+  return { ok: true, stderr: result.stderr }
+}
+
+const check_secrets: Plugin = async () => {
   return {
     "tool.execute.before": async (input, output) => {
-      if (input.tool !== "bash") return
-      const cmd = (output.args?.command as string) || ""
-      if (!/^git\s+commit\b/.test(cmd.trim())) return
-      let diff = ""
-      try {
-        diff = execSync("git diff --cached --diff-filter=ACMR", {
-          cwd: directory,
-          encoding: "utf-8",
-          maxBuffer: 50 * 1024 * 1024,
-        })
-      } catch (e: any) {
-        return
-      }
-      if (!diff) return
-      const findings: string[] = []
-      for (const { name, regex } of PATTERNS) {
-        if (regex.test(diff)) findings.push(name)
-      }
-      if (findings.length > 0) {
-        throw new Error(
-          `BLOCKED: Possible secrets detected in staged changes:\n  - ${findings.join("\n  - ")}\n\n` +
-            `Move secrets to env vars or a secrets manager, or use a skip marker.`,
-        )
+      const r = runBashHook({ tool: input.tool, args: output.args || {} })
+      if (!r.ok) {
+        throw new Error(`BLOCKED by check-secrets hook:\n${r.stderr}`)
       }
     },
   }
 }
 
-export default checkSecrets
+export default check_secrets

@@ -1,0 +1,4 @@
+name: threat-model
+description: STRIDE threat modelling — spoofing, tampering, repudiation, disclosure, DoS, EoP. Deep-dive for /launch-check security.
+effort: high
+body_file: .claude/skills/threat-model/SKILL.md

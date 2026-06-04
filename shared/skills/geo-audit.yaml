@@ -1,0 +1,4 @@
+name: geo-audit
+description: GEO + AEO audit — `llms.txt`, `AGENTS.md`, AI-crawler robots, JSON-LD citation grounding. Sibling to /seo-audit.
+effort: medium
+body_file: .claude/skills/geo-audit/SKILL.md

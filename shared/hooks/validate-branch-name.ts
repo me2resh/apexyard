@@ -1,47 +1,53 @@
 #!/usr/bin/env bun
 /**
- * validate-branch-name hook
+ * validate-branch-name hook — auto-generated wrapper.
  *
- * Enforces branch naming convention: {type}/{TICKET-ID}-{description}
- * Types: feature, fix, refactor, chore, docs, test, spike, ci, build, perf
- * Mirrors .claude/hooks/validate-branch-name.sh
+ * Wraps the original bash implementation in .claude/hooks/validate-branch-name.sh as an
+ * OpenCode TypeScript plugin. The bash logic is the source of truth (100%
+ * preserved); this wrapper just shells out to it and bridges the JSON I/O.
+ *
+ * OpenCode plugin event: tool.execute.before
  */
 
-import { execSync } from "node:child_process"
+import { spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { join, dirname } from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
 
-const TYPES = ["feature", "fix", "refactor", "chore", "docs", "test", "spike", "ci", "build", "perf"]
-const TICKET_PATTERN = /^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$/
-const BRANCH_REGEX = /^(feature|fix|refactor|chore|docs|test|spike|ci|build|perf)\/((?:#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+))-[a-z0-9][a-z0-9-]*$/
+const REPO_ROOT = join(import.meta.dir, "..", "..")
+const BASH_SCRIPT = join(REPO_ROOT, ".claude", "hooks", "validate-branch-name.sh")
 
-const validateBranchName: Plugin = async ({ directory }) => {
+interface BashInput {
+  tool: string
+  args: Record<string, any>
+}
+
+function runBashHook(input: BashInput): { ok: boolean; stderr: string } {
+  if (!existsSync(BASH_SCRIPT)) {
+    return { ok: true, stderr: `[validate-branch-name] bash script not found, skipping` }
+  }
+  const payload = JSON.stringify({ tool_name: input.tool, tool_input: input.args })
+  const result = spawnSync("bash", [BASH_SCRIPT], {
+    input: payload,
+    encoding: "utf-8",
+    maxBuffer: 50 * 1024 * 1024,
+  })
+  if (result.status === 0) return { ok: true, stderr: "" }
+  if (result.status === 2) {
+    return { ok: false, stderr: result.stderr || "blocked" }
+  }
+  return { ok: true, stderr: result.stderr }
+}
+
+const validate_branch_name: Plugin = async () => {
   return {
     "tool.execute.before": async (input, output) => {
-      if (input.tool !== "bash") return
-      const cmd = (output.args?.command as string) || ""
-      // Only check on push, on switch (post-creation), or first commit per session
-      if (!/^git\s+(push|checkout\s+-b|switch\s+-c)\b/.test(cmd.trim())) return
-      let branch = ""
-      try {
-        branch = execSync("git symbolic-ref --short HEAD", { cwd: directory, encoding: "utf-8" }).trim()
-      } catch {
-        return
-      }
-      if (!BRANCH_REGEX.test(branch)) {
-        const m = branch.match(/^([^/]+)\/(.+)$/)
-        const typeOk = m && TYPES.includes(m[1])
-        const ticketOk = m && TICKET_PATTERN.test(m[2].split("-")[0])
-        if (!typeOk || !ticketOk) {
-          throw new Error(
-            `BLOCKED: Branch name '${branch}' doesn't match convention.\n` +
-              `Expected: {type}/{TICKET-ID}-{description}\n` +
-              `Types: ${TYPES.join(", ")}\n` +
-              `Example: feature/GH-42-add-csv-export`,
-          )
-        }
+      const r = runBashHook({ tool: input.tool, args: output.args || {} })
+      if (!r.ok) {
+        throw new Error(`BLOCKED by validate-branch-name hook:\n${r.stderr}`)
       }
     },
   }
 }
 
-export default validateBranchName
+export default validate_branch_name

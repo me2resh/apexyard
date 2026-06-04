@@ -1,0 +1,3 @@
+name: roadmap
+description: Update / create / reprioritise the product roadmap — add, remove, reorder milestones; renders a markdown table per milestone.
+body_file: .claude/skills/roadmap/SKILL.md

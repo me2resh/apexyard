@@ -1,0 +1,4 @@
+name: launch-check
+description: Production readiness audit — 10-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs, behaviour-quality).
+effort: high
+body_file: .claude/skills/launch-check/SKILL.md

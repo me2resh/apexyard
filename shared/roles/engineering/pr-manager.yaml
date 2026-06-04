@@ -1,0 +1,12 @@
+name: pr-manager
+department: engineering
+description: Coordinates PR lifecycle from creation to merge. Enforces 2-review workflow, commit SHA verification, and auto-merge on human approval.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/pr-manager.md
+persona: Tariq

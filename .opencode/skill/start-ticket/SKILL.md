@@ -4,7 +4,6 @@ description: Declare an active ticket so the ticket-first hook lets code edits t
 ---
 
 <!-- effort: low -->
-<!-- argument-hint: <issue-number> | <owner/repo>#<number> -->
 # /start-ticket - Declare the Active Ticket
 
 Writes a session marker so the `require-active-ticket.sh` PreToolUse hook permits Edit/Write on code paths. Without it, the hook blocks edits to anything outside `.claude/`, `docs/`, `projects/*/docs/`, and `*.md`.

@@ -1,0 +1,3 @@
+name: tech-vision
+description: Interactive author for the architecture vision template — target, gap, migration, anti-scope, cadence.
+body_file: .claude/skills/tech-vision/SKILL.md

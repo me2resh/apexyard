@@ -1,0 +1,3 @@
+name: investigation
+description: Create an investigation ticket + live-doc for sustained root-cause work (retros, bug archaeology, regression hunts).
+body_file: .claude/skills/investigation/SKILL.md

@@ -1,0 +1,12 @@
+name: data-engineer
+department: data
+description: Builds ETL pipelines, designs data models, owns data-quality work, and manages warehouse schema changes. Activates on ETL / data-modelling / warehouse-schema / data-quality work — pipeline implementation, often in-flow with Backend Engineer handoff.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/data-engineer.md
+persona: Anwar

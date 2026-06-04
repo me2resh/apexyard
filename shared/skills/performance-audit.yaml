@@ -1,0 +1,4 @@
+name: performance-audit
+description: Performance audit — bundle size, image opt, lazy load, code split, caching, CWV. Deep-dive for /launch-check performance.
+effort: medium
+body_file: .claude/skills/performance-audit/SKILL.md

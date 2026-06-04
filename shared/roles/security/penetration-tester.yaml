@@ -1,0 +1,12 @@
+name: penetration-tester
+department: security
+description: Adversarial security testing, exploit discovery, API security review, and pre-release security sign-off. Activates on explicit invocation for active testing, exploit reasoning, or hardening checks; not auto-fired on diff content.
+mode: subagent
+model: openai/gpt-5
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/penetration-tester.md
+persona: Hamza

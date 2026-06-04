@@ -1,0 +1,4 @@
+name: fan-out
+description: Spawn N parallel Agent calls in one message (per-task agent type, worktree isolation, background mode).
+effort: medium
+body_file: .claude/skills/fan-out/SKILL.md

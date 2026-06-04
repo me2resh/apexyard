@@ -1,0 +1,4 @@
+name: debug
+description: Hypothesis-driven debugging — architecture-first reading + evidence-before-fix. For bugs that resisted naïve fix attempts.
+effort: medium
+body_file: .claude/skills/debug/SKILL.md

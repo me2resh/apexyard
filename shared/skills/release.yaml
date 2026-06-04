@@ -1,0 +1,3 @@
+name: release
+description: Cut an apexyard release — diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, tag + push after merge.
+body_file: .claude/skills/release/SKILL.md

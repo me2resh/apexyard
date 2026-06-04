@@ -1,0 +1,12 @@
+name: ux-designer
+department: design
+description: Focuses on user flows, information architecture, and usability — documenting journeys and ensuring products are intuitive and efficient. Activates on user flows, information architecture, usability review, or wireframing.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/ux-designer.md
+persona: Iman

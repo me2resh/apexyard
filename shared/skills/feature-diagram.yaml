@@ -1,0 +1,3 @@
+name: feature-diagram
+description: Per-feature Mermaid flowchart — routes / models / jobs / screens. Consumes /extract-features inventory.
+body_file: .claude/skills/feature-diagram/SKILL.md

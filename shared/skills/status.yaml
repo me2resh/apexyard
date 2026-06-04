@@ -1,0 +1,3 @@
+name: status
+description: Project snapshot — git state, open PRs + CI, recent merges, in-progress issue. Use `--briefing` for compact form.
+body_file: .claude/skills/status/SKILL.md

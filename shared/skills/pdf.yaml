@@ -1,0 +1,3 @@
+name: pdf
+description: Convert markdown/HTML/BPMN to PDF (pandoc/md-to-pdf/wkhtmltopdf/bpmn-to-image), destination-prompted; graceful-degrades.
+body_file: .claude/skills/pdf/SKILL.md

@@ -15,6 +15,30 @@ edit = "ask"
 bash = "ask"
 webfetch = "allow"
 
+[agents.data-analyst]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.data-engineer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.head-of-data]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.head-of-design]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.ui-designer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.ux-designer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
 [agents.backend-engineer]
 model = "opencode/minimax-m3-free"
 mode = "subagent"
@@ -23,7 +47,63 @@ mode = "subagent"
 model = "openai/gpt-5"
 mode = "subagent"
 
+[agents.dependency-auditor]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.frontend-engineer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.head-of-engineering]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.platform-engineer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.pr-manager]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.qa-engineer]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.sre]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
 [agents.tech-lead]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.ticket-manager]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.head-of-product]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.product-analyst]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.product-manager]
+model = "opencode/minimax-m3-free"
+mode = "subagent"
+
+[agents.head-of-security]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.penetration-tester]
+model = "openai/gpt-5"
+mode = "subagent"
+
+[agents.security-reviewer]
 model = "openai/gpt-5"
 mode = "subagent"
 

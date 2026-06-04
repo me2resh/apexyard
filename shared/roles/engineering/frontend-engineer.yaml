@@ -1,0 +1,12 @@
+name: frontend-engineer
+department: engineering
+description: Builds user interfaces following the design system — accessible, performant, and delightful. Activates during the Build phase on UI code, component work, design-system integration, or accessibility review.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/frontend-engineer.md
+persona: Yasmin

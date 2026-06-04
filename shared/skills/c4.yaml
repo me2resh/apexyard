@@ -1,0 +1,3 @@
+name: c4
+description: Generate C4 L1 (Context) + L2 (Container) Mermaid diagrams from a project's codebase.
+body_file: .claude/skills/c4/SKILL.md

@@ -1,0 +1,12 @@
+name: sre
+department: engineering
+description: Ensures systems are reliable, observable, and resilient — applies engineering to operational problems. Activates on production incidents, SLO breaches, monitoring / alerting work, or on-call rotation.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/sre.md
+persona: Saif

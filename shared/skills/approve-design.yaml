@@ -1,0 +1,4 @@
+name: approve-design
+description: Record per-PR design-review approval (UI merge gate). ONLY on an explicit per-PR designer "approved".
+effort: low
+body_file: .claude/skills/approve-design/SKILL.md

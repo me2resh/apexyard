@@ -14,6 +14,66 @@
     }
   },
   "agent": {
+    "data-analyst": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "data-engineer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "head-of-data": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "head-of-design": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "ui-designer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "ux-designer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
     "backend-engineer": {
       "model": "opencode/minimax-m3-free",
       "mode": "subagent",
@@ -30,8 +90,78 @@
       "permission": {
         "edit": "deny",
         "bash": "ask",
-        "webfetch": "deny",
-        "websearch": "deny"
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "dependency-auditor": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "frontend-engineer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "head-of-engineering": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "platform-engineer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "pr-manager": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "qa-engineer": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "sre": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
       }
     },
     "tech-lead": {
@@ -39,6 +169,76 @@
       "mode": "subagent",
       "permission": {
         "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "ticket-manager": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "head-of-product": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "product-analyst": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "product-manager": {
+      "model": "opencode/minimax-m3-free",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "head-of-security": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "penetration-tester": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "ask",
+        "webfetch": "allow",
+        "websearch": "allow"
+      }
+    },
+    "security-reviewer": {
+      "model": "openai/gpt-5",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
         "bash": "ask",
         "webfetch": "allow",
         "websearch": "allow"

@@ -1,0 +1,3 @@
+name: inbox
+description: Show every item across managed projects needing the user's attention — PRs, assigned issues, comments, blockers.
+body_file: .claude/skills/inbox/SKILL.md

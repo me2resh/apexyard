@@ -4,18 +4,80 @@
 // under unique keys for OpenCode's plugin loader.
 import type { Plugin } from "@opencode-ai/plugin"
 
-import _hook_0 from "../../shared/hooks/block-git-add-all.ts"
-import _hook_1 from "../../shared/hooks/block-main-push.ts"
-import _hook_2 from "../../shared/hooks/check-secrets.ts"
-import _hook_3 from "../../shared/hooks/require-active-ticket.ts"
-import _hook_4 from "../../shared/hooks/validate-branch-name.ts"
+import _hook_0 from "../../shared/hooks/apply-agent-routing.ts"
+import _hook_1 from "../../shared/hooks/auto-code-review.ts"
+import _hook_2 from "../../shared/hooks/block-agent-routing-drift.ts"
+import _hook_3 from "../../shared/hooks/block-git-add-all.ts"
+import _hook_4 from "../../shared/hooks/block-main-push.ts"
+import _hook_5 from "../../shared/hooks/block-merge-on-red-ci.ts"
+import _hook_6 from "../../shared/hooks/block-private-refs-in-public-repos.ts"
+import _hook_7 from "../../shared/hooks/block-unreviewed-merge.ts"
+import _hook_8 from "../../shared/hooks/check-jq-installed.ts"
+import _hook_9 from "../../shared/hooks/check-portfolio-config.ts"
+import _hook_10 from "../../shared/hooks/check-secrets.ts"
+import _hook_11 from "../../shared/hooks/check-upstream-drift.ts"
+import _hook_12 from "../../shared/hooks/clear-bootstrap-marker.ts"
+import _hook_13 from "../../shared/hooks/clear-issue-skill-marker.ts"
+import _hook_14 from "../../shared/hooks/detect-role-trigger.ts"
+import _hook_15 from "../../shared/hooks/link-custom-skills.ts"
+import _hook_16 from "../../shared/hooks/onboarding-check.ts"
+import _hook_17 from "../../shared/hooks/pin-ops-root.ts"
+import _hook_18 from "../../shared/hooks/pre-push-gate.ts"
+import _hook_19 from "../../shared/hooks/remind-mcp-tools.ts"
+import _hook_20 from "../../shared/hooks/require-active-ticket.ts"
+import _hook_21 from "../../shared/hooks/require-agdr-for-arch-changes.ts"
+import _hook_22 from "../../shared/hooks/require-agdr-for-arch-pr.ts"
+import _hook_23 from "../../shared/hooks/require-design-review-for-ui.ts"
+import _hook_24 from "../../shared/hooks/require-migration-ticket.ts"
+import _hook_25 from "../../shared/hooks/require-skill-for-issue-create.ts"
+import _hook_26 from "../../shared/hooks/suggest-mcp-reindex-after-clone.ts"
+import _hook_27 from "../../shared/hooks/suggest-mcp-search.ts"
+import _hook_28 from "../../shared/hooks/suggest-ticket-template.ts"
+import _hook_29 from "../../shared/hooks/validate-branch-name.ts"
+import _hook_30 from "../../shared/hooks/validate-commit-format.ts"
+import _hook_31 from "../../shared/hooks/validate-issue-structure.ts"
+import _hook_32 from "../../shared/hooks/validate-pr-create.ts"
+import _hook_33 from "../../shared/hooks/verify-commit-refs.ts"
+import _hook_34 from "../../shared/hooks/warn-bootstrap-scope.ts"
+import _hook_35 from "../../shared/hooks/warn-stale-review-markers.ts"
 
 const hooks = {
-  "block-git-add-all": _hook_0,
-  "block-main-push": _hook_1,
-  "check-secrets": _hook_2,
-  "require-active-ticket": _hook_3,
-  "validate-branch-name": _hook_4,
+  "apply-agent-routing": _hook_0,
+  "auto-code-review": _hook_1,
+  "block-agent-routing-drift": _hook_2,
+  "block-git-add-all": _hook_3,
+  "block-main-push": _hook_4,
+  "block-merge-on-red-ci": _hook_5,
+  "block-private-refs-in-public-repos": _hook_6,
+  "block-unreviewed-merge": _hook_7,
+  "check-jq-installed": _hook_8,
+  "check-portfolio-config": _hook_9,
+  "check-secrets": _hook_10,
+  "check-upstream-drift": _hook_11,
+  "clear-bootstrap-marker": _hook_12,
+  "clear-issue-skill-marker": _hook_13,
+  "detect-role-trigger": _hook_14,
+  "link-custom-skills": _hook_15,
+  "onboarding-check": _hook_16,
+  "pin-ops-root": _hook_17,
+  "pre-push-gate": _hook_18,
+  "remind-mcp-tools": _hook_19,
+  "require-active-ticket": _hook_20,
+  "require-agdr-for-arch-changes": _hook_21,
+  "require-agdr-for-arch-pr": _hook_22,
+  "require-design-review-for-ui": _hook_23,
+  "require-migration-ticket": _hook_24,
+  "require-skill-for-issue-create": _hook_25,
+  "suggest-mcp-reindex-after-clone": _hook_26,
+  "suggest-mcp-search": _hook_27,
+  "suggest-ticket-template": _hook_28,
+  "validate-branch-name": _hook_29,
+  "validate-commit-format": _hook_30,
+  "validate-issue-structure": _hook_31,
+  "validate-pr-create": _hook_32,
+  "verify-commit-refs": _hook_33,
+  "warn-bootstrap-scope": _hook_34,
+  "warn-stale-review-markers": _hook_35,
 }
 
 export const ApexyardHooks: Plugin = async (ctx) => {

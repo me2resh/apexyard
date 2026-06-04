@@ -1,0 +1,3 @@
+name: write-spec
+description: Write a feature spec or PRD from a problem statement or feature idea. Use when creating product requirements documents.
+body_file: .claude/skills/write-spec/SKILL.md

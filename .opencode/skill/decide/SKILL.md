@@ -3,8 +3,6 @@ name: decide
 description: Make a technical decision with structured reasoning and create an Agent Decision Record (AgDR).
 ---
 
-<!-- effort: medium -->
-<!-- argument-hint: <what you're deciding> -->
 # /decide — Technical Decision Gate
 
 Forces structured decision-making and creates an auditable Agent Decision Record (AgDR).

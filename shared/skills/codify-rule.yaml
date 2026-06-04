@@ -1,0 +1,3 @@
+name: codify-rule
+description: Turn a review comment that caught a Rex-miss into a draft handbook entry — Y/N gate, source-PR footer, bucket-routed.
+body_file: .claude/skills/codify-rule/SKILL.md

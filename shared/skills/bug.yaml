@@ -1,0 +1,3 @@
+name: bug
+description: Create a structured bug ticket (Given/When/Then scenario, repro steps, severity).
+body_file: .claude/skills/bug/SKILL.md

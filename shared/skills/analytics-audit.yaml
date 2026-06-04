@@ -1,0 +1,4 @@
+name: analytics-audit
+description: Analytics audit — SDK config, event naming, funnel completeness, dashboards. Deep-dive for /launch-check analytics.
+effort: medium
+body_file: .claude/skills/analytics-audit/SKILL.md

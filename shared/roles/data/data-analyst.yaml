@@ -1,0 +1,12 @@
+name: data-analyst
+department: data
+description: Writes SQL, builds dashboards, runs A/B-test analysis, and investigates metrics. Activates on SQL / dashboard / A/B-test / metric-investigation work — quantitative, fast, narrow tool-use (candidate for local-model routing per
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/data-analyst.md
+persona: Nadia

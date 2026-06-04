@@ -1,0 +1,3 @@
+name: idea
+description: Capture a new product idea / feature concept / internal tool proposal to the ideas backlog (pre-triage).
+body_file: .claude/skills/idea/SKILL.md

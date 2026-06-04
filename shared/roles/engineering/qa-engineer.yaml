@@ -1,0 +1,12 @@
+name: qa-engineer
+department: engineering
+description: Verifies acceptance criteria on merged PRs, triages bugs, runs regression checks, and signs off tickets before they move to Done. Activates when a ticket enters the QA state after merge. Read-only by design — QA verifies, doesn't ship.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/qa-engineer.md
+persona: Salim

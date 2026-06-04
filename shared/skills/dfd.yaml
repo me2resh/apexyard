@@ -1,0 +1,3 @@
+name: dfd
+description: DFD with trust boundaries + data classifications (Mermaid + optional Threat Dragon JSON). Source-of-truth for /threat-model.
+body_file: .claude/skills/dfd/SKILL.md

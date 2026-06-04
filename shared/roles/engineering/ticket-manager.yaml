@@ -1,0 +1,12 @@
+name: ticket-manager
+department: engineering
+description: Creates and manages GitHub Issues in the project's own repo for all work tracking. Use when a new task is starting, a PR is being created, or work needs tracking.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/ticket-manager.md
+persona: Idris

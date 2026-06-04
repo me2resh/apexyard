@@ -1,5 +1,4 @@
 name: start-ticket
 description: Declare an active ticket so the ticket-first hook lets code edits through. Accepts `<N>` or `<owner>/<repo>#<N>`.
 effort: low
-argument_hint: "<issue-number> | <owner/repo>#<number>"
 body_file: .claude/skills/start-ticket/SKILL.md

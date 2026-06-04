@@ -1,0 +1,12 @@
+name: head-of-data
+department: data
+description: Owns analytics strategy, data governance, reporting architecture, and cross-project data modelling. Activates on cross-project data calls, governance decisions, reporting-architecture reviews, and strategic data tooling choices.
+mode: subagent
+model: openai/gpt-5
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/head-of-data.md
+persona: Khalil

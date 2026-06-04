@@ -1,0 +1,3 @@
+name: handover
+description: Onboard an external repo via a structured handover assessment + harnessability scoring across 5 codebase dimensions.
+body_file: .claude/skills/handover/SKILL.md

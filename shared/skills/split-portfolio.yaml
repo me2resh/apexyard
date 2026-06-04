@@ -1,0 +1,4 @@
+name: split-portfolio
+description: Migrate single-fork to split-portfolio mode (public framework + private portfolio) via gated destructive recovery flow.
+effort: high
+body_file: .claude/skills/split-portfolio/SKILL.md

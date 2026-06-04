@@ -1,0 +1,3 @@
+name: update
+description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch, walk per-version migrations.
+body_file: .claude/skills/update/SKILL.md

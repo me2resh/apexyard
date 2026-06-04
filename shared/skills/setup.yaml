@@ -1,5 +1,4 @@
 name: setup
 description: First-run framework bootstrap — 3 exchanges (describe stack → defaults → accept/customize) and the fork is configured.
 effort: medium
-argument_hint: "[--reset] [--enable-lsp]"
 body_file: .claude/skills/setup/SKILL.md

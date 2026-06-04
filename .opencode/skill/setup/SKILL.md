@@ -4,7 +4,6 @@ description: First-run framework bootstrap — 3 exchanges (describe stack → d
 ---
 
 <!-- effort: medium -->
-<!-- argument-hint: [--reset] [--enable-lsp] -->
 # /setup — ApexYard First-Run Bootstrap
 
 Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.

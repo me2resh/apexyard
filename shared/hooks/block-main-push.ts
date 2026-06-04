@@ -1,33 +1,53 @@
 #!/usr/bin/env bun
 /**
- * block-main-push hook
+ * block-main-push hook — auto-generated wrapper.
  *
- * Blocks `git push` to protected branches (main, master, dev, develop).
- * Mirrors .claude/hooks/block-main-push.sh
+ * Wraps the original bash implementation in .claude/hooks/block-main-push.sh as an
+ * OpenCode TypeScript plugin. The bash logic is the source of truth (100%
+ * preserved); this wrapper just shells out to it and bridges the JSON I/O.
+ *
+ * OpenCode plugin event: tool.execute.before
  */
 
+import { spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { join, dirname } from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
 
-const PROTECTED = ["main", "master", "dev", "develop"]
+const REPO_ROOT = join(import.meta.dir, "..", "..")
+const BASH_SCRIPT = join(REPO_ROOT, ".claude", "hooks", "block-main-push.sh")
 
-const blockMainPush: Plugin = async () => {
+interface BashInput {
+  tool: string
+  args: Record<string, any>
+}
+
+function runBashHook(input: BashInput): { ok: boolean; stderr: string } {
+  if (!existsSync(BASH_SCRIPT)) {
+    return { ok: true, stderr: `[block-main-push] bash script not found, skipping` }
+  }
+  const payload = JSON.stringify({ tool_name: input.tool, tool_input: input.args })
+  const result = spawnSync("bash", [BASH_SCRIPT], {
+    input: payload,
+    encoding: "utf-8",
+    maxBuffer: 50 * 1024 * 1024,
+  })
+  if (result.status === 0) return { ok: true, stderr: "" }
+  if (result.status === 2) {
+    return { ok: false, stderr: result.stderr || "blocked" }
+  }
+  return { ok: true, stderr: result.stderr }
+}
+
+const block_main_push: Plugin = async () => {
   return {
     "tool.execute.before": async (input, output) => {
-      if (input.tool !== "bash") return
-      const cmd = (output.args?.command as string) || ""
-      if (!/^git\s+push\b/.test(cmd.trim())) return
-      const m = cmd.match(/^git\s+push\s+(?:-[a-z]+\s+)*([^\s]+)\s+([^\s:]+)/)
-      if (!m) return
-      const remote = m[1]
-      const branch = m[2].replace(/^:/, "")
-      if (PROTECTED.includes(branch)) {
-        throw new Error(
-          `BLOCKED: Direct push to protected branch '${branch}' is not allowed.\n` +
-            `All changes must go through a PR. Use: git push ${remote} feature/<branch>`,
-        )
+      const r = runBashHook({ tool: input.tool, args: output.args || {} })
+      if (!r.ok) {
+        throw new Error(`BLOCKED by block-main-push hook:\n${r.stderr}`)
       }
     },
   }
 }
 
-export default blockMainPush
+export default block_main_push

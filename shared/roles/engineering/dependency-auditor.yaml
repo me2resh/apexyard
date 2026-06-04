@@ -1,0 +1,12 @@
+name: dependency-auditor
+department: engineering
+description: Monitors dependencies for vulnerabilities, outdated packages, and license compliance. Run weekly or when package.json changes.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: deny
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/dependency-auditor.md
+persona: Munir

@@ -1,0 +1,3 @@
+name: task
+description: Create a structured technical task ticket (driver, scope, ACs) for tech debt, infra, refactoring, or non-user-facing changes.
+body_file: .claude/skills/task/SKILL.md

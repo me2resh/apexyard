@@ -1,0 +1,12 @@
+name: ui-designer
+department: design
+description: Defines the visual language and component specifications that guide UI implementation. Activates on visual design, component specifications, design tokens, or pixel-level work.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/ui-designer.md
+persona: Nour

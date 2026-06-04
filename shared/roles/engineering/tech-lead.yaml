@@ -1,12 +1,12 @@
 name: tech-lead
-persona: Hisham
 department: engineering
-model: openai/gpt-5
 description: Bridges architecture and implementation — authors technical designs, leads code reviews, mentors engineers, and owns technical quality for a domain. Activates on technical design, planning phase, code review approval gate, or task breakdown.
 mode: subagent
+model: openai/gpt-5
 permission:
   edit: allow
   bash: ask
   webfetch: allow
   websearch: allow
 prompt_file: .claude/agents/tech-lead.md
+persona: Hisham

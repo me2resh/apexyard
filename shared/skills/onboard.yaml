@@ -1,0 +1,4 @@
+name: onboard
+description: DEPRECATED — use /setup (framework config) or /handover (adopt a project). This skill redirects.
+effort: low
+body_file: .claude/skills/onboard/SKILL.md

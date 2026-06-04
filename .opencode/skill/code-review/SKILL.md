@@ -3,8 +3,6 @@ name: code-review
 description: Review a PR for quality, security, and standards compliance. Invokes the Code Reviewer agent (Rex).
 ---
 
-<!-- effort: medium -->
-<!-- argument-hint: <pr-number> [repo] -->
 # /code-review — Code Review
 
 Review a pull request for quality, security, and adherence to standards.

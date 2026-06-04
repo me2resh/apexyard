@@ -1,0 +1,3 @@
+name: spike
+description: Create a hypothesis-driven, time-boxed spike ticket (Hypothesis/Budget/Kill Criteria/Disposition). Exempt from AgDR + coverage gates.
+body_file: .claude/skills/spike/SKILL.md

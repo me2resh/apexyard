@@ -1,0 +1,4 @@
+name: approve-merge
+description: Record per-PR CEO approval and merge in one turn. ONLY on an explicit per-PR "approved" — never on umbrella "go".
+effort: low
+body_file: .claude/skills/approve-merge/SKILL.md

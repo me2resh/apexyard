@@ -1,0 +1,12 @@
+name: platform-engineer
+department: engineering
+description: Builds and maintains infrastructure, CI/CD pipelines, and developer tooling — the platform that lets engineers ship fast and safely. Activates on CI/CD pipeline changes, developer tooling, infrastructure-as-code work, or golden-path templates.
+mode: subagent
+model: opencode/minimax-m3-free
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/platform-engineer.md
+persona: Adel

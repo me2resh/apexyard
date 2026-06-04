@@ -1,0 +1,3 @@
+name: extract-features
+description: Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) — a "what we must preserve" spec for greenfield rewrites.
+body_file: .claude/skills/extract-features/SKILL.md

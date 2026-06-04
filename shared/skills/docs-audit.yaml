@@ -1,0 +1,4 @@
+name: docs-audit
+description: Diataxis docs audit — tutorials, how-to, reference, explanation; checks README, API docs, deployment guides, changelog, staleness.
+effort: medium
+body_file: .claude/skills/docs-audit/SKILL.md

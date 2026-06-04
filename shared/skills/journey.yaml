@@ -1,0 +1,4 @@
+name: journey
+description: Self-contained HTML user-journey map (boxes/arrows with per-page modals) — preview between PRD and tech-design.
+effort: medium
+body_file: .claude/skills/journey/SKILL.md

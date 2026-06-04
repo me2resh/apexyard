@@ -1,0 +1,3 @@
+name: agdr
+description: Browse / search / show / stats AgDRs across the portfolio — recalls "have we decided this before?".
+body_file: .claude/skills/agdr/SKILL.md

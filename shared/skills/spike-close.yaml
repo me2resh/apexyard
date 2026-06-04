@@ -1,0 +1,3 @@
+name: spike-close
+description: Close a spike via the disposition gate — `--promote` files a [Feature] follow-up, `--discard` writes a memo.
+body_file: .claude/skills/spike-close/SKILL.md

@@ -1,0 +1,4 @@
+name: accessibility-audit
+description: WCAG 2.1 AA audit — perceivable, operable, understandable, robust criteria. Deep-dive for /launch-check accessibility.
+effort: high
+body_file: .claude/skills/accessibility-audit/SKILL.md

@@ -1,0 +1,3 @@
+name: stakeholder-update
+description: Generate a weekly / monthly / launch stakeholder update — synthesises PRs, closed issues, AgDRs, and roadmap into a narrative.
+body_file: .claude/skills/stakeholder-update/SKILL.md

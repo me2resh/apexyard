@@ -1,0 +1,4 @@
+name: seo-audit
+description: Technical SEO audit — meta, OG, sitemap, robots.txt, structured data, mobile, CWV readiness. Deep-dive for /launch-check SEO.
+effort: medium
+body_file: .claude/skills/seo-audit/SKILL.md

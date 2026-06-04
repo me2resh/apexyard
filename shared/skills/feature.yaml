@@ -1,0 +1,3 @@
+name: feature
+description: Create a structured feature ticket (user story, acceptance criteria, design notes) for a new user-facing feature.
+body_file: .claude/skills/feature/SKILL.md

@@ -1,0 +1,3 @@
+name: migration
+description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
+body_file: .claude/skills/migration/SKILL.md

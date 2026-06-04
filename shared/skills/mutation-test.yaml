@@ -1,0 +1,3 @@
+name: mutation-test
+description: Mutation-testing sensor — language-dispatched (Stryker/MutPy/go-mutesting/mutant), milestone-cadence not per-PR, exit-3 graceful-degrade.
+body_file: .claude/skills/mutation-test/SKILL.md
