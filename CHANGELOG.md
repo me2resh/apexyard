@@ -2,6 +2,32 @@
 
 All notable changes to ApexYard are documented here.
 
+## [2.3.0] — 2026-06-04
+
+### Added
+
+- **Solution Architect role + `/design-review` (#471)** — an independent design-review role (Tariq) reviews technical designs, migration AgDRs, and feature specs *before* the Build phase, gated at merge (Gate 3b). The non-code analog of the Code Reviewer. Ships `/design-review` + `/approve-architecture`.
+- **`/launch-check --workflow` (#473)** — opt-in mode that fans the 10 readiness dimensions out in parallel and adversarially verifies the findings.
+- **`/handover` checklist-first doc selection (#480)** — choose which docs to generate per handover, each with its own template pick.
+- **`/report-apexyard-bug` + `/request-apexyard-feature` (#482)** — file framework bugs / feature requests upstream (leak-scrubbed), distinct from project-level `/bug` and `/feature`.
+
+### Changed
+
+- **Pre-push gate runs the framework CI locally (#506)** — `.pre_push.commands` wired to the CI checks (markdownlint, shellcheck, count-drift, sub-packs) + a committed `.githooks/pre-push` for terminal pushes, so failures are caught before push.
+- **`/release` auto-bumps the marketing-site version (#493)** — with a drift guard so the site version can't silently fall behind the CHANGELOG again.
+- **Release-gated security scan (#487)** — the framework repo now runs its security pipeline at release time.
+- **`sync` accepted as a commit / branch / PR type (#458)** — validators whitelist it for the release-sync flow.
+
+### Fixed
+
+- **Build-agent self-review blocked (#494)** — build-class sub-agents can no longer frame their output as a code review or fabricate approval markers; guardrails + an advisory warn hook (a stricter mechanical gate is available as an opt-in).
+- **Issue-filing version on `dev` (#493)** — the upstream-feedback skills read the current version from the CHANGELOG instead of a stale `git describe` tag.
+- **Tracker hooks shape-only fallback (#493)** — PR / commit ticket hooks no longer hard-block when a non-GitHub tracker (Jira / Linear) can't be queried; they fall back to format validation.
+- **Repo-qualified review markers (#485)** — markers are namespaced by repo, preventing same-PR-number collisions across repos.
+- **PR-create hooks resolve the PR's origin repo (#464)** — not the session ops-fork, fixing cross-repo false-positives.
+- **Sync PRs require `--merge` (#459)** — the release-sync flow guards against `--squash`, which would discard the ancestry link.
+- **AgDR-arch-PR body extractor (#461)** — replaced a truncating `sed` extractor with a greedy `awk` one.
+
 ## [2.2.0] — 2026-05-29
 
 ### Local agent routing + split-portfolio v2 hardening + release-cycle plumbing
