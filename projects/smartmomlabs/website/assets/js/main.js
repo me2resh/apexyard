@@ -8,6 +8,12 @@
     return pack?.[key] || "";
   }
 
+  function hasCheckoutConfig(variant) {
+    const key = variant + "_" + MARKET;
+    const urls = cfg.checkoutUrls || {};
+    return Boolean(urls[key] || cfg.shopifyStoreUrl);
+  }
+
   function variantControl(variant) {
     return (
       document.querySelector('.variant-tab[data-variant="' + variant + '"], .variant-card[data-variant="' + variant + '"]') ||
@@ -15,11 +21,20 @@
     );
   }
 
+  function applyImageAlt(img, key) {
+    if (!img || !key) return;
+    img.dataset.i18n = key;
+    const label = t(key);
+    if (label) img.alt = label;
+  }
+
   function syncPdpVariant(variant) {
     const tab = variantControl(variant);
     const imgSrc = tab && (tab.dataset.image || tab.dataset.pack);
+    const altKey = tab && tab.dataset.altKey;
     const img = document.getElementById("pdp-image");
     if (img && imgSrc) img.src = imgSrc;
+    applyImageAlt(img, altKey);
     const kids = document.getElementById("panel-kids");
     const todd = document.getElementById("panel-toddlers");
     if (kids && todd) {
@@ -58,6 +73,7 @@
       badge.appendChild(span);
     }
     if (pack && tab.dataset.pack) pack.src = tab.dataset.pack;
+    applyImageAlt(pack, tab.dataset.altKey);
   }
 
   function initVariantTabs(root) {
@@ -85,10 +101,43 @@
     return "product.html?variant=" + variant + "&market=" + MARKET;
   }
 
+  function syncReserveButtonState(root) {
+    const btn = root.querySelector("[data-reserve-btn]");
+    if (!btn) return;
+    const fine = root.querySelector(".reserve-fine");
+    const variant = root.dataset.variant || "kids";
+    const isPdp = window.location.pathname.endsWith("product.html");
+
+    btn.dataset.defaultI18n = btn.dataset.defaultI18n || btn.dataset.i18n || "";
+    if (fine) fine.dataset.defaultI18n = fine.dataset.defaultI18n || fine.dataset.i18n || "";
+
+    if (isPdp && !hasCheckoutConfig(variant)) {
+      btn.href = "#";
+      btn.dataset.i18n = "pdp.cta.pending";
+      btn.textContent = t("pdp.cta.pending") || btn.textContent;
+      btn.setAttribute("aria-disabled", "true");
+      btn.classList.remove("is-loading");
+      btn.removeAttribute("aria-busy");
+      if (fine) {
+        fine.dataset.i18n = "pdp.fine.pending";
+        fine.textContent = t("pdp.fine.pending") || fine.textContent;
+      }
+      return;
+    }
+
+    btn.href = reserveUrl(root);
+    btn.dataset.i18n = btn.dataset.defaultI18n;
+    btn.textContent = t(btn.dataset.defaultI18n) || btn.textContent;
+    btn.removeAttribute("aria-disabled");
+    if (fine) {
+      fine.dataset.i18n = fine.dataset.defaultI18n;
+      fine.textContent = t(fine.dataset.defaultI18n) || fine.textContent;
+    }
+  }
+
   function updateReserveLinks() {
     document.querySelectorAll("[data-reserve-root]").forEach((root) => {
-      const btn = root.querySelector("[data-reserve-btn]");
-      if (btn) btn.href = reserveUrl(root);
+      syncReserveButtonState(root);
     });
     updateProductCardLinks();
   }
@@ -104,11 +153,16 @@
       initVariantTabs(root);
       const btn = root.querySelector("[data-reserve-btn]");
       if (btn) {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", (event) => {
+          syncReserveButtonState(root);
+          if (btn.getAttribute("aria-disabled") === "true") {
+            event.preventDefault();
+            return;
+          }
           btn.href = reserveUrl(root);
           setBtnLoading(btn);
         });
-        btn.href = reserveUrl(root);
+        syncReserveButtonState(root);
       }
     });
     document.querySelectorAll("a.btn-gold[href]").forEach((btn) => {

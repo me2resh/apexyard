@@ -280,6 +280,11 @@ h1, h2, h3 { text-wrap: balance; }
   pointer-events: none;
   opacity: 0.92;
 }
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.68;
+  box-shadow: none;
+}
 .btn.is-loading::after {
   content: "";
   width: 1.05em;
@@ -300,6 +305,7 @@ h1, h2, h3 { text-wrap: balance; }
   .hero-visual-in { animation: none; }
 }
 .btn:hover { text-decoration: none; transform: translateY(-2px); }
+.btn[aria-disabled="true"]:hover { transform: none; }
 .btn-primary {
   background: var(--accent);
   color: #fff;
