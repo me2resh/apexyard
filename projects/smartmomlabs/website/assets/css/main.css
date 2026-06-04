@@ -49,6 +49,18 @@ html[dir="rtl"] .logo {
 img { max-width: 100%; height: auto; display: block; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+a.btn,
+a.btn:hover {
+  text-decoration: none;
+}
+.nav-links a.btn,
+.nav-menu-inner a.btn {
+  color: #fff;
+}
+.nav-links a.btn-secondary,
+.nav-menu-inner a.btn-secondary {
+  color: var(--text);
+}
 h1, h2, h3 { text-wrap: balance; }
 
 .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
@@ -137,13 +149,13 @@ h1, h2, h3 { text-wrap: balance; }
   gap: 16px;
   flex-wrap: wrap;
 }
-.nav-links a {
+.nav-links a:not(.btn) {
   color: var(--text);
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
 }
-.nav-links a:hover { color: var(--accent); }
+.nav-links a:not(.btn):hover { color: var(--accent); }
 
 .show-mobile-only { display: none; }
 .nav-menu-btn {
@@ -176,7 +188,7 @@ h1, h2, h3 { text-wrap: balance; }
   padding: 20px;
   background: var(--bg-card);
 }
-.nav-menu-inner a {
+.nav-menu-inner a:not(.btn) {
   padding: 14px 12px;
   min-height: 44px;
   display: flex;
@@ -186,7 +198,11 @@ h1, h2, h3 { text-wrap: balance; }
   text-decoration: none;
   border-radius: var(--radius-sm);
 }
-.nav-menu-inner a:hover { background: var(--bg-soft); text-decoration: none; }
+.nav-menu-inner a:not(.btn):hover { background: var(--bg-soft); text-decoration: none; }
+.nav-menu-inner a.btn {
+  margin-top: 8px;
+  justify-content: center;
+}
 .nav-menu-close {
   align-self: flex-end;
   margin-bottom: 8px;
@@ -306,22 +322,24 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .btn:hover { text-decoration: none; transform: translateY(-2px); }
 .btn[aria-disabled="true"]:hover { transform: none; }
-.btn-primary {
+.btn-primary,
+a.btn-primary {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 6px 24px rgba(47, 74, 56, 0.28);
 }
-.btn-secondary {
+.btn-secondary,
+a.btn-secondary {
   background: var(--bg-card);
   color: var(--text);
   border: 2px solid var(--border);
 }
-.btn-gold {
+.btn-gold,
+a.btn-gold {
   background: linear-gradient(135deg, var(--gold-light), var(--gold));
   color: #fff;
   box-shadow: 0 6px 20px rgba(154, 115, 50, 0.35);
 }
-
 /* EllaOla-style trust strip */
 .trust-strip {
   display: grid;
@@ -382,11 +400,13 @@ h1, h2, h3 { text-wrap: balance; }
 .hero-variant-pick { margin-bottom: 14px; max-width: 420px; }
 .hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; }
 
+.lang-btn:focus-visible,
 .variant-tab:focus-visible,
 .market-btn:focus-visible,
 .btn:focus-visible,
 .faq-item summary:focus-visible,
-a.logo:focus-visible {
+a.logo:focus-visible,
+.nav-menu-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
