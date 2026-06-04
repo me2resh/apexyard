@@ -212,5 +212,7 @@
     const active =
       document.querySelector(".variant-tab.active, .variant-card.active")?.dataset.variant || "kids";
     updateHeroFromVariant(active);
+    syncPdpVariant(active);
+    document.querySelectorAll("[data-reserve-root]").forEach((root) => syncReserveButtonState(root));
   });
 })();
