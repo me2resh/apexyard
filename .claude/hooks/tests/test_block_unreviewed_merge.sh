@@ -59,7 +59,9 @@ make_sandbox() {
   # Mock `gh` so resolve_pr_head returns FIXED_SHA. The hook calls
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
   # shape) — return the fixed SHA on stdout, no network involved.
-  # Also handles headRefName (sync-PR guard) and headRepository (repo extraction, #485).
+  # Also handles headRefName (sync-PR guard), headRepository (repo extraction, #485),
+  # and reviews (real-GitHub-review gate, #494). The default shim returns a
+  # single COMMENTED review at FIXED_SHA so "happy path" tests keep passing.
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 # Minimal gh shim for test_block_unreviewed_merge.
@@ -67,6 +69,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -382,13 +385,15 @@ make_sandbox_with_sync_branch() {
   local sb branch_name
   branch_name="${1:-sync/main-to-dev-after-v2.3.0}"
   sb=$(make_sandbox)
-  # Rewrite the gh shim to handle headRefOid, headRefName, and headRepository.
+  # Rewrite the gh shim to handle headRefOid, headRefName, headRepository,
+  # and reviews (#494 real-review gate).
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "$branch_name" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -406,6 +411,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/GH-99-something" ;;
   *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -512,6 +518,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)    echo "feature/test" ;;
   *"pr view"*"headRepository"*) echo "$repo" ;;
+  *"pr view"*"--json reviews"*) echo '[{"state":"COMMENTED","commit":{"oid":"$FIXED_SHA"}}]' ;;
   *) ;;
 esac
 exit 0
@@ -571,6 +578,170 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cross-repo-distinct-files "
 fi
 rm -rf "$sb"
+
+# --- Real-GitHub-review gate tests (#494) -----------------------------
+#
+# The hook now also calls `gh pr view --json reviews` and requires at
+# least one review at the PR HEAD SHA. These cases extend the gh shim to
+# return synthetic reviews JSON so we can exercise all three branches:
+#   (a) marker present + real review at HEAD → PASS
+#   (b) marker present + NO review at HEAD → BLOCK
+#   (c) gh unavailable (shim exits non-zero) → warn + fall back to SHA-only → PASS
+
+# make_sandbox_with_reviews <reviews_json>
+# Returns a sandbox where `gh pr view ... --json reviews` outputs the given JSON.
+make_sandbox_with_reviews() {
+  local reviews_json="$1"
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
+  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"--json reviews"*) echo '${reviews_json}' ;;
+  *) ;;
+esac
+exit 0
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+# make_sandbox_gh_unavailable: gh shim exits 1 for all calls (simulates
+# network/auth failure). The hook should warn + fall back to SHA-only.
+make_sandbox_gh_unavailable() {
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+# Case G1: marker present + real review at HEAD → PASS (#494)
+sb=$(make_sandbox_with_reviews "[{\"state\":\"COMMENTED\",\"commit\":{\"oid\":\"${FIXED_SHA}\"}}]")
+write_rex_marker "$sb" 400
+write_ceo_marker_structured "$sb" 400
+run_case "rex marker + real GitHub review at HEAD → passes (#494)" 0 "" "$sb" 400
+
+# Case G2: marker present + NO review at HEAD → BLOCK (#494)
+# Reviews JSON is empty array — no review exists.
+sb=$(make_sandbox_with_reviews "[]")
+write_rex_marker "$sb" 401
+write_ceo_marker_structured "$sb" 401
+run_case "rex marker + NO GitHub review at HEAD → blocks (#494)" 2 "no posted GitHub review at HEAD" "$sb" 401
+
+# Case G3: marker present + review at DIFFERENT SHA → BLOCK (#494)
+# The review was posted for an older commit, not the current HEAD.
+sb=$(make_sandbox_with_reviews "[{\"state\":\"APPROVED\",\"commit\":{\"oid\":\"${WRONG_SHA}\"}}]")
+write_rex_marker "$sb" 402
+write_ceo_marker_structured "$sb" 402
+run_case "rex marker + review at WRONG SHA (not HEAD) → blocks (#494)" 2 "no posted GitHub review at HEAD" "$sb" 402
+
+# Case G4: gh unavailable → WARN + fall back to SHA-only → PASS (#494 graceful-degrade)
+# gh shim exits non-zero for all calls. HEAD resolution also fails, so the
+# hook falls back to local HEAD. We write valid markers and the test should
+# PASS with a WARN on stderr (not a block).
+sb=$(make_sandbox_gh_unavailable)
+# We need a valid local git state so local HEAD can be used as fallback.
+# Initialize a real git commit so git rev-parse HEAD returns a SHA.
+(
+  cd "$sb" || exit 1
+  git config user.email "test@example.com" 2>/dev/null || true
+  git config user.name "test" 2>/dev/null || true
+  # Create the marker with the local HEAD sha (we'll use FIXED_SHA as a
+  # stand-in and accept that the SHA mismatch warning fires but NOT a block,
+  # since the graceful-degrade path exits 0 when gh is unavailable).
+  # The simplest approach: accept that gh-unavailable may produce warnings
+  # on stderr but must NOT exit 2.
+  true
+)
+write_rex_marker "$sb" 403 "$FIXED_SHA"
+write_ceo_marker_structured "$sb" 403 "$FIXED_SHA"
+# In the gh-unavailable sandbox, the hook can't resolve PR HEAD via gh.
+# It will warn about both the HEAD resolution failure AND the review check
+# skip. The CEO SHA comparison will use local HEAD (from git rev-parse HEAD
+# in the sandbox's git repo). The sandbox's HEAD commit SHA is not FIXED_SHA
+# so the CEO SHA-mismatch check would block — unless we handle this. Let's
+# use the sandbox's actual HEAD SHA for the CEO marker.
+_SANDBOX_GIT_HEAD=$(cd "$sb" && git rev-parse HEAD 2>/dev/null || echo "$FIXED_SHA")
+write_ceo_marker_structured "$sb" 403 "$_SANDBOX_GIT_HEAD"
+write_rex_marker "$sb" 403 "$_SANDBOX_GIT_HEAD"
+input=$(jq -nc --arg c "gh pr merge 403 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+# Accept either: exit 0 with WARN, or exit 0 with empty stderr
+# (graceful-degrade path — no block, just warn).
+if [ "$got_rc" = "0" ]; then
+  echo "PASS [gh-unavailable → graceful-degrade to SHA-only, no block (#494)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [gh-unavailable → must not block, got rc=$got_rc]: stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}gh-unavailable-degrade "
+fi
+
+# --- warn-review-marker-write.sh tests (#494) -------------------------
+#
+# The advisory hook fires when a Write or Bash command targets a
+# *-rex.approved or *-ceo.approved file. It must always exit 0.
+
+WARN_HOOK_SRC="$SRC_ROOT/.claude/hooks/warn-review-marker-write.sh"
+if [ ! -f "$WARN_HOOK_SRC" ]; then
+  echo "FAIL: warn-review-marker-write.sh not found at $WARN_HOOK_SRC" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-missing "
+else
+  # W1: Write to a rex.approved path → advisory fires, exit 0
+  input=$(jq -nc --arg fp ".claude/session/reviews/me2resh__apexyard__42-rex.approved" \
+    '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+    echo "PASS [warn-hook: Write to rex.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: Write to rex.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-write-rex "
+  fi
+
+  # W2: Bash echo redirect to ceo.approved → advisory fires, exit 0
+  input=$(jq -nc --arg c "echo 'sha=abc' > .claude/session/reviews/me2resh__apexyard__42-ceo.approved" \
+    '{tool_name:"Bash", tool_input:{command:$c}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+    echo "PASS [warn-hook: Bash echo to ceo.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: Bash echo to ceo.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-bash-ceo "
+  fi
+
+  # W3: Write to an unrelated path → no advisory, exit 0
+  input=$(jq -nc --arg fp "src/some-other-file.ts" \
+    '{tool_name:"Write", tool_input:{file_path:$fp, content:"x"}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+    echo "PASS [warn-hook: unrelated Write → no advisory, exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: unrelated Write → must be silent]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-unrelated-path "
+  fi
+
+  # W4: Bash command with no marker path → no advisory, exit 0
+  input=$(jq -nc --arg c "gh pr view 42" \
+    '{tool_name:"Bash", tool_input:{command:$c}}')
+  got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+    echo "PASS [warn-hook: non-marker Bash → silent, exit 0 (#494)]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [warn-hook: non-marker Bash → must be silent]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-nonmarker-bash "
+  fi
+fi
 
 # --- Summary ----------------------------------------------------------
 

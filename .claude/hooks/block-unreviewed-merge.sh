@@ -42,9 +42,18 @@
 # grep-able rule violation — much more obvious than an `echo $SHA`. See
 # me2resh/apexyard#48 for the design rationale.
 #
-# The Rex marker is unchanged (still bare-SHA) because Rex's marker is
-# written by the code-reviewer agent's automated review flow, not an
-# explicit human-authorization moment. Different threat model.
+# The Rex marker is a bare-SHA file, same as before #494 — but starting
+# with #494 the hook also verifies that a real GitHub review was posted at
+# the PR HEAD. A fabricated local file with no corresponding GitHub review
+# is rejected. See AgDR-0062 for the design.
+#
+# Rex posts a COMMENT-type review (GitHub blocks self-approval on own-PR),
+# so the check accepts ANY review state (APPROVED, COMMENTED,
+# CHANGES_REQUESTED) by any reviewer at HEAD — not just APPROVED.
+#
+# Graceful degrade: if gh is unavailable (network/auth), the hook warns
+# and falls back to the prior SHA-only behaviour. An infra failure must
+# not permanently brick the merge gate.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -192,6 +201,69 @@ New commits were pushed after the Rex review. Re-invoke Rex on the latest
 HEAD before merging.
 MSG
   exit 2
+fi
+
+# --- Rex real-GitHub-review check (#494) ---
+# Require a real posted GitHub review at the PR HEAD, not just a local file.
+# This prevents build agents fabricating a *-rex.approved file without the
+# real code-reviewer agent ever posting a review on GitHub.
+#
+# Rex posts a COMMENT-type review (GitHub blocks self-approval on own PR)
+# so we accept any review state — APPROVED, COMMENTED, CHANGES_REQUESTED.
+# The invariant is that a human-visible review exists in the GitHub audit
+# trail at HEAD, not that it has a particular verdict.
+#
+# Graceful degrade: if gh is unavailable, warn and skip this check so an
+# infra outage does not permanently block merges. The SHA-match above still
+# applies — the local marker must exist and match HEAD.
+_GH_REVIEW_CHECK_SKIPPED=0
+if [ -n "$CMD_REPO" ]; then
+  _REVIEWS_JSON=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" \
+    --json reviews -q '.reviews' 2>/dev/null)
+else
+  _REVIEWS_JSON=$(gh pr view "$PR_NUMBER" \
+    --json reviews -q '.reviews' 2>/dev/null)
+fi
+
+if [ -z "$_REVIEWS_JSON" ]; then
+  # gh call failed — network, auth, or gh not installed.
+  echo "WARN: Could not fetch GitHub reviews for PR #${PR_NUMBER} — skipping real-review check (falling back to SHA-only). Re-authenticate gh if this persists." >&2
+  _GH_REVIEW_CHECK_SKIPPED=1
+fi
+
+if [ "$_GH_REVIEW_CHECK_SKIPPED" = "0" ] && [ -n "$CURRENT_SHA" ]; then
+  # Look for any review submitted at or after CURRENT_SHA.
+  # GitHub's reviews array contains objects with at least:
+  #   { "state": "APPROVED|COMMENTED|CHANGES_REQUESTED", "commit": { "oid": "<sha>" } }
+  # We accept any review whose commit.oid matches the HEAD SHA.
+  _REVIEW_AT_HEAD=$(echo "$_REVIEWS_JSON" | \
+    jq -r --arg sha "$CURRENT_SHA" \
+      '[.[] | select(.commit.oid == $sha)] | length' 2>/dev/null)
+
+  if [ -z "$_REVIEW_AT_HEAD" ]; then
+    # jq unavailable or parse failed — degrade gracefully.
+    echo "WARN: Could not parse GitHub reviews JSON for PR #${PR_NUMBER} — skipping real-review check (jq parse failure)." >&2
+    _GH_REVIEW_CHECK_SKIPPED=1
+  elif [ "$_REVIEW_AT_HEAD" = "0" ]; then
+    cat >&2 <<MSG
+BLOCKED: rex marker present for PR #${PR_NUMBER} but no posted GitHub review at HEAD ${CURRENT_SHA:0:7}.
+
+A fabricated local marker file is not sufficient — the real code-reviewer
+(Rex) must post an actual GitHub review on this PR before the merge gate
+can be satisfied. A file written by a build agent (platform-engineer,
+backend-engineer, etc.) does not count.
+
+To unblock:
+  1. Invoke the real code-reviewer agent on this PR:
+       /code-review
+  2. Rex will post a review comment on GitHub and record the marker.
+  3. Retry the merge.
+
+See AgDR-0062 and .claude/rules/pr-workflow.md § "Build agents cannot
+self-review" for the rationale.
+MSG
+    exit 2
+  fi
 fi
 
 # --- CEO marker check ---
