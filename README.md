@@ -40,8 +40,9 @@ apexyard/
 │   └── instructions/       # 4 rule files + INDEX.md
 │
 ├── .codex/                 # Generated Codex CLI config (do not edit)
-│   ├── config.toml         # Providers, default model, hook wiring
+│   ├── config.toml         # Model + sandbox + inline [[hooks.<Event>]] blocks + [agents] map
 │   ├── AGENTS.md           # Project-level Codex instructions
+│   ├── agents/             # 23 subagent TOML files (model + sandbox + [instructions])
 │   └── hooks/              # 36 bash wrappers invoking `bun run shared/hooks/<name>.ts`
 │
 ├── .claude/                # Original Claude Code primitives (source of truth for bash logic)
@@ -146,6 +147,28 @@ Even if you have just one repo, register it — the skills are happier with one 
 The hooks fire on every `git` / `gh` command, the portfolio skills aggregate across the registry, and the Code Reviewer agent can be invoked with `/code-review <pr>`.
 
 Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-project.md`](docs/multi-project.md).
+
+## Harnesses — pick your CLI
+
+Apexyard ships side-by-side wiring for two agent CLIs. Same workflow gates, same 23 roles, same 55 skills, same 36 hooks — just a different runtime. Pick one per session.
+
+| Harness | Default model | Cost | Free tier | Hook mechanism | Where to look |
+|---|---|---|---|---|---|
+| **OpenCode** | `opencode/minimax-m3-free` | Free | Yes | TS plugin in `.opencode/plugins/` | `.opencode/opencode.json` |
+| **Codex CLI** | `gpt-5.4` | Paid | No | Inline `[[hooks.*]]` in TOML | `.codex/config.toml` + `.codex/agents/*.toml` |
+
+The same 36 bash scripts in `.claude/hooks/*.sh` are the source of truth on both sides — the TS wrappers in `shared/hooks/*.ts` shell out to them.
+
+```bash
+# OpenCode
+opencode                   # plugin auto-loads; default model is free tier
+
+# Codex CLI
+codex                      # needs OPENAI_API_KEY; project must be trusted on first run
+codex doctor               # validate config + hooks loaded
+```
+
+Run `bun run bin/sync.ts` to regenerate both `.opencode/` and `.codex/` from `shared/`. The generator is deterministic — re-running it produces 0 changes.
 
 ## Why ApexYard?
 
