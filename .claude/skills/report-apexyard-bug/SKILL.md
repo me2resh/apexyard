@@ -73,12 +73,29 @@ canonical `me2resh/apexyard`.
 
 So the maintainer knows which version the report is against, capture the version
 from the fork (the SessionStart upstream-drift banner shows it; otherwise derive
-it):
+it).
+
+**Do NOT use `git describe --tags --abbrev=0`.** Under the release-cut branch
+model, release tags (`vX.Y.Z`) are created on `main` and are NOT ancestors of
+`dev`, so `git describe` from a `dev` checkout reports a stale version (observed:
+`v1.1.0` when the line is actually `v2.2.0`) — every issue filed from `dev` would
+be mislabeled (#503). Derive from `CHANGELOG.md` instead, which `/release-sync`
+carries `main → dev`, so it is always current on `dev`:
 
 ```bash
-FW_VERSION=$(git -C "$ops_root" describe --tags --abbrev=0 2>/dev/null \
-  || git -C "$ops_root" rev-parse --short HEAD 2>/dev/null \
-  || echo "unknown")
+# Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
+# /release-sync, so always the canonical current version on dev).
+FW_VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
+  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+if [ -n "$FW_VERSION" ]; then
+  FW_VERSION="v$FW_VERSION"          # keep the `v` prefix the field renders today
+else
+  # Fallbacks: highest semver tag across ALL refs (catches main-only release
+  # tags via -v:refname sort) → short HEAD → literal "unknown".
+  FW_VERSION=$(git -C "$ops_root" tag --sort=-v:refname 2>/dev/null | head -1)
+  [ -z "$FW_VERSION" ] && FW_VERSION=$(git -C "$ops_root" rev-parse --short HEAD 2>/dev/null)
+  [ -z "$FW_VERSION" ] && FW_VERSION="unknown"
+fi
 ```
 
 ### 3. Gather details (one question at a time)

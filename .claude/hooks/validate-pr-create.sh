@@ -249,7 +249,18 @@ if [ -n "$TICKET_REF" ]; then
         MATCHED_REPO="$UPSTREAM_REPO"
       fi
     fi
-    if [ -z "$ISSUE_JSON" ]; then
+    if [ -z "$ISSUE_JSON" ] && [ "$TRACKER_KIND" != "gh" ]; then
+      # Non-gh tracker (Linear / Jira / Asana / custom) returned nothing — the
+      # tracker CLI is absent, unauthenticated, or not queryable from this
+      # environment (#501). Do NOT block: the title already passed the shape
+      # check against tracker_id_pattern, which is all we can assert without a
+      # working CLI. Blocking here would make it impossible to open a PR that
+      # references a real, valid non-GitHub ticket. Hard existence enforcement
+      # is retained ONLY for tracker.kind == gh (the block below).
+      echo "WARN: validate-pr-create.sh: tracker '${TRACKER_KIND}' not queryable here — ${TICKET_REF} accepted on shape only (no existence check)." >&2
+      ISSUE_JSON=""
+      TICKET_NUM=""
+    elif [ -z "$ISSUE_JSON" ]; then
       # Name both trackers in the error when an upstream fallback was tried,
       # so the operator sees exactly where the lookup was attempted.
       if [ -n "$UPSTREAM_REPO" ]; then
