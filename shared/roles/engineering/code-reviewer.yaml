@@ -1,0 +1,12 @@
+name: code-reviewer
+persona: Rex
+department: engineering
+model: openai/gpt-5
+description: Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review.
+mode: subagent
+permission:
+  edit: deny
+  bash: ask
+  webfetch: deny
+  websearch: deny
+prompt_file: .claude/agents/code-reviewer.md

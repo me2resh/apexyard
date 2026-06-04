@@ -1,0 +1,5 @@
+name: code-review
+description: Review a PR for quality, security, and standards compliance. Invokes the Code Reviewer agent (Rex).
+effort: medium
+argument_hint: "<pr-number> [repo]"
+body_file: .claude/skills/code-review/SKILL.md

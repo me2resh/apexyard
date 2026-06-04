@@ -1,0 +1,38 @@
+{
+  "providers": {
+    "opencode": { "enabled": true },
+    "openai": { "apiKey": "{env:OPENAI_API_KEY}" }
+  },
+  "default_model": "opencode/minimax-m3-free",
+  "default_small_model": "opencode/minimax-m3-free",
+  "tiered_agents": {
+    "code-reviewer": "openai/gpt-5",
+    "security-reviewer": "openai/gpt-5",
+    "penetration-tester": "openai/gpt-5",
+    "head-of-*": "openai/gpt-5",
+    "tech-lead": "openai/gpt-5"
+  },
+  "gates": {
+    "ticket_first": true,
+    "merge_two_marker": true,
+    "branch_name_enforced": true,
+    "pr_title_enforced": true,
+    "no_main_push": true,
+    "no_git_add_all": true,
+    "secrets_scanning": true
+  },
+  "permissions": {
+    "edit": "ask",
+    "bash": "ask",
+    "webfetch": "allow",
+    "websearch": "allow"
+  },
+  "openai_model_aliases": {
+    "gpt-5": "gpt-5",
+    "gpt-4o": "gpt-4o",
+    "gpt-4o-mini": "gpt-4o-mini"
+  },
+  "opencode_model_aliases": {
+    "minimax-m3-free": "minimax-m3-free"
+  }
+}

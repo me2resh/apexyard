@@ -1,0 +1,5 @@
+name: decide
+description: Make a technical decision with structured reasoning and create an Agent Decision Record (AgDR).
+effort: medium
+argument_hint: "<what you're deciding>"
+body_file: .claude/skills/decide/SKILL.md

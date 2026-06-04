@@ -1,0 +1,13 @@
+name: backend-engineer
+persona: Karim
+department: engineering
+model: opencode/minimax-m3-free
+fallback_model: openai/gpt-5
+description: Implements domain logic, APIs, and infrastructure following clean architecture principles. Activates during the Build phase on backend code (domain / application / infrastructure layers), API work, or database schema changes.
+mode: subagent
+permission:
+  edit: allow
+  bash: ask
+  webfetch: allow
+  websearch: allow
+prompt_file: .claude/agents/backend-engineer.md
