@@ -307,14 +307,30 @@ ${registry.join("\n")}
 }
 
 export const ApexyardHooks: Plugin = async (ctx) => {
-  const exported: Record<string, any> = {}
+  // Collect handlers from every hook, grouped by event name. We then wrap
+  // each event in a single function that runs the handlers in registration
+  // order — OpenCode expects each event to be ONE function, not an array.
+  const handlersByEvent: Record<string, Array<{ name: string; handler: any }>> = {}
   for (const [name, hook] of Object.entries(hooks)) {
     const result = await hook(ctx)
     if (result && typeof result === "object") {
       for (const [event, handler] of Object.entries(result)) {
         if (typeof handler === "function") {
-          exported[event] = exported[event] || []
-          exported[event].push({ name, handler })
+          ;(handlersByEvent[event] ||= []).push({ name, handler })
+        }
+      }
+    }
+  }
+  const exported: Record<string, any> = {}
+  for (const [event, handlers] of Object.entries(handlersByEvent)) {
+    exported[event] = async (input: any, output: any) => {
+      for (const { name, handler } of handlers) {
+        try {
+          await handler(input, output)
+        } catch (err) {
+          // Re-throw with hook name so the error trace identifies the gate
+          const msg = err instanceof Error ? err.message : String(err)
+          throw new Error(\`[apexyard/\${name}] \${msg}\`)
         }
       }
     }
@@ -328,7 +344,7 @@ export default ApexyardHooks
 }
 
 async function buildOpencodePlugin(hookFiles: { name: string; path: string }[]): Promise<void> {
-  const dir = join(OPENCODE_DIR, "plugin")
+  const dir = join(OPENCODE_DIR, "plugins")
   if (!CHECK_MODE) await mkdir(dir, { recursive: true })
   const content = composeOpencodePlugin(hookFiles)
   trackChange(await writeIfChanged(join(dir, "apexyard-hooks.ts"), content))
@@ -343,7 +359,6 @@ function renderOpencodeConfig(roles: Role[], config: Config): string {
     provider: {},
     agent: {},
     permission: config.permissions,
-    plugin: [".opencode/plugin/apexyard-hooks.ts"],
     mcp: {},
   }
   if (config.default_small_model) oc.small_model = config.default_small_model

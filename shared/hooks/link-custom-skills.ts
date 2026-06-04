@@ -6,27 +6,28 @@
  * OpenCode TypeScript plugin. The bash logic is the source of truth (100%
  * preserved); this wrapper just shells out to it and bridges the JSON I/O.
  *
+ * The _adapter translates between OpenCode's plugin format
+ * (lowercase tool, camelCase args) and Claude Code's bash-hook input
+ * format (capitalized tool, snake_case args) so the existing rules
+ * work as-is.
+ *
  * OpenCode plugin event: tool.execute.before
  */
 
 import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"
-import { join, dirname } from "node:path"
+import { join } from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
+import { toClaudeInput } from "./_adapter.ts"
 
 const REPO_ROOT = join(import.meta.dir, "..", "..")
 const BASH_SCRIPT = join(REPO_ROOT, ".claude", "hooks", "link-custom-skills.sh")
 
-interface BashInput {
-  tool: string
-  args: Record<string, any>
-}
-
-function runBashHook(input: BashInput): { ok: boolean; stderr: string } {
+function runBashHook(tool: string, args: Record<string, any>): { ok: boolean; stderr: string } {
   if (!existsSync(BASH_SCRIPT)) {
     return { ok: true, stderr: `[link-custom-skills] bash script not found, skipping` }
   }
-  const payload = JSON.stringify({ tool_name: input.tool, tool_input: input.args })
+  const payload = JSON.stringify(toClaudeInput(tool, args))
   const result = spawnSync("bash", [BASH_SCRIPT], {
     input: payload,
     encoding: "utf-8",
@@ -42,7 +43,7 @@ function runBashHook(input: BashInput): { ok: boolean; stderr: string } {
 const link_custom_skills: Plugin = async () => {
   return {
     "tool.execute.before": async (input, output) => {
-      const r = runBashHook({ tool: input.tool, args: output.args || {} })
+      const r = runBashHook(input.tool, output.args || {})
       if (!r.ok) {
         throw new Error(`BLOCKED by link-custom-skills hook:\n${r.stderr}`)
       }

@@ -6,7 +6,9 @@ A multi-project ops repo where your projects reference each other, learn from sh
 
 You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
-Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+OpenCode and the OpenAI Codex CLI are the default drivers, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+
+The repo's source of truth lives in `shared/` (provider-agnostic YAML + TypeScript). A single `bun run bin/sync.ts` regenerates both `.opencode/` (OpenCode config) and `.codex/` (Codex CLI config) from that one tree. Default model is `opencode/minimax-m3-free`; review / security / architecture agents upgrade to `openai/gpt-5` via `shared/config/defaults.json → tiered_agents`.
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
@@ -14,48 +16,53 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 ```
 apexyard/
-├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
-├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
+├── INSTRUCTIONS.md         # Stack entry point — read by OpenCode + Codex
+├── CLAUDE.md               # Legacy Claude Code entry point (kept for adopters)
+├── onboarding.yaml         # Your company config — fill this in to adopt the stack
 │
-├── roles/                 # AI agent role definitions
-│   ├── engineering/       # Backend, Frontend, QA, Platform, SRE, Tech Lead, Head of Eng
-│   ├── product/           # Product Manager, Product Analyst, Head of Product
-│   ├── design/            # UI Designer, UX Designer, Head of Design
-│   ├── security/          # Security Auditor, Penetration Tester, Head of Security
-│   └── data/              # Data Analyst, Data Engineer, Head of Data
+├── shared/                 # Single source of truth (canonical, AI-agnostic)
+│   ├── config/             # Default provider / permission / gate config
+│   ├── roles/              # 23 role YAMLs across engineering / product / design / security / data
+│   ├── skills/             # 55 skill YAMLs
+│   ├── hooks/              # 36 hook TS wrappers (shell out to .claude/hooks/*.sh)
+│   └── rules/              # 11 rule markdown files
 │
-├── workflows/             # Development lifecycle processes
-│   ├── sdlc.md            # Full SDLC including the database-migration sub-workflow
-│   ├── code-review.md     # Code review process and standards
-│   └── deployment.md      # Environment promotion, rollback, IaC patterns
+├── bin/                    # Generator scripts (Bun + TypeScript)
+│   ├── sync.ts             # shared/ → .opencode/ + .codex/
+│   └── migrate-from-claude.ts   # .claude/ → shared/ (one-shot, idempotent)
 │
-├── templates/             # Reusable document templates
-│   ├── prd.md             # Product Requirements Document
-│   ├── technical-design.md # Technical design document
-│   ├── adr.md             # Architecture Decision Record
-│   ├── agdr.md            # Agent Decision Record (AI-specific)
-│   ├── agdr-migration.md  # Migration-specific AgDR (rollback, downtime, consumers)
-│   └── architecture/      # C4 diagram templates — Context (L1) + Container (L2), Mermaid
+├── .opencode/              # Generated OpenCode config (do not edit)
+│   ├── opencode.json       # Main config (providers, default model, agents)
+│   ├── agent/              # 23 role markdown files
+│   ├── skill/              # 55 skill folders with SKILL.md
+│   ├── plugins/
+│   │   └── apexyard-hooks.ts   # Composed plugin (1 file, 36 hooks)
+│   └── instructions/       # 4 rule files + INDEX.md
 │
-├── .claude/               # Claude Code primitives (the runnable layer)
-│   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
-│   ├── hooks/             # 18 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, upstream-drift banner
-│   ├── rules/             # 8 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
-│   ├── agents/            # 5 sub-agents — Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
-│   └── skills/            # 33 slash commands — see CLAUDE.md for the full list
+├── .codex/                 # Generated Codex CLI config (do not edit)
+│   ├── config.toml         # Providers, default model, hook wiring
+│   ├── AGENTS.md           # Project-level Codex instructions
+│   └── hooks/              # 36 bash wrappers invoking `bun run shared/hooks/<name>.ts`
 │
-├── workspace/             # Live local clones of managed projects — gitignored
-├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
+├── .claude/                # Original Claude Code primitives (source of truth for bash logic)
+│   ├── settings.json       # Claude Code hook wiring (kept for fallback)
+│   ├── hooks/              # 36 bash scripts — the actual gate logic
+│   ├── rules/              # 11 rule files
+│   ├── agents/             # 23 agent markdown files
+│   └── skills/             # 55 skill folders
+│
+├── workspace/              # Live local clones of managed projects — gitignored
+├── projects/               # Per-project committed docs (README, roadmap, AgDRs, updates)
 ├── apexyard.projects.yaml.example  # Portfolio registry template
 │
-├── golden-paths/          # Reusable infra & ops templates
-│   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, security, dependency audit, PR title check, review check, SEO check)
+├── golden-paths/           # Reusable infra & ops templates
+│   └── pipelines/          # Drop-in GitHub Actions workflows
 │
-├── docs/                  # Documentation
-│   ├── getting-started.md # Setup guide
-│   └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
+├── docs/                   # Documentation
+│   ├── getting-started.md  # Setup guide
+│   └── multi-project.md    # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
 │
-└── site/                  # Landing page (deployed to yard.apexscript.com)
+└── site/                   # Landing page (deployed to yard.apexscript.com)
     ├── index.html
     ├── architecture.html
     ├── skills.html

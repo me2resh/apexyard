@@ -81,14 +81,30 @@ const hooks = {
 }
 
 export const ApexyardHooks: Plugin = async (ctx) => {
-  const exported: Record<string, any> = {}
+  // Collect handlers from every hook, grouped by event name. We then wrap
+  // each event in a single function that runs the handlers in registration
+  // order — OpenCode expects each event to be ONE function, not an array.
+  const handlersByEvent: Record<string, Array<{ name: string; handler: any }>> = {}
   for (const [name, hook] of Object.entries(hooks)) {
     const result = await hook(ctx)
     if (result && typeof result === "object") {
       for (const [event, handler] of Object.entries(result)) {
         if (typeof handler === "function") {
-          exported[event] = exported[event] || []
-          exported[event].push({ name, handler })
+          ;(handlersByEvent[event] ||= []).push({ name, handler })
+        }
+      }
+    }
+  }
+  const exported: Record<string, any> = {}
+  for (const [event, handlers] of Object.entries(handlersByEvent)) {
+    exported[event] = async (input: any, output: any) => {
+      for (const { name, handler } of handlers) {
+        try {
+          await handler(input, output)
+        } catch (err) {
+          // Re-throw with hook name so the error trace identifies the gate
+          const msg = err instanceof Error ? err.message : String(err)
+          throw new Error(`[apexyard/${name}] ${msg}`)
         }
       }
     }

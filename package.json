@@ -11,9 +11,10 @@
     "sync": "bun run bin/sync.ts",
     "sync:watch": "bun run --watch bin/sync.ts",
     "sync:check": "bun run bin/sync.ts --check",
+    "migrate": "bun run bin/migrate-from-claude.ts",
     "test": "bun test",
-    "test:hooks": "bun test bin/hooks.test.ts",
-    "test:sync": "bun test bin/sync.test.ts"
+    "test:hooks": "bun run bin/test-hooks.ts",
+    "test:plugin": "bun run bin/test-plugin-wiring.ts"
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.0.0",

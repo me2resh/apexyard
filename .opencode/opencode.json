@@ -251,9 +251,6 @@
     "webfetch": "allow",
     "websearch": "allow"
   },
-  "plugin": [
-    ".opencode/plugin/apexyard-hooks.ts"
-  ],
   "mcp": {},
   "small_model": "opencode/minimax-m3-free"
 }
