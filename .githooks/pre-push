@@ -1,0 +1,35 @@
+#!/bin/bash
+# .githooks/pre-push — terminal-push companion to .claude/hooks/pre-push-gate.sh.
+#
+# pre-push-gate.sh fires only on Claude Code-driven pushes (it is a
+# PreToolUse hook). This git hook covers the same check set for terminal
+# `git push` commands so both paths are equally protected.
+#
+# Both paths enforce the same skip marker, the same tool-missing graceful-
+# degrade logic, and the same command set. The command set is defined in
+# bin/run-pre-push-checks.sh, which this hook delegates to.
+#
+# Opt-in once per clone:
+#   git config core.hooksPath .githooks
+#
+# Or set it globally for all apexyard clones (the hook is a no-op outside
+# apexyard because bin/run-pre-push-checks.sh checks for the repo root):
+#   git config --global core.hooksPath .githooks
+#
+# See docs/getting-started.md § "Terminal push hook" for details.
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  # Not a git repo — nothing to do.
+  exit 0
+fi
+
+RUNNER="$REPO_ROOT/bin/run-pre-push-checks.sh"
+if [ ! -f "$RUNNER" ]; then
+  # Runner not present (e.g. old clone before this hook was added).
+  # Fail open so contributors aren't hard-blocked on a missing binary.
+  echo "WARN: $RUNNER not found — pre-push checks skipped. Pull latest to enable them." >&2
+  exit 0
+fi
+
+exec bash "$RUNNER"

@@ -136,6 +136,54 @@ Create an AgDR.
 
 ---
 
+## Optional: Terminal push hook (`core.hooksPath`)
+
+The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, site-counts drift, and subpack extraction smoke test — for terminal `git push` commands.
+
+The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Claude Code_. The git hook covers pushes made directly from the terminal.
+
+### One-time opt-in per clone
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Run this once inside your apexyard clone. Git then picks up `.githooks/pre-push` on every `git push` regardless of how you invoke it.
+
+To enable it globally for all clones of apexyard (useful if you work across multiple machines or re-clone often):
+
+```bash
+git config --global core.hooksPath .githooks
+```
+
+Note: `--global` affects every git repo on your machine, not just apexyard. If other repos ship their own hooks under `.git/hooks/`, those will be shadowed. The safest approach is per-clone.
+
+### Missing tools degrade gracefully
+
+Each check guards for its tool: if `shellcheck` or `npx` is missing, the check prints an actionable install message and skips (exit 0). A contributor without a tool is never hard-blocked; the check still runs in CI.
+
+### Emergency bypass
+
+Include `<!-- pre-push: skip -->` in the HEAD commit message (subject or body) to bypass for a genuine one-off emergency. The bypass is printed to stderr so it's visible in the terminal output and grep-able in history. The skip is intentionally narrow — it covers one push per commit, not all future pushes.
+
+```bash
+git commit --amend -m "$(git log -1 --format=%B)
+<!-- pre-push: skip -->"
+```
+
+### Checks in the set
+
+| Check | What it catches | Tool required |
+|-------|----------------|---------------|
+| `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
+| `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
+| `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
+| `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
+
+Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
+
+---
+
 ## Optional: LSP-aware code navigation
 
 Claude Code v2.0.74+ ships a built-in **LSP (Language Server Protocol) tool** that answers semantic queries — *"where is this defined?"*, *"where is this used?"*, *"what does this symbol resolve to?"* — by talking to a language server (`tsserver`, `pyright`, `gopls`, `rust-analyzer`, etc.) instead of grepping the file tree. It is **off by default** and **opt-in per session**.
