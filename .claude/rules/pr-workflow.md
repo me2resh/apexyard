@@ -112,12 +112,12 @@ Build agents MUST:
 
 ### Mechanical backstop
 
-This rule is enforced by two mechanisms in addition to the prompt guardrail in each build-agent file:
+This rule is currently enforced by two layers in addition to the prompt guardrail in each build-agent file:
 
 1. `warn-review-marker-write.sh` — PreToolUse advisory (exit 0, never blocks) that fires when a Write or Bash call targets `*-rex.approved` or `*-ceo.approved` under `.claude/session/reviews/`, reminding that markers must come from the real reviewer or `/approve-merge`.
-2. `block-unreviewed-merge.sh` — at merge time, in addition to SHA-matching the `*-rex.approved` file, also requires that a real GitHub review was posted at the PR HEAD. A file-only marker with no corresponding GitHub review is rejected. See AgDR-0062 for the design rationale and the gh-unavailable graceful-degrade.
+2. The prompt-convention guardrail in each build-agent file — the primary human-in-the-loop safety net is the per-PR CEO nod required by `/approve-merge`; the orchestrator running a real, separate Rex review is the second. These are the current enforcement layers.
 
-The self-discipline guardrail in the agent files (layer 1) is the primary defence. The advisory hook is the pre-write reminder. The merge gate is the final backstop.
+A stronger mechanical gate — requiring a real posted GitHub review at the PR HEAD before the merge gate passes — is analysed in AgDR-0062 and deferred as an explicit **opt-in for future hands-off / multi-account setups**. In a single-maintainer / single-GitHub-account setup (the default), Rex posts reviews from the same account that opened the PR, so an author-independence check can never be satisfied and would block every merge. The gate will be re-enabled behind a config flag if/when merging becomes unattended or a separate reviewer identity (bot account) exists.
 
 ### Mechanical enforcement
 
