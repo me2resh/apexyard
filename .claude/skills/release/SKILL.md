@@ -76,6 +76,49 @@ Run `git log <prev-tag>..upstream/dev --pretty=format:'%h %s'` and group by conv
 
 Show the draft and let the user edit interactively before opening the PR.
 
+### 3.5. Bump the marketing-site version strings (`site/index.html`)
+
+The marketing site hard-codes the framework version in several places. `/release`
+bumps the git tag + CHANGELOG but historically did NOT touch these, so they
+drifted across ~5 release cycles before anyone noticed (#491 / #493). Update them
+**in the same commit that lands the CHANGELOG entry**, driven by the version being
+cut (`vX.Y.Z`, with `X.Y.Z` the bare semver and `X.Y` the major.minor) and the
+release date (`YYYY-MM-DD`):
+
+| Location in `site/index.html` | What to set | Approx. line |
+|------|------|------|
+| JSON-LD `softwareVersion` | `X.Y.Z` (no `v` prefix — matches CHANGELOG `## [X.Y.Z]`) | ~L54 |
+| JSON-LD `dateModified` | release date `YYYY-MM-DD` | ~L57 |
+| Hero pill `apexyard vX.Y` | `apexyard vX.Y` | ~L1568 |
+| Hero version link **text** | `vX.Y.Z` | ~L1576 |
+| Hero version link **href** | `…/releases/tag/vX.Y.Z` | ~L1576 |
+| Releases-shipped metric **count** | number of `## [` release entries in `CHANGELOG.md` | ~L1696 |
+| Releases-shipped metric **range** | `(v0.1 → vX.Y)` | ~L1696 |
+
+Derive every value from the version being cut — do not hand-pick. Suggested
+computation:
+
+```bash
+VER="${VERSION#v}"                       # 2.2.0  (strip leading v if present)
+MAJOR_MINOR="${VER%.*}"                   # 2.2
+RELEASE_DATE=$(date +%F)                  # YYYY-MM-DD (or the CHANGELOG entry's date)
+RELEASE_COUNT=$(grep -cE '^## \[[0-9]' "$ops_root/CHANGELOG.md")  # count of release entries
+```
+
+**Leave historical version strings untouched** — CHANGELOG entries, migration-script
+filenames (e.g. `migrate-v1-to-v2.ts`), and AgDR examples that quote an old version
+are history, not the current-version advertisement. Only the seven locations above
+move with each cut.
+
+Show the resulting `site/index.html` diff alongside the CHANGELOG diff in the
+dry-run / preview so the operator sees both before the PR opens.
+
+> **Durable guard:** `test_site_counts.sh` asserts `site/index.html`'s JSON-LD
+> `softwareVersion` equals the top-most `## [X.Y.Z]` entry in `CHANGELOG.md`, and
+> the CI workflow `site-counts-check.yml` runs it on every PR. If you bump the
+> CHANGELOG without bumping the site (or vice-versa), CI goes red — the drift can
+> no longer accumulate silently.
+
 ### 4. Open the release PR
 
 Branch from `dev`: `release/vA.B.C`. Push to `upstream`. Open PR:
