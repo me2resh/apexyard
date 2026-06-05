@@ -25,7 +25,7 @@
 # Company Information
 # -----------------------------------------------------------------------------
 company:
-  name: "ZAVA"
+  name: "Your Company Name"
   mission: ""
   vision: ""
   website: ""
@@ -81,10 +81,10 @@ tech_stack:
 # -----------------------------------------------------------------------------
 project_management:
   tool: "Jira"
-  instance: "zavamed.atlassian.net"
+  instance: "yourcompany.atlassian.net"
   sprint_duration: ""              # Kanban — no fixed sprints
   branching_strategy: "feature-branch"
-  ticket_prefix: "PLAT"
+  ticket_prefix: "PROJ"
 
 # -----------------------------------------------------------------------------
 # Quality Standards
