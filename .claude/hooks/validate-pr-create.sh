@@ -16,8 +16,35 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Parse --repo from the gh command for cross-repo PR creation
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+# Parse --repo / -R from the gh command for cross-repo PR creation.
+# Handles: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
+# Source _lib-pr-repo.sh when available (DRY — it owns the canonical parser).
+# Inline fallback preserved for partial checkouts without the lib.
+CMD_REPO=""
+_VPC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$_VPC_HOOK_DIR/_lib-pr-repo.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_VPC_HOOK_DIR/_lib-pr-repo.sh"
+  CMD_REPO=$(pr_cmd_target_repo "$COMMAND")
+else
+  # Inline fallback: handles all four forms without the lib.
+  # Uses greedy `.*[[:space:]]<FLAG>` — see _lib-pr-repo.sh for the BSD-sed
+  # rationale (alternation capture groups don't work reliably on macOS sed).
+  CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]--repo=([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-R[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  if [ -z "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-R=([^[:space:]]+).*/\1/p' | head -1)
+  fi
+  # Strip optional host prefix.
+  if [ -n "$CMD_REPO" ]; then
+    CMD_REPO=$(printf '%s' "$CMD_REPO" | sed -E 's|^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/||')
+  fi
+fi
 
 # Only check on gh pr create
 if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
@@ -76,7 +103,7 @@ if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   PR_TYPES=$(config_get '.pr.title_type_whitelist[]' 2>/dev/null | paste -sd'|' -)
 fi
 if [ -z "$PR_TYPES" ]; then
-  PR_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+  PR_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release|spike|sync"
 fi
 
 TICKET_REF=""
@@ -150,6 +177,16 @@ if [ -n "$TICKET_REF" ]; then
   #
   # The upstream fallback only makes sense for the gh kind — Linear / Jira /
   # Asana don't have a fork-of-a-tracker concept.
+  #
+  # Cross-repo guard (me2resh/apexyard#464): when `--repo` is set and the PR
+  # targets a repo that is NOT a fork of the current git tree's upstream, the
+  # fallback would resolve to an UNRELATED repo (e.g. session pinned to the
+  # ops-fork; --repo points at a sibling repo; upstream remote of the ops-fork
+  # returns me2resh/apexyard, which has no relation to the sibling PR). Suppress
+  # the upstream fallback in that case by checking whether TRACKER_REPO shares
+  # the upstream lineage (either it IS the upstream, or the upstream IS a fork
+  # of it). If TRACKER_REPO matches neither origin nor upstream → cross-repo
+  # context → no fallback.
   UPSTREAM_REPO=""
   if [ "$TRACKER_KIND" = "gh" ] && git remote get-url upstream >/dev/null 2>&1; then
     UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
@@ -159,6 +196,42 @@ if [ -n "$TICKET_REF" ]; then
     # --repo on the gh command points at upstream directly).
     if [ "$UPSTREAM_REPO" = "$TRACKER_REPO" ]; then
       UPSTREAM_REPO=""
+    fi
+    # Cross-repo guard (#464): if the primary TRACKER_REPO was set via the
+    # --repo flag (CMD_REPO is non-empty), it means the operator explicitly
+    # named the target repo. Only allow the upstream fallback when the
+    # explicitly-named target is "related" to this git tree's remotes —
+    # i.e. TRACKER_REPO equals the current origin slug OR equals the
+    # upstream slug. When it matches neither, the `upstream` remote of the
+    # current working tree belongs to a completely different project lineage
+    # and must not be consulted as a ticket-existence fallback.
+    if [ -n "$CMD_REPO" ] && [ -n "$UPSTREAM_REPO" ]; then
+      ORIGIN_SLUG_VAL=""
+      if [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$HOOK_DIR/_lib-pr-repo.sh"
+        ORIGIN_SLUG_VAL=$(git_origin_repo "$REPO_ROOT")
+      else
+        # _lib-pr-repo.sh is missing (partial checkout or manual hook copy
+        # without the lib). Fall back to inline slug extraction. This is a
+        # degraded state — emit a visible warning so the operator knows the
+        # cross-repo guard is running without its purpose-built library
+        # (me2resh/apexyard#464). The inline fallback preserves the guard
+        # logic, so the protection is not silently lost.
+        echo "WARN: validate-pr-create.sh: _lib-pr-repo.sh not found at $HOOK_DIR — cross-repo guard running with inline fallback. Ensure _lib-pr-repo.sh is present alongside this hook for full coverage." >&2
+        _RAW_ORIGIN=$(git remote get-url origin 2>/dev/null)
+        ORIGIN_SLUG_VAL=$(echo "$_RAW_ORIGIN" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
+      fi
+      # Normalise to lowercase for comparison (GitHub repos are case-insensitive).
+      CMD_REPO_LC=$(printf '%s' "$CMD_REPO" | tr '[:upper:]' '[:lower:]')
+      ORIGIN_LC=$(printf '%s' "$ORIGIN_SLUG_VAL" | tr '[:upper:]' '[:lower:]')
+      UPSTREAM_LC=$(printf '%s' "$UPSTREAM_REPO" | tr '[:upper:]' '[:lower:]')
+      # Allow fallback only when the PR targets the origin or its upstream.
+      if [ "$CMD_REPO_LC" != "$ORIGIN_LC" ] && [ "$CMD_REPO_LC" != "$UPSTREAM_LC" ]; then
+        # The PR is targeting a completely different repo lineage.
+        # Suppress the upstream fallback to avoid cross-repo false lookups.
+        UPSTREAM_REPO=""
+      fi
     fi
   fi
 
@@ -176,7 +249,18 @@ if [ -n "$TICKET_REF" ]; then
         MATCHED_REPO="$UPSTREAM_REPO"
       fi
     fi
-    if [ -z "$ISSUE_JSON" ]; then
+    if [ -z "$ISSUE_JSON" ] && [ "$TRACKER_KIND" != "gh" ]; then
+      # Non-gh tracker (Linear / Jira / Asana / custom) returned nothing — the
+      # tracker CLI is absent, unauthenticated, or not queryable from this
+      # environment (#501). Do NOT block: the title already passed the shape
+      # check against tracker_id_pattern, which is all we can assert without a
+      # working CLI. Blocking here would make it impossible to open a PR that
+      # references a real, valid non-GitHub ticket. Hard existence enforcement
+      # is retained ONLY for tracker.kind == gh (the block below).
+      echo "WARN: validate-pr-create.sh: tracker '${TRACKER_KIND}' not queryable here — ${TICKET_REF} accepted on shape only (no existence check)." >&2
+      ISSUE_JSON=""
+      TICKET_NUM=""
+    elif [ -z "$ISSUE_JSON" ]; then
       # Name both trackers in the error when an upstream fallback was tried,
       # so the operator sees exactly where the lookup was attempted.
       if [ -n "$UPSTREAM_REPO" ]; then

@@ -21,6 +21,12 @@ Rex finds handbooks by **path convention** — there is no YAML frontmatter, no 
 
 If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
 
+### Semantic supplement (apexyard#449)
+
+When the MCP search server (`apexyard-search`) is installed and the framework has been reindexed, Rex **additionally** consults the vector index for handbooks that semantically match the PR's content but didn't match a path glob. This is purely additive — the path-convention table above is the floor and never shrinks. Semantically-discovered handbooks are loaded on top with the same enforcement semantics as path-discovered ones, and citations in the review output carry an explicit `*(semantic match — discovery: semantic-search)*` annotation so the reader can see why a handbook fired for a diff that didn't match its paths.
+
+Adopters who don't run MCP get path-convention discovery only — Rex's behaviour is byte-for-byte identical to pre-#449 for them, with no warning emitted. See `.claude/agents/code-reviewer.md` § 8 "Semantic supplement" for the discovery shape and fail-soft semantics.
+
 ## File format
 
 Flat markdown. No YAML frontmatter required. Rex reads the file as prose during review and applies the rules conversationally.

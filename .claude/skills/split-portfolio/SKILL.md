@@ -160,6 +160,69 @@ git push -u origin main
 
 Print: `✓ Private portfolio repo populated at <name>`.
 
+#### Step 4a — Configure branch protection on the private portfolio repo
+
+Immediately after the snapshot push, apply branch protection to `main` on the new private repo so that no one (including the operator's own account) can push directly to `main` without a PR.
+
+The protection is intentionally lenient: no required status checks (CI may not exist yet on a brand-new private repo), `enforce_admins: false` so the operator can still merge an admin PR when needed, and one required approving review.
+
+```bash
+OWNER=$(gh api user --jq .login)
+REPO_NAME=<private-repo-name>   # resolved from step 3
+
+gh api -X PUT "repos/${OWNER}/${REPO_NAME}/branches/main/protection" \
+  --input - <<'EOF'
+{
+  "required_status_checks": null,
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": false
+  },
+  "restrictions": null
+}
+EOF
+```
+
+The `gh api` call requires the operator to have **admin** permission on the new private repo. Because the skill itself just created the repo via `gh repo create`, the operator is always the repo owner and therefore has admin access — so this call should succeed in the normal flow.
+
+However, if the repo was pre-created by an org admin and the operator only has write access, the `PUT` will return HTTP 403. Handle this gracefully:
+
+```bash
+if ! gh api -X PUT "repos/${OWNER}/${REPO_NAME}/branches/main/protection" \
+     --input - <<'EOF'
+{
+  "required_status_checks": null,
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": false
+  },
+  "restrictions": null
+}
+EOF
+then
+  echo ""
+  echo "⚠  Branch protection could not be applied to ${OWNER}/${REPO_NAME}/branches/main."
+  echo "   You do not have admin access to that repo, or it is under an org with"
+  echo "   restricted branch-protection APIs."
+  echo "   Apply protection manually: GitHub → ${OWNER}/${REPO_NAME} → Settings → Branches → Add rule"
+  echo "   Recommended rule: require PR with 1 approval, no bypass for admins off."
+  echo "   Continuing migration — branch protection is advisory at this stage."
+fi
+```
+
+Idempotency: if branch protection is already configured (re-run scenario), the `PUT` is a no-op update and is safe to call again.
+
+On success, print:
+
+```
+✓ Branch protection configured on ${OWNER}/${REPO_NAME}:main
+    require_pull_request_reviews: 1 approval required
+    required_status_checks:       none (add when CI is in place)
+    enforce_admins:               false
+```
+
 #### Step 5 — Backup branch on the public fork
 
 Before any rewrite. Recoverable safety net.
@@ -432,6 +495,7 @@ Final report:
 
   Public fork:        <account>/<fork>      (registry removed, history rewritten)
   Private portfolio:  <account>/<private>   (registry + projects/ pushed)
+  Branch protection:  <account>/<private>:main (1 required review, no required status checks)
   Config block:       .claude/project-config.json (portfolio.* set)
   Backup branch:      backup-pre-rewrite (kept for 7 days, run /split-portfolio --verify to monitor)
 
@@ -449,6 +513,7 @@ Re-running the skill on a partially-migrated fork picks up where it left off:
 |----------------|--------|
 | Private repo already exists, is empty | Skip step 3, do step 4 |
 | Private repo already exists, has the snapshot | Skip steps 3 + 4 |
+| Branch protection already set on private repo's `main` | Skip step 4a (PUT is idempotent, but print current state) |
 | `backup-pre-rewrite` branch exists | Skip step 5 |
 | HEAD on main has no registry/projects | Skip steps 6 + 7 |
 | `.claude/project-config.json` already has portfolio block matching new layout | Skip step 9 |

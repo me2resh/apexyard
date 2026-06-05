@@ -118,7 +118,7 @@ fi
 # 3. Last-resort fallback — matches the shipped defaults (keeps this hook
 #    working in a bare checkout with no config files at all).
 if [ -z "$TYPES" ]; then
-  TYPES="feat|fix|refactor|test|docs|chore|style|perf|build|ci|revert"
+  TYPES="feat|fix|refactor|test|docs|chore|style|perf|build|ci|revert|spike|sync"
 fi
 
 TYPE_REGEX="^(${TYPES})(\([^)]+\))?!?:[[:space:]]+.+"

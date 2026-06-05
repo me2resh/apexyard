@@ -8,7 +8,7 @@ effort: low
 
 # /approve-design - Record Per-PR Design-Review Approval
 
-Writes `.claude/session/reviews/<pr>-design.approved` with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, or `design-tokens*` files.
+Writes `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, or `design-tokens*` files.
 
 This skill is the design-review analog of `/approve-merge` (which writes the CEO marker for the merge gate). Same pattern, different gate.
 
@@ -63,11 +63,22 @@ Run `gh pr view <pr> --json state,isDraft,mergeable`. Sanity checks:
 
 ### 4. Verify the Rex marker exists at current HEAD
 
-Design review is a stamp on top of a Rex-approved HEAD, not parallel to code review. Check (using an absolute path anchored at the repo root):
+Design review is a stamp on top of a Rex-approved HEAD, not parallel to code review. Resolve the ops fork root and source the marker path helper:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
-REX="$REPO_ROOT/.claude/session/reviews/<pr>-rex.approved"
+OPS_ROOT=""
+r="$REPO_ROOT"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  if [ -f "$r/.apexyard-fork" ]; then OPS_ROOT="$r"; break; fi
+  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then OPS_ROOT="$r"; break; fi
+  r=$(dirname "$r")
+done
+MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
+PR_REPO=$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+REX=$(review_marker_path "$PR_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "$(git rev-parse HEAD)" ]
 ```
 
@@ -83,12 +94,13 @@ gh pr diff <pr> --name-only | grep -qE '\.(tsx|jsx|vue|svelte|css|scss|sass|less
 
 ### 6. Write the design marker
 
-Construct the path from the repo root (same lesson as `/approve-merge` — never use cwd-relative paths):
+Use the repo-qualified path via `_lib-review-markers.sh` (already sourced in step 4):
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$REPO_ROOT/.claude/session/reviews"
-git rev-parse HEAD > "$REPO_ROOT/.claude/session/reviews/<pr>-design.approved"
+# (MARKER_HOME and PR_REPO already resolved in step 4 — reuse them here.)
+mkdir -p "$MARKER_HOME/.claude/session/reviews"
+DESIGN=$(review_marker_path "$PR_REPO" <pr> design "$MARKER_HOME")
+git rev-parse HEAD > "$DESIGN"
 ```
 
 The file contains exactly one line: the 40-character HEAD SHA.
@@ -131,12 +143,12 @@ Two distinct moments. One is mockup approval (design phase). The other is implem
 
 ## Relationship to other approval skills
 
-| Skill | Marker | Gate hook | Who invokes |
-|-------|--------|-----------|-------------|
-| `/approve-merge` | `<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
-| **`/approve-design`** | `<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
+| Skill | Marker (repo-qualified, see AgDR-0060) | Gate hook | Who invokes |
+|-------|----------------------------------------|-----------|-------------|
+| `/approve-merge` | `<owner>__<repo>__<pr>-ceo.approved` | `block-unreviewed-merge.sh` | On explicit CEO per-PR merge nod |
+| **`/approve-design`** | `<owner>__<repo>__<pr>-design.approved` | `require-design-review-for-ui.sh` | On explicit designer per-PR design nod |
 
-Both skills follow the same pattern: verify PR state → verify Rex marker → write marker at repo root → confirm → stop. Both refuse to write on a stale Rex base. Both are invalidated by new commits. Neither runs `gh pr merge`.
+Both skills follow the same pattern: verify PR state → verify Rex marker → write marker at ops fork root → confirm → stop. Both refuse to write on a stale Rex base. Both are invalidated by new commits. Neither runs `gh pr merge`.
 
 The merge flow for a UI PR requires **three** markers before the merge-gate hooks allow through:
 

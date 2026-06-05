@@ -145,10 +145,53 @@ projects: []
 YAML
 mkdir -p "$SB/../portfolio_test_$$/proj"
 touch "$SB/../portfolio_test_$$/proj/ideas.md"
+mkdir -p "$SB/../portfolio_test_$$/workspace"
 
 # Resolve the actual sibling path (mktemp may use a different real path on macOS).
 SIB=$(cd "$SB/../portfolio_test_$$" && pwd)
 
+# Complete split-portfolio v2 config — registry/projects_dir/ideas_backlog AND
+# workspace_dir all pointing at the sibling repo. The partial-v2 detector
+# added in me2resh/apexyard#373 fires only when workspace_dir falls back to
+# the in-fork default while the other keys are sibling-pointing, so this
+# fixture must include workspace_dir to test the "validate OK" path.
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "registry": "$SIB/apex.yaml",
+    "projects_dir": "$SIB/proj",
+    "ideas_backlog": "$SIB/proj/ideas.md",
+    "workspace_dir": "$SIB/workspace"
+  }
+}
+JSON
+
+run_case "override: absolute registry path wins" "$SB" '
+r=$(portfolio_registry)
+expected="'"$SIB"'/apex.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "override: validate is OK against complete sibling-dir paths" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 2b: partial split-portfolio v2 — registry / projects_dir point at a
+# sibling repo but workspace_dir falls back to the in-fork default.
+# This is the silent-fallback Bug 1 from me2resh/apexyard#373. validate()
+# must surface it as broken so the SessionStart banner fires.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+mkdir -p "$SB/../portfolio_partial_$$/proj"
+touch "$SB/../portfolio_partial_$$/proj/ideas.md"
+cat > "$SB/../portfolio_partial_$$/apex.yaml" <<'YAML'
+version: 1
+projects: []
+YAML
+SIB=$(cd "$SB/../portfolio_partial_$$" && pwd)
+
+# DELIBERATELY OMIT workspace_dir — this is the bug fixture.
 cat > "$SB/.claude/project-config.json" <<JSON
 {
   "portfolio": {
@@ -159,13 +202,18 @@ cat > "$SB/.claude/project-config.json" <<JSON
 }
 JSON
 
-run_case "override: absolute registry path wins" "$SB" '
-r=$(portfolio_registry)
-expected="'"$SIB"'/apex.yaml"
-if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
-'
-run_case "override: validate is OK against sibling-dir paths" "$SB" '
-if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+run_case "v2 (#373): partial config — workspace_dir missing while registry is sibling → broken" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"partial split-portfolio v2 config"*)
+    [ "$rc" -ne 0 ] && exit 0
+    echo "rc was 0 even though partial-v2 message printed: $out"
+    exit 1
+    ;;
+esac
+echo "expected partial-v2 message, got rc=$rc out=$out"
+exit 1
 '
 rm -rf "$SB" "$SIB"
 

@@ -37,14 +37,25 @@
 #   fork ships with framework default models that work out-of-box.
 # - Omitted agents inherit the framework default from
 #   .claude/agents/<name>.md frontmatter.
-# - At SessionStart, the sync hook (ships in PR 2) rewrites the affected
-#   .claude/agents/*.md frontmatter in-place. Pre-commit + pre-push
-#   guards (PR 2) catch accidental commits of the rewritten frontmatter
-#   so adopter routing choices never leak to the public fork.
+# - At SessionStart, the sync hook (`apply-agent-routing.sh`) rewrites
+#   the affected `.claude/agents/*.md` frontmatter in-place. Pre-commit
+#   and pre-push guards (`block-agent-routing-drift.sh`) catch accidental
+#   commits of the rewritten frontmatter so adopter routing choices never
+#   leak to the public fork.
 #
-# Until PR 2 lands, authoring this file is documented but inert — the
-# YAML is parsed by the schema validator and `portfolio_agent_routing`
-# resolver, but no hook applies it yet.
+# - For entries with `endpoint:`, the sync hook also writes session-wide
+#   `ANTHROPIC_BASE_URL` to `.claude/session/agent-env/__session__.env`
+#   (the per-agent files are written too but are informational until
+#   Claude Code exposes per-agent env scoping). Endpoint reachability is
+#   checked at SessionStart with a 2s budget; an unreachable proxy emits
+#   a warning and skips the override (model rewrite still applies).
+#
+# - For `model: ollama/<name>` entries, the sync hook queries the
+#   endpoint's `/api/tags` and warns if the named model isn't pulled
+#   locally (suggesting `ollama pull <name>`). See me2resh/apexyard#438.
+#
+# See `docs/local-model-setup.md` for the install + configuration
+# walkthrough (Ollama + LiteLLM proxy + this file's Example C).
 #
 
 # Schema version. Bump if breaking changes are introduced.

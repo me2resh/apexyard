@@ -273,9 +273,16 @@ else
   record_fail "linear: closed-state (Done) → blocked"
 fi
 
-# Linear: missing ticket (linear exits 1) — should block.
+# Linear: tracker CLI returns empty (linear exits 1). Under #501 this is
+# treated as "not queryable here" — indistinguishable from an absent /
+# unauthenticated CLI — so the hook falls back to shape-only and PASSES
+# (exit 0) rather than blocking. Prior to #501 this blocked (exit 2); the
+# behaviour was reversed because blocking made it impossible to open a PR
+# referencing a real, valid non-GitHub ticket when the CLI isn't reachable.
+# (Closed-state Linear tickets still block — see the "Done" case above — and
+# gh fabricated #N still blocks — see Case 12.)
 install_mock "$SB" linear 'exit 1'
-cmd='gh pr create --title "feat(LIN-99): missing" --body "
+cmd='gh pr create --title "feat(LIN-99): unqueryable" --body "
 ## Testing
 x
 
@@ -284,10 +291,10 @@ x
 |------|------------|
 | LIN | Linear |
 " --head feature/LIN-99-test'
-if run_pr_hook "$SB" "$cmd" 2; then
-  record_pass "linear: missing ticket → blocked"
+if run_pr_hook "$SB" "$cmd" 0; then
+  record_pass "linear: tracker CLI returns empty → shape-only PASS (#501; was block pre-#501)"
 else
-  record_fail "linear: missing ticket → blocked"
+  record_fail "linear: tracker CLI returns empty → shape-only PASS (#501; was block pre-#501)"
 fi
 rm -rf "$SB"
 
@@ -601,6 +608,127 @@ if [ "$rc" -ne 0 ]; then
   record_pass "lib: tracker_view (none) exits non-zero (existence-check disabled)"
 else
   record_fail "lib: tracker_view (none) exits non-zero (existence-check disabled)" "got rc=$rc"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 10 (#501): non-gh tracker, CLI absent / returns empty → shape-only
+# fallback. The existence check can't run (no working CLI), so a well-formed
+# key in a valid PR title must PASS (not block) — blocking would make it
+# impossible to open a PR referencing a real non-GitHub ticket.
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "tracker": {
+    "kind": "linear",
+    "view_command": "linear issue view {id} --json",
+    "id_pattern": "^[A-Z]+-[0-9]+$"
+  }
+}
+JSON
+# Mock linear CLI that always fails (CLI absent / unauthenticated / not
+# queryable from this environment) — tracker_view returns empty.
+install_mock "$SB" linear 'exit 1'
+cmd='gh pr create --title "feat(LIN-77): real linear ticket" --body "
+## Testing
+x
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| LIN | Linear |
+" --head feature/LIN-77-test'
+if run_pr_hook "$SB" "$cmd" 0; then
+  record_pass "#501 pr-create: non-gh tracker not queryable → shape-only PASS (no block)"
+else
+  record_fail "#501 pr-create: non-gh tracker not queryable → shape-only PASS (no block)"
+fi
+
+# Same mode — verify-commit-refs.sh must also fall back to shape-only and PASS
+# on a #N ref it cannot verify against the (absent) non-gh tracker.
+cmd='git commit -m "feat: wire LIN-77
+
+Closes #77
+"'
+if run_commit_hook "$SB" "$cmd" 0; then
+  record_pass "#501 commit-refs: non-gh tracker not queryable → shape-only PASS (no block)"
+else
+  record_fail "#501 commit-refs: non-gh tracker not queryable → shape-only PASS (no block)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 11 (#501): an ill-formed PR title still fails the shape check even
+# under a non-gh tracker. Shape-only fallback must NOT become a blanket pass —
+# the title regex (type(TICKET): …) still gates malformed titles.
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "tracker": {
+    "kind": "linear",
+    "view_command": "linear issue view {id} --json",
+    "id_pattern": "^[A-Z]+-[0-9]+$"
+  }
+}
+JSON
+install_mock "$SB" linear 'exit 1'
+# Malformed title: no ticket ref in the type(TICKET): shape → must block (exit 2).
+cmd='gh pr create --title "feat: missing ticket parens" --body "
+## Testing
+x
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| x | x |
+" --head feature/LIN-1-test'
+if run_pr_hook "$SB" "$cmd" 2; then
+  record_pass "#501 pr-create: ill-formed title still fails shape check under non-gh tracker"
+else
+  record_fail "#501 pr-create: ill-formed title still fails shape check under non-gh tracker"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 12 (#501): gh behaviour is UNCHANGED — a fabricated #N under the default
+# gh tracker still BLOCKS (exit 2). The shape-only fallback is strictly non-gh;
+# the GitHub-issue existence check must remain hard for tracker.kind == gh.
+# =============================================================================
+SB=$(make_fork)
+# Default config (no project-config.json) → tracker.kind = gh. Mock gh returns
+# nothing (issue doesn't exist).
+install_mock "$SB" gh '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  exit 1
+fi
+exit 0
+'
+cmd='gh pr create --title "feat(#88888): missing gh ticket" --body "
+## Testing
+x
+
+## Glossary
+| Term | Definition |
+|------|------------|
+| x | x |
+" --head feature/GH-1-test'
+if run_pr_hook "$SB" "$cmd" 2; then
+  record_pass "#501 pr-create: gh tracker fabricated #N still BLOCKS (gh behaviour unchanged)"
+else
+  record_fail "#501 pr-create: gh tracker fabricated #N still BLOCKS (gh behaviour unchanged)"
+fi
+
+# verify-commit-refs.sh under gh: fabricated #N still blocks.
+cmd='git commit -m "feat: thing
+
+Closes #88888
+"'
+if run_commit_hook "$SB" "$cmd" 2; then
+  record_pass "#501 commit-refs: gh tracker fabricated #N still BLOCKS (gh behaviour unchanged)"
+else
+  record_fail "#501 commit-refs: gh tracker fabricated #N still BLOCKS (gh behaviour unchanged)"
 fi
 rm -rf "$SB"
 

@@ -51,17 +51,53 @@ fi
 extract_flag_value() {
   # $1 = flag regex (e.g. --title | -t). Matches:
   #   --title "value with spaces"
-  #   --title 'value'
+  #   --title 'value with spaces'
   #   --title value
+  #
+  # The original sed form used `[^"]*` which truncated at the first embedded
+  # double-quote inside the body value — false-blocking PRs whose body contained
+  # a `"` before the AgDR reference (me2resh/apexyard#461). The fix mirrors the
+  # already-corrected extractor in block-private-refs-in-public-repos.sh
+  # (me2resh/apexyard#227): awk with a greedy `(.*)` match anchored on the next
+  # recognised flag boundary (whitespace + `--<letter>`) or end-of-string. This
+  # captures the full quoted span, including any embedded quotes, without
+  # bleeding past the start of the next flag.
   local flag_re="$1"
   local cmd="$2"
-  local v
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+\"([^\"]*)\".*/\2/p" | head -1)
-  if [ -n "$v" ]; then echo "$v"; return; fi
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+'([^']*)'.*/\2/p" | head -1)
-  if [ -n "$v" ]; then echo "$v"; return; fi
-  v=$(echo "$cmd" | sed -nE "s/.*(${flag_re})[[:space:]]+([^[:space:]]+).*/\2/p" | head -1)
-  echo "$v"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
+        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+      # Single-quoted value: same greedy + anchor treatment.
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
+        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "[[:space:]]*$", "", chunk)
+        print chunk
+        exit
+      }
+      # Unquoted value: single token, embedded quotes irrelevant.
+      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
 }
 
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
@@ -109,6 +145,48 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 2a-i. Cross-repo guard (me2resh/apexyard#464).
+#
+# When the hook fires on a `gh pr create --repo <X>` command but the current
+# git working tree belongs to a DIFFERENT repo (e.g. the session is pinned to
+# the ops-fork while the command targets a sibling repo), the diff computed
+# below reflects the ops-fork's changed files — NOT the PR's actual diff.
+# That produces false-positive blocks for PRs that don't touch any framework
+# architecture paths.
+#
+# Fix: compare the PR target repo (--repo flag, or implicit same-repo) to the
+# origin remote of the current working tree. If they differ, we cannot compute
+# a meaningful diff for this PR from this cwd → exit 0 (no-op).
+#
+# Framework gating is preserved: when creating a me2resh/apexyard PR from the
+# framework cwd, the --repo value matches origin → the guard does NOT fire and
+# the diff check runs as usual.
+# ---------------------------------------------------------------------------
+
+HOOK_DIR_AGDR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HOOK_DIR_AGDR/_lib-pr-repo.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR_AGDR/_lib-pr-repo.sh"
+  if ! pr_repo_matches_cwd "$COMMAND" "$REPO_ROOT"; then
+    # PR targets a different repo than this working tree — cannot evaluate
+    # the arch-path diff from here. Silently pass; the hook in that repo's
+    # own CI context will gate this correctly.
+    exit 0
+  fi
+else
+  # _lib-pr-repo.sh is missing (partial checkout or manual hook copy without
+  # the lib). The cross-repo guard cannot run, which means a `gh pr create
+  # --repo <sibling>` command will fall through to the ops-fork diff — exactly
+  # the false-positive bug #464 this guard was introduced to prevent.
+  # Emit a loud warning so the degradation is visible; do NOT silently revert.
+  # Match all four flag forms: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
+  CMD_REPO_PRESENT=$(printf '%s' "$COMMAND" | grep -cE '(^|[[:space:]])(--repo[=[:space:]]|-R[=[:space:]])' || true)
+  if [ "${CMD_REPO_PRESENT:-0}" -gt 0 ]; then
+    echo "WARN: require-agdr-for-arch-pr.sh: _lib-pr-repo.sh not found at $HOOK_DIR_AGDR — cross-repo guard DEGRADED. A \`gh pr create --repo <sibling>\` command will be evaluated against the current working tree's diff, which may produce false-positive blocks (me2resh/apexyard#464). Ensure _lib-pr-repo.sh is present alongside this hook." >&2
+  fi
 fi
 
 # ---------------------------------------------------------------------------

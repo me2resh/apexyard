@@ -2,8 +2,25 @@
 # Copy this to .github/workflows/security.yml in your project.
 #
 # Agent: Shield (Security Scanner)
-# Trigger: every PR and push to main
-# Purpose: automated security scanning following OWASP Top 10
+# Trigger: every PR and push to main (adopter projects scan on every PR;
+#          the framework's own self-scan is release-gated — see
+#          .github/workflows/security-scan.yml in the apexyard repo itself)
+# Purpose: automated security scanning — secrets, SAST, dep audit, SBOM
+#
+# Tools — ALL free/OSS, no account or token required:
+#   Secrets   : gitleaks/gitleaks-action@v2 (replaces TruffleHog @main which
+#               required a token and was pinned to an unstable ref)
+#   SAST      : Semgrep OSS via `pip install semgrep` + `semgrep scan`
+#               (replaces returntocorp/semgrep-action@v1 which required
+#               SEMGREP_APP_TOKEN)
+#   Dep audit : npm audit (Node projects) — remove if not applicable
+#   SBOM      : anchore/sbom-action@v0 — generates CycloneDX SBOM as artifact
+#
+# Customise SEMGREP_CONFIGS for your stack:
+#   Shell/bash repos : r/bash
+#   TypeScript/Node  : p/typescript p/nodejs p/owasp-top-ten p/security-audit
+#   Python           : p/python p/django (or p/flask)
+#   React            : p/react p/typescript
 
 name: Security Scan
 
@@ -18,32 +35,122 @@ permissions:
   pull-requests: write
 
 env:
-  # Fail thresholds — set to: critical, high, medium, low
-  FAIL_ON_SEVERITY: high
+  # Semgrep configs to run — adjust for your stack (see header comment)
+  SEMGREP_CONFIGS: "p/security-audit p/owasp-top-ten p/typescript p/nodejs"
+  # Fail on WARNING (medium) and above; set to ERROR to only fail on high+
+  SEMGREP_FAIL_SEVERITY: "WARNING"
+  # npm audit threshold: critical, high, moderate, low
+  NPM_AUDIT_LEVEL: high
 
 jobs:
-  shield-scan:
-    name: Shield Security Scan
+  # --------------------------------------------------------------------------
+  # Secrets scan — gitleaks over the full git history
+  # --------------------------------------------------------------------------
+  secrets-scan:
+    name: Secrets (gitleaks)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout (full history for gitleaks git-log scan)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Static Analysis with Semgrep
-      - name: Run Semgrep SAST
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/security-audit
-            p/owasp-top-ten
-            p/typescript
-            p/react
-            p/nodejs
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
         env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE not required for public/OSS repos
+
+  # --------------------------------------------------------------------------
+  # SAST — Semgrep OSS (free, no token required)
+  # --------------------------------------------------------------------------
+  sast:
+    name: SAST (Semgrep OSS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep OSS
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        id: semgrep
+        run: |
+          set +e
+          semgrep scan \
+            $(echo "$SEMGREP_CONFIGS" | sed 's/[^ ]*/--config=&/g') \
+            --metrics=off \
+            --no-autofix \
+            --json \
+            --output semgrep-results.json \
+            .
+          SEMGREP_EXIT=$?
+          set -e
+
+          # Parse + summarise
+          python3 - <<'PYEOF'
+          import json, os
+
+          data = json.load(open('semgrep-results.json'))
+          results = data.get('results', [])
+          counts = {}
+          for r in results:
+              sev = r.get('extra', {}).get('severity', 'UNKNOWN')
+              counts[sev] = counts.get(sev, 0) + 1
+
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## SAST (Semgrep) Results\n')
+              f.write('| Severity | Count |\n|----------|-------|\n')
+              for sev in ('ERROR', 'WARNING', 'INFO'):
+                  f.write(f'| {sev} | {counts.get(sev, 0)} |\n')
+
+              medium_plus = [r for r in results
+                             if r.get('extra', {}).get('severity', '') in ('ERROR', 'WARNING')]
+              if medium_plus:
+                  f.write('\n### Medium+ Findings\n')
+                  for r in medium_plus:
+                      sev = r['extra']['severity']
+                      path = r['path']
+                      line = r['start']['line']
+                      rule = r['check_id'].split('.')[-1]
+                      msg = r['extra']['message'].split('\n')[0][:120]
+                      f.write(f'- [{sev}] `{path}:{line}` ({rule}): {msg}\n')
+          PYEOF
+
+          # Fail on medium+ if threshold set to WARNING, or ERROR+ only
+          FAIL_SEV="${{ env.SEMGREP_FAIL_SEVERITY }}"
+          WARNING_COUNT=$(python3 -c "import json; d=json.load(open('semgrep-results.json')); r=d.get('results',[]); print(sum(1 for x in r if x.get('extra',{}).get('severity','') == 'WARNING'))")
+          ERROR_COUNT=$(python3 -c "import json; d=json.load(open('semgrep-results.json')); r=d.get('results',[]); print(sum(1 for x in r if x.get('extra',{}).get('severity','') == 'ERROR'))")
+
+          if [ "$FAIL_SEV" = "WARNING" ] && [ $((WARNING_COUNT + ERROR_COUNT)) -gt 0 ]; then
+            echo "::error::Semgrep found $ERROR_COUNT ERROR + $WARNING_COUNT WARNING findings"
+            exit 1
+          elif [ "$FAIL_SEV" = "ERROR" ] && [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "::error::Semgrep found $ERROR_COUNT ERROR findings"
+            exit 1
+          fi
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 30
+
+  # --------------------------------------------------------------------------
+  # Dependency audit — npm (remove this job if your project has no package.json)
+  # --------------------------------------------------------------------------
+  dep-audit:
+    name: Dependency audit (npm)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,122 +163,79 @@ jobs:
 
       - name: Run npm audit
         run: |
-          npm audit --audit-level=${{ env.FAIL_ON_SEVERITY }} --json > npm-audit.json || true
+          npm audit --audit-level=${{ env.NPM_AUDIT_LEVEL }} --json > npm-audit.json || true
 
           CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' npm-audit.json)
           HIGH=$(jq '.metadata.vulnerabilities.high // 0' npm-audit.json)
           MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' npm-audit.json)
           LOW=$(jq '.metadata.vulnerabilities.low // 0' npm-audit.json)
 
-          echo "## Dependency Vulnerabilities" >> $GITHUB_STEP_SUMMARY
-          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
-          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
-          echo "| Moderate | $MODERATE |" >> $GITHUB_STEP_SUMMARY
-          echo "| Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+          echo "## Dependency Vulnerabilities" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Severity | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|----------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Critical | $CRITICAL |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| High | $HIGH |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Moderate | $MODERATE |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Low | $LOW |" >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
             echo "::error::Found $CRITICAL critical and $HIGH high severity vulnerabilities"
             exit 1
           fi
 
-      - name: Check for secrets
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --only-verified
-
-      # CodeQL for deeper analysis (optional — requires setup)
-      - name: Initialize CodeQL
-        if: github.event_name == 'push'
-        uses: github/codeql-action/init@v3
-        with:
-          languages: typescript, javascript
-
-      - name: Perform CodeQL Analysis
-        if: github.event_name == 'push'
-        uses: github/codeql-action/analyze@v3
-
-  eslint-security:
-    name: ESLint Security Rules
+  # --------------------------------------------------------------------------
+  # SBOM — CycloneDX via anchore/sbom-action (free, no token)
+  # --------------------------------------------------------------------------
+  sbom:
+    name: SBOM (CycloneDX)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
         with:
-          node-version: '20'
-          cache: 'npm'
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact: true
+          artifact-name: sbom-cyclonedx
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint with security plugin
-        run: |
-          npm install --save-dev eslint-plugin-security eslint-plugin-no-unsanitized || true
-
-          npx eslint . --ext .ts,.tsx,.js,.jsx \
-            --rule 'security/detect-object-injection: warn' \
-            --rule 'security/detect-non-literal-regexp: warn' \
-            --rule 'security/detect-unsafe-regex: error' \
-            --rule 'security/detect-buffer-noassert: error' \
-            --rule 'security/detect-eval-with-expression: error' \
-            --rule 'security/detect-no-csrf-before-method-override: error' \
-            --rule 'security/detect-possible-timing-attacks: warn' \
-            --format compact || true
-
-  security-summary:
-    name: Security Summary
+  # --------------------------------------------------------------------------
+  # Security gate — all jobs must pass
+  # --------------------------------------------------------------------------
+  security-gate:
+    name: Security Gate
     runs-on: ubuntu-latest
-    needs: [shield-scan, eslint-security]
-    if: github.event_name == 'pull_request'
+    needs: [secrets-scan, sast, dep-audit, sbom]
+    if: always()
 
     steps:
-      - name: Post summary comment
+      - name: Evaluate gate
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
+            const jobs = {
+              'Secrets (gitleaks)': '${{ needs.secrets-scan.result }}',
+              'SAST (Semgrep)': '${{ needs.sast.result }}',
+              'Dep audit (npm)': '${{ needs.dep-audit.result }}',
+              'SBOM': '${{ needs.sbom.result }}',
+            };
 
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Shield Security Scan')
-            );
+            let summary = '## Security Gate Summary\n| Job | Result |\n|-----|--------|\n';
+            let failed = false;
 
-            const body = `## 🛡️ Shield Security Scan Complete
+            for (const [name, result] of Object.entries(jobs)) {
+              const icon = result === 'success' ? 'PASSED' : (result === 'skipped' ? 'SKIPPED' : 'FAILED');
+              summary += `| ${name} | ${icon} |\n`;
+              if (result === 'failure') failed = true;
+            }
 
-            | Check | Status |
-            |-------|--------|
-            | SAST (Semgrep) | ✅ Passed |
-            | Dependency Audit | ✅ Passed |
-            | Secrets Detection | ✅ Passed |
-            | ESLint Security | ✅ Passed |
+            await core.summary.addRaw(summary).write();
 
-            ---
-            *Scanned by Shield (Security Scanner Agent)*`;
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body
-              });
+            if (failed) {
+              core.setFailed('Security gate FAILED — resolve findings before merge.');
             } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body
-              });
+              console.log('Security gate PASSED.');
             }

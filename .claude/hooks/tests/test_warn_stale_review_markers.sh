@@ -13,10 +13,19 @@
 set -u
 
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/warn-stale-review-markers.sh"
+LIB_MARKERS="$(cd "$(dirname "$0")/.." && pwd)/_lib-review-markers.sh"
 if [ ! -x "$HOOK_SRC" ]; then
   echo "FAIL: hook not found or not executable at $HOOK_SRC" >&2
   exit 1
 fi
+if [ ! -f "$LIB_MARKERS" ]; then
+  echo "FAIL: _lib-review-markers.sh not found at $LIB_MARKERS" >&2
+  exit 1
+fi
+
+# Load marker lib so test helpers use the same path logic as the hook.
+# shellcheck source=/dev/null
+. "$LIB_MARKERS"
 
 PASS=0
 FAIL=0
@@ -38,7 +47,8 @@ make_sandbox() {
     git commit -q -m "init"
   )
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews" "$sb/bin"
-  cp "$HOOK_SRC" "$sb/.claude/hooks/warn-stale-review-markers.sh"
+  cp "$HOOK_SRC"    "$sb/.claude/hooks/warn-stale-review-markers.sh"
+  cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   chmod +x "$sb/.claude/hooks/warn-stale-review-markers.sh"
   # The hook sources the shared config reader landed in apexyard#109. The
   # sandbox therefore needs both the reader and the shipped defaults so
@@ -53,6 +63,9 @@ make_sandbox() {
   fi
   echo "$sb"
 }
+
+# Default test PR repo for new-scheme marker writes.
+WARN_TEST_REPO="acme/repo"
 
 # Write a gh stub. Arguments: sandbox dir, behaviour keyword.
 #   no-pr        → all `gh pr view` calls exit 1 (no PR for branch)
@@ -86,12 +99,17 @@ case "$mode" in
     num="${num%%:*}"
     sha="${mode##*:}"
     # Route by args.
-    if [[ "$args" == *"--json number"* && "$args" != *"headRefOid"* ]]; then
+    if [[ "$args" == *"--json number"* && "$args" != *"headRefOid"* && "$args" != *"headRepository"* ]]; then
       echo "$num"
       exit 0
     fi
     if [[ "$args" == *"headRefOid"* ]]; then
       echo "$sha"
+      exit 0
+    fi
+    if [[ "$args" == *"headRepository"* ]]; then
+      # Return a test repo name for the warn-stale hook to build its glob.
+      echo "acme/repo"
       exit 0
     fi
     # Fallback: pretend success but empty.
@@ -199,9 +217,9 @@ case3() {
   local sha
   sha=$(printf 'b%.0s' {1..40})
   write_gh_stub "$sb" "pr:42:$sha"
-  # Markers record the current PR HEAD — not stale.
-  echo "$sha" > "$sb/.claude/session/reviews/42-rex.approved"
-  echo "$sha" > "$sb/.claude/session/reviews/42-ceo.approved"
+  # Markers record the current PR HEAD — not stale. Use qualified paths.
+  echo "$sha" > "$(review_marker_path "$WARN_TEST_REPO" 42 rex "$sb")"
+  echo "$sha" > "$(review_marker_path "$WARN_TEST_REPO" 42 ceo "$sb")"
   run_hook "$sb" "$(push_json_success)" "" "fresh-markers-silent"
   rm -rf "$sb"
 }
@@ -214,12 +232,16 @@ case4() {
   new_sha=$(printf 'c%.0s' {1..40})
   old_sha=$(printf 'd%.0s' {1..40})
   write_gh_stub "$sb" "pr:42:$new_sha"
-  echo "$old_sha" > "$sb/.claude/session/reviews/42-rex.approved"
+  local rex_marker
+  rex_marker=$(review_marker_path "$WARN_TEST_REPO" 42 rex "$sb")
+  echo "$old_sha" > "$rex_marker"
+  local marker_basename
+  marker_basename=$(basename "$rex_marker")
   run_hook "$sb" "$(push_json_success)" \
-    "Stale review marker: 42-rex\.approved.*was ddddddd.*now ccccccc" \
+    "Stale review marker: ${marker_basename}.*was ddddddd.*now ccccccc" \
     "stale-rex-warn"
   # Marker file should still exist (warn mode, not delete).
-  if [ ! -f "$sb/.claude/session/reviews/42-rex.approved" ]; then
+  if [ ! -f "$rex_marker" ]; then
     echo "FAIL [stale-rex-warn]: marker was deleted in warn mode" >&2
     FAIL=$((FAIL+1))
     PASS=$((PASS-1))
@@ -235,9 +257,13 @@ case5() {
   new_sha=$(printf 'e%.0s' {1..40})
   old_sha=$(printf 'f%.0s' {1..40})
   write_gh_stub "$sb" "pr:42:$new_sha"
-  echo "$old_sha" > "$sb/.claude/session/reviews/42-ceo.approved"
+  local ceo_marker
+  ceo_marker=$(review_marker_path "$WARN_TEST_REPO" 42 ceo "$sb")
+  echo "$old_sha" > "$ceo_marker"
+  local marker_basename
+  marker_basename=$(basename "$ceo_marker")
   run_hook "$sb" "$(push_json_success)" \
-    "Stale review marker: 42-ceo\.approved" \
+    "Stale review marker: ${marker_basename}" \
     "stale-ceo-warn"
   rm -rf "$sb"
 }
@@ -250,9 +276,13 @@ case6() {
   new_sha=$(printf '1%.0s' {1..40})
   old_sha=$(printf '2%.0s' {1..40})
   write_gh_stub "$sb" "pr:42:$new_sha"
-  echo "$old_sha" > "$sb/.claude/session/reviews/42-design.approved"
+  local design_marker
+  design_marker=$(review_marker_path "$WARN_TEST_REPO" 42 design "$sb")
+  echo "$old_sha" > "$design_marker"
+  local marker_basename
+  marker_basename=$(basename "$design_marker")
   run_hook "$sb" "$(push_json_success)" \
-    "Stale review marker: 42-design\.approved" \
+    "Stale review marker: ${marker_basename}" \
     "stale-design-warn"
   rm -rf "$sb"
 }
@@ -265,15 +295,19 @@ case7() {
   new_sha=$(printf '3%.0s' {1..40})
   old_sha=$(printf '4%.0s' {1..40})
   write_gh_stub "$sb" "pr:42:$new_sha"
-  echo "$old_sha" > "$sb/.claude/session/reviews/42-rex.approved"
+  local rex_marker
+  rex_marker=$(review_marker_path "$WARN_TEST_REPO" 42 rex "$sb")
+  echo "$old_sha" > "$rex_marker"
+  local marker_basename
+  marker_basename=$(basename "$rex_marker")
   # Opt in to delete mode.
   cat > "$sb/.claude/project-config.json" <<EOF
 {"review_markers": {"on_stale": "delete"}}
 EOF
   run_hook "$sb" "$(push_json_success)" \
-    "Stale review marker deleted: 42-rex\.approved" \
+    "Stale review marker deleted: ${marker_basename}" \
     "stale-rex-delete"
-  if [ -f "$sb/.claude/session/reviews/42-rex.approved" ]; then
+  if [ -f "$rex_marker" ]; then
     echo "FAIL [stale-rex-delete]: marker was NOT deleted in delete mode" >&2
     FAIL=$((FAIL+1))
     PASS=$((PASS-1))
@@ -292,14 +326,35 @@ case8() {
   # Stale marker present — but push failed, so the hook should stay silent
   # (the remote didn't move, so prior markers are still valid against the
   # remote's actual HEAD).
-  echo "$old_sha" > "$sb/.claude/session/reviews/42-rex.approved"
+  local rex_marker
+  rex_marker=$(review_marker_path "$WARN_TEST_REPO" 42 rex "$sb")
+  echo "$old_sha" > "$rex_marker"
   run_hook "$sb" "$(push_json_failure)" "" "push-failed-silent"
   # Marker must NOT have been deleted.
-  if [ ! -f "$sb/.claude/session/reviews/42-rex.approved" ]; then
+  if [ ! -f "$rex_marker" ]; then
     echo "FAIL [push-failed-silent]: marker was touched on failed push" >&2
     FAIL=$((FAIL+1))
     PASS=$((PASS-1))
   fi
+  rm -rf "$sb"
+}
+
+# -------------------- CASE 9: cross-repo isolation (#485) --------------------
+# Stale marker for repo-other/project-other's PR#42 should NOT appear as stale
+# for acme/repo's PR#42 (different qualified prefix → different glob, no match).
+case9() {
+  local sb
+  sb=$(make_sandbox)
+  local new_sha old_sha
+  new_sha=$(printf '7%.0s' {1..40})
+  old_sha=$(printf '8%.0s' {1..40})
+  # gh stub returns PR#42 for acme/repo.
+  write_gh_stub "$sb" "pr:42:$new_sha"
+  # Write a stale marker for a DIFFERENT repo's PR#42 — should be invisible.
+  echo "$old_sha" > "$(review_marker_path "repo-other/project-other" 42 rex "$sb")"
+  # Also write a fresh marker for the correct repo — should be silent.
+  echo "$new_sha" > "$(review_marker_path "$WARN_TEST_REPO" 42 rex "$sb")"
+  run_hook "$sb" "$(push_json_success)" "" "cross-repo-isolation-silent"
   rm -rf "$sb"
 }
 
@@ -312,6 +367,7 @@ case5
 case6
 case7
 case8
+case9
 
 echo ""
 echo "==================================="

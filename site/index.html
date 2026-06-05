@@ -51,10 +51,10 @@
   "url": "https://yard.apexscript.com/",
   "description": "Ship AI-built software like a real engineering team. Automatic code review, launch-readiness checks, one inbox for every product — on Claude Code.",
   "license": "https://opensource.org/licenses/MIT",
-  "softwareVersion": "2.0.0",
+  "softwareVersion": "2.3.0",
   "downloadUrl": "https://github.com/me2resh/apexyard",
   "datePublished": "2026-04-09",
-  "dateModified": "2026-05-24",
+  "dateModified": "2026-06-04",
   "copyrightYear": "2026",
   "copyrightHolder": {
     "@type": "Person",
@@ -1454,6 +1454,7 @@ a:hover { color: var(--accent); }
    Gates Google Analytics (Consent Mode v2) for GDPR/ePrivacy.
    ============================================================ */
 
+/* begin: consent-css — keep in sync across all site/*.html pages (#399) */
 .consent {
   position: fixed;
   bottom: 0;
@@ -1502,8 +1503,10 @@ a:hover { color: var(--accent); }
   background: var(--accent);
   border-color: var(--accent);
 }
+/* end: consent-css */
 </style>
 
+<!-- begin: gtag — keep in sync across all site/*.html pages (#399) -->
 <!-- Google tag (gtag.js) with Consent Mode v2 - analytics_storage defaults to denied
      until the consent banner below records an explicit choice. -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-G3EMR3CB02"></script>
@@ -1522,8 +1525,9 @@ a:hover { color: var(--accent); }
     }
   } catch (e) {}
   gtag('js', new Date());
-  gtag('config', 'G-G3EMR3CB02', { 'anonymize_ip': true });
+  gtag('config', 'G-G3EMR3CB02');
 </script>
+<!-- end: gtag -->
 </head>
 <body>
 <a href="#main" class="skip">Skip to content</a>
@@ -1561,7 +1565,7 @@ a:hover { color: var(--accent); }
   <div class="hero__inner">
 
     <div class="hero__eyebrow rise rise-1">
-      <span class="pill">apexyard v2.0</span>
+      <span class="pill">apexyard v2.3</span>
       <span>open source · built for founders shipping with AI</span>
       <button class="copy-for-ai" data-md-url="/index.md" type="button" style="margin-left:auto;font-size:0.75rem;padding:0.25rem 0.6rem;border:1px solid currentColor;border-radius:4px;background:transparent;color:inherit;cursor:pointer;font-family:inherit;">Copy as Markdown for AI</button>
     </div>
@@ -1569,7 +1573,7 @@ a:hover { color: var(--accent); }
     <h1 class="hero__title rise rise-2">apexyard</h1>
 
     <p class="hero__version rise rise-2" style="margin:-0.5em 0 0.5em;font-size:13px;opacity:0.55;letter-spacing:0.05em;">
-      <a href="https://github.com/me2resh/apexyard/releases/tag/v2.0.1" style="color:inherit;text-decoration:none;" target="_blank" rel="noopener">v2.0.1</a>
+      <a href="https://github.com/me2resh/apexyard/releases/tag/v2.3.0" style="color:inherit;text-decoration:none;" target="_blank" rel="noopener">v2.3.0</a>
       &nbsp;·&nbsp;
       <a href="https://github.com/me2resh/apexyard/blob/main/CHANGELOG.md" style="color:inherit;text-decoration:underline;text-underline-offset:3px;" target="_blank" rel="noopener">changelog</a>
     </p>
@@ -1684,15 +1688,15 @@ a:hover { color: var(--accent); }
 
   <div class="hero__metrics" aria-label="ApexYard's own engineering activity" style="max-width: var(--max-w); margin: 0 auto; padding: 0 var(--gutter); border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);">
     <div class="hero__metric">
-      <strong>176</strong>
+      <strong>175</strong>
       <span>PRs reviewed &amp; merged · last 90 days</span>
     </div>
     <div class="hero__metric">
-      <strong>8</strong>
-      <span>Production releases shipped (v0.1 → v2.0)</span>
+      <strong>13</strong>
+      <span>Production releases shipped (v0.1 → v2.3)</span>
     </div>
     <div class="hero__metric">
-      <strong>51</strong>
+      <strong>29</strong>
       <span>Technical decisions on record (released to main)</span>
     </div>
     <div class="hero__metric">
@@ -1995,7 +1999,7 @@ confirm it skips the missing column before you ship."</span></pre>
       <div class="layer__num">reviews like a real team</div>
       <h3 class="layer__title">Reviews from a full engineering team — without hiring one</h3>
       <p class="layer__desc">
-        The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. <span class="dim">Behind the scenes: 19 role definitions across 5 departments, each with its own checklist and boundaries.</span>
+        The reviewer changes based on what you're working on. Touching auth code? A security reviewer takes a look. Touching the database? Someone who specialises in database changes walks you through the rollback plan. <span class="dim">Behind the scenes: 20 role definitions across 5 departments, each with its own checklist and boundaries.</span>
       </p>
     </article>
 
@@ -2019,7 +2023,7 @@ confirm it skips the missing column before you ship."</span></pre>
       <div class="layer__num">reviewers that don't rubber-stamp</div>
       <h3 class="layer__title">A real code review on every change</h3>
       <p class="layer__desc">
-        The reviewer reads what changed and how the rest of the system reacts to it — not just the diff. It flags missing tests, surfaces decisions you made silently, and refuses to approve work that bypasses the team's standards. Pushing new code invalidates the previous approval, so nothing slips through after the review is done. <span class="dim">Powered by 23 specialised reviewer agents under the hood.</span>
+        The reviewer reads what changed and how the rest of the system reacts to it — not just the diff. It flags missing tests, surfaces decisions you made silently, and refuses to approve work that bypasses the team's standards. Pushing new code invalidates the previous approval, so nothing slips through after the review is done. <span class="dim">Powered by 24 specialised reviewer agents under the hood.</span>
       </p>
     </article>
 
@@ -2511,6 +2515,7 @@ confirm it skips the missing column before you ship."</span></pre>
 })();
 </script>
 
+<!-- begin: consent — keep in sync across all site/*.html pages (#399) -->
 <!-- ============================================================
      COOKIE CONSENT BANNER
      Hidden if a prior choice is stored. On Accept, updates gtag
@@ -2561,6 +2566,7 @@ confirm it skips the missing column before you ship."</span></pre>
   });
 })();
 </script>
+<!-- end: consent -->
 
 <script src="/copy-for-ai.js" defer></script>
 </body>

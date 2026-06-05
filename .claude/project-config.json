@@ -1,0 +1,25 @@
+{
+  "_comment": "Framework-repo overrides for project-config.defaults.json. The apexyard framework repo itself dog-foods its own pre-push gate here — see .claude/hooks/pre-push-gate.sh and docs/getting-started.md § 'Terminal push hook'. Managed projects under governance set their own pre_push.commands per their stack.",
+
+  "pre_push": {
+    "_comment": "Commands mirror the locally-runnable CI jobs from .github/workflows/. Each entry guards for a missing tool: a missing tool prints an actionable install message and exits 0 (skip-with-note) so a contributor without the tool is not hard-blocked. Link-check (lychee) is intentionally excluded — it is slow and network-flaky, unsuitable for pre-push. See docs/getting-started.md for the git pre-push hook (core.hooksPath) wiring.",
+    "commands": [
+      {
+        "name": "markdownlint",
+        "run": "command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; npx --yes markdownlint-cli2 '**/*.md' '#node_modules' '#.git' '#workspace' 2>&1"
+      },
+      {
+        "name": "shellcheck",
+        "run": "command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed — shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .claude/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
+      },
+      {
+        "name": "site-counts",
+        "run": "bash .claude/hooks/tests/test_site_counts.sh 2>&1"
+      },
+      {
+        "name": "subpacks",
+        "run": "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1"
+      }
+    ]
+  }
+}

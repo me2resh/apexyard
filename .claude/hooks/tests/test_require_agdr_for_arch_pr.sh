@@ -282,6 +282,41 @@ run_case "spike active-ticket marker (arch change, non-spike branch + title) →
   "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
 
 # ---------------------------------------------------------------------------
+# Regression: embedded-quote truncation bug (apexyard#461).
+#
+# The original sed extractor used `[^"]*` which stopped at the first embedded
+# double-quote inside --body, false-blocking PRs where quoted text appeared
+# before the AgDR reference or the skip marker.
+#
+# These cases exercise the three required sub-scenarios from the ticket ACs:
+#   (A) AgDR reference follows an embedded quote → hook PASSES.
+#   (B) Skip marker follows an embedded quote     → hook PASSES with warn.
+#   (C) Embedded quote, but NO AgDR reference     → hook still BLOCKS
+#       (true-negative: verifying we haven't over-corrected the gate).
+#
+# All three use the c1_base/c1_feat arch-change fixture so the hook's
+# arch-detection fires and the body-check is actually reached.
+# ---------------------------------------------------------------------------
+
+# (A) AgDR reference comes after embedded quote text → PASS.
+DIR=$(setup_repo c1_base c1_feat)
+run_case "embedded quote before AgDR ref → PASS (no false-block) [#461-A]" \
+  "$DIR" 0 "" \
+  "gh pr create --base main --title 'feat(#1): tweak domain' --body 'Summary: uses \"greedy\" matching. See AgDR-0007-tweak-domain for rationale.'"
+
+# (B) Skip marker follows an embedded quote → PASS with skip-marker warning.
+DIR=$(setup_repo c1_base c1_feat)
+run_case "embedded quote before skip marker → PASS with skip warning [#461-B]" \
+  "$DIR" 0 "agdr: not-applicable marker present" \
+  "gh pr create --base main --title 'refactor(#2): move domain' --body 'Uses \"pure\" rename. <!-- agdr: not-applicable -->'"
+
+# (C) Embedded quote, but genuinely NO AgDR reference and NO skip marker → still BLOCK.
+DIR=$(setup_repo c1_base c1_feat)
+run_case "embedded quote, no AgDR ref at all → still BLOCKS (true-negative) [#461-C]" \
+  "$DIR" 2 "no AgDR reference" \
+  "gh pr create --base main --title 'feat(#3): tweak domain' --body 'Uses \"greedy\" matching but forgot to add the decision record.'"
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 

@@ -72,25 +72,41 @@ if [ -n "$PUSH_COMBINED" ] && echo "$PUSH_COMBINED" | grep -qEi '\b(rejected|fai
   exit 0
 fi
 
+# Source the marker path helper (#485) so we can construct the right glob.
+HOOK_DIR_STALE="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$HOOK_DIR_STALE/_lib-review-markers.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR_STALE/_lib-review-markers.sh"
+fi
+
 # -------- Resolve repo root + session/reviews dir --------
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
-REVIEWS_DIR="${REPO_ROOT}/.claude/session/reviews"
+REVIEWS_DIR=$(review_markers_dir "$REPO_ROOT" 2>/dev/null || printf '%s/.claude/session/reviews' "$REPO_ROOT")
 if [ ! -d "$REVIEWS_DIR" ]; then
   # No reviews ever recorded — nothing can be stale.
   exit 0
 fi
 
-# -------- Resolve the PR number for the current branch --------
+# -------- Resolve the PR number and repo for the current branch --------
 # `gh pr view` with no args looks up the PR for the checked-out branch.
 # If no PR exists (early push before `gh pr create`), gh exits non-zero and
 # we exit silently — this is the expected path for most first pushes.
 PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
 if [ -z "$PR_NUMBER" ]; then
   exit 0
+fi
+
+# Resolve the repo so we scan only markers that belong to this PR's repo (#485).
+# `gh pr view --json headRepository` returns the repo the PR targets.
+PR_REPO=$(gh pr view "$PR_NUMBER" --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+# Fallback: derive from git remote origin if gh is offline.
+if [ -z "$PR_REPO" ]; then
+  _origin_url=$(git remote get-url origin 2>/dev/null)
+  PR_REPO=$(echo "$_origin_url" | sed -nE 's|.*[:/]([^/]+/[^/]+)(\.git)?$|\1|p')
 fi
 
 # -------- Resolve the PR's HEAD SHA --------
@@ -122,14 +138,32 @@ if [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
   fi
 fi
 
+# -------- Build the marker glob prefix for this (repo, pr) pair --------
+# New scheme: <owner>__<repo>__<pr>-*.approved  (AgDR-0060 / #485)
+# Derive the safe repo slug (same transformation as review_marker_path).
+if [ -n "$PR_REPO" ] && command -v review_marker_path >/dev/null 2>&1; then
+  _SAFE_REPO=$(printf '%s' "$PR_REPO" | sed 's|/|__|g')
+  MARKER_GLOB="${_SAFE_REPO}__${PR_NUMBER}-*.approved"
+else
+  # Fallback: scan all *-<PR_NUMBER>-*.approved or bare <PR_NUMBER>-*.approved
+  # so the hook degrades gracefully when the lib is unavailable.
+  MARKER_GLOB="*${PR_NUMBER}-*.approved"
+fi
+
 # -------- Scan the marker files for staleness --------
 # Use a for-loop with a nullglob-equivalent pattern check to handle the
 # no-match case cleanly (literal glob vs empty list).
 shopt -s nullglob 2>/dev/null
-for MARKER in "$REVIEWS_DIR"/"$PR_NUMBER"-*.approved; do
+for MARKER in "$REVIEWS_DIR"/$MARKER_GLOB; do
   [ -f "$MARKER" ] || continue
 
-  MARKER_SHA=$(tr -d '[:space:]' < "$MARKER")
+  # For the structured CEO marker (key=value format), extract the sha= field.
+  # For all other markers (bare SHA), read the whole file after stripping whitespace.
+  if grep -q '^sha=' "$MARKER" 2>/dev/null; then
+    MARKER_SHA=$(grep '^sha=' "$MARKER" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+  else
+    MARKER_SHA=$(tr -d '[:space:]' < "$MARKER")
+  fi
   if [ -z "$MARKER_SHA" ]; then
     # Malformed marker (empty file) — treat as stale so it gets surfaced,
     # since the merge gate will reject it anyway.

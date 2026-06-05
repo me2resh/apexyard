@@ -2,8 +2,8 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and one
-> place for all your products, built on top of Claude Code. 54 skills,
-> 32 hooks, 19 role definitions. Open source, plain markdown and shell,
+> place for all your products, built on top of Claude Code. 59 skills,
+> 39 hooks, 20 role definitions. Open source, plain markdown and shell,
 > no SaaS, no lock-in.
 
 ## Pages
@@ -11,7 +11,7 @@
 - [Home](https://yard.apexscript.com/) — what apexyard does for non-technical founders, who it's for, how to get started
 - [How it works](https://yard.apexscript.com/how-it-works) — a plain-English walkthrough of one realistic day with apexyard
 - [Architecture](https://yard.apexscript.com/architecture) — the technical 5-layer model + portfolio model
-- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (54 skills) grouped by outcome
+- [Skills](https://yard.apexscript.com/skills) — full slash-command reference (59 skills) grouped by outcome
 
 ## Full-content companion
 
@@ -52,20 +52,20 @@
 - **Portfolio model.** One registry (`apexyard.projects.yaml`) lists every repo
   under management. Skills like `/inbox`, `/status`, `/tasks` aggregate
   across the portfolio in ~1 second.
-- **54 slash commands** grouped by outcome: keep quality high, move work
+- **59 slash commands** grouped by outcome: keep quality high, move work
   forward, see everything at once, onboard new code, run things.
-- **32 shell hooks** mechanically enforce the rules — ticket-first, migration
+- **39 shell hooks** mechanically enforce the rules — ticket-first, migration
   gate, two-marker merge gate, red-CI block, secrets scanning, branch / PR-title
   validation, upstream-drift banner, leak protection.
-- **19 role definitions** across 5 departments (Engineering, Product, Design,
+- **20 role definitions** across 5 departments (Engineering, Product, Design,
   Security, Data). Roles activate on triggers (label, diff path, prompt).
 
 ## Proof — verifiable from our own GitHub activity
 
-- 176 PRs reviewed and merged in the last 90 days, under the same guardrails
+- 175 PRs reviewed and merged in the last 90 days, under the same guardrails
   apexyard installs in your fork
-- 8 production releases shipped (v0.1.0 through v2.0.0)
-- 51 technical decisions recorded (released to main)
+- 7 production releases shipped (v0.1.0 through v1.3.0)
+- 29 technical decisions recorded (released to main)
 - 13 bugs caught and fixed before users hit them
 - All visible at [github.com/me2resh/apexyard](https://github.com/me2resh/apexyard)
 

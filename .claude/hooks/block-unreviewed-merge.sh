@@ -56,6 +56,8 @@ fi
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
 . "$(dirname "$0")/_lib-extract-pr.sh"
+# Repo-qualified marker path helper (#485).
+. "$(dirname "$0")/_lib-review-markers.sh"
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
@@ -72,10 +74,60 @@ if [ -z "$CMD_REPO" ]; then
 fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
+# Also extract the repo so markers are scoped to (repo, pr) — #485.
+# CMD_REPO already parsed above; resolve via helper if blank (e.g. current-branch fallback).
+if [ -z "$CMD_REPO" ]; then
+  CMD_REPO=$(extract_repo_from_command "$COMMAND")
+fi
 
 if [ -z "$PR_NUMBER" ]; then
   echo "BLOCKED: Could not determine PR number for merge. Run from a PR branch or pass an explicit PR number." >&2
   exit 2
+fi
+
+# --- Sync-PR squash guard (apexyard#459) ---
+# /release-sync PRs MUST be merged with --merge (true merge, two parents).
+# Squash-merging destroys the second parent (pointing at the release squash
+# on main), so the release squash is never an ancestor of dev, and the
+# squash-divergence the skill exists to fix is silently re-introduced.
+#
+# Detection: if the PR's head branch starts with `sync/main-to-dev-after-`,
+# refuse a squash/rebase merge on BOTH command shapes:
+#   - `gh pr merge <N> --squash` / `--rebase`
+#   - `gh api .../pulls/<N>/merge -f merge_method=squash` (or rebase)
+# The `gh api` shape is the silent-bypass route that motivated #47, so the
+# guard must match `merge_method=squash|rebase` as well as the `--squash`
+# flag. (We make our own `gh pr view --json headRefName` call here — it is a
+# separate API call from the HEAD-SHA lookup further down, not the same one.)
+# On network failure we skip the guard and let the merge proceed — an
+# unavailable gh API is not a reason to permanently block all syncs.
+if echo "$COMMAND" | grep -qE '(--squash|--rebase|merge_method=squash|merge_method=rebase)'; then
+  _SYNC_BRANCH=""
+  if [ -n "$CMD_REPO" ]; then
+    _SYNC_BRANCH=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" \
+      --json headRefName -q '.headRefName' 2>/dev/null)
+  else
+    _SYNC_BRANCH=$(gh pr view "$PR_NUMBER" \
+      --json headRefName -q '.headRefName' 2>/dev/null)
+  fi
+  if echo "$_SYNC_BRANCH" | grep -qE '^sync/main-to-dev-after-'; then
+    cat >&2 <<MSG
+BLOCKED: Sync PR #${PR_NUMBER} (branch: ${_SYNC_BRANCH}) cannot be squash-merged.
+
+/release-sync PRs MUST be merged with --merge (true merge that preserves both
+parents). Squash-merging destroys the second parent (pointing at the release
+squash commit on main), so the release squash is NOT made an ancestor of dev —
+defeating the entire purpose of /release-sync.
+
+Use --merge instead:
+  gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>} --merge --delete-branch
+
+Or invoke /approve-merge ${PR_NUMBER} — it auto-detects sync PRs and uses --merge.
+
+See AgDR-0053 for the full rationale.
+MSG
+    exit 2
+  fi
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -90,9 +142,10 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
-REVIEWS_DIR="${MARKER_HOME}/.claude/session/reviews"
-REX_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-rex.approved"
-CEO_APPROVAL="${REVIEWS_DIR}/${PR_NUMBER}-ceo.approved"
+# Repo-qualified marker paths — scoped to (CMD_REPO, PR_NUMBER) so same-numbered
+# PRs in different repos never collide. See AgDR-0060 + me2resh/apexyard#485.
+REX_APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" rex "$MARKER_HOME")
+CEO_APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" ceo "$MARKER_HOME")
 
 # Resolve the PR's real HEAD via GitHub, not local git (see #55). The local
 # HEAD is rarely the PR's HEAD — usually main or an unrelated feature
@@ -142,8 +195,34 @@ MSG
 fi
 
 # --- CEO marker check ---
+# If the marker file doesn't exist on disk, check whether the COMMAND
+# itself will create it (compound command: `cat > marker && gh pr merge`).
+# PreToolUse hooks fire BEFORE execution, so in a compound command the
+# marker write hasn't happened yet. We validate the inline content
+# in-memory and let the command through if it's valid. See #426.
+_INLINE_CEO_MARKER=""
 if [ ! -f "$CEO_APPROVAL" ]; then
-  cat >&2 <<MSG
+  # Look for inline marker content in the command targeting this PR's
+  # approval file. Match heredoc, printf, or echo writing to *-ceo.approved.
+  # Match both the new repo-qualified basename and the bare-number legacy form
+  # so compound commands from /approve-merge are recognised correctly. The
+  # SHA-match check below provides the safety backstop.
+  CEO_BASENAME=$(basename "$CEO_APPROVAL")
+  if echo "$COMMAND" | grep -qE "(${CEO_BASENAME}|${PR_NUMBER}-ceo\.approved)"; then
+    # Extract sha=, approved_by=, skill_version= from the command string.
+    _inline_sha=$(echo "$COMMAND" | grep -oE 'sha=[0-9a-f]{40}' | head -1 | cut -d= -f2)
+    _inline_approved_by=$(echo "$COMMAND" | grep -oE 'approved_by=[a-z]+' | head -1 | cut -d= -f2)
+    _inline_skill_version=$(echo "$COMMAND" | grep -oE 'skill_version=[0-9]+' | head -1 | cut -d= -f2)
+    if [ -n "$_inline_sha" ] && [ "$_inline_approved_by" = "user" ] && \
+       [ -n "$_inline_skill_version" ] && [ "$_inline_skill_version" -ge 2 ] 2>/dev/null; then
+      _INLINE_CEO_MARKER="valid"
+      CEO_SHA="$_inline_sha"
+      CEO_APPROVED_BY="$_inline_approved_by"
+      CEO_SKILL_VERSION="$_inline_skill_version"
+    fi
+  fi
+  if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
+    cat >&2 <<MSG
 BLOCKED: PR #${PR_NUMBER} has Rex approval but no CEO approval marker.
 
 Plan-level "go" / "continue" / "ship it" does NOT authorize a merge. Each
@@ -164,29 +243,31 @@ To unblock:
 NEVER create this marker yourself from an umbrella "go" on a plan.
 EVER. This is the exact failure this hook exists to prevent.
 MSG
-  exit 2
+    exit 2
+  fi
 fi
 
-# Parse the structured CEO marker. Required fields (#48):
-#   sha=<40-char hex>
-#   approved_by=user
-#   skill_version=<N>  with N >= 2
-#
-# Bare-SHA legacy markers (single line, no `=`) fail the parse and are
-# rejected with a clear "stale format" message pointing at /approve-merge.
-ceo_field() {
-  # Extract value of `<key>=` from the marker, stripping surrounding quotes.
-  # Reads only the first matching line so a malformed marker with duplicates
-  # still produces a deterministic answer.
-  grep -E "^${1}=" "$CEO_APPROVAL" 2>/dev/null \
-    | head -1 \
-    | sed -E "s/^${1}=//" \
-    | sed -E 's/^"(.*)"$/\1/'
-}
+# Parse the structured CEO marker — from file unless already extracted
+# from inline command content (compound-command path, see #426 above).
+if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
+  # Required fields (#48):
+  #   sha=<40-char hex>
+  #   approved_by=user
+  #   skill_version=<N>  with N >= 2
+  #
+  # Bare-SHA legacy markers (single line, no `=`) fail the parse and are
+  # rejected with a clear "stale format" message pointing at /approve-merge.
+  ceo_field() {
+    grep -E "^${1}=" "$CEO_APPROVAL" 2>/dev/null \
+      | head -1 \
+      | sed -E "s/^${1}=//" \
+      | sed -E 's/^"(.*)"$/\1/'
+  }
 
-CEO_SHA=$(ceo_field sha)
-CEO_APPROVED_BY=$(ceo_field approved_by)
-CEO_SKILL_VERSION=$(ceo_field skill_version)
+  CEO_SHA=$(ceo_field sha)
+  CEO_APPROVED_BY=$(ceo_field approved_by)
+  CEO_SKILL_VERSION=$(ceo_field skill_version)
+fi
 
 # Reject the bare-SHA legacy format. A marker with no `sha=` line is either
 # a pre-#132 plain-SHA file or something the model fabricated via raw echo

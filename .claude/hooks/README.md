@@ -64,10 +64,12 @@ If any gate fails, blocks with a message pointing at the `/migration` skill. If 
 
 **What it does:** blocks the merge unless **both** approval markers exist for the PR number being merged, and both contain a SHA that matches the current HEAD. New commits after either approval invalidate it.
 
-| Marker | Path | Written by | Semantics |
-|--------|------|------------|-----------|
-| Rex | `.claude/session/reviews/<pr>-rex.approved` | `code-reviewer` agent after a successful review | "Code reviewed, no blocking issues" |
-| CEO | `.claude/session/reviews/<pr>-ceo.approved` | `/approve-merge <pr>` skill, **only** on explicit user invocation | "The human approver has looked at this specific PR and said ship it" |
+| Marker | Path (repo-qualified since #485) | Written by | Semantics |
+|--------|----------------------------------|------------|-----------|
+| Rex | `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` | `code-reviewer` agent after a successful review | "Code reviewed, no blocking issues" |
+| CEO | `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` | `/approve-merge <pr>` skill, **only** on explicit user invocation | "The human approver has looked at this specific PR and said ship it" |
+
+Marker paths are constructed via `_lib-review-markers.sh::review_marker_path <owner/repo> <pr> <role>`. The double-underscore separator ensures the (owner, repo, pr) triple is unambiguous — GitHub slugs never contain `__`. This prevents same-numbered PRs in different managed repos from colliding on the same marker filename (AgDR-0060).
 
 Both files contain exactly one line: the 40-character HEAD SHA at the time of approval. The hook reads each, compares with `git rev-parse HEAD`, and blocks on any mismatch.
 
@@ -174,7 +176,7 @@ All path patterns use the `(^|/)` anchor so they catch **monorepo layouts** (`ba
 
 **Event:** `PreToolUse` on `Bash(gh pr merge *)`.
 
-**What it does:** if the PR's diff touches any UI file, requires a design-approval marker at `.claude/session/reviews/<pr>-design.approved` with a SHA matching HEAD. Non-UI PRs bypass silently.
+**What it does:** if the PR's diff touches any UI file, requires a design-approval marker at `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified, see AgDR-0060) with a SHA matching HEAD. Non-UI PRs bypass silently.
 
 **Default UI paths** (regex):
 
@@ -193,7 +195,7 @@ design-tokens
 
 **Companion skill:** `/approve-design <pr>` (in `.claude/skills/approve-design/`) writes the marker. It follows the same pattern as `/approve-merge`: verify PR state → verify Rex marker at HEAD → write the design marker at the repo root → confirm → stop. The skill definition includes explicit valid/invalid triggers and an anti-pattern section distinguishing mockup approval (design phase) from implementation-review approval (PR phase).
 
-**Manual fallback:** for projects that deliberately skip design review (admin tools, internal dashboards), `touch .claude/session/reviews/<pr>-design.approved` is a visible, auditable "we decided to skip" artifact rather than an invisible omission.
+**Manual fallback:** for projects that deliberately skip design review (admin tools, internal dashboards), create `touch .claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (using the repo-qualified name) as a visible, auditable "we decided to skip" artifact.
 
 **Enforces:** `.claude/rules/pr-quality.md § "Design Review (UI Changes)"` and `workflows/code-review.md § "UI Designer (conditional)"` — both prose-only until this hook shipped.
 
@@ -334,8 +336,10 @@ These were already in place before the enforcement layer and remain unchanged (e
 ├── onboarded                     # created by /onboard, read by onboarding-check
 ├── current-ticket                # created by /start-ticket, read by require-active-ticket
 ├── pending-reviews/<pr>          # created by auto-code-review, tracks PRs awaiting Rex
-├── reviews/<pr>-rex.approved     # created by code-reviewer agent, read by merge-gate
-└── reviews/<pr>-ceo.approved     # created by /approve-merge, read by merge-gate
+├── reviews/<owner>__<repo>__<pr>-rex.approved           # created by code-reviewer agent, read by merge-gate
+├── reviews/<owner>__<repo>__<pr>-ceo.approved           # created by /approve-merge, read by merge-gate
+├── reviews/<owner>__<repo>__<pr>-design.approved        # created by /approve-design, read by UI merge-gate
+└── reviews/<owner>__<repo>__<pr>-architecture.approved  # created by /approve-architecture or Tariq
 ```
 
 If a marker gets stale, delete the file and re-run the corresponding skill.
