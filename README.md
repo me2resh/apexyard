@@ -100,15 +100,17 @@ cd apexyard
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, `git fetch upstream && git merge upstream/main` pulls the latest apexyard improvements into your fork.
+Later, run **`/update`** to pull the latest apexyard improvements into your fork — it previews the upstream diff, merges on a sync branch, and walks you through any per-version migrations (don't hand-merge `main`).
 
-### 4. Fill in `onboarding.yaml`
+### 4. Configure the framework — run `/setup`
 
-```bash
-$EDITOR onboarding.yaml
+Run **`/setup`** in Claude Code. In three exchanges (describe your stack → review the proposed defaults → accept or tweak) it captures your company, team, tech stack, and quality bar and writes your config.
+
+```text
+/setup
 ```
 
-Set company, team, tech stack, quality bar. Defaults are sensible — change what matters for your team.
+Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
 
 ### 5. Create the portfolio registry
 
@@ -271,7 +273,7 @@ Contributions are welcome — **start with [CONTRIBUTING.md](CONTRIBUTING.md)** 
 
 ApexYard runs on its own rules, so the flow mirrors any project under ApexYard governance:
 
-1. **File a ticket** — `/feature`, `/bug`, or `/task` on this repo. Describes what you want to change and why.
+1. **File an issue** — open a GitHub issue with the **Bug report** / **Feature request** template. If you run apexyard yourself, the **`/report-apexyard-bug`** and **`/request-apexyard-feature`** skills file it here for you (they target `me2resh/apexyard` — distinct from `/bug` and `/feature`, which file into your *own* managed project).
 2. **Start the ticket** — `/start-ticket <number>` so the ticket-first hook lets your code edits through.
 3. **Branch + commit** — `{type}/GH-{number}-{short-description}`, conventional commit format (`type(#number): subject`).
 4. **Self-check before pushing** — `npm run lint` / markdownlint / shellcheck as applicable; hooks remind you at `git push`.

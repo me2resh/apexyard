@@ -5,7 +5,8 @@ title: "[Bug] "
 labels: bug
 ---
 
-<!-- Mirrors the framework's own /bug ticket shape. -->
+<!-- Mirrors the framework-feedback skill /report-apexyard-bug (files upstream
+     to me2resh/apexyard). Distinct from /bug, which files into your own project. -->
 
 ## Given / When / Then
 

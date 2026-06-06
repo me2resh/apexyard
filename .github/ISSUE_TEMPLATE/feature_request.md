@@ -5,8 +5,9 @@ title: "[Feature] "
 labels: enhancement
 ---
 
-<!-- Mirrors the framework's own /feature + /request-apexyard-feature shape:
-     lead with the problem, not the solution. -->
+<!-- Mirrors the framework-feedback skill /request-apexyard-feature (files
+     upstream to me2resh/apexyard). Lead with the problem, not the solution.
+     Distinct from /feature, which files into your own project. -->
 
 ## Problem
 

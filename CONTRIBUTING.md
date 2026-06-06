@@ -74,7 +74,12 @@ If your change introduces a library, a pattern, or an architectural choice, add 
 
 ## Reporting bugs & requesting features
 
-Use the issue templates (New issue → pick **Bug report** or **Feature request**). They mirror the framework's own `/bug` and `/feature` ticket shapes. For **security** issues, do **not** open a public issue — see [SECURITY.md](SECURITY.md).
+Open a GitHub issue (New issue → **Bug report** or **Feature request**). If you already run apexyard in Claude Code, use the framework-feedback skills instead — they file the issue here, on `me2resh/apexyard`, for you:
+
+- **`/report-apexyard-bug`** — a bug in the framework itself (hook misfire, skill gap, rule bug)
+- **`/request-apexyard-feature`** — a new skill / hook / rule / agent / workflow
+
+These are distinct from `/bug` and `/feature`, which file into **your own** managed project, not upstream. For **security** issues, do **not** open a public issue — see [SECURITY.md](SECURITY.md).
 
 ## Questions
 
