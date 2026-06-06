@@ -28,7 +28,7 @@ These four hooks make the SDLC mechanical instead of advisory. Each enforces a r
 
 **Event:** `PreToolUse` on `Edit | Write | MultiEdit`.
 
-**What it does:** blocks edits to any code path unless a session marker exists. Resolution is two-tier (#41): per-project marker at `<ops_root>/.claude/session/tickets/<project>` when `FILE_PATH` is under `<ops_root>/workspace/<project>/`, otherwise falls back to `<ops_root>/.claude/session/current-ticket`. Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
+**What it does:** blocks edits to any code path unless a session marker exists. Resolution is three-tier (#41 + #513): (0) per-worktree marker at `<ops_root>/.claude/session/tickets/<project>/<safe-branch>` when the edited file's repo is on a git-worktree branch — lets parallel agents on the *same* project hold independent tickets; (1) per-project marker at `<ops_root>/.claude/session/tickets/<project>` (a FILE) when `FILE_PATH` is under `<ops_root>/workspace/<project>/`; (2) fallback `<ops_root>/.claude/session/current-ticket`. Exempts `.claude/`, `docs/`, `projects/*/docs/`, and any `*.md` file so framework / doc / meta work is still fluid.
 
 **Enforces:** the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists, has acceptance criteria, and is broken into tasks."
 
@@ -335,7 +335,9 @@ These were already in place before the enforcement layer and remain unchanged (e
 ```
 .claude/session/
 ├── onboarded                     # created by /onboard, read by onboarding-check
-├── current-ticket                # created by /start-ticket, read by require-active-ticket
+├── tickets/<project>             # per-project ticket marker (FILE) — #41
+├── tickets/<project>/<branch>    # per-worktree ticket marker — #513 (DIR form; parallel agents)
+├── current-ticket                # created by /start-ticket, read by require-active-ticket (fallback)
 ├── pending-reviews/<pr>          # created by auto-code-review, tracks PRs awaiting Rex
 ├── reviews/<owner>__<repo>__<pr>-rex.approved           # created by code-reviewer agent, read by merge-gate
 ├── reviews/<owner>__<repo>__<pr>-ceo.approved           # created by /approve-merge, read by merge-gate

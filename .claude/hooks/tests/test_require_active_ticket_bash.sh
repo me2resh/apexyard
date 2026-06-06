@@ -156,6 +156,56 @@ EOF
 in=$(jq -nc --arg p "$sb/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "edit allowed with active ticket marker" 0 "" "$in" "$sb"
 
+# --- Per-worktree marker tier (#513) -----------------------------------
+
+# NOTE: PROJECT resolution compares FILE_PATH against the hook's resolved
+# OPS_ROOT (from `git rev-parse`, which canonicalises symlinks). On macOS
+# mktemp returns a /var/... path that git reports as /private/var/..., so the
+# file_path must use the realpath of the sandbox or the workspace prefix won't
+# match. rsb = canonical sandbox path.
+
+# 13. per-worktree marker present + matching branch → allowed
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/.claude/session/tickets/myproj"
+cat > "$sb/.claude/session/tickets/myproj/feature__x" <<EOF
+repo=me2resh/apexyard
+number=513
+title=worktree A
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+export CLAUDE_WORKTREE_BRANCH="feature/x"
+run_case "per-worktree marker honored on matching branch" 0 "" "$in" "$sb"
+unset CLAUDE_WORKTREE_BRANCH
+
+# 14. per-worktree isolation: marker exists for branch A, agent on branch B,
+#     no per-project file, no current-ticket → BLOCKED (proves no collision)
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/.claude/session/tickets/myproj"
+cat > "$sb/.claude/session/tickets/myproj/feature__a" <<EOF
+repo=me2resh/apexyard
+number=513
+title=worktree A
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+export CLAUDE_WORKTREE_BRANCH="feature/b"
+run_case "per-worktree isolation: branch B not satisfied by branch A marker" 2 "BLOCKED" "$in" "$sb"
+unset CLAUDE_WORKTREE_BRANCH
+
+# 15. per-project FILE marker still works under a workspace path with no
+#     worktree branch detected (single-agent regression)
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/.claude/session/tickets"
+cat > "$sb/.claude/session/tickets/myproj" <<EOF
+repo=me2resh/apexyard
+number=513
+title=single agent
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "per-project file marker still works (no worktree)" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

@@ -202,10 +202,25 @@ if [ -z "$PROJECT" ] && [ -n "$OPS_ROOT" ]; then
   esac
 fi
 
+# Three-tier marker lookup, mirroring require-active-ticket.sh (#41 + #513):
+# tier 0 per-worktree (tickets/<project>/<safe-branch>) → tier 1 per-project
+# (tickets/<project>, a FILE) → tier 2 ops fallback (current-ticket).
 MARKER=""
-if [ -n "$PROJECT" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT" ]; then
+if [ -n "$PROJECT" ]; then
+  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
+  if [ -z "$WT_BRANCH" ]; then
+    WT_BRANCH=$(git -C "$(dirname "$FILE_PATH")" branch --show-current 2>/dev/null)
+  fi
+  if [ -n "$WT_BRANCH" ]; then
+    SAFE_BRANCH="${WT_BRANCH//\//__}"
+    if [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH" ]; then
+      MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH"
+    fi
+  fi
+fi
+if [ -z "$MARKER" ] && [ -n "$PROJECT" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT" ]; then
   MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT"
-elif [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
+elif [ -z "$MARKER" ] && [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
   MARKER="$MARKER_HOME/.claude/session/current-ticket"
 fi
 

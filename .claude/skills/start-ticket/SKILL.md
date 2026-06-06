@@ -10,14 +10,15 @@ effort: low
 
 Writes a session marker so the `require-active-ticket.sh` PreToolUse hook permits Edit/Write on code paths. Without it, the hook blocks edits to anything outside `.claude/`, `docs/`, `projects/*/docs/`, and `*.md`.
 
-Marker layout (apexyard#41):
+Marker layout (apexyard#41 + #513):
 
 | Path | When the hook uses it |
 |------|----------------------|
-| `<ops_root>/.claude/session/tickets/<project>` | When the edit is under `<ops_root>/workspace/<project>/` AND this per-project marker exists |
-| `<ops_root>/.claude/session/current-ticket` | Fallback. Always checked if the per-project marker is absent. This is also the marker used for ops-repo framework edits (where no `workspace/<name>/` prefix applies). |
+| `<ops_root>/.claude/session/tickets/<project>/<safe-branch>` | **Tier 0 (#513).** Edit is under `<ops_root>/workspace/<project>/` AND the file's repo is on a git-worktree branch (or `CLAUDE_WORKTREE_BRANCH` is set). Lets parallel agents on the *same* project hold independent tickets. `safe-branch` = branch with `/`→`__`. |
+| `<ops_root>/.claude/session/tickets/<project>` | **Tier 1.** Edit is under `<ops_root>/workspace/<project>/` AND this per-project marker exists (as a FILE). Single-agent default. |
+| `<ops_root>/.claude/session/current-ticket` | **Tier 2.** Fallback. Checked if neither above matched. Also the marker for ops-repo framework edits (no `workspace/<name>/` prefix). |
 
-Both markers live in the ops fork (gitignored). No more `.claude/session/` inside each managed-project clone.
+All markers live in the ops fork (gitignored). No more `.claude/session/` inside each managed-project clone. `tickets/<project>` is a FILE (tier 1) or a DIRECTORY holding `<safe-branch>` markers (tier 0) — the hook's `-f` tests keep the two from colliding.
 
 This is the mechanical enforcement of the Pre-Build Gate in `.claude/rules/workflow-gates.md` — "do not start coding until the ticket exists".
 
@@ -131,15 +132,44 @@ Notes on the fallback:
 
 #### 4c. Pick the marker path
 
+Three tiers (apexyard#41 + #513). When the ticket maps to a registered project
+AND this session is running inside a **git worktree** (parallel agents fanned
+out on the same project), write a per-worktree marker so two agents on the same
+project don't overwrite each other's ticket (last-writer-wins). Otherwise write
+the per-project file (single-agent — unchanged), or the ops fallback.
+
 ```bash
 if [ -n "$project" ]; then
-  marker="$ops_root/.claude/session/tickets/$project"
+  # Detect a worktree: prefer the harness-set env var, else ask git whether the
+  # current checkout is a linked worktree (not the main working tree).
+  wt_branch="${CLAUDE_WORKTREE_BRANCH:-}"
+  if [ -z "$wt_branch" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    common=$(git rev-parse --git-common-dir 2>/dev/null)
+    gitdir=$(git rev-parse --git-dir 2>/dev/null)
+    # In a linked worktree, --git-dir differs from --git-common-dir.
+    if [ "$common" != "$gitdir" ]; then
+      wt_branch=$(git branch --show-current 2>/dev/null)
+    fi
+  fi
+
+  if [ -n "$wt_branch" ]; then
+    safe_branch="${wt_branch//\//__}"          # '/' → '__' filesystem-safe
+    marker="$ops_root/.claude/session/tickets/$project/$safe_branch"
+  else
+    marker="$ops_root/.claude/session/tickets/$project"
+  fi
   mkdir -p "$(dirname "$marker")"
 else
   marker="$ops_root/.claude/session/current-ticket"
   mkdir -p "$(dirname "$marker")"
 fi
 ```
+
+Note: `tickets/$project` is a FILE in single-agent mode and a DIRECTORY in
+worktree mode (it holds the per-branch markers). If you're switching a project
+from single-agent to worktree mode and `tickets/$project` already exists as a
+file, remove it first (`rm "$ops_root/.claude/session/tickets/$project"`) so the
+directory can be created.
 
 ### 5. Write the marker
 
