@@ -244,7 +244,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/codify-rule` | Turn a review comment that caught a Rex-miss into a draft handbook entry |
 | `/investigation` | Create an investigation ticket + live-doc for sustained root-cause work |
 | `/idea` | Capture a new product idea to the shared backlog |
-| `/handover` | Onboard an external repo + score harnessability across 5 codebase dimensions + checklist-pick which docs to generate (per-doc template choice; `--all` for the full non-interactive set) + offer to file Next Steps as tracker tickets |
+| `/handover` | Onboard an external repo — harnessability scoring across 5 dimensions, checklist-pick which docs to generate, and offer to file Next Steps as tracker tickets |
 | `/onboard` | Deprecated alias — redirects to `/setup` or `/handover` |
 | `/extract-features` | Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) for rewrites |
 | `/feature-diagram` | Per-feature Mermaid flowchart of routes / models / jobs / screens involved |

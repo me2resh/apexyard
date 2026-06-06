@@ -22,7 +22,11 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
-TEMPLATE_SRC="$ROOT/onboarding.yaml"
+# Since #517 the tracked placeholder template is onboarding.example.yaml
+# (onboarding.yaml is gitignored real config). /setup --reset now does
+# `cp onboarding.example.yaml onboarding.yaml`, so the template source here is
+# the example file.
+TEMPLATE_SRC="$ROOT/onboarding.example.yaml"
 
 if [ ! -f "$TEMPLATE_SRC" ]; then
   echo "FAIL: framework template $TEMPLATE_SRC not found" >&2
@@ -33,7 +37,7 @@ fi
 # placeholder. If this ever changes, this test (and the SKILL.md
 # detection grep) must change too.
 if ! grep -q '"Your Company Name"' "$TEMPLATE_SRC"; then
-  echo "FAIL: framework onboarding.yaml lacks the 'Your Company Name' placeholder — template detection grep in SKILL.md Step 1 is broken" >&2
+  echo "FAIL: framework onboarding.example.yaml lacks the 'Your Company Name' placeholder — template detection grep in SKILL.md Step 1 is broken" >&2
   exit 1
 fi
 
