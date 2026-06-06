@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run lychee
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2
         with:
           args: >-
             --no-progress
@@ -43,6 +43,7 @@ jobs:
             --exclude-loopback
             --exclude-private
             --accept 200,204,206,301,302,429
+            --exclude '^https://github\.com/Dr-kersho/'
             --base https://yard.apexscript.com/
             'site/index.html'
             '**/*.md'

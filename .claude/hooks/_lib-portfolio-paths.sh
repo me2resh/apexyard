@@ -375,6 +375,34 @@ portfolio_validate() {
   # would be noisy on fresh forks before /setup runs.
   local root
   root=$(_portfolio_root)
+
+  # Partial split-portfolio v2 detection — see me2resh/apexyard#373.
+  # The registry and projects_dir are the v1 keys that turn a fork into a
+  # split-portfolio v2 setup when overridden to sibling paths. If either is
+  # sibling-pointing but workspace_dir falls back to the in-fork default,
+  # the asymmetry is silent — clones accumulate in the public fork while
+  # docs land in the sibling. Surface the gap so SessionStart catches it.
+  # (onboarding gets its own validation below; it doesn't trigger this
+  # check because adopters legitimately centralise company config without
+  # going split-portfolio v2.)
+  local root_real wd_real
+  root_real=$(cd "$root" 2>/dev/null && pwd -P) || root_real="$root"
+  wd_real=$(cd "$workspace_dir" 2>/dev/null && pwd -P) || wd_real="$workspace_dir"
+
+  _outside_fork() {
+    case "$1" in
+      "$root_real"|"$root_real"/*) return 1 ;;
+    esac
+    return 0
+  }
+
+  if _outside_fork "$registry" || _outside_fork "$projects_dir"; then
+    if ! _outside_fork "$wd_real"; then
+      echo "broken: partial split-portfolio v2 config — registry/projects_dir point at a sibling repo but workspace_dir falls back to the in-fork default; set .portfolio.workspace_dir in .claude/project-config.json to the sibling path (e.g. \"../<fork>-portfolio/workspace\"). See me2resh/apexyard#373."
+      return 1
+    fi
+  fi
+
   case "$onboarding" in
     "$root"/*|"$root")
       # In-fork path — leave it to onboarding-check.sh.

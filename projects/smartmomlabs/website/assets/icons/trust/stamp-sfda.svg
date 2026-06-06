@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" aria-hidden="true">
+  <defs>
+    <path id="sfda-arc-bot" d="M 24 62 A 24 24 0 0 0 72 62" fill="none"/>
+  </defs>
+  <path d="M48 6 L54.8 8.4 L62 7.8 L65.8 13.8 L72.6 16.2 L72 23.4 L76.8 29.4 L72 35.4 L72.6 42.6 L65.8 45 L62 51 L54.8 50.4 L48 54 L41.2 50.4 L34 51 L30.2 45 L23.4 42.6 L24 35.4 L19.2 29.4 L24 23.4 L23.4 16.2 L30.2 13.8 L34 7.8 L41.2 8.4 Z" fill="#fff" stroke="#1a3d32" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="48" cy="48" r="30" fill="#f4faf9" stroke="#c9a227" stroke-width="1.25"/>
+  <circle cx="48" cy="48" r="22" fill="none" stroke="#1a3d32" stroke-width="1" opacity="0.2"/>
+  <path d="M34 48 L42.5 56.5 L62 37" fill="none" stroke="#1a3d32" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text font-family="Tajawal, Tahoma, sans-serif" font-size="8" font-weight="700" fill="#4a554f">
+    <textPath href="#sfda-arc-bot" startOffset="50%" text-anchor="middle">مسجّل</textPath>
+  </text>
+</svg>

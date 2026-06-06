@@ -160,6 +160,15 @@ Single-fork adopters with no override fall through to `templates/architecture/df
 Build the in-memory DFD model (actors / processes / stores / flows / boundaries / classifications) from the approved candidate. Pipe through `generate-mermaid.sh` to assemble the markdown file:
 
 ```bash
+# Helper preamble — REQUIRED in every bash block that writes to a
+# projects/<name>/ path. The Path resolution section above shows the
+# pattern at file scope, but Claude executes each ```bash``` block as
+# a separate shell invocation, so the variable assignment from the top
+# of the file doesn't carry into this block. See me2resh/apexyard#443.
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+
 discovery_yaml="/tmp/dfd-discovery-${PROJECT}.yaml"
 classifications_yaml="/tmp/dfd-classifications-${PROJECT}.yaml"
 
@@ -167,10 +176,10 @@ bash .claude/skills/dfd/discover.sh "$target_dir" "$scope_hint"   > "$discovery_
 bash .claude/skills/dfd/classify.sh "$target_dir"                 > "$classifications_yaml"
 
 bash .claude/skills/dfd/generate-mermaid.sh "$PROJECT" "$discovery_yaml" "$classifications_yaml" \
-  > "projects/${PROJECT}/architecture/dfd.md"
+  > "${projects_dir}/${PROJECT}/architecture/dfd.md"
 
 # Persist the source-of-truth combined report for re-run diffs
-cat "$discovery_yaml" "$classifications_yaml" > "projects/${PROJECT}/architecture/dfd-source.yaml"
+cat "$discovery_yaml" "$classifications_yaml" > "${projects_dir}/${PROJECT}/architecture/dfd-source.yaml"
 ```
 
 The generator replaces placeholders in the template skeleton with real actors / processes / stores / flows from the in-memory model. Every cross-boundary arrow MUST carry a payload label.
@@ -180,9 +189,14 @@ The generator replaces placeholders in the template skeleton with real actors / 
 Build a JSON document with the in-memory model and pipe through `generate-dragon.sh`:
 
 ```bash
+# Helper preamble — REQUIRED per block. See me2resh/apexyard#443.
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+
 echo "$model_json" \
   | bash .claude/skills/dfd/generate-dragon.sh \
-  > "projects/${PROJECT}/architecture/dfd.json"
+  > "${projects_dir}/${PROJECT}/architecture/dfd.json"
 ```
 
 `generate-dragon.sh` is a **pure function over the in-memory model** — `/threat-model --format=dragon` (#255) will import the same serialiser when it lands. If `#255` ships first with the serialiser inside `/threat-model`, switch this skill to import from there during code review.

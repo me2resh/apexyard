@@ -58,6 +58,15 @@ if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+
   exit 0
 fi
 
+# Allow main→dev sync branches (apexyard#458, AgDR-0052). The /release-sync
+# skill prescribes `sync/main-to-dev-after-vN.N.N` as the canonical name for
+# the post-release main→dev sync PR's source branch. Like release branches,
+# these don't carry a ticket-id — the release being synced is the ticket. Same
+# narrow, intentional exception to the {type}/{TICKET}-{desc} shape.
+if echo "$CURRENT_BRANCH" | grep -qE '^sync/main-to-dev-after-v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+  exit 0
+fi
+
 # Load the branch-type whitelist from project config.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 # shellcheck source=./_lib-read-config.sh
@@ -68,7 +77,38 @@ if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ];
 fi
 # Fallback if config unavailable (jq missing, standalone install, etc.)
 if [ -z "$TYPES" ]; then
-  TYPES="feature|fix|refactor|chore|docs|test|spike|ci|build|perf"
+  TYPES="feature|fix|refactor|chore|docs|test|spike|ci|build|perf|sync"
+fi
+
+# Load the ticket-ID regex from the tracker lib. The pattern is shape-only
+# (no existence check at the push gate — that's validate-pr-create.sh's job).
+# Default covers GH `#123` / `GH-123` plus enterprise prefixes (LIN, JIRA,
+# ABC). Adopters who want a stricter shape (e.g. exactly Linear: `^[A-Z]+-[0-9]+$`)
+# override `.tracker.id_pattern` in project-config.json. See AgDR-0033 and
+# `.claude/hooks/_lib-tracker.sh`.
+TRACKER_ID_PATTERN=""
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-tracker.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  TRACKER_ID_PATTERN=$(tracker_id_pattern)
+fi
+
+# Strip the anchors from the tracker pattern so we can embed it inside the
+# branch-name regex (`type/<TICKET-ID>-<description>`). The lib returns a
+# fully-anchored regex (`^...$`) because consumers like /start-ticket use
+# it standalone; here we need the inner alternation.
+INNER_PATTERN="${TRACKER_ID_PATTERN#^}"
+INNER_PATTERN="${INNER_PATTERN%$}"
+# Drop the wrapping parens if the pattern was `^(...)$` — they get re-added below.
+case "$INNER_PATTERN" in
+  '('*')')
+    INNER_PATTERN="${INNER_PATTERN#(}"
+    INNER_PATTERN="${INNER_PATTERN%)}"
+    ;;
+esac
+# Fallback if extraction failed.
+if [ -z "$INNER_PATTERN" ]; then
+  INNER_PATTERN='[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'
 fi
 
 # Load the ticket-ID regex from the tracker lib. The pattern is shape-only

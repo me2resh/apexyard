@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trust strip — Behance stamp directions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;700;800&family=El+Messiri:wght@600;700&family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #e8f2f0;
+      --bg-card: #fff;
+      --text: #1f2e26;
+      --text-muted: #4a554f;
+      --accent: #1a3d32;
+      --gold: #c9a227;
+      --border: rgba(26, 61, 50, 0.12);
+      --gcc-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l4 8h9l-7 6 3 9-9-5-9 5 3-9-7-6h9z' fill='%231a3d32' fill-opacity='0.04'/%3E%3C/svg%3E");
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: Tajawal, Tahoma, sans-serif;
+      background: var(--bg) var(--gcc-pattern);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 20px 64px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 {
+      font-family: "El Messiri", Tajawal, serif;
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      margin-bottom: 8px;
+    }
+    .lede { color: var(--text-muted); max-width: 68ch; margin-bottom: 28px; }
+    .refs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .ref {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 0.85rem;
+    }
+    .ref strong { display: block; margin-bottom: 4px; color: var(--accent); }
+    .ref a { color: var(--accent); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(26, 61, 50, 0.08);
+    }
+    .panel.recommended { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.25), 0 16px 40px rgba(26, 61, 50, 0.1); }
+    .panel-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .panel-head h2 { font-size: 1rem; font-weight: 800; }
+    .tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(26, 61, 50, 0.08);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .tag.pick { background: rgba(201, 162, 39, 0.18); color: #6b4f12; }
+    .panel-note {
+      padding: 10px 18px 0;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    .hero-mock {
+      padding: 22px 18px 26px;
+      background: var(--bg) var(--gcc-pattern);
+    }
+    .ksa-chip {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(201, 162, 39, 0.15);
+      color: #6b4f12;
+      margin-bottom: 16px;
+    }
+    /* shared strip layout */
+    .trust-strip {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 720px) {
+      .trust-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+    .trust-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .trust-item strong {
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    /* A: current phosphor */
+    .v-current .trust-icon {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: #fff;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(47, 74, 56, 0.1);
+    }
+    .v-current .trust-icon img { width: 28px; height: 28px; }
+    /* B: packaging stamps — production trust-rail v3 */
+    .v-stamps .trust-rail {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin: 0;
+      padding: 14px 0 12px;
+      list-style: none;
+      border-block: 1px solid var(--border);
+    }
+    .v-stamps .trust-rail__item {
+      position: relative;
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 7px;
+      padding: 0 6px;
+    }
+    .v-stamps .trust-rail__item:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      inset-inline-end: 0;
+      top: 14%;
+      height: 72%;
+      width: 1px;
+      background: var(--border);
+    }
+    .v-stamps .trust-rail__stamp {
+      width: 56px;
+      height: 56px;
+      display: block;
+      box-shadow: 0 2px 6px rgba(26, 61, 50, 0.08);
+    }
+    .v-stamps .trust-rail__label {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--text);
+    }
+    @media (max-width: 640px) {
+      .v-stamps .trust-rail {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px 10px;
+        padding: 14px 8px 12px;
+      }
+      .v-stamps .trust-rail__item::after { display: none; }
+      .v-stamps .trust-rail__item:nth-child(5) {
+        grid-column: 1 / -1;
+        justify-self: center;
+        width: min(100%, 11rem);
+      }
+    }
+    /* C: Up-style line badges */
+    .v-line .trust-badge {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      background: #fff;
+      font-family: "Albert Sans", system-ui, sans-serif;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+      line-height: 1.1;
+      text-align: center;
+      padding: 4px;
+    }
+    .v-line .trust-badge.gold-ring { border-color: var(--gold); }
+    .footnote {
+      margin-top: 28px;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: rgba(26, 61, 50, 0.06);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Trust strip — Behance-informed directions</h1>
+    <p class="lede">Three treatments for the hero credentials row. Direction B follows supplement packaging on Behance: typography-led stamps, scalloped seals, shield halal mark, and gold accent rings — not generic UI icon grids.</p>
+
+    <div class="refs">
+      <div class="ref">
+        <strong>Up — Supplement Label</strong>
+        Minimal wellness iconography, crisp white + mint, structured grid.
+        <a href="https://www.behance.net/gallery/210650335/Up-Supplement-Jar-Bottle-Label-Package-Design" target="_blank" rel="noopener">Behance ↗</a>
+      </div>
+      <div class="ref">
+        <strong>VitaTurm Pouch</strong>
+        Organic/gluten-free badges as quick trust signals on pack front.
+        <a href="https://www.behance.net/gallery/245262469/Premium-Termeric-Curcumin-Pouch-design" target="_blank" rel="noopener">Behance ↗</a>
+      </div>
+      <div class="ref">
+        <strong>Halal label craft</strong>
+        Shield + crescent stamps; limited palette, no clip-art moons.
+        <a href="https://dribbble.com/shots/3543399-Halal-Food-Label" target="_blank" rel="noopener">Dribbble ↗</a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Current -->
+      <section class="panel v-current">
+        <div class="panel-head">
+          <h2>A — Current (Phosphor duotone)</h2>
+          <span class="tag">Baseline</span>
+        </div>
+        <p class="panel-note">Round chips + stock duotone glyphs. Reads as DTC template.</p>
+        <div class="hero-mock">
+          <p class="ksa-chip">صُنع للمملكة · شحن محلي</p>
+          <div class="trust-strip">
+            <div class="trust-item"><span class="trust-icon"><img src="../assets/icons/trust/sugar-free.svg" alt="" width="28" height="28" /></span><strong>0غ سكر مضاف</strong></div>
+            <div class="trust-item"><span class="trust-icon"><img src="../assets/icons/trust/seal-check-duotone.svg" alt="" width="28" height="28" /></span><strong>مسجّل لدى هيئة الغذاء والدواء</strong></div>
+            <div class="trust-item"><span class="trust-icon"><img src="../assets/icons/trust/sachet.svg" alt="" width="28" height="28" /></span><strong>مسحوق بلا نكهة</strong></div>
+            <div class="trust-item"><span class="trust-icon"><img src="../assets/icons/trust/circles-three-plus-duotone.svg" alt="" width="28" height="28" /></span><strong>12 عنصرًا + حديد</strong></div>
+            <div class="trust-item"><span class="trust-icon"><img src="../assets/icons/trust/halal-seal.svg" alt="" width="28" height="28" /></span><strong>تركيبة حلال</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recommended stamps -->
+      <section class="panel v-stamps recommended">
+        <div class="panel-head">
+          <h2>B — Packaging stamps</h2>
+          <span class="tag pick">Recommended</span>
+        </div>
+        <p class="panel-note">v3 — ships in <code>index.html</code> + <code>product.html</code>: 56px stamps, hairline rail, short SFDA label, 2-col grid ≤640px.</p>
+        <div class="hero-mock">
+          <p class="ksa-chip">صُنع للمملكة · شحن محلي</p>
+          <ul class="trust-rail">
+            <li class="trust-rail__item"><img class="trust-rail__stamp" src="../assets/icons/trust/stamp-sugar.svg" alt="" width="56" height="56" /><span class="trust-rail__label">0غ سكر مضاف</span></li>
+            <li class="trust-rail__item"><img class="trust-rail__stamp" src="../assets/icons/trust/stamp-sfda.svg" alt="" width="56" height="56" /><span class="trust-rail__label">مسجّل لدى الهيئة</span></li>
+            <li class="trust-rail__item"><img class="trust-rail__stamp" src="../assets/icons/trust/stamp-sachet.svg" alt="" width="56" height="56" /><span class="trust-rail__label">مسحوق بلا نكهة</span></li>
+            <li class="trust-rail__item"><img class="trust-rail__stamp" src="../assets/icons/trust/stamp-nutrients.svg" alt="" width="56" height="56" /><span class="trust-rail__label">12 عنصرًا + حديد</span></li>
+            <li class="trust-rail__item"><img class="trust-rail__stamp" src="../assets/icons/trust/stamp-halal.svg" alt="" width="56" height="56" /><span class="trust-rail__label">تركيبة حلال</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Line badges -->
+      <section class="panel v-line">
+        <div class="panel-head">
+          <h2>C — Up-style type rings</h2>
+          <span class="tag">Alt</span>
+        </div>
+        <p class="panel-note">Pure typography in circular rings — inspired by Up label minimal badges. No pictograms.</p>
+        <div class="hero-mock">
+          <p class="ksa-chip">صُنع للمملكة · شحن محلي</p>
+          <div class="trust-strip">
+            <div class="trust-item"><span class="trust-badge">0g<br>SUGAR</span><strong>0غ سكر مضاف</strong></div>
+            <div class="trust-item"><span class="trust-badge gold-ring">SFDA<br>REG</span><strong>مسجّل لدى هيئة الغذاء والدواء</strong></div>
+            <div class="trust-item"><span class="trust-badge">NO<br>FLAVOR</span><strong>مسحوق بلا نكهة</strong></div>
+            <div class="trust-item"><span class="trust-badge gold-ring">12+<br>Fe</span><strong>12 عنصرًا + حديد</strong></div>
+            <div class="trust-item"><span class="trust-badge">حلال<br>HALAL</span><strong>تركيبة حلال</strong></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <p class="footnote"><strong>SFDA note:</strong> Stamps use مسجّل microtype only — not the SFDA logo. Official authority marks must not be implied per Saudi labeling rules. Direction B v3 is live on <code>index.html</code> and <code>product.html</code>.</p>
+  </div>
+</body>
+</html>

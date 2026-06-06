@@ -1,61 +1,76 @@
 # blendavit website (MVP)
 
-Luna & Eve–style marketing site for **blendavit** — static HTML ready to deploy or port into Shopify.
+Luna & Eve–style marketing site for **blendavit** — static HTML, Arabic-first (RTL), KSA-only at launch.
 
-## Impeccable context
+## Context docs
 
-- `PRODUCT.md` — register, users, principles (brand)
-- `DESIGN.md` — tokens, components, do/don't
-- `.impeccable/live/config.json` — live mode (already configured)
+| File | Purpose |
+|------|---------|
+| `PRODUCT.md` | Register, users, principles |
+| `DESIGN.md` | Tokens, components, do/don't (source of truth for colors) |
 
 ## Preview locally
 
+From the repo root or this folder:
+
 ```bash
 cd projects/smartmomlabs/website
-python3 -m http.server 8080
+chmod +x bin/preview   # once
+./bin/preview          # http://127.0.0.1:8080/
+./bin/preview 8766     # custom port (e.g. Impeccable live)
 ```
 
-Open http://localhost:8080
+Or: `python3 -m http.server 8080`
 
 ## Pages
 
 | File | Purpose |
 |------|---------|
-| `index.html` | Home — hero, evidence, comparison, FAQ, reserve |
-| `product.html` | PDP — Toddlers / Kids, KSA / USA, nutrient panels |
+| `index.html` | Home — trust stamps, lifestyle hero, steps, FAQ, reserve |
+| `product.html` | PDP — Toddlers / Kids, KSA, nutrient panel |
+| `404.html` | Branded not-found (Netlify/Vercel) |
+| `previews/trust-stamps-preview.html` | Trust icon direction comparison |
 
-## Brand
+## Assets (committed — do not swap without PR)
 
-- Mint `#D9E9E8`, brown `#4B3621`, green `#3B5340`
-- Pack shots in `assets/images/`
+| File | Use |
+|------|-----|
+| `assets/images/hero-stir-yoghurt.png` | Hero lifestyle |
+| `assets/images/usage-stir-yoghurt.png` | Step 2 — mix into yoghurt |
+| `assets/images/usage-oats-bowl.png` | Steps 1 & 3 — sachets / serve |
+| `assets/icons/trust/stamp-*.svg` | Trust strip (direction B) |
+| `assets/images/WhatsApp_*.png` | Pack shots (product cards + PDP) |
 
-## Shopify hookup (KSA + USA waitlist)
+## Brand tokens (from `main.css` / `DESIGN.md`)
 
-1. Create Shopify store + **Markets**: Saudi Arabia (SAR), United States (USD).
-2. Two products or variants: **Toddlers 1–3**, **Kids 4+**.
-3. Install **Early Bird** or **PreProduct** — enable deposit **or** $0 reserve (toggle anytime).
+- Background mint `#e8f2f0`, accent green `#1a3d32`, gold `#c9a227`
+- Fonts: Tajawal / El Messiri (AR), Albert Sans / Source Serif 4 (EN)
+
+## Shopify hookup (KSA only)
+
+1. Create Shopify store with **Saudi Arabia** market (SAR).
+2. Two variants: **Toddlers 1–3**, **Kids 4+**.
+3. Install **Early Bird** or **PreProduct** for deposit or $0 reserve.
 4. Paste checkout URLs into `assets/js/config.js`:
 
 ```javascript
 window.BLENDAVIT_CONFIG = {
   shopifyStoreUrl: "https://your-store.myshopify.com",
+  market: "ksa",
   checkoutUrls: {
     toddlers_ksa: "https://...",
-    toddlers_usa: "https://...",
     kids_ksa: "https://...",
-    kids_usa: "https://...",
   },
 };
 ```
 
-5. Deploy static files to Netlify/Vercel **or** rebuild sections as Shopify theme sections.
+5. Deploy `website/` to Netlify/Vercel (root = this folder) or port sections into a Shopify theme.
 
-## Deploy (Netlify)
+## Deploy
 
-Drag-drop `website/` folder or connect repo path `projects/smartmomlabs/website`.
+- **Vercel:** `vercel --prod` from this directory (`.vercel/` is gitignored).
+- **Netlify:** publish directory = `projects/smartmomlabs/website`.
 
-## Next
+## Branch note
 
-- `smartmomlabs.com` hub (EllaOla-style) — Phase 2
-- Arabic RTL for KSA
-- Set prices when ready
+Hero, usage photos, and trust stamps ship in git on the smartmomlabs site branch. After pulling, run `./bin/preview` to verify images load — if you see generic icons or a kitchen JPG hero, your branch is behind.

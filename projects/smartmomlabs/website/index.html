@@ -7,7 +7,8 @@
   <meta name="description" content="مسحوق فيتامينات بلا طعم، مسجّل لدى هيئة الغذاء والدواء. 12 عنصرًا مع حديد ليبوفير." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="assets/images/hero-stir-yoghurt.webp" type="image/webp" fetchpriority="high" />
   <link rel="stylesheet" href="assets/css/main.css" />
 </head>
 <body data-page-title="meta.title.home" data-page-desc="meta.desc.home">
@@ -16,82 +17,65 @@
 
   <header class="nav">
     <a class="logo" href="index.html">blendavit<small data-i18n="footer.brand">من Smart Mom Labs</small></a>
-    <nav class="nav-links" aria-label="Primary">
-      <div class="lang-switch" role="group" aria-label="Language">
+    <nav class="nav-links" data-i18n-aria-label="nav.aria.primary">
+      <div class="lang-switch" role="group" data-i18n-aria-label="nav.aria.language">
         <button type="button" class="lang-btn active" data-lang-btn="ar" data-i18n="lang.ar">عربي</button>
         <button type="button" class="lang-btn" data-lang-btn="en" data-i18n="lang.en">EN</button>
       </div>
       <a href="#products" class="hide-mobile" data-i18n="nav.shop">المنتجات</a>
       <a href="#science" class="hide-mobile" data-i18n="nav.science">العلم</a>
       <a href="#faq" class="hide-mobile" data-i18n="nav.faq">الأسئلة</a>
-      <a class="btn btn-primary hide-mobile" href="#reserve" data-i18n="nav.reserve">احجز علبتك</a>
+      <a class="btn btn-primary hide-mobile" href="#products" data-i18n="nav.reserve">احجز علبتك</a>
       <button type="button" class="nav-menu-btn show-mobile-only" aria-haspopup="dialog" aria-controls="nav-menu" data-nav-open data-i18n="nav.menu">القائمة</button>
     </nav>
   </header>
-  <dialog id="nav-menu" class="nav-menu-dialog" aria-label="Site sections">
+  <dialog id="nav-menu" class="nav-menu-dialog" data-i18n-aria-label="nav.aria.menu">
     <div class="nav-menu-inner">
       <button type="button" class="nav-menu-close" data-nav-close data-i18n="nav.close">إغلاق</button>
       <a href="#products" data-nav-close data-i18n="nav.shop">المنتجات</a>
       <a href="#science" data-nav-close data-i18n="nav.science">العلم</a>
       <a href="#faq" data-nav-close data-i18n="nav.faq">الأسئلة</a>
-      <a class="btn btn-gold" href="#reserve" data-nav-close data-i18n="nav.reserve">احجز علبتك</a>
+      <a class="btn btn-primary" href="#products" data-nav-close data-i18n="nav.reserve">احجز علبتك</a>
     </div>
   </dialog>
 
   <main id="main-content">
-  <section class="hero">
+  <section class="hero hero--editorial">
     <div class="wrap">
       <p class="ksa-chip" data-i18n="ksa.chip">صُنع للمملكة · شحن محلي</p>
-      <div class="trust-strip" aria-label="Product credentials">
-        <div class="trust-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2l3 7h7l-5.5 4.5 2 7L12 16l-6.5 4.5 2-7L2 9h7z"/></svg>
-          <strong data-i18n="trust.sugar">0غ سكر مضاف</strong>
-        </div>
-        <div class="trust-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
-          <strong data-i18n="trust.sfda">مسجّل لدى هيئة الغذاء والدواء</strong>
-        </div>
-        <div class="trust-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5"/><path d="M4 12h16"/><path d="M12 5v14"/></svg>
-          <strong data-i18n="trust.powder">مسحوق بلا نكهة</strong>
-        </div>
-        <div class="trust-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v18M3 12h18"/></svg>
-          <strong data-i18n="trust.nutrients">12 عنصرًا + حديد</strong>
-        </div>
-        <div class="trust-item">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <strong data-i18n="trust.halal">تركيبة حلال</strong>
-        </div>
-      </div>
-      <div class="hero-grid">
-        <div class="hero-copy-in">
-          <p class="social-proof" data-i18n="hero.proof">مسجّل لدى هيئة الغذاء والدواء · مدعوم بدراسات منشورة</p>
-          <h1 data-i18n="hero.title">اثنا عشر عنصرًا غذائيًا في وجبات يأكلها طفلك أصلًا</h1>
-          <p class="hero-lead" data-i18n="hero.lead">مسحوق بلا طعم في ظرف 1غ مع حديد ليبوفير و0غ سكر مضاف.</p>
-          <div class="hero-variant-pick variant-tabs" role="group">
-            <button type="button" class="variant-tab" data-variant="toddlers" data-age-min="1" data-age-sublabel="3" data-age-badge-key="badge.toddlers" data-pack="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29__1_-311c9c0f-d5cc-43dc-a74a-3c9c6c2ce54b.png" data-alt-key="pack.t.alt" data-i18n="hero.variant.toddlers">الرضّع 1–3</button>
-            <button type="button" class="variant-tab active" data-variant="kids" data-age-min="4" data-age-badge-key="badge.years" data-pack="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" data-alt-key="pack.k.alt" data-i18n="hero.variant.kids">الأطفال 4+</button>
-          </div>
-          <div class="hero-ctas">
-            <a class="btn btn-gold" href="#reserve" data-i18n="hero.cta.reserve">احجز علبتك</a>
-            <a class="btn btn-secondary" href="#products" data-i18n="hero.cta.compare">قارن التركيبتين</a>
-          </div>
-        </div>
-        <div class="hero-visual hero-visual-in">
-          <img
-            class="hero-scene"
-            src="assets/images/hero-scene-kitchen.jpg"
-            alt=""
-            width="1200"
-            height="900"
-            loading="eager"
-            decoding="async"
-            data-i18n="hero.scene.alt"
-          />
-          <div class="hero-pack-stage">
-            <img id="hero-pack" src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" alt="" data-i18n="pack.k.alt" width="600" height="600" />
-            <div class="age-badge" id="hero-age-badge">4+<span data-i18n="badge.years">سنة</span></div>
+      <div class="hero-editorial">
+        <aside class="hero-aside" aria-labelledby="hero-trust-heading">
+          <h2 id="hero-trust-heading" class="hero-aside__title" data-i18n="trust.rail.heading">اعتمادات</h2>
+          <div data-trust-rail-mount="sidebar"></div>
+        </aside>
+        <div class="hero-main">
+          <div class="hero-split">
+            <div class="hero-copy-in">
+              <h1 data-i18n="hero.title">اثنا عشر عنصرًا غذائيًا في وجبات يأكلها طفلك أصلًا</h1>
+              <p class="hero-lead" data-i18n="hero.lead">مسحوق بلا طعم في ظرف 1غ مع حديد ليبوفير و0غ سكر مضاف.</p>
+              <div class="hero-ctas">
+                <a class="btn btn-primary" href="#products" data-i18n="hero.cta.shop">اختر علبتك</a>
+                <a class="btn btn-secondary" href="product.html" data-i18n="hero.cta.details">تفاصيل المنتج</a>
+              </div>
+            </div>
+            <div class="hero-visual hero-visual-in">
+              <picture>
+                <source type="image/webp" srcset="assets/images/hero-stir-yoghurt.webp" />
+                <img
+                  id="hero-visual"
+                  class="hero-scene"
+                  src="assets/images/hero-stir-yoghurt.png"
+                  alt=""
+                  width="1024"
+                  height="764"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                  data-i18n="hero.scene.alt"
+                />
+              </picture>
+              <div class="age-badge" id="hero-age-badge" aria-hidden="true"><span data-i18n="hero.badge.range">1–12</span><span data-i18n="badge.years">سنة</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -102,7 +86,7 @@
     <div class="wrap">
       <div class="section-head">
         <h2 data-i18n="products.title">تغذية أساسية بلا عناء</h2>
-        <p data-i18n="products.sub">تركيبتان متوافقتان مع هيئة الغذاء والدواء.</p>
+        <p data-i18n="products.sub">تركيبتان مسجّلتان لدى هيئة الغذاء والدواء.</p>
       </div>
       <div class="product-duo">
         <article class="product-card">
@@ -111,7 +95,8 @@
             <h3 data-i18n="card.t.title">بليندافيت للرضّع</h3>
             <p class="meta" data-i18n="card.t.meta">1–3 سنوات · 30 ظرف</p>
             <p data-i18n="card.t.desc">لوحة 12 عنصرًا مع حديد مغلّف.</p>
-            <a class="btn btn-primary" href="product.html?variant=toddlers&amp;market=ksa" data-product-link data-variant="toddlers" data-i18n="card.t.cta">احجز للرضّع</a>
+            <a class="btn btn-primary btn-buy" href="#waitlist" data-buy-btn data-variant="toddlers" data-i18n="card.t.cta">انضم لقائمة الانتظار</a>
+            <a class="product-details" href="product.html?variant=toddlers" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
         <article class="product-card">
@@ -120,7 +105,8 @@
             <h3 data-i18n="card.k.title">بليندافيت للأطفال</h3>
             <p class="meta" data-i18n="card.k.meta">4+ سنوات · 30 ظرف</p>
             <p data-i18n="card.k.desc">فيتامينات كاملة مع حديد.</p>
-            <a class="btn btn-primary" href="product.html?variant=kids&amp;market=ksa" data-product-link data-variant="kids" data-i18n="card.k.cta">احجز للأطفال</a>
+            <a class="btn btn-primary btn-buy" href="#waitlist" data-buy-btn data-variant="kids" data-i18n="card.k.cta">انضم لقائمة الانتظار</a>
+            <a class="product-details" href="product.html?variant=kids" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
       </div>
@@ -129,36 +115,19 @@
 
   <section id="science">
     <div class="wrap">
+      <div class="section-head section-head--tight">
+        <h2 data-i18n="science.title">لماذا المسحوق وليس العلكة؟</h2>
+      </div>
       <div class="proof-columns">
         <div class="proof-block">
           <h3 data-i18n="proof1.title">89.8٪ يقاومون النكهات غير المألوفة</h3>
-          <p data-i18n="proof1.body">في دراسة أجريت في جدة على 216 طفلًا.</p>
+          <p data-i18n="proof1.body">دراسة جدة على 216 طفلًا. العلكة تفشل قبل التغذية.</p>
           <p class="source" data-i18n="proof1.src">Kutbi HA et al. · Appetite · 2019</p>
         </div>
         <div class="proof-block">
           <h3 data-i18n="proof2.title">0غ سكر في كل ظرف</h3>
-          <p data-i18n="proof2.body">كل ظرف بليندافيت يذكر 0غ سكر مضاف.</p>
+          <p data-i18n="proof2.body">العلكة غالبًا ~8غ سكر. كل ظرف بليندافيت 0غ سكر مضاف.</p>
           <p class="source" data-i18n="proof2.src">American Heart Association · ConsumerLab 2023</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="alt">
-    <div class="wrap">
-      <div class="section-head"><h2 data-i18n="evidence.title">مبني على أدلة يمكن للأهل التحقق منها</h2></div>
-      <div class="evidence-stack">
-        <div class="evidence-row">
-          <span class="evidence-mark" aria-hidden="true">“</span>
-          <div><p data-i18n="evidence.1">عندما يحتاج الشكل إلى تعاون الطفل مع الطعم والقوام، تفشل الالتزامات قبل التغذية.</p><cite data-i18n="evidence.1cite">Kutbi et al.</cite></div>
-        </div>
-        <div class="evidence-row">
-          <span class="evidence-mark" aria-hidden="true">“</span>
-          <div><p data-i18n="evidence.2">الطعم المعدني يظهر في العلكة، فتستبعد الحديد.</p><cite data-i18n="evidence.2cite">Layrisse 2000</cite></div>
-        </div>
-        <div class="evidence-row">
-          <span class="evidence-mark" aria-hidden="true">“</span>
-          <div><p data-i18n="evidence.3">يمكن أن يتضمن المسحوق فيتامينات أطفال كاملة مع الحديد.</p><cite data-i18n="evidence.3cite">ConsumerLab 2023</cite></div>
         </div>
       </div>
     </div>
@@ -186,35 +155,53 @@
     <div class="wrap">
       <div class="section-head">
         <h2 data-i18n="steps.title">طريقة الاستخدام اليومية</h2>
-        <p data-i18n="steps.sub">افتح ظرفًا واحدًا، اخلطه مع وجبة مألوفة.</p>
+        <p data-i18n="steps.sub">ظرف واحد يوميًا مع وجبة مألوفة.</p>
       </div>
       <div class="steps">
-        <div class="step-item"><div class="step-num">1</div><h3 data-i18n="steps.1.t">افتح ظرفًا واحدًا</h3><p data-i18n="steps.1.p">ثلاثون ظرفًا فويل.</p></div>
-        <div class="step-item"><div class="step-num">2</div><h3 data-i18n="steps.2.t">اخلط مع الطعام</h3><p data-i18n="steps.2.p">مع الزبادي أو الشوفان.</p></div>
-        <div class="step-item"><div class="step-num">3</div><h3 data-i18n="steps.3.t">قدّم الوجبة</h3><p data-i18n="steps.3.p">نفس الوجبة مع الحديد والعناصر.</p></div>
+        <div class="step-item">
+          <picture>
+            <source type="image/webp" srcset="assets/images/usage-oats-bowl.webp" />
+            <img class="step-photo" src="assets/images/usage-oats-bowl.png" alt="" width="1024" height="764" loading="lazy" decoding="async" data-i18n="steps.1.img.alt" />
+          </picture>
+          <div class="step-num">1</div>
+          <h3 data-i18n="steps.1.t">افتح ظرفًا</h3>
+          <p data-i18n="steps.1.p">30 ظرفًا فويل.</p>
+        </div>
+        <div class="step-item">
+          <picture>
+            <source type="image/webp" srcset="assets/images/usage-stir-yoghurt.webp" />
+            <img class="step-photo" src="assets/images/usage-stir-yoghurt.png" alt="" width="1024" height="1024" loading="lazy" decoding="async" data-i18n="steps.2.img.alt" />
+          </picture>
+          <div class="step-num">2</div>
+          <h3 data-i18n="steps.2.t">اخلط مع الطعام</h3>
+          <p data-i18n="steps.2.p">زبادي أو شوفان.</p>
+        </div>
+        <div class="step-item">
+          <picture>
+            <source type="image/webp" srcset="assets/images/hero-stir-yoghurt.webp" />
+            <img class="step-photo" src="assets/images/hero-stir-yoghurt.png" alt="" width="1024" height="764" loading="lazy" decoding="async" data-i18n="steps.3.img.alt" />
+          </picture>
+          <div class="step-num">3</div>
+          <h3 data-i18n="steps.3.t">قدّم الوجبة</h3>
+          <p data-i18n="steps.3.p">نفس الطبق، مع الحديد والعناصر.</p>
+        </div>
       </div>
     </div>
   </section>
 
-  <section>
+  <section id="benefits">
     <div class="wrap">
-      <div class="section-head"><h2 data-i18n="benefits.title">يدعم النمو والعظام والرؤية والمناعة</h2></div>
-      <div class="benefits">
-        <div class="benefit"><div class="benefit-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22V8M8 12l4-4 4 4"/></svg></div><h3 data-i18n="benefit.growth">النمو</h3><p data-i18n="benefit.growth.p">حديد ومجموعة ب</p></div>
-        <div class="benefit"><div class="benefit-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M8 8h8"/></svg></div><h3 data-i18n="benefit.bones">العظام</h3><p data-i18n="benefit.bones.p">فيتامين د3</p></div>
-        <div class="benefit"><div class="benefit-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div><h3 data-i18n="benefit.vision">الرؤية</h3><p data-i18n="benefit.vision.p">فيتامين أ</p></div>
-        <div class="benefit"><div class="benefit-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3 data-i18n="benefit.immune">المناعة</h3><p data-i18n="benefit.immune.p">فيتامين ج والزنك</p></div>
-      </div>
+      <p class="benefit-strip" data-i18n="benefits.strip">نمو · حديد ومجموعة ب · عظام · فيتامين د3 · رؤية · فيتامين أ · مناعة · فيتامين ج والزنك</p>
     </div>
   </section>
 
   <section class="alt">
     <div class="wrap">
-      <div class="section-head"><h2 data-i18n="reviews.title">يثق به الأهل</h2></div>
-      <div class="reviews">
-        <div class="review"><p data-i18n="reviews.1">نخلط ظرفًا مع الشوفان صباحًا.</p><span data-i18n="reviews.1.meta">أم · الرياض</span></div>
-        <div class="review"><p data-i18n="reviews.2">مسحوق بحديد بلا طعم معدني في الزبادي.</p><span data-i18n="reviews.2.meta">أب · جدة</span></div>
-      </div>
+      <div class="section-head section-head--tight"><h2 data-i18n="reviews.title">يثق به الأهل</h2></div>
+      <blockquote class="review-solo">
+        <p data-i18n="reviews.1">مسحوق بحديد بلا طعم معدني في الزبادي. هذا ما أقنعنا.</p>
+        <footer data-i18n="reviews.1.meta">أب · جدة · قائمة انتظار</footer>
+      </blockquote>
     </div>
   </section>
 
@@ -227,31 +214,28 @@
         <details class="faq-item"><summary data-i18n="faq.3.q">لماذا مسحوق؟</summary><p data-i18n="faq.3.a">بلا سكر إضافي وبلا طعم معدني للحديد.</p></details>
         <details class="faq-item"><summary data-i18n="faq.4.q">هل مسجّل؟</summary><p data-i18n="faq.4.a">نعم، مكمل غذائي مسجّل.</p></details>
         <details class="faq-item"><summary data-i18n="faq.5.q">أين الشحن؟</summary><p data-i18n="faq.5.a">المملكة العربية السعودية فقط.</p></details>
-        <details class="faq-item"><summary data-i18n="faq.6.q">ماذا يعني الحجز؟</summary><p data-i18n="faq.6.a">يحفظ مكانك في الدفعة الأولى.</p></details>
-        <details class="faq-item"><summary data-i18n="faq.7.q">هل حلال؟</summary><p data-i18n="faq.7.a">تركيبة حلال، التفاصيل على العلبة.</p></details>
       </div>
     </div>
   </section>
 
-  <section id="reserve" class="alt">
-    <div class="wrap reserve-wrap">
-      <div class="reserve-panel" data-reserve-root data-variant="kids" data-market="ksa">
-        <h2 class="reserve-title" data-i18n="reserve.title">انضم إلى الدفعة الأولى</h2>
-        <p class="reserve-sub" data-i18n="reserve.sub">المملكة · الدفع بالريال</p>
-        <p class="choice-label" data-i18n="pdp.step1">اختر عمر طفلك</p>
-        <div class="variant-cards">
-          <button type="button" class="variant-card variant-tab" data-variant="toddlers" data-age-min="1" data-age-sublabel="3" data-age-badge-key="badge.toddlers" data-pack="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29__1_-311c9c0f-d5cc-43dc-a74a-3c9c6c2ce54b.png">
-            <span class="variant-card-title" data-i18n="card.t.title">بليندافيت للرضّع</span>
-            <span class="variant-card-meta" data-i18n="pdp.age.toddlers">1–3 سنوات</span>
-          </button>
-          <button type="button" class="variant-card variant-tab active" data-variant="kids" data-age-min="4" data-age-badge-key="badge.years" data-pack="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png">
-            <span class="variant-card-title" data-i18n="card.k.title">بليندافيت للأطفال</span>
-            <span class="variant-card-meta" data-i18n="pdp.age.kids">4+ سنوات</span>
-          </button>
-        </div>
-        <a class="btn btn-gold btn-cta" data-reserve-btn href="product.html" data-i18n="reserve.continue">متابعة الحجز</a>
-        <p class="reserve-fine" data-i18n="reserve.fine">عربون قابل للاسترداد عند التفعيل.</p>
-      </div>
+  <section id="waitlist" class="alt">
+    <div class="wrap waitlist-wrap">
+      <h2 class="waitlist-title" data-i18n="waitlist.title">قائمة الانتظار للدفعة الأولى</h2>
+      <p class="waitlist-sub" data-i18n="waitlist.sub">أدخل بريدك لنخبرك عند فتح الحجز. شحن داخل المملكة فقط.</p>
+      <form class="waitlist-form" data-waitlist-form method="post" novalidate>
+        <input type="hidden" name="variant" id="waitlist-variant" value="kids" />
+        <label class="waitlist-field">
+          <span class="waitlist-label" data-i18n="waitlist.email">البريد الإلكتروني</span>
+          <input type="email" name="email" autocomplete="email" required inputmode="email" data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
+        </label>
+        <p class="waitlist-pick">
+          <span data-i18n="waitlist.for">لـ</span>
+          <strong data-waitlist-variant-label data-i18n="card.k.title">بليندافيت للأطفال</strong>
+        </p>
+        <button type="submit" class="btn btn-gold btn-cta" data-i18n="waitlist.submit">انضم للقائمة</button>
+        <p class="waitlist-config-hint" data-waitlist-config-hint hidden data-i18n="waitlist.config">اربط waitlistFormAction في config.js أو روابط waitlistUrls للحفظ التلقائي.</p>
+      </form>
+      <p class="waitlist-fine" data-i18n="waitlist.fine">بلا دفع الآن. عند التفعيل يمكنك الحجز بعربون قابل للاسترداد.</p>
     </div>
   </section>
   </main>
@@ -259,7 +243,7 @@
   <footer class="footer">
     <div class="wrap footer-grid">
       <div><a class="logo" href="index.html">blendavit</a><p class="footer-brand-sub" data-i18n="footer.brand">من Smart Mom Labs</p></div>
-      <div><p><strong data-i18n="footer.shop">التسوق</strong></p><p><a href="product.html" data-i18n="footer.reserve">احجز</a></p></div>
+      <div><p><strong data-i18n="footer.shop">التسوق</strong></p><p><a href="#products" data-i18n="footer.reserve">احجز</a></p></div>
       <div><p><strong data-i18n="footer.company">الشركة</strong></p><p><span class="footer-muted" data-i18n="footer.hub">Smart Mom Labs</span></p></div>
     </div>
     <div class="wrap disclaimer" data-i18n="footer.disclaimer">مكمل غذائي فقط.</div>
@@ -267,6 +251,11 @@
 
   <script src="assets/js/i18n.js"></script>
   <script src="assets/js/config.js"></script>
+  <script src="assets/js/credential-rail.js"></script>
+  <script src="assets/js/config-validate.js"></script>
+  <script src="assets/js/purchase-path.js"></script>
+  <script src="assets/js/formula.js"></script>
   <script src="assets/js/main.js"></script>
+  <script src="assets/js/motion.js"></script>
 </body>
 </html>

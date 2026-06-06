@@ -2,7 +2,7 @@
 name: launch-check
 description: Production readiness audit — 10-dimension go/no-go sweep (security, a11y, compliance, analytics, SEO, GEO, perf, monitoring, docs, behaviour-quality).
 disable-model-invocation: false
-argument-hint: "[project-path] | trend [project-path]"
+argument-hint: "[project-path] | trend [project-path] | --workflow [project-path]"
 effort: high
 ---
 
@@ -12,10 +12,11 @@ Runs a 10-dimension sweep against a project and outputs a one-page verdict. Desi
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
 
-**Two modes:**
+**Three modes:**
 
-- `/launch-check [project-path]` — full audit (default). Runs all 10 dimensions, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
+- `/launch-check [project-path]` — full audit (default). Runs all 10 dimensions **serially**, persists results to the per-project history store, and renders a "Trend (last 5 runs)" section when ≥ 2 prior runs exist.
 - `/launch-check trend [project-path]` — read-only trend report. Renders just the trend section from existing run files. Useful for "are we trending up?" without burning the audit cost. See § "Trend-only mode" below.
+- `/launch-check --workflow [project-path]` — **opt-in** parallel + adversarially-verified audit. Fans the 10 dimensions out concurrently (one agent each), independently verifies every FAIL/WARN finding before it lands in the verdict, then synthesizes the **same** table and persists via the **same** history store. Faster wall-clock and fewer false positives; costs more tokens (spawns ~10–20 agents). Same output, same trend continuity — see § "Workflow mode" below.
 
 ## Deep-dive companions
 
@@ -260,6 +261,95 @@ Count PASS/WARN/FAIL, apply the verdict logic, format the output table.
 Print the table exactly as shown in the "Output format" section above. Then continue to Step 6 to persist the run and render the trend section.
 
 **Do NOT auto-create tickets for the findings.** Offer: "Want me to create tickets for the blocking items?" — but let the user decide. The launch check is advisory.
+
+## Workflow mode (`--workflow`) — opt-in parallel + adversarial verify
+
+When invoked as `/launch-check --workflow [project-path]`, replace the serial Steps 3–5 with a single `Workflow` tool invocation that fans the 10 dimensions out concurrently and adversarially verifies the findings, then resume at **Step 6 (persist) unchanged**. Steps 1–2 (resolve project + detect stack) and Step 6 (persist + trend) are identical to the default path — only the *evaluation* of the 10 dimensions changes from serial to fanned-out.
+
+### Why a Workflow here (and why opt-in)
+
+The 10 dimensions are **independent and read-only** — no shared writes, no cross-dimension data dependency, no human gate. That's the canonical fan-out shape: evaluate all 10 in parallel, then have an independent skeptic try to refute each FAIL/WARN before it reaches the verdict (the false-positive killer). The trade-off is token cost — a workflow run spawns ~10–20 agents versus one serial pass — so this is **opt-in**, never the default. Rationale: AgDR-0055.
+
+**Prerequisite:** the `Workflow` tool requires explicit opt-in to multi-agent orchestration. The `--workflow` flag *is* that opt-in — when the operator passes it, author and run the workflow below. Without the flag, run the serial path and do NOT invoke `Workflow`.
+
+### The canonical workflow script
+
+Author and run this via the `Workflow` tool (adapt the project name / stack-skip set from Steps 1–2). The dimension prompts reuse the **exact PASS/WARN/FAIL criteria** from "The 9 dimensions" / row-10 below — do not invent new criteria. Auto-PASS the not-applicable dimensions per the existing rules (e.g. SEO/GEO/perf auto-PASS for a non-web project, analytics auto-PASS for a CLI/library) by passing them as already-resolved rather than spawning an agent.
+
+```javascript
+export const meta = {
+  name: 'launch-check',
+  description: 'Parallel 10-dimension production-readiness audit with adversarial verification',
+  phases: [
+    { title: 'Evaluate', detail: 'one agent per applicable dimension' },
+    { title: 'Verify', detail: 'adversarially refute each FAIL/WARN finding' },
+  ],
+}
+
+// args = { projectPath, projectName, dimensions: [{ key, label, prompt, applicable }] }
+// `prompt` carries that dimension's "What to check" + PASS/WARN/FAIL criteria verbatim
+// from this SKILL. Non-applicable dimensions are pre-resolved to PASS and skipped.
+
+const DIM_SCHEMA = {
+  type: 'object',
+  required: ['key', 'status', 'score', 'finding'],
+  properties: {
+    key:     { type: 'string' },
+    status:  { enum: ['PASS', 'WARN', 'FAIL'] },
+    score:   { type: 'integer' },            // 0-100, same scale render-trend.sh plots
+    finding: { type: 'string' },             // one-line, fits the verdict-table cell
+    evidence:{ type: 'string' },             // file:line or command output backing the status
+  },
+}
+const VERDICT_SCHEMA = {
+  type: 'object',
+  required: ['key', 'upheld', 'reason'],
+  properties: {
+    key:    { type: 'string' },
+    upheld: { type: 'boolean' },             // false = the skeptic refuted the WARN/FAIL
+    reason: { type: 'string' },
+  },
+}
+
+const applicable = args.dimensions.filter(d => d.applicable)
+const preResolved = args.dimensions.filter(d => !d.applicable)
+  .map(d => ({ key: d.key, status: 'PASS', score: 100, finding: 'N/A for this project type' }))
+
+// Phase 1+2 pipelined: each dimension verifies as soon as its evaluation returns,
+// rather than waiting for the slowest dimension (no barrier).
+const evaluated = await pipeline(
+  applicable,
+  d => agent(d.prompt, { label: `eval:${d.key}`, phase: 'Evaluate', schema: DIM_SCHEMA, agentType: d.agentType }),
+  (res, d) => {
+    if (!res) return null
+    if (res.status === 'PASS') return res            // nothing to refute
+    // Adversarially verify only WARN/FAIL — the findings that move the verdict.
+    return agent(
+      `Adversarially REFUTE this ${d.label} finding for ${args.projectName}: "${res.finding}" ` +
+      `(evidence: ${res.evidence || 'none'}). Default upheld=false if you cannot independently confirm it. ` +
+      `Re-check the codebase yourself.`,
+      { label: `verify:${d.key}`, phase: 'Verify', schema: VERDICT_SCHEMA },
+    ).then(v => {
+      // A refuted FAIL/WARN is downgraded to PASS (the false-positive cut).
+      if (v && v.upheld === false) return { ...res, status: 'PASS', finding: `${res.finding} (refuted on verify: ${v.reason})` }
+      return res
+    })
+  },
+)
+
+return { results: [...preResolved, ...evaluated.filter(Boolean)] }
+```
+
+### After the workflow returns
+
+1. Take `results[]` (one row per dimension, each with `status` / `score` / `finding`).
+2. Count PASS/WARN/FAIL, apply the **same verdict logic** ("Verdict logic" table above) — go / go-with-warnings / conditional-go / no-go.
+3. Print the **same verdict table** as the serial path (Step 5 "Output format").
+4. **Persist via Step 6 unchanged** — build the same superset payload (`scores{}` from each row's `score`, `findings[]` from the WARN/FAIL rows), call `audit_run_persist`, then `audit_render_trend`. The history store, schema, and `render-trend.sh` chart are identical to a serial run, so trend continuity is preserved across serial↔workflow runs.
+
+### Degrade gracefully
+
+If the `Workflow` tool is unavailable in the current Claude Code installation, say so in one line and fall back to the serial Steps 3–5. The audit must still complete — `--workflow` is an optimisation, not a hard dependency.
 
 ### Step 6: Persist the run + render the trend
 

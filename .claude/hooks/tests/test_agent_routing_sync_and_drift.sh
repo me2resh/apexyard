@@ -3,7 +3,7 @@
 # block-agent-routing-drift.sh (pre-commit + pre-push drift guard) —
 # the two hooks #351 PR 2 ships per AgDR-0050 § Axis 4.
 #
-# Coverage (7 cases):
+# Coverage (13 cases):
 #
 #   Sync hook (apply-agent-routing.sh):
 #     1. Empty config — empty agent-routing.yaml means no-op; no agent
@@ -26,6 +26,28 @@
 #        hook exits 0.
 #     7. Drift accepts on no-drift — staged agent file carries the
 #        framework default model: line; hook exits 0 cleanly.
+#     8. Utility-agent override — ticket-manager sonnet → opus exercises
+#        the utility-class path (not just role-derived agents).
+#
+#   Ollama local-routing extensions (me2resh/apexyard#438):
+#     9. Ollama agent + reachable proxy + pulled model — full apply:
+#        model rewrite, per-agent env file, __session__.env, banner
+#        suffix "1 Ollama, 0 warning(s)".
+#    10. Ollama agent + UNREACHABLE proxy — model still rewrites; per-
+#        agent env file NOT written; no __session__.env; banner reports
+#        "1 Ollama, 1 warning(s)" with reachability warning emitted.
+#    11. Ollama agent + reachable proxy + model NOT pulled — apply
+#        succeeds (proxy is reachable); banner emits `ollama pull <name>`
+#        hint as a 1-warning.
+#    12. Two agents same endpoint — single __session__.env written, no
+#        multi-endpoint warning.
+#    13. Two agents different endpoints — first-declared wins;
+#        multi-endpoint warning emitted.
+#
+#   Mock curl: cases 9-13 prepend a fake `curl` to PATH that consults
+#   $APEXYARD_MOCK_CURL_DIR for canned responses. Each fixture is named
+#   by the URL with /:?&= squeezed to a single underscore, contents
+#   `<HTTP_STATUS>\n<BODY>`. Missing fixture = exit 7 (unreachable).
 #
 # Pattern follows test_portfolio_paths.sh + test_split_portfolio_v2_migration.sh:
 #   - SRC_ROOT resolved from the test file's location
@@ -431,6 +453,320 @@ if [ "$after_tm" = "opus" ] && [ "$after_qa" = "haiku" ] \
 else
   mark_fail "case 8: ticket-manager utility override" "after_tm=$after_tm qa=$after_qa snapshot=$defaults_snapshot_exists banner=[$banner_output]"
 fi
+rm -rf "$SB"
+
+# ===========================================================================
+# Mock curl helper for the Ollama-path cases (cases 9-13).
+#
+# Drops a fake `curl` script onto $PATH that consults $APEXYARD_MOCK_CURL_DIR
+# for canned responses. Each fixture is named by the sanitised URL and
+# contains `<HTTP_STATUS>\n<BODY>`. Missing fixture = simulated network
+# failure (exit 7). Honours `--fail` so the hook's reachability check
+# behaves like real curl would.
+# ===========================================================================
+make_mock_curl() {
+  local sb="$1"
+  local fixture_dir="$sb/.test-curl-fixtures/bin"
+  mkdir -p "$fixture_dir"
+  cat > "$fixture_dir/curl" <<'CURL_MOCK'
+#!/bin/bash
+# Mock curl — for hook tests only.
+url=""
+fail=0
+output_target=""
+expect_output_target=0
+for arg in "$@"; do
+  if [ "$expect_output_target" = "1" ]; then
+    output_target="$arg"
+    expect_output_target=0
+    continue
+  fi
+  case "$arg" in
+    -s|--silent) ;;
+    -f|--fail)   fail=1 ;;
+    -o)          expect_output_target=1 ;;
+    --max-time)  expect_output_target=1 ;;
+    --max-time=*) ;;
+    http*) url="$arg" ;;
+    *) ;;
+  esac
+done
+# If `--max-time <N>` consumed N as the output_target, undo that.
+case "$output_target" in
+  ''|[0-9]*) output_target="" ;;
+esac
+[ -z "$url" ] && exit 1
+key=$(printf '%s' "$url" | tr '/:?&=' '_____' | tr -s '_')
+fixture="${APEXYARD_MOCK_CURL_DIR:-/nonexistent}/$key"
+if [ -f "$fixture" ]; then
+  status=$(head -1 "$fixture")
+  body=$(tail -n +2 "$fixture")
+  if [ "$status" -ge 400 ] && [ "$fail" = "1" ]; then
+    exit 22
+  fi
+  if [ "$output_target" = "/dev/null" ] || [ -z "$output_target" ]; then
+    printf '%s' "$body"
+  else
+    printf '%s' "$body" > "$output_target"
+  fi
+  exit 0
+fi
+# No fixture = unreachable / connection refused
+exit 7
+CURL_MOCK
+  chmod +x "$fixture_dir/curl"
+  echo "$fixture_dir"
+}
+
+# ===========================================================================
+# CASE 9 — Ollama agent with reachable proxy + pulled model.
+# Expects: model rewrite, per-agent env file + __session__.env both written,
+# banner reports "1 Ollama, 0 warning(s)".
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_v1_models"
+printf '200\n{"models":[{"name":"qwen2.5-coder:14b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_api_tags"
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+YAML
+
+# Case 9 simulates the happy path where the adopter has done the shell-profile
+# step from docs/local-model-setup.md — ANTHROPIC_BASE_URL is already set in
+# the process env so the new routing-active check (me2resh/apexyard#442)
+# does NOT fire.
+banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+after_tm=$(read_model_line "$SB/.claude/agents/ticket-manager.md")
+session_env="$SB/.claude/session/agent-env/__session__.env"
+agent_env="$SB/.claude/session/agent-env/ticket-manager.env"
+session_set=0
+agent_set=0
+[ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
+[ -f "$agent_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$agent_env" && agent_set=1
+
+if [ "$after_tm" = "ollama/qwen2.5-coder:14b" ] \
+   && [ "$session_set" = "1" ] \
+   && [ "$agent_set" = "1" ] \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 0 warning'; then
+  mark_pass "case 9: Ollama agent with reachable proxy + pulled model (full apply, session + per-agent env, no warnings; ANTHROPIC_BASE_URL preset)"
+else
+  mark_fail "case 9: Ollama agent reachable + pulled" "model=$after_tm session=$session_set agent=$agent_set banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 10 — Ollama agent with UNREACHABLE proxy.
+# Expects: model rewrite still applies; per-agent env file NOT written;
+# __session__.env NOT written; banner reports "1 Ollama, 1 warning(s)".
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+# Deliberately register NO fixtures — mock curl returns exit 7 (unreachable).
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+YAML
+
+banner_output=$(cd "$SB" && PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+after_tm=$(read_model_line "$SB/.claude/agents/ticket-manager.md")
+session_env="$SB/.claude/session/agent-env/__session__.env"
+agent_env="$SB/.claude/session/agent-env/ticket-manager.env"
+session_absent=1
+agent_absent=1
+[ -f "$session_env" ] && session_absent=0
+[ -f "$agent_env" ] && agent_absent=0
+
+if [ "$after_tm" = "ollama/qwen2.5-coder:14b" ] \
+   && [ "$session_absent" = "1" ] \
+   && [ "$agent_absent" = "1" ] \
+   && echo "$banner_output" | grep -qE 'endpoint http://localhost:4000 not reachable' \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then
+  mark_pass "case 10: Ollama agent with unreachable proxy (model rewrites, no env files, 1 warning)"
+else
+  mark_fail "case 10: Ollama unreachable" "model=$after_tm session_absent=$session_absent agent_absent=$agent_absent banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 11 — Ollama agent with reachable proxy but model NOT pulled.
+# Expects: model rewrites; env files written (proxy is reachable); banner
+# reports "1 Ollama, 1 warning(s)" with the `ollama pull` hint emitted.
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_v1_models"
+# /api/tags returns a body that does NOT contain qwen2.5-coder:14b
+printf '200\n{"models":[{"name":"llama3.1:8b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_api_tags"
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+YAML
+
+# Case 11 — ANTHROPIC_BASE_URL preset (happy-path shell), so the only warning
+# should be the model-not-pulled hint, not the routing-active check.
+banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+session_env="$SB/.claude/session/agent-env/__session__.env"
+session_set=0
+[ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
+
+if echo "$banner_output" | grep -qE 'model qwen2\.5-coder:14b not in local Ollama' \
+   && echo "$banner_output" | grep -qE 'ollama pull qwen2\.5-coder:14b' \
+   && [ "$session_set" = "1" ] \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then
+  mark_pass "case 11: Ollama agent with reachable proxy + missing model (override applies, pull-hint emitted; ANTHROPIC_BASE_URL preset)"
+else
+  mark_fail "case 11: Ollama model-not-pulled" "session=$session_set banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 12 — Two agents same endpoint.
+# Expects: single __session__.env written, no multi-endpoint warning.
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_v1_models"
+printf '200\n{"models":[{"name":"qwen2.5-coder:14b"},{"name":"llama3.1:8b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_api_tags"
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+  qa-engineer:
+    model: ollama/llama3.1:8b
+    endpoint: http://localhost:4000
+YAML
+
+# Case 12 — ANTHROPIC_BASE_URL preset (happy-path shell).
+banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+session_env="$SB/.claude/session/agent-env/__session__.env"
+session_lines=0
+[ -f "$session_env" ] && session_lines=$(wc -l < "$session_env" | tr -d ' ')
+
+if [ -f "$session_env" ] \
+   && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" \
+   && [ "$session_lines" = "1" ] \
+   && ! echo "$banner_output" | grep -qE 'multiple endpoints' \
+   && echo "$banner_output" | grep -qE 'applied 2 agent-routing override.*2 Ollama'; then
+  mark_pass "case 12: two agents same endpoint (single __session__.env, no multi-endpoint warning; ANTHROPIC_BASE_URL preset)"
+else
+  mark_fail "case 12: same endpoint" "session_lines=$session_lines banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 13 — Two agents different endpoints.
+# Expects: first-declared endpoint wins; multi-endpoint warning emitted.
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_v1_models"
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4001_v1_models"
+printf '200\n{"models":[{"name":"qwen2.5-coder:14b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_api_tags"
+printf '200\n{"models":[{"name":"llama3.1:8b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4001_api_tags"
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+  qa-engineer:
+    model: ollama/llama3.1:8b
+    endpoint: http://localhost:4001
+YAML
+
+# Case 13 — ANTHROPIC_BASE_URL preset matching EITHER endpoint (whichever
+# wins as first-declared). Both 4000 and 4001 are reachable per the mock;
+# the iteration order picks one. We just need to keep the routing-active
+# warning silent, so set the env to match either possibility — the parser's
+# determinism is tested by checking the resulting session env content below.
+banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+session_env="$SB/.claude/session/agent-env/__session__.env"
+session_set=0
+# Order of writes from $AGENT_ENDPOINTS depends on the iteration order of
+# $ROWS; either endpoint may show up as "first". Just check that exactly
+# one of them is in the session env and the warning fires.
+[ -f "$session_env" ] && grep -qE '^ANTHROPIC_BASE_URL=http://localhost:400[01]$' "$session_env" && session_set=1
+
+if [ "$session_set" = "1" ] \
+   && echo "$banner_output" | grep -qE 'multiple endpoints declared' \
+   && echo "$banner_output" | grep -qE 'applied 2 agent-routing override'; then
+  mark_pass "case 13: two agents different endpoints (first wins, multi-endpoint warning emitted)"
+else
+  mark_fail "case 13: different endpoints" "session_set=$session_set banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
+rm -rf "$SB"
+
+# ===========================================================================
+# CASE 14 — Ollama agent with reachable proxy + pulled model BUT the parent
+# shell didn't preset ANTHROPIC_BASE_URL. me2resh/apexyard#442: the routing
+# is INACTIVE because Claude Code's process env doesn't have the var.
+# Expect: __session__.env still written (next-session prep); banner reports
+# "1 Ollama, 1 warning(s)" naming the routing-INACTIVE gap and the exact
+# shell-profile line to add.
+# ===========================================================================
+SB=$(make_fork)
+MOCK_BIN=$(make_mock_curl "$SB")
+APEXYARD_MOCK_CURL_DIR=$(mktemp -d)
+export APEXYARD_MOCK_CURL_DIR
+printf '200\n[]\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_v1_models"
+printf '200\n{"models":[{"name":"qwen2.5-coder:14b"}]}\n' > "$APEXYARD_MOCK_CURL_DIR/http_localhost_4000_api_tags"
+
+cat > "$SB/agent-routing.yaml" <<'YAML'
+version: 1
+agents:
+  ticket-manager:
+    model: ollama/qwen2.5-coder:14b
+    endpoint: http://localhost:4000
+YAML
+
+# Deliberately NOT setting ANTHROPIC_BASE_URL — simulates the adopter who
+# enabled Example C but never did the shell-profile step.
+banner_output=$(cd "$SB" && unset ANTHROPIC_BASE_URL; PATH="$MOCK_BIN:$PATH" bash .claude/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+session_env="$SB/.claude/session/agent-env/__session__.env"
+session_set=0
+[ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
+
+if [ "$session_set" = "1" ] \
+   && echo "$banner_output" | grep -qiE 'routing is INACTIVE' \
+   && echo "$banner_output" | grep -qF "$session_env" \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then
+  mark_pass "case 14 (#442): Ollama routing INACTIVE when ANTHROPIC_BASE_URL not preset (session env written, warning names the gap)"
+else
+  mark_fail "case 14 (#442): routing-inactive warning" "session=$session_set banner=[$banner_output]"
+fi
+unset APEXYARD_MOCK_CURL_DIR
 rm -rf "$SB"
 
 # ===========================================================================

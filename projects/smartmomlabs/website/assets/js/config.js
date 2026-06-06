@@ -7,6 +7,4 @@ window.BLENDAVIT_CONFIG = {
     kids_ksa: "",
   },
   depositMode: true,
-  depositLabel: "احجز بعربون قابل للاسترداد",
-  freeReserveLabel: "انضم لقائمة الانتظار، ادفع عند الشحن",
 };

@@ -2,8 +2,8 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
-> one place for all your products, built on top of Claude Code. 54 skills,
-> 32 hooks, 19 role definitions. Open source, plain markdown and shell, no SaaS,
+> one place for all your products, built on top of Claude Code. 59 skills,
+> 39 hooks, 20 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
 This file is the LLM/agent-friendly concatenation of the apexyard marketing
@@ -57,9 +57,9 @@ ApexYard is built using ApexYard. These are real numbers from the
 framework's own GitHub history — every change went through the same
 review and guardrails the tool installs in your fork.
 
-- **176 PRs reviewed and merged in the last 90 days**
-- **8 production releases shipped to date** (v0.1.0 through v2.0.0)
-- **51 technical decisions recorded** (released to main; every meaningful
+- **175 PRs reviewed and merged in the last 90 days**
+- **7 production releases shipped to date** (v0.1.0 through v1.3.0)
+- **29 technical decisions recorded** (released to main; every meaningful
   choice in an audit trail)
 - **13 bugs caught and fixed** before users hit them
 - 195 issues closed all-time
@@ -114,7 +114,7 @@ framework refuses to let you touch the database until the plan is real
 The reviewer changes based on what you're working on. Touching auth code?
 A security reviewer takes a look. Touching the database? Someone who
 specialises in database changes walks you through the rollback plan.
-Behind the scenes: 19 role definitions across 5 departments, each with
+Behind the scenes: 20 role definitions across 5 departments, each with
 its own checklist and boundaries.
 
 ### Tools for every step of shipping software
@@ -122,7 +122,7 @@ its own checklist and boundaries.
 Want to adopt a project you've inherited? `/handover`. Want to capture
 an idea before it evaporates? `/idea`. Want to know what's waiting on
 you across every product? `/inbox`. Want a launch-readiness check before
-customers see it? `/launch-check`. 54 of these in total — each one is a
+customers see it? `/launch-check`. 55 of these in total — each one is a
 focused workflow with safety rails.
 
 ### Guardrails that stop bad code from shipping — automatically
@@ -242,9 +242,9 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (54
-   slash commands), `.claude/agents/` (23 sub-agents incl. Rex), and
-   `.claude/hooks/` (32 mechanical enforcement scripts).
+2. **Capability layer** — the runnable spec: `.claude/skills/` (59
+   slash commands), `.claude/agents/` (24 sub-agents incl. Rex), and
+   `.claude/hooks/` (39 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
    `.claude/project-config.json` (shallow merge).
@@ -294,7 +294,7 @@ Free with any project you don't want named publicly.
 
 # Skills (https://yard.apexscript.com/skills)
 
-54 slash commands grouped by what you're trying to do — not by what's
+59 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
 `.claude/skills/<name>/`.
 

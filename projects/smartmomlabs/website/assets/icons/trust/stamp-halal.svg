@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" aria-hidden="true">
+  <circle cx="48" cy="48" r="44" fill="#fff" stroke="#1a3d32" stroke-width="2"/>
+  <circle cx="48" cy="48" r="40.5" fill="none" stroke="#c9a227" stroke-width="1.25"/>
+  <circle cx="48" cy="48" r="36" fill="#f4faf9"/>
+  <path d="M54 46 C54 46 49 36 38 34 C38 34 43 44 54 46 Z" fill="#1a3d32"/>
+  <text x="48" y="54" text-anchor="middle" font-family="Tajawal, Tahoma, sans-serif" font-size="15" font-weight="800" fill="#1a3d32">حلال</text>
+</svg>

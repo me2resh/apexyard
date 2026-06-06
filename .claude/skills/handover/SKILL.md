@@ -1,7 +1,7 @@
 ---
 name: handover
 description: Onboard an external repo via a structured handover assessment + harnessability scoring across 5 codebase dimensions.
-argument-hint: "<project name> [path or url] [--topology <name>]"
+argument-hint: "<project name> [path or url] [--topology <name>] [--all | --interactive]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
@@ -13,7 +13,7 @@ This is the bridge between "we just inherited this codebase" and "this codebase 
 
 ## LSP-aware (optional, recommended)
 
-The handover deep-dive — reading the codebase to populate the assessment — performs semantic code navigation: finding definitions, walking references, tracing handlers across modules. With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`) **and** the repo cloned locally (see the clone-first prompt from me2resh/apexyard#188), queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP — or when only metadata is available — the skill falls back to grep + Read transparently. No new failure mode, just optional speed during the deep-dive phase.
+The handover deep-dive — reading the codebase to populate the assessment — performs semantic code navigation: finding definitions, walking references, tracing handlers across modules. When a Git URL is given, the skill clones the repo into `workspace/<name>/` at step 1.5-clone (default, before any reads begin). With LSP enabled (`ENABLE_LSP_TOOL=1` + per-language plugin per `docs/getting-started.md`) **and** the repo cloned locally, queries are ~3-15× cheaper in token cost than grep + Read on shallow lookups, and ~1.4-5× cheaper on multi-hop traces. Without LSP — or when only metadata is available — the skill falls back to grep + Read transparently. No new failure mode, just optional speed during the deep-dive phase.
 
 Per-language LSP plugins live in Claude Code's marketplace. Install once; the skill detects the active language and dispatches automatically.
 
@@ -24,10 +24,24 @@ Read the registry path via `portfolio_registry`, the per-project docs dir via `p
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
 registry=$(portfolio_registry)
 ```
 
 Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
+
+**Write targets** (see me2resh/apexyard#373 + #443): paths documented as `projects/<name>/X` in this skill are canonical adopter-facing forms — implement them in bash as `"${projects_dir}/<name>/X"`. Never construct from `"${PWD}/projects/..."`, `"$(git rev-parse --show-toplevel)/projects/..."`, or a literal `./projects/...` — those break in split-portfolio v2 mode where `projects_dir` resolves to a sibling repo.
+
+**REQUIRED per-block preamble** (see #443): Claude executes each ```bash``` block as a separate shell invocation. The `projects_dir` assignment from the Path resolution section above does NOT carry into later blocks. Every bash block that writes to a `projects/<name>/X` path MUST start with this three-line preamble so it's self-contained:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+# ... now write to "${projects_dir}/<name>/X"
+```
+
+The Path resolution section's example sources the helper *once* for documentation purposes; it does not absolve later blocks from sourcing it themselves. Treat each ```bash``` fence as a fresh process.
 
 ## Usage
 
@@ -36,18 +50,35 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /handover legacy-billing-api ../legacy-billing-api
 /handover marketing-site https://github.com/some-org/marketing-site
 /handover marketing-site --topology typescript-nextjs
+/handover legacy-billing-api --all          # non-interactive: generate the full default set
+/handover legacy-billing-api --interactive  # explicit opt-in to the checklist (same as default)
 ```
 
 The `--topology <name>` flag pre-selects a topology bundle and skips the interactive pick in step 1.5. Available v1 topologies: `typescript-nextjs`, `python-fastapi`, `go-data-pipeline`. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
 
+### Document-set flags (`--all` vs `--interactive`) — default is the checklist
+
+By default the skill presents a **document selection checklist** (step 5.6) after the assessment is computed, so the operator opts in to exactly the artefacts they want and picks the template for each template-backed doc. Two flags override the prompt:
+
+| Flag | Behaviour |
+|------|-----------|
+| `--all` | **Non-interactive.** Generate the full default set with no checklist and the conventional template for each template-backed doc — byte-for-byte the pre-checklist behaviour. Use this for scripted / unattended runs or when you just want everything. |
+| `--interactive` (default) | Present the checklist + per-doc template pick. Equivalent to passing no flag. The flag exists so the default is nameable in scripts and docs. |
+
+Default is `--interactive` because a handover rarely needs every artefact, and the wrong template choice on a template-backed doc is annoying to undo by hand. `--all` is the explicit escape that preserves today's muscle memory — existing invocations that pass neither flag now see the checklist; pass `--all` to keep the old no-prompt flow. The handover assessment + harnessability score are **always** generated regardless of flag — they are the skill's core output, not optional artefacts.
+
 ## Output location
 
-The skill writes two files under `projects/<name>/`:
+The skill always writes the handover assessment; the rest of the artefacts are **selected via the step 5.6 checklist** (or generated in full with `--all`):
 
 ```
-projects/<name>/handover-assessment.md         ← always (re)written
-projects/<name>/architecture/container.md      ← only if missing — stub L2 C4 diagram
+projects/<name>/handover-assessment.md         ← always (re)written (assessment + harnessability)
+projects/<name>/architecture/container.md      ← if selected + missing — stub L2 C4 diagram (default-ticked)
+projects/<name>/architecture/context.md        ← if selected + missing — stub L1 C4 diagram
+projects/<name>/architecture/sequence-<flow>.md ← if selected + a clear flow exists
 ```
+
+Richer artefacts the operator can select but which are owned by dedicated skills — DFD (`/dfd`), Feature Inventory (`/extract-features`), user-journey HTML (`/journey`), Architecture Vision (`/tech-vision`) — are **handed off** rather than generated inline (see step 5.6).
 
 The folder lives in the ops repo (your fork of apexyard), alongside the rest of `projects/`.
 
@@ -67,13 +98,87 @@ mkdir -p .claude/session && echo "handover" > .claude/session/active-bootstrap
 
 Clear the marker on completion (Step "Post-Handover Checklist" below). If the skill is interrupted, the SessionStart hook `clear-bootstrap-marker.sh` clears it at the start of the next session. See AgDR-0011 + me2resh/apexyard#150.
 
+### Bootstrap scope — what IS and IS NOT exempt
+
+The bootstrap exemption covers ONLY these writes:
+
+- `apexyard.projects.yaml` — registry append (step 7)
+- `projects/<name>/` — assessment, architecture stubs (container / context / sequence), README (steps 5, 6, 6.1)
+- `.claude/session/active-bootstrap` — the marker itself (step 0)
+- Topology instantiation files (step 5.5, if a topology is picked)
+
+It does NOT cover:
+
+- Palette changes, UI work, or any other user request made during the session
+- Creating or pushing new repositories
+- Commits to branches without a ticket
+
+If the user requests work outside the handover's scope mid-session, tell them: "That's outside the handover's bootstrap exemption — let me /start-ticket first." Then follow the normal SDLC: ticket → branch → PR → review.
+
 ### 1. Locate the target repo
 
-If a path is given, use it. If a URL is given, prompt the user to clone it into `workspace/<name>/` first (don't clone automatically — that's a side-effect with cost). If nothing is given, ask:
+If a path is given, use it. If a URL is given, proceed immediately to clone it into `workspace/<name>/` (see step 1.5-clone below) — the user does not need to clone manually. If nothing is given, ask:
 
 ```
 Where is the target repo? Local path or git URL?
 ```
+
+### 1.5-clone. Clone the repo (URL path only — default yes)
+
+When the operator provides a Git URL (step 1), clone it immediately before doing any further reads. Default is **yes** — no confirmation needed unless the operator explicitly passes `--no-clone` on the skill invocation. This is the cheapest moment: subsequent reads in steps 2–6 are 3–15× cheaper per query against a local clone than via the GitHub API.
+
+#### Resolve the workspace dir and clone
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+mkdir -p "$WORKSPACE_DIR"
+
+if [ -d "$WORKSPACE_DIR/<name>/.git" ]; then
+  echo "✓ $WORKSPACE_DIR/<name>/ already exists — skipping clone."
+else
+  git clone <repo-url> "$WORKSPACE_DIR/<name>"
+fi
+```
+
+In single-fork mode `WORKSPACE_DIR` resolves to `<ops-root>/workspace`; in split-portfolio v2 mode it resolves to the sibling private repo (e.g. `../<fork>-portfolio/workspace`). Don't hardcode `workspace/<name>/`.
+
+#### On clone failure
+
+If the clone fails (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone <repo-url> "$WORKSPACE_DIR/<name>"` as the recovery, and continue with the local-path fallback. Do **not** retry or invent an alternative URL. The operator picks up from there.
+
+If the operator explicitly passed `--no-clone` on the `/handover` invocation, skip this step silently and set `$CLONE_STATUS="declined"` for the step 10 summary.
+
+#### Set the clone marker
+
+```bash
+CLONE_STATUS="cloned"   # or "preserved" | "declined" | "failed: <reason>"
+```
+
+All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo root whenever `$CLONE_STATUS` is `cloned` or `preserved`. When `$CLONE_STATUS` is `declined` or `failed`, fall back to GitHub API reads via `gh api` / `gh -R <owner/name> …` (degraded but functional).
+
+### 1.5-reindex. Reindex the cloned repo in MCP (default: always attempt)
+
+After a successful clone (`$CLONE_STATUS=cloned`), trigger an MCP reindex so `search_code` and `search_docs` return results during the deep-dive phases that follow (steps 2–6). Without this step those queries return empty against the just-cloned repo, and the agent silently falls back to `find` + `cat` + `Bash` — defeating the token-cost benefit of cloning early.
+
+```
+mcp__apexyard-search__reindex(scope="project", project="<name>")
+```
+
+**On MCP unavailable:** the call will error. Catch the error, print a single-line warning, set the marker, and continue. **Do not skip silently** — silent skips are indistinguishable between "server down" and "agent forgot the step", and the second failure mode is what this step exists to prevent.
+
+```
+⚠ MCP reindex unavailable — falling back to grep + Read for steps 2–6
+```
+
+```bash
+REINDEX_STATUS="indexed"   # or "unavailable" | "skipped" (when $CLONE_STATUS != cloned)
+```
+
+When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` over `grep` + `Read` for the assessment reads in steps 2–6 (per the MCP-search-first rule). When `unavailable` or `skipped`, fall back to `grep` + `Read` without further apology.
+
+A `PostToolUse` hook (`suggest-mcp-reindex-after-clone.sh`) fires after the clone command and emits a one-line reminder of this step. Same advisory shape as `detect-role-trigger.sh` — exit 0, non-blocking, removes the "I forgot the rule applied here" failure mode.
 
 ### 1.5. Pick a topology (default: skip / custom)
 
@@ -109,6 +214,8 @@ If `$PICKED_TOPOLOGY=""`, print nothing — the rest of the flow is unchanged.
 
 ### 2. Read the surface area
 
+Use `$WORKSPACE_DIR/<name>/` as `<repo>` when available (clone succeeded or path was given). Fall back to GitHub API reads only when `$CLONE_STATUS` is `declined` or `failed`. Local reads are preferred — they are cheaper and more complete.
+
 Without running anything destructive, gather:
 
 ```bash
@@ -130,7 +237,7 @@ ls <repo>/.github/workflows/ 2>/dev/null
 git -C <repo> log -1 --format='%h %ai %an %s'
 git -C <repo> shortlog -sn --no-merges | head -10
 
-# Open issues / PRs (if it's a GitHub repo)
+# Open issues / PRs (if it's a GitHub repo — always from the API regardless of clone status)
 gh -R <owner/name> issue list --state open --json number,title,labels --limit 10
 gh -R <owner/name> pr list --state open --json number,title --limit 10
 ```
@@ -523,7 +630,133 @@ If the workspace clone doesn't exist yet (operator hasn't cloned), defer the pip
 TOPOLOGY_INSTANTIATED="$PICKED_TOPOLOGY@$TOPOLOGY_VERSION"
 ```
 
-### 6. Write the L2 container diagram stub (if missing)
+### 5.6. Document selection (checklist) — opt in to what gets generated
+
+By this point the **computed core** is done: the handover assessment (step 5) and the harnessability score (step 4.5) are written regardless of any selection. This step decides which of the *additional* generatable artefacts to produce, and — for each template-backed one — which template to render it from.
+
+**Skip condition (`--all`)**: if the operator passed `--all` on the invocation, skip the checklist entirely. Generate the full default set (every row marked "default ✓" in the catalogue below) using each doc's conventional template. Note `document selection: --all (full set)` in the step 10 summary and continue to step 6. This is the byte-for-byte pre-checklist behaviour — existing scripted invocations keep working by adding `--all`.
+
+Otherwise (default, or explicit `--interactive`): present the checklist.
+
+#### Two kinds of output
+
+The catalogue distinguishes two classes — keep them visually distinct in the prompt so the operator knows which ones offer a template pick:
+
+- **Computed / toggle-only** — derived from the repo scan; there is no template to choose, only whether to emit. (Example: the L2 container diagram is *assembled* from detected signals, but it still renders **through** the `architecture/c4-container.md` template — so it's template-backed, see below. The handover assessment itself is pure-computed and is always on, never shown as a toggle.)
+- **Template-backed / choose-a-template** — rendered from a file in the template library. For these the operator gets a second sub-prompt to pick which resolved template to use (framework default vs an adopter `custom-templates/**` override, plus any sibling templates that fit the slot).
+
+#### The catalogue
+
+Present this as a numbered checklist. The "default" column marks what `--all` (and the pre-ticked checklist) would generate. Toggle-only rows have no template pick; template-backed rows do.
+
+| # | Artefact | Kind | Template (resolved via `portfolio_resolve_template`) | Default | Generated by |
+|---|----------|------|------------------------------------------------------|---------|--------------|
+| 1 | L2 container diagram (`architecture/container.md`) | template-backed | `architecture/c4-container.md` | ✓ (if signals + not already present) | step 6 |
+| 2 | L1 context diagram (`architecture/context.md`) | template-backed | `architecture/c4-context.md` | — | step 6.1 (`/c4` context pass) |
+| 3 | Data Flow Diagram (`architecture/dfd.md`) | template-backed | `architecture/dfd.md` | — | hand off to `/dfd <name>` |
+| 4 | Feature Inventory (`feature-inventory.md`) | computed (six-axis scan) | — | — | hand off to `/extract-features <name>` |
+| 5 | User-journey preview (`journeys/<flow>.html`) | computed (HTML, from flows) | — | — | hand off to `/journey <name>` |
+| 6 | Architecture Vision draft (`architecture/vision.md`) | template-backed | `architecture/vision.md` | — | hand off to `/tech-vision <name>` |
+| 7 | Sequence diagram (`architecture/sequence-<flow>.md`) | template-backed | `architecture/sequence.md` | — | step 6.1 (sequence pass) |
+
+> The handover assessment + harnessability score are NOT in this catalogue — they are always written (step 5 / 4.5). The catalogue is only the *optional* surface.
+
+Render the prompt like this (pre-tick the default rows; the operator toggles):
+
+```
+Document selection for <name>. The handover assessment + harnessability score are
+always written. Pick which additional docs to generate (default-ticked shown with [x]):
+
+  [x] 1. L2 container diagram          (template-backed → c4-container)
+  [ ] 2. L1 context diagram            (template-backed → c4-context)
+  [ ] 3. Data Flow Diagram             (template-backed → dfd)
+  [ ] 4. Feature Inventory             (computed — six-axis scan)
+  [ ] 5. User-journey preview          (computed — HTML)
+  [ ] 6. Architecture Vision draft     (template-backed → vision)
+  [ ] 7. Sequence diagram              (template-backed → sequence)
+
+Reply with: 'default' (keep ticks as-is), 'all', 'none',
+a comma-list of numbers to GENERATE (e.g. '1,3,4'),
+or toggles like '+2 -1' to adjust the defaults.
+```
+
+Accept:
+
+- `default` or empty — generate exactly the pre-ticked rows
+- `all` — generate every catalogue row (same set as `--all`)
+- `none` — generate nothing optional (assessment + harnessability only)
+- A comma-list (`1,3,4`) — generate exactly those rows
+- Toggle shorthand (`+2 -1`) — start from the defaults, add `+N`, remove `-N`
+
+If the response is ambiguous, ask **one** clarification; on a second ambiguous answer, fall back to `default`.
+
+#### Per-doc template pick (template-backed rows only)
+
+For each **template-backed** row the operator selected, run a template-pick sub-step before generation. Toggle-only / computed rows skip this entirely (there is nothing to pick).
+
+Resolve the candidate templates with the portfolio helper so adopter overrides surface alongside the framework default:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+
+# Conventional template for this slot (e.g. architecture/c4-container.md).
+default_tpl=$(portfolio_resolve_template architecture/c4-container.md)
+
+# Adopter override candidate (only listed when it actually exists — resolve()
+# already prefers it, so equality means there's only one real candidate).
+registry=$(portfolio_registry)
+custom_dir="$(dirname "$registry")/custom-templates"
+```
+
+Present the candidates, defaulting to the conventional one:
+
+```
+Template for the L2 container diagram:
+
+  [1] c4-container.md            (framework default — templates/architecture/)
+  [2] c4-container.md            (adopter override — custom-templates/architecture/)   ← only shown if it exists
+  [3] Other library template     (pick any file under templates/architecture/ or custom-templates/architecture/)
+
+[1/2/3 — default 1]
+```
+
+Rules for the pick:
+
+- **List the override only when it exists.** `portfolio_resolve_template` already returns the override path when present, so when the custom file is absent, candidate `[2]` is omitted and `[1]` is the sole conventional pick — don't fabricate a second row.
+- **Default is always the conventional template** for that slot (candidate `[1]`, or the override if `portfolio_resolve_template` returned it — i.e. the path the helper would pick unprompted). Pressing enter / empty input takes the default. This keeps `--all` and "default" runs byte-stable.
+- **`[3] Other`** lets the operator point at any sibling template (e.g. render the container slot from a custom `c4-container-microservices.md` they keep in `custom-templates/architecture/`). Glob `templates/architecture/*.md` + `custom-templates/architecture/*.md`, list them, let the operator choose. If they pick a path that doesn't exist, re-prompt once, then fall back to the default.
+- Record the chosen absolute path in a per-doc variable (e.g. `$CONTAINER_TEMPLATE`) and pass it to the generating step instead of re-resolving. Step 6's "Assembling the file" block reads `$CONTAINER_TEMPLATE` when set, falling back to `portfolio_resolve_template architecture/c4-container.md` when the checklist was skipped (`--all`) or the variable is unset.
+
+#### Hand-offs vs in-skill generation
+
+Rows 1, 2, 7 are generated **in this skill** (steps 6 / 6.1). Rows 3–6 are richer artefacts owned by dedicated skills — for those, the checklist records the selection and, after the summary (step 10), the skill **offers to hand off** to the matching skill rather than reimplementing it:
+
+```
+You selected: Data Flow Diagram, Feature Inventory.
+Run the owning skills now against the cloned repo?
+
+  /dfd <name>               — Data Flow Diagram
+  /extract-features <name>  — Feature Inventory
+
+[y to run in sequence / n to skip — default n]
+```
+
+This mirrors step 8's follow-up-skill offer (security/code review) — the checklist never reimplements `/dfd`, `/extract-features`, `/journey`, or `/tech-vision`; it routes to them. On `n`, note the selected-but-deferred docs in the summary so the operator can run them later.
+
+#### Record the selection for the summary
+
+```bash
+# Examples — set per the operator's picks
+SELECTED_DOCS="container,dfd,feature-inventory"
+CONTAINER_TEMPLATE="$default_tpl"   # absolute path chosen in the per-doc pick
+```
+
+The step 10 summary reports both the generated set and the deferred (handed-off) set.
+
+### 6. Write the L2 container diagram stub (if selected and missing)
+
+**Selection condition**: generate this file only when row 1 (L2 container diagram) was selected in step 5.6 — i.e. the operator kept it ticked, passed `--all`, or named it in the comma-list. If row 1 was de-selected, skip this step and note `architecture/container.md: skipped (deselected)` in the summary.
 
 **Skip condition**: if `projects/<name>/architecture/container.md` already exists, skip this entire step and note it in the final summary (`architecture/container.md: preserved`). Never overwrite.
 
@@ -644,10 +877,12 @@ Resolve the C4 container template via the portfolio helper so adopter overrides 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
-container_template=$(portfolio_resolve_template architecture/c4-container.md)
+# Prefer the template chosen in step 5.6's per-doc pick; fall back to the
+# conventional resolution when the checklist was skipped (--all) or unset.
+container_template="${CONTAINER_TEMPLATE:-$(portfolio_resolve_template architecture/c4-container.md)}"
 ```
 
-Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/architecture/c4-container.md` (the template shipped in #50). Adopters who want a customised C4 shape drop their version at `<private_repo>/custom-templates/architecture/c4-container.md`. See `templates/README.md` for the path-mirroring convention.
+Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/architecture/c4-container.md` (the template shipped in #50). Adopters who want a customised C4 shape drop their version at `<private_repo>/custom-templates/architecture/c4-container.md`. See `templates/README.md` for the path-mirroring convention. When the operator picked a non-conventional template in step 5.6 (the `[3] Other` option), `$CONTAINER_TEMPLATE` carries that choice and is used verbatim here.
 
 Start from the resolved template. Replace:
 
@@ -683,6 +918,28 @@ Create `projects/<name>/architecture/` if missing.
 #### If there's nothing meaningful to draw
 
 If after scanning you find zero signals (no `package.json`, no `pyproject.toml`, no Dockerfile, no known framework, no DB), skip the file and note in the summary: `architecture/container.md: skipped (no container signals detected — add manually from the C4 container template — resolve via portfolio_resolve_template architecture/c4-container.md — when ready)`. Better to write nothing than fabricate a wrong diagram.
+
+### 6.1. Write the L1 context + sequence diagram stubs (if selected)
+
+These are the other two **in-skill** template-backed docs from the step 5.6 catalogue (rows 2 and 7). Generate each only when it was selected; otherwise skip silently.
+
+**Row 2 — L1 context diagram** (`projects/<name>/architecture/context.md`): render from the template chosen in the per-doc pick (`$CONTEXT_TEMPLATE`, falling back to `portfolio_resolve_template architecture/c4-context.md`). Populate the system box with the project name and the `System_Ext` actors from the externals detected in step 6's external-systems scan (auth / payments / email / storage / LLM). Same "auto-generated — refine me" note + never-overwrite rule as the container stub.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+context_template="${CONTEXT_TEMPLATE:-$(portfolio_resolve_template architecture/c4-context.md)}"
+```
+
+**Row 7 — sequence diagram** (`projects/<name>/architecture/sequence-<flow>.md`): only meaningful when a clear request flow surfaced during the read (e.g. an auth handshake or a primary API path). Render from `$SEQUENCE_TEMPLATE` (fallback `portfolio_resolve_template architecture/sequence.md`). If no obvious flow exists, skip and note `sequence: skipped (no clear flow detected)` — don't fabricate one.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+sequence_template="${SEQUENCE_TEMPLATE:-$(portfolio_resolve_template architecture/sequence.md)}"
+```
+
+Both follow the architecture-stub conventions: write once, never overwrite (preserve on re-handover), and prepend the machine-drafted note. The richer rows (3–6: DFD, Feature Inventory, journey, vision) are **not** generated here — they hand off to `/dfd`, `/extract-features`, `/journey`, `/tech-vision` per step 5.6's hand-off offer.
 
 ### 7. Append to the portfolio registry
 
@@ -876,85 +1133,54 @@ Filed follow-up tickets:
   #42 — /bug  — Fix 7 failing tests in src/api/orders — <repo URL>
 ```
 
-### 8. Offer the clone-first deep-dive option (recommended)
+### 8. Offer follow-up deep-dive skills (against the already-cloned repo)
 
-You've just produced a metadata-only handover. The next natural step is a deeper dive — security audit, threat model, code-quality assessment. Those skills benefit substantially from a local clone + LSP-aware tooling, so offer the clone-first path here, with the cost transparently disclosed. Default is **no clone** — the operator has to type `y` explicitly.
+The repo was cloned in step 1.5-clone (or was already local). Offer follow-up deep-dive skills that benefit from the local clone + LSP tooling. This replaces the old "clone first" offer — cloning happened earlier, so this step is purely about what to run next.
 
-#### What to ask
+#### Branching on clone status
 
-Print a single offer block. Use the project name resolved earlier in the flow as `<name>`, and the registry's `repo` field (or the URL the operator gave in step 1) as `<repo-url>`. Don't paraphrase — the prompt below is the exact shape:
+**If `$CLONE_STATUS` is `cloned` or `preserved`:**
+
+Print a single follow-up offer after the step 10 summary:
 
 ```
-Want me to clone <name> into workspace/<name>/ now? It enables
-LSP-aware navigation in /code-review, /threat-model, /security-review
-and the post-handover discovery skills (~3-15× cheaper than grep on
-shallow semantic queries; ~1.4-5× on multi-hop traces).
+✓ <name> is cloned at $WORKSPACE_DIR/<name>/ and indexed in MCP.
+  Want to run any of the following against the clone now?
 
-Cost: ~tens of MB on disk + a one-time clone. The clone is gitignored
-from your fork (workspace/*/).
+  1. /threat-model <name>   — STRIDE threat model (recommended for first handover)
+  2. /security-review <name> — Security Auditor pass on the codebase
+  3. /code-review <name>    — Rex code-quality review
 
-Note: LSP requires `ENABLE_LSP_TOOL=1` and a per-language Claude Code
-LSP plugin installed (the plugin install is your problem — it's not
-bundled). Cross-project semantic queries still need grep (LSP is
-per-workspace). Cold-start on large monorepos can be 30+ seconds.
-Decline now if you'd rather configure that first or skip the deep dive.
+  Note: LSP-aware navigation requires ENABLE_LSP_TOOL=1 and a per-language
+  Claude Code LSP plugin installed. Cross-project queries still need grep
+  (LSP is per-workspace). Cold-start on large monorepos can be 30+ seconds.
 
-[y / n / later]
+[1/2/3/all/none — default none]
 ```
 
-#### Cost-transparency requirements
+Accept:
 
-The offer **must** explicitly disclose:
+- `1`, `2`, `3` — run that specific skill
+- `all` — run all three in sequence
+- `none` or empty — skip; the operator can invoke any skill manually later
 
-1. **`ENABLE_LSP_TOOL=1`** — the env var the harness reads to enable LSP
-2. **Per-language plugin install is the adopter's problem** — don't pretend the clone alone enables LSP
-3. **Disk cost** (~tens of MB) and gitignored status (`workspace/*/`)
-4. **Cross-project queries still need grep** — LSP is per-workspace
-5. **Cold-start cost on large monorepos** — 30+ seconds is realistic per the spike
+The skill never invokes follow-up skills automatically — the operator explicitly selects. On `none` / empty, continue to the final summary with no side effects.
 
-If any of these aren't surfaced in the offer, the adopter accepts a deal they don't understand. Don't compress the prompt past these five.
+**If `$CLONE_STATUS` is `declined`:**
 
-#### Branching
+Skip this step silently. The operator consciously opted out of cloning; don't re-offer.
 
-**On `y`:**
+**If `$CLONE_STATUS` is `failed: <reason>`:**
 
-1. Resolve `<repo-url>`. If the registry already has the repo slug (`me2resh/<name>` form), translate to `https://github.com/<owner>/<name>.git`. If the operator gave a path in step 1 instead of a URL, fall back to asking for the clone URL — never invent one.
+Print a brief recovery note only — don't re-attempt the clone:
 
-2. Resolve the workspace dir via the portfolio helper, then skip cleanly if the project clone already exists:
+```
+Note: the clone of <name> failed earlier (<reason>). Once you have a local
+copy at $WORKSPACE_DIR/<name>/, you can run /threat-model, /security-review,
+or /code-review against it directly.
+```
 
-   ```bash
-   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
-   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
-   WORKSPACE_DIR=$(portfolio_workspace_dir)
-   mkdir -p "$WORKSPACE_DIR"
-
-   if [ -d "$WORKSPACE_DIR/<name>" ]; then
-     echo "✓ $WORKSPACE_DIR/<name>/ already exists — skipping clone."
-   else
-     git clone <repo-url> "$WORKSPACE_DIR/<name>"
-   fi
-   ```
-
-   In single-fork mode `WORKSPACE_DIR` resolves to `<ops-root>/workspace`; in split-portfolio v2 mode it resolves to the sibling private repo (e.g. `../<fork>-portfolio/workspace`). Don't hardcode `workspace/<name>/`.
-
-3. On clone failure (private repo without credentials, network error, repo moved): report the exit code, point at `gh auth login` or a manual `git clone` as the recovery, and continue to the final summary. Do **not** retry, do **not** fall back to a different URL — the operator picks up from there.
-
-4. On clone success, suggest the next skill as a single follow-up question:
-
-   ```
-   ✓ Cloned into $WORKSPACE_DIR/<name>/.
-     Want to run /threat-model against the new clone now? (y/n)
-   ```
-
-   If the operator declines, mention `/code-review` and `/security-review` as the other natural follow-ups, then continue to the final summary. The skill never invokes follow-up skills automatically — the operator confirms each one.
-
-**On `n` or `later`:**
-
-Skip silently — no side effects, no further prompts. The adopter can clone manually anytime with `git clone <repo-url> "$WORKSPACE_DIR/<name>"`. Continue to the final summary.
-
-**On any other input:**
-
-Treat as `n` (no clone). Don't loop the prompt — the offer is one-shot.
+Then continue to the final summary.
 
 ### 9. Offer validation (conditional, default-no)
 
@@ -973,11 +1199,12 @@ If the project is healthy (recent commits, active PRs/issues), skip the prompt e
 
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
-Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped})
+Document selection:          {"checklist — generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
+Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped | skipped (deselected)})
 Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
 Next-step tickets filed:     {N filed of M offered | none offered (zero risks) | declined (skipped all) | skipped (registry not appended)}
-Workspace clone:             workspace/{name}/ ({cloned | preserved | skipped (declined) | skipped (later) | failed: <reason>})
+Workspace clone:             workspace/{name}/ ({cloned at step 1.5 | preserved (already existed) | declined (--no-clone) | failed: <reason> | n/a (local path given)})
 Validation:                  {"completed — verdict <GREEN|YELLOW|RED>" | "skipped" | "not offered (project is active)"}
 
 Tech stack: {one-liner}
@@ -1004,7 +1231,7 @@ Filed follow-up tickets:
 4. **Auto-append to the registry** (with confirmation) — don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
 5. **Derive roles from the stack** — don't hard-code `[tech-lead, backend-engineer]`. The roles list depends on the actual tech stack, CI config, and security surface detected in step 3.
 6. **Derive next steps from the risks** — don't emit generic placeholders. Every "Next Step" must correspond to a specific finding from the Quality Risks section of the assessment.
-7. **Never auto-clone** — ask for the path in step 1, and offer (default-no) the optional clone in step 8. Clone only happens on an explicit operator `y`; `n` / `later` / unrecognised input all skip cleanly.
+7. **Clone immediately when a URL is given** — when the operator provides a Git URL in step 1, clone it into `workspace/<name>/` in step 1.5-clone without asking (default-yes). The only opt-out is an explicit `--no-clone` flag on the skill invocation. When only a local path is given, use it directly — no clone needed. The old "offer the clone at the end (step 8)" pattern is gone; cloning first makes every subsequent read cheaper.
 8. **Never store secrets** — if `.env` is found, list its presence but never read its contents.
 9. **Status starts at `handover`** — moves to `active` only after the integration plan is executed.
 10. **Never break the registry** — if the YAML append breaks the file, restore the previous version and ask the user to edit manually.
@@ -1016,6 +1243,8 @@ Filed follow-up tickets:
 16. **The routing heuristic is the default, not the law** — step 7.5's auto-route from next-step shape to `/feature` / `/task` / `/bug` is a sensible default. The operator can override per item (`1 as feature` / `3 as bug`). When in doubt, default to `/task` — handover-derived next-steps are almost never user-facing capabilities (`/feature` shape) and rarely strictly broken behaviour (`/bug` shape).
 17. **Source-link every filed ticket back to the assessment** — each ticket dispatched in step 7.5 carries a `_Source: handover deep-dive on YYYY-MM-DD — see projects/<name>/handover-assessment.md_` footer. Without that link, the assessment's context (risks, harnessability score, build status) is invisible to anyone working the ticket later, and the recommendation traceability rot is exactly the failure mode this step exists to prevent.
 18. **Re-runs surface deltas, not redundancy** — the filed-marker presence on each next-step entry is the source of truth for "already done". On re-handover, step 5's regeneration of `## Next Steps` MUST preserve any `~~strikethrough~~ → Filed as [#N](url)` markers from prior runs (don't blow away the operator's filing history). Step 7.5 then prompts only on the entries that lack a `Filed as` link, so the operator never re-sees what they've already filed. If every entry already carries a `Filed as` link, the whole step skips (see § Skip conditions). Byte-equivalence of the section text is NOT the test — only the per-entry marker presence is.
+19. **Document selection is a checklist, not a fixed pipeline** — step 5.6 presents the generatable artefacts as an opt-in checklist (default-ticked: the L2 container diagram). The handover assessment + harnessability score are ALWAYS written and never appear in the checklist — they are the skill's core output. `--all` is the non-interactive escape that generates the full default set with conventional templates (byte-for-byte the pre-checklist behaviour); `--interactive` (the default) presents the checklist. Distinguish computed/toggle-only rows (no template to pick) from template-backed rows (per-doc template pick).
+20. **Per-doc template pick defaults to the conventional template** — for each selected template-backed doc, list the resolved candidates (framework `templates/**` + adopter `custom-templates/**` via `portfolio_resolve_template`) and default to the conventional one (candidate `[1]`, i.e. the path `portfolio_resolve_template` would pick unprompted). Empty input takes the default, keeping `--all` and "default" runs byte-stable. Only list the adopter override candidate when it actually exists. Never reimplement a dedicated skill's artefact — DFD / Feature Inventory / journey / vision hand off to `/dfd` / `/extract-features` / `/journey` / `/tech-vision`.
 
 ## When to use this
 

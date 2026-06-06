@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Local preview — zero deps. Usage: ./bin/preview [port]
+set -e
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PORT="${1:-8080}"
+cd "$ROOT"
+echo "blendavit preview → http://127.0.0.1:${PORT}/"
+echo "Stop with Ctrl+C"
+exec python3 -m http.server "$PORT"

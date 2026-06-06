@@ -6,39 +6,43 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/pin-ops-root.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/pin-ops-root.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/onboarding-check.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/onboarding-check.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-upstream-drift.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/check-upstream-drift.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-jq-installed.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/check-jq-installed.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/check-portfolio-config.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/clear-bootstrap-marker.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/clear-bootstrap-marker.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/clear-issue-skill-marker.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/clear-issue-skill-marker.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/link-custom-skills.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/link-custom-skills.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/apply-agent-routing.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/apply-agent-routing.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/remind-mcp-tools.sh\"'"
           }
         ]
       }
@@ -49,15 +53,33 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/suggest-mcp-search.sh\"'"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/warn-review-marker-write.sh\"'"
           }
         ]
       },
@@ -67,154 +89,167 @@
           {
             "type": "command",
             "if": "Bash(git add *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-git-add-all.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-git-add-all.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-main-push.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-main-push.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/validate-branch-name.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/validate-branch-name.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/check-secrets.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/check-secrets.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/verify-commit-refs.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/verify-commit-refs.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/validate-commit-format.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/validate-commit-format.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-agdr-for-arch-changes.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-agdr-for-arch-changes.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/pre-push-gate.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/pre-push-gate.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git commit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/warn-bootstrap-scope.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-agent-routing-drift.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-skill-for-issue-create.sh\"'"
-          },
-          {
-            "type": "command",
-            "if": "Bash(gh issue create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/suggest-ticket-template.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-skill-for-issue-create.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh issue create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/validate-issue-structure.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/suggest-ticket-template.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh issue create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/validate-issue-structure.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh issue create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/validate-issue-structure.sh\"'"
-          },
-          {
-            "type": "command",
-            "if": "Bash(gh issue create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/validate-pr-create.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/validate-pr-create.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-agdr-for-arch-pr.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-agdr-for-arch-pr.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh issue comment *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr comment *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh api *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-private-refs-in-public-repos.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh api *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-unreviewed-merge.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh api *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-design-review-for-ui.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh pr merge *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh api *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-merge-on-red-ci.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
+            "if": "Bash(gh pr merge *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-architecture-review.sh\"'"
           },
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+            "if": "Bash(gh api *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-architecture-review.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/suggest-mcp-search.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/warn-review-marker-write.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(gh issue edit *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
           }
         ]
       }
@@ -224,7 +259,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
           }
         ]
       }
@@ -236,12 +271,22 @@
           {
             "type": "command",
             "if": "Bash(gh pr create *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/auto-code-review.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/auto-code-review.sh\"'"
           },
           {
             "type": "command",
             "if": "Bash(git push *)",
-            "command": "bash -c 'r=$PWD;while [ ! -f \"$r/.apexyard-fork\" ] && [ ! -f \"$r/onboarding.yaml\" ] && [ -n \"$r\" ] && [ \"$r\" != / ];do r=${r%/*};done;[ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ] || exit 0;exec \"$r/.claude/hooks/warn-stale-review-markers.sh\"'"
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/warn-stale-review-markers.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git clone *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/suggest-mcp-reindex-after-clone.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/suggest-mcp-reindex-after-pull.sh\"'"
           }
         ]
       }

@@ -56,7 +56,8 @@
       "spike",
       "ci",
       "build",
-      "perf"
+      "perf",
+      "sync"
     ]
   },
 
@@ -73,7 +74,8 @@
       "build",
       "ci",
       "revert",
-      "spike"
+      "spike",
+      "sync"
     ]
   },
 
@@ -91,7 +93,8 @@
       "chore",
       "revert",
       "release",
-      "spike"
+      "spike",
+      "sync"
     ],
     "required_sections": [
       "Testing",

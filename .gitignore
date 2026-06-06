@@ -1,3 +1,6 @@
+# gstack local analytics and security reports (machine-local; never committed)
+.gstack/
+
 # ApexYard per-session state — active ticket, pending / completed reviews,
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/

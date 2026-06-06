@@ -214,6 +214,40 @@ if [ "$DRIFT" -gt 0 ]; then
   exit 1
 fi
 
+# --- Advertised version vs CHANGELOG (#493) ----------------------------------
+# The marketing site (site/index.html) hard-codes the framework version in its
+# JSON-LD `softwareVersion`. /release now bumps it as part of the release cut
+# (step 3.5 of .claude/skills/release/SKILL.md). This guard asserts the site's
+# advertised version still equals the top-most release entry in CHANGELOG.md, so
+# a future cut that bumps the CHANGELOG without bumping the site (or vice-versa)
+# fails CI instead of drifting silently across release cycles. Wired into CI via
+# the same .github/workflows/site-counts-check.yml that runs this whole test.
+echo
+echo "Advertised site version vs CHANGELOG (drift guard):"
+# CHANGELOG: the top-most `## [X.Y.Z]` heading is the canonical current version.
+CHANGELOG_VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md 2>/dev/null \
+  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+# site/index.html: JSON-LD `softwareVersion` (bare X.Y.Z, no `v` prefix).
+SITE_VERSION=$(grep -oE '"softwareVersion"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' site/index.html 2>/dev/null \
+  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+
+if [ -z "$CHANGELOG_VERSION" ]; then
+  echo "FAIL: could not parse the top '## [X.Y.Z]' release entry from CHANGELOG.md"
+  exit 1
+fi
+if [ -z "$SITE_VERSION" ]; then
+  echo "FAIL: could not parse JSON-LD softwareVersion from site/index.html"
+  exit 1
+fi
+if [ "$SITE_VERSION" != "$CHANGELOG_VERSION" ]; then
+  echo "FAIL: site/index.html softwareVersion=$SITE_VERSION but CHANGELOG.md top entry is $CHANGELOG_VERSION"
+  echo "      The marketing site's advertised version drifted from the release line."
+  echo "      Fix: bump site/index.html (softwareVersion + the other version strings"
+  echo "      per .claude/skills/release/SKILL.md step 3.5) to match CHANGELOG.md."
+  exit 1
+fi
+echo "  ok   site softwareVersion=$SITE_VERSION matches CHANGELOG top entry $CHANGELOG_VERSION"
+
 # --- LLM payload-size meta tags (#333 item C) ---
 # Each main marketing page carries <meta name="llm:token-count" content="N">
 # and <meta name="llm:doc-length" content="M chars">. The token estimate is

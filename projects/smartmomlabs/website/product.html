@@ -16,8 +16,8 @@
 
   <header class="nav">
     <a class="logo" href="index.html">blendavit<small data-i18n="footer.brand">من Smart Mom Labs</small></a>
-    <nav class="nav-links" aria-label="Primary">
-      <div class="lang-switch" role="group" aria-label="Language">
+    <nav class="nav-links" data-i18n-aria-label="nav.aria.primary">
+      <div class="lang-switch" role="group" data-i18n-aria-label="nav.aria.language">
         <button type="button" class="lang-btn active" data-lang-btn="ar" data-i18n="lang.ar">عربي</button>
         <button type="button" class="lang-btn" data-lang-btn="en" data-i18n="lang.en">EN</button>
       </div>
@@ -27,13 +27,13 @@
       <button type="button" class="nav-menu-btn show-mobile-only" aria-haspopup="dialog" aria-controls="nav-menu" data-nav-open data-i18n="nav.menu">القائمة</button>
     </nav>
   </header>
-  <dialog id="nav-menu" class="nav-menu-dialog" aria-label="Site sections">
+  <dialog id="nav-menu" class="nav-menu-dialog" data-i18n-aria-label="nav.aria.menu">
     <div class="nav-menu-inner">
       <button type="button" class="nav-menu-close" data-nav-close data-i18n="nav.close">إغلاق</button>
       <a href="index.html" data-nav-close data-i18n="nav.home">الرئيسية</a>
       <a href="index.html#products" data-nav-close data-i18n="nav.shop">المنتجات</a>
       <a href="index.html#faq" data-nav-close data-i18n="nav.faq">الأسئلة</a>
-      <a class="btn btn-gold" href="#pdp-buy" data-nav-close data-i18n="nav.reserve">احجز علبتك</a>
+      <a class="btn btn-primary" href="#pdp-buy" data-nav-close data-i18n="nav.reserve">احجز علبتك</a>
     </div>
   </dialog>
 
@@ -49,10 +49,8 @@
         <h1 class="pdp-title">blendavit</h1>
         <p class="pdp-summary" data-i18n="pdp.summary">مسجّل لدى هيئة الغذاء والدواء · 0غ سكر مضاف</p>
 
-        <div class="trust-pills">
-          <span class="trust-pill" data-i18n="trust.nutrients">12 عنصرًا + حديد</span>
-          <span class="trust-pill" data-i18n="trust.halal">تركيبة حلال</span>
-          <span class="trust-pill" data-i18n="trust.sfda">مسجّل لدى هيئة الغذاء والدواء</span>
+        <div class="trust-rail-wrap trust-rail-wrap--compact">
+          <div data-trust-rail-mount="inline"></div>
         </div>
 
         <p class="choice-label" data-i18n="pdp.step1">اختر عمر طفلك</p>
@@ -110,6 +108,11 @@
 
   <script src="assets/js/i18n.js"></script>
   <script src="assets/js/config.js"></script>
+  <script src="assets/js/credential-rail.js"></script>
+  <script src="assets/js/config-validate.js"></script>
+  <script src="assets/js/purchase-path.js"></script>
+  <script src="assets/js/formula.js"></script>
   <script src="assets/js/main.js"></script>
+  <script src="assets/js/motion.js"></script>
 </body>
 </html>

@@ -46,13 +46,15 @@ mark_fail() {
 echo "== Settings.json hook-wrapper invariants (#370 regression guard)"
 
 # --- Invariant 1: every wrapper has the anchor-found guard --------------------
-# Count wrappers (each `r=$PWD` line is one wrapper) vs guards present.
-total=$(grep -cF 'r=$PWD' "$SETTINGS")
+# v2 wrappers start with the session-pin preamble (CLAUDE_CODE_SESSION_ID), then
+# fall back to the r=$PWD walk-up. Count wrappers by the v2 preamble marker and
+# verify each has the anchor-found guard.
+total=$(grep -cF 'CLAUDE_CODE_SESSION_ID' "$SETTINGS")
 guarded=$(grep -cF '|| exit 0;exec' "$SETTINGS")
 unguarded=$(grep -cF 'done;exec' "$SETTINGS")
 
 if [ "$total" = "0" ]; then
-  mark_fail "wrapper count" "expected ≥1 wrapper matching the r=\$PWD shape; found 0 — settings.json may have drifted"
+  mark_fail "wrapper count" "expected ≥1 v2 wrapper matching CLAUDE_CODE_SESSION_ID; found 0 — settings.json may have drifted"
 fi
 
 if [ "$guarded" = "$total" ] && [ "$unguarded" = "0" ]; then
@@ -61,9 +63,21 @@ else
   mark_fail "wrapper guards" "total=$total guarded=$guarded unguarded=$unguarded — every wrapper must have '|| exit 0;exec' (#370 regression)"
 fi
 
+# --- Invariant 1b: no stale v1-only walker entries remain (#414) -------------
+# v1-only walkers lacked the session-pin preamble and used a pure onboarding.yaml
+# check without the .apexyard-fork fallback. After /split-portfolio v2 removes
+# onboarding.yaml from the fork root, they resolve to / and exec fails with exit
+# 127, silently blocking gh issue create and related commands.
+v1_pure=$(grep -cF "bash -c 'r=\$PWD;while" "$SETTINGS" 2>/dev/null || true)
+if [ "${v1_pure:-0}" = "0" ]; then
+  mark_pass "no stale v1-only walkers found (split-portfolio v2 safe)"
+else
+  mark_fail "stale v1 walkers" "found ${v1_pure} v1-only walker(s) without session-pin preamble — these break gh issue create after /split-portfolio v2 migration (#414)"
+fi
+
 # --- Invariant 2: wrapper invoked outside the fork exits 0 silently ----------
-# Extract the canonical wrapper shape + substitute a real hook name
-WRAPPER='r=$PWD;while [ ! -f "$r/.apexyard-fork" ] && [ ! -f "$r/onboarding.yaml" ] && [ -n "$r" ] && [ "$r" != / ];do r=${r%/*};done;[ -f "$r/.apexyard-fork" ] || [ -f "$r/onboarding.yaml" ] || exit 0;exec "$r/.claude/hooks/detect-role-trigger.sh"'
+# Use the canonical v2 wrapper shape (session-pin first, walk-up fallback).
+WRAPPER='r="";if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ];then p="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}";[ -f "$p" ] && IFS= read -r r < "$p" && [ -d "$r/.claude/hooks" ] || r="";fi;if [ -z "$r" ];then r=$PWD;while [ -n "$r" ] && [ "$r" != / ];do { [ -f "$r/.apexyard-fork" ] || [ -f "$r/onboarding.yaml" ]; } && [ -d "$r/.claude/hooks" ] && break;r=${r%/*};done;fi;[ -d "$r/.claude/hooks" ] || exit 0;exec "$r/.claude/hooks/detect-role-trigger.sh"'
 
 OUT=$(mktemp)
 ERR=$(mktemp)
