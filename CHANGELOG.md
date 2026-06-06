@@ -2,6 +2,188 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.0.0] — 2026-06-06
+
+Large catch-up release — 181 commits since v2.3.0 (81 feat, 31 fix, 32 chore, plus docs/test/refactor/ci). Highlights this cycle: a Swift CI golden-path, onboarding-config-out-of-git + commit guard, framework security hardening (CodeQL/Scorecard/Dependabot/SECURITY.md/release-artifact guard), a per-worktree ticket-marker tier, and a CI-gated hook test suite.
+
+### Breaking
+
+- (#347) Hatim→Hakim consolidation — the Security Auditor agent was consolidated; adopters referencing the old `hatim`/Hatim agent name should move to `security-reviewer`/Hakim. (bcbb121)
+
+### Added
+
+- harden framework security scanning (code parts) (#523) (f617039)
+- per-worktree ticket marker tier (fix same-project concurrent-agent collision) (#524) (5c0b8ee)
+- keep onboarding config out of git (example-file + gitignore + guard) (#522) (3c1e728)
+- add reusable Swift CI golden-path pipeline (#520) (b4ba5ab)
+- fire the MCP-search advisory on Read/Glob/Grep for workspace paths (#490) (fdad663)
+- /report-apexyard-bug + /request-apexyard-feature (upstream framework feedback) (#484) (7b39bcc)
+- suggest MCP reindex after a workspace clone is pulled/updated (#483) (fb367b8)
+- /handover checklist-first doc selection + template pick (#481) (b66fcf6)
+- /launch-check --workflow — opt-in parallel + adversarially-verified audit (#474) (ec0727f)
+- Solution Architect — independent design-review role/agent (Rex for non-code) (#472) (f86f843)
+- /release-sync carries forward CHANGELOG.md from main to dev (#451) (95fd084)
+- Rex semantic handbook supplement via MCP search_docs (#450) (d7519f4)
+- Ollama/LiteLLM agent routing — reachability + model-pulled checks + session-wide ANTHROPIC_BASE_URL (#440) (add9c79)
+- clone repo immediately at step 1.5 when URL given in /handover (#432) (587048a)
+- auto-reindex MCP search after /handover clones a project (#429) (4a3e7bb)
+- enforce MCP search-first pattern with advisory hooks (bbf4453)
+- /release-sync — main→dev sync after each release (#406) (39f4b6e)
+- rewrite site/ for outcomes-led positioning to non-tech founders (#387) (b9ed8cd)
+- /plan-initiative — initiative → milestones → tasks (DAG + topo-sort + two-pass filing) (#379) (ac087b7)
+- /handover offers to file Next Steps as tracker tickets (#378) (7879c0d)
+- site AI-readiness polish — agent-permissions, llm:* meta, Copy-for-AI button (#369) (ada6836)
+- clean URLs without .html via Netlify _redirects rewrites (#367) (8c86328)
+- local-routing — Claude default + 4 commented candidates by hardware (Wave 2 PR 4) (#365) (dc83764)
+- /setup seeds agent-routing.yaml + 8th portfolio config key (Wave 2 PR 3) (#363) (8be449c)
+- class-aware role-trigger banner — HYBRID spawn vs in-thread (Wave 2 PR 5) (#362) (4ca8f30)
+- promote utility agents to per-agent model: frontmatter (Wave 2 PR 4) (#361) (4baae6d)
+- Hatim→Hakim consolidation + security + data sub-agents (Wave 2 PR 3) (#360) (bcbb121)
+- agent-routing sync hook + pre-commit/pre-push drift guards (Wave 1 PR 2) (#357) (12484a0)
+- promote product + design roles to sub-agents (Wave 3 PR 2) (#356) (5b37d69)
+- promote engineering-dept roles to sub-agents + Activation mode (Wave 1 PR 1) (#355) (1e78cfd)
+- agent-routing.yaml schema + portfolio_agent_routing resolver (Wave 1 PR 1) (#353) (cfdac35)
+- audit-pack + safety-hooks marketplace plugins (#344) (5fe91d4)
+- harness templates by topology — TS NextJS / Python FastAPI / Go data pipeline (#346) (6c0dc3f)
+- /mutation-test skill + behaviour-quality sensor (#338) (8cca818)
+- /generative-engine-audit — LLM/agent SEO sibling to /seo-audit (#315) (5ab092c)
+- PR summary narrative-quality rule + Rex advisory check (#314) (550322d)
+- /handover scores harnessability + warns on low blast-radius (#307) (dc81460)
+- /codify-rule — turn human review comments into draft handbook entries (#305) (20ac99b)
+- /extract-features --with-mockups (AI-inferred ASCII wireframes) (#292) (bc4b56b)
+- standardise self-correction guidance across blocking hooks (shape + 5 retrofits) (#301) (4cebf94)
+- declare jq as a hard dependency — Option A (#300) (bd5c29e)
+- Rex domain-aware code review — handbooks/domain/ Stage 1 (#294) (2d514cf)
+- tracker-aware hooks + _lib-tracker.sh dispatcher (#289) (ac89541)
+- /feature-diagram skill for per-feature Mermaid sub-graphs (#291) (5b7ece9)
+- /update walks intermediate-release migration chain (#286) (39bbaa4)
+- /pdf — export any framework-generated doc to PDF, with destination prompt (#287) (40552c6)
+- uniform ticket templates + custom-templates/ override (#285) (a4efbf2)
+- skill-gated ticket-create hook (multi-tracker) (#276) (456272b)
+- /threat-model inlines DFD as point-in-time snapshot at audit time (#273) (2aae484)
+- mermaid lint per emitting skill (/c4, /dfd, /tech-vision) (#269) (94ed7a7)
+- add site/architecture.html — 5-layer diagram, recoloured to site palette (#272) (43a5970)
+- /tech-vision skill — interactive author for architecture vision (#263) (7de6b64)
+- /investigation skill + template for sustained root-cause work (#262) (999e1b7)
+- /dfd skill — extract Data Flow Diagram with trust boundaries + classifications (#260) (7c33016)
+- /process skill — extract process from code, BPMN 2.0 output (#259) (3d8b75c)
+- /threat-model --format=dragon for OWASP Threat Dragon JSON export (#258) (7c5f49d)
+- private repo houses company custom skills + cross-org handbooks (#253) (40439ff)
+- /update --from-dev hidden flag for pre-release sync (#254) (1020e01)
+- /extract-features skill for greenfield rewrite inventories (#252) (df5b006)
+- custom templates layer with override semantics (#251) (3dafe92)
+
+### Fixed
+
+- block build-agent self-review — require a real GitHub review behind the rex marker (#504) (471a74a)
+- release site-version bump + correct issue-filing version on dev + tracker shape-only fallback (#505) (b149c4e)
+- repo-qualify review markers to prevent same-PR-number collision across repos (#486) (417e326)
+- make code-reading sub-agents MCP-first (#477) (42c8fb5)
+- suggest-mcp-search surfaces to the agent + install-gates (#470) (d8862f1)
+- PR-create hooks resolve PR origin repo, not session ops-fork (#465) (5638132)
+- require --merge for sync PRs; guard --squash in hook (#463) (2961d4d)
+- replace truncating sed extractor in require-agdr-for-arch-pr.sh with greedy awk (#462) (dfe35ba)
+- inline helper-source in /dfd write blocks + strengthen Write targets rule (#445) (d12c460)
+- warn at SessionStart when Ollama routing is INACTIVE; promote shell-profile step in docs (#444) (3848cb1)
+- catch split-portfolio v2 silent fallbacks for workspace_dir and projects/ (#441) (d638dbf)
+- route SETUP step 1 onboarding.yaml through portfolio helper (#437) (84eae45)
+- promote /handover MCP reindex to named step + add advisory hook (#439) (03ed05a)
+- configure branch protection on private portfolio repo after split-portfolio (#431) (1d107d8)
+- update wrapper test to v2 shape + guard against v1 regression (#430) (c98a262)
+- merge hook handles compound marker-write + merge commands (#427) (be1479c)
+- hook walker reads session pin before walk-up (#425) (a2e7c36)
+- guard bootstrap exemption scope — /handover only (#423) (d24c762)
+- reorder case patterns to satisfy shellcheck SC2221 (3b217f9)
+- remove stale --pdf-output-folder flag from md-to-pdf dispatch (#405) (47a438f)
+- mobile UX regressions — nav main pages + eyebrow + content polish (#394) (0ba64e1)
+- pin ops-root via CLAUDE_CODE_SESSION_ID SessionStart hook (#385) (fbc1cff)
+- refine gh api matcher to only block POST on /issues (#384) (1f86db3)
+- replace `|| echo "0"` with `|| true` in code-quality.yml (#375) (3942789)
+- hook wrappers silent no-op outside an apexyard fork (#371) (fa327e0)
+- /split-portfolio produces v2 layout + copy-onboarding semantics (#335) (a075c9a)
+- resolve config from ops-fork root, not workspace clone (#313) (4b81bde)
+- additive ui_paths_exclude carve-out for require-design-review-for-ui (#277) (14b651b)
+- greedy body extractor — no more truncation at embedded quotes (#264) (227b3b4)
+- align merge gates + agent + skill on ops-fork marker path (#240) (c419666)
+- make verify-commit-refs and validate-pr-create consult upstream remote (#211) (02eeb1a)
+- validation hooks read git context from command, not $PWD (#198) (ffb44b0)
+- CHANGELOG fallback in drift hook for squash-merged forks (#129) (dd85a13)
+
+### Changed
+
+- rename /generative-engine-audit to /geo-audit (#339) (7567739)
+- token-efficiency Wave 1 — ~2.9k tokens saved at session start (#328) (2ccefa4)
+- sweep all 40 hook wrappers to v2-anchor-aware shape (#306) (ad42d0d)
+- give every role + agent an Arabic persona name (#212) (88f9dae)
+
+### Changed (chore)
+
+- onboarding guard — literal filename match (grep -Fxq) (#525) (1822767)
+- relax release-gated semgrep to fail-on-ERROR (#521) (2422927)
+- reset onboarding.yaml to template placeholders (9730435)
+- wire pre-push-gate to the framework CI checks + add git pre-push hook (#507) (94a6a0f)
+- bump marketing-site framework version to 2.2.0 (#492) (e93562c)
+- whitelist `sync` type across branch/commit/PR validators (#460) (02dc105)
+- main→dev sync after v2.2.0 release (#457) (2314e2f)
+- add split-portfolio v2 marker + sync onboarding.yaml from portfolio (de9069c)
+- sync CHANGELOG.md from main to dev (#447) (e8208bd)
+- ship 6 site/ binary assets — OG previews + favicons (#383) (0526aac)
+- wave-2 cleanup bundle — drop allowed_tools_override + push-gate scope + multi-line drift (#364) (47b557a)
+- site/ count refresh + meta-tag polish + content-shape + markdown alternates (#340) (7668e91)
+- site/ AI-readiness + classic SEO infrastructure (#337) (cb00fa9)
+- generic cleanup (#304) (e4aa82a)
+- retrofit 7 audit skills onto _lib-audit-history.sh (#239) (c8b292e)
+- add Data Flow Diagram section to threat-model template (#225) (fc54ace)
+- /setup emits verified LSP plugin-install commands (#216) (526e9b7)
+- sync CHANGELOG.md from main → dev (#174) (85fe794)
+- exempt release/vN.N.N from validate-pr-create's branch-id check (#171) (9873c25)
+- accept release/vN.N.N branches + release(...) PR titles (#169) (f28096a)
+- default the split-portfolio sibling repo name to <fork>-portfolio (#164) (9517b19)
+- remove voice-prompts feature + correct hook/skill counts (#161) (327a297)
+- extend Bash-write matcher beyond first-version coverage (#155) (690ada8)
+- adopt release-cut branch model (dev/main + tags) — framework only (#126) (3c53ff8)
+- enforce single Closes-keyword per PR body (#125) (5a03d9e)
+- require Testing section in PR body (config-driven) (#124) (e4c09a3)
+- add require-agdr-for-arch-pr.sh PreToolUse hook (#123) (f23f784)
+- add validate-issue-structure.sh PreToolUse hook (#122) (6920060)
+- upgrade pre-push-gate from advisory reminder to blocking check-runner (#121) (e98633c)
+- add warn-stale-review-markers.sh PostToolUse hook (#120) (6e86b95)
+- add block-private-refs-in-public-repos.sh hook (#119) (a4edb89)
+- project-configurable ticket / branch / commit / PR schema (#118) (1586d44)
+
+### Docs
+
+- /debug 'when to invoke' sidebar in workflows/sdlc.md Phase 3 (#366) (008aaf0)
+- AgDR-0050 — agent runtime overhaul (cross-cutting design for #347 + #348 + #351) (#352) (17942fc)
+- align v1→v2 manual recipe in docs/multi-project.md with AgDR-0021 § H copy-onboarding semantics (#350) (5d54641)
+- AgDR-0047 for framework packaging & distribution (#343) (e6a6d71)
+- plan-mode usage rule — when to enter (#220) (5eccc0f)
+- Claude tier-routing spike — measurement + recommendation (#201) (e435719)
+- local-model routing spike — measurement + recommendation (#196) (20d9974)
+- document ENABLE_LSP_TOOL opt-in + per-language LSP plugin install (#193) (8e753f6)
+- annotate LSP-aware skills with opt-in callouts (#191) (fa72b0a)
+- LSP integration spike — measurement + recommendation (#184) (9615dea)
+- correct privacy-gate wording — adopter action, not framework auto-publish (#149) (20b071e)
+- document split-portfolio mode + add /setup privacy gate (#144) (344da88)
+
+### Performance
+
+- drop @docs/multi-project.md auto-import from CLAUDE.md (#380) (0f6ca08)
+
+### CI
+
+- gate the hook test suite in CI (#527) (1027dbc)
+- release-gated security scan on the framework repo (dog-food the Shield pipeline) (#488) (4509ebf)
+
+### Tests
+
+- drain quarantine — pin-escape audit fix + handover rewrite (#533) (afbb26c)
+- fix + un-quarantine agent_routing_sync_and_drift (#530) (41d1051)
+- fix + un-quarantine 3 of 5 hook-test failures (#529) (9bd0e17)
+- multi-project workspace + conflict-skip + README preservation (Case 5) (#368) (9ddbe2b)
+- /setup + /update step 8a test infrastructure (#349) (e135a0b)
+- mock gh in test sandboxes to remove live-tracker dependency (#156) (d4ed533)
+
 ## [2.3.0] — 2026-06-04
 
 ### Added
