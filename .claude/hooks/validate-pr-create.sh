@@ -476,9 +476,13 @@ CURRENT_BRANCH="${HEAD_FLAG:-$(git branch --show-current 2>/dev/null)}"
 if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
   # Release-cut branches are exempt — same recognition `validate-branch-name.sh`
   # added in me2resh/apexyard#168 / #169. Release branches don't carry a
-  # ticket-id because the release itself is the ticket.
-  if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
-    :  # release branch, exempt — fall through to the rest of the validator
+  # ticket-id because the release itself is the ticket. The /release-sync
+  # branch `sync/main-to-dev-after-vN.N.N` is exempt for the same reason
+  # (the release being synced is the ticket) — see apexyard#458 and the
+  # /release-sync skill. The PR title still references a live ticket via
+  # `sync(#N):`, which the title check above validates.
+  if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$|^sync/main-to-dev-after-v[0-9]+\.[0-9]+\.[0-9]+$'; then
+    :  # release-cut or release-sync branch, exempt — fall through to the rest of the validator
   elif ! echo "$CURRENT_BRANCH" | grep -qE '[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'; then
     ERRORS="${ERRORS}Branch '$CURRENT_BRANCH' missing ticket ID.\n"
   fi
