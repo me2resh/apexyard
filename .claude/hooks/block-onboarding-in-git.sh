@@ -40,9 +40,10 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -z "$REPO_ROOT" ] && exit 0
 
-# Is onboarding.yaml staged for this commit?
+# Is onboarding.yaml staged for this commit? Use -F (fixed string) so the '.'
+# is a literal dot, not a regex wildcard — '-x' already anchors the whole line.
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)
-echo "$STAGED" | grep -qx 'onboarding.yaml' || exit 0
+echo "$STAGED" | grep -Fxq 'onboarding.yaml' || exit 0
 
 # Placeholder-diff: if the staged onboarding.yaml is byte-identical to the
 # shipped example template, it carries no real values → allow. Otherwise it's
