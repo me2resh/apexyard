@@ -75,7 +75,7 @@ The reviewer changes based on what you're working on. Touching auth code? A secu
 
 Want to adopt a project you've inherited? `/handover`. Want to capture an idea before it evaporates? `/idea`. Want to know what's waiting on you across every product? `/inbox`. Want a launch-readiness check before customers see it? `/launch-check`. 54 of these in total — each one is a focused workflow with safety rails.
 
-### Guardrails that stop bad code from shipping · 39 hooks
+### Guardrails that stop bad code from shipping · 40 hooks
 
 Every edit needs a real ticket behind it. Every database change needs a rollback plan. Every merge needs a real review. Secrets in code get caught before they're committed. Mechanically enforced — 32 small scripts that fire at the right moments.
 
