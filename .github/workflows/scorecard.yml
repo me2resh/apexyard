@@ -1,0 +1,50 @@
+name: Scorecard supply-chain security
+
+# OSSF Scorecard — assesses the repo's supply-chain security posture (branch
+# protection, token permissions, pinned actions, dangerous workflow patterns,
+# etc.) and publishes results to the Security > Code scanning tab. Free for
+# public repos; the score also drives the README badge. #518.
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '19 4 * * 1'   # weekly, Monday 04:19 UTC
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # upload results to code-scanning
+      id-token: write          # publish results to the OSSF API (badge)
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true   # enables the README badge
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif

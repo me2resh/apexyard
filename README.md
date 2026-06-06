@@ -1,5 +1,7 @@
 # ApexYard
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/me2resh/apexyard/badge)](https://securityscorecards.dev/viewer/?uri=github.com/me2resh/apexyard)
+
 **Where projects get forged.**
 
 A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders who ship alone, or companies standing up AI-enabled squads.

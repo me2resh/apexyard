@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # The framework has no package manifests (no package.json / requirements.txt /
+  # go.mod) — its only declared dependency surface is the GitHub Actions pinned
+  # in .github/workflows/**. Keep those patched. If a manifest is added later
+  # (e.g. a build tool under site/), add its ecosystem here. #518.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"

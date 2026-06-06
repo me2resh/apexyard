@@ -1,0 +1,48 @@
+name: CodeQL
+
+# Semantic code scanning (free for public repos). The framework is mostly
+# markdown + shell — CodeQL doesn't analyse bash (that's covered by Semgrep
+# r/bash in security-scan.yml) — but it DOES cover:
+#   - actions: the GitHub Actions workflows themselves (workflow injection,
+#     unpinned actions, excessive token scope)
+#   - javascript-typescript: site/copy-for-ai.js and any future JS/TS
+#
+# Results surface in the repo's Security > Code scanning tab. #518.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: '27 3 * * 1'   # weekly, Monday 03:27 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # required to upload CodeQL results
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

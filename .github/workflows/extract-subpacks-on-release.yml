@@ -65,6 +65,28 @@ jobs:
       - name: Run the extraction smoke test
         run: bash .claude/hooks/tests/test_subpack_extraction.sh
 
+      # Release-artifact content guard (#518): scan the BUILT bundle (filesystem,
+      # not git history) for secrets, and for a filled-in onboarding.yaml (the
+      # placeholder-diff signal from #517). Fails the build before anything is
+      # published, so sensitive data can't ship inside a release artifact.
+      - name: Release-artifact content guard (secrets + filled-in config)
+        run: |
+          echo "Scanning built marketplace/ bundle for secrets…"
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            detect --no-git --source /repo/marketplace --redact -v --exit-code 1
+
+          # Placeholder-diff: a filled-in onboarding.yaml must never be bundled.
+          if [ -f onboarding.example.yaml ]; then
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              if ! diff -q "$f" onboarding.example.yaml >/dev/null 2>&1; then
+                echo "::error::Release artifact bundles a filled-in onboarding.yaml: $f"
+                exit 1
+              fi
+            done < <(find marketplace -name 'onboarding.yaml' 2>/dev/null)
+          fi
+          echo "Artifact content guard: clean."
+
       - name: Upload extracted sub-packs as build artefacts
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
