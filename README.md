@@ -1,6 +1,10 @@
+<p align="center">
+  <a href="https://yard.apexscript.com"><img src="site/og/index.png" alt="ApexYard — where projects get forged" width="640"></a>
+</p>
+
 # ApexYard
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/me2resh/apexyard/badge)](https://securityscorecards.dev/viewer/?uri=github.com/me2resh/apexyard) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **Where projects get forged.**
 
