@@ -55,7 +55,7 @@ jobs:
     name: extract sub-packs + run smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0  # need full history so EXTRACTION_MANIFEST records a real SHA
 
@@ -67,7 +67,7 @@ jobs:
 
       - name: Upload extracted sub-packs as build artefacts
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: marketplace-subpacks
           path: marketplace/
