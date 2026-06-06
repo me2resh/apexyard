@@ -16,7 +16,7 @@ git checkout -b feature/GH-<issue>-short-slug upstream/dev
 
 # 3. Make the change. Run the checks the CI gate runs:
 bash bin/run-hook-tests.sh          # the hook test suite
-# (+ markdownlint / shellcleck if you touched .md / .sh)
+# (+ markdownlint / shellcheck if you touched .md / .sh)
 
 # 4. Open a PR targeting dev, with a Summary / Testing / Glossary body
 gh pr create --base dev --fill
