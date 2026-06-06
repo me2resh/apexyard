@@ -1,6 +1,10 @@
+<p align="center">
+  <a href="https://yard.apexscript.com"><img src="site/og/index.png" alt="ApexYard — where projects get forged" width="640"></a>
+</p>
+
 # ApexYard
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/me2resh/apexyard/badge)](https://securityscorecards.dev/viewer/?uri=github.com/me2resh/apexyard)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **Where projects get forged.**
 
@@ -19,8 +23,9 @@ apexyard/
 ├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
 ├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
 │
-├── roles/                 # AI agent role definitions
+├── roles/                 # AI agent role definitions (20 across 6 departments)
 │   ├── engineering/       # Backend, Frontend, QA, Platform, SRE, Tech Lead, Head of Eng
+│   ├── architecture/      # Solution Architect (Tariq)
 │   ├── product/           # Product Manager, Product Analyst, Head of Product
 │   ├── design/            # UI Designer, UX Designer, Head of Design
 │   ├── security/          # Security Auditor, Penetration Tester, Head of Security
@@ -41,17 +46,17 @@ apexyard/
 │
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
-│   ├── hooks/             # 18 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, upstream-drift banner
-│   ├── rules/             # 8 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
-│   ├── agents/            # 5 sub-agents — Code Reviewer (Rex), Security Reviewer (Shield), Dependency Auditor (Guardian), PR Manager, Ticket Manager
-│   └── skills/            # 33 slash commands — see CLAUDE.md for the full list
+│   ├── hooks/             # 40 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
+│   ├── rules/             # 11 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, leak-protection, parallel-work, plan-mode, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
+│   ├── agents/            # 24 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (PR & ticket managers, dependency auditor)
+│   └── skills/            # 59 slash commands — see CLAUDE.md for the full list
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
 ├── apexyard.projects.yaml.example  # Portfolio registry template
 │
 ├── golden-paths/          # Reusable infra & ops templates
-│   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, security, dependency audit, PR title check, review check, SEO check)
+│   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, Swift CI, security, dependency audit, PR title check, review check, SEO check)
 │
 ├── docs/                  # Documentation
 │   ├── getting-started.md # Setup guide
@@ -99,24 +104,29 @@ cd apexyard
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, `git fetch upstream && git merge upstream/main` pulls the latest apexyard improvements into your fork.
+Later, run **`/update`** to pull the latest apexyard improvements into your fork — it previews the upstream diff, merges on a sync branch, and walks you through any per-version migrations (don't hand-merge `main`).
 
-### 4. Fill in `onboarding.yaml`
+### 4. Configure the framework — run `/setup`
 
-```bash
-$EDITOR onboarding.yaml
+Run **`/setup`** in Claude Code. In three exchanges (describe your stack → review the proposed defaults → accept or tweak) it captures your company, team, tech stack, and quality bar and writes your config.
+
+```text
+/setup
 ```
 
-Set company, team, tech stack, quality bar. Defaults are sensible — change what matters for your team.
+Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
 
-### 5. Create the portfolio registry
+### 5. Register your projects — run `/handover`
 
-```bash
-cp apexyard.projects.yaml.example apexyard.projects.yaml
-$EDITOR apexyard.projects.yaml   # list every repo you manage
+Projects join the portfolio through a skill, not hand-edited YAML. For each repo you want under management:
+
+```text
+/handover <repo-url-or-local-path>
 ```
 
-The minimal entry is:
+**`/handover`** clones the repo, scores its "harnessability" across five dimensions, seeds its per-project docs, and **registers it in `apexyard.projects.yaml`** (creating the registry on first use). `/setup` also offered to register your first project back in step 4.
+
+The registry it maintains looks like this — you rarely touch it by hand:
 
 ```yaml
 version: 1
@@ -127,7 +137,7 @@ projects:
     status: active
 ```
 
-Even if you have just one repo, register it — the skills are happier with one registered project than with a dangling "assume the current directory" fallback.
+Register even a single repo — the portfolio skills (`/projects`, `/inbox`, `/status`) work off the registry. (Prefer to bootstrap it manually? `cp apexyard.projects.yaml.example apexyard.projects.yaml` still works.)
 
 ### 6. Start working
 
@@ -146,7 +156,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 **The problem**: Claude Code is powerful, but without structure it produces inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
 
-**The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 19 role definitions to use, battle-tested workflows to follow, and 18 shell hooks that enforce the rules mechanically.
+**The solution**: ApexYard provides that structure as a reusable, open-source stack. One config file to customize, 20 role definitions to use, battle-tested workflows to follow, and 40 shell hooks that enforce the rules mechanically.
 
 ### What makes it different
 
@@ -154,7 +164,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 |---------|-------------------|----------------|
 | Code reviews | Ad-hoc prompts | Rex agent on every PR, SHA-bound approval marker |
 | Technical decisions | Lost in chat history | Documented as Agent Decision Records |
-| Quality gates | Hope and pray | 18 shell hooks block bad commits, forged markers, unreviewed merges |
+| Quality gates | Hope and pray | 40 shell hooks block bad commits, forged markers, unreviewed merges |
 | Merge approval | Informal "LGTM" | Two-marker gate — Rex (code) + CEO (per-PR explicit) |
 | Database migrations | Drop-column-on-Friday | Dedicated gate: labelled ticket + migration AgDR (rollback, downtime, consumers) required before schema edits |
 | Architecture docs | Nobody draws them | C4 L1 + L2 Mermaid templates + `/c4` skill generates stubs from a codebase |
@@ -165,7 +175,7 @@ Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-pr
 
 ## Roles
 
-ApexYard includes 19 software development roles across 5 departments:
+ApexYard includes 20 software development roles across 6 departments:
 
 ### Engineering (7 roles)
 
@@ -176,6 +186,10 @@ ApexYard includes 19 software development roles across 5 departments:
 - **QA Engineer** -- Test strategy, automation, quality gates
 - **Platform Engineer** -- CI/CD, infrastructure as code, developer tooling
 - **Site Reliability Engineer** -- Monitoring, incidents, SLOs
+
+### Architecture (1 role)
+
+- **Solution Architect** (Tariq) -- Independent design review before Build: NFRs, patterns, tech-debt, risk, traceability — the non-code analog of the Code Reviewer
 
 ### Product (3 roles)
 
@@ -262,9 +276,11 @@ ApexYard is designed to be customized. Every role, workflow, and template can be
 
 ## Contributing
 
-Contributions are welcome. ApexYard itself runs on its own rules, so the flow is the same one you'd use for any project under ApexYard governance:
+Contributions are welcome — **start with [CONTRIBUTING.md](CONTRIBUTING.md)** for the full fork → PR → review flow, and open issues with the **Bug report** / **Feature request** templates. Security issues go through [SECURITY.md](SECURITY.md) (private reporting), not public issues.
 
-1. **File a ticket** — `/feature`, `/bug`, or `/task` on this repo. Describes what you want to change and why.
+ApexYard runs on its own rules, so the flow mirrors any project under ApexYard governance:
+
+1. **File an issue** — open a GitHub issue with the **Bug report** / **Feature request** template. If you run apexyard yourself, the **`/report-apexyard-bug`** and **`/request-apexyard-feature`** skills file it here for you (they target `me2resh/apexyard` — distinct from `/bug` and `/feature`, which file into your *own* managed project).
 2. **Start the ticket** — `/start-ticket <number>` so the ticket-first hook lets your code edits through.
 3. **Branch + commit** — `{type}/GH-{number}-{short-description}`, conventional commit format (`type(#number): subject`).
 4. **Self-check before pushing** — `npm run lint` / markdownlint / shellcheck as applicable; hooks remind you at `git push`.
@@ -273,6 +289,12 @@ Contributions are welcome. ApexYard itself runs on its own rules, so the flow is
 7. **Merge requires two markers** — Rex's approval + explicit per-PR CEO approval via `/approve-merge <pr>`. Plan-level "go" doesn't count.
 
 For larger changes (new skills, rule changes, workflow redesigns), open a discussion or draft PRD first.
+
+## Contributors
+
+Thanks to everyone who has helped forge ApexYard:
+
+[![Contributors](https://contrib.rocks/image?repo=me2resh/apexyard)](https://github.com/me2resh/apexyard/graphs/contributors)
 
 ## License
 

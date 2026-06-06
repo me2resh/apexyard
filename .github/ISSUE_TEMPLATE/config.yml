@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/me2resh/apexyard/security/advisories/new
+    about: Do NOT open a public issue for security problems — report privately here (see SECURITY.md).
+  - name: Question / discussion
+    url: https://github.com/me2resh/apexyard/discussions
+    about: Ask a question, share an idea, or get help landing your first PR.
