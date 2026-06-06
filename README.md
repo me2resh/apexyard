@@ -112,14 +112,17 @@ Run **`/setup`** in Claude Code. In three exchanges (describe your stack → rev
 
 Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
 
-### 5. Create the portfolio registry
+### 5. Register your projects — run `/handover`
 
-```bash
-cp apexyard.projects.yaml.example apexyard.projects.yaml
-$EDITOR apexyard.projects.yaml   # list every repo you manage
+Projects join the portfolio through a skill, not hand-edited YAML. For each repo you want under management:
+
+```text
+/handover <repo-url-or-local-path>
 ```
 
-The minimal entry is:
+**`/handover`** clones the repo, scores its "harnessability" across five dimensions, seeds its per-project docs, and **registers it in `apexyard.projects.yaml`** (creating the registry on first use). `/setup` also offered to register your first project back in step 4.
+
+The registry it maintains looks like this — you rarely touch it by hand:
 
 ```yaml
 version: 1
@@ -130,7 +133,7 @@ projects:
     status: active
 ```
 
-Even if you have just one repo, register it — the skills are happier with one registered project than with a dangling "assume the current directory" fallback.
+Register even a single repo — the portfolio skills (`/projects`, `/inbox`, `/status`) work off the registry. (Prefer to bootstrap it manually? `cp apexyard.projects.yaml.example apexyard.projects.yaml` still works.)
 
 ### 6. Start working
 
