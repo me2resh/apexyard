@@ -153,6 +153,7 @@ Large catch-up release — 181 commits since v2.3.0 (81 feat, 31 fix, 32 chore, 
 
 ### Docs
 
+- open-source community-health files (CONTRIBUTING, issue/PR templates, SECURITY) + README refresh — share banner, corrected component counts, framework-feedback skill guidance (#536) (#537) (6ac3373)
 - /debug 'when to invoke' sidebar in workflows/sdlc.md Phase 3 (#366) (008aaf0)
 - AgDR-0050 — agent runtime overhaul (cross-cutting design for #347 + #348 + #351) (#352) (17942fc)
 - align v1→v2 manual recipe in docs/multi-project.md with AgDR-0021 § H copy-onboarding semantics (#350) (5d54641)
