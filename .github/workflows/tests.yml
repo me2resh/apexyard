@@ -1,0 +1,38 @@
+name: tests
+
+# Runs the framework's mechanical-enforcement test suites (the ~60 test_*.sh
+# under .claude/**/tests/) on every PR and on push to dev/main. Until now these
+# tests were advisory — only 2 ran in CI — so a hook regression could ship
+# green. This job makes the whole suite a gate. See me2resh/apexyard#526.
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hook-tests:
+    name: hook test suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq (used by the hooks + their tests)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Configure git identity (test sandboxes run git init/commit)
+        run: |
+          git config --global user.email "ci@apexyard.test"
+          git config --global user.name "apexyard-ci"
+          git config --global init.defaultBranch main
+
+      - name: Run the hook test suite
+        run: bash bin/run-hook-tests.sh
