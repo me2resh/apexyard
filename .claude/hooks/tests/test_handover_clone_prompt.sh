@@ -1,24 +1,25 @@
 #!/bin/bash
-# Smoke tests for /handover's clone-first deep-dive prompt
-# (me2resh/apexyard#188 — LSP spike Option 3).
+# Smoke tests for /handover's clone behaviour.
 #
-# /handover is a markdown skill spec the model executes; this test
-# exercises two things:
+# History: the original design (me2resh/apexyard#188) offered a clone-first
+# deep-dive prompt at step 8 with a `[y / n / later]` choice. That was
+# REDESIGNED — the repo is now cloned by DEFAULT at step 1.5-clone (no prompt;
+# `--no-clone` opts out), and step 8 became a follow-up-skills offer against the
+# already-cloned repo. This test was rewritten (#528) to pin the current spec
+# instead of the removed prompt.
 #
-#   1. SPEC SHAPE — the SKILL.md file contains the prompt text at the
-#      right location (after step 7 "Append to the portfolio registry",
-#      before what becomes the final summary), and surfaces the five
-#      cost-transparency facts the ticket's AC requires.
+# /handover is a markdown skill spec the model executes; this test exercises:
 #
-#   2. RUNTIME SHAPE — a small bash simulator that mirrors the clone
-#      branch the spec documents, exercised against an isolated sandbox
-#      with a mocked `git` binary so no network call ever fires. Verifies:
+#   1. SPEC SHAPE — SKILL.md documents clone-by-default at step 1.5-clone
+#      (skip-if-`.git`-exists, `--no-clone` to decline), the step-8 follow-up
+#      offer, the LSP cost-transparency facts, and the surrounding step order.
 #
-#        - operator response `n`     → no `git clone` invocation, exit clean
-#        - operator response `later` → no `git clone` invocation, exit clean
-#        - operator response `y`     → exactly one `git clone <url> workspace/<name>`
-#                                       invocation with the documented argument shape
-#        - workspace already exists  → no `git clone` invocation (skip-if-exists)
+#   2. RUNTIME SHAPE — a small bash simulator mirroring the spec's clone branch,
+#      run against an isolated sandbox with a mocked `git` (no network). Verifies:
+#        - default (no --no-clone), workspace absent → exactly one
+#          `git clone <url> <workspace>/<name>`
+#        - `--no-clone`                              → no git clone (declined)
+#        - workspace/<name>/.git already exists      → no git clone (skip)
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -37,7 +38,7 @@ FAIL=0
 FAILED_CASES=""
 
 # ---------------------------------------------------------------------------
-# spec_assert <label> <expected literal substring> [grep-extended-regex flag]
+# spec_assert <label> <expected literal substring>
 # ---------------------------------------------------------------------------
 spec_assert() {
   local label="$1" needle="$2"
@@ -51,177 +52,126 @@ spec_assert() {
 }
 
 # ---------------------------------------------------------------------------
-# Spec-shape tests — verify the SKILL.md contains the documented prompt
-# at the documented location.
+# Spec-shape tests — the current clone-by-default design.
 # ---------------------------------------------------------------------------
 
-# 1. The new step exists, with a heading that names the clone-first option.
-spec_assert "spec-step-heading" \
-  "### 8. Offer the clone-first deep-dive option (recommended)"
+# 1. Clone happens at step 1.5-clone, by default, on the URL path.
+spec_assert "spec-step-1.5-clone-heading" \
+  "### 1.5-clone. Clone the repo (URL path only — default yes)"
+spec_assert "spec-clone-default-yes" \
+  'Default is **yes** — no confirmation needed unless the operator explicitly passes `--no-clone`'
 
-# 2. Insertion point — step 7 (registry append) still precedes step 8, and
-#    step 9 (validation) follows step 8. Catches accidental reordering.
-spec_assert "spec-step-7-still-registry"  \
-  "### 7. Append to the portfolio registry"
-spec_assert "spec-step-9-still-validation" \
-  "### 9. Offer validation (conditional, default-no)"
-spec_assert "spec-step-10-summary" \
-  "### 10. Return a summary"
+# 2. Clone mechanics: workspace resolved via the portfolio helper, skip when a
+#    .git already exists, otherwise clone.
+spec_assert "spec-workspace-dir-helper" "WORKSPACE_DIR=\$(portfolio_workspace_dir)"
+spec_assert "spec-skip-if-git-exists"   'if [ -d "$WORKSPACE_DIR/<name>/.git" ]; then'
+spec_assert "spec-clone-command"        'git clone <repo-url> "$WORKSPACE_DIR/<name>"'
 
-# 3. Five cost-transparency facts (AC #3 of the ticket).
-spec_assert "spec-cost-1-enable-lsp-tool"   "ENABLE_LSP_TOOL=1"
-spec_assert "spec-cost-2-plugin-install"    "plugin install is your problem"
-spec_assert "spec-cost-3-disk-and-gitignore" "gitignored"
-spec_assert "spec-cost-4-cross-project-grep" "Cross-project semantic queries still need grep"
-spec_assert "spec-cost-5-cold-start"         "Cold-start on large monorepos can be 30+ seconds"
+# 3. Clone-status marker drives the downstream read path.
+spec_assert "spec-clone-status-marker"  'CLONE_STATUS="cloned"'
+spec_assert "spec-no-clone-declined"    '$CLONE_STATUS="declined"'
 
-# 4. Three-option prompt response shape.
-spec_assert "spec-prompt-response-options" "[y / n / later]"
+# 4. Step 8 is now a follow-up-skills offer against the already-cloned repo.
+spec_assert "spec-step-8-heading" \
+  "### 8. Offer follow-up deep-dive skills (against the already-cloned repo)"
+spec_assert "spec-step-8-threat-model"   "1. /threat-model"
+spec_assert "spec-step-8-options"        "[1/2/3/all/none — default none]"
 
-# 5. Follow-up skill suggestion on success (AC #4 of the ticket).
-spec_assert "spec-followup-threat-model" \
-  "Want to run /threat-model against the new clone now?"
+# 5. Cost-transparency facts the step-8 offer still surfaces.
+spec_assert "spec-cost-enable-lsp-tool"  "ENABLE_LSP_TOOL=1"
+spec_assert "spec-cost-cold-start"       "Cold-start on large monorepos can be 30+ seconds"
 
-# 6. Skip-if-exists branch is documented. After framework #242 the skill
-# resolves the workspace dir via portfolio_workspace_dir (split-portfolio
-# v2 may point it at a sibling private repo), so the literal becomes
-# `$WORKSPACE_DIR/<name>` rather than `workspace/<name>`. The shape of
-# the skip branch (an `if [ -d ... ]; then` guard around `git clone`)
-# is what the spec test pins.
-spec_assert "spec-skip-if-exists" \
-  'if [ -d "$WORKSPACE_DIR/<name>" ]; then'
-
-# 7. Decline path documented as silent (no side effects).
-spec_assert "spec-decline-silent" \
-  "Skip silently — no side effects"
+# 6. Surrounding step order (catches accidental reordering).
+spec_assert "spec-step-7-registry"    "### 7. Append to the portfolio registry"
+spec_assert "spec-step-9-validation"  "### 9. Offer validation (conditional, default-no)"
+spec_assert "spec-step-10-summary"    "### 10. Return a summary"
 
 # ---------------------------------------------------------------------------
-# Runtime-shape simulator. Mirrors the bash logic the spec documents in
-# the "On `y`" branch. The simulator never touches the real `git`; we
-# point PATH at a mock that records its argv and exits 0.
+# Runtime-shape simulator. Mirrors the clone branch the spec documents in
+# step 1.5-clone. Never touches the real `git`; PATH points at a mock that
+# records its argv and exits 0.
 #
-# simulate <answer> <workspace-pre-exists?> <name> <repo-url>
+# simulate <no_clone_flag> <workspace-git-pre-exists?> <name> <repo-url>
 #   → echoes the recorded `git clone` argv to stdout (empty if no call)
-#   → returns simulator exit code
 # ---------------------------------------------------------------------------
 simulate() {
-  local answer="$1" pre_exists="$2" name="$3" repo_url="$4"
+  local no_clone="$1" pre_exists="$2" name="$3" repo_url="$4"
   local sb log
   sb=$(mktemp -d)
   sb=$(cd "$sb" && pwd -P)
   log="$sb/.git-clone-calls.log"
   : > "$log"
 
-  # Mock `git` — only handles `git clone <url> <dest>`; for anything else,
-  # the simulator never calls it, so we just record + exit 0.
   cat > "$sb/git" <<MOCK
 #!/usr/bin/env bash
 if [ "\$1" = "clone" ]; then
   printf '%s\n' "\$*" >> "$log"
-  # Pretend the clone succeeded — make the destination dir so any
-  # subsequent skip-if-exists logic in a re-run sees a real workspace.
-  if [ -n "\$3" ]; then
-    mkdir -p "\$3"
-  fi
+  [ -n "\$3" ] && mkdir -p "\$3"
   exit 0
 fi
 exit 0
 MOCK
   chmod +x "$sb/git"
 
-  # Optionally pre-create workspace/<name>/ to exercise the skip branch.
+  # WORKSPACE_DIR resolves to workspace/ in single-fork mode (what the sandbox
+  # models). Optionally pre-create workspace/<name>/.git to exercise the skip.
   if [ "$pre_exists" = "1" ]; then
-    mkdir -p "$sb/workspace/$name"
+    mkdir -p "$sb/workspace/$name/.git"
   fi
 
-  # The simulator: a faithful translation of the spec's "On y" + skip
-  # branches. Lives inside this test on purpose — the spec is the source
-  # of truth, and any divergence between this and the spec is a test
-  # failure to triage. All status output goes to stderr; only the
-  # captured git-clone argv from $log lands on stdout.
+  # Faithful translation of the spec's step-1.5-clone branch. Status → stderr;
+  # only the captured git-clone argv lands on stdout.
   (
     cd "$sb" || exit 1
     PATH="$sb:$PATH"
-    case "$answer" in
-      y|Y|yes)
-        if [ -d "workspace/$name" ]; then
-          echo "skip-existing" >&2
-        else
-          git clone "$repo_url" "workspace/$name" >/dev/null 2>&1
-          echo "cloned" >&2
-        fi
-        ;;
-      n|N|no|later|"")
-        echo "skipped" >&2
-        ;;
-      *)
-        # Unknown input → treat as `n` per the spec.
-        echo "skipped" >&2
-        ;;
-    esac
+    WORKSPACE_DIR="workspace"
+    if [ "$no_clone" = "1" ]; then
+      echo "declined (--no-clone)" >&2
+    elif [ -d "$WORKSPACE_DIR/$name/.git" ]; then
+      echo "preserved (already exists)" >&2
+    else
+      git clone "$repo_url" "$WORKSPACE_DIR/$name" >/dev/null 2>&1
+      echo "cloned" >&2
+    fi
   )
-  local rc=$?
 
-  # Echo whatever git invocations were captured.
-  if [ -s "$log" ]; then
-    cat "$log"
-  fi
-
+  [ -s "$log" ] && cat "$log"
   rm -rf "$sb"
-  return $rc
 }
 
-# Case A: answer `n` → no clone, exit 0
-out=$(simulate "n" 0 "example-app" "https://github.com/example/example-app.git" 2>/dev/null)
-if [ -z "$out" ]; then
-  echo "PASS [runtime-decline-no]"
-  PASS=$((PASS+1))
-else
-  echo "FAIL [runtime-decline-no]: expected no git invocation, got: $out" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-decline-no "
-fi
+URL="https://github.com/example/example-app.git"
 
-# Case B: answer `later` → no clone, exit 0
-out=$(simulate "later" 0 "example-app" "https://github.com/example/example-app.git" 2>/dev/null)
-if [ -z "$out" ]; then
-  echo "PASS [runtime-decline-later]"
-  PASS=$((PASS+1))
-else
-  echo "FAIL [runtime-decline-later]: expected no git invocation, got: $out" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-decline-later "
-fi
-
-# Case C: answer `y` → exactly one `git clone <url> workspace/<name>`
-out=$(simulate "y" 0 "example-app" "https://github.com/example/example-app.git" 2>/dev/null)
-expected="clone https://github.com/example/example-app.git workspace/example-app"
+# Case A: default (no --no-clone), workspace absent → exactly one clone.
+out=$(simulate "0" 0 "example-app" "$URL" 2>/dev/null)
+expected="clone $URL workspace/example-app"
 if [ "$out" = "$expected" ]; then
-  echo "PASS [runtime-accept-y]"
+  echo "PASS [runtime-default-clones]"
   PASS=$((PASS+1))
 else
-  echo "FAIL [runtime-accept-y]: argv mismatch" >&2
+  echo "FAIL [runtime-default-clones]: argv mismatch" >&2
   echo "    expected: $expected" >&2
   echo "    got:      $out" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-accept-y "
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-default-clones "
 fi
 
-# Case D: workspace pre-exists → answer `y` skips the clone
-out=$(simulate "y" 1 "example-app" "https://github.com/example/example-app.git" 2>/dev/null)
+# Case B: --no-clone → no git clone.
+out=$(simulate "1" 0 "example-app" "$URL" 2>/dev/null)
+if [ -z "$out" ]; then
+  echo "PASS [runtime-no-clone-declines]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [runtime-no-clone-declines]: expected no git invocation, got: $out" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-no-clone-declines "
+fi
+
+# Case C: workspace/<name>/.git pre-exists → skip the clone.
+out=$(simulate "0" 1 "example-app" "$URL" 2>/dev/null)
 if [ -z "$out" ]; then
   echo "PASS [runtime-skip-if-exists]"
   PASS=$((PASS+1))
 else
-  echo "FAIL [runtime-skip-if-exists]: expected no git invocation when workspace exists, got: $out" >&2
+  echo "FAIL [runtime-skip-if-exists]: expected no git invocation when clone exists, got: $out" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-skip-if-exists "
-fi
-
-# Case E: unknown input → treated as `n` (no clone)
-out=$(simulate "maybe" 0 "example-app" "https://github.com/example/example-app.git" 2>/dev/null)
-if [ -z "$out" ]; then
-  echo "PASS [runtime-unknown-input-no-clone]"
-  PASS=$((PASS+1))
-else
-  echo "FAIL [runtime-unknown-input-no-clone]: expected no git invocation, got: $out" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}runtime-unknown-input-no-clone "
 fi
 
 # ---------------------------------------------------------------------------

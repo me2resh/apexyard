@@ -17,17 +17,28 @@
 
 set -uo pipefail
 
+# Test isolation (#528): many hooks resolve their ops-root via _lib-ops-root.sh,
+# which inside a live Claude Code session honours the session pin
+# ($APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID) and points at the REAL
+# fork — so a sandbox-based test would escape onto the real repo (wrong results,
+# and for writing hooks like apply-agent-routing / link-custom-skills, real-file
+# mutation). Disable the pin for the whole suite so every test resolves by
+# walk-up to its own sandbox. No-op in headless CI (no pin). Tests that
+# specifically exercise the pin (test_resolve_ops_root_pin.sh) set/unset this
+# per-case, so the suite-level default doesn't interfere.
+export APEXYARD_OPS_DISABLE_PIN=1
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
 
 # --- Quarantine list (path :: reason). Empty by default; populated only with
 # --- evidence (a CI failure that is environmental, not a real regression). ---
 QUARANTINE=(
-  # One remaining pre-existing failure — tracked in #528. The other four
-  # originally-quarantined tests (token_efficiency_wave1, harnessability_scoring,
-  # md_to_pdf_fallback, agent_routing_sync_and_drift) have been FIXED and
-  # un-quarantined. This last one needs a test REWRITE, not a patch:
-  ".claude/hooks/tests/test_handover_clone_prompt.sh :: spec-pins a clone-prompt design that no longer exists — the /handover SKILL was redesigned (clone-by-default at step 1.5 + follow-up offer at step 8), so the [y/n/later]-prompt assertions test a removed feature; needs a rewrite against the current spec — #528"
+  # Empty — all five originally-quarantined tests (token_efficiency_wave1,
+  # harnessability_scoring, md_to_pdf_fallback, agent_routing_sync_and_drift,
+  # handover_clone_prompt) have been fixed and un-quarantined (#528). The gate
+  # now enforces the entire suite. Add an entry ONLY with evidence (a genuinely
+  # headless-incompatible test), citing why.
 )
 
 is_quarantined() {
