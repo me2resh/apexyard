@@ -10,6 +10,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `security.yml` | Shield | Security scanning (SAST, dependencies, secrets) | Every PR, push to main |
 | `dependency-audit.yml` | Guardian | Dependency vulnerabilities, outdated packages, licenses | Weekly, package changes |
 | `code-quality.yml` | Rex | TypeScript, ESLint, tests, build verification | Every PR |
+| `swift-ci.yml` | Rex | Swift Package Manager build + guarded test (macOS runner) | Every PR, push to default branch |
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
 | `ci.yml` | Combined | All checks in one pipeline | Every PR |

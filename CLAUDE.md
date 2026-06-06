@@ -278,6 +278,7 @@ Reusable GitHub Actions workflows live at `golden-paths/pipelines/`:
 |----------|---------|
 | `ci.yml` | Combined pipeline (code quality + security + dependencies) |
 | `code-quality.yml` | TypeScript, ESLint, tests, build |
+| `swift-ci.yml` | Swift Package Manager build + guarded test (macOS) |
 | `security.yml` | Semgrep SAST + npm audit + secrets detection |
 | `dependency-audit.yml` | Weekly vulnerability + license scan |
 | `pr-title-check.yml` | Enforce ticket ID in PR titles |

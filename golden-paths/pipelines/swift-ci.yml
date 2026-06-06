@@ -1,0 +1,56 @@
+# Swift CI Pipeline — Build & Test
+# Copy this to .github/workflows/swift-ci.yml in your project.
+#
+# For: Swift Package Manager projects (macOS / iOS apps or libraries).
+# Trigger: every PR + push to the default branch.
+# Purpose: a build gate that works before a test suite exists and upgrades
+#          itself to run tests the moment a test target is added.
+#
+# The Test step is GUARDED: it runs `swift test` only when Package.swift
+# declares a test target, otherwise it prints a skip note. This keeps the
+# pipeline green on a fresh package and auto-enables testing later with no
+# edit to this file.
+
+name: Swift CI
+
+on:
+  pull_request:
+  push:
+    # Adjust to your default branch — many Swift apps use `master`.
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swift-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          # Pin a concrete version (e.g. '16.2') if you need reproducible builds.
+          xcode-version: latest-stable
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: |
+          if grep -qE '\.testTarget|testTarget\(' Package.swift; then
+            swift test
+          else
+            echo "No test target declared in Package.swift yet — skipping tests."
+          fi
