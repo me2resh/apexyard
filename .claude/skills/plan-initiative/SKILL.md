@@ -1,6 +1,6 @@
 ---
 name: plan-initiative
-description: Interview-driven initiative → milestones → tasks with dependency-aware sequencing. Walks the operator from initiative-level goal through per-milestone Socratic interview, computes a topo-sorted recommended sequence, and optionally files each milestone as a Feature-shape ticket with `blocks` / `blocked by` cross-refs.
+description: Interview-driven initiative → milestones → tasks: per-milestone interview, a topo-sorted sequence, and optional filing of each milestone as a ticket with blocks/blocked-by cross-refs.
 argument-hint: "<slug>"
 ---
 

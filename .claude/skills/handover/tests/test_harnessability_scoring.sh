@@ -204,15 +204,17 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 12: skill count unchanged in CLAUDE.md — this is an extension to
-# an existing skill, not a new skill. The framework currently lists 51
-# skills (per the table header line). Pin that — a future legitimate
-# skill count bump will need to update this test.
+# Case 12: the harnessability-scoring extension to /handover is NOT a new
+# skill, so the CLAUDE.md "Available skills (N)" header must stay CONSISTENT
+# with the actual skill count on disk (no spurious bump). Computed dynamically
+# — counts SKILL.md files the same way site_counts does — so it survives
+# legitimate count changes instead of pinning a literal that goes stale (#528).
 # ---------------------------------------------------------------------------
-if grep -qE '### Available skills \(51\)' "$CLAUDE_MD"; then
-  mark_pass "12. CLAUDE.md still reports 51 skills (no spurious count bump)"
+actual_skills=$(find "$SRC_ROOT/.claude/skills" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+if grep -qE "### Available skills \($actual_skills\)" "$CLAUDE_MD"; then
+  mark_pass "12. CLAUDE.md skill-count header matches actual skill count ($actual_skills)"
 else
-  mark_fail "12. skill count" "the '### Available skills (51)' header changed — this extension should not bump the count"
+  mark_fail "12. skill count" "CLAUDE.md '### Available skills (N)' header != actual SKILL.md count ($actual_skills)"
 fi
 
 # ---------------------------------------------------------------------------

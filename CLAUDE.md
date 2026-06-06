@@ -258,6 +258,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/update` | Sync the ops fork with upstream apexyard — preview, merge-or-rebase, sync branch |
 | `/split-portfolio` | Migrate a single-fork adopter to split-portfolio mode (public framework + private portfolio) |
 | `/release` | (Framework-only) Cut an apexyard release — diff, bump, CHANGELOG, release PR, tag |
+| `/release-sync` | (Framework-only) Sync `main` back to `dev` after a squash-merge release so the squash commit is an ancestor of `dev`, preventing recurring merge conflicts |
 | `/projects` | List all managed projects from the registry with status |
 | `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
 | `/status` | Current snapshot — git, CI, in-progress work (use `--briefing` for 4-line shape) |

@@ -46,6 +46,17 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 0
 fi
 
+# This is a heavy end-to-end check: `npx -y md-to-pdf` resolves md-to-pdf from
+# npm at invocation time and drives headless chromium — a network + browser
+# dependency that is flaky/expensive on a CI runner (which DOES ship npx, so the
+# gate above doesn't catch it). Gate the e2e behind an explicit opt-in so the
+# suite isn't blocked on external tooling; run it locally / nightly with
+# RUN_PDF_E2E=1. The flag-regression it guards (#404) is exercised on demand. (#528)
+if [ "${RUN_PDF_E2E:-}" != "1" ]; then
+  echo "SKIP: md-to-pdf e2e gated behind RUN_PDF_E2E=1 (network npm install + headless chromium)."
+  exit 0
+fi
+
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
