@@ -140,14 +140,18 @@ the per-project file (single-agent — unchanged), or the ops fallback.
 
 ```bash
 if [ -n "$project" ]; then
-  # Detect a worktree: prefer the harness-set env var, else ask git whether the
-  # current checkout is a linked worktree (not the main working tree).
+  # Detect a worktree: prefer the harness-set env var, else check whether the
+  # current checkout is a LINKED worktree (not the main working tree). Compare
+  # the ABSOLUTE git-dir against the ABSOLUTE common-dir — they differ only in a
+  # linked worktree. The absolute forms matter: a plain --git-dir vs
+  # --git-common-dir comparison false-positives in the main checkout (one comes
+  # back absolute, the other relative). This is the SAME detection the
+  # require-active-ticket.sh / require-migration-ticket.sh read side uses.
   wt_branch="${CLAUDE_WORKTREE_BRANCH:-}"
-  if [ -z "$wt_branch" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    common=$(git rev-parse --git-common-dir 2>/dev/null)
-    gitdir=$(git rev-parse --git-dir 2>/dev/null)
-    # In a linked worktree, --git-dir differs from --git-common-dir.
-    if [ "$common" != "$gitdir" ]; then
+  if [ -z "$wt_branch" ]; then
+    gd=$(git rev-parse --absolute-git-dir 2>/dev/null)
+    gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$gd" ] && [ "$gd" != "$gcd" ]; then
       wt_branch=$(git branch --show-current 2>/dev/null)
     fi
   fi

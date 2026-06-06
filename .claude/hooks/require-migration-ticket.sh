@@ -207,9 +207,16 @@ fi
 # (tickets/<project>, a FILE) → tier 2 ops fallback (current-ticket).
 MARKER=""
 if [ -n "$PROJECT" ]; then
+  # Tier 0 worktree detection — identical to require-active-ticket.sh: env var,
+  # else LINKED-worktree check via absolute git-dir vs absolute common-dir.
   WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
   if [ -z "$WT_BRANCH" ]; then
-    WT_BRANCH=$(git -C "$(dirname "$FILE_PATH")" branch --show-current 2>/dev/null)
+    _fdir=$(dirname "$FILE_PATH")
+    _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
+    _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
+      WT_BRANCH=$(git -C "$_fdir" branch --show-current 2>/dev/null)
+    fi
   fi
   if [ -n "$WT_BRANCH" ]; then
     SAFE_BRANCH="${WT_BRANCH//\//__}"

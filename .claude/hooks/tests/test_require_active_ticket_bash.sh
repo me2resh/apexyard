@@ -206,6 +206,22 @@ EOF
 in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "per-project file marker still works (no worktree)" 0 "" "$in" "$sb"
 
+# 16. git linked-worktree detection (NO env var): a real linked worktree at
+#     workspace/myproj on branch wt-x is detected via absolute git-dir vs
+#     common-dir, tier-0 marker honored. Exercises the write/read-symmetric
+#     detection path, not just the CLAUDE_WORKTREE_BRANCH shortcut.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+( cd "$sb" && git worktree add -q workspace/myproj -b wt-x >/dev/null 2>&1 )
+mkdir -p "$sb/.claude/session/tickets/myproj"
+cat > "$sb/.claude/session/tickets/myproj/wt-x" <<EOF
+repo=me2resh/apexyard
+number=513
+title=worktree via git detection
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/myproj/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "per-worktree via git linked-worktree detection (no env var)" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

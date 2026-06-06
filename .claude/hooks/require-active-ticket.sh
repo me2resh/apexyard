@@ -231,11 +231,21 @@ fi
 # tests below distinguish them, so the two tiers never conflict.
 PER_WORKTREE_MARKER=""
 if [ -n "$PROJECT" ]; then
-  # Branch: prefer the harness-set env var (populated at worktree spawn), else
-  # ask git for the current branch of the edited file's repo.
+  # Branch: prefer the harness-set env var (populated at worktree spawn). Else
+  # only treat the file's repo as worktree-scoped when it's a LINKED worktree,
+  # detected by comparing the ABSOLUTE git-dir against the ABSOLUTE common-dir
+  # (they differ only in a linked worktree). This matches /start-ticket's
+  # write-side detection exactly — no read/write asymmetry — and the absolute
+  # forms avoid the false positive where, in the main checkout from a subdir,
+  # `--git-dir` is absolute but `--git-common-dir` is relative.
   WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
   if [ -z "$WT_BRANCH" ]; then
-    WT_BRANCH=$(git -C "$(dirname "$FILE_PATH")" branch --show-current 2>/dev/null)
+    _fdir=$(dirname "$FILE_PATH")
+    _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
+    _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
+      WT_BRANCH=$(git -C "$_fdir" branch --show-current 2>/dev/null)
+    fi
   fi
   if [ -n "$WT_BRANCH" ]; then
     SAFE_BRANCH="${WT_BRANCH//\//__}"   # '/' → '__' for a filesystem-safe segment
