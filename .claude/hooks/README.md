@@ -324,6 +324,7 @@ These were already in place before the enforcement layer and remain unchanged (e
 | `block-main-push.sh` | PreToolUse / Bash | Blocks pushing to `main` / `master` |
 | `validate-branch-name.sh` | PreToolUse / Bash | **Warns** on non-conforming branch names before push (warning-only; warning→blocker upgrade deferred to a follow-up ticket — breaking change) |
 | `check-secrets.sh` | PreToolUse / Bash | Scans commits for hardcoded secrets |
+| `block-onboarding-in-git.sh` | PreToolUse / Bash | Blocks committing a filled-in `onboarding.yaml` (placeholder-diff vs `onboarding.example.yaml`); env/marker escape hatch (#517) |
 | `pre-push-gate.sh` | PreToolUse / Bash | Reminds to run lint / typecheck / test / build |
 | `validate-pr-create.sh` | PreToolUse / Bash | **Blocks** on title format / glossary / branch ID (upgraded from warning in GH-20). Also **blocks** when the title's issue number doesn't exist in the tracker (extended in GH-14). |
 

@@ -8,11 +8,14 @@
 # the placeholder value "Your Company Name". If so, the fork hasn't been
 # set up yet and the user should run /setup.
 #
-# Why onboarding.yaml and not a session marker: onboarding.yaml is COMMITTED
-# (to the fork in single-fork mode, to the private portfolio repo in
-# split-portfolio v2 mode), so the setup state persists across clones and
-# team members. A fresh clone of a configured fork already has real
-# values — no per-machine marker needed.
+# Detection model (#517): in single-fork mode `onboarding.yaml` is now
+# GITIGNORED (real config stays local) and `onboarding.example.yaml` is the
+# tracked placeholder template. "Configured" = a real onboarding.yaml exists
+# with a non-placeholder company.name. A fresh clone has only the example (no
+# onboarding.yaml) → unconfigured → prompt /setup, which copies the example to
+# onboarding.yaml and fills it in. In split-portfolio v2 mode the real
+# onboarding.yaml lives (committed) in the private sibling repo, which
+# portfolio_onboarding_path resolves — that path still reads as configured.
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
@@ -35,14 +38,19 @@ if [ -z "$CONFIG" ]; then
   CONFIG="$REPO_ROOT/onboarding.yaml"
 fi
 
-# No onboarding.yaml at the resolved path — not an apexyard fork (or
-# split-portfolio v2 misconfigured); skip silently. check-portfolio-config.sh
-# handles broken paths.
+# No onboarding.yaml at the resolved path. Two cases:
+#   - A tracked onboarding.example.yaml exists → this IS an apexyard fork that
+#     hasn't been configured yet (fresh clone in the #517 model) → prompt /setup.
+#   - No example either → not an apexyard fork (or split-portfolio v2
+#     misconfigured); skip silently. check-portfolio-config.sh handles paths.
 if [ ! -f "$CONFIG" ]; then
+  if [ -f "$REPO_ROOT/onboarding.example.yaml" ]; then
+    echo "ApexYard: not configured yet (no onboarding.yaml). Run /setup — it copies onboarding.example.yaml → onboarding.yaml (gitignored) and fills it in."
+  fi
   exit 0
 fi
 
-# Check if the placeholder is still present
+# onboarding.yaml exists — configured unless the placeholder is still present
 if grep -q '"Your Company Name"' "$CONFIG" 2>/dev/null; then
   echo "ApexYard: onboarding.yaml is unconfigured (placeholder still present). Run /setup to configure this fork."
 fi

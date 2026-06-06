@@ -24,7 +24,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## When this runs
 
-The `onboarding-check.sh` SessionStart hook detects that `onboarding.yaml` still has placeholder values (e.g. `company.name: "Your Company Name"`) and prompts the user to run `/setup`. After `/setup` fills in real values and commits, the hook goes silent forever — even on fresh clones, because `onboarding.yaml` is committed.
+The `onboarding-check.sh` SessionStart hook prompts the user to run `/setup` when the fork isn't configured — either there's no real `onboarding.yaml` yet (a fresh clone ships only the tracked `onboarding.example.yaml` placeholder), or `onboarding.yaml` still has the `company.name: "Your Company Name"` placeholder. After `/setup` fills in real values, the hook goes silent on this machine. Note (#517): in single-fork mode `onboarding.yaml` is GITIGNORED — real config stays local — so each fresh clone runs `/setup` once (it copies the example and fills it in). In split-portfolio v2 mode the real config is committed in the private sibling repo, so it carries across clones.
 
 Re-running `/setup` on an already-configured fork shows the current config and asks what to update. Use `--reset` to clear everything and start from scratch.
 
@@ -75,12 +75,12 @@ See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
 Read `onboarding.yaml`. Four modes:
 
-- **First run** (placeholder values detected): proceed to Step 2.
+- **First run** (`onboarding.yaml` absent, or placeholder values detected): proceed to Step 2. The real file is gitignored (#517), so an absent `onboarding.yaml` with a present `onboarding.example.yaml` is the normal fresh-fork state — Step 6 copies the example before editing.
 - **Already configured** (real values): show a summary of the current config and ask "What would you like to update?" — then jump to the specific section. Don't re-ask everything.
-- **`--reset` flag**: clear `onboarding.yaml` back to the template defaults (copy from the upstream example or regenerate) and proceed as first run.
+- **`--reset` flag**: restore `onboarding.yaml` to the template defaults (`cp onboarding.example.yaml onboarding.yaml`) and proceed as first run.
 - **`--enable-lsp` flag** (retrofit mode): skip Steps 2 / 2a / 2b / 3-7 entirely and jump straight to Step 2c (LSP enablement). Use this when an existing adopter has a fully-configured fork and only wants to turn on LSP without re-running the whole bootstrap. The flag honours the same idempotence rules as a first-run pass through Step 2c — if LSP is already enabled, the step reports "already enabled" and exits cleanly. Step 0 (bootstrap marker) and Step 8 (clear marker) still run so the ticket gate stays coherent.
 
-Detection: `grep -q '"Your Company Name"' onboarding.yaml` — if found, it's still a template.
+Detection: `[ ! -f onboarding.yaml ]` (fresh fork — only the example is present) OR `grep -q '"Your Company Name"' onboarding.yaml` (file present but still a template) → treat as first run.
 
 ### Step 2: One question — describe your world
 
@@ -515,7 +515,15 @@ Don't loop more than twice. If the user keeps correcting, switch to "tell me exa
 
 ### Step 6: Write onboarding.yaml + the .apexyard-fork marker
 
-Read the current `onboarding.yaml` template (in single-fork mode this is at the fork root; in v2 split-portfolio mode it lives in the private sibling repo, resolved via `portfolio_onboarding_path`), replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments — the comments are documentation for future readers.
+**First, ensure a real `onboarding.yaml` exists to edit (#517).** The real config is now GITIGNORED; a fresh fork ships only the tracked `onboarding.example.yaml` placeholder template. So if `onboarding.yaml` is absent, copy the example to it before editing:
+
+```bash
+ONBOARDING=$(portfolio_onboarding_path)
+EXAMPLE="$(dirname "$ONBOARDING")/onboarding.example.yaml"
+[ -f "$ONBOARDING" ] || cp "$EXAMPLE" "$ONBOARDING"
+```
+
+Then read `onboarding.yaml` (single-fork: fork root; v2 split-portfolio: the private sibling repo, resolved via `portfolio_onboarding_path`), replace placeholder values with the confirmed config, and write back. Preserve the file's structure and comments — the comments are documentation for future readers.
 
 **Important:** use `Edit` tool to modify in-place, not `Write` to overwrite — this preserves comments and structure that the user didn't touch.
 
@@ -535,15 +543,17 @@ In **split-portfolio v2 mode** the marker was already written in Step 2b — ski
 After writing:
 
 ```bash
-# In single-fork mode: stage the in-fork onboarding.yaml.
-# In v2 mode: stage the SIBLING repo's onboarding.yaml.
+# #517: onboarding.yaml is GITIGNORED in single-fork mode — it stays LOCAL and
+# must NOT be staged/committed (the block-onboarding-in-git.sh guard backstops
+# this). In v2 mode the real config lives in the PRIVATE sibling repo, where it
+# is committed (the sibling is private), so staging there is fine.
 ONBOARDING=$(portfolio_onboarding_path)
 case "$ONBOARDING" in
   "$(git rev-parse --show-toplevel)"/*)
-    git add onboarding.yaml
+    : # single-fork — do NOT stage onboarding.yaml; it's gitignored, kept local
     ;;
   *)
-    # v2 mode — onboarding lives in the sibling repo. Stage it there
+    # v2 mode — onboarding lives in the PRIVATE sibling repo. Stage it there
     # so the user can `git -C ../<sibling> diff --cached` before committing.
     sibling_root=$(git -C "$(dirname "$ONBOARDING")" rev-parse --show-toplevel 2>/dev/null)
     if [ -n "$sibling_root" ]; then
@@ -553,14 +563,21 @@ case "$ONBOARDING" in
 esac
 ```
 
-Stage but do NOT commit — let the user review the diff and commit when ready. Tell them:
+In **single-fork mode** the config is intentionally NOT committed — tell the user:
 
 ```
-onboarding.yaml updated and staged. Review with `git diff --cached` and
-commit when you're happy: git commit -m "chore: configure apexyard for <company>"
+onboarding.yaml written locally (it's gitignored — your real config stays on
+this machine and is never published to the public fork or an upstream PR).
+Nothing to commit. If a teammate needs the config SHAPE, edit and commit
+onboarding.example.yaml instead.
 ```
 
-(In v2 mode point them at the sibling repo for the diff + commit.)
+In **v2 split-portfolio mode** the real config is committed in the private sibling repo — point the user there for the diff + commit:
+
+```
+onboarding.yaml updated and staged in the private portfolio repo. Review with
+`git -C ../<sibling> diff --cached` and commit when you're happy.
+```
 
 ### Step 7: Optionally seed the project registry
 

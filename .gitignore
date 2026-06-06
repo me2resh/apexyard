@@ -2,6 +2,12 @@
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
+# Real onboarding config (#517). The tracked template is onboarding.example.yaml;
+# /setup copies it to onboarding.yaml (this file) and fills in real values that
+# must stay LOCAL — company name, internal URLs, tracker instance, named people.
+# block-onboarding-in-git.sh backstops this gitignore at commit time.
+onboarding.yaml
+
 # ApexYard per-project config written by /onboard. Contains deploy URLs and
 # sensitive-topic notes that should not leak to git — keep it local.
 .claude/project-config.json

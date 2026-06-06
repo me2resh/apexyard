@@ -92,11 +92,23 @@ Now `git fetch upstream` will pull the latest apexyard changes whenever you want
 
 ### 4. Fill in `onboarding.yaml`
 
-Edit the file at the repo root. Set company, team, tech stack, quality bar. Defaults are sensible — change what matters for your team.
+The repo ships a tracked placeholder template, `onboarding.example.yaml`. Your real config lives in `onboarding.yaml`, which is **gitignored** (#517) — it stays local and is never published to your public fork or an upstream PR. Copy the template, then edit it (or just run `/setup`, which does the copy + fill for you):
 
 ```bash
-$EDITOR onboarding.yaml
+cp onboarding.example.yaml onboarding.yaml
+$EDITOR onboarding.yaml      # set company, team, tech stack, quality bar
 ```
+
+Don't commit `onboarding.yaml` — a commit-time guard (`block-onboarding-in-git.sh`) blocks a filled-in copy if you try. If a teammate needs the config *shape*, edit and commit `onboarding.example.yaml` (placeholders only) instead.
+
+> **Migrating an existing fork (pre-#517, where `onboarding.yaml` was tracked):** untrack it once — your local copy is preserved — and let the new gitignore + guard take over:
+>
+> ```bash
+> git rm --cached onboarding.yaml
+> git commit -m "chore: untrack onboarding.yaml (now gitignored, #517)"
+> ```
+>
+> The real values still exist in prior git history; scrub history separately if the fork is public and the old values are sensitive (see the security-hardening full-history sweep).
 
 ### 5. Create the registry
 

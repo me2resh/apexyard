@@ -1,13 +1,18 @@
 # =============================================================================
-# ApexYard Onboarding Configuration
+# ApexYard Onboarding Configuration — EXAMPLE TEMPLATE
 # =============================================================================
 #
-# Fill in this file to customize ApexYard for your team.
-# Claude Code reads this file to understand your company context.
+# This is the TRACKED placeholder template (committed to the repo). Your real
+# configuration lives in `onboarding.yaml`, which is GITIGNORED and never
+# committed — the same convention as `.env.example` / `.env`.
 #
-# After editing, commit this file to your repo. Claude Code will use it
-# to tailor its behavior to your team's structure and processes.
+# Don't edit this file with real values. Instead run `/setup`, which copies
+# this template to `onboarding.yaml` (gitignored) and fills it in locally.
+# A commit-time guard (block-onboarding-in-git.sh) backstops the gitignore so a
+# filled-in `onboarding.yaml` can't reach a public fork or an upstream PR.
 #
+# Split-portfolio v2 adopters: your real config lives in the private sibling
+# repo; this example stays in the public framework fork.
 
 # -----------------------------------------------------------------------------
 # ApexYard Setup
@@ -39,52 +44,47 @@ company:
   # What kind of software you build
   products:
     - name: "Main Platform"
-      description: "REDACTED with REDACTED (REDACTED), serverless AWS backend, and Vue frontend"
+      description: "Describe your primary product in one line"
       type: "saas"
 
 # -----------------------------------------------------------------------------
 # Team Structure
 # -----------------------------------------------------------------------------
 team:
-  - name: "Ahmed"
+  - name: "Your Name"
     role: "head-of-engineering"
     department: "engineering"
     responsibilities:
       - "Platform"
       - "Security"
       - "Architecture"
-    title: "REDACTED"
+    title: "Your Title"
 
 # -----------------------------------------------------------------------------
 # Tech Stack
 # -----------------------------------------------------------------------------
 tech_stack:
-  language: "TypeScript"           # Primary language (SAM lambdas + NestJS BFF)
+  language: "TypeScript"           # Primary language
   runtime: "Node.js"
-  framework: "Vue"                 # Frontend framework
-  backend: "NestJS"                # BFF pattern — ALB + Nginx on 2 Fargate containers
-  database: "MySQL"                # Legacy monolith DB
-  hosting: "AWS"
-  cdn: "Cloudflare"
+  framework: ""                    # Frontend framework (e.g. React, Vue)
+  backend: ""                      # Backend framework (e.g. NestJS, Express)
+  database: ""                     # e.g. PostgreSQL, MySQL
+  hosting: ""                      # e.g. AWS, GCP, Vercel
+  cdn: ""
   ci_cd: "GitHub Actions"
   testing: "Vitest"
   e2e_testing: "Playwright"
-  iac: "AWS SAM"                   # Serverless infrastructure
-
-  # Additional services
-  ehr: "REDACTED"                 # EHR system
-  legacy: "PHP + MySQL monolith"
-  bff_pattern: "ALB + Nginx on Fargate (2 containers, NestJS)"
+  iac: ""                          # e.g. AWS SAM, Terraform, CDK
 
 # -----------------------------------------------------------------------------
 # Project Management
 # -----------------------------------------------------------------------------
 project_management:
-  tool: "Jira"
-  instance: "yourcompany.atlassian.net"
-  sprint_duration: ""              # Kanban — no fixed sprints
+  tool: "GitHub Issues"            # e.g. GitHub Issues, Jira, Linear
+  instance: ""                     # e.g. yourcompany.atlassian.net (Jira/Linear)
+  sprint_duration: ""              # blank for Kanban
   branching_strategy: "feature-branch"
-  ticket_prefix: "PROJ"
+  ticket_prefix: ""                # e.g. PROJ (Jira/Linear); blank for GitHub #N
 
 # -----------------------------------------------------------------------------
 # Quality Standards
@@ -99,7 +99,6 @@ quality:
     - typecheck
     - test
     - build
-    - sam validate --lint
 
   review_style: "thorough"
 
@@ -110,8 +109,8 @@ workflows:
   require_prd: true
   require_technical_design: true
   require_qa_signoff: true
-  require_security_review: true    # Ahmed leads security
-  require_design_review: true      # Vue frontend
+  require_security_review: true
+  require_design_review: true
   use_feature_flags: false
   use_agent_decision_records: true
 
