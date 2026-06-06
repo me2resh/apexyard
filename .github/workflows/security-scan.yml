@@ -39,8 +39,11 @@ permissions:
   contents: read
 
 env:
-  # Semgrep: fail on WARNING (= medium) and above
-  SEMGREP_FAIL_SEVERITY: ${{ inputs.fail_on_severity || 'WARNING' }}
+  # Semgrep severity policy (#511 / AgDR-0063): fail the release-gated scan on
+  # ERROR only. WARNING (= medium) findings stay advisory — surfaced in the step
+  # summary, never red a release. A release-gated scan must not hard-fail on
+  # pre-existing low-severity lint. Override per-run via the fail_on_severity input.
+  SEMGREP_FAIL_SEVERITY: ${{ inputs.fail_on_severity || 'ERROR' }}
 
 jobs:
   # --------------------------------------------------------------------------

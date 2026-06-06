@@ -37,8 +37,11 @@ permissions:
 env:
   # Semgrep configs to run — adjust for your stack (see header comment)
   SEMGREP_CONFIGS: "p/security-audit p/owasp-top-ten p/typescript p/nodejs"
-  # Fail on WARNING (medium) and above; set to ERROR to only fail on high+
-  SEMGREP_FAIL_SEVERITY: "WARNING"
+  # Severity policy: fail on ERROR (high) only; WARNING (medium) findings are
+  # advisory (surfaced in the step summary, do not fail the job). Set to
+  # "WARNING" for stricter gating. Rationale: a new scan should not hard-fail on
+  # a project's pre-existing low-severity lint (apexyard #511 / AgDR-0063).
+  SEMGREP_FAIL_SEVERITY: "ERROR"
   # npm audit threshold: critical, high, moderate, low
   NPM_AUDIT_LEVEL: high
 
