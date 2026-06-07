@@ -18,7 +18,7 @@ apexyard is a multi-project forge — a single ops repository that governs a por
 | Tier | Model | Use for |
 |------|-------|---------|
 | Default (free) | `opencode/minimax-m3-free` | Implementation, drafting, docs, simple edits |
-| Critical (paid) | `openai/gpt-5` | Code review, security review, penetration testing, head-of-*, tech-lead |
+| Critical (paid) | `openai/gpt-5.5` | Code review, security review, penetration testing, head-of-*, tech-lead |
 
 Override per-agent via local gitignored `.opencode/opencode.json` or by editing `shared/config/defaults.json → tiered_agents`.
 
@@ -80,9 +80,9 @@ The most important gates (apply everywhere):
 
 - Hooks: `.codex/hooks/<name>.sh` wrappers calling `bun run shared/hooks/<name>.ts`
 - Config: `.codex/config.toml` (model + sandbox + inline `[[hooks.<Event>]]` blocks)
-- Subagents: `.codex/agents/<name>.toml` (one per role, `gpt-5.4` for reviewers/heads, `gpt-5.4-mini` for fast tasks)
+- Subagents: `.codex/agents/<name>.toml` (one per role, `gpt-5.5` for reviewers/heads, `gpt-5.4-mini` for fast tasks)
 - Instructions: `.codex/AGENTS.md` (generated from this file)
-- Default model: `gpt-5.4` (no free tier; you need an OpenAI plan or API key)
+- Default model: `gpt-5.5` (no free tier; you need an OpenAI plan or API key)
 
 **Trust model.** Codex loads project-local `.codex/` only when the project is trusted. On first run, the TUI will prompt to trust the project (and the hook commands). To skip the prompt: `codex --dangerously-bypass-hook-trust`. To manage trust later: run `/hooks` in the Codex TUI.
 

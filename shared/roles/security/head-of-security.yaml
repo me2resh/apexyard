@@ -2,7 +2,7 @@ name: head-of-security
 department: security
 description: Owns security strategy, threat-model gating, compliance calls, and cross-project security architecture. Activates on strategic security decisions, organisation-level threat-model reviews, compliance-deadline calls, and escalations from the Security Auditor.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: allow
   bash: ask

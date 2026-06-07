@@ -1,7 +1,7 @@
 ---
 description: Security Auditor — runs OWASP / threat-model / SAST analysis on PR diffs and provides remediation guidance. Auto-activates on PRs touching auth, crypto, secrets, user data, APIs, or third-party integrations; explicit invocation via /security-review. Canonical role at @roles/security/security-auditor.md.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: deny
   bash: ask

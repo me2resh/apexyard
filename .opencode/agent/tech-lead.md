@@ -1,7 +1,7 @@
 ---
 description: Bridges architecture and implementation — authors technical designs, leads code reviews, mentors engineers, and owns technical quality for a domain. Activates on technical design, planning phase, code review approval gate, or task breakdown.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: allow
   bash: ask

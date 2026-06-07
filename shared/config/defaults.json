@@ -6,11 +6,11 @@
   "default_model": "opencode/minimax-m3-free",
   "default_small_model": "opencode/minimax-m3-free",
   "tiered_agents": {
-    "code-reviewer": "openai/gpt-5",
-    "security-reviewer": "openai/gpt-5",
-    "penetration-tester": "openai/gpt-5",
-    "head-of-*": "openai/gpt-5",
-    "tech-lead": "openai/gpt-5"
+    "code-reviewer": "openai/gpt-5.5",
+    "security-reviewer": "openai/gpt-5.5",
+    "penetration-tester": "openai/gpt-5.5",
+    "head-of-*": "openai/gpt-5.5",
+    "tech-lead": "openai/gpt-5.5"
   },
   "gates": {
     "ticket_first": true,
@@ -28,6 +28,7 @@
     "websearch": "allow"
   },
   "openai_model_aliases": {
+    "gpt-5.5": "gpt-5.5",
     "gpt-5": "gpt-5",
     "gpt-4o": "gpt-4o",
     "gpt-4o-mini": "gpt-4o-mini"

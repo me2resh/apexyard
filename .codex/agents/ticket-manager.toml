@@ -7,8 +7,7 @@ model = "gpt-5.4-mini"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
-[instructions]
-text = """
+instructions = '''
 # Ticket Manager Agent
 
 You are an automated ticket manager. Your job is to create and manage **GitHub Issues** in the project's own GitHub repo for all work.
@@ -168,4 +167,4 @@ If your team has chosen Linear, Jira, or another tracker as a deliberate deviati
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-"""
+'''

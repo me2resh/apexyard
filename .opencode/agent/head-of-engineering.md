@@ -1,7 +1,7 @@
 ---
 description: Owns engineering strategy, architecture standards, and engineering culture across the portfolio. Activates on architecture review, new tech stack additions, cross-project engineering calls, and Tech Lead escalations.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: allow
   bash: ask

@@ -8,7 +8,7 @@ You don't *add* apexyard to a project — projects get forged *inside* it. One o
 
 OpenCode and the OpenAI Codex CLI are the default drivers, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
 
-The repo's source of truth lives in `shared/` (provider-agnostic YAML + TypeScript). A single `bun run bin/sync.ts` regenerates both `.opencode/` (OpenCode config) and `.codex/` (Codex CLI config) from that one tree. Default model is `opencode/minimax-m3-free`; review / security / architecture agents upgrade to `openai/gpt-5` via `shared/config/defaults.json → tiered_agents`.
+The repo's source of truth lives in `shared/` (provider-agnostic YAML + TypeScript). A single `bun run bin/sync.ts` regenerates both `.opencode/` (OpenCode config) and `.codex/` (Codex CLI config) from that one tree. Default model is `opencode/minimax-m3-free`; review / security / architecture agents upgrade to `openai/gpt-5.5` via `shared/config/defaults.json → tiered_agents`.
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
@@ -42,7 +42,7 @@ apexyard/
 ├── .codex/                 # Generated Codex CLI config (do not edit)
 │   ├── config.toml         # Model + sandbox + inline [[hooks.<Event>]] blocks + [agents] map
 │   ├── AGENTS.md           # Project-level Codex instructions
-│   ├── agents/             # 23 subagent TOML files (model + sandbox + [instructions])
+│   ├── agents/             # 23 subagent TOML files (model + sandbox + instructions)
 │   └── hooks/              # 36 bash wrappers invoking `bun run shared/hooks/<name>.ts`
 │
 ├── .claude/                # Original Claude Code primitives (source of truth for bash logic)
@@ -155,7 +155,7 @@ Apexyard ships side-by-side wiring for two agent CLIs. Same workflow gates, same
 | Harness | Default model | Cost | Free tier | Hook mechanism | Where to look |
 |---|---|---|---|---|---|
 | **OpenCode** | `opencode/minimax-m3-free` | Free | Yes | TS plugin in `.opencode/plugins/` | `.opencode/opencode.json` |
-| **Codex CLI** | `gpt-5.4` | Paid | No | Inline `[[hooks.*]]` in TOML | `.codex/config.toml` + `.codex/agents/*.toml` |
+| **Codex CLI** | `gpt-5.5` | Paid | No | Inline `[[hooks.*]]` in TOML | `.codex/config.toml` + `.codex/agents/*.toml` |
 
 The same 36 bash scripts in `.claude/hooks/*.sh` are the source of truth on both sides — the TS wrappers in `shared/hooks/*.ts` shell out to them.
 

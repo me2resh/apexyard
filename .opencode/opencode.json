@@ -35,7 +35,7 @@
       }
     },
     "head-of-data": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -45,7 +45,7 @@
       }
     },
     "head-of-design": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -85,7 +85,7 @@
       }
     },
     "code-reviewer": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "deny",
@@ -115,7 +115,7 @@
       }
     },
     "head-of-engineering": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -165,7 +165,7 @@
       }
     },
     "tech-lead": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -185,7 +185,7 @@
       }
     },
     "head-of-product": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -215,7 +215,7 @@
       }
     },
     "head-of-security": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -225,7 +225,7 @@
       }
     },
     "penetration-tester": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "allow",
@@ -235,7 +235,7 @@
       }
     },
     "security-reviewer": {
-      "model": "openai/gpt-5",
+      "model": "openai/gpt-5.5",
       "mode": "subagent",
       "permission": {
         "edit": "deny",

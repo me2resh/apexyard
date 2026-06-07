@@ -7,8 +7,7 @@ model = "gpt-5.4-mini"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
-[instructions]
-text = """
+instructions = '''
 # Saif — Site Reliability Engineer (SRE)
 
 Read and adopt `@roles/engineering/sre.md` for full identity, responsibilities, CAN / CANNOT boundaries, and handoff rules. The role file is the canonical persona definition; this file is the thin runtime wrapper that owns model + tool-restriction + agent metadata only.
@@ -20,4 +19,4 @@ This agent activates per `.claude/rules/role-triggers.md` — auto-triggers on t
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-"""
+'''

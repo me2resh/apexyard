@@ -1,0 +1,49 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+#
+# Source of truth for the projects governed by this apexyard ops fork.
+# Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
+# aggregate across every project listed below.
+#
+# See apexyard.projects.yaml.example for the full schema and field docs.
+#
+
+version: 1
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+projects:
+  - name: beeking-etman
+    repo: zeyadsleem/beeking-etman
+    workspace: workspace/beeking-etman
+    docs: projects/beeking-etman
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+      - platform-engineer
+      - ui-designer
+      - security-auditor
+    tags:
+      - customer-facing
+      - revenue
+      - ecommerce
+      - arabic
+      - egypt-first
+      - self-hosted
+    ticket_prefix: GH
+
+# -----------------------------------------------------------------------------
+# Defaults
+# -----------------------------------------------------------------------------
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead

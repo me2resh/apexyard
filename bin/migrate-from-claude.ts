@@ -110,15 +110,15 @@ const ROLE_DEPT: Record<string, string> = {
 }
 
 const TIERED_OVERRIDE: Record<string, string> = {
-  "code-reviewer": "openai/gpt-5",
-  "security-reviewer": "openai/gpt-5",
-  "penetration-tester": "openai/gpt-5",
-  "tech-lead": "openai/gpt-5",
-  "head-of-engineering": "openai/gpt-5",
-  "head-of-product": "openai/gpt-5",
-  "head-of-design": "openai/gpt-5",
-  "head-of-security": "openai/gpt-5",
-  "head-of-data": "openai/gpt-5",
+  "code-reviewer": "openai/gpt-5.5",
+  "security-reviewer": "openai/gpt-5.5",
+  "penetration-tester": "openai/gpt-5.5",
+  "tech-lead": "openai/gpt-5.5",
+  "head-of-engineering": "openai/gpt-5.5",
+  "head-of-product": "openai/gpt-5.5",
+  "head-of-design": "openai/gpt-5.5",
+  "head-of-security": "openai/gpt-5.5",
+  "head-of-data": "openai/gpt-5.5",
 }
 
 // ============================================================================
@@ -155,7 +155,7 @@ async function migrateAgents(): Promise<number> {
     }
     if (fm.persona_name) yaml.persona = fm.persona_name
     if (TIERED_OVERRIDE[name] === "opencode/minimax-m3-free") {
-      yaml.fallback_model = "openai/gpt-5"
+      yaml.fallback_model = "openai/gpt-5.5"
     }
     const out = join(SHARED, "roles", dept, `${name}.yaml`)
     const content = stringifyYaml(yaml, { lineWidth: -1 })

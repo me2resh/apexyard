@@ -1,7 +1,7 @@
 ---
 description: Owns product strategy, roadmap prioritisation, and feasibility studies. Activates on roadmap prioritisation, feasibility calls, strategic product decisions, or cross-product resource allocation.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: allow
   bash: ask

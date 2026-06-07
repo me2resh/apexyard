@@ -7,8 +7,7 @@ model = "gpt-5.4-mini"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
-[instructions]
-text = """
+instructions = '''
 # Dependency Auditor Agent
 
 **Persona name**: Munir
@@ -193,4 +192,4 @@ References:
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-"""
+'''

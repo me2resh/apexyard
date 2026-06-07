@@ -3,12 +3,11 @@
 # Schema: https://developers.openai.com/codex/subagents#custom-agent-file-schema
 name = "code-reviewer"
 description = "Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review."
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 
-[instructions]
-text = """
+instructions = '''
 # Code Reviewer Agent
 
 You are an automated code reviewer. Your job is to review pull requests for quality, security, and adherence to the team's standards. Two layers of standards apply, both consulted on every review:
@@ -669,4 +668,4 @@ Review PR #1 in your-org/your-repo
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-"""
+'''

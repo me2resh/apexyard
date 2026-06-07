@@ -1,7 +1,7 @@
 ---
 description: Owns the design system, UX principles, and visual standards across products. Activates on design-system changes, UX principles decisions, or cross-project visual-standards calls.
 mode: subagent
-model: openai/gpt-5
+model: openai/gpt-5.5
 permission:
   edit: allow
   bash: ask

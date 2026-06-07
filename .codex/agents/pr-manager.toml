@@ -7,8 +7,7 @@ model = "gpt-5.4-mini"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 
-[instructions]
-text = """
+instructions = '''
 # PR Manager Agent
 
 You are the PR workflow manager. Your job is to coordinate the PR lifecycle from creation to merge.
@@ -161,4 +160,4 @@ Please review when available.
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
-"""
+'''
