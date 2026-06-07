@@ -21,7 +21,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 - `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote)
 - `site/` — marketing site (HTML, deployed via Netlify to `yard.apexscript.com`)
 - `golden-paths/pipelines/` — reusable GitHub Actions workflows for adopter projects
-- `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing)
+- `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing; `bin/graphify-project` / `bin/graphify-bootstrap` for portfolio knowledge graphs)
 
 ## Key files
 
@@ -87,3 +87,17 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 - **`site/llms.txt`** — markdown manifest per the llmstxt.org convention; index for AI crawlers
 - **`site/llms-full.txt`** — full content concatenation for one-shot LLM consumption
 - **`README.md`** — public-facing intro (humans + agents)
+
+## Graphify (portfolio knowledge graphs)
+
+Managed project clones under `workspace/<name>/` can have a queryable code+doc graph at `graphify-out/`.
+
+| Command | Purpose |
+|---------|---------|
+| `bin/graphify-project list` | Workspace clones + graph status |
+| `bin/graphify-project <name> query "…"` | Ask the graph (fast path) |
+| `bin/graphify-bootstrap workspace/<name> <name>` | Full rebuild + agent wiring |
+
+Run `bin/install-graphify-skill` once per clone to install the `/graphify` agent skill (not committed — copied from `workspace/graphify`).
+
+**Query-first:** When `graphify-out/graph.json` exists, run `graphify query` / `path` / `explain` before broad greps. See `.cursor/rules/graphify-query-first.mdc` and `projects/graphify/README.md`.

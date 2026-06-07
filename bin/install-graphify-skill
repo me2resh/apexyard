@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Install Graphify as a Cursor agent skill in the ops repo (optional).
+# The CLI + .cursor/rules/graphify.mdc are the primary integration; this copies
+# the upstream skill body so /graphify works as a named agent skill in Cursor.
+set -euo pipefail
+
+ops_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+src="$ops_root/workspace/graphify/graphify/skill.md"
+dst_dir="$ops_root/.agents/skills/graphify"
+dst="$dst_dir/SKILL.md"
+
+if [ ! -f "$src" ]; then
+  echo "Missing $src — clone workspace/graphify first." >&2
+  exit 1
+fi
+
+mkdir -p "$dst_dir"
+cp "$src" "$dst"
+echo "Installed Cursor agent skill → $dst"
+echo "Also run: graphify cursor install   (writes .cursor/rules/graphify.mdc)"

@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# graphify-project — run graphify against a managed project's workspace clone
+#
+# Graphify CLI is installed from workspace/graphify (uv tool install --editable .).
+# This shim resolves workspace/<name>/ from apexyard.projects.yaml and runs
+# graphify there so each project gets its own graphify-out/.
+#
+# Usage:
+#   graphify-project list
+#   graphify-project <name> [graphify args...]
+#   graphify-project <name> cursor-install
+#
+# Examples:
+#   graphify-project koraid .
+#   graphify-project elite-telegram . --no-viz
+#   graphify-project koraid query "what connects auth to the database?"
+#   graphify-project koraid cursor-install
+#
+# In Cursor, after building a graph, open the project folder (or run from its
+# workspace path) and ask: /graphify .  — or use graphify-project from a terminal.
+
+set -euo pipefail
+
+find_ops_root() {
+  local cur="$PWD"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -e "$cur/.apexyard-fork" ]; then
+      printf '%s' "$cur"
+      return 0
+    fi
+    if [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; then
+      printf '%s' "$cur"
+      return 0
+    fi
+    cur=$(dirname "$cur")
+  done
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: graphify-project <command> [args]
+
+Commands:
+  list                         Managed projects with a workspace/ clone present
+  <name> [graphify args...]    Run graphify inside workspace/<name>/
+  <name> cursor-install        Write .cursor/rules/graphify.mdc in that project
+
+Examples:
+  graphify-project list
+  graphify-project koraid .
+  graphify-project elite-telegram query "how does billing work?"
+
+Requires: graphify on PATH (install from workspace/graphify via uv tool install --editable .)
+EOF
+}
+
+if ! ops_root=$(find_ops_root); then
+  echo "graphify-project: not inside an apexyard fork" >&2
+  exit 1
+fi
+
+if ! command -v graphify >/dev/null 2>&1; then
+  echo "graphify-project: graphify not on PATH" >&2
+  echo "  cd workspace/graphify && uv tool install --editable ." >&2
+  exit 1
+fi
+
+registry="$ops_root/apexyard.projects.yaml"
+
+list_projects() {
+  python3 - "$registry" "$ops_root" <<'PY'
+import sys
+from pathlib import Path
+
+registry = Path(sys.argv[1])
+ops_root = Path(sys.argv[2])
+ws = ops_root / "workspace"
+rows = {}
+
+# Registry entries with workspace: field
+current = None
+for line in registry.read_text(encoding="utf-8").splitlines():
+    s = line.strip()
+    if s.startswith("- name:"):
+        current = s.split(":", 1)[1].strip()
+    elif current and s.startswith("workspace:"):
+        rel = s.split(":", 1)[1].strip()
+        if (ops_root / rel).is_dir():
+            rows[current] = rel
+        current = None
+
+# Any other workspace/* clone (tool-only clones, etc.)
+if ws.is_dir():
+    for d in sorted(ws.iterdir()):
+        if d.is_dir() and d.name not in rows.values() and d.name != "README.md":
+            rows.setdefault(d.name, f"workspace/{d.name}")
+
+if not rows:
+    print("No workspace clones found under workspace/.")
+    raise SystemExit(0)
+
+print("Projects with workspace clones:\n")
+for name, rel in sorted(rows.items(), key=lambda r: r[0]):
+    graph = (ops_root / rel / "graphify-out" / "graph.json").is_file()
+    tag = "graph" if graph else "no graph"
+    print(f"  {name:<24} {rel}/  [{tag}]")
+PY
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+  ""|-h|--help|help)
+    usage
+    exit 0
+    ;;
+  list)
+    list_projects
+    exit 0
+    ;;
+esac
+
+project="$cmd"
+workspace_rel=$(python3 - "$registry" "$project" <<'PY'
+import sys
+from pathlib import Path
+
+registry = Path(sys.argv[1])
+want = sys.argv[2]
+current = None
+workspace = None
+for line in registry.read_text(encoding="utf-8").splitlines():
+    s = line.strip()
+    if s.startswith("- name:"):
+        if current == want and workspace:
+            print(workspace)
+            raise SystemExit(0)
+        current = s.split(":", 1)[1].strip()
+        workspace = None
+    elif current == want and s.startswith("workspace:"):
+        workspace = s.split(":", 1)[1].strip()
+if current == want and workspace:
+    print(workspace)
+PY
+)
+
+if [ -z "${workspace_rel:-}" ]; then
+  fallback="$ops_root/workspace/$project"
+  if [ -d "$fallback" ]; then
+    workspace_rel="workspace/$project"
+  else
+    echo "graphify-project: no workspace for '$project'" >&2
+    echo "  Pick from: graphify-project list" >&2
+    exit 1
+  fi
+fi
+
+target="$ops_root/$workspace_rel"
+if [ ! -d "$target" ]; then
+  echo "graphify-project: workspace missing at $target" >&2
+  exit 1
+fi
+
+if [ "${1:-}" = "cursor-install" ]; then
+  shift
+  (cd "$target" && graphify cursor install)
+  exit 0
+fi
+
+if [ "$#" -eq 0 ]; then
+  set -- .
+fi
+
+echo "graphify-project: $project → $workspace_rel ($*)"
+cd "$target"
+exec graphify "$@"
