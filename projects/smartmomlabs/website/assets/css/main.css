@@ -1198,7 +1198,106 @@ html[dir="ltr"] .reserve-title { font-family: var(--font-serif); }
   gap: 40px;
   margin-bottom: 28px;
 }
+@media (min-width: 900px) {
+  .footer-grid:has(> :nth-child(4)) {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+}
 .footer .logo { color: #fff; }
+.legal-page {
+  padding: 48px 0 80px;
+  max-width: 42rem;
+}
+.legal-draft {
+  background: #fff8e6;
+  border: 1px solid var(--gold, #c9a227);
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 28px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.legal-page h1 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  margin-bottom: 8px;
+}
+.legal-updated {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin-bottom: 28px;
+}
+.legal-page h2 {
+  font-size: 1.1rem;
+  margin: 28px 0 10px;
+}
+.legal-page p,
+.legal-page li {
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+.legal-page ul {
+  padding-inline-start: 1.25rem;
+  margin-bottom: 16px;
+}
+.legal-see-also {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.form-privacy {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.form-privacy a {
+  color: var(--accent);
+}
+.consent-banner {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: var(--z-toast, 1200);
+  background: var(--bg-card, #fff);
+  border-top: 2px solid var(--border);
+  box-shadow: 0 -8px 32px rgba(26, 61, 50, 0.12);
+  padding: 16px 20px;
+}
+.consent-banner__inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.consent-banner__text {
+  flex: 1 1 220px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.consent-banner__text strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+.consent-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.consent-banner__actions .btn {
+  font-size: 0.82rem;
+  padding: 10px 16px;
+}
+.consent-banner__link {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
 .disclaimer {
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.9);

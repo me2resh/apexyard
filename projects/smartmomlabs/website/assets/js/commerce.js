@@ -20,7 +20,12 @@
     return cfg().checkoutEnabled === false;
   }
 
+  function storageOk(kind) {
+    return root.BLENDAVIT_CONSENT?.allows(kind) !== false;
+  }
+
   function hasDiscount() {
+    if (!storageOk("discount")) return false;
     try {
       return localStorage.getItem(DISCOUNT_KEY) === "1";
     } catch (_) {
@@ -37,10 +42,12 @@
   }
 
   function unlockDiscount(email) {
-    try {
-      localStorage.setItem(DISCOUNT_KEY, "1");
-      if (email) localStorage.setItem(EMAIL_KEY, email);
-    } catch (_) {}
+    if (storageOk("discount")) {
+      try {
+        localStorage.setItem(DISCOUNT_KEY, "1");
+        if (email) localStorage.setItem(EMAIL_KEY, email);
+      } catch (_) {}
+    }
     document.dispatchEvent(new CustomEvent("blendavit:discount-unlocked"));
     syncDiscountUi();
   }
@@ -255,9 +262,7 @@
     const dialog = document.querySelector("[data-entry-modal]");
     if (!dialog || hasDiscount()) return;
 
-    try {
-      if (sessionStorage.getItem(ENTRY_SNOOZE_KEY) === "1") return;
-    } catch (_) {}
+    if (root.BLENDAVIT_CONSENT?.isEntrySnoozed()) return;
 
     const delay = Number(cfg().emailCaptureDelayMs) || 2000;
     setTimeout(() => {
@@ -265,9 +270,7 @@
     }, delay);
 
     dialog.querySelector("[data-entry-dismiss]")?.addEventListener("click", () => {
-      try {
-        sessionStorage.setItem(ENTRY_SNOOZE_KEY, "1");
-      } catch (_) {}
+      root.BLENDAVIT_CONSENT?.snoozeEntry();
       dialog.close();
     });
 

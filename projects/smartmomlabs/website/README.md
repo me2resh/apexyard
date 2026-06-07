@@ -66,6 +66,16 @@ window.BLENDAVIT_CONFIG = {
 
 5. Deploy `website/` to Netlify/Vercel (root = this folder) or port sections into a Shopify theme.
 
+## SEO and legal
+
+| File | Purpose |
+|------|---------|
+| `robots.txt` | Crawler rules + sitemap pointer |
+| `sitemap.xml` | Index, PDP, privacy, terms |
+| `privacy.html` / `terms.html` | DRAFT legal pages (AR/EN via i18n) — legal sign-off required |
+
+Update `siteUrl` in `assets/js/config.js` and absolute URLs in `robots.txt`, `sitemap.xml`, and `<head>` canonical/OG tags when the custom domain goes live.
+
 ## Deploy
 
 - **Vercel:** `vercel --prod` from this directory (`.vercel/` is gitignored).
