@@ -14,9 +14,10 @@ Portfolio-wide knowledge graphs for Cursor — query a map before grepping the r
 ```bash
 source ~/.local/bin/env   # graphify on PATH
 
-bin/graphify-project list
+bin/graphify-all --list    # all 9 portfolio targets
+bin/graphify-all           # rebuild every project
 bin/graphify-project koraid query "how does auth reach the database?"
-bin/graphify-bootstrap workspace/koraid koraid   # full rebuild
+bin/graphify-bootstrap workspace/koraid koraid   # single project
 ```
 
 ## Doc-aware graphs (LLM optional)

@@ -53,3 +53,7 @@ workspace/*/
 
 # Graphify agent skill body — copied from workspace/graphify via bin/install-graphify-skill
 .agents/skills/graphify/
+**/.agents/skills/graphify/
+
+# Graphify build artifacts (local only)
+**/graphify-out/

@@ -51,6 +51,7 @@ projects:
 
   - name: training-command-center
     repo: Dr-kersho/AI-Driven-Personal-Training-Command-Center-
+    workspace: workspace/training-command-center
     docs: projects/training-command-center
     status: active
     tier: P0
@@ -108,6 +109,22 @@ projects:
       - frontend-engineer
     tags:
       - marketing
+      - website
+    ticket_prefix: GH
+
+  - name: smartmomlabs
+    repo: Dr-kersho/apexyard
+    workspace: projects/smartmomlabs/website
+    docs: projects/smartmomlabs
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - frontend-engineer
+      - product-manager
+    tags:
+      - customer-facing
+      - dtc
       - website
     ticket_prefix: GH
 

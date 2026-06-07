@@ -1,0 +1,8 @@
+{
+  "ignores": [
+    "**/graphify-out/**",
+    "**/.agents/skills/graphify/**",
+    "projects/smartmomlabs/website/meta-trials/**",
+    "projects/luma-pwa/meta-trials/**"
+  ]
+}

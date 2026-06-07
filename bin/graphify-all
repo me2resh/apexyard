@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# graphify-all — bootstrap knowledge graphs for every portfolio target
+#
+# Usage:
+#   graphify-all              # all registry workspace paths + workspace/* clones
+#   graphify-all --list       # show targets without building
+#   graphify-all koraid luma-pwa   # subset by name
+#
+set -euo pipefail
+
+find_ops_root() {
+  local cur="${1:-$PWD}"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -e "$cur/.apexyard-fork" ] || { [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; }; then
+      printf '%s' "$cur"; return 0
+    fi
+    cur=$(dirname "$cur")
+  done
+  return 1
+}
+
+ops_root=$(find_ops_root) || { echo "graphify-all: not inside apexyard fork" >&2; exit 1; }
+bootstrap="$ops_root/bin/graphify-bootstrap"
+registry="$ops_root/apexyard.projects.yaml"
+
+if [ ! -x "$bootstrap" ]; then
+  echo "graphify-all: missing $bootstrap" >&2
+  exit 1
+fi
+
+targets_file=$(mktemp)
+trap 'rm -f "$targets_file"' EXIT
+python3 - "$registry" "$ops_root" >"$targets_file" <<'PY'
+import sys
+from pathlib import Path
+
+registry = Path(sys.argv[1])
+ops_root = Path(sys.argv[2])
+rows: dict[str, str] = {}
+
+current = None
+for line in registry.read_text(encoding="utf-8").splitlines():
+    s = line.strip()
+    if s.startswith("- name:"):
+        current = s.split(":", 1)[1].strip()
+    elif current and s.startswith("workspace:"):
+        rel = s.split(":", 1)[1].strip()
+        if (ops_root / rel).is_dir():
+            rows[current] = rel
+        current = None
+
+ws = ops_root / "workspace"
+if ws.is_dir():
+    for d in sorted(ws.iterdir()):
+        if d.is_dir() and d.name != "README.md":
+            rows.setdefault(d.name, f"workspace/{d.name}")
+
+for name, rel in sorted(rows.items()):
+    print(f"{name}\t{rel}")
+PY
+
+if [ "${1:-}" = "--list" ]; then
+  echo "Portfolio graph targets:"
+  while IFS=$'\t' read -r name rel; do
+    graph="$ops_root/$rel/graphify-out/graph.json"
+    if [ -f "$graph" ]; then tag="graph"; else tag="no graph"; fi
+    printf "  %-28s %s/  [%s]\n" "$name" "$rel" "$tag"
+  done <"$targets_file"
+  exit 0
+fi
+
+filter=()
+if [ "$#" -gt 0 ]; then
+  filter=("$@")
+fi
+
+count=0
+fail=0
+while IFS=$'\t' read -r name rel; do
+  if [ "${#filter[@]}" -gt 0 ]; then
+    match=0
+    for want in "${filter[@]}"; do
+      if [ "$want" = "$name" ]; then match=1; break; fi
+    done
+    [ "$match" -eq 1 ] || continue
+  fi
+  count=$((count + 1))
+  echo ""
+  if "$bootstrap" "$ops_root/$rel" "$name"; then
+    echo "OK: $name"
+  else
+    echo "FAILED: $name" >&2
+    fail=1
+  fi
+done <"$targets_file"
+
+if [ "$count" -eq 0 ]; then
+  echo "graphify-all: no matching targets (try --list)" >&2
+  exit 1
+fi
+
+echo ""
+echo "graphify-all: processed $count target(s)"
+exit "$fail"

@@ -97,6 +97,8 @@ Managed project clones under `workspace/<name>/` can have a queryable code+doc g
 | `bin/graphify-project list` | Workspace clones + graph status |
 | `bin/graphify-project <name> query "…"` | Ask the graph (fast path) |
 | `bin/graphify-bootstrap workspace/<name> <name>` | Full rebuild + agent wiring |
+| `bin/graphify-all` | Rebuild every portfolio target |
+| `bin/graphify-all --list` | All targets + graph status |
 
 Run `bin/install-graphify-skill` once per clone to install the `/graphify` agent skill (not committed — copied from `workspace/graphify`).
 
