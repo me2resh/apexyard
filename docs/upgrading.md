@@ -8,6 +8,7 @@ This doc covers:
 - The version anchor file (`.claude/framework-version`)
 - What each migration does (table)
 - Common scenarios (multi-hop, missing anchor, skip-migrations, dry-run)
+- **When `/update` isn't enough — re-forking and keeping your data**
 - Authoring a new migration (framework maintainers only)
 
 For the daily-sync UX, see `.claude/skills/update/SKILL.md`. For the design rationale, see [`docs/agdr/AgDR-0032-update-chain-migrations.md`](agdr/AgDR-0032-update-chain-migrations.md).
@@ -145,6 +146,55 @@ If a migration script reports a conflict (exit code 1), the chain pauses. The an
 ### `--from-dev` (pre-release sync)
 
 When you use `--from-dev` to pull from `upstream/dev`, the migration chain is automatically skipped — pre-release work has no release tag to anchor against. The anchor file is NOT advanced; `--from-dev` is the only path that leaves the anchor untouched.
+
+---
+
+## When `/update` isn't enough — re-forking & keeping your data
+
+Most of the time `/update` is all you need. The exception is when your fork has
+drifted so far that upgrading is a wall of conflicts — then you re-fork. Either
+way, the only thing you have to protect is **your own work**.
+
+One idea makes this easy: everything in your fork is either **the framework** or
+**your data**.
+
+- **The framework** — `.claude/`, `workflows/`, `templates/`, `docs/`. Upstream
+  owns it; upgrades overwrite it. Let them.
+- **Your data** — your registry (`apexyard.projects.yaml`), `onboarding.yaml`,
+  `projects/`, `workspace/`, `handbooks/`, and any custom skills. This is what
+  must survive.
+
+### Upgrade or re-fork?
+
+Run `/update --dry-run`. A clean or small merge → just `/update`. Conflicts
+across most of `.claude/` — or a PR from your fork to upstream that touches the
+*whole* framework tree → your base has drifted too far; re-fork.
+
+### Re-forking without losing anything
+
+Keep your data somewhere a re-fork can't reach. **Split-portfolio mode does
+exactly that** — `/split-portfolio` moves your data into a separate private repo,
+so the framework fork becomes throwaway: re-fork or upgrade it anytime and your
+data never moves.
+
+```bash
+/split-portfolio            # one-time migration — every step asks first
+/split-portfolio --dry-run  # preview the steps without running them
+```
+
+Not split yet? Do it by hand — copy your data out, re-fork `me2resh/apexyard`,
+copy it back, then re-add the upstream remote:
+
+```bash
+git remote add upstream https://github.com/me2resh/apexyard.git
+```
+
+### Seeing your project's tickets show up here?
+
+If `/feature`, `/bug`, or `/task` file tickets against `me2resh/apexyard` instead
+of your own repo, your fork predates per-project tracker routing. Run `/update` —
+it fixes the routing and turns on leak-protection so private names stay out of
+public trackers.
 
 ---
 

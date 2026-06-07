@@ -152,6 +152,8 @@ The hooks fire on every `git` / `gh` command, the portfolio skills aggregate acr
 
 Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-project.md`](docs/multi-project.md).
 
+Keeping a fork current — upgrade in place, when to re-fork instead, and how to preserve your portfolio data either way: [`docs/upgrading.md`](docs/upgrading.md).
+
 ## Why ApexYard?
 
 **The problem**: Claude Code is powerful, but without structure it produces inconsistent results. Every team reinvents the same processes -- role definitions, review checklists, document templates, workflow gates.
