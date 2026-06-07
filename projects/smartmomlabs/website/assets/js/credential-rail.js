@@ -14,9 +14,9 @@
   ];
 
   const LAYOUTS = {
-    sidebar: {
-      listClass: "trust-rail trust-rail--sidebar",
-      stampSize: 40,
+    hero: {
+      listClass: "trust-rail trust-rail--hero",
+      stampSize: 48,
     },
     inline: {
       listClass: "trust-rail trust-rail--inline",

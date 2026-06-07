@@ -298,7 +298,7 @@ h1, h2, h3 { text-wrap: balance; }
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
   .btn.is-loading::after { animation: none; border-inline-end-color: currentColor; opacity: 0.5; }
-  .hero-editorial,
+  .hero-enter,
   .trust-rail,
   .motion-reveal,
   .nav-menu-dialog,
@@ -332,7 +332,7 @@ a.btn-gold {
 a.btn-gold:hover {
   box-shadow: 0 8px 26px rgba(92, 66, 24, 0.38);
 }
-/* Credential rail — sidebar (editorial) or inline row (PDP) */
+/* Credential rail — hero strip (home) or inline row (PDP) */
 .trust-rail-wrap {
   margin-bottom: 18px;
 }
@@ -352,35 +352,34 @@ a.btn-gold:hover {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent) 28%, transparent) transparent;
 }
-.trust-rail--sidebar {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-  border-block: none;
-  padding: 0;
+.trust-rail--hero {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px 10px;
   overflow: visible;
+  scroll-snap-type: none;
+  padding: 22px 0 6px;
+  border-block: none;
+  border-top: 1px solid var(--border);
   animation: none;
 }
-.trust-rail--sidebar .trust-rail__item {
-  flex-direction: row;
-  align-items: center;
-  text-align: start;
-  gap: 10px;
-  min-width: 0;
-  padding: 0;
+.trust-rail--hero .trust-rail__item {
   flex: unset;
+  min-width: 0;
+  padding: 0 8px;
 }
-.trust-rail--sidebar .trust-rail__item::after {
+.trust-rail--hero .trust-rail__stamp {
+  width: 48px;
+  height: 48px;
+}
+.trust-rail--hero .trust-rail__label {
+  max-width: 9rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.trust-rail--hero .trust-rail__item::after {
   display: none;
-}
-.trust-rail--sidebar .trust-rail__stamp {
-  width: 40px;
-  height: 40px;
-}
-.trust-rail--sidebar .trust-rail__label {
-  max-width: none;
-  font-size: 0.74rem;
-  font-weight: 600;
 }
 .trust-rail--inline {
   animation: none;
@@ -436,31 +435,11 @@ a.btn-gold:hover {
 .hero--editorial {
   padding-top: 22px;
 }
-.hero-editorial {
-  display: grid;
-  grid-template-columns: minmax(148px, 200px) 1fr;
-  gap: 0;
-  align-items: start;
+.hero-trust {
+  margin-top: 8px;
 }
-.hero-aside {
-  border-inline-end: 1px solid var(--border);
-  padding-inline-end: 22px;
-}
-.hero-aside__title {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-html[dir="rtl"] .hero-aside__title {
-  letter-spacing: 0;
-  text-transform: none;
-  font-size: 0.72rem;
-}
-.hero-main {
-  padding-inline-start: 22px;
+.hero-enter {
+  animation: hero-enter 0.38s var(--ease-out-quint) both;
 }
 .hero-split {
   display: grid;
@@ -517,9 +496,6 @@ a.logo:focus-visible,
 .nav-menu-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-.hero-editorial {
-  animation: hero-enter 0.38s var(--ease-out-quint) both;
 }
 @keyframes hero-enter {
   from { opacity: 0; }
@@ -1211,7 +1187,8 @@ html[dir="ltr"] .reserve-title { font-family: var(--font-serif); }
 }
 
 @media (max-width: 640px) {
-  .trust-rail:not(.trust-rail--sidebar) {
+  .trust-rail--hero,
+  .trust-rail--inline {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 14px 10px;
@@ -1219,15 +1196,9 @@ html[dir="ltr"] .reserve-title { font-family: var(--font-serif); }
     scroll-snap-type: none;
     padding: 14px 8px 12px;
   }
-  .trust-rail--sidebar {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px 10px;
-  }
-  .trust-rail--sidebar .trust-rail__item {
-    flex-direction: column;
-    text-align: center;
-    gap: 6px;
+  .trust-rail--hero {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
   }
   .trust-rail__item {
     flex: unset;
@@ -1246,19 +1217,6 @@ html[dir="ltr"] .reserve-title { font-family: var(--font-serif); }
 }
 
 @media (max-width: 900px) {
-  .hero-editorial {
-    grid-template-columns: 1fr;
-  }
-  .hero-aside {
-    border-inline-end: none;
-    border-bottom: 1px solid var(--border);
-    padding-inline-end: 0;
-    padding-bottom: 16px;
-    margin-bottom: 16px;
-  }
-  .hero-main {
-    padding-inline-start: 0;
-  }
   .hero-split,
   .hero-grid,
   .proof-columns,
