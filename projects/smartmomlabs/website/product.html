@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>احجز بليندافيت</title>
   <meta name="description" content="احجز بليندافيت للرضّع أو الأطفال. مسجّل لدى هيئة الغذاء والدواء. داخل المملكة." />
+  <link rel="canonical" href="https://website-dun-zeta-85.vercel.app/product.html" />
+  <meta property="og:type" content="product" />
+  <meta property="og:site_name" content="blendavit" />
+  <meta property="og:locale" content="ar_SA" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:url" content="https://website-dun-zeta-85.vercel.app/product.html" />
+  <meta property="og:title" content="احجز بليندافيت | للرضّع والأطفال" />
+  <meta property="og:description" content="فيتامينات متعددة بلا طعم · 30 ظرف · مسجّل لدى SFDA · شحن داخل المملكة." />
+  <meta property="og:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Reserve blendavit | Toddlers &amp; Kids" />
+  <meta name="twitter:description" content="SFDA-registered tasteless multivitamin powder. KSA shipping only." />
+  <meta name="twitter:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -110,6 +123,11 @@
   </main>
 
   <footer class="footer">
+    <div class="wrap footer-grid footer-grid--legal">
+      <div><a class="logo" href="index.html">blendavit</a><p class="footer-brand-sub" data-i18n="footer.brand">من Smart Mom Labs</p></div>
+      <div><p><strong data-i18n="footer.shop">التسوق</strong></p><p><a href="index.html#products" data-i18n="footer.reserve">احجز</a></p></div>
+      <div><p><strong data-i18n="footer.legal">القانوني</strong></p><p><a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a></p><p><a href="terms.html" data-i18n="footer.terms">الشروط</a></p></div>
+    </div>
     <div class="wrap disclaimer" data-i18n="pdp.disclaimer">مكمل غذائي فقط. مسجّل لدى هيئة الغذاء والدواء.</div>
   </footer>
 
@@ -127,6 +145,7 @@
             <input type="email" name="email" autocomplete="email" required inputmode="email" autofocus data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
           </label>
           <button type="submit" class="btn btn-gold btn-cta" style="width:100%;margin-top:12px" data-i18n="commerce.entry.submit">احصلي على الخصم</button>
+          <p class="form-privacy"><span data-i18n="forms.privacy.prefix">بإرسال بريدك توافقين على</span> <a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a>.</p>
         </form>
         <button type="button" class="btn btn-secondary" style="width:100%;margin-top:8px" data-entry-dismiss data-i18n="commerce.entry.dismiss">لاحقًا</button>
       </div>
@@ -171,8 +190,23 @@
     <span data-cart-toast-msg></span>
   </div>
 
+  <div class="consent-banner" data-consent-banner role="dialog" aria-labelledby="consent-title" hidden>
+    <div class="consent-banner__inner wrap">
+      <div class="consent-banner__text">
+        <strong id="consent-title" data-i18n="consent.title">الخصوصية والتخزين</strong>
+        <span data-i18n="consent.body">نستخدم التخزين المحلي للسلة ورمز الخصم.</span>
+      </div>
+      <div class="consent-banner__actions">
+        <button type="button" class="btn btn-primary" data-consent-accept data-i18n="consent.accept">قبول الكل</button>
+        <button type="button" class="btn btn-secondary" data-consent-essential data-i18n="consent.essential">الأساسي فقط</button>
+        <a href="privacy.html" class="consent-banner__link" data-i18n="consent.privacy">سياسة الخصوصية</a>
+      </div>
+    </div>
+  </div>
+
   <script src="assets/js/i18n.js"></script>
   <script src="assets/js/config.js"></script>
+  <script src="assets/js/consent.js"></script>
   <script src="assets/js/cart.js"></script>
   <script src="assets/js/commerce.js"></script>
   <script src="assets/js/credential-rail.js"></script>

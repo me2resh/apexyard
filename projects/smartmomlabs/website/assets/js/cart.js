@@ -24,7 +24,18 @@
     return root.BLENDAVIT_CONFIG || {};
   }
 
+  let memoryCart = null;
+
+  function persistenceAllowed() {
+    const consent = root.BLENDAVIT_CONSENT;
+    if (!consent) return true;
+    return consent.allows("cart");
+  }
+
   function read() {
+    if (!persistenceAllowed()) {
+      return memoryCart ? { items: memoryCart.items.slice() } : { items: [] };
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return { items: [] };
@@ -36,9 +47,13 @@
   }
 
   function write(cart) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
-    } catch (_) {}
+    if (!persistenceAllowed()) {
+      memoryCart = { items: cart.items.map((i) => ({ ...i })) };
+    } else {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cart));
+      } catch (_) {}
+    }
     document.dispatchEvent(
       new CustomEvent("blendavit:cart-change", { detail: { cart } })
     );
@@ -118,6 +133,15 @@
       comparePrice: comparePrice(i.variant),
       lineTotal: unitPrice(i.variant) * i.qty,
     }));
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("blendavit:consent", (e) => {
+      if (e.detail?.value === "all" && memoryCart?.items?.length) {
+        write(memoryCart);
+        memoryCart = null;
+      }
+    });
   }
 
   root.BLENDAVIT_CART = {

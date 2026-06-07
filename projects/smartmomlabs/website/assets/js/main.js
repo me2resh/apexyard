@@ -233,6 +233,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    if (window.BLENDAVIT_CONSENT) window.BLENDAVIT_CONSENT.init();
     if (window.BLENDAVIT_CREDENTIAL_RAIL) window.BLENDAVIT_CREDENTIAL_RAIL.mountAll();
     if (window.BLENDAVIT_CONFIG_VALIDATE) window.BLENDAVIT_CONFIG_VALIDATE.run();
     window.BLENDAVIT_PURCHASE?.resetResolver();
