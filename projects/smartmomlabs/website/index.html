@@ -26,6 +26,10 @@
       <a href="#science" class="hide-mobile" data-i18n="nav.science">العلم</a>
       <a href="#faq" class="hide-mobile" data-i18n="nav.faq">الأسئلة</a>
       <a class="btn btn-primary hide-mobile" href="#products" data-i18n="nav.reserve">احجز علبتك</a>
+      <button type="button" class="nav-cart-btn" data-cart-open data-i18n-aria-label="commerce.nav.cart" aria-label="السلة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6h15l-1.5 9h-12z"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M6 6L5 3H2"/></svg>
+        <span class="nav-cart-count" data-cart-count hidden>0</span>
+      </button>
       <button type="button" class="nav-menu-btn show-mobile-only" aria-haspopup="dialog" aria-controls="nav-menu" data-nav-open data-i18n="nav.menu">القائمة</button>
     </nav>
   </header>
@@ -43,41 +47,37 @@
   <section class="hero hero--editorial">
     <div class="wrap">
       <p class="ksa-chip" data-i18n="ksa.chip">صُنع للمملكة · شحن محلي</p>
-      <div class="hero-editorial">
-        <aside class="hero-aside" aria-labelledby="hero-trust-heading">
-          <h2 id="hero-trust-heading" class="hero-aside__title" data-i18n="trust.rail.heading">اعتمادات</h2>
-          <div data-trust-rail-mount="sidebar"></div>
-        </aside>
-        <div class="hero-main">
-          <div class="hero-split">
-            <div class="hero-copy-in">
-              <h1 data-i18n="hero.title">اثنا عشر عنصرًا غذائيًا في وجبات يأكلها طفلك أصلًا</h1>
-              <p class="hero-lead" data-i18n="hero.lead">مسحوق بلا طعم في ظرف 1غ مع حديد ليبوفير و0غ سكر مضاف.</p>
-              <div class="hero-ctas">
-                <a class="btn btn-primary" href="#products" data-i18n="hero.cta.shop">اختر علبتك</a>
-                <a class="btn btn-secondary" href="product.html" data-i18n="hero.cta.details">تفاصيل المنتج</a>
-              </div>
-            </div>
-            <div class="hero-visual hero-visual-in">
-              <picture>
-                <source type="image/webp" srcset="assets/images/hero-stir-yoghurt.webp" />
-                <img
-                  id="hero-visual"
-                  class="hero-scene"
-                  src="assets/images/hero-stir-yoghurt.png"
-                  alt=""
-                  width="1024"
-                  height="764"
-                  loading="eager"
-                  fetchpriority="high"
-                  decoding="async"
-                  data-i18n="hero.scene.alt"
-                />
-              </picture>
-              <div class="age-badge" id="hero-age-badge" aria-hidden="true"><span data-i18n="hero.badge.range">1–12</span><span data-i18n="badge.years">سنة</span></div>
-            </div>
+      <div class="hero-split hero-enter">
+        <div class="hero-copy-in">
+          <h1 data-i18n="hero.title">اثنا عشر عنصرًا غذائيًا في وجبات يأكلها طفلك أصلًا</h1>
+          <p class="hero-lead" data-i18n="hero.lead">مسحوق بلا طعم في ظرف 1غ مع حديد ليبوفير و0غ سكر مضاف.</p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="#products" data-i18n="hero.cta.shop">اختر علبتك</a>
+            <a class="btn btn-secondary" href="product.html" data-i18n="hero.cta.details">تفاصيل المنتج</a>
           </div>
         </div>
+        <div class="hero-visual hero-visual-in">
+          <picture>
+            <source type="image/webp" srcset="assets/images/hero-stir-yoghurt.webp" />
+            <img
+              id="hero-visual"
+              class="hero-scene"
+              src="assets/images/hero-stir-yoghurt.png"
+              alt=""
+              width="1024"
+              height="764"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+              data-i18n="hero.scene.alt"
+            />
+          </picture>
+          <div class="age-badge" id="hero-age-badge" aria-hidden="true"><span data-i18n="hero.badge.range">1–12</span><span data-i18n="badge.years">سنة</span></div>
+        </div>
+      </div>
+      <div class="hero-trust" aria-labelledby="hero-trust-heading">
+        <h2 id="hero-trust-heading" class="visually-hidden" data-i18n="trust.rail.heading">اعتمادات</h2>
+        <div data-trust-rail-mount="hero"></div>
       </div>
     </div>
   </section>
@@ -95,7 +95,12 @@
             <h3 data-i18n="card.t.title">بليندافيت للرضّع</h3>
             <p class="meta" data-i18n="card.t.meta">1–3 سنوات · 30 ظرف</p>
             <p data-i18n="card.t.desc">لوحة 12 عنصرًا مع حديد مغلّف.</p>
-            <a class="btn btn-primary btn-buy" href="#waitlist" data-buy-btn data-variant="toddlers" data-i18n="card.t.cta">انضم لقائمة الانتظار</a>
+            <div class="price-block" data-price-block data-variant="toddlers">
+              <span class="discount-badge" data-discount-badge hidden data-i18n="commerce.badge">خصم 20٪</span>
+              <span class="price-compare" data-price-compare hidden></span>
+              <span class="price-current" data-price-current></span>
+            </div>
+            <button type="button" class="btn btn-primary btn-buy" data-add-to-cart data-variant="toddlers" data-i18n="commerce.addToCart">أضيفي للسلة</button>
             <a class="product-details" href="product.html?variant=toddlers" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
@@ -105,7 +110,12 @@
             <h3 data-i18n="card.k.title">بليندافيت للأطفال</h3>
             <p class="meta" data-i18n="card.k.meta">4+ سنوات · 30 ظرف</p>
             <p data-i18n="card.k.desc">فيتامينات كاملة مع حديد.</p>
-            <a class="btn btn-primary btn-buy" href="#waitlist" data-buy-btn data-variant="kids" data-i18n="card.k.cta">انضم لقائمة الانتظار</a>
+            <div class="price-block" data-price-block data-variant="kids">
+              <span class="discount-badge" data-discount-badge hidden data-i18n="commerce.badge">خصم 20٪</span>
+              <span class="price-compare" data-price-compare hidden></span>
+              <span class="price-current" data-price-current></span>
+            </div>
+            <button type="button" class="btn btn-primary btn-buy" data-add-to-cart data-variant="kids" data-i18n="commerce.addToCart">أضيفي للسلة</button>
             <a class="product-details" href="product.html?variant=kids" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
@@ -218,10 +228,10 @@
     </div>
   </section>
 
-  <section id="waitlist" class="alt">
+  <section id="preorder" class="alt">
     <div class="wrap waitlist-wrap">
-      <h2 class="waitlist-title" data-i18n="waitlist.title">قائمة الانتظار للدفعة الأولى</h2>
-      <p class="waitlist-sub" data-i18n="waitlist.sub">أدخل بريدك لنخبرك عند فتح الحجز. شحن داخل المملكة فقط.</p>
+      <h2 class="waitlist-title" data-i18n="preorder.title">أكملي الطلب المسبق</h2>
+      <p class="waitlist-sub" data-i18n="preorder.sub">أدخلي بريدك لتأكيد الطلب. شحن داخل المملكة فقط.</p>
       <form class="waitlist-form" data-waitlist-form method="post" novalidate>
         <input type="hidden" name="variant" id="waitlist-variant" value="kids" />
         <label class="waitlist-field">
@@ -249,8 +259,68 @@
     <div class="wrap disclaimer" data-i18n="footer.disclaimer">مكمل غذائي فقط.</div>
   </footer>
 
+  <dialog class="commerce-dialog entry-offer" data-entry-modal data-i18n-aria-label="commerce.entry.title" aria-labelledby="entry-offer-title">
+    <div class="commerce-dialog__inner">
+      <div class="commerce-dialog__head">
+        <h2 id="entry-offer-title" data-i18n="commerce.entry.title">خصم 20٪ لأول طلب</h2>
+        <button type="button" class="dialog-close" data-entry-dismiss aria-label="Close">×</button>
+      </div>
+      <div data-entry-form-wrap>
+        <p data-i18n="commerce.entry.sub">أدخلي بريدك الإلكتروني واحصلي على رمز الخصم فورًا.</p>
+        <form data-entry-form>
+          <label class="waitlist-field">
+            <span class="waitlist-label" data-i18n="commerce.entry.email">البريد الإلكتروني</span>
+            <input type="email" name="email" autocomplete="email" required inputmode="email" autofocus data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
+          </label>
+          <button type="submit" class="btn btn-gold btn-cta" style="width:100%;margin-top:12px" data-i18n="commerce.entry.submit">احصلي على الخصم</button>
+        </form>
+        <button type="button" class="btn btn-secondary" style="width:100%;margin-top:8px" data-entry-dismiss data-i18n="commerce.entry.dismiss">لاحقًا</button>
+      </div>
+      <div class="entry-offer__success" data-entry-success hidden>
+        <p data-i18n="commerce.entry.success">تم! استخدمي الرمز عند الدفع:</p>
+        <strong class="entry-offer__code" data-entry-code>FIRSTBLEND20</strong>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="cart-drawer" data-cart-drawer aria-labelledby="cart-drawer-title">
+    <div class="cart-drawer__inner">
+      <div class="cart-drawer__head">
+        <h2 id="cart-drawer-title" data-i18n="commerce.cart.title">سلتك</h2>
+        <button type="button" class="dialog-close" data-cart-close data-i18n-aria-label="commerce.cart.close" aria-label="إغلاق">×</button>
+      </div>
+      <p class="cart-empty" data-cart-empty data-i18n="commerce.cart.empty">سلتك فارغة</p>
+      <ul class="cart-lines" data-cart-lines></ul>
+      <div class="cart-footer" data-cart-footer hidden>
+        <div class="cart-subtotal-row">
+          <span data-i18n="commerce.cart.subtotal">المجموع</span>
+          <strong data-cart-subtotal></strong>
+        </div>
+        <button type="button" class="btn btn-gold btn-cta" data-cart-checkout data-i18n="commerce.cart.checkout">إتمام الشراء الآمن</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="commerce-dialog restock-modal" data-restock-modal aria-labelledby="restock-title">
+    <div class="commerce-dialog__inner">
+      <div class="commerce-dialog__head">
+        <h2 id="restock-title" data-i18n="commerce.restock.title">طلبك محجوز للتنفيذ عند التوفر</h2>
+        <button type="button" class="dialog-close" data-restock-close aria-label="Close">×</button>
+      </div>
+      <p class="restock-modal__body" data-i18n="commerce.restock.body">يُنفَّذ طلبك عند إعادة التوفر. لا يُخصم المبلغ حتى الشحن داخل المملكة.</p>
+      <button type="button" class="btn btn-gold btn-cta" data-restock-continue data-i18n="commerce.restock.cta">أكملي الطلب المسبق</button>
+      <button type="button" class="btn btn-secondary" data-restock-close data-i18n="commerce.restock.close">متابعة التسوق</button>
+    </div>
+  </dialog>
+
+  <div class="cart-toast" data-cart-toast role="status" aria-live="polite" hidden>
+    <span data-cart-toast-msg></span>
+  </div>
+
   <script src="assets/js/i18n.js"></script>
   <script src="assets/js/config.js"></script>
+  <script src="assets/js/cart.js"></script>
+  <script src="assets/js/commerce.js"></script>
   <script src="assets/js/credential-rail.js"></script>
   <script src="assets/js/config-validate.js"></script>
   <script src="assets/js/purchase-path.js"></script>
