@@ -67,10 +67,23 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     exit 0
   fi
 
+  # Deletion-only (rm without any content-writing sibling) does not add repo
+  # content, so it should not require a ticket (#569).
+  if bash_command_is_deletion_only "$COMMAND"; then
+    exit 0
+  fi
+
   # Try to extract a target path so we can apply the same path-based
   # exemptions (.claude/, docs/, *.md). If extraction fails, FILE_PATH
   # stays empty and the gate is applied categorically.
   FILE_PATH=$(bash_extract_write_target "$COMMAND")
+
+  # Variable target (e.g. `cat > "$VAR"`): the extractor returns the literal
+  # shell-variable token. We cannot resolve it statically; treat it as
+  # non-blocking rather than defaulting to the fallback-only path (#569).
+  case "$FILE_PATH" in
+    \$*) exit 0 ;;
+  esac
 fi
 
 if [ -z "$FILE_PATH" ] && [ "$TOOL_NAME" != "Bash" ]; then
@@ -83,6 +96,26 @@ REL_PATH="$FILE_PATH"
 if [ -n "$REPO_ROOT" ] && [ -n "$FILE_PATH" ]; then
   case "$FILE_PATH" in
     "$REPO_ROOT"/*) REL_PATH="${FILE_PATH#$REPO_ROOT/}" ;;
+  esac
+fi
+
+# Bash-write: absolute paths outside the repo root are outside the tracked
+# source tree (e.g. /tmp/, /var/, /usr/, system-temp paths). A write there
+# cannot mutate apexyard-governed content, so no ticket is required (#569).
+# This check runs only for the Bash path (FILE_PATH set via extractor) and
+# only when FILE_PATH is absolute and does NOT strip to a REL_PATH (meaning
+# it's outside REPO_ROOT). We conservatively skip this for non-Bash tools —
+# they supply an explicit file_path from the tool call that we trust fully.
+if [ "$TOOL_NAME" = "Bash" ] && [ -n "$FILE_PATH" ] && [ -n "$REPO_ROOT" ]; then
+  case "$FILE_PATH" in
+    /*)
+      # Absolute path — was it stripped to a repo-relative form?
+      if [ "$REL_PATH" = "$FILE_PATH" ]; then
+        # REL_PATH is still absolute: FILE_PATH is NOT under REPO_ROOT.
+        # It's a system path or temp path — exempt.
+        exit 0
+      fi
+      ;;
   esac
 fi
 

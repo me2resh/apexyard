@@ -222,6 +222,67 @@ EOF
 in=$(jq -nc --arg p "$rsb/workspace/myproj/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "per-worktree via git linked-worktree detection (no env var)" 0 "" "$in" "$sb"
 
+# --- #569: bash-write path-exemption fixes ------------------------------
+# These cases prove the over-blocking described in #569 is gone, while
+# preserving the gate for writes into tracked source paths.
+
+# 17. cat > /tmp/x with no ticket → allowed (absolute path outside repo)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "cat > /tmp/commit-msg.txt" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to /tmp exempt (no ticket needed)" 0 "" "$in" "$sb"
+
+# 18. echo > /var/tmp/scratch with no ticket → allowed (non-repo absolute path)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hello > /var/tmp/scratch.txt" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to /var/tmp exempt" 0 "" "$in" "$sb"
+
+# 19. echo > .claude/session/foo with no ticket → allowed (exempt .claude/ path)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x > .claude/session/foo" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to .claude/ exempt" 0 "" "$in" "$sb"
+
+# 20. cp src dst where dst is a .claude/ path → allowed (exempt destination)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "cp .claude/session/tickets/myproj .claude/session/current-ticket" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash cp to .claude/ destination exempt" 0 "" "$in" "$sb"
+
+# 21. rm -f file.txt with no ticket → allowed (deletion-only, no content written)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "rm -f workspace/proj/.git/tmpfile" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash rm-only exempt (no ticket needed)" 0 "" "$in" "$sb"
+
+# 22. rm -rf dir/ with no ticket → allowed (deletion-only)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "rm -rf /tmp/workdir" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash rm -rf exempt" 0 "" "$in" "$sb"
+
+# 23. cat > \$VAR with no ticket → allowed (unresolvable variable target)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'cat > "$CEO"' '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to shell variable exempt (unresolvable target)" 0 "" "$in" "$sb"
+
+# 24. echo > src/app.ts with no ticket → STILL BLOCKED (tracked source path)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to tracked source still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 25. rm followed by redirect into tracked source → STILL BLOCKED (not deletion-only)
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "rm old.ts && echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash rm+redirect to tracked source still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 26. All #569 cases pass through when a current-ticket marker IS present (regression)
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=569
+title=test
+url=https://example.com
+EOF
+in=$(jq -nc --arg c "echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to tracked source allowed WITH active ticket" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

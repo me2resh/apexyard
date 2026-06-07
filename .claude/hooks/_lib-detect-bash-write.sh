@@ -307,6 +307,53 @@ bash_command_appears_to_write() {
 }
 
 # ------------------------------------------------------------------------------
+# Public: bash_command_is_deletion_only COMMAND
+#
+# Returns 0 when the ONLY write-like pattern in the command is `rm` — i.e. the
+# command removes files but does NOT add or mutate tracked content via redirect,
+# tee, cp/mv, sed -i, interpreters, archive extraction, network writes, etc.
+#
+# Used by require-active-ticket.sh to exempt bare `rm` calls from the ticket
+# gate: deleting a file does not add source content to the repo, so requiring a
+# ticket for it is over-blocking.
+#
+# Returns 0 (deletion only), 1 (content-writing detected or not an rm command).
+# ------------------------------------------------------------------------------
+bash_command_is_deletion_only() {
+  local cmd="$1"
+  [ -z "$cmd" ] && return 1
+
+  # Must match _bdw_match_file_movers (covers rm / cp / mv / dd / install).
+  _bdw_match_file_movers "$cmd" || return 1
+
+  # cp, mv, dd, install all write content — not deletion-only.
+  if echo "$cmd" | grep -qE '(^|[;&|(]|&&|\|\|)[[:space:]]*(cp|mv|dd|install)([[:space:]]|$)'; then
+    return 1
+  fi
+
+  # Any other content-writing pattern alongside rm → not deletion-only.
+  _bdw_match_redirection    "$cmd" && return 1
+  _bdw_match_tee            "$cmd" && return 1
+  _bdw_match_sed_inplace    "$cmd" && return 1
+  _bdw_match_awk_inplace    "$cmd" && return 1
+  _bdw_match_tar_extract    "$cmd" && return 1
+  _bdw_match_curl_output    "$cmd" && return 1
+  _bdw_match_wget_output    "$cmd" && return 1
+  _bdw_match_python_dash_c  "$cmd" && return 1
+  _bdw_match_python_heredoc "$cmd" && return 1
+  _bdw_match_node_dash_e    "$cmd" && return 1
+  _bdw_match_node_heredoc   "$cmd" && return 1
+  _bdw_match_ruby_dash_e    "$cmd" && return 1
+  _bdw_match_ruby_heredoc   "$cmd" && return 1
+  _bdw_match_perl_dash_e    "$cmd" && return 1
+  _bdw_match_php_dash_r     "$cmd" && return 1
+  _bdw_match_script_runner  "$cmd" && return 1
+
+  # Only rm matched — deletion-only operation.
+  return 0
+}
+
+# ------------------------------------------------------------------------------
 # Public: bash_extract_write_target COMMAND
 #
 # Best-effort extraction of the target path from a write command.

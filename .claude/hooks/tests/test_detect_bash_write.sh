@@ -180,6 +180,45 @@ assert_target "deno run (miss)"    "deno run script.ts" ""
 bypass_cmd=$'python3 - <<\'PY\'\nimport pathlib\np = pathlib.Path(".gitignore")\np.write_text("...")\nPY'
 assert_write "issue-151 bypass attempt" "$bypass_cmd"
 
+# --- bash_command_is_deletion_only (#569) — positive class (rm-only) ---
+
+assert_deletion_only() {
+  local label="$1" cmd="$2"
+  if bash_command_is_deletion_only "$cmd"; then
+    echo "PASS [deletion-only/$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [should-be-deletion-only/$label]: $cmd" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}deletion-only/${label} "
+  fi
+}
+
+assert_not_deletion_only() {
+  local label="$1" cmd="$2"
+  if bash_command_is_deletion_only "$cmd"; then
+    echo "FAIL [should-NOT-be-deletion-only/$label]: $cmd" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}not-deletion-only/${label} "
+  else
+    echo "PASS [not-deletion-only/$label]"
+    PASS=$((PASS+1))
+  fi
+}
+
+# Positive class: rm-only → deletion_only returns 0
+assert_deletion_only "rm file"          "rm file.ts"
+assert_deletion_only "rm -f file"       "rm -f .claude/session/current-ticket"
+assert_deletion_only "rm -rf dir"       "rm -rf /tmp/workdir"
+
+# Negative class: content-writing alongside or instead of rm → deletion_only returns 1
+assert_not_deletion_only "cp (not rm)"              "cp src.txt dst.txt"
+assert_not_deletion_only "mv (not rm)"              "mv old.txt new.txt"
+assert_not_deletion_only "dd (not rm)"              "dd if=/dev/zero of=x bs=1M count=1"
+assert_not_deletion_only "install (not rm)"         "install -m 0644 src dst"
+assert_not_deletion_only "rm + redirect"            "rm old.ts && echo x > src/app.ts"
+assert_not_deletion_only "rm + tee"                 "rm a | tee b"
+assert_not_deletion_only "redirect only (no rm)"    "echo x > file.ts"
+assert_not_deletion_only "cp only"                  "cp a b"
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
