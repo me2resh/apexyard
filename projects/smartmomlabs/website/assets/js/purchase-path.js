@@ -57,9 +57,9 @@
 
     function onSiteWaitlistHref(formula, surface) {
       if (surface === "pdp") {
-        return "index.html?variant=" + encodeURIComponent(formula) + "#waitlist";
+        return "index.html?variant=" + encodeURIComponent(formula) + "#preorder";
       }
-      return "#waitlist";
+      return "#preorder";
     }
 
     function labelKey(formula) {

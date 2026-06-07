@@ -31,5 +31,8 @@
   --nav-h: 72px;
   --shadow: 0 20px 50px rgba(26, 61, 50, 0.12);
   --z-sticky: 100;
+  --z-drawer: 200;
+  --z-modal: 300;
+  --z-toast: 400;
   --gcc-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l4 8h9l-7 6 3 9-9-5-9 5 3-9-7-6h9z' fill='%231a3d32' fill-opacity='0.035'/%3E%3C/svg%3E");
 }

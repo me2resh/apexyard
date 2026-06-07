@@ -33,17 +33,21 @@
       nonEmpty(waitlist.kids_ksa);
 
     const hasForm = nonEmpty(cfg.waitlistFormAction);
-    const hasOnSite = Boolean(document.getElementById("waitlist"));
+    const hasOnSite = Boolean(
+      document.getElementById("preorder") || document.getElementById("waitlist")
+    );
+    const commerceMode = cfg.checkoutEnabled === false;
 
     let mode = "waitlist";
-    if (hasCheckout) mode = "checkout";
+    if (commerceMode) mode = "commerce-preorder";
+    if (hasCheckout && cfg.checkoutEnabled !== false) mode = "checkout";
 
     if (hasCheckout && hasExternalWaitlist) {
       warnings.push("Both checkoutUrls and waitlistUrls set — checkout takes priority.");
     }
 
-    if (!hasCheckout && !hasExternalWaitlist && !hasForm && !hasOnSite) {
-      warnings.push("No checkout, waitlist URL, or #waitlist form — buyers have no path.");
+    if (!commerceMode && !hasCheckout && !hasExternalWaitlist && !hasForm && !hasOnSite) {
+      warnings.push("No checkout, waitlist URL, or #preorder form — buyers have no path.");
     }
 
     if (!hasCheckout && !hasExternalWaitlist && hasOnSite && !hasForm) {

@@ -1,10 +1,20 @@
-/** KSA-only Shopify setup — paste store URL and checkout links after products exist */
+/** KSA Shopify + commerce — flip checkoutEnabled when live */
 window.BLENDAVIT_CONFIG = {
-  shopifyStoreUrl: "",
+  checkoutEnabled: false,
   market: "ksa",
+  discountPercent: 20,
+  discountCode: "FIRSTBLEND20",
+  emailCaptureDelayMs: 2000,
+  prices: {
+    toddlers_ksa: 189,
+    kids_ksa: 189,
+  },
+  shopifyStoreUrl: "",
   checkoutUrls: {
     toddlers_ksa: "",
     kids_ksa: "",
   },
+  waitlistFormAction: "",
+  waitlistUrls: {},
   depositMode: true,
 };
