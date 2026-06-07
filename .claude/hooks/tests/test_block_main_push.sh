@@ -212,6 +212,28 @@ run_case "cd protected-wt && git commit blocks (worktree on main)" \
   "$SB" "$SB" "cd ${SB2} && git commit -m 'bad'" 2
 rm -rf "$SB2"
 
+# --- #580 review follow-ups: quoted-path + chained-cd resolution ---
+SB3=$(make_sandbox "main")   # a separate checkout on protected 'main'
+
+# Quoted cd into a protected worktree must STILL block. Before the fix the
+# quotes reached `git -C`, which errored → empty branch → silent slip-through.
+run_case "cd \"protected\" (double-quoted) && commit blocks" \
+  "$SB" "$SB" "cd \"${SB3}\" && git commit -m 'bad'" 2
+run_case "cd 'protected' (single-quoted) && commit blocks" \
+  "$SB" "$SB" "cd '${SB3}' && git commit -m 'bad'" 2
+
+# Quoted cd into a feature worktree must still PASS (quote-strip must not over-block).
+run_case "cd \"feature-wt\" (quoted) && commit passes" \
+  "$SB" "$SB" "cd \"${WT}\" && git commit -m 'wip'" 0
+
+# Chained cd resolves the LAST target, not the first.
+run_case "chained cd: last=feature passes (cd main && cd wt && commit)" \
+  "$SB" "$SB" "cd ${SB3} && cd ${WT} && git commit -m 'wip'" 0
+run_case "chained cd: last=protected blocks (cd wt && cd main && commit)" \
+  "$SB" "$SB" "cd ${WT} && cd ${SB3} && git commit -m 'bad'" 2
+
+rm -rf "$SB3"
+
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------

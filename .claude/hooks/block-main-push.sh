@@ -130,12 +130,19 @@ if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   #   cd /abs/path && git commit …
   # Match `cd` as the first meaningful token before any separator.
   WORKTREE_PATH=""
-  if echo "$COMMAND" | grep -qE '^\s*cd\s+\S'; then
-    # Extract the path token immediately following `cd`.
-    # Uses POSIX sed: strip leading whitespace, match `cd <token>`, capture token.
-    WORKTREE_PATH=$(echo "$COMMAND" | \
-      sed -n 's/^[[:space:]]*cd[[:space:]]\{1,\}\([^[:space:];&|][^[:space:];&|]*\).*/\1/p' | \
-      head -1)
+  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+    # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
+    # targets b, not a) and STRIP surrounding quotes. Quote-stripping is the
+    # security-critical part: without it, `cd "path" && git commit` would pass
+    # `"path"` (quotes included) to `git -C`, which errors → empty branch → the
+    # protected-branch check is skipped and a commit into a protected-branch
+    # worktree slips through. That false-negative was caught in the #580 review
+    # of this fix (#549). Handles double-quoted, single-quoted (incl. spaces),
+    # and bare paths.
+    WORKTREE_PATH=$(echo "$COMMAND" \
+      | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+      | tail -n 1 \
+      | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
   fi
 
   if [ -n "$WORKTREE_PATH" ]; then
