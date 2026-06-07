@@ -248,6 +248,42 @@ if [ "$SITE_VERSION" != "$CHANGELOG_VERSION" ]; then
 fi
 echo "  ok   site softwareVersion=$SITE_VERSION matches CHANGELOG top entry $CHANGELOG_VERSION"
 
+# --- Hero pill + releases-shipped metric vs CHANGELOG (#562) ------------------
+# softwareVersion is only ONE of the seven version strings /release step 3.5
+# bumps. The guard above covered just that one, so the hero pill and the
+# releases-shipped metric silently drifted to v2.2 while CI stayed green at
+# v3.0.0 (#562). Extend the guard to the two most visible remaining strings.
+CHANGELOG_MM=$(printf '%s' "$CHANGELOG_VERSION" | grep -oE '^[0-9]+\.[0-9]+')
+CHANGELOG_COUNT=$(grep -cE '^## \[[0-9]' CHANGELOG.md)
+
+# Hero pill: <span class="pill">apexyard vX.Y</span> (major.minor only).
+PILL_MM=$(grep -oE 'class="pill">apexyard v[0-9]+\.[0-9]+' site/index.html 2>/dev/null \
+  | grep -oE '[0-9]+\.[0-9]+' | head -1)
+if [ "$PILL_MM" != "$CHANGELOG_MM" ]; then
+  echo "FAIL: site hero pill 'apexyard v$PILL_MM' but CHANGELOG major.minor is $CHANGELOG_MM"
+  echo "      Bump the hero pill (site/index.html ~L1568) per SKILL.md step 3.5."
+  exit 1
+fi
+echo "  ok   site hero pill apexyard v$PILL_MM matches CHANGELOG $CHANGELOG_MM"
+
+# Releases-shipped metric: <strong>N</strong> + 'Production releases shipped (v0.1 → vX.Y)'.
+# Match without depending on the literal arrow glyph.
+RANGE_MATCH=$(grep -oE 'Production releases shipped \(v0\.1[^)]*[0-9]+\.[0-9]+\)' site/index.html 2>/dev/null | head -1)
+RANGE_MM=$(printf '%s' "$RANGE_MATCH" | grep -oE '[0-9]+\.[0-9]+' | tail -1)
+if [ "$RANGE_MM" != "$CHANGELOG_MM" ]; then
+  echo "FAIL: site releases-shipped range ends at v$RANGE_MM but CHANGELOG major.minor is $CHANGELOG_MM"
+  echo "      Bump the releases-shipped range (site/index.html ~L1696) per SKILL.md step 3.5."
+  exit 1
+fi
+SHIPPED_COUNT=$(grep -B1 'Production releases shipped' site/index.html 2>/dev/null \
+  | grep -oE '<strong>[0-9]+</strong>' | grep -oE '[0-9]+' | head -1)
+if [ "$SHIPPED_COUNT" != "$CHANGELOG_COUNT" ]; then
+  echo "FAIL: site releases-shipped count=$SHIPPED_COUNT but CHANGELOG has $CHANGELOG_COUNT release entries"
+  echo "      Bump the releases-shipped count (site/index.html ~L1696) per SKILL.md step 3.5."
+  exit 1
+fi
+echo "  ok   site releases-shipped $SHIPPED_COUNT / (v0.1 → v$RANGE_MM) matches CHANGELOG ($CHANGELOG_COUNT entries, $CHANGELOG_MM)"
+
 # --- LLM payload-size meta tags (#333 item C) ---
 # Each main marketing page carries <meta name="llm:token-count" content="N">
 # and <meta name="llm:doc-length" content="M chars">. The token estimate is

@@ -113,11 +113,15 @@ move with each cut.
 Show the resulting `site/index.html` diff alongside the CHANGELOG diff in the
 dry-run / preview so the operator sees both before the PR opens.
 
-> **Durable guard:** `test_site_counts.sh` asserts `site/index.html`'s JSON-LD
-> `softwareVersion` equals the top-most `## [X.Y.Z]` entry in `CHANGELOG.md`, and
-> the CI workflow `site-counts-check.yml` runs it on every PR. If you bump the
-> CHANGELOG without bumping the site (or vice-versa), CI goes red — the drift can
-> no longer accumulate silently.
+> **Durable guard:** `test_site_counts.sh` asserts that `site/index.html`'s
+> JSON-LD `softwareVersion`, the **hero pill** (`apexyard vX.Y`), and the
+> **releases-shipped metric** (count + `(v0.1 → vX.Y)` range) all match the
+> top-most `## [X.Y.Z]` entry in `CHANGELOG.md` (the count matches
+> `grep -cE '^## \[[0-9]' CHANGELOG.md`). The CI workflow `site-counts-check.yml`
+> runs it on every PR. If you bump the CHANGELOG without bumping these site
+> strings (or vice-versa), CI goes red — the drift can no longer accumulate
+> silently. (Before #562 only `softwareVersion` was guarded, which is how the
+> pill + metric drifted to v2.2 at the v3.0.0 cut.)
 
 ### 4. Open the release PR
 
