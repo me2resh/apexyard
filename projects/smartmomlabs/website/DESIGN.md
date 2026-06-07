@@ -71,7 +71,7 @@ Anti-references for agents: generic stroke trust icons, identical icon+heading c
 
 ## Colors
 
-Source of truth: `:root` tokens in `assets/css/main.css`.
+Source of truth: `:root` tokens in `assets/css/tokens.css` (imported by `main.css`).
 
 | Role | Token | Hex | Use |
 |------|-------|-----|-----|
