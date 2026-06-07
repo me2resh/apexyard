@@ -272,6 +272,22 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c "rm old.ts && echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "bash rm+redirect to tracked source still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
 
+# 25b. var WITH a path tail into tracked source → STILL BLOCKED (#582 review:
+#      the blanket $* exemption was fail-open; var+tail must not bypass the gate).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'echo x > $PWD/src/app.ts' '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to \$PWD/src tracked path still blocked" 2 "BLOCKED" "$in" "$sb"
+
+# 25c. var-prefixed relative path tail → STILL BLOCKED (not a bare variable).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'echo x > $D/app.ts' '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to \$D/app.ts (var+tail) still blocked" 2 "BLOCKED" "$in" "$sb"
+
+# 25d. bare braced variable target → allowed (unresolvable scratch path).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'cat > "${marker}"' '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "bash redirect to bare \${marker} exempt" 0 "" "$in" "$sb"
+
 # 26. All #569 cases pass through when a current-ticket marker IS present (regression)
 sb=$(make_sandbox)
 cat > "$sb/.claude/session/current-ticket" <<EOF

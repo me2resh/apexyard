@@ -79,11 +79,22 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   FILE_PATH=$(bash_extract_write_target "$COMMAND")
 
   # Variable target (e.g. `cat > "$VAR"`): the extractor returns the literal
-  # shell-variable token. We cannot resolve it statically; treat it as
-  # non-blocking rather than defaulting to the fallback-only path (#569).
+  # shell-variable token. Exempt a temp-dir var, and a BARE whole-target variable
+  # (`$CEO`, `${marker}` — unresolvable, in practice a .claude/ scratch path). A
+  # variable WITH a concatenated path tail (`$PWD/src/app.ts`, `$D/app.ts`,
+  # `$HOME/work/src/x.ts`) is NOT exempt — that path could be tracked source, and
+  # the old blanket `$*` exemption let such a write dodge the ticket gate (#582
+  # review: fail-open on a security gate). A var+tail target isn't bare and isn't
+  # absolute, so it falls through to the ticket gate below and blocks — which is
+  # the safe direction. (We deliberately do NOT expand $PWD/$HOME here: that adds
+  # nothing for blocking and tripped a /var↔/private/var symlink mismatch.)
   case "$FILE_PATH" in
-    \$*) exit 0 ;;
+    '$TMPDIR'/*|'${TMPDIR}'/*|'$TMP'/*|'${TMP}'/*) exit 0 ;;  # temp dir → outside the repo
   esac
+  # Bare whole-target variable only (no path/extension tail) → exempt.
+  if printf '%s' "$FILE_PATH" | grep -qE '^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$'; then
+    exit 0
+  fi
 fi
 
 if [ -z "$FILE_PATH" ] && [ "$TOOL_NAME" != "Bash" ]; then
