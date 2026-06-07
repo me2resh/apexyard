@@ -1,10 +1,15 @@
 #!/bin/bash
-# Tests for validate-branch-name.sh's push-source-ref extraction (#194).
+# Tests for validate-branch-name.sh's push-source-ref extraction (#194, #547).
 #
 # Validates that the hook reads the branch from the actual `git push`
 # command's source ref when present, rather than from `git branch
 # --show-current` against the harness's $PWD. This is the worktree-safe
 # behaviour Agent fan-out workers depend on.
+#
+# Also validates the #547 bug fixes:
+#   - `HEAD:dst` refspec → validates DST, not HEAD (was: blocked on "HEAD")
+#   - `--tags 2>&1 | tail` → skipped as tag push (was: blocked on "2>")
+#   - shell redirections stripped before token parsing
 #
 # Each case:
 #   - builds an isolated sandbox with the hook + helper
@@ -141,6 +146,55 @@ run_case "git push --delete: falls back, blocks (local non-conforming)" \
 # Non-push commands → no-op.
 run_case "non-push command exits 0 silently" \
   "git status" 0
+
+# ---- #547 bug fixes -----------------------------------------------------
+#
+# (a) src:dst refspec — validate the DST (right of colon), not the src.
+#     Before fix: hook grabbed "HEAD" from the left side and blocked.
+run_case "#547: HEAD:valid-branch validates dst → passes" \
+  "git push upstream HEAD:feature/GH-547-push-ref-parsing" 0
+
+run_case "#547: HEAD:non-conforming-dst blocks on dst" \
+  "git push upstream HEAD:bogus-branch-name" 2
+
+run_case "#547: sha:dst validates dst → passes" \
+  "git push upstream abc1234:fix/GH-1-some-fix" 0
+
+run_case "#547: local-branch:remote-branch validates remote-dst → passes" \
+  "git push upstream fix/GH-100-local:feature/GH-200-remote" 0
+
+# (b) Tag pushes must be a no-op for a branch-name validator.
+#     Before fix: hook grabbed "2>" from the redirection and blocked.
+run_case "#547: --tags plain → skip (no branch to validate)" \
+  "git push upstream --tags" 0
+
+run_case "#547: --tags with 2>&1 pipe → skip (no branch to validate)" \
+  "git push upstream --tags 2>&1 | tail -5" 0
+
+run_case "#547: --tags before remote → skip" \
+  "git push --tags upstream" 0
+
+run_case "#547: tag <name> keyword form → skip" \
+  "git push upstream tag v1.2.3" 0
+
+run_case "#547: refs/tags/ refspec → skip" \
+  "git push upstream refs/tags/v1.0.0:refs/tags/v1.0.0" 0
+
+# (c) Shell redirections stripped — bare redirect token not mistaken for branch.
+#     Before fix: "2>" or ">" could end up as a positional token.
+run_case "#547: plain 2>&1 redirect on valid push → passes" \
+  "git push upstream feature/GH-547-foo 2>&1" 0
+
+run_case "#547: > redirect on valid push → passes" \
+  "git push upstream fix/GH-1-bar > /tmp/out.txt" 0
+
+# ---- Regression: original #194 cases still pass after #547 fix ----------
+
+run_case "regression: explicit ref passes (no refspec)" \
+  "git push origin feature/GH-194-worktree-cwd-hooks" 0
+
+run_case "regression: non-conforming explicit ref still blocks" \
+  "git push origin bogus-branch" 2
 
 # ---- Summary ------------------------------------------------------------
 

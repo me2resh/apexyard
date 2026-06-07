@@ -25,23 +25,82 @@
 # -----
 #   . "$(dirname "$0")/_lib-extract-push-ref.sh"
 #   PUSH_REF=$(extract_push_ref "$COMMAND")
+#   # Check is_tag_push first — tag pushes must be no-ops for a branch validator.
+#   if is_tag_push "$COMMAND"; then exit 0; fi
 #   BRANCH="${PUSH_REF:-$(git branch --show-current)}"
 #
-# Refs: me2resh/apexyard#194
+# Refs: me2resh/apexyard#194, me2resh/apexyard#547
 
-# Echoes the source ref from a `git push` command, or empty if none found.
+# Returns true (0) when the command is a tag push that has no branch ref at all.
+# Tag pushes must be a no-op for a *branch*-name validator.
+#
+# Detects:
+#   git push <remote> --tags              → true
+#   git push <remote> tag <name>          → true
+#   git push --tags                       → true
+#   git push <remote> refs/tags/<name>    → true
+#   git push <remote> +refs/tags/<name>:refs/tags/<name>  → true (refspec targeting tags/)
+#   git push <remote> v1.0.0              → NOT detected (bare tag name = branch name,
+#                                            validator falls back to local HEAD)
+is_tag_push() {
+  local cmd="$1"
+
+  # Strip everything after the first shell redirection/pipe so the check isn't
+  # fooled by `2>&1 | tail` appended to the command.
+  local clean_cmd
+  clean_cmd=$(echo "$cmd" | sed 's/[[:space:]]*[0-9]*[>|][&>|0-9].*$//')
+
+  # --tags flag: `git push [opts] --tags [remote]`
+  if echo "$clean_cmd" | grep -qE '\bgit\s+push\b.*\s--tags(\s|$)'; then
+    return 0
+  fi
+
+  # `git push <remote> tag <name>` (explicit `tag` keyword before ref)
+  if echo "$clean_cmd" | grep -qE '\bgit\s+push\b.*\stag\s+\S'; then
+    return 0
+  fi
+
+  # refs/tags/ in any positional argument (e.g. push by full ref or refspec)
+  if echo "$clean_cmd" | grep -qE '\brefs/tags/'; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Echoes the DESTINATION branch ref from a `git push` command, or empty if
+# none found.
+#
+# KEY BEHAVIOUR CHANGES vs the original (me2resh/apexyard#547):
+#
+#   1. Shell redirections and pipes are stripped BEFORE token parsing so that
+#      `2>&1`, `2>`, `>`, `|` tokens are not mistaken for branch names.
+#
+#   2. For a `src:dst` refspec (e.g. `HEAD:feature/GH-1-foo`), the DESTINATION
+#      (right of the colon) is returned for validation, not the source. The
+#      source side may be `HEAD`, a SHA, or an arbitrary local ref name that
+#      the branch-name validator should not block on — the dst is what actually
+#      lands on the remote.
+#
+#   3. Tag pushes are NOT handled here — call is_tag_push() first and exit 0
+#      before calling extract_push_ref. This function still returns empty for
+#      `--tags` (it's a boolean flag), which is the same as before, but the
+#      caller should never reach the branch-name validation step for tag pushes.
 #
 # Recognises:
 #   git push origin <branch>                           → <branch>
-#   git push origin <branch>:<remote-branch>           → <branch>  (LHS of refspec)
+#   git push origin HEAD:<branch>                      → <branch>  (DST of refspec)
+#   git push origin <src>:<dst-branch>                 → <dst-branch>
 #   git push -u origin <branch>                        → <branch>
 #   git push --set-upstream origin <branch>            → <branch>
 #   git push --force origin <branch>                   → <branch>
 #   git push --force-with-lease origin <branch>        → <branch>
-#   git push origin HEAD                               → empty (HEAD is not a ref name we can validate)
+#   git push origin HEAD                               → empty (HEAD alone, no dst)
+#   git push origin --tags                             → empty (tag push, no branch)
 #   git push                                           → empty (relies on upstream tracking)
 #   git push origin                                    → empty (no ref given)
-#   git push origin --delete <branch>                  → empty (deletion, no source-ref check)
+#   git push origin --delete <branch>                  → empty (deletion, no source-ref)
+#   git push upstream HEAD:feature/GH-1-foo 2>&1 | tl → feature/GH-1-foo (redirections stripped)
 #
 # Returns: prints the ref to stdout (or empty), always exits 0.
 extract_push_ref() {
@@ -54,10 +113,25 @@ extract_push_ref() {
     return 0
   fi
 
+  # Strip shell redirections and pipeline suffixes from the raw command before
+  # we extract the push segment.  A command like:
+  #   git push upstream --tags 2>&1 | tail -5
+  # should be seen as:
+  #   git push upstream --tags
+  # We remove everything from the first redirection operator onward:
+  #   - `NNN>` (e.g. `2>`, `1>`, plain `>`)
+  #   - `|` pipe
+  # This is conservative: we drop from the FIRST such operator to end-of-line.
+  # The sed expression matches optional digits, then `>` or `|`, followed by
+  # anything: `[[:space:]]*[0-9]*[>|].*`
+  local stripped_cmd
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]]*[0-9]*[>|].*$//')
+
   # Isolate the `git push ...` segment up to the first command separator
   # (|, ;, &&, &) so `git push origin foo && echo bar` doesn't pick up `echo`
-  # tokens.
-  push_segment=$(echo "$cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | head -1)
+  # tokens.  (After stripping redirections above, the push segment is usually
+  # the whole remaining string, but the separator guard is a useful safety net.)
+  push_segment=$(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | head -1)
   if [ -z "$push_segment" ]; then
     echo ""
     return 0
@@ -73,7 +147,7 @@ extract_push_ref() {
   push_segment="${push_segment#push}"
 
   # Walk the remaining tokens, skipping flags + their values + the remote.
-  # The first non-flag, non-remote positional that isn't HEAD is the source ref.
+  # The first non-flag, non-remote positional is the refspec (or branch).
   #
   # Recognised flags that consume a following value:
   #   -o / --push-option, --recurse-submodules, --signed, --receive-pack /
@@ -131,19 +205,30 @@ extract_push_ref() {
     return 0
   fi
 
-  # `git push origin HEAD` — HEAD isn't a branch name we can validate; let the
-  # caller fall back to local HEAD resolution.
-  if [ "$ref" = "HEAD" ]; then
+  # Strip any leading `+` (force-update marker on a refspec).
+  ref="${ref#+}"
+
+  # Refspec form `<src>:<dst>` — validate the DESTINATION (right side) because:
+  #   - The dst is what lands on the remote and whose name matters for the
+  #     branch-naming convention.
+  #   - The src may be `HEAD`, a SHA, or a differently-named local tracking
+  #     branch — none of which should be validated as a remote branch name.
+  # If there is no `:` the whole token is the branch name.
+  if echo "$ref" | grep -q ':'; then
+    # Take the DST side (right of colon).
+    ref="${ref#*:}"
+  fi
+
+  if [ -z "$ref" ]; then
     echo ""
     return 0
   fi
 
-  # Refspec form `<src>:<dst>` — the LHS is the branch the operator is pushing.
-  # Strip the colon-and-after so `feature/GH-1-x:main` → `feature/GH-1-x`.
-  ref="${ref%%:*}"
-
-  # Strip any leading `+` (force-update marker on a refspec).
-  ref="${ref#+}"
+  # `HEAD` without a refspec dst — not a branch name we can validate.
+  if [ "$ref" = "HEAD" ]; then
+    echo ""
+    return 0
+  fi
 
   # Strip leading `refs/heads/` if present — leave just the branch shorthand.
   ref="${ref#refs/heads/}"

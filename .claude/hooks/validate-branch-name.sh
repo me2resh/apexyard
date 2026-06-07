@@ -26,12 +26,22 @@ fi
 #
 # Falls back to local HEAD when the push has no source ref (no-arg push,
 # `git push origin` with no ref, etc.) — preserves today's behaviour for
-# anyone not passing the ref explicitly. See me2resh/apexyard#194.
+# anyone not passing the ref explicitly. See me2resh/apexyard#194, #547.
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 PUSH_REF=""
 if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-extract-push-ref.sh"
+
+  # Tag pushes (--tags, `tag <name>`, refs/tags/) have no branch to validate.
+  # Exit cleanly — a branch-name validator has nothing to check here.
+  # This guard runs before extract_push_ref so shell redirections appended
+  # to a tag-push command (e.g. `git push --tags 2>&1 | tail`) don't cause
+  # is_tag_push() to miss the --tags flag. See me2resh/apexyard#547.
+  if is_tag_push "$COMMAND"; then
+    exit 0
+  fi
+
   PUSH_REF=$(extract_push_ref "$COMMAND")
 fi
 
