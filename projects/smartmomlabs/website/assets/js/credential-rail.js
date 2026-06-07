@@ -18,6 +18,10 @@
       listClass: "trust-rail trust-rail--hero",
       stampSize: 48,
     },
+    pdp: {
+      listClass: "trust-rail trust-rail--pdp",
+      stampSize: 36,
+    },
     inline: {
       listClass: "trust-rail trust-rail--inline",
       stampSize: 56,

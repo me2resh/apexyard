@@ -339,6 +339,24 @@ a.btn-gold:hover {
 .trust-rail-wrap--compact {
   margin-bottom: 16px;
 }
+.trust-rail-wrap--pdp {
+  margin: 18px 0 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.trust-rail-wrap__label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+html[dir="rtl"] .trust-rail-wrap__label {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 0.78rem;
+}
 .trust-rail {
   display: flex;
   align-items: stretch;
@@ -383,6 +401,49 @@ a.btn-gold:hover {
 }
 .trust-rail--inline {
   animation: none;
+}
+/* PDP buy box — EllaOla/Ritual-style claim chips (no boxed strip) */
+.trust-rail--pdp {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  overflow: visible;
+  scroll-snap-type: none;
+  padding: 0;
+  border: none;
+  animation: none;
+}
+.trust-rail--pdp .trust-rail__item {
+  flex: unset;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+.trust-rail--pdp .trust-rail__item::after {
+  display: none;
+}
+.trust-rail--pdp .trust-rail__stamp {
+  width: 36px;
+  height: 36px;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+.trust-rail--pdp .trust-rail__label {
+  max-width: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+.trust-rail--pdp .trust-rail__item:nth-child(5) {
+  grid-column: 1 / -1;
 }
 .trust-rail::-webkit-scrollbar {
   height: 4px;
@@ -1199,6 +1260,9 @@ html[dir="ltr"] .reserve-title { font-family: var(--font-serif); }
   .trust-rail--hero {
     border-top: 1px solid var(--border);
     padding-top: 18px;
+  }
+  .trust-rail--pdp .trust-rail__item:nth-child(5) {
+    grid-column: 1 / -1;
   }
   .trust-rail__item {
     flex: unset;

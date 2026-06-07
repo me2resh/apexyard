@@ -53,10 +53,6 @@
         <h1 class="pdp-title">blendavit</h1>
         <p class="pdp-summary" data-i18n="pdp.summary">مسجّل لدى هيئة الغذاء والدواء · 0غ سكر مضاف</p>
 
-        <div class="trust-rail-wrap trust-rail-wrap--compact">
-          <div data-trust-rail-mount="inline"></div>
-        </div>
-
         <p class="choice-label" data-i18n="pdp.step1">اختر عمر طفلك</p>
         <div class="variant-cards" role="group" aria-labelledby="pdp-age-label">
           <span id="pdp-age-label" class="visually-hidden" data-i18n="pdp.step1">اختر عمر طفلك</span>
@@ -78,6 +74,12 @@
         </div>
 
         <button type="button" class="btn btn-gold btn-cta" data-add-to-cart data-variant="kids" data-pdp-add data-i18n="commerce.addToCart">أضيفي للسلة</button>
+
+        <div class="trust-rail-wrap trust-rail-wrap--pdp" aria-labelledby="pdp-trust-heading">
+          <p id="pdp-trust-heading" class="trust-rail-wrap__label" data-i18n="pdp.trust.label">لماذا تثقين به</p>
+          <div data-trust-rail-mount="pdp"></div>
+        </div>
+
         <p class="reserve-fine" data-i18n="pdp.fine">انضم إلى الدفعة الأولى. عربون قابل للاسترداد عند التفعيل.</p>
 
         <details class="nutrients-panel" open>
