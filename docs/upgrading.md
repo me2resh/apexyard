@@ -8,6 +8,7 @@ This doc covers:
 - The version anchor file (`.claude/framework-version`)
 - What each migration does (table)
 - Common scenarios (multi-hop, missing anchor, skip-migrations, dry-run)
+- **When upgrading isn't enough — re-forking and keeping your data**
 - Authoring a new migration (framework maintainers only)
 
 For the daily-sync UX, see `.claude/skills/update/SKILL.md`. For the design rationale, see [`docs/agdr/AgDR-0032-update-chain-migrations.md`](agdr/AgDR-0032-update-chain-migrations.md).
@@ -145,6 +146,90 @@ If a migration script reports a conflict (exit code 1), the chain pauses. The an
 ### `--from-dev` (pre-release sync)
 
 When you use `--from-dev` to pull from `upstream/dev`, the migration chain is automatically skipped — pre-release work has no release tag to anchor against. The anchor file is NOT advanced; `--from-dev` is the only path that leaves the anchor untouched.
+
+---
+
+## When upgrading isn't enough — re-fork & keep your data
+
+`/update` handles the common case. Two situations need more than a sync — and
+both hinge on one mental model.
+
+### Your data vs. the framework
+
+Everything in a fork falls into one of two buckets:
+
+| Bucket | Examples | Lifecycle |
+|--------|----------|-----------|
+| **The framework** | `.claude/hooks/`, `.claude/skills/`, `.claude/agents/`, `.claude/rules/`, `workflows/`, `templates/`, `docs/` | Owned by upstream — replaced on every upgrade |
+| **Your portfolio data** | `apexyard.projects.yaml` (registry), `onboarding.yaml`, `projects/<name>/`, `workspace/<name>/`, `handbooks/`, custom skills | Owned by you — must survive every upgrade |
+
+Upgrades replace the **framework** bucket. The whole game is keeping your **data**
+bucket out of the line of fire. Split-portfolio mode does that structurally; the
+manual approach does it by copy-out / copy-back.
+
+### Re-fork (when the fork has drifted too far)
+
+Sometimes a fork has been edited so heavily — or branched from such an old base —
+that merging upstream is more painful than starting fresh. Symptoms:
+
+- `/update` (or `/update --dry-run`) reports conflicts across most of `.claude/`.
+- A PR opened from your fork against upstream shows a diff touching the *entire*
+  framework tree.
+
+Upgrade vs. re-fork — quick decision:
+
+| Situation | Do this |
+|-----------|---------|
+| `/update --dry-run` shows a clean or small merge | **Upgrade** (`/update`) |
+| A few conflicts in files you knowingly customised | **Upgrade**, resolve conflicts |
+| Conflicts across most of `.claude/` | **Re-fork** |
+| You don't know what diverged | **Re-fork** (cleanest reset) |
+
+To re-fork safely:
+
+1. **Get your data out of the line of fire first** (see below).
+2. Re-fork `me2resh/apexyard` (a fresh fork, or a fresh clone you re-point
+   `origin` at).
+3. Re-attach your data (split-portfolio: nothing to do — it lives elsewhere;
+   manual: copy your data bucket back in).
+4. Re-add the `upstream` remote so future `/update`s work:
+
+   ```bash
+   git remote add upstream https://github.com/me2resh/apexyard.git
+   ```
+
+### Preserving your data
+
+**Best — split-portfolio mode (makes the fork disposable).** Your portfolio data
+lives in a **separate private repo**; the framework fork only holds framework code
+plus a `.claude/project-config.json` pointing at the sibling. Once split,
+upgrading or re-forking the framework **never touches your data**.
+
+```bash
+/split-portfolio            # gated, destructive migration — every step confirms
+/split-portfolio --dry-run  # walk the steps without executing
+/split-portfolio --verify   # read-only state report
+```
+
+**Fallback — manual copy-out / copy-back** around a re-fork:
+
+1. Copy your **data bucket** out of the old fork: `apexyard.projects.yaml`,
+   `onboarding.yaml`, `projects/`, `workspace/` (if used), `handbooks/`, custom
+   skills.
+2. Re-fork `me2resh/apexyard`.
+3. Copy the data bucket back into the fresh fork.
+4. Re-add the `upstream` remote (above).
+
+This works but repeats on every re-fork. Split-portfolio is the one-time
+investment that removes the chore.
+
+### A common trap: project tickets filed against the framework repo
+
+On older forks (before per-project tracker routing landed), `/feature`, `/bug`,
+and `/task` could file tickets against the **framework** repo instead of your
+own project's repo. If your project's tickets/PRs show up on `me2resh/apexyard`,
+your fork is out of date — **upgrade (`/update`)**, which fixes the routing and
+enables leak-protection so private project names don't leak into public trackers.
 
 ---
 
