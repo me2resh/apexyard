@@ -201,12 +201,7 @@ run_case "cd wt && git commit -am passes (worktree=feature, cwd=dev)" \
   "$SB" "$SB" "cd ${WT} && git commit -am 'wip'" 0
 
 # Worktree is on a protected branch — cd into it must still block.
-WT_PROTECTED=$(make_worktree "$SB" "main-local")
-# Detach and reattach to main: git worktree add creates a new branch by
-# default; we need to put a protected branch name in it.
-(cd "$SB" && git worktree add -q "$SB/wt-main" main 2>/dev/null || \
-  git worktree add -q "$SB/wt-main" -b main-protected 2>/dev/null || true)
-# Use a simpler approach: create a secondary repo on 'main' and point cd at it.
+# Use a secondary sandbox repo on 'main' and point cd at it.
 SB2=$(make_sandbox "main")   # second sandbox with primary on main
 run_case "cd protected-wt && git commit blocks (worktree on main)" \
   "$SB" "$SB" "cd ${SB2} && git commit -m 'bad'" 2
