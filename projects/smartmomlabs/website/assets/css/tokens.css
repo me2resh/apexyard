@@ -1,0 +1,35 @@
+/* blendavit design tokens — source of truth (see DESIGN.md) */
+:root {
+  --bg: #e8f2f0;
+  --bg-soft: #f4faf9;
+  --bg-card: #ffffff;
+  --text: #1f2e26;
+  --text-muted: #4a554f;
+  --accent: #1a3d32;
+  --accent-light: #2d5c4a;
+  --gold: #8a6428;
+  --gold-light: #c9a227;
+  --gold-deep: #5c4218;
+  --border: rgba(26, 61, 50, 0.12);
+  --accent-a08: rgba(26, 61, 50, 0.08);
+  --accent-a10: rgba(26, 61, 50, 0.1);
+  --accent-a45: rgba(26, 61, 50, 0.45);
+  --nav-bg: rgba(244, 250, 249, 0.94);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font-display: "Albert Sans", system-ui, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --font-body-serif: "Albert Sans", system-ui, sans-serif;
+  --font-sans: "Albert Sans", system-ui, sans-serif;
+  --font-arabic: "Tajawal", "Tahoma", sans-serif;
+  --font-display-ar: "El Messiri", "Tajawal", serif;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-fast: 0.15s;
+  --motion-ui: 0.22s;
+  --motion-reveal: 0.42s;
+  --nav-h: 72px;
+  --shadow: 0 20px 50px rgba(26, 61, 50, 0.12);
+  --z-sticky: 100;
+  --gcc-pattern: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l4 8h9l-7 6 3 9-9-5-9 5 3-9-7-6h9z' fill='%231a3d32' fill-opacity='0.035'/%3E%3C/svg%3E");
+}
