@@ -149,13 +149,41 @@ The release PR runs through the normal flow:
 
 ### 6. Tag + push (after merge)
 
-Once the release PR merges, the user invokes `/release --tag vA.B.C` (or runs the suggested commands manually):
+Once the release PR squash-merges to `main`, the tag must point at the **squash commit that landed on `main`** — never at the release-branch HEAD. When a PR is squash-merged, GitHub creates a single new commit on `main` whose SHA is different from every commit on the source branch. Tagging the release-branch HEAD produces a tag that is not reachable from `main`, breaking `git describe`, `git merge-base`, and any ancestry-based tooling (see issue #550).
+
+The user invokes `/release --tag vA.B.C` (or runs the suggested commands manually):
 
 ```bash
-git fetch upstream main
+# Step 1 — fetch so upstream/main points at the squash commit just merged.
+git fetch upstream
+
+# Step 2 — tag the tip of upstream/main.
+#           This IS the squash commit. Do NOT use the release-branch HEAD —
+#           it was discarded by the squash and is no longer in main's ancestry.
 git tag vA.B.C upstream/main
+
+# Step 3 — ancestry guard: assert the tag is reachable from main BEFORE pushing.
+#           If this exits non-zero, the tag is mis-placed — delete and re-tag.
+if ! git merge-base --is-ancestor vA.B.C upstream/main; then
+  echo "ERROR: vA.B.C is not an ancestor of upstream/main — tag is mis-placed." >&2
+  echo "Delete the tag with: git tag -d vA.B.C" >&2
+  echo "Then re-run from Step 1 after confirming the PR was squash-merged." >&2
+  exit 1
+fi
+
+# Step 4 — push only after the guard passes.
 git push upstream vA.B.C
 ```
+
+#### Post-tag release checklist
+
+Before announcing the release, verify all three assertions hold:
+
+- [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0 (tag is an ancestor of main)
+- [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C` (tag is discoverable from main)
+- [ ] `git rev-parse vA.B.C^{}` equals `git rev-parse upstream/main` (tag points at the exact tip — true for a clean release with no post-merge commits; will differ if post-merge work has landed, which is fine as long as the first two assertions hold)
+
+> **One-time note on v2.3.0:** the existing `v2.3.0` tag is mis-placed (release-branch HEAD, not the squash commit on `main`). Re-pointing it is an operational step — force-updating a published tag — that must be done by the maintainer outside this skill. This fix prevents the same mistake on all future releases.
 
 ### 7. Optional: GitHub Release
 
@@ -199,7 +227,7 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 3. **Always show the bump for confirmation** — auto-detection is a proposal, not a fait accompli. The CEO's eyes are the final check on semver intent.
 4. **CHANGELOG is editable** before the release PR opens. Don't auto-file what hasn't been reviewed.
 5. **Never auto-merge the release PR.** Rex + CEO approval applies as for any PR. The skill stops at "PR opened."
-6. **Never tag before merge.** Tags follow the merge commit on `main`, not the dev HEAD.
+6. **Never tag before merge, and never tag the release-branch HEAD.** After a squash-merge the release branch's HEAD is not in `main`'s ancestry. Always tag `upstream/main` (the squash commit) and assert `git merge-base --is-ancestor vA.B.C upstream/main` before pushing the tag. See step 6 for the full guard.
 7. **`<!-- multi-close: approved -->`** in the release PR body is required — release PRs legitimately close many tickets at once.
 
 ## Related
