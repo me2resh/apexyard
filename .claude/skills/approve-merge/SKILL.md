@@ -75,18 +75,33 @@ The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone acti
 ```bash
 # Resolve the OPS FORK ROOT, not git toplevel. Inside workspace/<project>/,
 # git toplevel is the project clone; markers live in the ops fork above.
-# See me2resh/apexyard#229 + #230.
-REPO_ROOT=$(git rev-parse --show-toplevel)
+# See me2resh/apexyard#229 + #230. Resolve PIN-FIRST — the same strategy the
+# merge gate uses (_lib-ops-root.sh::resolve_ops_root). The session pin points
+# at the real ops fork even from a workspace clone; a plain walk-up resolves to
+# the private portfolio sibling in split-portfolio mode (it has onboarding.yaml
+# + apexyard.projects.yaml) where _lib-review-markers.sh doesn't exist, so the
+# CEO marker lands where the gate can't see it (me2resh/apexyard#559).
 OPS_ROOT=""
-r="$REPO_ROOT"
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  if [ -f "$r/.apexyard-fork" ]; then OPS_ROOT="$r"; break; fi
-  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-    OPS_ROOT="$r"; break
-  fi
-  r=$(dirname "$r")
-done
-MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
+if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
+  IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
+fi
+# Validate the pin (self-heal a stale one): must satisfy a fork anchor.
+if [ -n "$OPS_ROOT" ] && [ ! -f "$OPS_ROOT/.apexyard-fork" ] && \
+   { [ ! -f "$OPS_ROOT/onboarding.yaml" ] || [ ! -f "$OPS_ROOT/apexyard.projects.yaml" ]; }; then
+  OPS_ROOT=""
+fi
+# Fallback: walk up from git toplevel (pre-#381 behaviour, safety net).
+if [ -z "$OPS_ROOT" ]; then
+  r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  while [ -n "$r" ] && [ "$r" != "/" ]; do
+    if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+      OPS_ROOT="$r"; break
+    fi
+    r=$(dirname "$r")
+  done
+fi
+MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 # Source the marker path helper — repo-qualified naming (#485, AgDR-0060).
 # shellcheck source=/dev/null
