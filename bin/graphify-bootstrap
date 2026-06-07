@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# graphify-bootstrap — full graph build (code + docs + agent wiring)
+set -euo pipefail
+
+find_ops_root() {
+  local cur="${1:-$PWD}"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -e "$cur/.apexyard-fork" ] || { [ -e "$cur/onboarding.yaml" ] && [ -e "$cur/apexyard.projects.yaml" ]; }; then
+      printf '%s' "$cur"; return 0
+    fi
+    cur=$(dirname "$cur")
+  done
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: graphify-bootstrap <project-dir> [project-name]
+
+Detect → AST → docs (LLM if API key, else lightweight markdown extract) →
+label → html → cursor rules + agent skill + AGENTS.md snippet.
+
+Optional: create ops-root .env.graphify with GEMINI_API_KEY=... (not committed).
+EOF
+}
+
+target="${1:-}"
+name="${2:-$(basename "$target")}"
+
+if [ -z "$target" ] || [ "$target" = "-h" ] || [ "$target" = "--help" ]; then
+  usage; exit 0
+fi
+
+ops_root=$(find_ops_root "$(cd "$(dirname "$target")" 2>/dev/null && pwd)" 2>/dev/null || true)
+ops_root=${ops_root:-$(find_ops_root)}
+
+if [ -z "${ops_root:-}" ]; then
+  echo "graphify-bootstrap: not inside apexyard fork" >&2; exit 1
+fi
+
+if [[ "$target" != /* ]]; then
+  target="$ops_root/$target"
+fi
+
+if [ ! -d "$target" ]; then
+  echo "graphify-bootstrap: directory not found: $target" >&2; exit 1
+fi
+
+if ! command -v graphify >/dev/null 2>&1; then
+  echo "graphify-bootstrap: graphify not on PATH" >&2; exit 1
+fi
+
+skill_src="$ops_root/workspace/graphify/graphify"
+doc_extract="$ops_root/bin/_graphify_doc_extract.py"
+agents_snippet="$ops_root/templates/graphify-agents-snippet.md"
+query_rule="$ops_root/.cursor/rules/graphify-query-first.mdc"
+
+if [ ! -f "$skill_src/skill.md" ]; then
+  echo "graphify-bootstrap: missing workspace/graphify clone" >&2; exit 1
+fi
+
+# Load optional API keys (gitignored pattern — operator creates locally)
+if [ -f "$ops_root/.env.graphify" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ops_root/.env.graphify"
+  set +a
+  echo "Loaded API keys from .env.graphify"
+fi
+
+echo "=== graphify-bootstrap: $name ==="
+
+cat > "$target/.graphifyignore" <<'IGN'
+node_modules/
+dist/
+build/
+.next/
+coverage/
+.agents/
+graphify-out/
+skills-lock.json
+IGN
+
+mkdir -p "$target/.agents/skills/graphify/references"
+cp "$skill_src/skill.md" "$target/.agents/skills/graphify/SKILL.md"
+cp "$skill_src/skills/claude/references/"*.md "$target/.agents/skills/graphify/references/" 2>/dev/null || true
+
+mkdir -p "$target/.cursor/rules"
+cp "$query_rule" "$target/.cursor/rules/graphify-query-first.mdc"
+(cd "$target" && graphify cursor install) >/dev/null
+
+# AGENTS.md snippet
+if [ -f "$agents_snippet" ]; then
+  agents_file="$target/AGENTS.md"
+  if [ ! -f "$agents_file" ]; then
+    printf '# %s\n\n' "$name" > "$agents_file"
+  fi
+  if ! grep -q '## graphify (query-first)' "$agents_file" 2>/dev/null; then
+    cat "$agents_snippet" >> "$agents_file"
+    echo "  AGENTS.md        → graphify section appended"
+  fi
+fi
+
+GRAPHIFY_BIN=$(command -v graphify)
+PY=$(head -1 "$GRAPHIFY_BIN" | tr -d '#!')
+
+cd "$target"
+rm -rf graphify-out
+mkdir -p graphify-out
+echo "$PY" > graphify-out/.graphify_python
+echo "$(pwd)" > graphify-out/.graphify_root
+
+DOC_EXTRACT="$doc_extract" "$PY" <<'PY'
+import json, os, subprocess, sys
+from pathlib import Path
+from graphify.detect import detect
+from graphify.extract import collect_files, extract
+from graphify.cache import check_semantic_cache, save_semantic_cache
+from graphify.build import build_from_json
+from graphify.cluster import cluster, score_all
+from graphify.analyze import god_nodes, surprising_connections, suggest_questions
+from graphify.report import generate
+from graphify.export import to_json
+from graphify.llm import detect_backend
+
+root = Path('.')
+doc_extract = Path(os.environ.get('DOC_EXTRACT', ''))
+result = detect(root)
+Path('graphify-out/.graphify_detect.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+files = result.get('files', {})
+print(f"Corpus: {result.get('total_files', 0)} files · ~{result.get('total_words', 0)} words")
+for k, v in sorted(files.items()):
+    if v:
+        print(f"  {k}: {len(v)}")
+
+code_files = []
+for f in files.get('code', []):
+    code_files.extend(collect_files(Path(f)) if Path(f).is_dir() else [Path(f)])
+if code_files:
+    ast = extract(code_files, cache_root=root, parallel=False)
+    Path('graphify-out/.graphify_ast.json').write_text(json.dumps(ast, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(f"AST: {len(ast['nodes'])} nodes, {len(ast['edges'])} edges")
+else:
+    ast = {'nodes': [], 'edges': [], 'input_tokens': 0, 'output_tokens': 0}
+
+non_code = []
+for cat in ('document', 'paper', 'image', 'video'):
+    non_code.extend(files.get(cat, []))
+sem = {'nodes': [], 'edges': [], 'hyperedges': [], 'input_tokens': 0, 'output_tokens': 0}
+semantic_mode = 'none'
+
+if non_code:
+    _, _, _, uncached = check_semantic_cache(non_code)
+    backend = detect_backend()
+    if backend and uncached:
+        try:
+            from graphify.llm import extract_corpus_parallel
+            sem = extract_corpus_parallel(uncached, backend=backend)
+            save_semantic_cache(sem.get('nodes', []), sem.get('edges', []), sem.get('hyperedges', []))
+            semantic_mode = f'llm:{backend}'
+            print(f"Semantic ({backend}): {len(sem.get('nodes', []))} nodes")
+        except Exception as e:
+            print(f"LLM semantic failed, falling back to doc extract: {e}", file=sys.stderr)
+    if semantic_mode == 'none' and uncached and doc_extract.is_file():
+        chunk = root / 'graphify-out/.graphify_doc_semantic.json'
+        subprocess.run(
+            [sys.executable, str(doc_extract), str(root.resolve()), str(chunk), *uncached],
+            check=True,
+        )
+        sem = json.loads(chunk.read_text(encoding='utf-8'))
+        semantic_mode = 'doc-extract'
+        print(f"Semantic (doc-extract): {len(sem.get('nodes', []))} nodes, {len(sem.get('edges', []))} edges")
+
+merged_nodes = ast['nodes'] + sem.get('nodes', [])
+merged_edges = ast['edges'] + sem.get('edges', [])
+seen = set()
+deduped = []
+for n in merged_nodes:
+    if n['id'] not in seen:
+        seen.add(n['id'])
+        deduped.append(n)
+
+# Bridge doc concepts → code symbols by normalized label
+code_by_label = {}
+for n in deduped:
+    if n.get('file_type') == 'code' or str(n.get('source_file', '')).endswith(('.ts', '.tsx', '.js', '.jsx', '.py')):
+        code_by_label.setdefault(n.get('label', '').lower(), []).append(n['id'])
+
+bridge_edges = 0
+for n in deduped:
+    if n.get('file_type') not in ('document', 'concept', 'rationale'):
+        continue
+    label = n.get('label', '')
+    for cid in code_by_label.get(label.lower(), []):
+        if cid == n['id']:
+            continue
+        merged_edges.append({
+            'source': n['id'], 'target': cid,
+            'relation': 'conceptually_related_to',
+            'confidence': 'INFERRED', 'confidence_score': 0.85,
+            'source_file': n.get('source_file', ''), 'source_location': n.get('source_location'),
+            'weight': 1.0,
+        })
+        bridge_edges += 1
+    # partial match: function names with ()
+    base = label.rstrip('()')
+    for cid in code_by_label.get(base.lower(), []):
+        merged_edges.append({
+            'source': n['id'], 'target': cid,
+            'relation': 'conceptually_related_to',
+            'confidence': 'INFERRED', 'confidence_score': 0.75,
+            'source_file': n.get('source_file', ''), 'source_location': n.get('source_location'),
+            'weight': 1.0,
+        })
+        bridge_edges += 1
+if bridge_edges:
+    print(f"Doc→code bridges: {bridge_edges} edges ({semantic_mode})")
+
+extraction = {
+    'nodes': deduped,
+    'edges': merged_edges,
+    'hyperedges': sem.get('hyperedges', []),
+    'input_tokens': ast.get('input_tokens', 0) + sem.get('input_tokens', 0),
+    'output_tokens': ast.get('output_tokens', 0) + sem.get('output_tokens', 0),
+}
+Path('graphify-out/.graphify_extract.json').write_text(json.dumps(extraction, indent=2, ensure_ascii=False), encoding='utf-8')
+
+G = build_from_json(extraction)
+if G.number_of_nodes() == 0:
+    print("ERROR: empty graph", file=sys.stderr)
+    sys.exit(1)
+
+communities = cluster(G)
+cohesion = score_all(G, communities)
+gods = god_nodes(G)
+surprises = surprising_connections(G, communities)
+
+def auto_label(cid, members):
+    scored = []
+    for nid in members:
+        if not G.has_node(nid):
+            continue
+        label = G.nodes[nid].get('label', nid)
+        deg = G.degree(nid)
+        ft = G.nodes[nid].get('file_type', '')
+        if label.lower() in {'name', 'type', 'version', 'private', 'description'}:
+            continue
+        if ft == 'document' and deg >= 2:
+            scored.append((deg + 5, label))
+        else:
+            scored.append((deg, label))
+    if not scored:
+        return f"Community {cid}"
+    scored.sort(reverse=True)
+    top = scored[0][1]
+    return top[:40] + ('...' if len(top) > 40 else '')
+
+labels = {cid: auto_label(cid, communities[cid]) for cid in communities}
+used_vals = set()
+for cid in sorted(labels):
+    if labels[cid] in used_vals:
+        labels[cid] = f"{labels[cid]} ({cid})"
+    used_vals.add(labels[cid])
+
+tokens = {'input': extraction.get('input_tokens', 0), 'output': extraction.get('output_tokens', 0)}
+questions = suggest_questions(G, communities, labels)
+report = generate(G, communities, cohesion, labels, gods, surprises, result, tokens, '.', suggested_questions=questions)
+Path('graphify-out/GRAPH_REPORT.md').write_text(report, encoding='utf-8')
+to_json(G, communities, 'graphify-out/graph.json')
+Path('graphify-out/.graphify_labels.json').write_text(json.dumps({str(k): v for k, v in labels.items()}, ensure_ascii=False), encoding='utf-8')
+Path('graphify-out/.graphify_mode.json').write_text(json.dumps({'semantic': semantic_mode}, indent=2), encoding='utf-8')
+print(f"Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges, {len(communities)} communities")
+PY
+
+graphify export html >/dev/null
+links=$(python3 -c "import json; print(len(json.load(open('graphify-out/graph.json')).get('links',[])))")
+echo "  → graphify-out/graph.html ($links links)"
+echo "  → graphify-out/GRAPH_REPORT.md"
+echo "Done: $name"

@@ -35,6 +35,7 @@ projects:
 
   - name: qppv-agent
     repo: Dr-kersho/QPPV-Agent
+    workspace: workspace/qppv-agent
     docs: projects/qppv-agent
     status: active
     tier: P0
@@ -50,6 +51,7 @@ projects:
 
   - name: training-command-center
     repo: Dr-kersho/AI-Driven-Personal-Training-Command-Center-
+    workspace: workspace/training-command-center
     docs: projects/training-command-center
     status: active
     tier: P0
@@ -81,6 +83,7 @@ projects:
 
   - name: elite-telegram
     repo: Dr-kersho/elite-telegram
+    workspace: workspace/elite-telegram
     docs: projects/elite-telegram
     status: active
     tier: P1
@@ -93,6 +96,51 @@ projects:
       - new-product
       - planning
       - telegram
+    ticket_prefix: GH
+
+  - name: inlinead-website
+    repo: Dr-kersho/inlinead-website
+    workspace: workspace/inlinead-website
+    docs: projects/inlinead-website
+    status: active
+    tier: P2
+    roles:
+      - tech-lead
+      - frontend-engineer
+    tags:
+      - marketing
+      - website
+    ticket_prefix: GH
+
+  - name: smartmomlabs
+    repo: Dr-kersho/apexyard
+    workspace: projects/smartmomlabs/website
+    docs: projects/smartmomlabs
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - frontend-engineer
+      - product-manager
+    tags:
+      - customer-facing
+      - dtc
+      - website
+    ticket_prefix: GH
+
+  - name: graphify
+    repo: safishamsi/graphify
+    workspace: workspace/graphify
+    docs: projects/graphify
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - backend-engineer
+      - platform-engineer
+    tags:
+      - tool-only
+      - dev-productivity
     ticket_prefix: GH
 
 defaults:

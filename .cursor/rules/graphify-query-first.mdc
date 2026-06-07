@@ -1,0 +1,12 @@
+---
+description: Mandatory graphify query-first for codebase questions
+alwaysApply: true
+---
+
+When `graphify-out/graph.json` exists in this workspace:
+
+1. **Architecture / flow / "how does X connect to Y"** — run `graphify query`, `graphify path`, or `graphify explain` **before** `Grep`, `Glob`, or reading more than 3 files.
+2. **Do not** read the entire repo or run broad greps when a graph query returns enough context.
+3. After editing code, run `graphify update .` before the next graph-backed question.
+
+If the graph is missing, run `/graphify .` or ask the user to run `bin/graphify-bootstrap`.
