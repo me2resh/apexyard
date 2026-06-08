@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>LLM Field Guide — an interactive game · ApexYard</title>
-<meta name="description" content="A short, hands-on game that teaches the working vocabulary of LLMs and agents — tokens, embeddings, temperature, RAG, hallucination, prompt injection, the agent loop, and cost. Play, score, and share.">
+<title>You vs. the LLM — an ApexYard game</title>
+<meta name="description" content="Think you understand how AI actually works? Prove it. A fast, fun game across tokens, embeddings, RAG, prompt injection, and the agent loop — score it and challenge your friends. An ApexYard game.">
 <link rel="canonical" href="https://yard.apexscript.com/game">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -13,16 +13,16 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/game">
-<meta property="og:title" content="LLM Field Guide — an interactive game">
-<meta property="og:description" content="Test your LLM & agent knowledge in a short interactive game: tokens, embeddings, RAG, prompt injection, the agent loop, and more. Play, score, and share.">
+<meta property="og:title" content="You vs. the LLM — an ApexYard game">
+<meta property="og:description" content="Think you understand how AI actually works? Prove it. 10 quick rounds — tokens, embeddings, RAG, prompt injection, the agent loop — score it and challenge your friends.">
 <meta property="og:image" content="https://yard.apexscript.com/og/index.png">
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@me2resh">
 <meta name="twitter:creator" content="@me2resh">
-<meta name="twitter:title" content="LLM Field Guide — an interactive game">
-<meta name="twitter:description" content="Test your LLM & agent knowledge in a short interactive game. Play, score, and share.">
+<meta name="twitter:title" content="You vs. the LLM — an ApexYard game">
+<meta name="twitter:description" content="Think you understand how AI actually works? Prove it — 10 quick rounds, then challenge your friends to beat your score.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -851,7 +851,10 @@
 <body>
 <div id="app">
   <header>
-    <div class="logo">Field Guide · <em>LLMs &amp; Agents</em></div>
+    <a class="logo" href="/" style="text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:9px;">
+      <span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;background:#C8321A;color:#F4EFE6;font-family:'Spline Sans Mono',ui-monospace,monospace;font-size:12px;font-weight:800;letter-spacing:-1px;border-radius:5px;">AY</span>
+      <span>ApexYard <span style="color:var(--faint);font-weight:400;">·</span> <em>You vs. the LLM</em></span>
+    </a>
     <div class="progress" id="progress"></div>
     <div class="score-pill">SCORE <b id="scoreNum">0</b></div>
   </header>
@@ -1059,9 +1062,9 @@ function renderIntro(){
   renderProgress();
   hintBtn.style.visibility = 'hidden';
   const card = el('div',{class:'intro-card'});
-  card.appendChild(el('h1',{html:'Learn LLMs<br>by <em>playing</em>'}));
+  card.appendChild(el('h1',{html:'You <em>vs.</em><br>the LLM'}));
   card.appendChild(el('p',{},
-    "Ten mini-games, one per core concept — ordered as a learning path. Tokens first, cost last. About 15 minutes."));
+    "Think you understand how AI actually works? Prove it. Ten quick rounds — tokens first, agents and cost last — about 15 minutes. Score it, then challenge your friends to beat you. An ApexYard game."));
   const chips = el('div',{class:'chip-row'});
   const cs = [
     ['Tokens','var(--iris)'],['Embeddings','var(--iris)'],['Temperature','var(--iris)'],
@@ -1072,7 +1075,7 @@ function renderIntro(){
   cs.forEach(c=>chips.appendChild(el('div',{class:'chip'},
     el('span',{class:'swatch',style:{background:c[1]}}), c[0])));
   card.appendChild(chips);
-  card.appendChild(el('button',{class:'primary', onClick:advance}, 'Start →'));
+  card.appendChild(el('button',{class:'primary', onClick:advance}, 'Take the challenge →'));
   clear(stage);
   stage.appendChild(card);
   footnote.textContent = 'Concepts ordered: each one builds on the previous.';
@@ -1085,7 +1088,7 @@ function renderOutro(){
   renderProgress();
   hintBtn.style.visibility = 'hidden';
   const card = el('div',{class:'outro-card'});
-  card.appendChild(el('h1',{html:'You finished the <em>field guide</em>.'}));
+  card.appendChild(el('h1',{html:'You <em>vs.</em> the LLM — done.'}));
   card.appendChild(el('p',{},
     `Total score: ${state.score} / ${LEVELS.length*100}. You now have the working vocabulary of LLMs and agents — tokens, embeddings, temperature, prompting, knowledge cutoff, RAG, hallucination, prompt injection, the agent loop, and cost — and have seen each in action.`));
   // per-level breakdown
@@ -1112,7 +1115,7 @@ function renderOutro(){
   // other channels embed the credit in the message text).
   const GAME_URL = 'https://yard.apexscript.com/game';
   const max = LEVELS.length * 100;
-  const msg = `I scored ${state.score}/${max} on the LLM Field Guide 🧠 Test your LLM & agent knowledge:`;
+  const msg = `I scored ${state.score}/${max} on 'You vs. the LLM' 🧠 Think you can beat me?`;
   const fullLine = `${msg} ${GAME_URL} via @me2resh`;
   const xUrl  = `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(GAME_URL)}&via=me2resh`;
   const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(GAME_URL)}`;
@@ -1121,7 +1124,7 @@ function renderOutro(){
 
   const share = el('div', {style:{margin:'4px auto 20px', maxWidth:'420px'}});
   share.appendChild(el('div', {style:{
-    fontSize:'12px', color:'var(--faint)', marginBottom:'10px',
+    fontSize:'12px', color:'var(--dim)', marginBottom:'10px',
     textTransform:'uppercase', letterSpacing:'.08em'
   }}, 'Share your score'));
 
@@ -1153,7 +1156,7 @@ function renderOutro(){
 
   // Quiet link back to the apexyard site.
   card.appendChild(el('div', {style:{marginTop:'18px', fontSize:'12px', color:'var(--faint)'}},
-    el('a', {href:'/', style:{color:'var(--amber)', textDecoration:'none'}}, '← back to ApexYard'),
+    el('a', {href:'/', style:{color:'var(--amber)', textDecoration:'underline', textUnderlineOffset:'2px'}}, '← back to ApexYard'),
     el('span', {}, '  ·  an SDLC harness for Claude Code')));
 
   clear(stage);
