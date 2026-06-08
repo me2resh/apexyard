@@ -6,6 +6,9 @@ updates:
   # (e.g. a build tool under site/), add its ecosystem here. #518.
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Follow the release-cut model — open bump PRs against dev, not the default
+    # main branch (main only receives release PRs, AgDR-0007). #588.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"

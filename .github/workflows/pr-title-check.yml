@@ -26,6 +26,16 @@ jobs:
         with:
           script: |
             const title = context.payload.pull_request.title;
+            const headRef = context.payload.pull_request.head.ref || '';
+
+            // Bot / automation branches carry no ticket by design — dependabot
+            // bump PRs ("chore: bump X from A to B") and release-sync merges.
+            // Exempt them, mirroring the local hooks' sync/ exemption (#545).
+            // See #588.
+            if (/^(dependabot\/|sync\/)/.test(headRef)) {
+              console.log(`✅ Exempt automation branch (${headRef}) — ticket ID not required.`);
+              return;
+            }
 
             // Pattern matches:
             //   Project tracker: ABC-123, ENG-456, PROJ-789 (2-10 char uppercase prefix + dash + digits)
