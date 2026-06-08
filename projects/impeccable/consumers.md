@@ -53,6 +53,7 @@ Runtime paths are gitignored via the `impeccable-live-ignore` block in the consu
 
 | Project | Site root | Sidecars |
 |---------|-----------|----------|
+| **apexyard (ops)** | repo root | `PRODUCT.md`, `DESIGN.md`, `.impeccable/live/config.json` |
 | [smartmomlabs](../smartmomlabs/) | `projects/smartmomlabs/website/` | `PRODUCT.md`, `DESIGN.md`, `.impeccable/live/config.json` |
 
 ## Where to open PRs

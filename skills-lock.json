@@ -1,0 +1,8 @@
+{
+  "impeccable": {
+    "version": "3.5.0",
+    "installedAt": "2026-06-08T23:13:54Z",
+    "harnessDirs": [".claude", ".cursor", ".github"],
+    "installCommand": "bin/install-impeccable-skills"
+  }
+}

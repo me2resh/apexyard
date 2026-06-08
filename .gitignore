@@ -60,3 +60,9 @@ workspace/*/
 
 # Vercel CLI link metadata (local deploy config)
 .vercel
+
+# impeccable-live-ignore-start
+.impeccable/live/sessions/
+.impeccable/live/previews/
+.impeccable/hook.cache.json
+# impeccable-live-ignore-end

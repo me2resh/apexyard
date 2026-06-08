@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Install or restore Impeccable skills into the ops-repo harness folders.
+# Idempotent: skips when already installed unless --force is passed.
+#
+# Persistence model (see projects/impeccable/README.md):
+#   1. Committed copies live in .claude/.cursor/.github/skills/impeccable/
+#   2. skills-lock.json records the pinned npm version
+#   3. This script reinstalls from npm when copies are missing or --force
+set -euo pipefail
+
+ops_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+lock_file="$ops_root/skills-lock.json"
+force=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --force) force=1 ;;
+    --help|-h)
+      echo "Usage: bin/install-impeccable-skills [--force]"
+      echo "  Reinstall Impeccable skills from npm when missing or when --force."
+      exit 0
+      ;;
+  esac
+done
+
+marker="$ops_root/.cursor/skills/impeccable/SKILL.md"
+
+read_version() {
+  grep -m1 '^version:' "$marker" | sed 's/version: *//'
+}
+
+write_lock_file() {
+  local version="$1"
+  if [[ -f "$lock_file" ]] && grep -q "\"version\": \"${version}\"" "$lock_file" 2>/dev/null; then
+    return 0
+  fi
+  cat > "$lock_file" <<EOF
+{
+  "impeccable": {
+    "version": "${version:-unknown}",
+    "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+    "harnessDirs": [".claude", ".cursor", ".github"],
+    "installCommand": "bin/install-impeccable-skills"
+  }
+}
+EOF
+  echo "Wrote $lock_file"
+}
+
+if [[ -f "$marker" && "$force" -eq 0 ]]; then
+  version="$(read_version)"
+  echo "Impeccable skills already present (v${version:-unknown}) in .cursor/skills/impeccable/"
+  write_lock_file "$version"
+  exit 0
+fi
+
+echo "Installing Impeccable skills from npm..."
+cd "$ops_root"
+install_args=()
+if [[ "$force" -eq 1 ]]; then
+  install_args+=(--force)
+fi
+echo Y | npx impeccable skills install "${install_args[@]}"
+version="$(read_version)"
+write_lock_file "$version"
+echo "Done. Commit .claude/.cursor/.github/skills/impeccable/ and skills-lock.json so skills survive clone/clean."

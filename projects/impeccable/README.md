@@ -49,6 +49,21 @@ Or symlink if you keep a canonical clone elsewhere:
 ln -sf ~/Documents/impeccable workspace/impeccable
 ```
 
+## Install into the ops repo (harness skills)
+
+Skills must be **committed to git** — `npx impeccable skills install` alone leaves untracked copies that vanish on `git clean`, fresh clones, or branch resets.
+
+```bash
+# Install or verify (idempotent)
+bin/install-impeccable-skills
+
+# After install or upgrade, commit the harness copies + lock file:
+git add skills-lock.json .claude/skills/impeccable .cursor/skills/impeccable .github/skills/impeccable
+git commit -m "chore: pin impeccable skills v$(grep -m1 '^version:' .cursor/skills/impeccable/SKILL.md | sed 's/version: //')"
+```
+
+`skills-lock.json` at the ops-repo root records the pinned version. Re-run `bin/install-impeccable-skills --force` to pull a newer npm release, then recommit.
+
 ## Install into a consumer project
 
 From the consumer repo (see upstream README for full options):
@@ -63,6 +78,8 @@ Or harness-wide:
 ```bash
 npx impeccable skills install
 ```
+
+Consumer sidecars (`PRODUCT.md`, `DESIGN.md`, `.impeccable/live/config.json`) live in each site root — see [consumers.md](./consumers.md).
 
 ## Ticket prefix
 
