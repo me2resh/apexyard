@@ -1,0 +1,22 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "smartmomlabs.com" }],
+      "destination": "/hub/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.smartmomlabs.com" }],
+      "destination": "/hub/",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.blendavit.com" }],
+      "destination": "https://blendavit.com/:path*",
+      "permanent": true
+    }
+  ]
+}

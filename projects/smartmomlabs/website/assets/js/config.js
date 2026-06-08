@@ -2,6 +2,7 @@
 window.BLENDAVIT_CONFIG = {
   /** Production origin — update when custom domain (blendavit.com) goes live */
   siteUrl: "https://website-dun-zeta-85.vercel.app",
+  hubUrl: "https://website-dun-zeta-85.vercel.app/hub/",
   checkoutEnabled: false,
   market: "ksa",
   discountPercent: 20,

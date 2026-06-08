@@ -1,0 +1,19 @@
+:root {
+  --hub-bg: #f2f6fb;
+  --hub-bg-card: #ffffff;
+  --hub-bg-soft: #e8eef6;
+  --hub-text: #142033;
+  --hub-text-muted: #4a5c72;
+  --hub-accent: #1e4d8c;
+  --hub-accent-light: #2f6bb8;
+  --hub-blendavit: #1a3d32;
+  --hub-gold: #c9a227;
+  --hub-border: rgba(20, 32, 51, 0.1);
+  --hub-radius: 14px;
+  --hub-radius-lg: 18px;
+  --hub-shadow: 0 16px 40px rgba(20, 32, 51, 0.08);
+  --hub-nav-h: 68px;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --font-ar: "Tajawal", system-ui, sans-serif;
+  --font-ar-display: "El Messiri", Georgia, serif;
+}

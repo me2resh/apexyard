@@ -52,27 +52,44 @@
     syncDiscountUi();
   }
 
+  function syncPriceBlock(block) {
+    const variant = block.dataset.variant;
+    if (!variant || !root.BLENDAVIT_CART) return;
+    const compare = root.BLENDAVIT_CART.comparePrice(variant);
+    const on = hasDiscount();
+    const launch = block.hasAttribute("data-launch-price");
+    const showPromo = on || launch;
+    const pct = Number(cfg().discountPercent) || 0;
+    const salePrice =
+      showPromo && compare && pct
+        ? Math.round(compare * (1 - pct / 100))
+        : root.BLENDAVIT_CART.unitPrice(variant);
+    const compareEl = block.querySelector("[data-price-compare]");
+    const currentEl = block.querySelector("[data-price-current]");
+    if (compareEl) {
+      compareEl.textContent = showPromo && compare ? formatMoney(compare) : "";
+      compareEl.hidden = !(showPromo && compare);
+    }
+    if (currentEl) {
+      const display = showPromo ? salePrice : compare;
+      currentEl.textContent = display ? formatMoney(display) : "";
+    }
+    const badge = block.querySelector("[data-discount-badge]");
+    if (badge) badge.hidden = !showPromo;
+  }
+
   function syncDiscountUi() {
     const on = hasDiscount();
     document.querySelectorAll("[data-discount-badge]").forEach((el) => {
+      if (
+        el.closest("[data-price-block][data-launch-price]") ||
+        el.closest(".product-card--shop")
+      ) {
+        return;
+      }
       el.hidden = !on;
     });
-    document.querySelectorAll("[data-price-block]").forEach((block) => {
-      const variant = block.dataset.variant;
-      if (!variant || !root.BLENDAVIT_CART) return;
-      const compare = root.BLENDAVIT_CART.comparePrice(variant);
-      const current = root.BLENDAVIT_CART.unitPrice(variant);
-      const compareEl = block.querySelector("[data-price-compare]");
-      const currentEl = block.querySelector("[data-price-current]");
-      if (compareEl) {
-        compareEl.textContent = on && compare ? formatMoney(compare) : "";
-        compareEl.hidden = !(on && compare);
-      }
-      if (currentEl) {
-        const display = on ? current : compare;
-        currentEl.textContent = display ? formatMoney(display) : "";
-      }
-    });
+    document.querySelectorAll("[data-price-block]").forEach(syncPriceBlock);
     renderCart();
   }
 
@@ -171,11 +188,15 @@
         formatMoney(line.unitPrice) +
         "</p>" +
         '<div class="cart-line__qty">' +
-        '<button type="button" class="cart-qty-btn" data-cart-dec aria-label="-">−</button>' +
+        '<button type="button" class="cart-qty-btn" data-cart-dec aria-label="' +
+        t("commerce.cart.decrease") +
+        '">−</button>' +
         '<span data-cart-qty>' +
         line.qty +
         "</span>" +
-        '<button type="button" class="cart-qty-btn" data-cart-inc aria-label="+">+</button>' +
+        '<button type="button" class="cart-qty-btn" data-cart-inc aria-label="' +
+        t("commerce.cart.increase") +
+        '">+</button>' +
         "</div>" +
         "</div>" +
         '<button type="button" class="cart-line__remove" data-cart-remove aria-label="' +
@@ -246,16 +267,16 @@
   function proceedToPreorder() {
     const restock = document.querySelector("[data-restock-modal]");
     restock?.close();
-    const section = document.getElementById("preorder");
-    if (section) {
-      if (!window.location.pathname.endsWith("index.html") && !window.location.pathname.endsWith("/")) {
-        window.location.href = "index.html#preorder";
-        return;
-      }
-      section.scrollIntoView({ behavior: "smooth", block: "start" });
-      const email = section.querySelector('input[type="email"]');
-      if (email) setTimeout(() => email.focus(), 400);
+    if (!window.location.pathname.endsWith("index.html") && !window.location.pathname.endsWith("/")) {
+      window.location.href = "index.html#newsletter";
+      return;
     }
+    if (window.BLENDAVIT_SITE_CHROME?.scrollToNewsletter()) return;
+    const section = document.getElementById("newsletter") || document.getElementById("preorder");
+    if (!section) return;
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    const email = section.querySelector('input[type="email"]');
+    if (email) setTimeout(() => email.focus(), 400);
   }
 
   function initEntryModal() {
@@ -265,9 +286,16 @@
     if (root.BLENDAVIT_CONSENT?.isEntrySnoozed()) return;
 
     const delay = Number(cfg().emailCaptureDelayMs) || 2000;
-    setTimeout(() => {
-      if (!dialog.open) openDialog(dialog);
-    }, delay);
+    const scheduleOpen = () => {
+      setTimeout(() => {
+        if (!dialog.open) openDialog(dialog);
+      }, delay);
+    };
+    if (root.BLENDAVIT_CONSENT?.pending()) {
+      root.addEventListener("blendavit:consent", scheduleOpen, { once: true });
+    } else {
+      scheduleOpen();
+    }
 
     dialog.querySelector("[data-entry-dismiss]")?.addEventListener("click", () => {
       root.BLENDAVIT_CONSENT?.snoozeEntry();
@@ -306,7 +334,10 @@
 
     document.addEventListener("blendavit:cart-change", renderCart);
     document.addEventListener("blendavit:discount-unlocked", syncDiscountUi);
-    document.addEventListener("blendavit:lang", syncDiscountUi);
+    document.addEventListener("blendavit:lang", () => {
+      syncDiscountUi();
+      renderCart();
+    });
 
     renderCart();
     syncDiscountUi();

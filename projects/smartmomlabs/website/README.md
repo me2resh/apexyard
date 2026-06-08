@@ -9,6 +9,13 @@ Luna & Eve–style marketing site for **blendavit** — static HTML, Arabic-firs
 | `PRODUCT.md` | Register, users, principles |
 | `DESIGN.md` | Tokens, components, do/don't (source of truth for colors) |
 
+These are **Impeccable consumer sidecars** — they stay in this folder. Portfolio tooling lives in [impeccable](../../impeccable/) (`workspace/impeccable/`). See [consumers.md](../../impeccable/consumers.md).
+
+| Path | Purpose |
+|------|---------|
+| `.impeccable/live/config.json` | Live Mode entry files (committed) |
+| `.impeccable/live/sessions/` | Live session state (gitignored) |
+
 ## Preview locally
 
 From the repo root or this folder:
@@ -28,6 +35,7 @@ Or: `python3 -m http.server 8080`
 |------|---------|
 | `index.html` | Home — trust stamps, lifestyle hero, steps, FAQ, reserve |
 | `product.html` | PDP — Toddlers / Kids, KSA, nutrient panel |
+| `hub/index.html` | Smart Mom Labs portfolio hub — blendavit live, other brands soon |
 | `404.html` | Branded not-found (Netlify/Vercel) |
 | `previews/trust-stamps-preview.html` | Trust icon direction comparison |
 
@@ -35,7 +43,11 @@ Or: `python3 -m http.server 8080`
 
 | File | Use |
 |------|-----|
-| `assets/images/hero-stir-yoghurt.png` | Hero lifestyle |
+| `assets/images/posters/poster-lifestyle.png` | Meta trial B1 only — **do not ship** (Gemini watermark baked in; regenerate) |
+| `assets/images/hero-stir-yoghurt.png` | Hero lifestyle (cropped, no watermark) |
+| `assets/images/posters/poster-split-gummy.png` | Science section — gummy vs sachet (B2) |
+| `assets/images/posters/poster-variants.png` | Products section + PDP OG (B3) |
+| `assets/images/hero-stir-yoghurt.png` | Usage steps (stir yoghurt) |
 | `assets/images/usage-stir-yoghurt.png` | Step 2 — mix into yoghurt |
 | `assets/images/usage-oats-bowl.png` | Steps 1 & 3 — sachets / serve |
 | `assets/icons/trust/stamp-*.svg` | Trust strip (direction B) |

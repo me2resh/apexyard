@@ -57,3 +57,6 @@ workspace/*/
 
 # Graphify build artifacts (local only)
 **/graphify-out/
+
+# Vercel CLI link metadata (local deploy config)
+.vercel

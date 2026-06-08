@@ -1,0 +1,23 @@
+# blendavit by Smart Mom Labs
+
+> SFDA-registered tasteless multivitamin powder for children in Saudi Arabia. Arabic-first marketing site with English toggle; reserve / waitlist checkout (KSA, SAR).
+
+## Primary pages
+
+- [Home](https://website-dun-zeta-85.vercel.app/): Hero, product cards (Toddlers 1–3, Kids 4+), evidence row, science stats, FAQ, newsletter capture
+- [Product](https://website-dun-zeta-85.vercel.app/product.html): PDP with variant tabs, nutrient panel, launch pricing
+- [Parent hub](https://website-dun-zeta-85.vercel.app/hub/): Smart Mom Labs portfolio — blendavit live, other brands coming soon
+- [Privacy](https://website-dun-zeta-85.vercel.app/privacy.html)
+- [Terms](https://website-dun-zeta-85.vercel.app/terms.html)
+
+## Product facts (citation-first)
+
+- Format: 30 × 1g tasteless powder sachets; 0g added sugar; liposomal iron (Lipofer®)
+- Variants: Toddlers 1–3 and Kids 4+; SFDA-registered food supplement
+- Markets: KSA only at launch (SAR); shipping within Kingdom
+- Commerce: Waitlist / pre-order UX; Shopify URLs wired via `assets/js/config.js` when live
+
+## Optional
+
+- [AGENTS.md](https://website-dun-zeta-85.vercel.app/AGENTS.md): Agent entry for this static site
+- [DESIGN.md](./DESIGN.md): Visual tokens (committed in repo, not deployed as standalone URL)

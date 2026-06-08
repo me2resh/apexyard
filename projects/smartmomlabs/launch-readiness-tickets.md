@@ -28,7 +28,7 @@
 | [#573](https://github.com/me2resh/apexyard/issues/573) | Analytics commerce funnel events | P1 | Yes (measurement) |
 | [#574](https://github.com/me2resh/apexyard/issues/574) | Sentry browser monitoring | P1 | Yes (ops) |
 | [#575](https://github.com/me2resh/apexyard/issues/575) | robots.txt, sitemap, OG meta | P1 | Warn only |
-| [#576](https://github.com/me2resh/apexyard/issues/576) | llms.txt GEO artefacts | P2 | No |
+| [#576](https://github.com/me2resh/apexyard/issues/576) | llms.txt GEO artefacts | P2 | Done in Phase 5 (`llms.txt` + hub sitemap) |
 
 ## Operator inputs (before engineering can close)
 

@@ -112,6 +112,22 @@ projects:
       - website
     ticket_prefix: GH
 
+  - name: impeccable
+    repo: Dr-kersho/impeccable
+    workspace: workspace/impeccable
+    docs: projects/impeccable
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - ui-designer
+      - frontend-engineer
+    tags:
+      - design-system
+      - ai-tools
+      - internal-tool
+    ticket_prefix: GH
+
   - name: smartmomlabs
     repo: Dr-kersho/apexyard
     workspace: projects/smartmomlabs/website
@@ -126,6 +142,7 @@ projects:
       - customer-facing
       - dtc
       - website
+      - impeccable-consumer
     ticket_prefix: GH
 
   - name: graphify

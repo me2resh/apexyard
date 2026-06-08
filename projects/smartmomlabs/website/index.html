@@ -13,11 +13,13 @@
   <meta property="og:url" content="https://website-dun-zeta-85.vercel.app/" />
   <meta property="og:title" content="blendavit | فيتامينات متعددة بلا طعم لأطفالك" />
   <meta property="og:description" content="مسحوق فيتامينات بلا طعم، مسجّل لدى هيئة الغذاء والدواء. 12 عنصرًا مع حديد ليبوفير. 0غ سكر." />
-  <meta property="og:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
+  <meta property="og:image" content="https://website-dun-zeta-85.vercel.app/assets/images/posters/poster-split-gummy.png" />
+  <meta property="og:image:width" content="1536" />
+  <meta property="og:image:height" content="1024" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="blendavit | فيتامينات متعددة بلا طعم" />
   <meta name="twitter:description" content="مسحوق فيتامينات بلا طعم، مسجّل لدى هيئة الغذاء والدواء. شحن داخل المملكة." />
-  <meta name="twitter:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
+  <meta name="twitter:image" content="https://website-dun-zeta-85.vercel.app/assets/images/posters/poster-split-gummy.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -26,7 +28,11 @@
 </head>
 <body data-page-title="meta.title.home" data-page-desc="meta.desc.home">
   <a class="skip-link" href="#main-content" data-i18n="skip">انتقل إلى المحتوى الرئيسي</a>
-  <div class="promo" data-i18n="promo">الدفعة الأولى مفتوحة للحجز · شحن داخل المملكة · الدفع بالريال</div>
+  <div class="promo-bar" data-promo-bar role="region" data-i18n-aria-label="promo.aria">
+    <p class="promo-bar__text" data-i18n="promo">الدفعة الأولى مفتوحة للحجز · شحن داخل المملكة · خصم 20٪</p>
+    <a class="promo-bar__cta" href="#products" data-i18n="promo.cta">احجزي الآن</a>
+    <button type="button" class="promo-bar__close" data-promo-dismiss data-i18n-aria-label="promo.dismiss" aria-label="إغلاق">×</button>
+  </div>
 
   <header class="nav">
     <a class="logo" href="index.html">blendavit<small data-i18n="footer.brand">من Smart Mom Labs</small></a>
@@ -57,16 +63,16 @@
   </dialog>
 
   <main id="main-content">
-  <section class="hero hero--editorial">
+  <section class="hero hero--ella section--surface">
     <div class="wrap">
-      <p class="ksa-chip" data-i18n="ksa.chip">صُنع للمملكة · شحن محلي</p>
       <div class="hero-split hero-enter">
         <div class="hero-copy-in">
+          <p class="hero-eyebrow" data-i18n="hero.eyebrow">صُنع للمملكة · مسجّل لدى الهيئة</p>
           <h1 data-i18n="hero.title">اثنا عشر عنصرًا غذائيًا في وجبات يأكلها طفلك أصلًا</h1>
           <p class="hero-lead" data-i18n="hero.lead">مسحوق بلا طعم في ظرف 1غ مع حديد ليبوفير و0غ سكر مضاف.</p>
+          <p class="hero-proof-line" data-i18n="hero.social">0غ سكر · حديد ليبوفير · 30 ظرف</p>
           <div class="hero-ctas">
-            <a class="btn btn-primary" href="#products" data-i18n="hero.cta.shop">اختر علبتك</a>
-            <a class="btn btn-secondary" href="product.html" data-i18n="hero.cta.details">تفاصيل المنتج</a>
+            <a class="btn btn-gold btn-primary" href="#products" data-i18n="hero.cta.shop">اختر علبتك</a>
           </div>
         </div>
         <div class="hero-visual hero-visual-in">
@@ -77,8 +83,8 @@
               class="hero-scene"
               src="assets/images/hero-stir-yoghurt.png"
               alt=""
-              width="1024"
-              height="764"
+              width="736"
+              height="656"
               loading="eager"
               fetchpriority="high"
               decoding="async"
@@ -88,47 +94,51 @@
           <div class="age-badge" id="hero-age-badge" aria-hidden="true"><span data-i18n="hero.badge.range">1–12</span><span data-i18n="badge.years">سنة</span></div>
         </div>
       </div>
-      <div class="hero-trust" aria-labelledby="hero-trust-heading">
+      <div class="hero-trust-chips" aria-labelledby="hero-trust-heading">
         <h2 id="hero-trust-heading" class="visually-hidden" data-i18n="trust.rail.heading">اعتمادات</h2>
-        <div data-trust-rail-mount="hero"></div>
+        <div data-trust-rail-mount="chips"></div>
       </div>
     </div>
   </section>
 
-  <section id="products" class="alt">
+  <section id="products" class="section--surface">
     <div class="wrap">
-      <div class="section-head">
+      <div class="section-head section-head--center">
         <h2 data-i18n="products.title">تغذية أساسية بلا عناء</h2>
         <p data-i18n="products.sub">تركيبتان مسجّلتان لدى هيئة الغذاء والدواء.</p>
       </div>
       <div class="product-duo">
-        <article class="product-card">
-          <img src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29__1_-311c9c0f-d5cc-43dc-a74a-3c9c6c2ce54b.png" alt="" loading="lazy" data-i18n="pack.t.alt" />
+        <article class="product-card product-card--shop">
+          <div class="product-card-media">
+            <span class="discount-badge discount-badge--card" data-discount-badge data-i18n="commerce.badge">خصم 20٪</span>
+            <img src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29__1_-311c9c0f-d5cc-43dc-a74a-3c9c6c2ce54b.png" alt="" width="800" height="600" loading="lazy" decoding="async" data-i18n="pack.t.alt" />
+          </div>
           <div class="product-card-body">
             <h3 data-i18n="card.t.title">بليندافيت للرضّع</h3>
             <p class="meta" data-i18n="card.t.meta">1–3 سنوات · 30 ظرف</p>
             <p data-i18n="card.t.desc">لوحة 12 عنصرًا مع حديد مغلّف.</p>
-            <div class="price-block" data-price-block data-variant="toddlers">
-              <span class="discount-badge" data-discount-badge hidden data-i18n="commerce.badge">خصم 20٪</span>
-              <span class="price-compare" data-price-compare hidden></span>
+            <div class="price-block" data-price-block data-variant="toddlers" data-launch-price>
+              <span class="price-compare" data-price-compare></span>
               <span class="price-current" data-price-current></span>
             </div>
-            <button type="button" class="btn btn-primary btn-buy" data-add-to-cart data-variant="toddlers" data-i18n="commerce.addToCart">أضيفي للسلة</button>
+            <button type="button" class="btn btn-gold btn-primary btn-buy" data-add-to-cart data-variant="toddlers" data-i18n="commerce.addToCart">أضيفي للسلة</button>
             <a class="product-details" href="product.html?variant=toddlers" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
-        <article class="product-card">
-          <img src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" alt="" loading="lazy" data-i18n="pack.k.alt" />
+        <article class="product-card product-card--shop">
+          <div class="product-card-media">
+            <span class="discount-badge discount-badge--card" data-discount-badge data-i18n="commerce.badge">خصم 20٪</span>
+            <img src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" alt="" width="800" height="600" loading="lazy" decoding="async" data-i18n="pack.k.alt" />
+          </div>
           <div class="product-card-body">
             <h3 data-i18n="card.k.title">بليندافيت للأطفال</h3>
             <p class="meta" data-i18n="card.k.meta">4+ سنوات · 30 ظرف</p>
             <p data-i18n="card.k.desc">فيتامينات كاملة مع حديد.</p>
-            <div class="price-block" data-price-block data-variant="kids">
-              <span class="discount-badge" data-discount-badge hidden data-i18n="commerce.badge">خصم 20٪</span>
-              <span class="price-compare" data-price-compare hidden></span>
+            <div class="price-block" data-price-block data-variant="kids" data-launch-price>
+              <span class="price-compare" data-price-compare></span>
               <span class="price-current" data-price-current></span>
             </div>
-            <button type="button" class="btn btn-primary btn-buy" data-add-to-cart data-variant="kids" data-i18n="commerce.addToCart">أضيفي للسلة</button>
+            <button type="button" class="btn btn-gold btn-primary btn-buy" data-add-to-cart data-variant="kids" data-i18n="commerce.addToCart">أضيفي للسلة</button>
             <a class="product-details" href="product.html?variant=kids" data-i18n="card.details">التفاصيل</a>
           </div>
         </article>
@@ -136,79 +146,215 @@
     </div>
   </section>
 
-  <section id="science">
+  <section id="evidence" class="section--surface expert-section">
     <div class="wrap">
-      <div class="section-head section-head--tight">
+      <div class="section-head section-head--center">
+        <h2 data-i18n="expert.title">مبني على أدلة يمكنك التحقق منها</h2>
+        <p data-i18n="expert.sub">بحث منشور وتركيبة مدروسة — لا ادعاءات طبية.</p>
+        <p class="expert-panel-note" data-i18n="expert.panel.note">لوحة أدلة — صور المستشارين عند توقيع الاتفاقيات.</p>
+      </div>
+      <div class="expert-row">
+        <article class="expert-card">
+          <div class="expert-card__avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M8 17h8M8 13h5M8 9h8"/></svg>
+          </div>
+          <p class="expert-card__tag" data-i18n="expert.1.tag">أدلة سريرية</p>
+          <blockquote data-i18n="expert.1.quote">عندما يتطلب الشكل تعاون الطفل مع الطعم والقوام، تفشل الالتزام قبل أن تصل التغذية.</blockquote>
+          <footer data-i18n="expert.1.src">Kutbi HA et al. · Appetite · 2019 · جدة</footer>
+        </article>
+        <article class="expert-card">
+          <div class="expert-card__avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 3l7 4v5c0 4.5-3.2 7.8-7 9-3.8-1.2-7-4.5-7-9V7l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <p class="expert-card__tag" data-i18n="expert.2.tag">تنظيمي</p>
+          <blockquote data-i18n="expert.2.quote">مكمل غذائي مسجّل لدى هيئة الغذاء والدواء — تركيبتان واضحتان للأعمار 1–3 و4+.</blockquote>
+          <footer data-i18n="expert.2.src">SFDA · مكمل غذائي · 0غ سكر مضاف</footer>
+        </article>
+        <article class="expert-card">
+          <div class="expert-card__avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M10 2v7.5L6 14v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-6l-4-4.5V2"/><path d="M8 22h8"/></svg>
+          </div>
+          <p class="expert-card__tag" data-i18n="expert.3.tag">التركيبة</p>
+          <blockquote data-i18n="expert.3.quote">المكمل الكامل في مسحوق يمكن أن يتضمن الحديد؛ معظم مصفوفات العلكة لا تستطيع ذلك بالتصميم.</blockquote>
+          <footer data-i18n="expert.3.src">Layrisse 2000 · ConsumerLab 2023 · Lipofer®</footer>
+        </article>
+      </div>
+      <p class="expert-disclaimer" data-i18n="expert.disclaimer">هذه العبارات تلخص أبحاثًا منشورة ومنطق التركيبة. المكمل الغذائي لا يشخّص ولا يعالج الأمراض.</p>
+    </div>
+  </section>
+
+  <section id="science" class="alt science-section">
+    <div class="wrap">
+      <div class="section-head section-head--center">
         <h2 data-i18n="science.title">لماذا المسحوق وليس العلكة؟</h2>
+        <p data-i18n="science.sub">ثلاثة أسباب مدعومة بأدلة — بلا ادعاءات طبية.</p>
       </div>
-      <div class="proof-columns">
-        <div class="proof-block">
-          <h3 data-i18n="proof1.title">89.8٪ يقاومون النكهات غير المألوفة</h3>
+      <figure class="poster-figure poster-figure--split science-poster">
+        <picture>
+          <source type="image/webp" srcset="assets/images/posters/poster-split-gummy.webp" />
+          <img src="assets/images/posters/poster-split-gummy.png" alt="" width="1536" height="1024" loading="lazy" decoding="async" data-i18n="poster.split.alt" />
+        </picture>
+      </figure>
+      <div class="science-stats">
+        <article class="science-stat">
+          <p class="science-stat__value" data-i18n="proof1.stat">89.8٪</p>
+          <h3 data-i18n="proof1.title">يقاومون النكهات غير المألوفة</h3>
           <p data-i18n="proof1.body">دراسة جدة على 216 طفلًا. العلكة تفشل قبل التغذية.</p>
-          <p class="source" data-i18n="proof1.src">Kutbi HA et al. · Appetite · 2019</p>
-        </div>
-        <div class="proof-block">
-          <h3 data-i18n="proof2.title">0غ سكر في كل ظرف</h3>
+          <p class="science-stat__src" data-i18n="proof1.src">Kutbi HA et al. · Appetite · 2019</p>
+        </article>
+        <article class="science-stat">
+          <p class="science-stat__value" data-i18n="proof2.stat">0غ</p>
+          <h3 data-i18n="proof2.title">سكر مضاف في كل ظرف</h3>
           <p data-i18n="proof2.body">العلكة غالبًا ~8غ سكر. كل ظرف بليندافيت 0غ سكر مضاف.</p>
-          <p class="source" data-i18n="proof2.src">American Heart Association · ConsumerLab 2023</p>
-        </div>
+          <p class="science-stat__src" data-i18n="proof2.src">American Heart Association · ConsumerLab 2023</p>
+        </article>
+        <article class="science-stat">
+          <p class="science-stat__value" data-i18n="proof3.stat">7mg</p>
+          <h3 data-i18n="proof3.title">حديد ليبوفير في الظرف</h3>
+          <p data-i18n="proof3.body">معظم العلكة تستبعد الحديد. المسحوق يخفي الطعم المعدني في الطعام.</p>
+          <p class="science-stat__src" data-i18n="proof3.src">Layrisse 2000 · Hurrell &amp; Egli 2010 · Lipofer®</p>
+        </article>
       </div>
     </div>
   </section>
 
-  <section>
+  <section class="section--surface compare-section" aria-labelledby="compare-title">
     <div class="wrap">
-      <div class="section-head"><h2 data-i18n="compare.title">ما الذي يميّز بليندافيت</h2></div>
-      <table class="compare-table" aria-describedby="compare-desc">
-        <caption id="compare-desc" class="visually-hidden" data-i18n="compare.caption">مقارنة بليندافيت مع العلكة</caption>
-        <thead>
-          <tr><th scope="col"></th><th scope="col" data-i18n="compare.h.gummy">فيتامين علكة</th><th scope="col" data-i18n="compare.h.brand">بليندافيت</th></tr>
-        </thead>
-        <tbody>
-          <tr><th scope="row" data-i18n="compare.r.iron">يحتوي حديد</th><td class="no" data-i18n="compare.no" data-mobile-col="compare.h.gummy">لا</td><td class="yes" data-i18n="compare.yes.iron" data-mobile-col="compare.h.brand">نعم · ليبوفير</td></tr>
-          <tr><th scope="row" data-i18n="compare.r.sugar">سكر مضاف</th><td class="no" data-mobile-col="compare.h.gummy">~8g</td><td class="yes" data-i18n="compare.yes.0g" data-mobile-col="compare.h.brand">0غ</td></tr>
-          <tr><th scope="row" data-i18n="compare.r.coop">تعاون الطفل</th><td class="no" data-i18n="compare.coop.no" data-mobile-col="compare.h.gummy">مطلوب</td><td class="yes" data-i18n="compare.coop.yes" data-mobile-col="compare.h.brand">غير مطلوب</td></tr>
-          <tr><th scope="row" data-i18n="compare.r.detect">يُكتشف في الطعام</th><td class="no" data-i18n="compare.detect.no" data-mobile-col="compare.h.gummy">طعم ولون</td><td class="yes" data-i18n="compare.detect.yes" data-mobile-col="compare.h.brand">غير ملحوظ</td></tr>
-        </tbody>
-      </table>
+      <div class="section-head section-head--center">
+        <h2 id="compare-title" data-i18n="compare.title">ما الذي يميّز بليندافيت</h2>
+        <p data-i18n="compare.sub">لماذا المسحوق يتفوق على العلكة</p>
+      </div>
+      <div class="compare-visual" role="region" data-i18n-aria-label="compare.caption">
+        <article class="compare-panel compare-panel--other">
+          <h3 class="compare-panel__title" data-i18n="compare.h.gummy">فيتامين علكة</h3>
+          <ul class="compare-list">
+            <li class="compare-list__row compare-list__row--no">
+              <span class="compare-list__icon" aria-hidden="true">✕</span>
+              <span><strong data-i18n="compare.r.iron">يحتوي حديد</strong> · <span data-i18n="compare.no">لا</span></span>
+            </li>
+            <li class="compare-list__row compare-list__row--no">
+              <span class="compare-list__icon" aria-hidden="true">✕</span>
+              <span><strong data-i18n="compare.r.sugar">سكر مضاف</strong> · ~8g</span>
+            </li>
+            <li class="compare-list__row compare-list__row--no">
+              <span class="compare-list__icon" aria-hidden="true">✕</span>
+              <span><strong data-i18n="compare.r.coop">تعاون الطفل</strong> · <span data-i18n="compare.coop.no">مطلوب</span></span>
+            </li>
+            <li class="compare-list__row compare-list__row--no">
+              <span class="compare-list__icon" aria-hidden="true">✕</span>
+              <span><strong data-i18n="compare.r.detect">يُكتشف في الطعام</strong> · <span data-i18n="compare.detect.no">طعم ولون</span></span>
+            </li>
+          </ul>
+        </article>
+        <article class="compare-panel compare-panel--brand">
+          <h3 class="compare-panel__title" data-i18n="compare.h.brand">بليندافيت</h3>
+          <ul class="compare-list">
+            <li class="compare-list__row compare-list__row--yes">
+              <span class="compare-list__icon" aria-hidden="true">✓</span>
+              <span><strong data-i18n="compare.r.iron">يحتوي حديد</strong> · <span data-i18n="compare.yes.iron">نعم · ليبوفير</span></span>
+            </li>
+            <li class="compare-list__row compare-list__row--yes">
+              <span class="compare-list__icon" aria-hidden="true">✓</span>
+              <span><strong data-i18n="compare.r.sugar">سكر مضاف</strong> · <span data-i18n="compare.yes.0g">0غ</span></span>
+            </li>
+            <li class="compare-list__row compare-list__row--yes">
+              <span class="compare-list__icon" aria-hidden="true">✓</span>
+              <span><strong data-i18n="compare.r.coop">تعاون الطفل</strong> · <span data-i18n="compare.coop.yes">غير مطلوب</span></span>
+            </li>
+            <li class="compare-list__row compare-list__row--yes">
+              <span class="compare-list__icon" aria-hidden="true">✓</span>
+              <span><strong data-i18n="compare.r.detect">يُكتشف في الطعام</strong> · <span data-i18n="compare.detect.yes">غير ملحوظ</span></span>
+            </li>
+          </ul>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section id="how-it-works" class="alt">
+  <section id="how-it-works" class="section--surface">
     <div class="wrap">
-      <div class="section-head">
-        <h2 data-i18n="steps.title">طريقة الاستخدام اليومية</h2>
-        <p data-i18n="steps.sub">ظرف واحد يوميًا مع وجبة مألوفة.</p>
+      <div class="section-head section-head--center">
+        <h2 data-i18n="steps.title">خمس خطوات يومية</h2>
+        <p data-i18n="steps.sub">ظرف واحد يوميًا مع وجبة مألوفة — بلا معركة.</p>
       </div>
-      <div class="steps">
-        <div class="step-item">
+      <ol class="steps-rail steps-rail--five">
+        <li class="step-rail-item">
+          <span class="step-rail-num" aria-hidden="true">1</span>
+          <h3 data-i18n="steps.1.t">اختر الطعام</h3>
+          <p data-i18n="steps.1.p">زبادي أو شوفان أو عصير.</p>
+        </li>
+        <li class="step-rail-item step-rail-item--photo">
           <picture>
             <source type="image/webp" srcset="assets/images/usage-oats-bowl.webp" />
-            <img class="step-photo" src="assets/images/usage-oats-bowl.png" alt="" width="1024" height="764" loading="lazy" decoding="async" data-i18n="steps.1.img.alt" />
+            <img class="step-rail-photo" src="assets/images/usage-oats-bowl.webp" alt="" width="1024" height="764" loading="lazy" decoding="async" data-i18n="steps.2.img.alt" />
           </picture>
-          <div class="step-num">1</div>
-          <h3 data-i18n="steps.1.t">افتح ظرفًا</h3>
-          <p data-i18n="steps.1.p">30 ظرفًا فويل.</p>
-        </div>
-        <div class="step-item">
+          <span class="step-rail-num" aria-hidden="true">2</span>
+          <h3 data-i18n="steps.2.t">افتح ظرفًا</h3>
+          <p data-i18n="steps.2.p">30 ظرفًا فويل في العلبة.</p>
+        </li>
+        <li class="step-rail-item">
+          <span class="step-rail-num" aria-hidden="true">3</span>
+          <h3 data-i18n="steps.3.t">انثر المسحوق</h3>
+          <p data-i18n="steps.3.p">1غ بلا طعم أو لون.</p>
+        </li>
+        <li class="step-rail-item step-rail-item--photo">
           <picture>
             <source type="image/webp" srcset="assets/images/usage-stir-yoghurt.webp" />
-            <img class="step-photo" src="assets/images/usage-stir-yoghurt.png" alt="" width="1024" height="1024" loading="lazy" decoding="async" data-i18n="steps.2.img.alt" />
+            <img class="step-rail-photo" src="assets/images/usage-stir-yoghurt.webp" alt="" width="1024" height="1024" loading="lazy" decoding="async" data-i18n="steps.4.img.alt" />
           </picture>
-          <div class="step-num">2</div>
-          <h3 data-i18n="steps.2.t">اخلط مع الطعام</h3>
-          <p data-i18n="steps.2.p">زبادي أو شوفان.</p>
-        </div>
-        <div class="step-item">
+          <span class="step-rail-num" aria-hidden="true">4</span>
+          <h3 data-i18n="steps.4.t">اخلط جيدًا</h3>
+          <p data-i18n="steps.4.p">يذوب في الطعام المألوف.</p>
+        </li>
+        <li class="step-rail-item step-rail-item--photo">
           <picture>
             <source type="image/webp" srcset="assets/images/hero-stir-yoghurt.webp" />
-            <img class="step-photo" src="assets/images/hero-stir-yoghurt.png" alt="" width="1024" height="764" loading="lazy" decoding="async" data-i18n="steps.3.img.alt" />
+            <img class="step-rail-photo" src="assets/images/hero-stir-yoghurt.webp" alt="" width="798" height="611" loading="lazy" decoding="async" data-i18n="steps.5.img.alt" />
           </picture>
-          <div class="step-num">3</div>
-          <h3 data-i18n="steps.3.t">قدّم الوجبة</h3>
-          <p data-i18n="steps.3.p">نفس الطبق، مع الحديد والعناصر.</p>
-        </div>
+          <span class="step-rail-num" aria-hidden="true">5</span>
+          <h3 data-i18n="steps.5.t">قدّم الوجبة</h3>
+          <p data-i18n="steps.5.p">نفس الطبق، مع الحديد والعناصر.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="timeline" class="alt timeline-section">
+    <div class="wrap">
+      <div class="section-head section-head--center">
+        <h2 data-i18n="timeline.title">ماذا تتوقعين</h2>
+        <p data-i18n="timeline.sub">روتين بلا معركة — نتائج فردية تختلف.</p>
       </div>
+      <ol class="timeline">
+        <li class="timeline__item">
+          <span class="timeline__marker" aria-hidden="true">1</span>
+          <div class="timeline__body">
+            <h3 data-i18n="timeline.1.t">اليوم الأول</h3>
+            <p data-i18n="timeline.1.p">اخلطي الظرف الأول في وجبة يأكلها طفلك أصلًا.</p>
+          </div>
+        </li>
+        <li class="timeline__item">
+          <span class="timeline__marker" aria-hidden="true">2</span>
+          <div class="timeline__body">
+            <h3 data-i18n="timeline.2.t">الأسبوع الأول</h3>
+            <p data-i18n="timeline.2.p">ظرف واحد يوميًا بلا طعم معدني أو لون جديد.</p>
+          </div>
+        </li>
+        <li class="timeline__item">
+          <span class="timeline__marker" aria-hidden="true">3</span>
+          <div class="timeline__body">
+            <h3 data-i18n="timeline.3.t">الأسبوع 2–4</h3>
+            <p data-i18n="timeline.3.p">تغطية يومية لـ 12 عنصرًا مع حديد ليبوفير.</p>
+          </div>
+        </li>
+        <li class="timeline__item">
+          <span class="timeline__marker" aria-hidden="true">4</span>
+          <div class="timeline__body">
+            <h3 data-i18n="timeline.4.t">الشهر الثاني+</h3>
+            <p data-i18n="timeline.4.p">عادة مستدامة — التغذية في الطبق، لا في معركة العلكة.</p>
+          </div>
+        </li>
+      </ol>
     </div>
   </section>
 
@@ -218,13 +364,33 @@
     </div>
   </section>
 
-  <section class="alt">
+  <section class="section--surface reviews-section">
     <div class="wrap">
-      <div class="section-head section-head--tight"><h2 data-i18n="reviews.title">يثق به الأهل</h2></div>
-      <blockquote class="review-solo">
-        <p data-i18n="reviews.1">مسحوق بحديد بلا طعم معدني في الزبادي. هذا ما أقنعنا.</p>
-        <footer data-i18n="reviews.1.meta">أب · جدة · قائمة انتظار</footer>
-      </blockquote>
+      <div class="section-head section-head--center">
+        <h2 data-i18n="reviews.title">يثق به الأهل</h2>
+        <p data-i18n="reviews.sub">آراء من قائمة الانتظار — تجارب فردية.</p>
+      </div>
+      <div class="reviews-carousel" data-reviews-carousel>
+        <div class="reviews-track" data-reviews-track tabindex="0" role="region" data-i18n-aria-label="reviews.aria">
+          <blockquote class="review-card">
+            <p data-i18n="reviews.1">مسحوق بحديد بلا طعم معدني في الزبادي. هذا ما أقنعنا.</p>
+            <footer data-i18n="reviews.1.meta">أب · جدة · قائمة انتظار</footer>
+          </blockquote>
+          <blockquote class="review-card">
+            <p data-i18n="reviews.2">ابنتي لا تلاحظ أي فرق في الشوفان. أخيرًا حديد بلا معركة.</p>
+            <footer data-i18n="reviews.2.meta">أم · الرياض · قائمة انتظار</footer>
+          </blockquote>
+          <blockquote class="review-card">
+            <p data-i18n="reviews.3">كنت أتجنب فيتامينات العلكة بسبب السكر. هذا الحل أنسب لنا.</p>
+            <footer data-i18n="reviews.3.meta">أم · جدة · قائمة انتظار</footer>
+          </blockquote>
+        </div>
+        <div class="reviews-dots" role="tablist" data-i18n-aria-label="reviews.dots">
+          <button type="button" class="reviews-dot is-active" role="tab" aria-selected="true" data-review-dot="0" aria-label="1"></button>
+          <button type="button" class="reviews-dot" role="tab" aria-selected="false" data-review-dot="1" aria-label="2"></button>
+          <button type="button" class="reviews-dot" role="tab" aria-selected="false" data-review-dot="2" aria-label="3"></button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -241,34 +407,48 @@
     </div>
   </section>
 
-  <section id="preorder" class="alt">
-    <div class="wrap waitlist-wrap">
-      <h2 class="waitlist-title" data-i18n="preorder.title">أكملي الطلب المسبق</h2>
-      <p class="waitlist-sub" data-i18n="preorder.sub">أدخلي بريدك لتأكيد الطلب. شحن داخل المملكة فقط.</p>
-      <form class="waitlist-form" data-waitlist-form method="post" novalidate>
-        <input type="hidden" name="variant" id="waitlist-variant" value="kids" />
-        <label class="waitlist-field">
-          <span class="waitlist-label" data-i18n="waitlist.email">البريد الإلكتروني</span>
-          <input type="email" name="email" autocomplete="email" required inputmode="email" data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
-        </label>
-        <p class="waitlist-pick">
-          <span data-i18n="waitlist.for">لـ</span>
-          <strong data-waitlist-variant-label data-i18n="card.k.title">بليندافيت للأطفال</strong>
-        </p>
-        <button type="submit" class="btn btn-gold btn-cta" data-i18n="waitlist.submit">انضم للقائمة</button>
-        <p class="form-privacy"><span data-i18n="forms.privacy.prefix">بإرسال بريدك توافقين على</span> <a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a>.</p>
-        <p class="waitlist-config-hint" data-waitlist-config-hint hidden data-i18n="waitlist.config">اربط waitlistFormAction في config.js أو روابط waitlistUrls للحفظ التلقائي.</p>
-      </form>
-      <p class="waitlist-fine" data-i18n="waitlist.fine">بلا دفع الآن. عند التفعيل يمكنك الحجز بعربون قابل للاسترداد.</p>
+  <section id="preorder" class="section--surface preorder-cta">
+    <div class="wrap preorder-cta__inner">
+      <h2 class="preorder-cta__title" data-i18n="preorder.cta.title">جاهزة للحجز؟</h2>
+      <p class="preorder-cta__sub" data-i18n="preorder.cta.sub">انضمي لقائمة الإطلاق واحصلي على خصم 20٪ للدفعة الأولى.</p>
+      <a class="btn btn-gold btn-primary" href="#newsletter" data-i18n="preorder.cta.btn">انضمي للقائمة</a>
+      <p class="preorder-cta__fine" data-i18n="waitlist.fine">بلا دفع الآن. عند التفعيل يمكنك الحجز بعربون قابل للاسترداد.</p>
     </div>
   </section>
   </main>
+
+  <div class="shop-bar" data-shop-bar aria-hidden="true">
+    <a class="btn btn-gold shop-bar__btn" href="#products" data-i18n="shop.bar.cta">اختر علبتك</a>
+  </div>
+
+  <section class="newsletter-bar" id="newsletter" aria-labelledby="newsletter-title">
+    <div class="wrap newsletter-bar__inner">
+      <div class="newsletter-bar__copy">
+        <h2 id="newsletter-title" data-i18n="newsletter.title">انضمي لقائمة الإطلاق</h2>
+        <p data-i18n="newsletter.sub">أخبار الدفعة الأولى وخصم 20٪ — شحن داخل المملكة فقط.</p>
+      </div>
+      <form class="newsletter-bar__form" data-waitlist-form method="post" novalidate>
+        <input type="hidden" name="variant" id="newsletter-variant" value="kids" />
+        <label class="newsletter-bar__field">
+          <span class="visually-hidden" data-i18n="waitlist.email">البريد الإلكتروني</span>
+          <input type="email" name="email" autocomplete="email" required inputmode="email" data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
+        </label>
+        <button type="submit" class="btn btn-gold" data-i18n="newsletter.cta">اشتركي</button>
+        <p class="newsletter-bar__pick">
+          <span data-i18n="waitlist.for">لـ</span>
+          <strong data-newsletter-variant-label data-i18n="card.k.title">بليندافيت للأطفال</strong>
+        </p>
+        <p class="form-privacy newsletter-bar__privacy"><span data-i18n="forms.privacy.prefix">بإرسال بريدك توافقين على</span> <a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a>.</p>
+        <p class="newsletter-bar__hint" data-waitlist-config-hint hidden data-i18n="waitlist.config">اربط waitlistFormAction في config.js أو روابط waitlistUrls للحفظ التلقائي.</p>
+      </form>
+    </div>
+  </section>
 
   <footer class="footer">
     <div class="wrap footer-grid">
       <div><a class="logo" href="index.html">blendavit</a><p class="footer-brand-sub" data-i18n="footer.brand">من Smart Mom Labs</p></div>
       <div><p><strong data-i18n="footer.shop">التسوق</strong></p><p><a href="#products" data-i18n="footer.reserve">احجز</a></p></div>
-      <div><p><strong data-i18n="footer.company">الشركة</strong></p><p><span class="footer-muted" data-i18n="footer.hub">Smart Mom Labs</span></p></div>
+      <div><p><strong data-i18n="footer.company">الشركة</strong></p><p><a href="hub/" class="footer-muted" data-i18n="footer.hub">Smart Mom Labs</a></p></div>
       <div><p><strong data-i18n="footer.legal">القانوني</strong></p><p><a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a></p><p><a href="terms.html" data-i18n="footer.terms">الشروط</a></p></div>
     </div>
     <div class="wrap disclaimer" data-i18n="footer.disclaimer">مكمل غذائي فقط.</div>
@@ -278,7 +458,7 @@
     <div class="commerce-dialog__inner">
       <div class="commerce-dialog__head">
         <h2 id="entry-offer-title" data-i18n="commerce.entry.title">خصم 20٪ لأول طلب</h2>
-        <button type="button" class="dialog-close" data-entry-dismiss aria-label="Close">×</button>
+        <button type="button" class="dialog-close" data-entry-dismiss data-i18n-aria-label="nav.close" aria-label="إغلاق">×</button>
       </div>
       <div data-entry-form-wrap>
         <p data-i18n="commerce.entry.sub">أدخلي بريدك الإلكتروني واحصلي على رمز الخصم فورًا.</p>
@@ -321,7 +501,7 @@
     <div class="commerce-dialog__inner">
       <div class="commerce-dialog__head">
         <h2 id="restock-title" data-i18n="commerce.restock.title">طلبك محجوز للتنفيذ عند التوفر</h2>
-        <button type="button" class="dialog-close" data-restock-close aria-label="Close">×</button>
+        <button type="button" class="dialog-close" data-restock-close data-i18n-aria-label="nav.close" aria-label="إغلاق">×</button>
       </div>
       <p class="restock-modal__body" data-i18n="commerce.restock.body">يُنفَّذ طلبك عند إعادة التوفر. لا يُخصم المبلغ حتى الشحن داخل المملكة.</p>
       <button type="button" class="btn btn-gold btn-cta" data-restock-continue data-i18n="commerce.restock.cta">أكملي الطلب المسبق</button>
@@ -347,16 +527,18 @@
     </div>
   </div>
 
-  <script src="assets/js/i18n.js"></script>
-  <script src="assets/js/config.js"></script>
-  <script src="assets/js/consent.js"></script>
-  <script src="assets/js/cart.js"></script>
-  <script src="assets/js/commerce.js"></script>
-  <script src="assets/js/credential-rail.js"></script>
-  <script src="assets/js/config-validate.js"></script>
-  <script src="assets/js/purchase-path.js"></script>
-  <script src="assets/js/formula.js"></script>
-  <script src="assets/js/main.js"></script>
-  <script src="assets/js/motion.js"></script>
+  <script src="assets/js/i18n.js" defer></script>
+  <script src="assets/js/config.js" defer></script>
+  <script src="assets/js/consent.js" defer></script>
+  <script src="assets/js/cart.js" defer></script>
+  <script src="assets/js/commerce.js" defer></script>
+  <script src="assets/js/credential-rail.js" defer></script>
+  <script src="assets/js/config-validate.js" defer></script>
+  <script src="assets/js/purchase-path.js" defer></script>
+  <script src="assets/js/formula.js" defer></script>
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/reviews-carousel.js" defer></script>
+  <script src="assets/js/site-chrome.js" defer></script>
+  <script src="assets/js/motion.js" defer></script>
 </body>
 </html>

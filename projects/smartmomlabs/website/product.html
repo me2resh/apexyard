@@ -13,19 +13,25 @@
   <meta property="og:url" content="https://website-dun-zeta-85.vercel.app/product.html" />
   <meta property="og:title" content="احجز بليندافيت | للرضّع والأطفال" />
   <meta property="og:description" content="فيتامينات متعددة بلا طعم · 30 ظرف · مسجّل لدى SFDA · شحن داخل المملكة." />
-  <meta property="og:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
+  <meta property="og:image" content="https://website-dun-zeta-85.vercel.app/assets/images/posters/poster-variants.png" />
+  <meta property="og:image:width" content="1536" />
+  <meta property="og:image:height" content="1024" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Reserve blendavit | Toddlers &amp; Kids" />
   <meta name="twitter:description" content="SFDA-registered tasteless multivitamin powder. KSA shipping only." />
-  <meta name="twitter:image" content="https://website-dun-zeta-85.vercel.app/assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" />
+  <meta name="twitter:image" content="https://website-dun-zeta-85.vercel.app/assets/images/posters/poster-variants.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=El+Messiri:wght@600;700&family=Tajawal:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/main.css" />
 </head>
 <body data-page-title="meta.title.pdp" data-page-desc="meta.desc.home" class="page-pdp">
   <a class="skip-link" href="#main-content" data-i18n="skip">انتقل إلى المحتوى الرئيسي</a>
-  <div class="promo" data-i18n="pdp.promo">احجز علبتك · داخل المملكة · الدفعة الأولى</div>
+  <div class="promo-bar" data-promo-bar role="region" data-i18n-aria-label="promo.aria">
+    <p class="promo-bar__text" data-i18n="pdp.promo">احجز علبتك · داخل المملكة · خصم 20٪</p>
+    <a class="promo-bar__cta" href="#pdp-buy" data-i18n="promo.cta">احجزي الآن</a>
+    <button type="button" class="promo-bar__close" data-promo-dismiss data-i18n-aria-label="promo.dismiss" aria-label="إغلاق">×</button>
+  </div>
 
   <header class="nav">
     <a class="logo" href="index.html">blendavit<small data-i18n="footer.brand">من Smart Mom Labs</small></a>
@@ -54,17 +60,17 @@
     </div>
   </dialog>
 
-  <main class="pdp" id="main-content">
+  <main class="pdp section--surface" id="main-content">
     <div class="wrap pdp-layout">
-      <div class="pdp-gallery">
+      <div class="pdp-gallery pdp-gallery--shop">
         <img id="pdp-image" src="assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png" alt="" data-i18n="pack.k.alt" />
       </div>
 
-      <div class="pdp-buy-box" id="pdp-buy" data-reserve-root data-variant="kids" data-market="ksa">
-        <p class="ksa-chip" data-i18n="ksa.chip">صُنع للمملكة · شحن محلي</p>
-        <p class="pdp-eyebrow" data-i18n="pdp.eyebrow">فيتامينات متعددة بلا طعم · 30 ظرف × 1غ</p>
+      <div class="pdp-buy-box pdp-buy-box--shop" id="pdp-buy" data-reserve-root data-variant="kids" data-market="ksa">
+        <p class="hero-eyebrow" data-i18n="hero.eyebrow">صُنع للمملكة · مسجّل لدى الهيئة</p>
         <h1 class="pdp-title">blendavit</h1>
         <p class="pdp-summary" data-i18n="pdp.summary">مسجّل لدى هيئة الغذاء والدواء · 0غ سكر مضاف</p>
+        <p class="pdp-proof-line" data-i18n="hero.social">0غ سكر · حديد ليبوفير · 30 ظرف</p>
 
         <p class="choice-label" data-i18n="pdp.step1">اختر عمر طفلك</p>
         <div class="variant-cards" role="group" aria-labelledby="pdp-age-label">
@@ -80,9 +86,9 @@
         </div>
 
         <p class="choice-label" data-i18n="pdp.step2">راجع اللوحة ثم احجز</p>
-        <div class="price-block" data-price-block data-variant="kids" data-pdp-price-block>
-          <span class="discount-badge" data-discount-badge hidden data-i18n="commerce.badge">خصم 20٪</span>
-          <span class="price-compare" data-price-compare hidden></span>
+        <div class="price-block price-block--pdp" data-price-block data-variant="kids" data-pdp-price-block data-launch-price>
+          <span class="discount-badge" data-discount-badge data-i18n="commerce.badge">خصم 20٪</span>
+          <span class="price-compare" data-price-compare></span>
           <span class="price-current" data-price-current></span>
         </div>
 
@@ -94,6 +100,7 @@
         </div>
 
         <p class="reserve-fine" data-i18n="pdp.fine">انضم إلى الدفعة الأولى. عربون قابل للاسترداد عند التفعيل.</p>
+        <p class="pdp-science-link"><a href="index.html#science" data-i18n="pdp.science.link">لماذا المسحوق وليس العلكة؟</a></p>
 
         <details class="nutrients-panel" open>
           <summary data-i18n="pdp.nutrients">اللوحة الغذائية</summary>
@@ -122,9 +129,31 @@
     </div>
   </main>
 
+  <section class="newsletter-bar" id="newsletter" aria-labelledby="newsletter-title">
+    <div class="wrap newsletter-bar__inner">
+      <div class="newsletter-bar__copy">
+        <h2 id="newsletter-title" data-i18n="newsletter.title">انضمي لقائمة الإطلاق</h2>
+        <p data-i18n="newsletter.sub">أخبار الدفعة الأولى وخصم 20٪ — شحن داخل المملكة فقط.</p>
+      </div>
+      <form class="newsletter-bar__form" data-waitlist-form method="post" novalidate>
+        <input type="hidden" name="variant" id="newsletter-variant" value="kids" />
+        <label class="newsletter-bar__field">
+          <span class="visually-hidden" data-i18n="waitlist.email">البريد الإلكتروني</span>
+          <input type="email" name="email" autocomplete="email" required inputmode="email" data-i18n-placeholder="waitlist.email.placeholder" placeholder="you@example.com" />
+        </label>
+        <button type="submit" class="btn btn-gold" data-i18n="newsletter.cta">اشتركي</button>
+        <p class="newsletter-bar__hint" data-waitlist-config-hint hidden data-i18n="waitlist.config">اربط waitlistFormAction في config.js أو روابط waitlistUrls للحفظ التلقائي.</p>
+      </form>
+    </div>
+  </section>
+
+  <div class="shop-bar" data-shop-bar aria-hidden="true">
+    <a class="btn btn-gold shop-bar__btn" href="#pdp-buy" data-i18n="nav.reserve">احجز علبتك</a>
+  </div>
+
   <footer class="footer">
     <div class="wrap footer-grid footer-grid--legal">
-      <div><a class="logo" href="index.html">blendavit</a><p class="footer-brand-sub" data-i18n="footer.brand">من Smart Mom Labs</p></div>
+      <div><a class="logo" href="index.html">blendavit</a><p class="footer-brand-sub"><a href="hub/" data-i18n="footer.brand">من Smart Mom Labs</a></p></div>
       <div><p><strong data-i18n="footer.shop">التسوق</strong></p><p><a href="index.html#products" data-i18n="footer.reserve">احجز</a></p></div>
       <div><p><strong data-i18n="footer.legal">القانوني</strong></p><p><a href="privacy.html" data-i18n="footer.privacy">سياسة الخصوصية</a></p><p><a href="terms.html" data-i18n="footer.terms">الشروط</a></p></div>
     </div>
@@ -135,7 +164,7 @@
     <div class="commerce-dialog__inner">
       <div class="commerce-dialog__head">
         <h2 id="entry-offer-title" data-i18n="commerce.entry.title">خصم 20٪ لأول طلب</h2>
-        <button type="button" class="dialog-close" data-entry-dismiss aria-label="Close">×</button>
+        <button type="button" class="dialog-close" data-entry-dismiss data-i18n-aria-label="nav.close" aria-label="إغلاق">×</button>
       </div>
       <div data-entry-form-wrap>
         <p data-i18n="commerce.entry.sub">أدخلي بريدك الإلكتروني واحصلي على رمز الخصم فورًا.</p>
@@ -178,7 +207,7 @@
     <div class="commerce-dialog__inner">
       <div class="commerce-dialog__head">
         <h2 id="restock-title" data-i18n="commerce.restock.title">طلبك محجوز للتنفيذ عند التوفر</h2>
-        <button type="button" class="dialog-close" data-restock-close aria-label="Close">×</button>
+        <button type="button" class="dialog-close" data-restock-close data-i18n-aria-label="nav.close" aria-label="إغلاق">×</button>
       </div>
       <p class="restock-modal__body" data-i18n="commerce.restock.body">يُنفَّذ طلبك عند إعادة التوفر. لا يُخصم المبلغ حتى الشحن داخل المملكة.</p>
       <button type="button" class="btn btn-gold btn-cta" data-restock-continue data-i18n="commerce.restock.cta">أكملي الطلب المسبق</button>
@@ -204,16 +233,17 @@
     </div>
   </div>
 
-  <script src="assets/js/i18n.js"></script>
-  <script src="assets/js/config.js"></script>
-  <script src="assets/js/consent.js"></script>
-  <script src="assets/js/cart.js"></script>
-  <script src="assets/js/commerce.js"></script>
-  <script src="assets/js/credential-rail.js"></script>
-  <script src="assets/js/config-validate.js"></script>
-  <script src="assets/js/purchase-path.js"></script>
-  <script src="assets/js/formula.js"></script>
-  <script src="assets/js/main.js"></script>
-  <script src="assets/js/motion.js"></script>
+  <script src="assets/js/i18n.js" defer></script>
+  <script src="assets/js/config.js" defer></script>
+  <script src="assets/js/consent.js" defer></script>
+  <script src="assets/js/cart.js" defer></script>
+  <script src="assets/js/commerce.js" defer></script>
+  <script src="assets/js/credential-rail.js" defer></script>
+  <script src="assets/js/config-validate.js" defer></script>
+  <script src="assets/js/purchase-path.js" defer></script>
+  <script src="assets/js/formula.js" defer></script>
+  <script src="assets/js/main.js" defer></script>
+  <script src="assets/js/site-chrome.js" defer></script>
+  <script src="assets/js/motion.js" defer></script>
 </body>
 </html>

@@ -16,30 +16,56 @@
   const LAYOUTS = {
     hero: {
       listClass: "trust-rail trust-rail--hero",
+      itemClass: "trust-rail__item",
+      stampClass: "trust-rail__stamp",
+      labelClass: "trust-rail__label",
       stampSize: 48,
+    },
+    chips: {
+      listClass: "trust-chips",
+      itemClass: "trust-chips__item",
+      stampClass: "trust-chips__stamp",
+      labelClass: "trust-chips__label",
+      stampSize: 28,
     },
     pdp: {
       listClass: "trust-rail trust-rail--pdp",
+      itemClass: "trust-rail__item",
+      stampClass: "trust-rail__stamp",
+      labelClass: "trust-rail__label",
       stampSize: 36,
     },
     inline: {
       listClass: "trust-rail trust-rail--inline",
+      itemClass: "trust-rail__item",
+      stampClass: "trust-rail__stamp",
+      labelClass: "trust-rail__label",
       stampSize: 56,
     },
   };
 
-  function stampHtml(stamp, size) {
+  function stampHtml(stamp, layout) {
+    const size = layout.stampSize;
+    const itemClass = layout.itemClass || "trust-rail__item";
+    const stampClass = layout.stampClass || "trust-rail__stamp";
+    const labelClass = layout.labelClass || "trust-rail__label";
     const src = ICON_DIR + stamp.file;
     return (
-      '<li class="trust-rail__item">' +
-      '<img class="trust-rail__stamp" src="' +
+      '<li class="' +
+      itemClass +
+      '">' +
+      '<img class="' +
+      stampClass +
+      '" src="' +
       src +
       '" alt="" width="' +
       size +
       '" height="' +
       size +
       '" decoding="async" aria-hidden="true" />' +
-      '<span class="trust-rail__label" data-i18n="' +
+      '<span class="' +
+      labelClass +
+      '" data-i18n="' +
       stamp.labelKey +
       '"></span>' +
       "</li>"
@@ -49,7 +75,7 @@
   function mount(el) {
     const layoutKey = el.getAttribute("data-trust-rail-mount") || "inline";
     const layout = LAYOUTS[layoutKey] || LAYOUTS.inline;
-    const items = STAMPS.map((s) => stampHtml(s, layout.stampSize)).join("");
+    const items = STAMPS.map((s) => stampHtml(s, layout)).join("");
     el.innerHTML =
       '<ul class="' +
       layout.listClass +
