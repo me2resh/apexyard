@@ -1,0 +1,71 @@
+/**
+ * LUMA ONLY — warm-editorial preset. Do not import in blendavit or other projects.
+ * Source: projects/luma-pwa/design-preview/luma-system-direction.html
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 33% 96%;
+    --foreground: 0 0% 10%;
+    --card: 40 33% 99%;
+    --card-foreground: 0 0% 10%;
+    --popover: 40 33% 99%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 0 68% 32%;
+    --primary-foreground: 40 33% 98%;
+    --secondary: 38 28% 90%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 38 20% 92%;
+    --muted-foreground: 30 6% 38%;
+    --accent: 38 35% 63%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 68% 32%;
+    --destructive-foreground: 40 33% 98%;
+    --border: 38 22% 87%;
+    --input: 38 22% 87%;
+    --ring: 0 68% 32%;
+    --radius: 0.75rem;
+    --luma-black: #1a1a1a;
+    --luma-ivory: #f8f6f1;
+    --luma-card: #fcfbf9;
+    --luma-warm: #f2eee8;
+    --luma-gold: #b8a47e;
+    --luma-cherry: #8b1a1a;
+    --luma-cherry-wash: rgba(139, 26, 26, 0.08);
+    --luma-gold-wash: rgba(184, 164, 126, 0.18);
+    --luma-text: #1a1a1a;
+    --luma-text-secondary: #5c5650;
+    --luma-text-tertiary: #6f6a63;
+    --luma-border: #e5dfd5;
+    --luma-navy: #1b2a3b;
+    --font-display: "Bodoni Moda", Georgia, serif;
+    --font-serif: "Cormorant Garamond", Georgia, serif;
+    --font-body: "Outfit", system-ui, sans-serif;
+    --radius-card: 12px;
+    --radius-ui: 10px;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 40 33% 95%;
+    --card: 220 18% 12%;
+    --card-foreground: 40 33% 95%;
+    --primary: 12 100% 65%;
+    --primary-foreground: 220 20% 10%;
+    --border: 220 12% 22%;
+    --input: 220 12% 22%;
+    --ring: 12 100% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
