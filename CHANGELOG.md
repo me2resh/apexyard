@@ -2,6 +2,18 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.1.4] — 2026-06-09
+
+Patch release — game polish.
+
+### Fixed
+
+- (#619) game (`site/game.html`): outro footer no longer points players at LangGraph / unrelated tools — repointed to ApexYard's "Loop Engineering" read + yard.apexscript.com; fixed stale intro copy/chips missed when the 11th level landed ("Ten quick rounds" → "Eleven … loop engineering last", added the "Loops" chip); added a dedicated game OG share card (`site/og/game.png`, 1200×630) and pointed `og:image`/`twitter:image` at it instead of the generic site OG (cb701c7)
+
+### Closes
+
+- Closes #619
+
 ## [3.1.3] — 2026-06-09
 
 Patch release — game scoring fix.
