@@ -303,56 +303,8 @@
   .compare-row .yours h4{color:var(--iris);}
   .compare-row .actual h4{color:var(--ok);}
 
-  /* =========================================================
-     LEVEL 2 — EMBEDDING SPACE
-     ========================================================= */
-  .emb-row{display:flex;gap:18px;align-items:flex-start;margin-top:14px;}
-  .emb-plane-wrap{flex:1;}
-  .emb-plane{
-    position:relative;background:var(--card);
-    border:1px solid var(--line);border-radius:12px;
-    height:340px;overflow:hidden;
-    background-image:
-      linear-gradient(rgba(27,26,23,.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(27,26,23,.045) 1px, transparent 1px);
-    background-size:24px 24px;
-  }
-  .cluster-zone{
-    position:absolute;border-radius:50%;
-    pointer-events:none;opacity:.10;
-  }
-  .cluster-label{
-    position:absolute;font-family:'Spline Sans Mono',monospace;
-    font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-    pointer-events:none;opacity:.65;
-  }
-  .emb-word{
-    position:absolute;
-    background:var(--panel);border:1.5px solid var(--teal);
-    padding:7px 14px;border-radius:99px;
-    font-family:'Spline Sans Mono',monospace;font-size:13px;
-    color:var(--ink);cursor:grab;
-    touch-action:none;user-select:none;-webkit-user-select:none;
-    box-shadow:0 4px 12px rgba(0,0,0,.3);
-    transition:transform .12s, box-shadow .12s;
-    z-index:2;
-  }
-  .emb-word.dragging{cursor:grabbing;transform:scale(1.08);z-index:10;
-    box-shadow:0 8px 20px rgba(0,0,0,.12);}
-  .emb-tray{
-    width:170px;background:var(--card);
-    border:1px solid var(--line);border-radius:12px;
-    padding:14px;display:flex;flex-direction:column;gap:9px;
-    min-height:340px;
-  }
-  .emb-tray h4{
-    font-family:'Spline Sans Mono',monospace;font-size:10px;
-    letter-spacing:.14em;color:var(--faint);margin-bottom:4px;
-  }
-  .emb-tray .placeholder{
-    color:var(--faint);font-size:11px;font-style:italic;text-align:center;
-    padding:8px;
-  }
+  /* LEVEL 2 — EMBEDDING SPACE now reuses the .cut-* card/pick styling
+     (mobile-friendly tap-to-group); the old drag-plane .emb-* CSS was removed. */
 
   /* =========================================================
      LEVEL 3 — PROMPT BUILDER
@@ -836,8 +788,6 @@
     h1.lvl-title{font-size:26px;}
     .intro-card,.outro-card{padding:32px 22px;}
     .intro-card h1,.outro-card h1{font-size:32px;}
-    .emb-row{flex-direction:column;}
-    .emb-tray{width:100%;min-height:auto;}
     .ag-grid{grid-template-columns:1fr;}
     .compare-row{grid-template-columns:1fr;}
     header{padding:12px 14px;gap:12px;}
@@ -861,7 +811,6 @@
   /* tighter pass for very narrow phones (~≤380px) */
   @media (max-width:380px){
     h1.lvl-title{font-size:23px;}
-    .emb-plane{height:300px;}
     .tok-char{font-size:26px;}
     .cost-bill{font-size:26px;}
     .rag-tile{min-width:78px;}
@@ -1344,167 +1293,80 @@ function level2(){
   wrap.appendChild(levelHeader(
     'EMBEDDINGS','var(--teal)',
     'Map the meaning space',
-    "Embeddings turn words into points in space, where similar meanings sit near each other. Drag each word from the tray into the plane — group them by meaning."
+    "Embeddings turn words into points in space, where similar meanings sit near each other. Tap the meaning group each word belongs to — related words land together."
   ));
 
-  const row = el('div',{class:'emb-row'});
-
-  // clusters: [name, color, cx%, cy%, words...]
+  // The three meaning regions ("clusters" in embedding space).
   const CLUSTERS = [
-    { name:'ANIMALS',  color:'var(--teal)',  cx:25, cy:30, words:['dog','cat','wolf'] },
-    { name:'FRUITS',   color:'var(--amber)', cx:75, cy:30, words:['apple','banana','grape'] },
-    { name:'VEHICLES', color:'var(--iris)',  cx:50, cy:75, words:['car','truck','bicycle'] },
+    { id:'animals',  name:'Animals',  emoji:'🐾' },
+    { id:'fruits',   name:'Fruits',   emoji:'🍎' },
+    { id:'vehicles', name:'Vehicles', emoji:'🚗' },
   ];
-  const allWords = CLUSTERS.flatMap(c => c.words.map(w=>({w, cluster:c})));
-  // shuffle words for the tray
-  for (let i=allWords.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [allWords[i],allWords[j]] = [allWords[j],allWords[i]];
-  }
+  const WORDS = [
+    { w:'dog',     g:'animals'  }, { w:'cat',    g:'animals'  }, { w:'wolf',    g:'animals'  },
+    { w:'apple',   g:'fruits'   }, { w:'banana', g:'fruits'   }, { w:'grape',   g:'fruits'   },
+    { w:'car',     g:'vehicles' }, { w:'truck',  g:'vehicles' }, { w:'bicycle', g:'vehicles' },
+  ];
+  for (let i=WORDS.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [WORDS[i],WORDS[j]]=[WORDS[j],WORDS[i]]; }
+  const nameOf = id => CLUSTERS.find(c=>c.id===id).name.toLowerCase();
 
-  // plane
-  const planeWrap = el('div',{class:'emb-plane-wrap'});
-  const plane = el('div',{class:'emb-plane'});
-  // cluster zone visuals
-  CLUSTERS.forEach(c=>{
-    plane.appendChild(el('div',{class:'cluster-zone', style:{
-      left:(c.cx-18)+'%', top:(c.cy-22)+'%',
-      width:'36%', height:'44%',
-      background:c.color
-    }}));
-    plane.appendChild(el('div',{class:'cluster-label', style:{
-      left:(c.cx)+'%', top:(c.cy-30)+'%',
-      transform:'translateX(-50%)', color:c.color
-    }}, c.name));
-  });
-  planeWrap.appendChild(plane);
-  row.appendChild(planeWrap);
+  const list = el('div',{class:'cut-list'});
+  wrap.appendChild(list);
+  const choice = {};   // word index -> cluster id
 
-  // tray
-  const tray = el('div',{class:'emb-tray'});
-  tray.appendChild(el('h4',{}, 'WORDS'));
-  const trayItems = el('div',{style:{display:'flex',flexDirection:'column',gap:'9px'}});
-  tray.appendChild(trayItems);
-  row.appendChild(tray);
-  wrap.appendChild(row);
-
-  // placed words tracking
-  const placed = []; // {w, cluster, x%, y%}
-
-  // build word chips in tray
-  const wordNodes = new Map();
-  allWords.forEach(item=>{
-    const wn = el('div',{class:'emb-word'}, item.w);
-    wn.style.position = 'static';
-    wn.style.display = 'inline-block';
-    wordNodes.set(item.w, wn);
-    trayItems.appendChild(wn);
-
-    // drag from tray onto plane
-    let grabDX=0, grabDY=0, w0=0, h0=0;
-    dragify(wn, {
-      onStart(e){
-        const r = wn.getBoundingClientRect();
-        grabDX = e.clientX - r.left;   // where inside the chip we grabbed
-        grabDY = e.clientY - r.top;
-        w0 = r.width; h0 = r.height;
-        wn.classList.add('dragging');
-        // detach to body so it can fly over the plane, fixed to viewport
-        wn.style.position = 'fixed';
-        wn.style.margin = '0';
-        wn.style.width = w0 + 'px';
-        wn.style.left = r.left + 'px';
-        wn.style.top  = r.top  + 'px';
-        wn.style.zIndex = 1000;
-        document.body.appendChild(wn);
-      },
-      onMove(e){
-        wn.style.left = (e.clientX - grabDX) + 'px';
-        wn.style.top  = (e.clientY - grabDY) + 'px';
-      },
-      onEnd(e){
-        wn.classList.remove('dragging');
-        wn.style.margin = '';
-        wn.style.width = '';
-        const planeRect = plane.getBoundingClientRect();
-        // use the chip's CENTRE for the hit test & placement, not the raw cursor
-        const cx = e.clientX - grabDX + w0/2;
-        const cy = e.clientY - grabDY + h0/2;
-        const insidePlane = cx>=planeRect.left && cx<=planeRect.right &&
-                            cy>=planeRect.top  && cy<=planeRect.bottom;
-        if (insidePlane){
-          // place into plane (absolute positioning)
-          plane.appendChild(wn);
-          wn.style.position = 'absolute';
-          const px = ((cx - planeRect.left) / planeRect.width) * 100;
-          const py = ((cy - planeRect.top)  / planeRect.height)* 100;
-          wn.style.left = `calc(${px}% - ${w0/2}px)`;
-          wn.style.top  = `calc(${py}% - ${h0/2}px)`;
-          wn.style.zIndex = 2;
-          // record
-          const existing = placed.find(p=>p.w===item.w);
-          const rec = { w:item.w, cluster:item.cluster, x:px, y:py };
-          if (existing) Object.assign(existing, rec);
-          else placed.push(rec);
-
-          checkAllPlaced();
-        } else {
-          // snap back to tray
-          trayItems.appendChild(wn);
-          wn.style.position = 'static';
-          wn.style.left = ''; wn.style.top = '';
-          wn.style.zIndex = '';
-          // if it was previously placed, remove from record
-          const i = placed.findIndex(p=>p.w===item.w);
-          if (i>=0) placed.splice(i,1);
-        }
-      }
+  WORDS.forEach((item,i)=>{
+    const row = el('div',{class:'cut-card'});
+    row.appendChild(el('div',{class:'cut-q'}, item.w));
+    const btns = el('div',{class:'cut-btns'});
+    const pickBtns = {};
+    CLUSTERS.forEach(c=>{
+      const b = el('button',{class:'cut-pick'}, c.emoji+' '+c.name);
+      b.addEventListener('click', ()=>{ if(locked)return;
+        choice[i]=c.id;
+        Object.values(pickBtns).forEach(x=>x.classList.remove('sel'));
+        b.classList.add('sel'); updateSubmit(); });
+      pickBtns[c.id]=b; btns.appendChild(b);
     });
+    row.appendChild(btns);
+    const verdict = el('div',{class:'cut-verdict'});
+    row.appendChild(verdict);
+    row._refs = {pickBtns, verdict, item};
+    list.appendChild(row);
   });
 
-  // scoring once everything placed
-  let locked = false;
-  function checkAllPlaced(){
-    if (placed.length < allWords.length || locked) return;
-    locked = true;
+  let locked=false;
+  const ctrls = el('div',{style:{display:'flex',justifyContent:'center',marginTop:'16px'}});
+  const submit = el('button',{class:'primary', disabled:true}, 'Check grouping');
+  ctrls.appendChild(submit); wrap.appendChild(ctrls);
+  function updateSubmit(){ submit.disabled = Object.keys(choice).length < WORDS.length; }
 
-    // compute score: each word's distance to its cluster centre
-    let sc = 0;
-    placed.forEach(p=>{
-      const dx = p.x - p.cluster.cx, dy = p.y - p.cluster.cy;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      // 0px = 1.0 ; 30px diag = 0
-      const acc = Math.max(0, 1 - dist/35);
-      sc += acc;
-      // also color word to show right/wrong cluster
-      const node = wordNodes.get(p.w);
-      // check if it's actually in the right cluster region (closer to its target than to others)
-      let closest = p.cluster, closestDist = dist;
-      CLUSTERS.forEach(c=>{
-        const d = Math.hypot(p.x-c.cx, p.y-c.cy);
-        if (d < closestDist){ closest = c; closestDist = d; }
-      });
-      if (closest === p.cluster){
-        node.style.borderColor = 'var(--ok)';
-      } else {
-        node.style.borderColor = 'var(--bad)';
-      }
+  submit.addEventListener('click', ()=>{
+    if (locked) return; locked = true;
+    let correct = 0;
+    [...list.children].forEach((row,i)=>{
+      const {pickBtns, verdict, item} = row._refs;
+      const got = choice[i];
+      const right = got === item.g;
+      if (right) correct++;
+      Object.values(pickBtns).forEach(b=>b.disabled=true);
+      pickBtns[got].classList.add(right?'right':'wrong');
+      pickBtns[item.g].classList.add('truth');
+      verdict.style.display='block';
+      verdict.style.color = right ? 'var(--ok)' : 'var(--bad)';
+      verdict.textContent = right
+        ? `✓ "${item.w}" groups with the other ${nameOf(item.g)}`
+        : `✗ "${item.w}" belongs with ${nameOf(item.g)}`;
     });
-    sc = Math.round( (sc / allWords.length) * 100 );
+    const sc = Math.round(correct/WORDS.length*100);
     state.levelScores[state.level] = sc;
     addScore(sc);
-
-    setTimeout(()=>{
-      showResult(sc, 100,
-        `<b>Key idea —</b> embeddings place related concepts close together. A query for "puppy" lands near "dog" — even though the letters are completely different. This geometry is what powers <b>semantic search</b>, <b>RAG retrieval</b>, and the ability to find "similar" things without exact-match.`,
-        'var(--teal)');
-    }, 600);
-  }
+    showResult(sc, 100,
+      `<b>Key idea —</b> embeddings place related concepts close together. A query for "puppy" lands near "dog" — even though the letters are completely different. This geometry is what powers <b>semantic search</b>, <b>RAG retrieval</b>, and the ability to find "similar" things without exact-match.`,
+      'var(--teal)');
+  });
 
   hintBtn.style.visibility = 'visible';
-  hintBtn.onclick = ()=>{
-    footnote.textContent = '💡 Drag each word into one of the three faintly-tinted regions. Like meanings cluster.';
-  };
+  hintBtn.onclick = ()=>{ footnote.textContent = '💡 Ask what each word IS — a kind of creature, something you eat, or something you ride.'; };
 
   clear(stage); stage.appendChild(wrap);
 }
@@ -2770,7 +2632,7 @@ const LEVELS = [
       ],
       terms:['token','context window','BPE'] } },
 
-  { title:'Embedding space', render:level2, foot:'Drag each word into the right meaning region.',
+  { title:'Embedding space', render:level2, foot:'Tap the meaning group each word belongs to.',
     slide:{ cat:'EMBEDDINGS', color:'var(--teal)', icon:'🧭',
       title:'Meaning becomes geometry',
       points:[
