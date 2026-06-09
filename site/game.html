@@ -240,6 +240,7 @@
     font-family:'Spline Sans Mono',monospace;font-size:11px;color:var(--faint);
     letter-spacing:.05em;
   }
+  .footer-btns{display:flex;gap:8px;align-items:center;flex:none;}
   .hint-btn{
     background:transparent;border:1px dashed var(--line);
     color:var(--dim);padding:6px 12px;border-radius:6px;
@@ -880,7 +881,10 @@
   <main id="stage"></main>
   <footer>
     <span id="footnote">Click "Start" to begin.</span>
-    <button class="hint-btn" id="hintBtn" style="visibility:hidden">HINT</button>
+    <div class="footer-btns">
+      <button class="hint-btn" id="skipBtn" style="visibility:hidden">SKIP</button>
+      <button class="hint-btn" id="hintBtn" style="visibility:hidden">HINT</button>
+    </div>
   </footer>
 </div>
 
@@ -896,6 +900,9 @@ const scoreEl = document.getElementById('scoreNum');
 const progEl  = document.getElementById('progress');
 const footnote= document.getElementById('footnote');
 const hintBtn = document.getElementById('hintBtn');
+const skipBtn = document.getElementById('skipBtn');
+let skipArmed = false;            // tap-to-confirm guard for SKIP
+skipBtn.onclick = () => skipLevel();
 
 // el(tag, props, ...children)  — terse DOM builder
 function el(tag, props, ...kids){
@@ -985,6 +992,25 @@ function levelHeader(cat, color, title, sub){
   return wrap;
 }
 
+// Skip the current level — forfeits it (scores 0), then advances. Requires two
+// taps to confirm so a stuck player can't zero a level by accident.
+function skipLevel(){
+  if (state.phase !== 'play') return;                 // only during a challenge
+  if (stage.querySelector('.result-bar')) return;     // already submitted/scored
+  if (!skipArmed){
+    skipArmed = true;
+    skipBtn.textContent = 'SKIP? (0 pts)';
+    footnote.textContent = "Skip this level? You'll score 0 for it. Tap SKIP again to confirm.";
+    setTimeout(() => { if (skipArmed){ skipArmed = false; skipBtn.textContent = 'SKIP'; } }, 4000);
+    return;
+  }
+  skipArmed = false; skipBtn.textContent = 'SKIP';
+  if (state.levelScores[state.level] == null) state.levelScores[state.level] = 0;
+  skipBtn.style.visibility = 'hidden';
+  hintBtn.style.visibility = 'hidden';
+  advance();
+}
+
 // ---------------------------------------------------------------------
 // FLOW CONTROL
 // state.phase: 'slide' (teaching screen) | 'play' (the challenge)
@@ -1002,6 +1028,8 @@ function advance(){
     hintBtn.style.visibility = 'hidden';
     LEVELS[state.level].render();
     footnote.textContent = LEVELS[state.level].foot || '';
+    skipArmed = false; skipBtn.textContent = 'SKIP';
+    skipBtn.style.visibility = 'visible';
   } else {
     // finished a challenge → next concept slide (or outro)
     state.level++;
@@ -1014,6 +1042,7 @@ function advance(){
 // Teaching slide shown before each level
 function renderSlide(){
   hintBtn.style.visibility = 'hidden';
+  skipBtn.style.visibility = 'hidden';
   const L = LEVELS[state.level];
   const s = L.slide;
   const card = el('div',{class:'teach-slide'});
@@ -1065,6 +1094,7 @@ function showResult(scoreGained, max, takeawayHtml, color){
 
   panel.appendChild(card);
   hintBtn.style.visibility = 'hidden';
+  skipBtn.style.visibility = 'hidden';
   // gently bring the result into view without yanking away the reveal
   card.scrollIntoView({behavior:'smooth', block:'center'});
 }
@@ -1080,6 +1110,7 @@ function renderIntro(){
   scoreEl.textContent = '0';
   renderProgress();
   hintBtn.style.visibility = 'hidden';
+  skipBtn.style.visibility = 'hidden';
   const card = el('div',{class:'intro-card'});
   card.appendChild(el('h1',{html:'You <em>vs.</em><br>the LLM'}));
   card.appendChild(el('p',{},
@@ -1106,6 +1137,7 @@ function renderIntro(){
 function renderOutro(){
   renderProgress();
   hintBtn.style.visibility = 'hidden';
+  skipBtn.style.visibility = 'hidden';
   const card = el('div',{class:'outro-card'});
   card.appendChild(el('h1',{html:'You <em>vs.</em> the LLM — done.'}));
   card.appendChild(el('p',{},
