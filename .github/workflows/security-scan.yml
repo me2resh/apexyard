@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout (full history for gitleaks git-log scan)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -85,7 +85,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Semgrep OSS
         run: pip install semgrep
