@@ -1,12 +1,13 @@
 # Open Graph images
 
-Three 1200×630 share-preview PNGs referenced from the `<meta property="og:image">` and `<meta name="twitter:image">` tags in `site/{index,architecture,skills}.html`. Served at `https://yard.apexscript.com/og/<page>.png`.
+Four 1200×630 share-preview PNGs referenced from the `<meta property="og:image">` and `<meta name="twitter:image">` tags in `site/{index,architecture,skills,game}.html`. Served at `https://yard.apexscript.com/og/<page>.png`.
 
 | File | Page it backs | Size |
 |------|---------------|------|
 | `index.png` | `index.html` | 1200×630, ~52 KB |
 | `architecture.png` | `architecture.html` | 1200×630, ~96 KB |
 | `skills.png` | `skills.html` | 1200×630, ~75 KB |
+| `game.png` | `game.html` ("You vs. the LLM") | 1200×630, ~124 KB. Rendered from the game's own intro hero (the 11 topic chips + CTA), so it stays on-brand and self-updates if regenerated. |
 
 ## Design tokens (for future regeneration)
 

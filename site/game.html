@@ -15,7 +15,7 @@
 <meta property="og:url" content="https://yard.apexscript.com/game">
 <meta property="og:title" content="You vs. the LLM — an ApexYard game">
 <meta property="og:description" content="Think you understand how AI actually works? Prove it. 11 quick rounds — tokens, embeddings, RAG, prompt injection, the agent loop, loop engineering — score it and challenge your friends.">
-<meta property="og:image" content="https://yard.apexscript.com/og/index.png">
+<meta property="og:image" content="https://yard.apexscript.com/og/game.png">
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
@@ -23,7 +23,7 @@
 <meta name="twitter:creator" content="@me2resh">
 <meta name="twitter:title" content="You vs. the LLM — an ApexYard game">
 <meta name="twitter:description" content="Think you understand how AI actually works? Prove it — 11 quick rounds, then challenge your friends to beat your score.">
-<meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
+<meta name="twitter:image" content="https://yard.apexscript.com/og/game.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1063,13 +1063,13 @@ function renderIntro(){
   const card = el('div',{class:'intro-card'});
   card.appendChild(el('h1',{html:'You <em>vs.</em><br>the LLM'}));
   card.appendChild(el('p',{},
-    "Think you understand how AI actually works? Prove it. Ten quick rounds — tokens first, agents and cost last — about 15 minutes. Score it, then challenge your friends to beat you. An ApexYard game."));
+    "Think you understand how AI actually works? Prove it. Eleven quick rounds — tokens first, loop engineering last — about 15 minutes. Score it, then challenge your friends to beat you. An ApexYard game."));
   const chips = el('div',{class:'chip-row'});
   const cs = [
     ['Tokens','var(--iris)'],['Embeddings','var(--iris)'],['Temperature','var(--iris)'],
     ['Prompting','var(--olive)'],['Cutoff','var(--teal)'],['RAG','var(--teal)'],
     ['Hallucination','var(--rust)'],['Injection','var(--rust)'],
-    ['Agents','var(--amber)'],['Cost','var(--pink)']
+    ['Agents','var(--amber)'],['Cost','var(--pink)'],['Loops','var(--amber)']
   ];
   cs.forEach(c=>chips.appendChild(el('div',{class:'chip'},
     el('span',{class:'swatch',style:{background:c[1]}}), c[0])));
@@ -1163,7 +1163,7 @@ function renderOutro(){
 
   clear(stage);
   stage.appendChild(card);
-  footnote.textContent = 'Want to go deeper? See: AI Engineering · Build a LLM from Scratch · LangGraph docs.';
+  footnote.textContent = "Want to go deeper? Read 'Loop Engineering' → me2resh.com/blog/loop-engineering · Built with ApexYard (yard.apexscript.com)";
 }
 
 // =====================================================================
