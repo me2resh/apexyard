@@ -4,16 +4,20 @@ All notable changes to ApexYard are documented here.
 
 ## [3.1.1] — 2026-06-09
 
-Patch release — two fixes shipped to production.
+Patch release — CI fix + marketing-site game improvements shipped to production.
 
 ### Fixed
 
 - (#601) pin `ossf/scorecard-action@v2.4.3` — the floating `@v2` major tag stopped resolving, failing the Scorecard supply-chain workflow on every push to `main` (771e2ea)
 - (#602) game (`site/game.html`): mobile-responsive pass so every round plays on a ~360–390px phone, a universal `via #apexyard` share message (works across X / LinkedIn / WhatsApp / Copy, not just X), and a new capstone level **"Engineer the loop"** — toggle the guardrails that make an agent loop safe to run unattended (b3e9f4a)
 
+### Added
+
+- (#606) game: **Skip level** option for stuck players — a footer SKIP button (tap-to-confirm) that forfeits the current level (scores 0) and advances, so a hard level never blocks finishing the game (ebd3582)
+
 ### Closes
 
-- Closes #601, #602
+- Closes #601, #602, #606
 
 ## [3.1.0] — 2026-06-09
 
