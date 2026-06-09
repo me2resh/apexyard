@@ -1262,8 +1262,6 @@ function level1(){
       colA.appendChild(ac); cmp.appendChild(colA);
       main.appendChild(cmp);
 
-      addScore(rs);
-
       // manual continue to next word, or finish
       revealBtn.textContent = roundIdx < ROUNDS.length-1 ? 'Next word →' : 'Finish →';
       const nb = revealBtn.cloneNode(true); revealBtn.replaceWith(nb);
@@ -1273,6 +1271,7 @@ function level1(){
         else {
           const avg = Math.round(totalScore / ROUNDS.length);
           state.levelScores[state.level] = avg;
+          addScore(avg);
           showResult(avg, 100,
             `<b>Key idea —</b> tokens aren't words. A token is a subword chunk a model has seen often during training — a whole word, a root, a suffix, or punctuation. More tokens means more <b>cost</b>, slower <b>speed</b>, and less room in the <b>context window</b>. Notice short common words stayed whole, while long or rare words shattered into pieces.`,
             'var(--iris)');
@@ -2218,9 +2217,7 @@ function levelTemp(){
       const [lo,hi] = sc.band;
       if (temp>=lo && temp<=hi) rs = 100;
       else { const d = temp<lo ? lo-temp : temp-hi; rs = Math.max(0, Math.round(100 - d*120)); }
-      const pts = Math.round(rs/3);
-      totalScore += pts;
-      addScore(pts);
+      totalScore += rs;
 
       // verdict
       const ok = temp>=lo && temp<=hi;
@@ -2246,6 +2243,7 @@ function levelTemp(){
         else {
           const avg = Math.round(totalScore/SCEN.length);
           state.levelScores[state.level] = avg;
+          addScore(avg);
           showResult(avg, 100,
             `<b>Key idea —</b> temperature is a creativity dial, not a quality dial. Near <b>0</b> the model almost always picks its single most-likely token, so you get the same reliable answer — perfect for extraction, classification, or code. Crank it up and it samples less-likely tokens too, giving variety — great for brainstorming, bad for facts. The right setting depends entirely on whether you want <b>repeatability</b> or <b>range</b>.`,
             'var(--iris)');
