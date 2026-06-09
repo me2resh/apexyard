@@ -2,6 +2,18 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.1.2] — 2026-06-09
+
+Patch release — game mobile fix.
+
+### Fixed
+
+- (#609) game (`site/game.html`): the Embeddings level was unplayable on a phone (free-form drag of words into a 2D plane). Replaced with a tap-the-meaning-group picker (reuses the mobile-proven `cut-*` card pattern); removed the dead `.emb-*` drag CSS (583e8a6)
+
+### Closes
+
+- Closes #609
+
 ## [3.1.1] — 2026-06-09
 
 Patch release — CI fix + marketing-site game improvements shipped to production.
