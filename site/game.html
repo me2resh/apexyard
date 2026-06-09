@@ -14,7 +14,7 @@
 <meta property="og:site_name" content="ApexYard">
 <meta property="og:url" content="https://yard.apexscript.com/game">
 <meta property="og:title" content="You vs. the LLM — an ApexYard game">
-<meta property="og:description" content="Think you understand how AI actually works? Prove it. 10 quick rounds — tokens, embeddings, RAG, prompt injection, the agent loop — score it and challenge your friends.">
+<meta property="og:description" content="Think you understand how AI actually works? Prove it. 11 quick rounds — tokens, embeddings, RAG, prompt injection, the agent loop, loop engineering — score it and challenge your friends.">
 <meta property="og:image" content="https://yard.apexscript.com/og/index.png">
 
 <!-- Twitter / X -->
@@ -22,7 +22,7 @@
 <meta name="twitter:site" content="@me2resh">
 <meta name="twitter:creator" content="@me2resh">
 <meta name="twitter:title" content="You vs. the LLM — an ApexYard game">
-<meta name="twitter:description" content="Think you understand how AI actually works? Prove it — 10 quick rounds, then challenge your friends to beat your score.">
+<meta name="twitter:description" content="Think you understand how AI actually works? Prove it — 11 quick rounds, then challenge your friends to beat your score.">
 <meta name="twitter:image" content="https://yard.apexscript.com/og/index.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -845,6 +845,25 @@
     .tok-char{font-size:32px;}
     .rag-tile{min-width:90px;padding:12px 8px;}
     .rag-tile p{font-size:10.5px;}
+    /* widget-level fixes so every round fits a phone (≤640px) */
+    body{overflow-x:hidden;}
+    .rag-paper{padding:22px 16px;}
+    .pb-slot{flex-direction:column;align-items:flex-start;gap:8px;}
+    .pb-slot-label{width:auto;}
+    .pb-snippet{max-width:100%;}
+    .cut-q{min-width:0;width:100%;}
+    .inj-doc{padding:16px 16px;}
+    .cost-meter{padding:16px 14px;}
+    .cost-bill{font-size:30px;}
+    .cost-opt{padding:12px;gap:10px;}
+  }
+  /* tighter pass for very narrow phones (~≤380px) */
+  @media (max-width:380px){
+    h1.lvl-title{font-size:23px;}
+    .emb-plane{height:300px;}
+    .tok-char{font-size:26px;}
+    .cost-bill{font-size:26px;}
+    .rag-tile{min-width:78px;}
   }
 </style>
 </head>
@@ -1111,13 +1130,15 @@ function renderOutro(){
   card.appendChild(rows);
 
   // ---- Share your score ----------------------------------------------------
-  // Link back to the game + "via @me2resh" (X uses its native via= param; the
-  // other channels embed the credit in the message text).
+  // Credit reads "via #apexyard" — a hashtag works as a brand tag on every
+  // channel (X, LinkedIn, WhatsApp, copied text), unlike an "@me2resh" mention
+  // which only resolves on X. The credit is embedded in the message text so it
+  // travels everywhere identically (no X-only intent params).
   const GAME_URL = 'https://yard.apexscript.com/game';
   const max = LEVELS.length * 100;
   const msg = `I scored ${state.score}/${max} on 'You vs. the LLM' 🧠 Think you can beat me?`;
-  const fullLine = `${msg} ${GAME_URL} via @me2resh`;
-  const xUrl  = `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(GAME_URL)}&via=me2resh`;
+  const fullLine = `${msg} ${GAME_URL} via #apexyard`;
+  const xUrl  = `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg + ' via #apexyard')}&url=${encodeURIComponent(GAME_URL)}`;
   const liUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(GAME_URL)}`;
   const waUrl = `https://wa.me/?text=${encodeURIComponent(fullLine)}`;
   const openShare = (u) => window.open(u, '_blank', 'noopener,noreferrer,width=600,height=540');
@@ -2579,6 +2600,131 @@ function levelCost(){
   clear(stage); stage.appendChild(wrap);
 }
 
+// Loop engineering — toggle the guardrails that make a loop safe to run
+// unattended. Reuses the cost-* toggle/meter styling. Pass = all guardrails on,
+// no dangerous setting enabled. Same shape as levelCost (safe vs risky toggles).
+function levelLoop(){
+  const wrap = el('div',{class:'panel'});
+  wrap.appendChild(levelHeader(
+    'LOOP ENGINEERING','var(--amber)',
+    'Make the loop safe to run unattended',
+    "Instead of prompting an agent step by step, you design a loop that prompts it — discover → plan → execute → verify → repeat. But a loop is only as good as its ability to check its own work, and only safe if it halts. Toggle the guardrails that let you actually leave it running."
+  ));
+
+  const OPTS = [
+    { id:'verify', label:'Verify with build + tests + review',
+      desc:'Run the test suite and a code review every iteration — not just a green build.', risky:false, on:false },
+    { id:'halt',   label:'Halt at the human merge gate',
+      desc:'The loop builds and reviews, then stops for a person to approve the merge. It never approves its own.', risky:false, on:false },
+    { id:'budget', label:'Set a budget + iteration ceiling',
+      desc:'Cap the tokens and the number of rounds up front. The loop stops at the ceiling.', risky:false, on:false },
+    { id:'noprog', label:'Stop after no-progress rounds',
+      desc:'Halt when a few rounds in a row produce nothing new, instead of spinning.', risky:false, on:false },
+    { id:'skills', label:'Call named skills, not re-derived prompts',
+      desc:'Reuse your standard commands so the loop inherits policy instead of re-guessing it every tick.', risky:false, on:false },
+    { id:'selfmerge', label:'Let the loop approve its own merges',
+      desc:'Skip the human and ship whatever it builds — fast, and unaccountable.', risky:true, on:false },
+    { id:'buildonly', label:'Verify with the build only (skip tests)',
+      desc:'Faster rounds — but a green build still ships broken behaviour.', risky:true, on:false },
+    { id:'unbounded', label:'Run unbounded until it decides it’s done',
+      desc:'No budget, no iteration cap. This is the runaway / billing-surprise path.', risky:true, on:false },
+  ];
+  const SAFE_TOTAL = OPTS.filter(o=>!o.risky).length;
+
+  // meter (reuses cost-* classes)
+  const meter = el('div',{class:'cost-meter'});
+  const billNum = el('div',{class:'cost-bill'});
+  const perK = el('div',{class:'cost-perk'});
+  const barOuter = el('div',{class:'cost-bar'});
+  const barFill = el('div',{class:'cost-bar-fill'});
+  const targetTick = el('div',{class:'cost-target'});
+  targetTick.appendChild(el('span',{}, 'all guardrails'));
+  targetTick.style.left = '100%';
+  barOuter.appendChild(barFill); barOuter.appendChild(targetTick);
+  const quality = el('div',{class:'cost-quality'});
+  meter.appendChild(el('div',{class:'cost-meter-label'}, 'LOOP SAFETY · RUN UNATTENDED'));
+  meter.appendChild(billNum);
+  meter.appendChild(perK);
+  meter.appendChild(barOuter);
+  meter.appendChild(quality);
+  wrap.appendChild(meter);
+
+  const optWrap = el('div',{class:'cost-opts'});
+  wrap.appendChild(optWrap);
+  OPTS.forEach(o=>{
+    const card = el('div',{class:'cost-opt'});
+    const tg = el('div',{class:'cost-toggle'});
+    const knob = el('div',{class:'cost-knob'});
+    tg.appendChild(knob);
+    const mid = el('div',{style:{flex:'1'}});
+    mid.appendChild(el('div',{class:'cost-opt-label'}, o.label));
+    mid.appendChild(el('div',{class:'cost-opt-desc'}, o.desc));
+    mid.appendChild(el('span',{class:'cost-opt-tag '+(o.risky?'bad':'ok')}, o.risky?'risky':'safe'));
+    card.appendChild(tg); card.appendChild(mid);
+    card.addEventListener('click', ()=>{ if(locked)return; o.on=!o.on; card.classList.toggle('on', o.on); recalc(); });
+    o._card = card;
+    optWrap.appendChild(card);
+  });
+
+  let locked=false;
+  function recalc(){
+    let safeOn=0, riskyOn=0;
+    OPTS.forEach(o=>{ if(o.on){ o.risky?riskyOn++:safeOn++; } });
+    const safe = riskyOn===0 && safeOn===SAFE_TOTAL;
+    const pct = riskyOn>0 ? Math.max(8,(safeOn/SAFE_TOTAL)*40) : (safeOn/SAFE_TOTAL)*100;
+    barFill.style.width = Math.max(2,pct)+'%';
+    barFill.style.background = riskyOn>0 ? 'var(--bad)' : safe ? 'var(--ok)' : 'var(--amber)';
+    billNum.textContent = riskyOn>0 ? 'Unsafe' : safe ? 'Safe to run' : 'Partly guarded';
+    perK.textContent = safeOn+'/'+SAFE_TOTAL+' guardrails on'+(riskyOn>0?'  ·  '+riskyOn+' dangerous setting'+(riskyOn>1?'s':'')+' enabled':'');
+    if (riskyOn>0){
+      const w = OPTS.find(o=>o.risky&&o.on);
+      quality.className='cost-quality broken';
+      quality.textContent = '⚠ '+(w.id==='selfmerge'
+        ? 'A loop that approves its own merges has no halt — pull that out.'
+        : w.id==='buildonly'
+          ? 'Build-only verify ships broken behaviour — add the tests.'
+          : 'No budget or cap is the runaway path — set a ceiling.');
+    } else if (safe){
+      quality.className='cost-quality good'; quality.textContent='✓ Bounded, self-verifying, halts at the human gate.';
+    } else {
+      quality.className='cost-quality poor'; quality.textContent='Add the remaining guardrails before you let it run unattended.';
+    }
+    return {safeOn, riskyOn, safe};
+  }
+  recalc();
+
+  const ctrls = el('div',{style:{display:'flex',justifyContent:'center',marginTop:'16px'}});
+  const submit = el('button',{class:'primary'}, 'Run this loop →');
+  ctrls.appendChild(submit); wrap.appendChild(ctrls);
+
+  submit.addEventListener('click', ()=>{
+    if (locked) return; locked = true;
+    const {safeOn, riskyOn, safe} = recalc();
+    OPTS.forEach(o=>o._card.style.pointerEvents='none');
+    let sc;
+    if (riskyOn>0) sc = 25;
+    else if (safe) sc = 100;
+    else sc = Math.max(30, Math.round((safeOn/SAFE_TOTAL)*80));
+    state.levelScores[state.level] = sc;
+    addScore(sc);
+    const verdict = el('div',{class:'temp-verdict '+(sc>=75?'ok':'no'), style:{marginTop:'14px'}});
+    verdict.innerHTML = riskyOn>0
+      ? '✗ That loop runs off a cliff. One that can self-approve, skip tests, or never stop is a confident-mistake machine — fast, unaccountable, expensive.'
+      : safe
+        ? '✓ Bounded, self-verifying, and it halts at the human gate. That’s a loop you can actually leave running.'
+        : 'Decent — but an unguarded gap is where a loop quietly goes wrong. All five guardrails together make it safe to run unattended.';
+    wrap.appendChild(verdict);
+    showResult(sc, 100,
+      `<b>Key idea —</b> loop engineering is designing the loop that prompts the agent, instead of prompting each step yourself. The leverage is real, but a loop is only as good as its ability to <b>check its own work</b>, and only safe if it <b>halts</b>: verify with tests + review (not just a green build), cap the budget, and stop at a human gate it can never skip. Build the loop — but stay the engineer.`,
+      'var(--amber)');
+  });
+
+  hintBtn.style.visibility = 'visible';
+  hintBtn.onclick = ()=>{ footnote.textContent = '💡 Enable all five "safe" guardrails. Anything tagged "risky" removes the loop’s ability to verify or halt.'; };
+
+  clear(stage); stage.appendChild(wrap);
+}
+
 // =====================================================================
 // LEVEL REGISTRY
 // =====================================================================
@@ -2672,6 +2818,15 @@ const LEVELS = [
         "The big savings are structural: <b>cache</b> the static parts you resend every call, <b>summarise</b> ballooning history, and <b>rerank</b> so you only pay for context that matters. But cut something essential and the cheaper request just returns the wrong answer."
       ],
       terms:['cost = tokens × price','caching','latency'] } },
+
+  { title:'Engineer the loop', render:levelLoop, foot:'Toggle the guardrails that make a loop safe to run unattended.',
+    slide:{ cat:'LOOP ENGINEERING', color:'var(--amber)', icon:'🔁',
+      title:'Stop prompting. Design the loop.',
+      points:[
+        "Instead of prompting an agent step by step, you design a <b>loop</b> that prompts it: discover → plan → execute → <b>verify</b> → repeat, until a goal is met. You write the loop; the model becomes the subroutine.",
+        "A loop is only as good as its ability to <b>check its own work</b> — and it's only safe if it <b>halts</b>. The guardrails are the point: verify with tests (not just a green build), cap the budget, and stop at a human gate it can never skip."
+      ],
+      terms:['loop engineering','verify + halt','agent loop'] } },
 ];
 
 // boot
