@@ -2,6 +2,38 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.1.0] — 2026-06-09
+
+Post-v3.0.0 cycle — a new governed-looping pattern, an interactive marketing-site game, and a batch of hook / release-tooling fixes shaken out while cutting and syncing v3.0.0. The headline feature is **governed looping**: a trigger-heuristic rule that recommends a bounded, self-verifying loop for repetitive multi-item work and binds every loop to apexyard's existing merge gates as its eval.
+
+### Added
+
+- (#594) governed looping — `loop-mode.md` trigger rule + AgDR-0068 (when to OFFER a closed loop, which primitive, and the halt-at-CEO-gate / verify-with-tests guardrails) (9797a29)
+- (#585) interactive "You vs. the LLM" game on the marketing site, with social score-sharing (X / LinkedIn / WhatsApp / Copy) and a play-the-game CTA across the site (fe743f9)
+
+### Fixed
+
+- (#549) `block-main-push` checks the operation's target branch, not the session cwd — no longer false-blocks a push to a feature branch from a `dev` checkout (eaa0fa9)
+- (#547) git-push hook parses the destination ref and ignores redirection tokens + tag pushes (2b41158)
+- (#548) pre-push markdownlint lints tracked files only (98a0aba)
+- (#568) PR-number extractor ignores redirection tokens + unexpanded `$VAR` args (7da5984)
+- (#569) bash-write ticket gate exempts `.claude/`, `/tmp`, `rm`, and `$VAR` targets (be50036)
+- (#550) `/release` tags the squash commit on `main` + adds an ancestry guard before pushing the tag (63b72bf)
+- (#559) Rex + `/approve-merge` resolve the review-marker home pin-first (split-portfolio marker lands where the gate reads it) (50b54a5)
+- (#562) durable guard for the hero pill + releases-shipped metric against site/CHANGELOG version drift (a7f5f34)
+
+### Changed
+
+- (#588) dependabot + sync branches are exempt from the PR-create ticket-ID check; dependabot targets `dev` (207a761)
+- (#590) bump `upload-artifact` v4→v7 + `codeql-action` v3→v4 (38dcf45)
+- (#543, #542, #540) dependabot bumps — markdownlint-cli2-action 16→23, github-script 7→9, gitleaks-action 2→3 (4c8352a, 4c2a3cb, 4b69896)
+- (#545) exempt `sync/` branches from the PR-create ticket-ID rule (f2ed536)
+- (#560) re-fork & data-preservation guide added to `docs/upgrading.md` (28b34fe)
+
+### Closes
+
+- Closes #594, #585, #549, #547, #548, #568, #569, #550, #559, #562, #588, #590, #545, #560
+
 ## [3.0.0] — 2026-06-06
 
 Large catch-up release — 181 commits since v2.3.0 (81 feat, 31 fix, 32 chore, plus docs/test/refactor/ci). Highlights this cycle: a Swift CI golden-path, onboarding-config-out-of-git + commit guard, framework security hardening (CodeQL/Scorecard/Dependabot/SECURITY.md/release-artifact guard), a per-worktree ticket-marker tier, and a CI-gated hook test suite.
