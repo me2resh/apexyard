@@ -2,6 +2,18 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.1.3] — 2026-06-09
+
+Patch release — game scoring fix.
+
+### Fixed
+
+- (#614) game (`site/game.html`): total score could exceed the 1100 max (share text showed "1188/1100"). `level1` and `levelTemp` called `addScore()` per round but recorded only the per-level average; `levelTemp` also double-divided, capping it at ~33. Each level now adds its 0–100 once — total maxes at 1100 and matches the breakdown, and Temperature scores correctly (2224a53)
+
+### Closes
+
+- Closes #614
+
 ## [3.1.2] — 2026-06-09
 
 Patch release — game mobile fix.
