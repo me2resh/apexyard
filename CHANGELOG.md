@@ -2,6 +2,19 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.1.1] — 2026-06-09
+
+Patch release — two fixes shipped to production.
+
+### Fixed
+
+- (#601) pin `ossf/scorecard-action@v2.4.3` — the floating `@v2` major tag stopped resolving, failing the Scorecard supply-chain workflow on every push to `main` (771e2ea)
+- (#602) game (`site/game.html`): mobile-responsive pass so every round plays on a ~360–390px phone, a universal `via #apexyard` share message (works across X / LinkedIn / WhatsApp / Copy, not just X), and a new capstone level **"Engineer the loop"** — toggle the guardrails that make an agent loop safe to run unattended (b3e9f4a)
+
+### Closes
+
+- Closes #601, #602
+
 ## [3.1.0] — 2026-06-09
 
 Post-v3.0.0 cycle — a new governed-looping pattern, an interactive marketing-site game, and a batch of hook / release-tooling fixes shaken out while cutting and syncing v3.0.0. The headline feature is **governed looping**: a trigger-heuristic rule that recommends a bounded, self-verifying loop for repetitive multi-item work and binds every loop to apexyard's existing merge gates as its eval.
