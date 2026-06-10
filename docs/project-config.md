@@ -1,6 +1,6 @@
 # Project Config
 
-`.claude/project-config.defaults.json` ships the framework defaults. Each fork optionally creates `.claude/project-config.json` to override specific top-level keys. Both files live inside `.claude/`, so edits are exempt from the ticket-first hook (per `.claude/rules/workflow-gates.md`).
+`.claude/project-config.defaults.json` ships the framework defaults. Each fork optionally creates `.claude/project-config.json` to override specific top-level keys. The override file is local/private in the public framework fork and is gitignored by default; split-portfolio adopters commit private overrides in their private portfolio repo, not upstream.
 
 Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #114, #115 all read from it.
 
@@ -9,7 +9,9 @@ Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #1
 | File | Who maintains | Purpose |
 | --- | --- | --- |
 | `.claude/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork — upstream syncs via `/update`. |
-| `.claude/project-config.json` | fork owner | Overrides. Optional. Commit or gitignore per the fork's preference. |
+| `.claude/project-config.json` | fork owner | Local/private overrides. Optional. Gitignored in the public framework fork. |
+| `.codex/project-config.defaults.json` | generated from upstream defaults | Codex-native copy of shipped defaults. Regenerate with `./bin/apexyard codex render`. |
+| `.codex/project-config.json` | fork owner | Local/private Codex overrides. Optional. Never generated from `.claude/project-config.json` and gitignored in the public framework fork. |
 
 ## Merge semantics
 

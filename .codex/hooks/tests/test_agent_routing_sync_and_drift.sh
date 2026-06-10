@@ -75,6 +75,10 @@ LIB_OPS="$SRC_ROOT/.codex/hooks/_lib-ops-root.sh"
 LIB_PORT="$SRC_ROOT/.codex/hooks/_lib-portfolio-paths.sh"
 LIB_CFG="$SRC_ROOT/.codex/hooks/_lib-read-config.sh"
 DEFAULTS="$SRC_ROOT/.codex/project-config.defaults.json"
+ADAPTER_RUNTIME="claude"
+case "$SYNC_HOOK" in
+  */.codex/hooks/*) ADAPTER_RUNTIME="codex" ;;
+esac
 
 for f in "$SYNC_HOOK" "$DRIFT_HOOK" "$LIB_OPS" "$LIB_PORT" "$LIB_CFG" "$DEFAULTS"; do
   [ -f "$f" ] || { echo "FAIL: missing $f" >&2; exit 1; }
@@ -215,6 +219,38 @@ read_model_line() {
       awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}' "$1"
       ;;
   esac
+}
+
+is_codex_adapter() {
+  [ "$ADAPTER_RUNTIME" = "codex" ]
+}
+
+codex_provider_id_for() {
+  printf 'apexyard_%s' "$(printf '%s' "$1" | tr '-' '_' | tr -cd 'A-Za-z0-9_')"
+}
+
+codex_base_url_for_endpoint() {
+  local endpoint="${1%/}"
+  case "$endpoint" in
+    */v1) echo "$endpoint" ;;
+    *)    echo "$endpoint/v1" ;;
+  esac
+}
+
+codex_provider_count_for_agent() {
+  local agent_file="$1" agent_name="$2" provider
+  provider=$(codex_provider_id_for "$agent_name")
+  grep -cF "[model_providers.$provider]" "$agent_file" 2>/dev/null || true
+}
+
+codex_agent_has_endpoint() {
+  local agent_file="$1" agent_name="$2" endpoint="$3" provider base_url
+  provider=$(codex_provider_id_for "$agent_name")
+  base_url=$(codex_base_url_for_endpoint "$endpoint")
+  grep -qF "model_provider = \"$provider\"" "$agent_file" \
+    && grep -qF "[model_providers.$provider]" "$agent_file" \
+    && grep -qF "base_url = \"$base_url\"" "$agent_file" \
+    && grep -qF 'wire_api = "responses"' "$agent_file"
 }
 
 # ===========================================================================
@@ -414,11 +450,29 @@ second_qa=$(read_model_line "$SB/.codex/agents/qa-engineer.toml")
 second_env=""
 [ -f "$SB/.codex/session/agent-env/qa-engineer.env" ] && second_env=$(cat "$SB/.codex/session/agent-env/qa-engineer.env")
 
-# Env file should have exactly one ANTHROPIC_BASE_URL line + one MY_VAR line.
+# Claude writes exactly one endpoint env line. Codex writes endpoint routing
+# into the custom agent TOML provider block and leaves the env file for env:
+# entries only.
 endpoint_count=$(echo "$second_env" | grep -c '^ANTHROPIC_BASE_URL=' || true)
 myvar_count=$(echo "$second_env" | grep -c '^MY_VAR=' || true)
+codex_provider_ok=0
+codex_provider_count=0
+if is_codex_adapter; then
+  if codex_agent_has_endpoint "$SB/.codex/agents/qa-engineer.toml" "qa-engineer" "http://localhost:11434"; then
+    codex_provider_ok=1
+  fi
+  codex_provider_count=$(codex_provider_count_for_agent "$SB/.codex/agents/qa-engineer.toml" "qa-engineer")
+fi
 
-if [ "$first_qa" = "gpt-5.4" ] && [ "$second_qa" = "gpt-5.4" ] && [ "$first_env" = "$second_env" ] \
+if is_codex_adapter; then
+  if [ "$first_qa" = "gpt-5.4" ] && [ "$second_qa" = "gpt-5.4" ] && [ "$first_env" = "$second_env" ] \
+     && [ "$endpoint_count" -eq 0 ] && [ "$myvar_count" -eq 1 ] \
+     && [ "$codex_provider_ok" = "1" ] && [ "$codex_provider_count" -eq 1 ]; then
+    mark_pass "case 4: idempotent — second run is a no-op (Codex provider block not compounded)"
+  else
+    mark_fail "case 4: idempotent" "first_qa=$first_qa second_qa=$second_qa endpoint=$endpoint_count myvar=$myvar_count provider_ok=$codex_provider_ok provider_count=$codex_provider_count first_env=[$first_env] second_env=[$second_env]"
+  fi
+elif [ "$first_qa" = "gpt-5.4" ] && [ "$second_qa" = "gpt-5.4" ] && [ "$first_env" = "$second_env" ] \
    && [ "$endpoint_count" -eq 1 ] && [ "$myvar_count" -eq 1 ]; then
   mark_pass "case 4: idempotent — second run is a no-op (env file not compounded)"
 else
@@ -548,6 +602,34 @@ else
 fi
 rm -rf "$SB"
 
+# ===========================================================================
+# CASE 9b — routing YAML may use Claude tier names. Claude keeps the tier
+# name; Codex maps it to the corresponding GPT model before rewriting TOML.
+# ===========================================================================
+SB=$(make_fork)
+routing_model="son""net"
+cat > "$SB/agent-routing.yaml" <<YAML
+version: 1
+agents:
+  qa-engineer:
+    model: $routing_model
+YAML
+
+banner_output=$(cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
+after_qa=$(read_model_line "$SB/.codex/agents/qa-engineer.toml")
+expected_model="$routing_model"
+if is_codex_adapter; then
+  expected_model="gpt-5.4"
+fi
+
+if [ "$after_qa" = "$expected_model" ] \
+   && echo "$banner_output" | grep -qE 'applied 1 agent-routing override'; then
+  mark_pass "case 9b: routing tier name sonnet maps correctly for this adapter"
+else
+  mark_fail "case 9b: routing tier name mapping" "expected=$expected_model actual=$after_qa banner=[$banner_output]"
+fi
+rm -rf "$SB"
+
 # (make_mock_curl is defined near the top, alongside read_model_line, so the
 # earlier endpoint cases — e.g. case 4 idempotency — can use it too. #528)
 
@@ -583,8 +665,22 @@ session_set=0
 agent_set=0
 [ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
 [ -f "$agent_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$agent_env" && agent_set=1
+codex_provider_ok=0
+if is_codex_adapter && codex_agent_has_endpoint "$SB/.codex/agents/ticket-manager.toml" "ticket-manager" "http://localhost:4000"; then
+  codex_provider_ok=1
+fi
 
-if [ "$after_tm" = "ollama/qwen2.5-coder:14b" ] \
+if is_codex_adapter; then
+  if [ "$after_tm" = "ollama/qwen2.5-coder:14b" ] \
+     && [ "$session_set" = "0" ] \
+     && [ "$agent_set" = "0" ] \
+     && [ "$codex_provider_ok" = "1" ] \
+     && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 0 warning'; then
+    mark_pass "case 9: Ollama agent with reachable proxy + pulled model (Codex provider TOML, no warnings)"
+  else
+    mark_fail "case 9: Ollama agent reachable + pulled" "model=$after_tm session=$session_set agent=$agent_set provider_ok=$codex_provider_ok banner=[$banner_output]"
+  fi
+elif [ "$after_tm" = "ollama/qwen2.5-coder:14b" ] \
    && [ "$session_set" = "1" ] \
    && [ "$agent_set" = "1" ] \
    && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 0 warning'; then
@@ -662,8 +758,22 @@ banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK
 session_env="$SB/.codex/session/agent-env/__session__.env"
 session_set=0
 [ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
+codex_provider_ok=0
+if is_codex_adapter && codex_agent_has_endpoint "$SB/.codex/agents/ticket-manager.toml" "ticket-manager" "http://localhost:4000"; then
+  codex_provider_ok=1
+fi
 
-if echo "$banner_output" | grep -qE 'model qwen2\.5-coder:14b not in local Ollama' \
+if is_codex_adapter; then
+  if echo "$banner_output" | grep -qE 'model qwen2\.5-coder:14b not in local Ollama' \
+     && echo "$banner_output" | grep -qE 'ollama pull qwen2\.5-coder:14b' \
+     && [ "$session_set" = "0" ] \
+     && [ "$codex_provider_ok" = "1" ] \
+     && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then
+    mark_pass "case 11: Ollama agent with reachable proxy + missing model (Codex provider TOML, pull-hint emitted)"
+  else
+    mark_fail "case 11: Ollama model-not-pulled" "session=$session_set provider_ok=$codex_provider_ok banner=[$banner_output]"
+  fi
+elif echo "$banner_output" | grep -qE 'model qwen2\.5-coder:14b not in local Ollama' \
    && echo "$banner_output" | grep -qE 'ollama pull qwen2\.5-coder:14b' \
    && [ "$session_set" = "1" ] \
    && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then
@@ -701,8 +811,28 @@ banner_output=$(cd "$SB" && ANTHROPIC_BASE_URL=http://localhost:4000 PATH="$MOCK
 session_env="$SB/.codex/session/agent-env/__session__.env"
 session_lines=0
 [ -f "$session_env" ] && session_lines=$(wc -l < "$session_env" | tr -d ' ')
+tm_provider_ok=0
+qa_provider_ok=0
+if is_codex_adapter; then
+  if codex_agent_has_endpoint "$SB/.codex/agents/ticket-manager.toml" "ticket-manager" "http://localhost:4000"; then
+    tm_provider_ok=1
+  fi
+  if codex_agent_has_endpoint "$SB/.codex/agents/qa-engineer.toml" "qa-engineer" "http://localhost:4000"; then
+    qa_provider_ok=1
+  fi
+fi
 
-if [ -f "$session_env" ] \
+if is_codex_adapter; then
+  if [ "$session_lines" = "0" ] \
+     && [ "$tm_provider_ok" = "1" ] \
+     && [ "$qa_provider_ok" = "1" ] \
+     && ! echo "$banner_output" | grep -qE 'multiple endpoints' \
+     && echo "$banner_output" | grep -qE 'applied 2 agent-routing override.*2 Ollama'; then
+    mark_pass "case 12: two agents same endpoint (Codex provider TOML per agent, no multi-endpoint warning)"
+  else
+    mark_fail "case 12: same endpoint" "session_lines=$session_lines tm_provider=$tm_provider_ok qa_provider=$qa_provider_ok banner=[$banner_output]"
+  fi
+elif [ -f "$session_env" ] \
    && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" \
    && [ "$session_lines" = "1" ] \
    && ! echo "$banner_output" | grep -qE 'multiple endpoints' \
@@ -750,8 +880,28 @@ session_set=0
 # $ROWS; either endpoint may show up as "first". Just check that exactly
 # one of them is in the session env and the warning fires.
 [ -f "$session_env" ] && grep -qE '^ANTHROPIC_BASE_URL=http://localhost:400[01]$' "$session_env" && session_set=1
+tm_provider_ok=0
+qa_provider_ok=0
+if is_codex_adapter; then
+  if codex_agent_has_endpoint "$SB/.codex/agents/ticket-manager.toml" "ticket-manager" "http://localhost:4000"; then
+    tm_provider_ok=1
+  fi
+  if codex_agent_has_endpoint "$SB/.codex/agents/qa-engineer.toml" "qa-engineer" "http://localhost:4001"; then
+    qa_provider_ok=1
+  fi
+fi
 
-if [ "$session_set" = "1" ] \
+if is_codex_adapter; then
+  if [ "$session_set" = "0" ] \
+     && [ "$tm_provider_ok" = "1" ] \
+     && [ "$qa_provider_ok" = "1" ] \
+     && ! echo "$banner_output" | grep -qE 'multiple endpoints declared' \
+     && echo "$banner_output" | grep -qE 'applied 2 agent-routing override'; then
+    mark_pass "case 13: two agents different endpoints (Codex provider TOML keeps endpoints per agent)"
+  else
+    mark_fail "case 13: different endpoints" "session_set=$session_set tm_provider=$tm_provider_ok qa_provider=$qa_provider_ok banner=[$banner_output]"
+  fi
+elif [ "$session_set" = "1" ] \
    && echo "$banner_output" | grep -qE 'multiple endpoints declared' \
    && echo "$banner_output" | grep -qE 'applied 2 agent-routing override'; then
   mark_pass "case 13: two agents different endpoints (first wins, multi-endpoint warning emitted)"
@@ -790,8 +940,21 @@ banner_output=$(cd "$SB" && unset ANTHROPIC_BASE_URL; PATH="$MOCK_BIN:$PATH" bas
 session_env="$SB/.codex/session/agent-env/__session__.env"
 session_set=0
 [ -f "$session_env" ] && grep -q '^ANTHROPIC_BASE_URL=http://localhost:4000$' "$session_env" && session_set=1
+codex_provider_ok=0
+if is_codex_adapter && codex_agent_has_endpoint "$SB/.codex/agents/ticket-manager.toml" "ticket-manager" "http://localhost:4000"; then
+  codex_provider_ok=1
+fi
 
-if [ "$session_set" = "1" ] \
+if is_codex_adapter; then
+  if [ "$session_set" = "0" ] \
+     && [ "$codex_provider_ok" = "1" ] \
+     && ! echo "$banner_output" | grep -qiE 'routing is INACTIVE' \
+     && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 0 warning'; then
+    mark_pass "case 14 (#442): Codex endpoint routing is active via provider TOML without parent env"
+  else
+    mark_fail "case 14 (#442): Codex provider routing" "session=$session_set provider_ok=$codex_provider_ok banner=[$banner_output]"
+  fi
+elif [ "$session_set" = "1" ] \
    && echo "$banner_output" | grep -qiE 'routing is INACTIVE' \
    && echo "$banner_output" | grep -qF "$session_env" \
    && echo "$banner_output" | grep -qE 'applied 1 agent-routing override.*1 Ollama, 1 warning'; then

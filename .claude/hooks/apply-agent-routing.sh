@@ -37,7 +37,7 @@
 #       5. If env: block set, append KEY=VALUE lines to that env file
 #          (resolving $VAR_NAME refs against the parent env)
 #   - Write session-wide .claude/session/agent-env/__session__.env with
-#     ANTHROPIC_BASE_URL=<first-reachable-endpoint> (the routing mechanism
+#     the provider endpoint env var set to <first-reachable-endpoint> (the routing mechanism
 #     that actually works in v1, per AgDR-0050 § Axis 5). Multi-endpoint
 #     declarations warn and use the first.
 #   - Print a single one-line summary banner: silent on N=0; else
@@ -122,6 +122,92 @@ fi
 DEFAULTS_FILE="$AGENTS_DIR/.framework-defaults.json"
 ENV_DIR="$ROOT/.claude/session/agent-env"
 mkdir -p "$ENV_DIR"
+
+case "$AGENTS_DIR" in
+  */.codex/agents) AGENT_RUNTIME="codex" ;;
+  *)               AGENT_RUNTIME="claude" ;;
+esac
+
+SESSION_ENDPOINT_ENV_KEY="ANTHROPIC_BASE_URL"
+
+runtime_model_for() {
+  local model="$1"
+  if [ "$AGENT_RUNTIME" != "codex" ]; then
+    echo "$model"
+    return 0
+  fi
+  case "$model" in
+    opus)   echo "gpt-5.5" ;;
+    sonnet) echo "gpt-5.4" ;;
+    haiku)  echo "gpt-5.4-mini" ;;
+    *)      echo "$model" ;;
+  esac
+}
+
+toml_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+codex_provider_id_for() {
+  local agent_name="$1"
+  printf 'apexyard_%s' "$(printf '%s' "$agent_name" | tr '-' '_' | tr -cd 'A-Za-z0-9_')"
+}
+
+codex_base_url_for_endpoint() {
+  local endpoint="${1%/}"
+  case "$endpoint" in
+    */v1) echo "$endpoint" ;;
+    *)    echo "$endpoint/v1" ;;
+  esac
+}
+
+strip_codex_endpoint_provider_in_file() {
+  local agent_file="$1" tmp_agent
+  tmp_agent=$(mktemp)
+  awk '
+    /^[[:space:]]*model_provider[[:space:]]*=[[:space:]]*"apexyard_[A-Za-z0-9_]+"[[:space:]]*$/ { next }
+    /^\[model_providers\.apexyard_[A-Za-z0-9_]+\][[:space:]]*$/ { skip=1; next }
+    skip && /^\[/ { skip=0; print; next }
+    skip { next }
+    { print }
+  ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+}
+
+rewrite_codex_endpoint_in_file() {
+  local agent_file="$1" agent_name="$2" endpoint="$3" tmp_agent
+  local provider provider_escaped base_url base_url_escaped provider_line name_escaped
+
+  provider=$(codex_provider_id_for "$agent_name")
+  provider_escaped=$(toml_escape "$provider")
+  base_url=$(codex_base_url_for_endpoint "$endpoint")
+  base_url_escaped=$(toml_escape "$base_url")
+  name_escaped=$(toml_escape "ApexYard ${agent_name} endpoint")
+  provider_line="model_provider = \"${provider_escaped}\""
+
+  strip_codex_endpoint_provider_in_file "$agent_file"
+  tmp_agent=$(mktemp)
+  awk -v provider_line="$provider_line" '
+    BEGIN { inserted=0 }
+    function emit_provider() {
+      if (!inserted) {
+        print provider_line
+        inserted=1
+      }
+    }
+    !inserted && /^[[:space:]]*developer_instructions[[:space:]]*=/ { emit_provider() }
+    !inserted && /^[[:space:]]*\[/ { emit_provider() }
+    { print }
+    END { if (!inserted) emit_provider() }
+  ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+
+  cat >> "$agent_file" <<EOF_PROVIDER
+
+[model_providers.$provider]
+name = "$name_escaped"
+base_url = "$base_url_escaped"
+wire_api = "responses"
+EOF_PROVIDER
+}
 
 agent_file_for() {
   local agent_name="$1"
@@ -400,7 +486,20 @@ PY
 
 ROWS=$(parse_routing)
 if [ -z "$ROWS" ]; then
+  if [ "$AGENT_RUNTIME" = "codex" ]; then
+    for agent_file in "$AGENTS_DIR"/*.toml; do
+      [ -f "$agent_file" ] || continue
+      strip_codex_endpoint_provider_in_file "$agent_file"
+    done
+  fi
   exit 0
+fi
+
+if [ "$AGENT_RUNTIME" = "codex" ]; then
+  for agent_file in "$AGENTS_DIR"/*.toml; do
+    [ -f "$agent_file" ] || continue
+    strip_codex_endpoint_provider_in_file "$agent_file"
+  done
 fi
 
 # -----------------------------------------------------------------------------
@@ -414,7 +513,7 @@ fi
 #      neither it nor `/health` responds 2xx, mark the endpoint unreachable.
 #      Endpoint rows pointing at unreachable proxies are filtered out of
 #      $ROWS BEFORE the apply loop, so per-agent .env file's
-#      ANTHROPIC_BASE_URL is NOT written when the proxy is down — a downed
+#      provider endpoint env var is NOT written when the proxy is down — a downed
 #      proxy can't poison the session.
 #
 #   2. Model-pulled — for `model: ollama/<name>` rows whose endpoint is
@@ -424,7 +523,7 @@ fi
 #      cost — that's an adopter-visible cost, not a hook concern.
 #
 # After the apply loop we also write a session-wide `__session__.env`
-# containing ANTHROPIC_BASE_URL=<first-reachable-endpoint>. This is the only
+# containing the provider endpoint env var. This is the only
 # routing mechanism that works in v1 — per AgDR-0050 § Axis 5, Claude Code
 # doesn't consume per-agent env files yet. The per-agent files keep being
 # written for forward-compat. Multi-endpoint declarations warn and pick
@@ -491,7 +590,7 @@ done < "$AGENT_MODELS"
 
 # 3. Filter $ROWS — drop endpoint rows pointing at unreachable endpoints.
 #    The apply loop downstream will not see those rows, so per-agent env
-#    files keep their existing ANTHROPIC_BASE_URL untouched.
+#    files keep their existing provider endpoint env var untouched.
 ROWS=$(printf '%s\n' "$ROWS" | awk -F'\t' -v reach="$EP_REACH" '
   BEGIN {
     while ((getline line < reach) > 0) {
@@ -567,24 +666,28 @@ while IFS=$'\t' read -r agent_name key value; do
         fi
       fi
 
-      rewrite_model_in_file "$agent_file" "$value"
+      rewrite_model_in_file "$agent_file" "$(runtime_model_for "$value")"
       applied=$((applied + 1))
       ;;
 
     endpoint)
+      if [ "$AGENT_RUNTIME" = "codex" ]; then
+        rewrite_codex_endpoint_in_file "$agent_file" "$agent_name" "$value"
+        continue
+      fi
       # Write per-agent endpoint env file. Truncate-and-write (not
       # append) for idempotency.
       env_file="$ENV_DIR/${agent_name}.env"
       # Preserve any existing non-endpoint lines on re-application by
       # filtering them out then re-emitting the endpoint line.
       if [ -f "$env_file" ]; then
-        # Drop existing ANTHROPIC_BASE_URL lines; keep everything else.
-        grep -v '^ANTHROPIC_BASE_URL=' "$env_file" > "${env_file}.tmp" 2>/dev/null || true
+        # Drop existing endpoint lines; keep everything else.
+        grep -v "^${SESSION_ENDPOINT_ENV_KEY}=" "$env_file" > "${env_file}.tmp" 2>/dev/null || true
         mv "${env_file}.tmp" "$env_file"
       else
         : > "$env_file"
       fi
-      printf 'ANTHROPIC_BASE_URL=%s\n' "$value" >> "$env_file"
+      printf '%s=%s\n' "$SESSION_ENDPOINT_ENV_KEY" "$value" >> "$env_file"
       ;;
 
     env)
@@ -624,62 +727,66 @@ done < "$TMP_ROWS"
 rm -f "$TMP_ROWS"
 
 # -----------------------------------------------------------------------------
-# Session-wide ANTHROPIC_BASE_URL — write __session__.env using the first
-# reachable endpoint declared in agent-routing.yaml. Per AgDR-0050 § Axis 5,
-# v1 supports one endpoint per session because Claude Code doesn't consume
-# per-agent env files yet. If multiple distinct reachable endpoints were
-# declared, warn the adopter and use the first-declared.
+# Session-wide endpoint env — for Claude, write __session__.env using the
+# first reachable endpoint declared in agent-routing.yaml. Per AgDR-0050
+# § Axis 5, v1 supports one endpoint per session because Claude Code doesn't
+# consume per-agent env files yet. Codex uses per-agent provider settings in
+# .codex/agents/*.toml instead, so it intentionally skips this session-env
+# path.
 # -----------------------------------------------------------------------------
 
-# Reachable endpoints in declaration order (NOT sorted — first agent wins).
-REACHABLE_EPS=""
-while IFS=$'\t' read -r agent ep; do
-  [ -z "$ep" ] && continue
-  reach=$(awk -F'\t' -v e="$ep" '$1==e {print $2; exit}' "$EP_REACH")
-  if [ "${reach:-0}" = "1" ]; then
-    # De-dup while preserving order
-    if ! echo "$REACHABLE_EPS" | grep -Fxq "$ep"; then
-      REACHABLE_EPS="${REACHABLE_EPS}${ep}
+if [ "$AGENT_RUNTIME" != "codex" ]; then
+  # Reachable endpoints in declaration order (NOT sorted — first agent wins).
+  REACHABLE_EPS=""
+  while IFS=$'\t' read -r agent ep; do
+    [ -z "$ep" ] && continue
+    reach=$(awk -F'\t' -v e="$ep" '$1==e {print $2; exit}' "$EP_REACH")
+    if [ "${reach:-0}" = "1" ]; then
+      # De-dup while preserving order
+      if ! echo "$REACHABLE_EPS" | grep -Fxq "$ep"; then
+        REACHABLE_EPS="${REACHABLE_EPS}${ep}
 "
+      fi
     fi
-  fi
-done < "$AGENT_ENDPOINTS"
+  done < "$AGENT_ENDPOINTS"
 
-REACHABLE_COUNT=$(printf '%s' "$REACHABLE_EPS" | grep -c .)
-if [ "$REACHABLE_COUNT" -ge 1 ]; then
-  FIRST_EP=$(printf '%s' "$REACHABLE_EPS" | head -1)
-  if [ "$REACHABLE_COUNT" -gt 1 ]; then
-    EP_LIST=$(printf '%s' "$REACHABLE_EPS" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
-    echo "⚠ agent-routing: multiple endpoints declared ($EP_LIST); v1 supports one endpoint per session; using $FIRST_EP. See AgDR-0050 § Axis 5." >&2
-    warnings=$((warnings + 1))
-  fi
-  SESSION_ENV="$ENV_DIR/__session__.env"
-  if [ -f "$SESSION_ENV" ]; then
-    grep -v '^ANTHROPIC_BASE_URL=' "$SESSION_ENV" > "${SESSION_ENV}.tmp" 2>/dev/null || true
-    mv "${SESSION_ENV}.tmp" "$SESSION_ENV"
-  else
-    : > "$SESSION_ENV"
-  fi
-  printf 'ANTHROPIC_BASE_URL=%s\n' "$FIRST_EP" >> "$SESSION_ENV"
+  REACHABLE_COUNT=$(printf '%s' "$REACHABLE_EPS" | grep -c .)
+  if [ "$REACHABLE_COUNT" -ge 1 ]; then
+    FIRST_EP=$(printf '%s' "$REACHABLE_EPS" | head -1)
+    if [ "$REACHABLE_COUNT" -gt 1 ]; then
+      EP_LIST=$(printf '%s' "$REACHABLE_EPS" | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+      echo "⚠ agent-routing: multiple endpoints declared ($EP_LIST); v1 supports one endpoint per session; using $FIRST_EP. See AgDR-0050 § Axis 5." >&2
+      warnings=$((warnings + 1))
+    fi
+    SESSION_ENV="$ENV_DIR/__session__.env"
+    if [ -f "$SESSION_ENV" ]; then
+      grep -v "^${SESSION_ENDPOINT_ENV_KEY}=" "$SESSION_ENV" > "${SESSION_ENV}.tmp" 2>/dev/null || true
+      mv "${SESSION_ENV}.tmp" "$SESSION_ENV"
+    else
+      : > "$SESSION_ENV"
+    fi
+    printf '%s=%s\n' "$SESSION_ENDPOINT_ENV_KEY" "$FIRST_EP" >> "$SESSION_ENV"
 
-  # -----------------------------------------------------------------------------
-  # Routing-active check — see me2resh/apexyard#442.
-  # __session__.env is written above, but Claude Code's process env was set
-  # when Claude was launched — SessionStart hooks run in child shells and
-  # can't mutate the parent. So unless the adopter sources __session__.env
-  # in their shell profile BEFORE launching Claude Code, the routing won't
-  # actually take effect even though the banner reports overrides applied.
-  # Detect the mismatch and warn explicitly so the adopter sees the gap
-  # at SessionStart rather than discovering it via "why is my proxy log
-  # empty?" later.
-  # -----------------------------------------------------------------------------
-  if [ -z "${ANTHROPIC_BASE_URL:-}" ] || [ "${ANTHROPIC_BASE_URL:-}" != "$FIRST_EP" ]; then
-    cat >&2 <<EOF
-⚠ agent-routing: ANTHROPIC_BASE_URL=$FIRST_EP was written to $SESSION_ENV but is NOT set in this Claude session's process env. Routing is INACTIVE — every agent call still hits the Anthropic API. To activate, add this line to your shell profile (~/.zshrc / ~/.bashrc) and relaunch Claude Code from a fresh terminal:
-    [ -f "$SESSION_ENV" ] && . "$SESSION_ENV" && export ANTHROPIC_BASE_URL
+    # ---------------------------------------------------------------------------
+    # Routing-active check — see me2resh/apexyard#442.
+    # __session__.env is written above, but Claude Code's process env was set
+    # when Claude was launched — SessionStart hooks run in child shells and
+    # can't mutate the parent. So unless the adopter sources __session__.env
+    # in their shell profile BEFORE launching Claude Code, the routing won't
+    # actually take effect even though the banner reports overrides applied.
+    # Detect the mismatch and warn explicitly so the adopter sees the gap
+    # at SessionStart rather than discovering it via "why is my proxy log
+    # empty?" later.
+    # ---------------------------------------------------------------------------
+    eval "current_endpoint_env=\${$SESSION_ENDPOINT_ENV_KEY:-}"
+    if [ -z "$current_endpoint_env" ] || [ "$current_endpoint_env" != "$FIRST_EP" ]; then
+      cat >&2 <<EOF
+⚠ agent-routing: $SESSION_ENDPOINT_ENV_KEY=$FIRST_EP was written to $SESSION_ENV but is NOT set in this Claude session's process env. Routing is INACTIVE — every agent call still hits the default provider. To activate, add this line to your shell profile (~/.zshrc / ~/.bashrc) and relaunch Claude Code from a fresh terminal:
+    [ -f "$SESSION_ENV" ] && . "$SESSION_ENV" && export $SESSION_ENDPOINT_ENV_KEY
 See docs/local-model-setup.md § "Before you start" and me2resh/apexyard#442.
 EOF
-    warnings=$((warnings + 1))
+      warnings=$((warnings + 1))
+    fi
   fi
 fi
 

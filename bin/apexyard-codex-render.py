@@ -66,6 +66,7 @@ def transform_text(text: str) -> str:
     text = text.replace(".claude/", ".codex/")
     text = text.replace("CLAUDE.md", "AGENTS.md")
     text = text.replace("Claude Code", "Codex")
+    text = text.replace('SESSION_ENDPOINT_ENV_KEY="ANTHROPIC_BASE_URL"', 'SESSION_ENDPOINT_ENV_KEY=""')
     for claude_tier, codex_model in CODEX_MODEL_BY_CLAUDE_TIER.items():
         text = re.sub(
             rf"(^[ \t]*model:[ \t]*){re.escape(claude_tier)}\b",
@@ -76,10 +77,15 @@ def transform_text(text: str) -> str:
     return text
 
 
+def skip_symlinks(directory: str, names: list[str]) -> set[str]:
+    base = Path(directory)
+    return {name for name in names if (base / name).is_symlink()}
+
+
 def copy_tree(src: Path, dst: Path, transform: bool = True) -> None:
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(src, dst, symlinks=True)
+    shutil.copytree(src, dst, symlinks=False, ignore=skip_symlinks)
     if not transform:
         return
     for path in dst.rglob("*"):
@@ -88,6 +94,7 @@ def copy_tree(src: Path, dst: Path, transform: bool = True) -> None:
             if rel in {
                 "tests/test_settings_wrappers_silent_noop.sh",
                 "tests/test_site_counts.sh",
+                "tests/test_codex_render_private_boundaries.sh",
                 "tests/test_subpack_extraction.sh",
                 "tests/test_token_efficiency_wave1.sh",
             }:
@@ -501,12 +508,8 @@ def main() -> int:
     shutil.copy2(ROOT / ".claude" / "project-config.defaults.json", ROOT / ".codex" / "project-config.defaults.json")
     p = ROOT / ".codex" / "project-config.defaults.json"
     p.write_text(transform_text(p.read_text(encoding="utf-8")), encoding="utf-8")
-    src_override = ROOT / ".claude" / "project-config.json"
     dst_override = ROOT / ".codex" / "project-config.json"
-    if src_override.exists():
-        shutil.copy2(src_override, dst_override)
-        dst_override.write_text(transform_text(dst_override.read_text(encoding="utf-8")), encoding="utf-8")
-    elif dst_override.exists():
+    if dst_override.exists() or dst_override.is_symlink():
         dst_override.unlink()
     render_agents()
     write_codex_wrappers()

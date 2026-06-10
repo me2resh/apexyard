@@ -555,7 +555,7 @@ The full reference lives in [`agent-routing.yaml.example`](../agent-routing.yaml
 | Field | Required? | Purpose |
 | --- | --- | --- |
 | `model` | yes (for an override entry) | Model specifier — `opus` / `sonnet` / `haiku` / `ollama/<spec>` / `bedrock/<spec>` |
-| `endpoint` | no | Alternative inference endpoint (e.g. LiteLLM proxy URL); session-scoped — sets `ANTHROPIC_BASE_URL` at SessionStart |
+| `endpoint` | no | Alternative inference endpoint (e.g. LiteLLM proxy URL). Claude uses a session-scoped endpoint env var; Codex writes per-agent `model_provider` / `[model_providers.*]` TOML into `.codex/agents/<agent>.toml`. |
 | `env` | no | Map of environment variables for the agent's invocations; supports `$VAR_NAME` refs |
 | `timeout_seconds` | no | Override the framework default invocation timeout |
 
@@ -571,7 +571,7 @@ The pattern lives in `agent-routing.yaml.example` Example C as a commented-out t
 2. Uncomment the chosen entry in their `agent-routing.yaml` (private repo for split-portfolio mode, gitignored fork file for single-fork).
 3. Start LiteLLM proxy: `litellm --config ~/litellm-config.yaml --port 4000`. `agent-routing.yaml.example`'s Example C uses `http://localhost:4000` as the proxy endpoint by convention.
 4. Validate the chosen model against representative workloads (ticket-creation via `/feature`, SQL via Nadia, AC verification via Salim) BEFORE relying on it for production work. Tool-call reliability via LiteLLM's Anthropic-shape translator is the load-bearing risk; treat the first dozen invocations as a smoke test.
-5. v1 is **session-scoped** — when the `endpoint:` field is set, ALL agents on that session share the configured `ANTHROPIC_BASE_URL`. Per-agent invocation-env scoping is deferred to v2 (depends on Claude Code surfacing per-invocation env, not on apexyard).
+5. Claude Code v1 is **session-scoped** — when the `endpoint:` field is set, ALL Claude agents on that session share the configured endpoint env var. Codex uses generated per-agent provider TOML instead, so different Codex agents may point at different reachable endpoints in the same checkout.
 
 Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist (hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix).
 

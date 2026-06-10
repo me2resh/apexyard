@@ -23,6 +23,7 @@ require_file AGENTS.md
 require_file apexyard.projects.yaml
 require_file .codex/config.toml
 require_file .codex/hooks.json
+require_file .codex/project-config.defaults.json
 require_dir .codex/hooks
 require_dir .codex/agents
 require_dir .codex/rules
@@ -53,6 +54,18 @@ if [ $? -eq 0 ]; then
 else
   fail ".codex/config.toml is invalid"
   printf '%s\n' "$config_errors"
+fi
+
+codex_override_status=$(git -C "$ROOT" status --porcelain -- .codex/project-config.json 2>/dev/null || true)
+if [ -e "$ROOT/.codex/project-config.json" ] || [ -L "$ROOT/.codex/project-config.json" ]; then
+  fail ".codex/project-config.json exists in the working tree; Codex project overrides must stay local/private"
+elif git -C "$ROOT" ls-files --error-unmatch .codex/project-config.json >/dev/null 2>&1; then
+  case "$codex_override_status" in
+    *D*) pass ".codex/project-config.json is pending removal from tracked files" ;;
+    *)   fail ".codex/project-config.json is tracked; Codex project overrides must stay local/private" ;;
+  esac
+else
+  pass ".codex/project-config.json is not tracked"
 fi
 
 portfolio_errors=$(
@@ -127,6 +140,14 @@ else
   printf '%s\n' "$skill_errors"
 fi
 
+generated_symlinks=$(find "$ROOT/.agents/skills" "$ROOT/.codex" -type l -print 2>/dev/null)
+if [ -z "$generated_symlinks" ]; then
+  pass "Codex generated adapter contains no symlinks"
+else
+  fail "Codex generated adapter contains symlinks"
+  printf '%s\n' "$generated_symlinks" | sed -n '1,20p'
+fi
+
 claude_agent_count=$(find "$ROOT/.claude/agents" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
 codex_agent_count=$(find "$ROOT/.codex/agents" -maxdepth 1 -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
 if [ "$codex_agent_count" -ge "$claude_agent_count" ] && [ "$codex_agent_count" -gt 0 ]; then
@@ -199,6 +220,13 @@ if jq -e '
   pass "Codex hook commands resolve ApexYard ops root without trusting nearest git root"
 else
   fail "Codex hook commands do not use robust ops-root resolution"
+fi
+
+if rg -n 'ANTHROPIC_BASE_URL' "$ROOT/.codex/hooks/apply-agent-routing.sh" >/tmp/apexyard-codex-doctor-anthropic-routing 2>/dev/null; then
+  fail "Codex routing hook still references Claude endpoint env"
+  sed -n '1,20p' /tmp/apexyard-codex-doctor-anthropic-routing
+else
+  pass "Codex routing hook does not reference Claude endpoint env"
 fi
 
 if [ -f "$ROOT/.claude/registries/ai-crawlers.json" ]; then

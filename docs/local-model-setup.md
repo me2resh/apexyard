@@ -6,7 +6,7 @@ This is **opt-in**. The default `agent-routing.yaml` shape is empty; absence of 
 
 > **Read this first:** [Spike #195 — local-model routing measurement + recommendation](spikes/local-model-routing.md). The TL;DR is *"NO-GO as designed, partial GO for synthesis-style sub-tasks; not for everything."* This guide ships the routing mechanism #438 asks for, but the spike's conclusions about tool-call reliability, cold-start latency, and "no silent fallback" all still apply.
 
-## Before you start — the one manual step
+## Before you start — Claude Code manual step
 
 `ANTHROPIC_BASE_URL` is set in your shell **before** Claude Code launches. SessionStart hooks (which is where `apply-agent-routing.sh` runs) execute in child shells and **cannot** change Claude's process env. So even after the SessionStart banner reports `applied N agent-routing override(s)`, the routing is INACTIVE until you do this:
 
@@ -24,6 +24,20 @@ session_env="${ops_root}/.claude/session/agent-env/__session__.env"
 Open a fresh terminal and launch Claude Code from it. On every SessionStart, the apply hook checks whether `$ANTHROPIC_BASE_URL` in the current process matches what `__session__.env` says it should be — if not, the banner now emits a one-line `⚠ routing INACTIVE` warning naming the gap. No silent failure.
 
 If you'd rather not edit your shell profile, the alternative is to `export ANTHROPIC_BASE_URL=http://localhost:4000` manually in every terminal before `claude`. That works too; it's just the same step done by hand each time.
+
+## Codex note — no shell-profile endpoint export
+
+Codex does **not** use `ANTHROPIC_BASE_URL`. The generated Codex hook translates each reachable `endpoint:` entry into the matching custom-agent TOML:
+
+```toml
+model_provider = "apexyard_ticket_manager"
+
+[model_providers.apexyard_ticket_manager]
+base_url = "http://localhost:4000/v1"
+wire_api = "responses"
+```
+
+Run `./bin/apexyard codex render` after framework changes and trust the project in Codex (`/hooks`) before relying on hook-applied routing or gates. For a local routing smoke test, restart Codex after editing `agent-routing.yaml`, invoke the routed custom agent, and check the LiteLLM proxy log for `/v1/responses` or `/v1/chat/completions` traffic depending on the provider.
 
 ## 1. Install Ollama
 
@@ -112,20 +126,20 @@ agents:
       OLLAMA_KEEP_ALIVE: "30m"
 ```
 
-Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
+Restart Claude Code or Codex. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.
 2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model isn't pulled → emit `⚠ agent-routing: ticket-manager — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
-3. Rewrite `.claude/agents/ticket-manager.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
-4. Write `.claude/session/agent-env/ticket-manager.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
-5. Write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code actually reads at startup.
+3. Rewrite `.claude/agents/ticket-manager.md` frontmatter so `model: ollama/qwen2.5-coder:14b`, or rewrite `.codex/agents/ticket-manager.toml` so `model = "ollama/qwen2.5-coder:14b"`.
+4. For Claude Code, write `.claude/session/agent-env/ticket-manager.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
+5. For Claude Code, write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. For Codex, write `model_provider` and `[model_providers.*]` entries directly into the custom-agent TOML.
 6. Emit a one-line banner: `ApexYard: applied 1 agent-routing override(s) from agent-routing.yaml [1 Ollama, 0 warning(s)]`.
 
 The `block-agent-routing-drift.sh` pre-commit/pre-push hooks will refuse to let the rewritten frontmatter escape to the public framework remote — adopter routing choices stay local.
 
 ## 5. Verify it's actually routing
 
-Open a new Claude Code session in your apexyard fork. Trigger a ticket-manager invocation (e.g. `/task something-trivial`). Watch the LiteLLM proxy log — you should see an inbound POST to `/v1/messages` and a corresponding outbound call to Ollama's `/api/chat`.
+Open a new Claude Code or Codex session in your apexyard fork. Trigger a ticket-manager invocation. Watch the LiteLLM proxy log — you should see an inbound POST to the configured proxy and a corresponding outbound call to Ollama.
 
 If the routing didn't take effect, check in this order:
 
@@ -133,10 +147,11 @@ If the routing didn't take effect, check in this order:
 2. `echo $ANTHROPIC_BASE_URL` — has the env file been sourced by your shell profile? (You may need to add `. .claude/session/agent-env/__session__.env` to your `.zshrc`/`.bashrc`.)
 3. Was the LiteLLM proxy reachable when Claude Code started? (Check the SessionStart banner — `0 warning(s)` means the reachability check passed.)
 4. `grep model .claude/agents/ticket-manager.md` — has the model frontmatter been rewritten?
+5. Codex only: `grep -n 'model_provider\|base_url' .codex/agents/ticket-manager.toml` — has the provider TOML been written?
 
 ## Constraints (read these before relying on local routing for anything important)
 
-- **Single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All agents share it. You can't have ticket-manager route to local Ollama while code-reviewer stays on Claude — that's a v2 concern, gated on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning is emitted.
+- **Claude Code is single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All Claude agents share it. You can't have ticket-manager route to local Ollama while code-reviewer stays on Claude — that's a v2 concern, gated on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning is emitted. Codex uses per-agent provider TOML and can keep different reachable endpoints on different generated custom agents.
 
 - **Cold-start ~9–10s.** Measured in spike #195. The first call after `ollama serve` boot (or after `OLLAMA_KEEP_ALIVE` expires) pays full model-load cost. Subsequent calls within the keep-alive window are warm.
 
