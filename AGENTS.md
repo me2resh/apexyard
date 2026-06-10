@@ -66,7 +66,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 - **Secrets scanning** — `check-secrets.sh` runs on commit; blocks API keys, passwords, tokens.
 - **Workflow gates** — documented in `.claude/rules/workflow-gates.md`. Six gates from PRD → Done; each gate has a mechanical check or an advisory reminder.
 - **Branch model (framework only)** — daily PRs merge to `dev`; releases cut to `main` via `/release`. Managed projects under apexyard governance stay trunk-based on `main`.
-- **Codex hook trust** — after changing `.codex/hooks.json` or `.codex/hooks/*`, a local Codex session must review/trust hooks with `/hooks` before project-local command hooks run. Automation may use `--dangerously-bypass-hook-trust` only when the hook source has already been vetted outside Codex.
+- **Codex project + hook trust** — Codex ignores project-scoped `.codex/` config, hooks, and rules until the project is trusted. In a fresh local clone, trust the project and review changed hooks with `/hooks` before relying on mechanical gates. Automation may use `--dangerously-bypass-hook-trust` only when the project is already trusted and the hook source has already been vetted outside Codex.
 
 ## Conventions
 
@@ -100,6 +100,7 @@ The Codex adapter is generated from the canonical `.claude/` framework files. Do
 - Run generated hook tests: `for t in .codex/hooks/tests/test_*.sh; do bash "$t"; done`
 - Run canonical hook tests: `bin/run-hook-tests.sh`
 - Commit and push generated `.codex/`, `.agents/skills/`, and `apexyard.projects.yaml` changes before testing in Codex Cloud; Cloud checks out the selected branch or commit and cannot see untracked local files.
+- For local Codex runtime testing, use a trusted project. Static wrapper tests can pass in an untrusted clone even though Codex itself will ignore project `.codex/` hooks until the project is trusted.
 
 The framework is plain markdown + shell — no build step, no SaaS, no lock-in. MIT licensed.
 

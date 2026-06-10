@@ -9,6 +9,7 @@ FAIL=0
 pass() { printf 'PASS: %s\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1"; FAIL=1; }
 warn() { printf 'WARN: %s\n' "$1"; }
+note() { printf 'NOTE: %s\n' "$1"; }
 
 require_file() {
   [ -f "$ROOT/$1" ] && pass "$1 exists" || fail "$1 missing"
@@ -204,6 +205,7 @@ fi
 
 if command -v codex >/dev/null 2>&1; then
   pass "codex CLI is installed"
+  note "Codex runtime loads project .codex/ hooks only after the project is trusted; in a fresh local clone, use /hooks before relying on mechanical gates"
 else
   warn "codex CLI is not on PATH; cloud/app may still load repo files, but local doctor cannot verify runtime"
 fi
