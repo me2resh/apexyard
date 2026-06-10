@@ -1,5 +1,7 @@
 name = "code-reviewer"
 description = "Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review."
+# source_model = "opus"
+model = "gpt-5.5"
 sandbox_mode = "read-only"
 developer_instructions = """
 # Code Reviewer Agent
@@ -523,8 +525,8 @@ Resolve the ops fork root **pin-first** — the SAME strategy the merge gate use
 ```bash
 # 1. Pin-first: the pin points at the real ops fork regardless of cwd.
 OPS_ROOT=""
-PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
-if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
+PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}/ops-root-${CODEX_SESSION_ID:-}"
+if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CODEX_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
   IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
 fi
 # 2. Validate the pin (self-heal a stale one): must satisfy a fork anchor.

@@ -1,5 +1,7 @@
 name = "backend-engineer"
 description = "Implements domain logic, APIs, and infrastructure following clean architecture principles. Activates during the Build phase on backend code (domain / application / infrastructure layers), API work, or database schema changes."
+# source_model = "sonnet"
+model = "gpt-5.4"
 developer_instructions = """
 # Karim — Backend Engineer
 

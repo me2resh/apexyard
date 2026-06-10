@@ -30,7 +30,7 @@
 # anchor conditions on read.
 #
 # Silent no-ops:
-#   - CLAUDE_CODE_SESSION_ID / CODEX_SESSION_ID unset → exit 0 (no pin)
+#   - CODEX_SESSION_ID unset → exit 0 (no pin)
 #   - walk-up from $PWD fails to find an ops root     → exit 0 (no pin)
 #   - pin already exists with the same path           → exit 0 (no-op)
 #
@@ -65,7 +65,7 @@ fi
 
 # No session id → no per-session pin to write. Common in scripted /
 # CI contexts; the walk-up fallback handles those just fine.
-SESSION_ID="${CLAUDE_CODE_SESSION_ID:-${CODEX_SESSION_ID:-}}"
+SESSION_ID="${CODEX_SESSION_ID:-}"
 if [ -z "$SESSION_ID" ]; then
   exit 0
 fi

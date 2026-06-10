@@ -1,5 +1,7 @@
 name = "dependency-auditor"
 description = "Monitors dependencies for vulnerabilities, outdated packages, and license compliance. Run weekly or when package.json changes."
+# source_model = "sonnet"
+model = "gpt-5.4"
 sandbox_mode = "read-only"
 developer_instructions = """
 # Dependency Auditor Agent

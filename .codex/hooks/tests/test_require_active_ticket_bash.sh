@@ -174,9 +174,9 @@ number=513
 title=worktree A
 EOF
 in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-export CLAUDE_WORKTREE_BRANCH="feature/x"
+export CODEX_WORKTREE_BRANCH="feature/x"
 run_case "per-worktree marker honored on matching branch" 0 "" "$in" "$sb"
-unset CLAUDE_WORKTREE_BRANCH
+unset CODEX_WORKTREE_BRANCH
 
 # 14. per-worktree isolation: marker exists for branch A, agent on branch B,
 #     no per-project file, no current-ticket → BLOCKED (proves no collision)
@@ -189,9 +189,9 @@ number=513
 title=worktree A
 EOF
 in=$(jq -nc --arg p "$rsb/workspace/myproj/src/foo.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
-export CLAUDE_WORKTREE_BRANCH="feature/b"
+export CODEX_WORKTREE_BRANCH="feature/b"
 run_case "per-worktree isolation: branch B not satisfied by branch A marker" 2 "BLOCKED" "$in" "$sb"
-unset CLAUDE_WORKTREE_BRANCH
+unset CODEX_WORKTREE_BRANCH
 
 # 15. per-project FILE marker still works under a workspace path with no
 #     worktree branch detected (single-agent regression)
@@ -209,7 +209,7 @@ run_case "per-project file marker still works (no worktree)" 0 "" "$in" "$sb"
 # 16. git linked-worktree detection (NO env var): a real linked worktree at
 #     workspace/myproj on branch wt-x is detected via absolute git-dir vs
 #     common-dir, tier-0 marker honored. Exercises the write/read-symmetric
-#     detection path, not just the CLAUDE_WORKTREE_BRANCH shortcut.
+#     detection path, not just the CODEX_WORKTREE_BRANCH shortcut.
 sb=$(make_sandbox)
 rsb=$(cd "$sb" && pwd -P)
 ( cd "$sb" && git worktree add -q workspace/myproj -b wt-x >/dev/null 2>&1 )

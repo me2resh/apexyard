@@ -183,7 +183,7 @@ cat > "$SIB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   qa-engineer:
-    model: sonnet
+    model: gpt-5.4
 YAML
 cat > "$SB/.codex/project-config.json" <<JSON
 {

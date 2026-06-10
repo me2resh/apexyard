@@ -14,7 +14,7 @@ Marker layout (apexyard#41 + #513):
 
 | Path | When the hook uses it |
 |------|----------------------|
-| `<ops_root>/.codex/session/tickets/<project>/<safe-branch>` | **Tier 0 (#513).** Edit is under `<ops_root>/workspace/<project>/` AND the file's repo is on a git-worktree branch (or `CLAUDE_WORKTREE_BRANCH` is set). Lets parallel agents on the *same* project hold independent tickets. `safe-branch` = branch with `/`→`__`. |
+| `<ops_root>/.codex/session/tickets/<project>/<safe-branch>` | **Tier 0 (#513).** Edit is under `<ops_root>/workspace/<project>/` AND the file's repo is on a git-worktree branch (or `CODEX_WORKTREE_BRANCH` is set). Lets parallel agents on the *same* project hold independent tickets. `safe-branch` = branch with `/`→`__`. |
 | `<ops_root>/.codex/session/tickets/<project>` | **Tier 1.** Edit is under `<ops_root>/workspace/<project>/` AND this per-project marker exists (as a FILE). Single-agent default. |
 | `<ops_root>/.codex/session/current-ticket` | **Tier 2.** Fallback. Checked if neither above matched. Also the marker for ops-repo framework edits (no `workspace/<name>/` prefix). |
 
@@ -147,7 +147,7 @@ if [ -n "$project" ]; then
   # --git-common-dir comparison false-positives in the main checkout (one comes
   # back absolute, the other relative). This is the SAME detection the
   # require-active-ticket.sh / require-migration-ticket.sh read side uses.
-  wt_branch="${CLAUDE_WORKTREE_BRANCH:-}"
+  wt_branch="${CODEX_WORKTREE_BRANCH:-}"
   if [ -z "$wt_branch" ]; then
     gd=$(git rev-parse --absolute-git-dir 2>/dev/null)
     gcd=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)

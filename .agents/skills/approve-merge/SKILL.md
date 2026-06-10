@@ -82,8 +82,8 @@ The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone acti
 # + apexyard.projects.yaml) where _lib-review-markers.sh doesn't exist, so the
 # CEO marker lands where the gate can't see it (me2resh/apexyard#559).
 OPS_ROOT=""
-PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
-if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
+PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.codex/apexyard}/ops-root-${CODEX_SESSION_ID:-}"
+if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CODEX_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
   IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
 fi
 # Validate the pin (self-heal a stale one): must satisfy a fork anchor.

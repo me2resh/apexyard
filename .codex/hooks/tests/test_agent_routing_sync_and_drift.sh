@@ -61,7 +61,7 @@ set -u
 
 # Test isolation (#528): apply-agent-routing.sh resolves the ops root via
 # _lib-ops-root.sh, which — inside a real Codex session — honours the
-# session pin ($APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID) and
+# session pin ($APEXYARD_OPS_PIN_DIR/ops-root-$CODEX_SESSION_ID) and
 # points at the REAL fork, NOT our mktemp sandbox. That made the hook rewrite
 # the real .codex/agents/*.md and write a stray snapshot there, while every
 # sandbox assertion failed. Disable the pin so ops-root resolves by walk-up to
@@ -135,7 +135,8 @@ YAML
     cat > .codex/agents/qa-engineer.toml <<'TOML'
 name = "qa-engineer"
 description = "QA Engineer wrapper."
-model = "haiku"
+# source_model = "gpt-5.4-mini"
+model = "gpt-5.4-mini"
 sandbox_mode = "read-only"
 developer_instructions = """
 
@@ -145,7 +146,8 @@ TOML
     cat > .codex/agents/tech-lead.toml <<'TOML'
 name = "tech-lead"
 description = "Tech Lead wrapper."
-model = "opus"
+# source_model = "gpt-5.5"
+model = "gpt-5.5"
 developer_instructions = """
 
 # Hisham — Tech Lead
@@ -154,7 +156,8 @@ TOML
     cat > .codex/agents/backend-engineer.toml <<'TOML'
 name = "backend-engineer"
 description = "Backend Engineer wrapper."
-model = "sonnet"
+# source_model = "gpt-5.4"
+model = "gpt-5.4"
 developer_instructions = """
 
 # Karim — Backend Engineer
@@ -169,7 +172,8 @@ TOML
 # routing-config:override Idris bumped inherit → sonnet per AgDR-0050 § Axis 2 line 65. Wave 2 PR 4 fixture.
 name = "ticket-manager"
 description = "Ticket Manager wrapper."
-model = "sonnet"
+# source_model = "gpt-5.4"
+model = "gpt-5.4"
 sandbox_mode = "read-only"
 developer_instructions = """
 
@@ -323,7 +327,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   qa-engineer:
-    model: opus
+    model: gpt-5.5
 YAML
 
 banner_output=$(cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
@@ -334,11 +338,11 @@ after_be=$(read_model_line "$SB/.codex/agents/backend-engineer.toml")
 defaults_snapshot_exists=0
 [ -f "$SB/.codex/agents/.framework-defaults.json" ] && defaults_snapshot_exists=1
 
-if [ "$after_qa" = "opus" ] && [ "$after_lead" = "opus" ] && [ "$after_be" = "sonnet" ] \
+if [ "$after_qa" = "gpt-5.5" ] && [ "$after_lead" = "gpt-5.5" ] && [ "$after_be" = "gpt-5.4" ] \
    && [ "$defaults_snapshot_exists" = "1" ] \
    && echo "$banner_output" | grep -qE 'applied 1 agent-routing override'; then
   # Confirm the snapshot recorded the framework default, not the override.
-  if grep -q '"qa-engineer":"haiku"' "$SB/.codex/agents/.framework-defaults.json"; then
+  if grep -q '"qa-engineer":"gpt-5.4-mini"' "$SB/.codex/agents/.framework-defaults.json"; then
     mark_pass "case 2: qa-engineer override haiku→opus (other agents untouched, snapshot recorded)"
   else
     mark_fail "case 2" "snapshot did not record qa-engineer=haiku: $(cat "$SB/.codex/agents/.framework-defaults.json" 2>/dev/null)"
@@ -357,7 +361,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   nonexistent-agent:
-    model: opus
+    model: gpt-5.5
 YAML
 
 banner_output=$(cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
@@ -366,7 +370,7 @@ banner_output=$(cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev
 after_qa=$(read_model_line "$SB/.codex/agents/qa-engineer.toml")
 after_lead=$(read_model_line "$SB/.codex/agents/tech-lead.toml")
 
-if [ "$after_qa" = "haiku" ] && [ "$after_lead" = "opus" ] && [ -z "$banner_output" ]; then
+if [ "$after_qa" = "gpt-5.4-mini" ] && [ "$after_lead" = "gpt-5.5" ] && [ -z "$banner_output" ]; then
   mark_pass "case 3: orphan entry silently skipped (no error, no banner)"
 else
   mark_fail "case 3: orphan entry" "qa=$after_qa lead=$after_lead banner=[$banner_output]"
@@ -390,7 +394,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   qa-engineer:
-    model: sonnet
+    model: gpt-5.4
     endpoint: http://localhost:11434
     env:
       MY_VAR: hello
@@ -414,7 +418,7 @@ second_env=""
 endpoint_count=$(echo "$second_env" | grep -c '^ANTHROPIC_BASE_URL=' || true)
 myvar_count=$(echo "$second_env" | grep -c '^MY_VAR=' || true)
 
-if [ "$first_qa" = "sonnet" ] && [ "$second_qa" = "sonnet" ] && [ "$first_env" = "$second_env" ] \
+if [ "$first_qa" = "gpt-5.4" ] && [ "$second_qa" = "gpt-5.4" ] && [ "$first_env" = "$second_env" ] \
    && [ "$endpoint_count" -eq 1 ] && [ "$myvar_count" -eq 1 ]; then
   mark_pass "case 4: idempotent — second run is a no-op (env file not compounded)"
 else
@@ -433,7 +437,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   qa-engineer:
-    model: opus
+    model: gpt-5.5
 YAML
 (cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true) >/dev/null
 
@@ -462,7 +466,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   qa-engineer:
-    model: opus
+    model: gpt-5.5
 YAML
 (cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true) >/dev/null
 
@@ -471,7 +475,7 @@ cat > "$SB/.codex/agents/qa-engineer.toml" <<'MD'
 ---
 name: qa-engineer
 description: QA Engineer wrapper.
-model: opus
+model: gpt-5.5
 allowed-tools: Bash, Read, Grep, Glob
 persona_name: Salim
 ---
@@ -520,7 +524,7 @@ cat > "$SB/agent-routing.yaml" <<'YAML'
 version: 1
 agents:
   ticket-manager:
-    model: opus
+    model: gpt-5.5
 YAML
 
 banner_output=$(cd "$SB" && bash .codex/hooks/apply-agent-routing.sh 2>&1 < /dev/null || true)
@@ -530,11 +534,11 @@ after_qa=$(read_model_line "$SB/.codex/agents/qa-engineer.toml")
 defaults_snapshot_exists=0
 [ -f "$SB/.codex/agents/.framework-defaults.json" ] && defaults_snapshot_exists=1
 
-if [ "$after_tm" = "opus" ] && [ "$after_qa" = "haiku" ] \
+if [ "$after_tm" = "gpt-5.5" ] && [ "$after_qa" = "gpt-5.4-mini" ] \
    && [ "$defaults_snapshot_exists" = "1" ] \
    && echo "$banner_output" | grep -qE 'applied 1 agent-routing override'; then
   # Confirm the snapshot recorded the framework default sonnet (not opus).
-  if grep -q '"ticket-manager":"sonnet"' "$SB/.codex/agents/.framework-defaults.json"; then
+  if grep -q '"ticket-manager":"gpt-5.4"' "$SB/.codex/agents/.framework-defaults.json"; then
     mark_pass "case 8: ticket-manager utility override sonnet→opus (qa-engineer untouched, snapshot records sonnet)"
   else
     mark_fail "case 8" "snapshot did not record ticket-manager=sonnet: $(cat "$SB/.codex/agents/.framework-defaults.json" 2>/dev/null)"

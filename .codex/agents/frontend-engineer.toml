@@ -1,5 +1,7 @@
 name = "frontend-engineer"
 description = "Builds user interfaces following the design system — accessible, performant, and delightful. Activates during the Build phase on UI code, component work, design-system integration, or accessibility review."
+# source_model = "sonnet"
+model = "gpt-5.4"
 developer_instructions = """
 # Yasmin — Frontend Engineer
 

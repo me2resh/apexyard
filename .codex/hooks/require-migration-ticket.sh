@@ -209,7 +209,7 @@ MARKER=""
 if [ -n "$PROJECT" ]; then
   # Tier 0 worktree detection — identical to require-active-ticket.sh: env var,
   # else LINKED-worktree check via absolute git-dir vs absolute common-dir.
-  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
+  WT_BRANCH="${CODEX_WORKTREE_BRANCH:-}"
   if [ -z "$WT_BRANCH" ]; then
     _fdir=$(dirname "$FILE_PATH")
     _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)

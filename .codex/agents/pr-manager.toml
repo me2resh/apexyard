@@ -1,5 +1,7 @@
 name = "pr-manager"
 description = "Coordinates PR lifecycle from creation to merge. Enforces 2-review workflow, commit SHA verification, and auto-merge on human approval."
+# source_model = "sonnet"
+model = "gpt-5.4"
 sandbox_mode = "read-only"
 developer_instructions = """
 # PR Manager Agent

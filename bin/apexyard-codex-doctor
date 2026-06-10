@@ -136,10 +136,30 @@ else
 fi
 
 agent_errors=$(
-  python3 - "$ROOT/.codex/agents" <<'PY' 2>&1
+  python3 - "$ROOT/.claude/agents" "$ROOT/.codex/agents" <<'PY' 2>&1
 import pathlib, sys, tomllib
+SOURCE_DIR = pathlib.Path(sys.argv[1])
+CODEX_DIR = pathlib.Path(sys.argv[2])
+MODEL_BY_TIER = {
+    "opus": "gpt-5.5",
+    "sonnet": "gpt-5.4",
+    "haiku": "gpt-5.4-mini",
+}
 ok = True
-for path in sorted(pathlib.Path(sys.argv[1]).glob("*.toml")):
+
+def source_model(path):
+    text = path.read_text()
+    if not text.startswith("---\n"):
+        return ""
+    end = text.find("\n---", 4)
+    if end == -1:
+        return ""
+    for line in text[4:end].splitlines():
+        if line.startswith("model:"):
+            return line.split(":", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+for path in sorted(CODEX_DIR.glob("*.toml")):
     try:
         data = tomllib.loads(path.read_text())
     except Exception as exc:
@@ -150,6 +170,11 @@ for path in sorted(pathlib.Path(sys.argv[1]).glob("*.toml")):
         if not data.get(key):
             print(f"{path}: missing {key}")
             ok = False
+    source = SOURCE_DIR / f"{path.stem}.md"
+    expected_model = MODEL_BY_TIER.get(source_model(source)) if source.exists() else None
+    if expected_model and data.get("model") != expected_model:
+        print(f"{path}: expected model {expected_model!r}, got {data.get('model')!r}")
+        ok = False
 sys.exit(0 if ok else 1)
 PY
 )
@@ -158,6 +183,22 @@ if [ $? -eq 0 ]; then
 else
   fail "Codex custom agent TOML errors"
   printf '%s\n' "$agent_errors"
+fi
+
+if rg -n 'CLAUDE_CODE_SESSION_ID|CLAUDE_WORKTREE_BRANCH' "$ROOT/.agents/skills" "$ROOT/.codex/agents" >/tmp/apexyard-codex-doctor-claude-envrefs 2>/dev/null; then
+  fail "Codex instructions still reference Claude session env vars"
+  sed -n '1,20p' /tmp/apexyard-codex-doctor-claude-envrefs
+else
+  pass "Codex instructions use Codex session env vars"
+fi
+
+if jq -e '
+  [.. | objects | select(.type? == "command") | .command]
+  | all(test("\\$\\{PWD:-\\.\\}") and test("\\.apexyard-fork") and test("apexyard\\.projects\\.yaml") and test("\\.codex/hooks/\\$script"))
+' "$ROOT/.codex/hooks.json" >/dev/null 2>&1; then
+  pass "Codex hook commands resolve ApexYard ops root without trusting nearest git root"
+else
+  fail "Codex hook commands do not use robust ops-root resolution"
 fi
 
 if [ -f "$ROOT/.claude/registries/ai-crawlers.json" ]; then

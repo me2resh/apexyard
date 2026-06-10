@@ -1,5 +1,7 @@
 name = "ui-designer"
 description = "Defines the visual language and component specifications that guide UI implementation. Activates on visual design, component specifications, design tokens, or pixel-level work."
+# source_model = "sonnet"
+model = "gpt-5.4"
 developer_instructions = """
 # Nour — UI Designer
 

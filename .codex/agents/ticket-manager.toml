@@ -1,5 +1,7 @@
 name = "ticket-manager"
 description = "Creates and manages GitHub Issues in the project's own repo for all work tracking. Use when a new task is starting, a PR is being created, or work needs tracking."
+# source_model = "sonnet"
+model = "gpt-5.4"
 sandbox_mode = "read-only"
 developer_instructions = """
 # Ticket Manager Agent

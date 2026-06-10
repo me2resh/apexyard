@@ -18,6 +18,23 @@ def repo_root() -> Path:
 
 ROOT = repo_root()
 
+CODEX_MODEL_BY_CLAUDE_TIER = {
+    "opus": "gpt-5.5",
+    "sonnet": "gpt-5.4",
+    "haiku": "gpt-5.4-mini",
+}
+
+
+def codex_model_for(source_model: str) -> str | None:
+    source_model = source_model.strip()
+    if not source_model:
+        return None
+    if source_model in CODEX_MODEL_BY_CLAUDE_TIER:
+        return CODEX_MODEL_BY_CLAUDE_TIER[source_model]
+    if source_model.startswith(("gpt-", "ollama/", "lmstudio/")):
+        return source_model
+    return None
+
 
 def is_text(path: Path) -> bool:
     try:
@@ -28,6 +45,16 @@ def is_text(path: Path) -> bool:
 
 
 def transform_text(text: str) -> str:
+    text = text.replace("${CLAUDE_CODE_SESSION_ID:-${CODEX_SESSION_ID:-}}", "${CODEX_SESSION_ID:-}")
+    text = text.replace("${CLAUDE_WORKTREE_BRANCH:-${CODEX_WORKTREE_BRANCH:-}}", "${CODEX_WORKTREE_BRANCH:-}")
+    text = text.replace("CLAUDE_CODE_SESSION_ID / CODEX_SESSION_ID", "CODEX_SESSION_ID")
+    text = text.replace("CLAUDE_WORKTREE_BRANCH / CODEX_WORKTREE_BRANCH", "CODEX_WORKTREE_BRANCH")
+    text = text.replace("CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID")
+    text = text.replace("CLAUDE_WORKTREE_BRANCH", "CODEX_WORKTREE_BRANCH")
+    text = text.replace(
+        "CODEX_WORKTREE_BRANCH\n#      / CODEX_WORKTREE_BRANCH is set",
+        "CODEX_WORKTREE_BRANCH is set",
+    )
     text = text.replace(".claude/skills", ".agents/skills")
     text = text.replace(".claude/agents", ".codex/agents")
     text = re.sub(r"(\.codex/agents/[A-Za-z0-9_-]+)\.md\b", r"\1.toml", text)
@@ -39,6 +66,13 @@ def transform_text(text: str) -> str:
     text = text.replace(".claude/", ".codex/")
     text = text.replace("CLAUDE.md", "AGENTS.md")
     text = text.replace("Claude Code", "Codex")
+    for claude_tier, codex_model in CODEX_MODEL_BY_CLAUDE_TIER.items():
+        text = re.sub(
+            rf"(^[ \t]*model:[ \t]*){re.escape(claude_tier)}\b",
+            rf"\1{codex_model}",
+            text,
+            flags=re.M,
+        )
     return text
 
 
@@ -119,7 +153,10 @@ def markdown_agent_fixture_to_toml(body: str) -> str:
     if fm.get("description"):
         lines.append(f"description = {toml_string(fm['description'])}")
     if fm.get("model"):
-        lines.append(f"model = {toml_string(fm['model'])}")
+        codex_model = codex_model_for(fm["model"])
+        if codex_model:
+            lines.append(f"# source_model = {toml_string(fm['model'])}")
+            lines.append(f"model = {toml_string(codex_model)}")
     tools = fm.get("allowed-tools", fm.get("tools", ""))
     if tools and "Write" not in tools and "Edit" not in tools and "MultiEdit" not in tools:
         lines.append('sandbox_mode = "read-only"')
@@ -158,12 +195,16 @@ def transform_agent_routing_test(text: str) -> str:
         body = match.group(2)
         return f"{prefix}'TOML'\n{markdown_agent_fixture_to_toml(body)}\nTOML"
 
-    return re.sub(
+    text = re.sub(
         r"(cat > [^\n]*\.codex/agents/[A-Za-z0-9_-]+\.toml <<)'MD'\n(.*?)\nMD",
         repl,
         text,
         flags=re.S,
     )
+    for claude_tier, codex_model in CODEX_MODEL_BY_CLAUDE_TIER.items():
+        text = text.replace(f'"{claude_tier}"', f'"{codex_model}"')
+        text = text.replace(f"'{claude_tier}'", f"'{codex_model}'")
+    return text
 
 
 def render_agents() -> None:
@@ -183,6 +224,15 @@ def render_agents() -> None:
             f"name = {toml_string(name)}",
             f"description = {toml_string(desc)}",
         ]
+        source_model = fm.get("model", "")
+        codex_model = codex_model_for(source_model)
+        if codex_model:
+            lines.extend(
+                [
+                    f"# source_model = {toml_string(source_model)}",
+                    f"model = {toml_string(codex_model)}",
+                ]
+            )
         if tools and "Write" not in tools and "Edit" not in tools and "MultiEdit" not in tools:
             lines.append('sandbox_mode = "read-only"')
         lines.append(f"developer_instructions = {toml_multiline(body)}")
@@ -343,8 +393,18 @@ run suggest-mcp-reindex-after-pull.sh
 
 def hook_command(script: str) -> str:
     return (
-        "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; "
-        f"exec \"$root/.codex/hooks/{script}\"'"
+        f"bash -c 'script={script}; "
+        "for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do "
+        "[ -n \"$base\" ] || continue; "
+        "r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; "
+        "while [ -n \"$r\" ] && [ \"$r\" != / ]; do "
+        "if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then "
+        "exec \"$r/.codex/hooks/$script\"; "
+        "fi; "
+        "r=$(dirname \"$r\"); "
+        "done; "
+        "done; "
+        "exit 0'"
     )
 
 

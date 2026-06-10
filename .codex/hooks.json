@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-session-start.sh\"'",
+            "command": "bash -c 'script=codex-session-start.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'",
             "statusMessage": "Starting ApexYard session checks"
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-pre-bash.sh\"'",
+            "command": "bash -c 'script=codex-pre-bash.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'",
             "statusMessage": "Checking ApexYard Bash gates"
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-pre-edit.sh\"'",
+            "command": "bash -c 'script=codex-pre-edit.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'",
             "statusMessage": "Checking ApexYard edit gates"
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/suggest-mcp-search.sh\"'",
+            "command": "bash -c 'script=suggest-mcp-search.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'",
             "statusMessage": "Checking ApexYard search guidance"
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-post-bash.sh\"'",
+            "command": "bash -c 'script=codex-post-bash.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'",
             "statusMessage": "Running ApexYard post-Bash checks"
           }
         ]
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/detect-role-trigger.sh\"'"
+            "command": "bash -c 'script=detect-role-trigger.sh; for base in \"${PWD:-.}\" \"$(git rev-parse --show-toplevel 2>/dev/null || true)\"; do [ -n \"$base\" ] || continue; r=$(cd \"$base\" 2>/dev/null && pwd -P) || continue; while [ -n \"$r\" ] && [ \"$r\" != / ]; do if { [ -f \"$r/.apexyard-fork\" ] || { [ -f \"$r/onboarding.yaml\" ] && [ -f \"$r/apexyard.projects.yaml\" ]; }; } && [ -d \"$r/.codex/hooks\" ]; then exec \"$r/.codex/hooks/$script\"; fi; r=$(dirname \"$r\"); done; done; exit 0'"
           }
         ]
       }

@@ -8,7 +8,7 @@
 #     ops-fork layout (v1 or v2 anchors)
 #   - optionally writes a pin file under a per-case APEXYARD_OPS_PIN_DIR
 #   - sources the lib (or invokes the SessionStart hook)
-#   - exports CLAUDE_CODE_SESSION_ID to drive the pin lookup
+#   - exports CODEX_SESSION_ID to drive the pin lookup
 #   - asserts the returned path / pin-file contents
 #
 # Cases covered:
@@ -17,7 +17,7 @@
 #   3. APEXYARD_OPS_DISABLE_PIN=1 → pin ignored, walk-up used
 #   4. resolve_ops_root_walk direct call → ignores pin entirely
 #   5. Spaced path in pin (/tmp/test space/ops) → read back intact
-#   6. CLAUDE_CODE_SESSION_ID unset → falls back to walk-up
+#   6. CODEX_SESSION_ID unset → falls back to walk-up
 #   7. pin-ops-root.sh writes the pin file from launch cwd
 #
 # Exit 0 if all cases pass; 1 on first failure.
@@ -84,7 +84,7 @@ case_1() {
   printf '%s\n' "$sb" > "$pin_dir/ops-root-testsess1"
 
   (
-    export CLAUDE_CODE_SESSION_ID="testsess1"
+    export CODEX_SESSION_ID="testsess1"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN
     # shellcheck source=/dev/null
@@ -110,7 +110,7 @@ case_2() {
   printf '%s\n' "$stale_dir" > "$pin_dir/ops-root-testsess2"
 
   (
-    export CLAUDE_CODE_SESSION_ID="testsess2"
+    export CODEX_SESSION_ID="testsess2"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN
     # shellcheck source=/dev/null
@@ -140,7 +140,7 @@ case_3() {
   printf '%s\n' "$sb1" > "$pin_dir/ops-root-testsess3"
 
   (
-    export CLAUDE_CODE_SESSION_ID="testsess3"
+    export CODEX_SESSION_ID="testsess3"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     export APEXYARD_OPS_DISABLE_PIN=1
     # shellcheck source=/dev/null
@@ -168,7 +168,7 @@ case_4() {
   printf '%s\n' "$sb1" > "$pin_dir/ops-root-testsess4"
 
   (
-    export CLAUDE_CODE_SESSION_ID="testsess4"
+    export CODEX_SESSION_ID="testsess4"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN
     # shellcheck source=/dev/null
@@ -197,7 +197,7 @@ case_5() {
   printf '%s\n' "$sb" > "$pin_dir/ops-root-testsess5"
 
   (
-    export CLAUDE_CODE_SESSION_ID="testsess5"
+    export CODEX_SESSION_ID="testsess5"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN
     # shellcheck source=/dev/null
@@ -210,7 +210,7 @@ case_5() {
 }
 
 # ---------------------------------------------------------------------------
-# Case 6: CLAUDE_CODE_SESSION_ID unset → walk-up only (pin ignored)
+# Case 6: CODEX_SESSION_ID unset → walk-up only (pin ignored)
 # ---------------------------------------------------------------------------
 case_6() {
   local case_name="no session id: pin lookup skipped, walk-up used"
@@ -226,7 +226,7 @@ case_6() {
   printf '%s\n' "$sb1" > "$pin_dir/ops-root-"
 
   (
-    unset CLAUDE_CODE_SESSION_ID
+    unset CODEX_SESSION_ID
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN
     # shellcheck source=/dev/null
@@ -250,7 +250,7 @@ case_7() {
 
   local sess="testsess7-$$"
   (
-    export CLAUDE_CODE_SESSION_ID="$sess"
+    export CODEX_SESSION_ID="$sess"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     # Run the hook from inside the ops fork. The hook resolves $PWD via
     # walk-up and writes the pin.
@@ -272,17 +272,17 @@ case_7() {
 }
 
 # ---------------------------------------------------------------------------
-# Case 8: pin-ops-root.sh is a silent no-op when CLAUDE_CODE_SESSION_ID unset
+# Case 8: pin-ops-root.sh is a silent no-op when CODEX_SESSION_ID unset
 # ---------------------------------------------------------------------------
 case_8() {
-  local case_name="pin-ops-root.sh: no-op when CLAUDE_CODE_SESSION_ID is unset"
+  local case_name="pin-ops-root.sh: no-op when CODEX_SESSION_ID is unset"
   local sb pin_dir
   sb=$(mktemp -d)
   pin_dir=$(mktemp -d)
   build_v2_sandbox "$sb"
 
   (
-    unset CLAUDE_CODE_SESSION_ID
+    unset CODEX_SESSION_ID
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     cd "$sb" || exit 1
     bash "$HOOK" >/dev/null 2>&1
