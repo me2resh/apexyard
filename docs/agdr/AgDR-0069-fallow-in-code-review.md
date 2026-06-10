@@ -36,4 +36,4 @@ Chosen: **Option 1 — Rex runs the Fallow CLI as a new §9 review step**, becau
 - Ticket: me2resh/apexyard#627
 - Branch: `feature/GH-627-support-fallow` (fork: `tifa64/apexyard`)
 - Touches: `.claude/agents/code-reviewer.md`, `.claude/skills/code-review/SKILL.md`, `workflows/code-review.md`, `onboarding.example.yaml`, `docs/getting-started.md`
-- PR: _(link on open)_
+- PR: me2resh/apexyard#628
