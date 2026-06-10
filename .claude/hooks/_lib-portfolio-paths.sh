@@ -301,6 +301,54 @@ portfolio_agent_routing() {
 }
 
 # ------------------------------------------------------------------------------
+# Internal YAML helpers.
+#
+# Some Linux distros ship the Python yq wrapper as `yq`, which does not support
+# the Mike Farah `yq eval` syntax this project historically used. Prefer Ruby's
+# stdlib YAML parser when present, use Mike Farah yq only when its `eval`
+# subcommand actually works, and degrade to the old grep-only check when no
+# parser is available.
+# ------------------------------------------------------------------------------
+_portfolio_yaml_parser_available() {
+  command -v ruby >/dev/null 2>&1 && return 0
+  if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+_portfolio_yaml_parse_ok() {
+  local file="$1"
+  if command -v ruby >/dev/null 2>&1; then
+    ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], aliases: true)' "$file" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
+    yq eval '.' "$file" >/dev/null 2>&1
+    return $?
+  fi
+  return 2
+}
+
+_portfolio_yaml_has_top_key() {
+  local file="$1"
+  local key="$2"
+  if command -v ruby >/dev/null 2>&1; then
+    ruby -e '
+      require "yaml"
+      doc = YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], aliases: true)
+      exit(doc.is_a?(Hash) && doc.key?(ARGV[1]) ? 0 : 1)
+    ' "$file" "$key" >/dev/null 2>&1
+    return $?
+  fi
+  if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
+    [ "$(yq eval "has(\"$key\")" "$file" 2>/dev/null)" = "true" ]
+    return $?
+  fi
+  return 2
+}
+
+# ------------------------------------------------------------------------------
 # Public: portfolio_validate
 #   Sanity-check that resolved paths are actually usable.
 #   On success: prints nothing, returns 0.
@@ -332,22 +380,20 @@ portfolio_validate() {
     return 1
   fi
 
-  # Parse as YAML if yq is available; else minimal grep check.
-  if command -v yq >/dev/null 2>&1; then
-    if ! yq eval '.' "$registry" >/dev/null 2>&1; then
+  # Parse as YAML when a supported parser is available; else minimal grep check.
+  if _portfolio_yaml_parser_available; then
+    if ! _portfolio_yaml_parse_ok "$registry"; then
       echo "broken: portfolio.registry at $registry does not parse as valid YAML"
       return 1
     fi
-    local has_projects
-    has_projects=$(yq eval 'has("projects")' "$registry" 2>/dev/null)
-    if [ "$has_projects" != "true" ]; then
+    if ! _portfolio_yaml_has_top_key "$registry" "projects"; then
       echo "broken: portfolio.registry at $registry has no top-level 'projects:' key"
       return 1
     fi
   else
-    # yq not installed — minimal sanity check; don't block on parse depth.
+    # Full YAML parser not installed — minimal sanity check; don't block on parse depth.
     if ! grep -q '^projects:' "$registry" 2>/dev/null; then
-      echo "broken: portfolio.registry at $registry has no top-level 'projects:' key (yq not installed; only doing grep check)"
+      echo "broken: portfolio.registry at $registry has no top-level 'projects:' key (YAML parser unavailable; only doing grep check)"
       return 1
     fi
   fi

@@ -12,7 +12,8 @@
 #
 # Resolution order for a given FILE_PATH under ops_root/workspace/<project>/:
 #   0. If the file's repo is on a git worktree branch (or CLAUDE_WORKTREE_BRANCH
-#      is set), look up tickets/<project>/<safe-branch>. If present → exempt.
+#      / CODEX_WORKTREE_BRANCH is set), look up tickets/<project>/<safe-branch>.
+#      If present → exempt.
 #      (Lets parallel agents on the SAME project hold independent tickets.)
 #   1. Look up tickets/<project> (a FILE). If present → exempt.
 #   2. Fall back to current-ticket. If present → exempt.
@@ -282,7 +283,7 @@ if [ -n "$PROJECT" ]; then
   # write-side detection exactly — no read/write asymmetry — and the absolute
   # forms avoid the false positive where, in the main checkout from a subdir,
   # `--git-dir` is absolute but `--git-common-dir` is relative.
-  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
+  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-${CODEX_WORKTREE_BRANCH:-}}"
   if [ -z "$WT_BRANCH" ]; then
     _fdir=$(dirname "$FILE_PATH")
     _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)

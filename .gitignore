@@ -1,6 +1,7 @@
 # ApexYard per-session state — active ticket, pending / completed reviews,
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
+.codex/session/
 
 # Real onboarding config (#517). The tracked template is onboarding.example.yaml;
 # /setup copies it to onboarding.yaml (this file) and fills in real values that
@@ -31,17 +32,20 @@ workspace/*/
 # adopter's routing override rewrote the agent file. Adopter-local; the
 # sync hook regenerates it each session, so committing would be churn.
 .claude/agents/.framework-defaults.json
+.codex/agents/.framework-defaults.json
 
 # Per-agent env files written by apply-agent-routing.sh — endpoint,
 # env vars, timeout markers per agent. Session-scoped; never committed
 # (the routing config in agent-routing.yaml is the source of truth).
 .claude/session/agent-env/
+.codex/session/agent-env/
 
 # Backups of framework skills that were overridden by an adopter's
 # private custom skill (link-custom-skills.sh moves the framework version
 # aside as <skill-name>.framework.bak so the symlink can take its place).
 # These are per-machine artefacts; never committed.
 .claude/skills/*.framework.bak/
+.agents/skills/*.framework.bak/
 
 # Symlinks at .claude/skills/<name>/ created by link-custom-skills.sh
 # pointing into the private sibling repo's custom-skills/ are NOT covered

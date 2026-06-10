@@ -103,7 +103,7 @@ Where should the PDF land?
   this PDF (API spec, deployment runbook). Pick (2) if it's framework
   context (handover, stakeholder update, audit). Pick (k) when in doubt.
 
-> 
+>
 ```
 
 When `<name>` couldn't be resolved, slots (1) and (2) print as `(no project — supply via --project)` and accepting them prompts for a name.

@@ -41,7 +41,7 @@ _mrt_parse_registry() {
   registry=$(portfolio_registry)
   [ -f "$registry" ] || return 0
 
-  if command -v yq >/dev/null 2>&1; then
+  if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
     # yq path: structured extraction, handles both bare and quoted scalars.
     yq eval '
       .projects[]? |

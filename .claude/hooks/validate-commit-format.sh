@@ -58,13 +58,69 @@ if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit\b[^|;&]*-m\b[^|;&]*\$\(cat[
   exit 0
 fi
 
-# Extract commit message (multi-line safe)
+# Extract the first `-m` value. Git accepts repeated -m flags, where the first
+# is the commit subject and later values become body paragraphs. The old greedy
+# sed parser captured the last -m value and blocked valid commands such as:
+#   git commit -m "feat: subject" -m "Refs #261"
+extract_first_m_msg() {
+  printf '%s' "$1" | awk '
+    { s = (NR == 1 ? $0 : s "\n" $0) }
+    END {
+      len = length(s)
+      for (i = 1; i <= len - 2; i++) {
+        prev = (i == 1 ? " " : substr(s, i - 1, 1))
+        if (prev !~ /[[:space:]]/) {
+          continue
+        }
+        if (substr(s, i, 2) != "-m") {
+          continue
+        }
+        j = i + 2
+        if (j <= len && substr(s, j, 1) !~ /[[:space:]]/) {
+          continue
+        }
+        while (j <= len && substr(s, j, 1) ~ /[[:space:]]/) {
+          j++
+        }
+        q = substr(s, j, 1)
+        if (q == "\"" || q == "\047") {
+          j++
+          msg = ""
+          escaped = 0
+          while (j <= len) {
+            c = substr(s, j, 1)
+            if (escaped) {
+              msg = msg c
+              escaped = 0
+            } else if (c == "\\") {
+              msg = msg c
+              escaped = 1
+            } else if (c == q) {
+              print msg
+              exit
+            } else {
+              msg = msg c
+            }
+            j++
+          }
+          print msg
+          exit
+        }
+        msg = ""
+        while (j <= len && substr(s, j, 1) !~ /[[:space:]]/) {
+          msg = msg substr(s, j, 1)
+          j++
+        }
+        print msg
+        exit
+      }
+    }
+  '
+}
+
 COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
 MSG=""
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
+MSG=$(extract_first_m_msg "$COMMAND")
 if [ -z "$MSG" ]; then
   MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then

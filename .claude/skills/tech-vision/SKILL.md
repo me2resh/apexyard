@@ -103,7 +103,7 @@ projects/<name>/architecture/vision.md already exists (last written {date}).
   (o) overwrite — start a fresh interview
   (r) refresh — start the interview with existing content as defaults (recommended for quarterly review)
 
-> 
+>
 ```
 
 On `k`: exit. On `o`: ignore existing content, proceed to step 2 with empty defaults. On `r`: parse existing file's sections, use each section's content as the default during the interview.
@@ -141,7 +141,7 @@ For each section:
      (e) edit — restart this section
      (s) skip — leave section as template default (NOT recommended for Anti-scope or Migration path)
      (q) quit — don't write anything
-   > 
+   >
    ```
 
 If the operator picks `s` on **Anti-scope or Migration path**, re-prompt with a stronger warning:
@@ -166,7 +166,7 @@ Vision assembled — {N} sections, {M} principles, {K} anti-scope items, {Q} mig
   (y) write to <output-path>
   (e) restart at section: 1 / 2 / 3 / 4 / 5 / 6 / 7  → re-prompt for that section
   (q) quit — don't write
-> 
+>
 ```
 
 ### 5. Write the file + lint the Mermaid

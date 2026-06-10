@@ -117,6 +117,12 @@ run_case "heredoc-substitution <<-: skip with INFO" \
 run_case "plain -m valid subject: pass silently" \
   'git commit -m "feat(#194): valid subject"' 0 ""
 
+run_case "repeated -m valid subject body refs: pass" \
+  'git commit -m "feat: add Codex-native adapter" -m "Refs #261"' 0 ""
+
+run_case "repeated -m bad subject valid body: BLOCK" \
+  'git commit -m "not a valid subject line" -m "feat: body is not the subject"' 2 "BLOCKED: Commit subject"
+
 run_case "plain -m bad subject: BLOCK" \
   'git commit -m "not a valid subject line"' 2 "BLOCKED: Commit subject"
 

@@ -123,6 +123,107 @@ DEFAULTS_FILE="$AGENTS_DIR/.framework-defaults.json"
 ENV_DIR="$ROOT/.claude/session/agent-env"
 mkdir -p "$ENV_DIR"
 
+agent_file_for() {
+  local agent_name="$1"
+  if [ -f "$AGENTS_DIR/${agent_name}.md" ]; then
+    echo "$AGENTS_DIR/${agent_name}.md"
+    return 0
+  fi
+  if [ -f "$AGENTS_DIR/${agent_name}.toml" ]; then
+    echo "$AGENTS_DIR/${agent_name}.toml"
+    return 0
+  fi
+  return 1
+}
+
+extract_model_from_stream() {
+  local format="$1"
+  case "$format" in
+    md)
+      awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}'
+      ;;
+    toml)
+      awk '
+        /^[[:space:]]*model[[:space:]]*=/ {
+          sub(/^[[:space:]]*model[[:space:]]*=[[:space:]]*/, "")
+          gsub(/^"|"$/, "")
+          print
+          exit
+        }
+      '
+      ;;
+  esac
+}
+
+extract_model_from_file() {
+  local agent_file="$1"
+  case "$agent_file" in
+    *.md)   extract_model_from_stream md   < "$agent_file" ;;
+    *.toml) extract_model_from_stream toml < "$agent_file" ;;
+  esac
+}
+
+extract_model_from_git() {
+  local ref="$1" agent_name="$2" model=""
+  model=$(git -C "$ROOT" show "${ref}:.claude/agents/${agent_name}.md" 2>/dev/null \
+    | extract_model_from_stream md)
+  if [ -n "$model" ]; then
+    echo "$model"
+    return 0
+  fi
+  model=$(git -C "$ROOT" show "${ref}:.claude/agents/${agent_name}.toml" 2>/dev/null \
+    | extract_model_from_stream toml)
+  [ -n "$model" ] && echo "$model"
+}
+
+rewrite_model_in_file() {
+  local agent_file="$1" value="$2" tmp_agent
+  tmp_agent=$(mktemp)
+  case "$agent_file" in
+    *.md)
+      # Rewrite the model: line in the agent file (inside frontmatter).
+      awk -v new="$value" '
+        BEGIN { fm=0; replaced=0 }
+        /^---[[:space:]]*$/ { fm++; print; next }
+        fm==1 && !replaced && /^model:[[:space:]]*/ {
+          print "model: " new
+          replaced=1
+          next
+        }
+        { print }
+      ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+      ;;
+    *.toml)
+      # Codex custom agents are TOML. Prefer replacing an existing model key;
+      # otherwise insert it before developer_instructions so the metadata stays
+      # with name/description at the top of the file.
+      awk -v new="$value" '
+        BEGIN { replaced=0; inserted=0 }
+        !replaced && /^[[:space:]]*model[[:space:]]*=/ {
+          print "model = \"" new "\""
+          replaced=1
+          inserted=1
+          next
+        }
+        !inserted && /^[[:space:]]*developer_instructions[[:space:]]*=/ {
+          print "model = \"" new "\""
+          inserted=1
+        }
+        { print }
+        END {
+          if (!inserted) {
+            print "model = \"" new "\""
+          }
+        }
+      ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+      ;;
+    *)
+      rm -f "$tmp_agent"
+      return 1
+      ;;
+  esac
+}
+
 # -----------------------------------------------------------------------------
 # Parse the routing YAML — emit one line per agent in the shape:
 #   <name>\t<key>\t<value>
@@ -138,7 +239,7 @@ mkdir -p "$ENV_DIR"
 # rare case so the adopter knows why their routing config didn't apply.
 # -----------------------------------------------------------------------------
 parse_routing() {
-  if command -v yq >/dev/null 2>&1; then
+  if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
     # yq output: tab-separated <name>\t<key>\t<value>. env is emitted as
     # one row per KEY=VAL inside the env: block.
     yq eval '
@@ -150,6 +251,37 @@ parse_routing() {
         ($a.value.env // {} | to_entries | .[] | $a.key + "\tenv\t" + .key + "=" + (.value | tostring))
       )
     ' "$ROUTING_PATH" 2>/dev/null
+    return 0
+  fi
+
+  if command -v ruby >/dev/null 2>&1; then
+    ruby - "$ROUTING_PATH" <<'RUBY' 2>/dev/null
+require "yaml"
+
+begin
+  doc = YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], aliases: true) || {}
+rescue StandardError
+  exit 0
+end
+
+agents = doc["agents"] || {}
+exit 0 unless agents.is_a?(Hash)
+
+agents.each do |name, entry|
+  next unless entry.is_a?(Hash)
+  model = entry["model"]
+  puts "#{name}\tmodel\t#{model}" if model && model.to_s != ""
+  endpoint = entry["endpoint"]
+  puts "#{name}\tendpoint\t#{endpoint}" if endpoint && endpoint.to_s != ""
+  timeout = entry["timeout_seconds"]
+  puts "#{name}\ttimeout_seconds\t#{timeout}" if timeout && timeout.to_s != ""
+  env = entry["env"] || {}
+  next unless env.is_a?(Hash)
+  env.each do |key, value|
+    puts "#{name}\tenv\t#{key}=#{value}"
+  end
+end
+RUBY
     return 0
   fi
 
@@ -386,18 +518,18 @@ ROWS=$(printf '%s\n' "$ROWS" | awk -F'\t' -v reach="$EP_REACH" '
 # -----------------------------------------------------------------------------
 snapshot_framework_default() {
   local agent_name="$1"
-  local agent_file="$AGENTS_DIR/${agent_name}.md"
+  local agent_file
   local default_model=""
+  agent_file=$(agent_file_for "$agent_name" || true)
 
   # Prefer the dev-branch baseline (most reliable framework default).
   # Fall back to the current file's model: if dev isn't reachable
   # (detached HEAD, bare checkout, hook running outside a git context).
   if git -C "$ROOT" rev-parse --verify dev >/dev/null 2>&1; then
-    default_model=$(git -C "$ROOT" show "dev:.claude/agents/${agent_name}.md" 2>/dev/null \
-      | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
+    default_model=$(extract_model_from_git dev "$agent_name")
   fi
   if [ -z "$default_model" ] && [ -f "$agent_file" ]; then
-    default_model=$(awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}' "$agent_file")
+    default_model=$(extract_model_from_file "$agent_file")
   fi
   echo "$default_model"
 }
@@ -414,8 +546,8 @@ printf '%s\n' "$ROWS" > "$TMP_ROWS"
 
 while IFS=$'\t' read -r agent_name key value; do
   [ -z "$agent_name" ] && continue
-  agent_file="$AGENTS_DIR/${agent_name}.md"
-  if [ ! -f "$agent_file" ]; then
+  agent_file=$(agent_file_for "$agent_name" || true)
+  if [ -z "$agent_file" ]; then
     # Orphan entry — adopter may have a stale routing config, harmless.
     continue
   fi
@@ -426,25 +558,16 @@ while IFS=$'\t' read -r agent_name key value; do
       # always grab from dev HEAD, never from the working-tree file).
       if ! echo "$defaults_acc" | grep -q "^\"${agent_name}\":"; then
         fwd=$(snapshot_framework_default "$agent_name")
-        if [ -n "$fwd" ]; then
+        if [ -f "$agent_file" ]; then
+          if [ -z "$fwd" ]; then
+            fwd="__absent__"
+          fi
           defaults_acc="$defaults_acc\"${agent_name}\":\"${fwd}\",
 "
         fi
       fi
 
-      # Rewrite the model: line in the agent file (inside frontmatter).
-      # We use awk to limit replacement to the first frontmatter block.
-      tmp_agent=$(mktemp)
-      awk -v new="$value" '
-        BEGIN { fm=0; replaced=0 }
-        /^---[[:space:]]*$/ { fm++; print; next }
-        fm==1 && !replaced && /^model:[[:space:]]*/ {
-          print "model: " new
-          replaced=1
-          next
-        }
-        { print }
-      ' "$agent_file" > "$tmp_agent" && mv "$tmp_agent" "$agent_file"
+      rewrite_model_in_file "$agent_file" "$value"
       applied=$((applied + 1))
       ;;
 

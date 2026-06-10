@@ -1,6 +1,6 @@
 ---
 name: plan-initiative
-description: Interview-driven initiative → milestones → tasks: per-milestone interview, a topo-sorted sequence, and optional filing of each milestone as a ticket with blocks/blocked-by cross-refs.
+description: "Interview-driven initiative → milestones → tasks: per-milestone interview, a topo-sorted sequence, and optional filing of each milestone as a ticket with blocks/blocked-by cross-refs."
 argument-hint: "<slug>"
 ---
 

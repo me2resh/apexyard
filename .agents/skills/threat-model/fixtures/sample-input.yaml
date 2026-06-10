@@ -1,0 +1,58 @@
+# Smoke-test fixture for serialize_dragon.py.
+#
+# Mirrors the placeholder DFD shape in templates/audits/threat-model.md:
+#   user ─▶ web ─▶ api ─▶ db
+#                    └─▶ ext
+# Three trust boundaries (internet / backend / third-party).
+# Three STRIDE threats covering S, T, I against three different parents
+# (process, store, flow) so the smoke test can assert per-parent attachment.
+
+title: "Example Web Application"
+description: "Sample threat model for /threat-model --format=dragon smoke testing."
+owner: "Security Team"
+contributors:
+  - "Alice"
+  - "Bob"
+reviewer: "Carol"
+
+actors:
+  - { id: user, name: "External user" }
+
+processes:
+  - { id: web, name: "Web frontend" }
+  - { id: api, name: "API service" }
+  - { id: ext, name: "External service" }
+
+stores:
+  - { id: db, name: "Primary data store" }
+
+boundaries:
+  - { id: internet,   name: "Public internet",       children: [web] }
+  - { id: backend,    name: "Backend network",       children: [api, db] }
+  - { id: thirdparty, name: "Third-party service",   children: [ext] }
+
+flows:
+  - { id: f1, source: user, target: web, label: "credentials, form input" }
+  - { id: f2, source: web,  target: api, label: "auth token, user PII" }
+  - { id: f3, source: api,  target: db,  label: "user PII, transaction" }
+  - { id: f4, source: api,  target: ext, label: "webhook payload" }
+
+threats:
+  - parent: api
+    type: "Spoofing"
+    severity: "high"
+    title: "No rate limit on /auth/login"
+    description: "Attacker can brute-force login credentials."
+    mitigation: "Add a rate limiter (5/min/IP) at the API gateway."
+  - parent: db
+    type: "Information disclosure"
+    severity: "medium"
+    title: "Stack traces in prod"
+    description: "Server returns stack traces in 500 responses."
+    mitigation: "Strip stack traces when NODE_ENV=production."
+  - parent: f2
+    type: "Tampering"
+    severity: "high"
+    title: "No CSRF on state-changing forms"
+    description: "Auth-token-bearing requests can be forged across origins."
+    mitigation: "Add CSRF middleware enforcing same-origin tokens."

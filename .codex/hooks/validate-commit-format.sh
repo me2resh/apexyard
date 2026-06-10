@@ -1,0 +1,220 @@
+#!/bin/bash
+# PreToolUse hook on `git commit`: validates the commit message subject line
+# against the conventional commit format defined in
+# .codex/rules/git-conventions.md:
+#
+#   type: subject
+#
+# Where type is one of: feat, fix, refactor, test, docs, chore, style, perf
+#
+# Note: the PR *title* format is `type(TICKET): description` (with scope in
+# parens) — that's enforced by validate-pr-create.sh. Commit messages use
+# the simpler `type: subject` form without the scope because commits often
+# don't correspond 1:1 to tickets.
+#
+# Multi-line -m messages are handled by flattening newlines before parsing
+# (same pattern as verify-commit-refs.sh). Interactive commits (no -m / -F)
+# are skipped.
+#
+# ApexYard also accepts the scoped form `type(scope): subject` as a valid
+# superset — if a project wants to use scopes in commits, that's fine, but
+# the scope is not required.
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+
+if [ -z "$COMMAND" ]; then
+  exit 0
+fi
+
+if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+  exit 0
+fi
+
+# Heredoc-substitution short-circuit (#194):
+#
+#   git commit -m "$(cat <<'EOF'
+#   feat(#42): subject line
+#   ...
+#   EOF
+#   )"
+#
+# At hook-invocation time the shell hasn't expanded `$(cat <<...)` yet — the
+# hook sees the literal string `$(cat <<'EOF' ... EOF )` as the `-m` value,
+# which obviously can't match the conventional-commit subject regex. Skipping
+# validation here is the right call: the actual subject is in the heredoc
+# body, not in the `-m` argument string the hook can read. Operators who
+# want subject validation on a multi-line message should use the file-based
+# shape (`git commit -F path/to/msg`) — that path goes through the existing
+# -F branch below and gets full validation.
+#
+# Trade-off: this allows a malformed subject through if the heredoc body is
+# itself malformed. Acceptable bounded risk — the heredoc-substitution shape
+# is uncommon (mostly Codex's own commit-message authoring path), and
+# the more important goal is keeping the hook from misfiring on a legitimate
+# multi-line commit produced from within a worktree.
+if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit\b[^|;&]*-m\b[^|;&]*\$\(cat[[:space:]]+<<-?[[:space:]]*'\''?[A-Za-z_][A-Za-z0-9_]*'\''?'; then
+  echo "INFO: heredoc-substitution detected in -m; skipping subject validation. Use 'git commit -F <file>' for validation on multi-line messages." >&2
+  exit 0
+fi
+
+# Extract the first `-m` value. Git accepts repeated -m flags, where the first
+# is the commit subject and later values become body paragraphs. The old greedy
+# sed parser captured the last -m value and blocked valid commands such as:
+#   git commit -m "feat: subject" -m "Refs #261"
+extract_first_m_msg() {
+  printf '%s' "$1" | awk '
+    { s = (NR == 1 ? $0 : s "\n" $0) }
+    END {
+      len = length(s)
+      for (i = 1; i <= len - 2; i++) {
+        prev = (i == 1 ? " " : substr(s, i - 1, 1))
+        if (prev !~ /[[:space:]]/) {
+          continue
+        }
+        if (substr(s, i, 2) != "-m") {
+          continue
+        }
+        j = i + 2
+        if (j <= len && substr(s, j, 1) !~ /[[:space:]]/) {
+          continue
+        }
+        while (j <= len && substr(s, j, 1) ~ /[[:space:]]/) {
+          j++
+        }
+        q = substr(s, j, 1)
+        if (q == "\"" || q == "\047") {
+          j++
+          msg = ""
+          escaped = 0
+          while (j <= len) {
+            c = substr(s, j, 1)
+            if (escaped) {
+              msg = msg c
+              escaped = 0
+            } else if (c == "\\") {
+              msg = msg c
+              escaped = 1
+            } else if (c == q) {
+              print msg
+              exit
+            } else {
+              msg = msg c
+            }
+            j++
+          }
+          print msg
+          exit
+        }
+        msg = ""
+        while (j <= len && substr(s, j, 1) !~ /[[:space:]]/) {
+          msg = msg substr(s, j, 1)
+          j++
+        }
+        print msg
+        exit
+      }
+    }
+  '
+}
+
+COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
+MSG=""
+MSG=$(extract_first_m_msg "$COMMAND")
+if [ -z "$MSG" ]; then
+  MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+  if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
+    MSG=$(cat "$MSG_FILE")
+  fi
+fi
+
+if [ -z "$MSG" ]; then
+  # Interactive commit — skip (accepted gap, matches sibling hooks)
+  exit 0
+fi
+
+# Get the first line of the message (the subject)
+SUBJECT=$(echo "$MSG" | head -1)
+
+if [ -z "$SUBJECT" ]; then
+  exit 0
+fi
+
+# Validate:
+#   type: subject              (no scope)
+#   type(scope): subject       (with scope)
+#   type!: subject             (breaking change, Conventional Commits 1.0)
+#   type(scope)!: subject      (breaking change with scope)
+#
+# Default types per .codex/rules/git-conventions.md ship at
+# .codex/project-config.defaults.json (.commit.type_whitelist). Projects
+# override per-fork via .codex/project-config.json — see apexyard#109.
+#
+# Backward-compat: the legacy flat `commit_types` top-level key in
+# .codex/project-config.json is still honoured when present, so forks that
+# customised before #109 landed keep working without edits.
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+TYPES=""
+
+# 1. Preferred: read from the unified project-config via the shared reader.
+if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.codex/hooks/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT/.codex/hooks/_lib-read-config.sh"
+  TYPES=$(config_get '.commit.type_whitelist[]' 2>/dev/null | paste -sd'|' -)
+fi
+
+# 2. Legacy compat: flat `commit_types` key at the top level of project-config.json.
+if [ -z "$TYPES" ] && [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.codex/project-config.json" ]; then
+  LEGACY=$(jq -r '.commit_types // [] | join("|")' "${REPO_ROOT}/.codex/project-config.json" 2>/dev/null)
+  if [ -n "$LEGACY" ] && [ "$LEGACY" != "null" ]; then
+    TYPES="$LEGACY"
+  fi
+fi
+
+# 3. Last-resort fallback — matches the shipped defaults (keeps this hook
+#    working in a bare checkout with no config files at all).
+if [ -z "$TYPES" ]; then
+  TYPES="feat|fix|refactor|test|docs|chore|style|perf|build|ci|revert|spike|sync"
+fi
+
+TYPE_REGEX="^(${TYPES})(\([^)]+\))?!?:[[:space:]]+.+"
+
+if ! echo "$SUBJECT" | grep -qE "$TYPE_REGEX"; then
+  cat >&2 <<MSG_END
+BLOCKED: Commit subject doesn't match the conventional commit format.
+
+Subject was:
+  ${SUBJECT}
+
+Expected format (from .codex/rules/git-conventions.md):
+  type: subject
+  type(scope): subject
+  type!: subject             (breaking change)
+  type(scope)!: subject      (breaking change with scope)
+
+Where type is one of:
+  feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert
+
+Examples:
+  feat: add user avatar upload
+  fix(auth): handle expired refresh tokens
+  feat!: remove deprecated v1 endpoints
+  feat(api)!: change response format to JSON:API
+  refactor: split order service into read/write sides
+  docs(#42): update deployment runbook
+
+The scope in parens is optional for commits (but REQUIRED for PR titles
+with a ticket reference — that's enforced by validate-pr-create.sh).
+
+To unblock:
+  1. Amend the commit: git commit --amend -m "type: your subject"
+  2. Or write a new commit with a conforming subject
+
+If you think this rule is too strict for your project, customize the type
+list in .codex/hooks/validate-commit-format.sh or file a ticket to add
+\`.commit_types\` as a project-config option.
+MSG_END
+  exit 2
+fi
+
+exit 0

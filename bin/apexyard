@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # apexyard — tiny CLI shim that exposes a subset of ApexYard skills as
-# shell-runnable commands. Today: only `apexyard status` (slide 6).
+# shell-runnable commands.
 #
 # Install: symlink this script into a directory on your PATH.
 #
@@ -8,6 +8,8 @@
 #
 # Usage:
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
+#   apexyard codex render             # render Codex-native adapter files
+#   apexyard codex doctor             # verify Codex adapter readiness
 #   apexyard --help
 #
 # The script delegates to .claude/skills/status/briefing.sh inside the
@@ -52,6 +54,9 @@ Commands:
   status [-b|--briefing]   Compact "where am I" briefing — workspace, ticket,
                            branch, role. Defaults to --briefing today (the
                            full /status report runs inside Claude Code).
+  codex render             Generate .agents/skills and .codex/ adapter files.
+  codex doctor             Check Codex adapter files, hooks, skills, agents,
+                           and local CLI/auth prerequisites.
 
 Run from inside an apexyard fork or any of its workspace/<name>/ clones.
 EOF
@@ -90,6 +95,36 @@ case "$cmd" in
     esac
 
     exec bash "$helper"
+    ;;
+  codex)
+    sub="${1:-}"
+    shift || true
+    if ! ops_root=$(find_ops_root); then
+      echo "apexyard: not inside an apexyard fork (no .apexyard-fork marker, and no onboarding.yaml + apexyard.projects.yaml found above $PWD)" >&2
+      exit 1
+    fi
+    case "$sub" in
+      render)
+        exec python3 "$ops_root/bin/apexyard-codex-render.py" "$@"
+        ;;
+      doctor)
+        exec bash "$ops_root/bin/apexyard-codex-doctor" "$@"
+        ;;
+      ""|-h|--help)
+        cat <<'EOF'
+Usage: apexyard codex <command>
+
+Commands:
+  render   Generate Codex-native adapter files from the framework sources.
+  doctor   Verify Codex adapter readiness in the current checkout.
+EOF
+        exit 0
+        ;;
+      *)
+        echo "apexyard codex: unknown command '$sub'" >&2
+        exit 2
+        ;;
+    esac
     ;;
   *)
     echo "apexyard: unknown command '$cmd'" >&2

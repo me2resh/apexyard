@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# Verify the Codex-native ApexYard adapter in the current checkout.
+
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FAIL=0
+
+pass() { printf 'PASS: %s\n' "$1"; }
+fail() { printf 'FAIL: %s\n' "$1"; FAIL=1; }
+warn() { printf 'WARN: %s\n' "$1"; }
+
+require_file() {
+  [ -f "$ROOT/$1" ] && pass "$1 exists" || fail "$1 missing"
+}
+
+require_dir() {
+  [ -d "$ROOT/$1" ] && pass "$1 exists" || fail "$1 missing"
+}
+
+require_file AGENTS.md
+require_file apexyard.projects.yaml
+require_file .codex/config.toml
+require_file .codex/hooks.json
+require_dir .codex/hooks
+require_dir .codex/agents
+require_dir .codex/rules
+require_dir .codex/registries
+if [ -d "$ROOT/.claude/migrations" ]; then
+  require_dir .codex/migrations
+fi
+require_dir .agents/skills
+
+if jq empty "$ROOT/.codex/hooks.json" >/dev/null 2>&1; then
+  pass ".codex/hooks.json is valid JSON"
+else
+  fail ".codex/hooks.json is invalid JSON"
+fi
+
+config_errors=$(
+  python3 - "$ROOT/.codex/config.toml" <<'PY' 2>&1
+import pathlib, sys, tomllib
+data = tomllib.loads(pathlib.Path(sys.argv[1]).read_text())
+if data.get("project_doc_max_bytes") != 65536:
+    raise SystemExit("project_doc_max_bytes is not top-level 65536")
+if not data.get("features", {}).get("hooks"):
+    raise SystemExit("features.hooks is not enabled")
+PY
+)
+if [ $? -eq 0 ]; then
+  pass ".codex/config.toml is valid and enables hooks"
+else
+  fail ".codex/config.toml is invalid"
+  printf '%s\n' "$config_errors"
+fi
+
+portfolio_errors=$(
+  ruby -r yaml -e '
+    data = YAML.safe_load(File.read(ARGV[0]))
+    unless data.is_a?(Hash)
+      abort "portfolio registry is not a YAML mapping"
+    end
+    unless data["projects"].is_a?(Array)
+      abort "portfolio registry must contain a projects array"
+    end
+  ' "$ROOT/apexyard.projects.yaml" 2>&1
+)
+if [ $? -eq 0 ]; then
+  pass "apexyard.projects.yaml parses as a portfolio registry"
+else
+  fail "apexyard.projects.yaml is invalid"
+  printf '%s\n' "$portfolio_errors"
+fi
+
+if [ "$(jq '[paths(scalars) as $p | select($p[-1] == "if")] | length' "$ROOT/.codex/hooks.json" 2>/dev/null || echo 1)" = "0" ]; then
+  pass ".codex/hooks.json uses Codex matcher schema, no Claude-only handler if fields"
+else
+  fail ".codex/hooks.json still contains Claude-only handler if fields"
+fi
+
+for script in codex-session-start.sh codex-pre-bash.sh codex-pre-edit.sh codex-post-bash.sh; do
+  if [ -x "$ROOT/.codex/hooks/$script" ]; then
+    pass ".codex/hooks/$script is executable"
+  else
+    fail ".codex/hooks/$script missing or not executable"
+  fi
+done
+
+claude_skill_count=$(find "$ROOT/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+codex_skill_count=$(find "$ROOT/.agents/skills" -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+if [ "$codex_skill_count" -ge "$claude_skill_count" ] && [ "$codex_skill_count" -gt 0 ]; then
+  pass "Codex skills rendered ($codex_skill_count/$claude_skill_count)"
+else
+  fail "Codex skills missing ($codex_skill_count/$claude_skill_count)"
+fi
+
+skill_errors=$(
+  ruby -r yaml -e '
+    ok = true
+    Dir[ARGV[0] + "/*/SKILL.md"].sort.each do |f|
+      txt = File.read(f)
+      unless txt.start_with?("---\n")
+        puts "#{f}: missing YAML frontmatter"
+        ok = false
+        next
+      end
+      fm = txt.split(/^---\s*$/, 3)[1]
+      begin
+        y = YAML.safe_load(fm)
+        unless y && y["name"] && y["description"]
+          puts "#{f}: missing name or description"
+          ok = false
+        end
+      rescue => e
+        puts "#{f}: #{e.message}"
+        ok = false
+      end
+    end
+    exit(ok ? 0 : 1)
+  ' "$ROOT/.agents/skills" 2>&1
+)
+if [ $? -eq 0 ]; then
+  pass "Codex skill frontmatter parses"
+else
+  fail "Codex skill frontmatter errors"
+  printf '%s\n' "$skill_errors"
+fi
+
+claude_agent_count=$(find "$ROOT/.claude/agents" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+codex_agent_count=$(find "$ROOT/.codex/agents" -maxdepth 1 -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
+if [ "$codex_agent_count" -ge "$claude_agent_count" ] && [ "$codex_agent_count" -gt 0 ]; then
+  pass "Codex custom agents rendered ($codex_agent_count/$claude_agent_count)"
+else
+  fail "Codex custom agents missing ($codex_agent_count/$claude_agent_count)"
+fi
+
+agent_errors=$(
+  python3 - "$ROOT/.codex/agents" <<'PY' 2>&1
+import pathlib, sys, tomllib
+ok = True
+for path in sorted(pathlib.Path(sys.argv[1]).glob("*.toml")):
+    try:
+        data = tomllib.loads(path.read_text())
+    except Exception as exc:
+        print(f"{path}: {exc}")
+        ok = False
+        continue
+    for key in ("name", "description", "developer_instructions"):
+        if not data.get(key):
+            print(f"{path}: missing {key}")
+            ok = False
+sys.exit(0 if ok else 1)
+PY
+)
+if [ $? -eq 0 ]; then
+  pass "Codex custom agent TOML parses"
+else
+  fail "Codex custom agent TOML errors"
+  printf '%s\n' "$agent_errors"
+fi
+
+if [ -f "$ROOT/.claude/registries/ai-crawlers.json" ]; then
+  if [ -f "$ROOT/.codex/registries/ai-crawlers.json" ] && jq empty "$ROOT/.codex/registries/ai-crawlers.json" >/dev/null 2>&1; then
+    pass "Codex registries rendered"
+  else
+    fail "Codex registries missing or invalid"
+  fi
+fi
+
+if [ -d "$ROOT/.claude/migrations" ]; then
+  claude_migration_count=$(find "$ROOT/.claude/migrations" -maxdepth 1 -type f | wc -l | tr -d ' ')
+  codex_migration_count=$(find "$ROOT/.codex/migrations" -maxdepth 1 -type f | wc -l | tr -d ' ')
+  if [ "$codex_migration_count" -ge "$claude_migration_count" ]; then
+    pass "Codex migrations rendered ($codex_migration_count/$claude_migration_count)"
+  else
+    fail "Codex migrations missing ($codex_migration_count/$claude_migration_count)"
+  fi
+fi
+
+if rg -n '\.codex/skills' "$ROOT/.agents" "$ROOT/.codex/hooks" "$ROOT/.codex/rules" >/tmp/apexyard-codex-doctor-skillrefs 2>/dev/null; then
+  fail "stale .codex/skills references remain"
+  sed -n '1,20p' /tmp/apexyard-codex-doctor-skillrefs
+else
+  pass "no stale .codex/skills references in Codex adapter"
+fi
+
+agents_bytes=$(wc -c < "$ROOT/AGENTS.md" | tr -d ' ')
+if [ "$agents_bytes" -le 65536 ]; then
+  pass "AGENTS.md is within configured Codex instruction budget ($agents_bytes bytes)"
+else
+  fail "AGENTS.md exceeds configured Codex instruction budget ($agents_bytes bytes)"
+fi
+
+if command -v gh >/dev/null 2>&1; then
+  if gh auth status >/tmp/apexyard-codex-doctor-gh 2>&1; then
+    pass "GitHub CLI authentication works"
+  else
+    fail "GitHub CLI authentication is not usable"
+    sed -n '1,8p' /tmp/apexyard-codex-doctor-gh
+  fi
+else
+  fail "gh CLI is not installed"
+fi
+
+if command -v codex >/dev/null 2>&1; then
+  pass "codex CLI is installed"
+else
+  warn "codex CLI is not on PATH; cloud/app may still load repo files, but local doctor cannot verify runtime"
+fi
+
+exit "$FAIL"

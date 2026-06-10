@@ -142,7 +142,7 @@ lookup_with_awk() {
   ' "$REGISTRY"
 }
 
-if command -v yq >/dev/null 2>&1; then
+if command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
   match=$(lookup_with_yq || true)
 else
   match=$(lookup_with_awk || true)

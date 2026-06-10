@@ -50,7 +50,8 @@
 # Escape hatches:
 #   - APEXYARD_OPS_DISABLE_PIN=1     → ignore the pin, use walk-up only
 #   - APEXYARD_OPS_PIN_DIR=<dir>     → override the pin directory
-#   - CLAUDE_CODE_SESSION_ID unset   → no pin lookup, walk-up only
+#   - CLAUDE_CODE_SESSION_ID / CODEX_SESSION_ID unset → no pin lookup,
+#     walk-up only
 #
 # Spaced-path safety: the pin file is written by `pin-ops-root.sh` with
 # `printf '%s\n' "$path"` and read here with `IFS= read -r` so paths
@@ -128,9 +129,10 @@ resolve_ops_root() {
 
   # Pin check — only when the session id is available and the escape
   # hatch isn't set. Any failure here silently falls through to walk-up.
-  if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+  local session_id="${CLAUDE_CODE_SESSION_ID:-${CODEX_SESSION_ID:-}}"
+  if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "$session_id" ]; then
     local pin_dir="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
-    local pin_file="$pin_dir/ops-root-${CLAUDE_CODE_SESSION_ID}"
+    local pin_file="$pin_dir/ops-root-${session_id}"
     if [ -f "$pin_file" ]; then
       local pinned=""
       # Read one line preserving spaces. IFS= so leading/trailing

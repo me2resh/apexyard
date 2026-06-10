@@ -94,7 +94,7 @@ get_candidate_files() {
   if [ "$IS_COMMIT" -eq 1 ]; then
     # Staged adds + modifies (renames + copies follow under R/C).
     git -C "$ROOT" diff --cached --name-only --diff-filter=ACMR 2>/dev/null \
-      | grep -E '^\.claude/agents/[^/]+\.md$' || true
+      | grep -E '^\.claude/agents/[^/]+\.(md|toml)$' || true
     return 0
   fi
   if [ "$IS_PUSH" -eq 1 ]; then
@@ -115,11 +115,11 @@ get_candidate_files() {
       # Brand-new branch with no comparable base — fall back to the last
       # 5 commits (better than nothing without false-positiving).
       git -C "$ROOT" diff --name-only HEAD~5..HEAD 2>/dev/null \
-        | grep -E '^\.claude/agents/[^/]+\.md$' || true
+        | grep -E '^\.claude/agents/[^/]+\.(md|toml)$' || true
       return 0
     fi
     git -C "$ROOT" diff --name-only "$base..HEAD" 2>/dev/null \
-      | grep -E '^\.claude/agents/[^/]+\.md$' || true
+      | grep -E '^\.claude/agents/[^/]+\.(md|toml)$' || true
   fi
 }
 
@@ -129,6 +129,33 @@ if [ -z "$CANDIDATES" ]; then
 fi
 
 DEFAULTS_FILE="$AGENTS_DIR/.framework-defaults.json"
+
+extract_model_from_stream() {
+  local format="$1"
+  case "$format" in
+    md)
+      awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}'
+      ;;
+    toml)
+      awk '
+        /^[[:space:]]*model[[:space:]]*=/ {
+          sub(/^[[:space:]]*model[[:space:]]*=[[:space:]]*/, "")
+          gsub(/^"|"$/, "")
+          print
+          exit
+        }
+      '
+      ;;
+  esac
+}
+
+extract_model_from_git_path() {
+  local ref="$1" rel="$2"
+  case "$rel" in
+    *.md)   git -C "$ROOT" show "${ref}:${rel}" 2>/dev/null | extract_model_from_stream md ;;
+    *.toml) git -C "$ROOT" show "${ref}:${rel}" 2>/dev/null | extract_model_from_stream toml ;;
+  esac
+}
 
 # -----------------------------------------------------------------------------
 # Resolve the framework-default model: for an agent. Tries (in order):
@@ -145,6 +172,7 @@ DEFAULTS_FILE="$AGENTS_DIR/.framework-defaults.json"
 framework_default_for() {
   local agent_name="$1"
   local m=""
+  local rel
 
   # 1. Snapshot file.
   if [ -f "$DEFAULTS_FILE" ]; then
@@ -160,22 +188,25 @@ framework_default_for() {
 
   # 2. dev baseline.
   if git -C "$ROOT" rev-parse --verify dev >/dev/null 2>&1; then
-    m=$(git -C "$ROOT" show "dev:.claude/agents/${agent_name}.md" 2>/dev/null \
-        | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
-    [ -n "$m" ] && { echo "$m"; return 0; }
+    for rel in ".claude/agents/${agent_name}.md" ".claude/agents/${agent_name}.toml"; do
+      m=$(extract_model_from_git_path dev "$rel")
+      [ -n "$m" ] && { echo "$m"; return 0; }
+    done
   fi
 
   # 3. upstream/main baseline.
   if git -C "$ROOT" rev-parse --verify upstream/main >/dev/null 2>&1; then
-    m=$(git -C "$ROOT" show "upstream/main:.claude/agents/${agent_name}.md" 2>/dev/null \
-        | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
-    [ -n "$m" ] && { echo "$m"; return 0; }
+    for rel in ".claude/agents/${agent_name}.md" ".claude/agents/${agent_name}.toml"; do
+      m=$(extract_model_from_git_path upstream/main "$rel")
+      [ -n "$m" ] && { echo "$m"; return 0; }
+    done
   fi
 
   # 4. HEAD baseline (handles brand-new agent file in this commit).
-  m=$(git -C "$ROOT" show "HEAD:.claude/agents/${agent_name}.md" 2>/dev/null \
-      | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}')
-  [ -n "$m" ] && echo "$m"
+  for rel in ".claude/agents/${agent_name}.md" ".claude/agents/${agent_name}.toml"; do
+    m=$(extract_model_from_git_path HEAD "$rel")
+    [ -n "$m" ] && { echo "$m"; return 0; }
+  done
 }
 
 # -----------------------------------------------------------------------------
@@ -186,12 +217,13 @@ framework_default_for() {
 current_model_for() {
   local rel="$1"
   if [ "$IS_COMMIT" -eq 1 ]; then
-    git -C "$ROOT" show ":$rel" 2>/dev/null \
-      | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}'
+    case "$rel" in
+      *.md)   git -C "$ROOT" show ":$rel" 2>/dev/null | extract_model_from_stream md ;;
+      *.toml) git -C "$ROOT" show ":$rel" 2>/dev/null | extract_model_from_stream toml ;;
+    esac
   else
     # Push: read from HEAD (the commit we're about to push).
-    git -C "$ROOT" show "HEAD:$rel" 2>/dev/null \
-      | awk '/^---/{count++; next} count==1 && /^model:/ {sub(/^model:[[:space:]]*/, ""); print; exit}'
+    extract_model_from_git_path HEAD "$rel"
   fi
 }
 
@@ -216,9 +248,19 @@ DRIFT_DETAILS=""
 
 while IFS= read -r rel; do
   [ -z "$rel" ] && continue
-  agent_name=$(basename "$rel" .md)
+  agent_name=$(basename "$rel")
+  agent_name="${agent_name%.*}"
   current=$(current_model_for "$rel")
   expected=$(framework_default_for "$agent_name")
+
+  if [ "$expected" = "__absent__" ]; then
+    if [ -z "$current" ]; then
+      continue
+    fi
+    expected_label="absent model key"
+  else
+    expected_label="$expected"
+  fi
 
   # No expected baseline (e.g. brand-new agent file) — allow.
   if [ -z "$expected" ]; then
@@ -238,7 +280,7 @@ while IFS= read -r rel; do
   fi
 
   DRIFT_FOUND=1
-  DRIFT_DETAILS="${DRIFT_DETAILS}  $rel — model: $current  (framework default: $expected)
+  DRIFT_DETAILS="${DRIFT_DETAILS}  $rel — model: $current  (framework default: $expected_label)
 "
 done <<< "$CANDIDATES"
 

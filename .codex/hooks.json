@@ -1,0 +1,70 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-session-start.sh\"'",
+            "statusMessage": "Starting ApexYard session checks"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-pre-bash.sh\"'",
+            "statusMessage": "Checking ApexYard Bash gates"
+          }
+        ]
+      },
+      {
+        "matcher": "apply_patch|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-pre-edit.sh\"'",
+            "statusMessage": "Checking ApexYard edit gates"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/suggest-mcp-search.sh\"'",
+            "statusMessage": "Checking ApexYard search guidance"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/codex-post-bash.sh\"'",
+            "statusMessage": "Running ApexYard post-Bash checks"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; exec \"$root/.codex/hooks/detect-role-trigger.sh\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

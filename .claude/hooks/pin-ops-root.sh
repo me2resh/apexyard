@@ -30,7 +30,7 @@
 # anchor conditions on read.
 #
 # Silent no-ops:
-#   - CLAUDE_CODE_SESSION_ID unset                    → exit 0 (no pin)
+#   - CLAUDE_CODE_SESSION_ID / CODEX_SESSION_ID unset → exit 0 (no pin)
 #   - walk-up from $PWD fails to find an ops root     → exit 0 (no pin)
 #   - pin already exists with the same path           → exit 0 (no-op)
 #
@@ -65,7 +65,8 @@ fi
 
 # No session id → no per-session pin to write. Common in scripted /
 # CI contexts; the walk-up fallback handles those just fine.
-if [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+SESSION_ID="${CLAUDE_CODE_SESSION_ID:-${CODEX_SESSION_ID:-}}"
+if [ -z "$SESSION_ID" ]; then
   exit 0
 fi
 
@@ -78,7 +79,7 @@ if [ -z "$ops_root" ]; then
 fi
 
 pin_dir="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
-pin_file="$pin_dir/ops-root-${CLAUDE_CODE_SESSION_ID}"
+pin_file="$pin_dir/ops-root-${SESSION_ID}"
 
 # Create the pin directory if missing. mkdir -p is idempotent.
 mkdir -p "$pin_dir" 2>/dev/null || exit 0

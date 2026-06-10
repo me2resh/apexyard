@@ -256,10 +256,33 @@ rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
 # Case 6: the shipped agent-routing.yaml.example parses as valid YAML
-# (and is on disk). With yq available we run a full parse; without yq we
-# fall back to a minimal grep check for the required top-level keys.
+# (and is on disk). Prefer Ruby's stdlib YAML parser, use Mike Farah yq only
+# when its `eval` subcommand is available, and otherwise fall back to a minimal
+# grep check for the required top-level keys.
 # ---------------------------------------------------------------------------
-if command -v yq >/dev/null 2>&1; then
+if command -v ruby >/dev/null 2>&1; then
+  if ruby -e 'require "yaml"; YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], aliases: true)' "$EXAMPLE_SRC" >/dev/null 2>&1; then
+    PASS=$((PASS + 1))
+    green "PASS: agent-routing.yaml.example parses as valid YAML (ruby)"
+  else
+    FAIL=$((FAIL + 1))
+    FAILED_CASES="$FAILED_CASES\n  - agent-routing.yaml.example parses as valid YAML (ruby)"
+    red "FAIL: agent-routing.yaml.example does not parse as valid YAML"
+  fi
+  # Confirm the documented top-level keys are present.
+  if ruby -e '
+      require "yaml"
+      doc = YAML.safe_load(File.read(ARGV[0]), permitted_classes: [], aliases: true)
+      exit(doc.is_a?(Hash) && doc.key?("version") && doc.key?("agents") ? 0 : 1)
+    ' "$EXAMPLE_SRC" >/dev/null 2>&1; then
+    PASS=$((PASS + 1))
+    green "PASS: agent-routing.yaml.example has 'version' and 'agents' top-level keys"
+  else
+    FAIL=$((FAIL + 1))
+    FAILED_CASES="$FAILED_CASES\n  - agent-routing.yaml.example missing top-level keys"
+    red "FAIL: agent-routing.yaml.example missing top-level keys"
+  fi
+elif command -v yq >/dev/null 2>&1 && yq eval -n '{}' >/dev/null 2>&1; then
   if yq eval '.' "$EXAMPLE_SRC" >/dev/null 2>&1; then
     PASS=$((PASS + 1))
     green "PASS: agent-routing.yaml.example parses as valid YAML (yq)"
@@ -268,7 +291,6 @@ if command -v yq >/dev/null 2>&1; then
     FAILED_CASES="$FAILED_CASES\n  - agent-routing.yaml.example parses as valid YAML (yq)"
     red "FAIL: agent-routing.yaml.example does not parse as valid YAML"
   fi
-  # Confirm the documented top-level keys are present.
   has_version=$(yq eval 'has("version")' "$EXAMPLE_SRC" 2>/dev/null)
   has_agents=$(yq eval 'has("agents")'  "$EXAMPLE_SRC" 2>/dev/null)
   if [ "$has_version" = "true" ] && [ "$has_agents" = "true" ]; then
