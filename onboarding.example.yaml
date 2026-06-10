@@ -102,6 +102,13 @@ quality:
 
   review_style: "thorough"
 
+  # Fallow static-analysis pass in code review (JS/TS projects only).
+  # Requires the `fallow` CLI on PATH (cargo install fallow-cli, or npx fallow).
+  # Rex runs it changed-scope on JS/TS diffs and skips silently if the CLI is
+  # absent, so leaving this false (or unset) is safe for non-JS/TS stacks.
+  # See docs/getting-started.md § "Optional: Fallow static analysis".
+  fallow_review: false
+
 # -----------------------------------------------------------------------------
 # Workflows
 # -----------------------------------------------------------------------------
