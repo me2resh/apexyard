@@ -129,7 +129,13 @@ config_get() {
     _CONFIG_CACHE=$(_config_load)
   fi
   if command -v jq >/dev/null 2>&1; then
-    echo "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null
+    # printf '%s', NOT echo: under an XSI/POSIX shell `echo` interprets backslash
+    # escapes, collapsing a valid JSON escape in the cached config (e.g. `\\0` in
+    # a pre_push command value) into an invalid one — jq then aborts on the whole
+    # document and config_get returns empty for EVERY key, silently dropping all
+    # project-config overrides (incl. split-portfolio portfolio.* paths).
+    # See me2resh/apexyard#629.
+    printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null
   else
     return 0
   fi
