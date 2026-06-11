@@ -152,10 +152,10 @@ _tracker_normalise_gh() {
     return 1
   fi
   # If raw isn't valid JSON, bail.
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then
     return 1
   fi
-  echo "$raw" | jq -c '{
+  printf '%s' "$raw" | jq -c '{
     state:  (.state // ""),
     title:  (.title // ""),
     url:    (.url // ""),
@@ -174,8 +174,8 @@ _tracker_normalise_gh() {
 _tracker_normalise_linear() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '{
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '{
     state:  ((.state | if type == "object" then .name else . end) // ""),
     title:  (.title // ""),
     url:    (.url // ""),
@@ -193,8 +193,8 @@ _tracker_normalise_linear() {
 _tracker_normalise_jira() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '{
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '{
     state:  ((.fields.status.name // .status // "") | tostring),
     title:  ((.fields.summary // .summary // .title // "") | tostring),
     url:    ((.self // .url // "") | tostring),
@@ -212,8 +212,8 @@ _tracker_normalise_jira() {
 _tracker_normalise_asana() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '
     (.data // .) as $t |
     {
       state:  (if ($t.completed == true) then "Closed" else "Open" end),
@@ -235,7 +235,7 @@ _tracker_normalise_asana() {
 _tracker_normalise_custom() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
 
   _tracker_load_config_lib
   local jq_expr
@@ -243,7 +243,7 @@ _tracker_normalise_custom() {
   if [ -z "$jq_expr" ] || [ "$jq_expr" = "null" ]; then
     jq_expr='.'
   fi
-  echo "$raw" | jq -c "$jq_expr" 2>/dev/null
+  printf '%s' "$raw" | jq -c "$jq_expr" 2>/dev/null
 }
 
 # ------------------------------------------------------------------------------
@@ -319,7 +319,7 @@ tracker_view() {
 tracker_state() {
   local json
   json=$(tracker_view "$@") || return $?
-  echo "$json" | jq -r '.state // empty' 2>/dev/null
+  printf '%s' "$json" | jq -r '.state // empty' 2>/dev/null
 }
 
 # ------------------------------------------------------------------------------
