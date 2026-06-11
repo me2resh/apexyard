@@ -2173,7 +2173,7 @@ confirm it skips the missing column before you ship."</span></pre>
       ''
     ].join('\n');
     a.setAttribute('href',
-      'mail' + 'to:' + u + '\u0040' + d +
+      'mail' + 'to:' + encodeURIComponent(u) + '\u0040' + encodeURIComponent(d) +
       '?subject=' + encodeURIComponent(subject) +
       '&body=' + encodeURIComponent(body)
     );
