@@ -127,6 +127,7 @@ QUESTION:   "Why did you choose Map over Object here?"
 - [ ] No code duplication
 - [ ] No dead code
 - [ ] Comments explain why, not what
+- [ ] Fallow static-analysis pass reviewed (JS/TS) — dead code, unused exports/deps, duplication, circular deps, complexity hotspots (advisory; Rex runs it automatically on JS/TS diffs when the `fallow` CLI is available — see `.claude/agents/code-reviewer.md` § 9)
 
 ### Security
 

@@ -314,6 +314,19 @@ Cargo workspaces with many crates have a slow first index — see the caveat bel
 - **No new failure mode.** Skills that benefit from LSP (`/code-review`, `/threat-model`, `/security-review`) fall back to grep + Read transparently when LSP is absent. There is no "broken without LSP" path — only a faster one with it.
 - **Plugin marketplace links may move.** The plugin ecosystem is young. If a marketplace search turns up multiple options for one language, prefer the one maintained by the language's own community (e.g. official `tsserver` over a third-party wrapper).
 
+## Optional: Fallow static analysis (JS/TS)
+
+For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run a [Fallow](https://docs.fallow.tools) static-analysis pass as part of every code review — surfacing dead code, unused exports/dependencies, duplication, circular dependencies, and complexity hotspots in the **changed code**, plus a dry-run preview of the fixes it would apply. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
+
+**This is opt-in and fail-soft.** Rex only runs it when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI is on `PATH`. If the CLI is absent, the step is skipped silently — there is no "broken without fallow" path, only a richer review with it. Findings are **advisory** (`nit:` / `suggestion:`); they never flip a verdict on their own, and the review only previews fixes (`fallow fix --dry-run`) — it never mutates your tree.
+
+To enable it on a JS/TS project:
+
+1. **Install the `fallow` CLI** — `cargo install fallow-cli`, or run it ad-hoc with `npx fallow`.
+2. **(Optional) toggle it in `onboarding.yaml`** — set `quality.fallow_review: false` to keep the CLI installed but disable the review pass. Absent or `true` → enabled when the CLI is present.
+
+Non-JS/TS stacks need do nothing — the language gate means the pass never fires on a non-JS/TS diff regardless of the flag, and an absent `fallow` CLI skips it anyway. (Leaving `quality.fallow_review` unset is equivalent to `true`; it only matters on JS/TS projects that have the CLI installed and want to turn the pass *off*.)
+
 ## Optional: Local agent routing
 
 Agents can optionally route through a locally-running Ollama instance via a LiteLLM proxy — useful when you want to keep prompts off any cloud API for specific sub-tasks (ticket triage, data-analyst sketches, exploratory rephrasing). See [`local-model-setup.md`](local-model-setup.md) for the install + configuration walkthrough.
