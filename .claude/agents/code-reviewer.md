@@ -3,7 +3,7 @@
 name: code-reviewer
 persona_name: Rex
 description: Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review.
-tools: Read, Grep, Glob, Bash, mcp__apexyard-search__search_docs
+tools: Read, Grep, Glob, Bash, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 disallowedTools: Write, Edit
 model: opus
 ---
@@ -42,6 +42,16 @@ Invoked when a PR is ready for review.
 
 - PR number or URL
 - Repository (any repository the user authorises)
+
+## Codebase grounding — prefer semantic search when available
+
+When the `apexyard-search` MCP is connected, **prefer `mcp__apexyard-search__search_code` over `grep`/`Read`** to ground the review in the actual codebase rather than the diff alone. Use it to surface:
+
+- existing **constant / enum / helper precedents** the change should reuse instead of re-introducing;
+- the real **call sites** of a modified function/method (blast radius the diff doesn't show);
+- whether a **test actually exercises** the changed branch.
+
+It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + full-file reads). **Graceful-degrade:** if the MCP server is absent the tool simply isn't available — fall back to `grep`/`Glob`/`Read` with no change in behaviour (same pattern as `search_docs`, `/handover`, and `/code-review`). Adopters who don't run the premium MCP are unaffected.
 
 ## Review Checklist
 
