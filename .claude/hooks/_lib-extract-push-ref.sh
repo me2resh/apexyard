@@ -48,7 +48,9 @@ is_tag_push() {
   # Strip everything after the first shell redirection/pipe so the check isn't
   # fooled by `2>&1 | tail` appended to the command.
   local clean_cmd
-  clean_cmd=$(echo "$cmd" | sed 's/[[:space:]]*[0-9]*[>|][&>|0-9].*$//')
+  # require a WHITESPACE boundary before the redirection/pipe operator so a bare
+  # `>` inside an ASCII arrow `->` in a commit message is not treated as one (#584).
+  clean_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
 
   # --tags flag: `git push [opts] --tags [remote]`
   if echo "$clean_cmd" | grep -qE '\bgit\s+push\b.*\s--tags(\s|$)'; then
@@ -122,10 +124,13 @@ extract_push_ref() {
   #   - `NNN>` (e.g. `2>`, `1>`, plain `>`)
   #   - `|` pipe
   # This is conservative: we drop from the FIRST such operator to end-of-line.
-  # The sed expression matches optional digits, then `>` or `|`, followed by
-  # anything: `[[:space:]]*[0-9]*[>|].*`
+  # The sed expression requires a WHITESPACE token boundary before the operator,
+  # then optional fd digits, then `>` or `|`, then anything: `[[:space:]][0-9]*[>|].*`.
+  # The leading whitespace is the #584 fix: the old `[[:space:]]*` (zero-width) let a
+  # bare `>` inside an ASCII arrow `->` in a commit message match, truncating the
+  # command before the trailing `&& git push <branch>` and falsely blocking the push.
   local stripped_cmd
-  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]]*[0-9]*[>|].*$//')
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
 
   # Isolate the `git push ...` segment up to the first command separator
   # (|, ;, &&, &) so `git push origin foo && echo bar` doesn't pick up `echo`
