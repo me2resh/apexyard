@@ -6,7 +6,8 @@
 
 | | |
 |--|--|
-| **Tracker** | [Dr-kersho/nourish#1](https://github.com/Dr-kersho/nourish/issues/1) |
+| **Spike PR** | https://github.com/Dr-kersho/nourish/pull/2 |
+| **Ops PR** | https://github.com/Dr-kersho/apexyard/pull/25 |
 | **Repo** | `Dr-kersho/nourish` (private — spike/planning only, no app scaffold yet) |
 | **Workspace** | `workspace/nourish/` (clone when spike code starts) |
 
@@ -27,4 +28,4 @@
 2. Accept **AgDR-0064** with spike results  
 3. Legal sign-off (GDPR / PDPL / child-data)  
 4. ~~Register `Dr-kersho/nourish` in `apexyard.projects.yaml`~~ ✓  
-5. ~~Clone `workspace/nourish` when SPIKE-001 code work starts~~ ✓ — branch `spike/GH-1-avatar-vendor-api` (push pending auth/hook)
+5. ~~Clone `workspace/nourish` when SPIKE-001 code work starts~~ ✓ — branch pushed: [spike/GH-1-avatar-vendor-api](https://github.com/Dr-kersho/nourish/tree/spike/GH-1-avatar-vendor-api)
