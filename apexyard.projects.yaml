@@ -160,6 +160,28 @@ projects:
       - dev-productivity
     ticket_prefix: GH
 
+  - name: nourish
+    repo: Dr-kersho/nourish
+    workspace: workspace/nourish
+    docs: projects/nourish
+    status: active
+    tier: P0
+    roles:
+      - tech-lead
+      - product-manager
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+      - ui-designer
+      - ux-designer
+    tags:
+      - new-product
+      - customer-facing
+      - mobile
+      - parenting
+      - ai
+    ticket_prefix: GH
+
 defaults:
   status: active
   tier: P1
