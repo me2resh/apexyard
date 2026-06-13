@@ -1,7 +1,7 @@
 # AgDR-0064: Nourish avatar vendor spike (illustrated hybrid pipeline)
 
 **Date:** 2026-06-10  
-**Status:** Proposed — **vendor selection pending SPIKE-001**  
+**Status:** Proposed — **SPIKE-001 in progress** (harness wired; live run blocked on API keys + photo pairs)  
 **Deciders:** Hisham (Tech Lead), Omar (Head of Product)  
 **Project:** Nourish (IDEA-002)
 
@@ -63,6 +63,7 @@
 
 - [projects/nourish/DECISIONS.md](../../projects/nourish/DECISIONS.md)  
 - [projects/nourish/SPIKE-001-avatar-vendor-api.md](../../projects/nourish/SPIKE-001-avatar-vendor-api.md)  
-- [projects/nourish/spike/avatar-vendor/SPIKE-PLAN.md](../../projects/nourish/spike/avatar-vendor/SPIKE-PLAN.md)  
+- [projects/nourish/SPIKE-RUNBOOK.md](../../projects/nourish/SPIKE-RUNBOOK.md) — panel, consent, DoD (Product)
+- [scripts/avatar-spike/pairs.manifest.json](https://github.com/Dr-kersho/nourish/blob/spike/GH-1-avatar-vendor-api/scripts/avatar-spike/pairs.manifest.json) — 20 pair slots (nourish repo)
 
 **Post-spike:** update this file — Status → Accepted; fill vendor table; link scorecard path.

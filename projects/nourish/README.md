@@ -17,7 +17,7 @@
 |-----|---------|
 | [DECISIONS.md](./DECISIONS.md) | Locked product + architecture decisions from `/grill-me` |
 | [SPIKE-001-avatar-vendor-api.md](./SPIKE-001-avatar-vendor-api.md) | Avatar API vendor spike ticket |
-| [spike/avatar-vendor/SPIKE-PLAN.md](./spike/avatar-vendor/SPIKE-PLAN.md) | Execution plan (no code yet) |
+| [SPIKE-RUNBOOK.md](./SPIKE-RUNBOOK.md) | Product owner runbook — panel, consent, DoD |
 | [../_inbox/IDEA-002-prd.md](../_inbox/IDEA-002-prd.md) | Draft PRD |
 | [../_inbox/validation/IDEA-002-validation.md](../_inbox/validation/IDEA-002-validation.md) | Validation (GREEN) |
 | [../../docs/agdr/AgDR-0064-nourish-avatar-vendor-spike.md](../../docs/agdr/AgDR-0064-nourish-avatar-vendor-spike.md) | Avatar pipeline + vendor spike architecture |
