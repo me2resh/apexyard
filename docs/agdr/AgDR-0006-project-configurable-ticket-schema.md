@@ -9,7 +9,7 @@ status: executed
 
 # Project-configurable ticket / branch / commit / PR schema
 
-> In the context of external adopters now running apexyard, facing the problem that hard-coded prefix lists in skills and hooks force every team into one opinion (where one team's `[Security]` need meets another's `[Perf]` need meets the framework's hardcoded six), I decided to lift the prefix / type whitelists into a versioned JSON config (`.claude/project-config.defaults.json` + optional `.claude/project-config.json` override) read by a shared shell library (`_lib-read-config.sh`), to achieve one source of truth that skills, hooks, and CI can all read, accepting that the framework now carries a config schema that future tickets must coordinate around.
+> In the context of external adopters now running apexyard, facing the problem that hard-coded prefix lists in skills and hooks force every team into one opinion (where one team's `[Security]` need meets another's `[Perf]` need meets the framework's hardcoded six), I decided to lift the prefix / type whitelists into a versioned JSON config (`.apexyard/project-config.defaults.json` + optional `.apexyard/project-config.json` override) read by a shared shell library (`_lib-read-config.sh`), to achieve one source of truth that skills, hooks, and CI can all read, accepting that the framework now carries a config schema that future tickets must coordinate around.
 
 ## Context
 
@@ -24,21 +24,21 @@ status: executed
 | -------- | ------ | ------ |
 | **A. Keep lists hardcoded in each hook** | Zero new abstraction | Drift; forks can't customise without editing framework files; upstream sync becomes conflict-heavy |
 | **B. Each hook reads its own one-off config key** | Minimal coupling | Same-pattern drift — every hook's reader differs; forks face N small config keys instead of one schema |
-| **C. Shared `_lib-read-config.sh` + versioned schema at `.claude/project-config.*.json` — CHOSEN** | One source of truth; skills / hooks / CI all read the same file; shipped defaults upgrade cleanly via `/update`; forks override only what they need | Schema now has a version number the framework must honour; deep-merge semantics deferred (shallow only for v1) |
+| **C. Shared `_lib-read-config.sh` + versioned schema at `.apexyard/project-config.*.json` — CHOSEN** | One source of truth; skills / hooks / CI all read the same file; shipped defaults upgrade cleanly via `/update`; forks override only what they need | Schema now has a version number the framework must honour; deep-merge semantics deferred (shallow only for v1) |
 | **D. Schema in `onboarding.yaml` | Reuses an existing user-facing file | Mixes org config (stack, quality bar) with tooling policy (prefix lists); YAML parsing adds jq+yq complexity to every hook |
 
 ## Decision
 
 Chosen: **Option C**, because it gives every consumer — skills, hooks, CI, future upstream additions — one read path and one file to override. The shipped-defaults file means upstream changes propagate via `/update` without overwriting fork customisation. Shallow top-level merge (not deep merge) is deliberate: simpler, predictable, no shell-side jq gymnastics. The small cost of copying a subtree when overriding one nested field is worth the zero-drift reader semantics.
 
-Keeping the schema in `.claude/` (not `onboarding.yaml`) reflects the split that already exists in the framework: `onboarding.yaml` is org / stack / quality-bar config the human writes once; `.claude/project-config.*.json` is tooling policy the framework reads on every hook invocation.
+Keeping the schema in `.claude/` (not `onboarding.yaml`) reflects the split that already exists in the framework: `onboarding.yaml` is org / stack / quality-bar config the human writes once; `.apexyard/project-config.*.json` is tooling policy the framework reads on every hook invocation.
 
 ## Consequences
 
 **Added:**
 
-- `.claude/project-config.defaults.json` (v1 schema, committed upstream)
-- `.claude/hooks/_lib-read-config.sh` (shared reader lib, used by hooks + skills + future)
+- `.apexyard/project-config.defaults.json` (v1 schema, committed upstream)
+- `.apexyard/hooks/_lib-read-config.sh` (shared reader lib, used by hooks + skills + future)
 - `docs/project-config.md` (schema reference + extension guide)
 
 **Migrated:**
@@ -69,6 +69,6 @@ Each of those tickets extends the schema by adding keys under its own subtree; t
 ## Artifacts
 
 - Ticket: `me2resh/apexyard#109`
-- Reader lib: `.claude/hooks/_lib-read-config.sh`
-- Defaults file: `.claude/project-config.defaults.json`
+- Reader lib: `.apexyard/hooks/_lib-read-config.sh`
+- Defaults file: `.apexyard/project-config.defaults.json`
 - Reference doc: `docs/project-config.md`

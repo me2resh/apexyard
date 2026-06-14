@@ -31,7 +31,7 @@ C4Context
 
 - **The user is the ops role.** Whoever runs Claude Code in the ops fork. In a solo setup that's one person wearing many hats; in a team setup it's a small group.
 - **ApexYard itself is a collection of docs, hooks, skills, and registries** — it doesn't "run" anywhere standalone. It's interpreted by Claude Code. Everything ApexYard enforces, it enforces through Claude Code hooks or through human-read rules in CLAUDE.md.
-- **GitHub is the source of truth** for tracker state, PR state, merge state. ApexYard never holds state that should live in GitHub — the approval markers in `.claude/session/reviews/` are session-local and gitignored.
+- **GitHub is the source of truth** for tracker state, PR state, merge state. ApexYard never holds state that should live in GitHub — the approval markers in `.apexyard/session/reviews/` are session-local and gitignored.
 - **Managed projects are first-class external systems.** ApexYard does not ingest their code; it points at them via the registry. Their own git history, CI, and issues stay in their own repos.
 
 ## Why these relationships matter

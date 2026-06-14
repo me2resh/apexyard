@@ -4,7 +4,7 @@
 
 ## Context
 
-- Rex (`.claude/agents/code-reviewer.md`) already gates language-specific **handbook** loading on the diff (`**/*.{ts,tsx}` → load `handbooks/language/typescript/`). It has no equivalent **tool** pass — nothing actually analyses the changed JS/TS for unused exports, clones, circular dependencies, or complexity.
+- Rex (`.apexyard/agents/code-reviewer.md`) already gates language-specific **handbook** loading on the diff (`**/*.{ts,tsx}` → load `handbooks/language/typescript/`). It has no equivalent **tool** pass — nothing actually analyses the changed JS/TS for unused exports, clones, circular dependencies, or complexity.
 - [Fallow](https://docs.fallow.tools) is a zero-config JS/TS intelligence CLI (`fallow check | find-dupes | check-health`, `fix --dry-run`) with `--changed-since` diff scoping and a JSON output mode — a natural fit for a review-time, changed-code-scoped pass. Exit code 1 means "issues found" (normal); only exit 2 is a real error.
 - Two facts constrain the design:
   1. **Rex has `Bash` but no `Skill`/`Agent` tool** — it can run the `fallow` binary but cannot invoke the `/fallow` skill. The integration is "Rex runs the CLI," not "Rex calls the skill."
@@ -28,12 +28,12 @@ Chosen: **Option 1 — Rex runs the Fallow CLI as a new §9 review step**, becau
 - JS/TS PRs gain an automatic dead-code / duplication / circular-dep / complexity pass with a results table and a proposed-fix preview in the review body.
 - Adopters who never install the `fallow` CLI see identical Rex behaviour to before (silent skip) — no hard onboarding requirement.
 - A new opt-in `quality.fallow_review` flag in `onboarding.yaml` lets a JS/TS adopter disable the pass even when the CLI is present.
-- The `/code-review` skill (`.claude/skills/code-review/SKILL.md`) and `workflows/code-review.md` must be kept in sync with the agent's §9.
+- The `/code-review` skill (`.apexyard/skills/code-review/SKILL.md`) and `workflows/code-review.md` must be kept in sync with the agent's §9.
 - If fallow's blocking value proves high later (e.g. a newly-introduced circular dependency), a narrow blocking subset can be added behind a follow-up AgDR.
 
 ## Artifacts
 
 - Ticket: me2resh/apexyard#627
 - Branch: `feature/GH-627-support-fallow` (fork: `tifa64/apexyard`)
-- Touches: `.claude/agents/code-reviewer.md`, `.claude/skills/code-review/SKILL.md`, `workflows/code-review.md`, `onboarding.example.yaml`, `docs/getting-started.md`
+- Touches: `.apexyard/agents/code-reviewer.md`, `.apexyard/skills/code-review/SKILL.md`, `workflows/code-review.md`, `onboarding.example.yaml`, `docs/getting-started.md`
 - PR: me2resh/apexyard#628

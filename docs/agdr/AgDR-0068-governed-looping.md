@@ -1,6 +1,6 @@
 # AgDR-0068 — Governed looping as an apexyard pattern
 
-> In the context of the field shifting from prompting agents step-by-step to *designing loops that prompt agents*, facing the risk that ungoverned loops become billing surprises and confident-mistake machines, I decided to **adopt governed looping as a first-class apexyard pattern via a trigger-heuristic rule (`.claude/rules/loop-mode.md`) that recommends a closed loop when work fits and binds every loop to apexyard's existing gates as its eval**, rather than shipping a new `/loop` engine or leaving looping undocumented, to achieve the "design loops, not steps" workflow on a normal budget, accepting that this is self-discipline (no new mechanical hook) layered on the merge-gate backstop.
+> In the context of the field shifting from prompting agents step-by-step to *designing loops that prompt agents*, facing the risk that ungoverned loops become billing surprises and confident-mistake machines, I decided to **adopt governed looping as a first-class apexyard pattern via a trigger-heuristic rule (`.apexyard/rules/loop-mode.md`) that recommends a closed loop when work fits and binds every loop to apexyard's existing gates as its eval**, rather than shipping a new `/loop` engine or leaving looping undocumented, to achieve the "design loops, not steps" workflow on a normal budget, accepting that this is self-discipline (no new mechanical hook) layered on the merge-gate backstop.
 
 ## Context
 
@@ -20,18 +20,18 @@
 
 ## Decision
 
-Chosen: **Option 1 — a trigger-heuristic rule.** `.claude/rules/loop-mode.md` defines when to OFFER a closed loop (repetitive over a set · machine-verifiable · bounded), when not to, which primitive to use (harness `/loop` for single-agent iterate · `/fan-out` for N independent items · the `Workflow` tool for a verifying fleet), and the guardrails. The guardrails are the point: **halt at the per-PR CEO merge gate (never self-approve); verify = build + tests + Rex (not just build); a budget + iteration ceiling; no-progress detection; loops call named skills, not re-derived prompts.** The rule auto-loads via the `@.claude/rules/*.md` import.
+Chosen: **Option 1 — a trigger-heuristic rule.** `.apexyard/rules/loop-mode.md` defines when to OFFER a closed loop (repetitive over a set · machine-verifiable · bounded), when not to, which primitive to use (harness `/loop` for single-agent iterate · `/fan-out` for N independent items · the `Workflow` tool for a verifying fleet), and the guardrails. The guardrails are the point: **halt at the per-PR CEO merge gate (never self-approve); verify = build + tests + Rex (not just build); a budget + iteration ceiling; no-progress detection; loops call named skills, not re-derived prompts.** The rule auto-loads via the `@.apexyard/rules/*.md` import.
 
 ## Consequences
 
-- New file `.claude/rules/loop-mode.md`; `CLAUDE.md` rule count + list updated (11 → 12 rules) and a code-standards bullet added.
+- New file `.apexyard/rules/loop-mode.md`; `CLAUDE.md` rule count + list updated (11 → 12 rules) and a code-standards bullet added.
 - Looping becomes a recommended, governed move — the agent proactively proposes it for fitting work and states the guardrails up front.
 - The merge-gate hooks (`block-unreviewed-merge.sh` + `/approve-merge`) remain the mechanical backstop: a loop that tries to self-approve is already blocked, so the "halt at CEO gate" clause is enforced in practice even though the rule itself is advisory.
 - Future hardening (deferred, candidate for a follow-up spike): mechanical budget enforcement, cron scheduling integration, and a possible `/loop`-wrapper skill that runs the SDLC as the loop body. Not needed for the recommend-and-guardrail goal.
 
 ## Artifacts
 
-- `.claude/rules/loop-mode.md` (this AgDR's implementation)
+- `.apexyard/rules/loop-mode.md` (this AgDR's implementation)
 - Feature: me2resh/apexyard#594
-- Precedent rules: `.claude/rules/parallel-work.md`, `.claude/rules/plan-mode.md`
-- Eval/gate rules cited: `.claude/rules/pr-workflow.md`, `.claude/rules/workflow-gates.md`
+- Precedent rules: `.apexyard/rules/parallel-work.md`, `.apexyard/rules/plan-mode.md`
+- Eval/gate rules cited: `.apexyard/rules/pr-workflow.md`, `.apexyard/rules/workflow-gates.md`

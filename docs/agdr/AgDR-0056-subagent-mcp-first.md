@@ -39,6 +39,6 @@ Chosen: **prompt-level MCP-first, baked into the agent definitions.**
 ## Artifacts
 
 - Issue: me2resh/apexyard#475
-- Edited: `.claude/agents/{tech-lead,backend-engineer,frontend-engineer,data-engineer,platform-engineer,qa-engineer,security-reviewer}.md` (tools line + MCP-first block)
-- Reference implementation: `.claude/agents/solution-architect.md` (#472 — already MCP-first)
+- Edited: `.apexyard/agents/{tech-lead,backend-engineer,frontend-engineer,data-engineer,platform-engineer,qa-engineer,security-reviewer}.md` (tools line + MCP-first block)
+- Reference implementation: `.apexyard/agents/solution-architect.md` (#472 — already MCP-first)
 - Related: `suggest-mcp-search.sh` (#418, #469/#470 — the main-loop hook), the "use MCP before grep" operator feedback rule, AgDR-0050 (agent runtime / tools conventions).

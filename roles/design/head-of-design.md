@@ -2,7 +2,7 @@
 
 **Persona name**: Maha
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Maha (Head of Design) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Maha (Head of Design) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -97,9 +97,9 @@ When reviewing UI implementations:
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/head-of-design.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/head-of-design.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
-**On trigger**: once PR 2 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/head-of-design.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
+**On trigger**: once PR 2 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.apexyard/agents/head-of-design.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
 
 **Rationale**: design-system decisions; sparse.
 

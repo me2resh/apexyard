@@ -1,6 +1,6 @@
 # Private Customs — Delivery Mechanism, Name-Collision Semantics, and Two-Layer Handbook Discovery
 
-> In the context of split-portfolio v2 adopters wanting a private home for **company-specific** custom skills + cross-org handbooks, facing the question of *how* those private artefacts surface inside the public fork's runtime (`.claude/skills/`, Rex's handbook context), I decided to ship a SessionStart symlink hook plus a "custom wins, framework backed up to `.framework.bak`" name-collision rule plus a two-layer handbook discovery in Rex, to keep the public-fork tree authoritative-on-disk while letting the private repo override skills and append handbooks, accepting the trade-offs of relying on POSIX symlinks (Windows requires manual install) and a `.bak` artefact in `.claude/skills/`.
+> In the context of split-portfolio v2 adopters wanting a private home for **company-specific** custom skills + cross-org handbooks, facing the question of *how* those private artefacts surface inside the public fork's runtime (`.apexyard/skills/`, Rex's handbook context), I decided to ship a SessionStart symlink hook plus a "custom wins, framework backed up to `.framework.bak`" name-collision rule plus a two-layer handbook discovery in Rex, to keep the public-fork tree authoritative-on-disk while letting the private repo override skills and append handbooks, accepting the trade-offs of relying on POSIX symlinks (Windows requires manual install) and a `.bak` artefact in `.apexyard/skills/`.
 
 ## Context
 
@@ -24,9 +24,9 @@ Three sub-decisions had to be made together because they interact.
 | Option | Pros | Cons |
 |--------|------|------|
 | **A1. Plugin install** — package each adopter custom skill as a Claude Code plugin and install via `/plugin install <local-path>` | First-class surface; matches the official plugin mechanism we use for LSP | Plugin-install plumbing is heavyweight per-skill; adopter has to repackage on every skill edit; no native symlink-like "edit in private repo, see in fork" iteration loop |
-| **A2. Direct copy on SessionStart** — copy `<sibling>/custom-skills/<name>/` → `<fork>/.claude/skills/<name>/` on every session start | Simple; no symlinks (works on Windows out of the box) | Writes into the public fork's tree, which means dirty working copy on every session, gitignored or not. Friction with `git status` review. Also: per-edit re-copy required, which silently overwrites in-progress edits |
-| **A3. Symlink on SessionStart** — `ln -sf <sibling>/custom-skills/<name> <fork>/.claude/skills/<name>` | Adopter edits in private repo, fork picks up immediately, no working-copy churn (the symlink itself is gitignored). Idempotent re-runs are cheap. | POSIX-only (Windows ln equivalent is fragile); leaves `.claude/skills/` with mixed real-dir + symlink-dir entries (operator has to remember which is which); requires gitignore discipline (already covered for v2) |
-| **A4. Runtime config-block resolution only** — extend Claude Code skill loader to consult `portfolio.custom_skills_dir`, no on-disk linking | Cleanest semantics; nothing lands in `.claude/skills/`; matches how onboarding.yaml resolution already works | Requires changes inside Claude Code itself (the loader, the slash-command resolver, the autocomplete index) — outside the framework's reach. Not viable in framework-only territory. |
+| **A2. Direct copy on SessionStart** — copy `<sibling>/custom-skills/<name>/` → `<fork>/.apexyard/skills/<name>/` on every session start | Simple; no symlinks (works on Windows out of the box) | Writes into the public fork's tree, which means dirty working copy on every session, gitignored or not. Friction with `git status` review. Also: per-edit re-copy required, which silently overwrites in-progress edits |
+| **A3. Symlink on SessionStart** — `ln -sf <sibling>/custom-skills/<name> <fork>/.apexyard/skills/<name>` | Adopter edits in private repo, fork picks up immediately, no working-copy churn (the symlink itself is gitignored). Idempotent re-runs are cheap. | POSIX-only (Windows ln equivalent is fragile); leaves `.apexyard/skills/` with mixed real-dir + symlink-dir entries (operator has to remember which is which); requires gitignore discipline (already covered for v2) |
+| **A4. Runtime config-block resolution only** — extend Claude Code skill loader to consult `portfolio.custom_skills_dir`, no on-disk linking | Cleanest semantics; nothing lands in `.apexyard/skills/`; matches how onboarding.yaml resolution already works | Requires changes inside Claude Code itself (the loader, the slash-command resolver, the autocomplete index) — outside the framework's reach. Not viable in framework-only territory. |
 
 ### Choice — **A3 (symlink on SessionStart)**
 
@@ -41,8 +41,8 @@ A3's failure mode (Windows) is contained: the `link-custom-skills.sh` hook detec
 | Option | Pros | Cons |
 |--------|------|------|
 | **B1. Framework wins** — refuse to link custom `/handover` over framework `/handover`, print warning | Conservative; framework behaviour stays predictable; CEO never gets a custom skill they forgot they wrote shadowing the canonical one | Defeats the use case: adopters who want a customised `/handover` (their org has a different onboarding checklist) cannot override. They'd have to fork the skill upstream, which means going public again. |
-| **B2. Custom wins, no backup** — symlink overwrites the framework skill dir; on uninstall there's nothing to restore | Adopter intent is honoured | Destructive — if the operator removes their custom skill, the framework version is gone too; recovery requires `git checkout .claude/skills/handover` which is a chore + footgun |
-| **B3. Custom wins, framework moved to `.framework.bak`** — `mv .claude/skills/handover .claude/skills/handover.framework.bak; ln -sf <sibling>/custom-skills/handover .claude/skills/handover` | Adopter intent honoured AND the framework version is recoverable in one `mv` back. Visible in `ls`, so the operator sees what's happening. | Leaves a `.bak` artefact in `.claude/skills/`. Gitignored via `*.framework.bak` to avoid noise. Marginal cognitive overhead. |
+| **B2. Custom wins, no backup** — symlink overwrites the framework skill dir; on uninstall there's nothing to restore | Adopter intent is honoured | Destructive — if the operator removes their custom skill, the framework version is gone too; recovery requires `git checkout .apexyard/skills/handover` which is a chore + footgun |
+| **B3. Custom wins, framework moved to `.framework.bak`** — `mv .apexyard/skills/handover .apexyard/skills/handover.framework.bak; ln -sf <sibling>/custom-skills/handover .apexyard/skills/handover` | Adopter intent honoured AND the framework version is recoverable in one `mv` back. Visible in `ls`, so the operator sees what's happening. | Leaves a `.bak` artefact in `.apexyard/skills/`. Gitignored via `*.framework.bak` to avoid noise. Marginal cognitive overhead. |
 | **B4. Prompt operator on collision** — interactive ask: "framework `/handover` exists, override?" | Most explicit | Hook runs at SessionStart — there's no operator to prompt yet. Defers the decision to a place no operator can answer it. |
 
 ### Choice — **B3 (custom wins, framework moved to `.framework.bak`)**
@@ -52,7 +52,7 @@ The CTO writing a custom `/handover` is making a deliberate override decision. T
 The hook prints a one-line warning on every collision so the operator sees `which command they overrode`:
 
 ```
-link-custom-skills: /handover overridden by custom; framework moved to .claude/skills/handover.framework.bak
+link-custom-skills: /handover overridden by custom; framework moved to .apexyard/skills/handover.framework.bak
 ```
 
 ## Decision C — SessionStart timing for the link operation
@@ -87,7 +87,7 @@ Custom handbooks are typically **additive** — *"add our company's TypeScript n
 
 D3 is the cleanest design but loses the shipped handbooks, which are the demo content for the feature. D2 gets the best of both — Rex reads framework `handbooks/` plus `<sibling>/custom-handbooks/` (resolved via `portfolio.custom_handbooks_dir` from the config block), applies the same `architecture/` + `general/` + `language/<lang>/` path conventions to both, and the operator can layer or shadow as they choose just by where they put the file.
 
-The agent prompt for Rex (`.claude/agents/code-reviewer.md`) enumerates both roots in its discovery step. The framework's existing `handbooks/README.md` documents the layering.
+The agent prompt for Rex (`.apexyard/agents/code-reviewer.md`) enumerates both roots in its discovery step. The framework's existing `handbooks/README.md` documents the layering.
 
 ## Consequences
 
@@ -101,7 +101,7 @@ The agent prompt for Rex (`.claude/agents/code-reviewer.md`) enumerates both roo
 
 ### Negative
 
-- `.claude/skills/` becomes a mixed dir of real dirs (framework) + symlinks (custom) + `*.framework.bak` (overridden). Operators reviewing `ls` must remember to interpret each. Mitigated by the hook printing a summary line on link/override.
+- `.apexyard/skills/` becomes a mixed dir of real dirs (framework) + symlinks (custom) + `*.framework.bak` (overridden). Operators reviewing `ls` must remember to interpret each. Mitigated by the hook printing a summary line on link/override.
 - Windows is degraded (manual install). Documented; same shape as LSP plugins.
 - Two-layer handbook discovery has a slightly larger surface in Rex's agent prompt than a single-layer model would. Acceptable; the agent prompt already enumerates multiple sources.
 
@@ -112,10 +112,10 @@ The agent prompt for Rex (`.claude/agents/code-reviewer.md`) enumerates both roo
 
 ## Artifacts
 
-- Implementation: `.claude/hooks/link-custom-skills.sh` (POSIX symlink, idempotent, Windows decline)
-- Tests: `.claude/hooks/tests/test_link_custom_skills.sh` (6 cases — no-op, two-skill link, collision, Windows, idempotent re-run, subdir-without-SKILL.md skip)
+- Implementation: `.apexyard/hooks/link-custom-skills.sh` (POSIX symlink, idempotent, Windows decline)
+- Tests: `.apexyard/hooks/tests/test_link_custom_skills.sh` (6 cases — no-op, two-skill link, collision, Windows, idempotent re-run, subdir-without-SKILL.md skip)
 - Path resolution: `_lib-portfolio-paths.sh` → `portfolio_custom_skills_dir`, `portfolio_custom_handbooks_dir`
-- Setup docs: `.claude/skills/setup/SKILL.md` (config-block keys); `docs/multi-project.md` (split-portfolio v2 section); `handbooks/README.md` (two-layer discovery note)
-- Wiring: `.claude/settings.json` (SessionStart entry); `.gitignore` (`.claude/skills/*.framework.bak`, custom-skills symlinks)
-- Agent prompt: `.claude/agents/code-reviewer.md` (Rex's discovery step now enumerates both handbook roots)
+- Setup docs: `.apexyard/skills/setup/SKILL.md` (config-block keys); `docs/multi-project.md` (split-portfolio v2 section); `handbooks/README.md` (two-layer discovery note)
+- Wiring: `.claude/settings.json` (SessionStart entry); `.gitignore` (`.apexyard/skills/*.framework.bak`, custom-skills symlinks)
+- Agent prompt: `.apexyard/agents/code-reviewer.md` (Rex's discovery step now enumerates both handbook roots)
 - Issue: #243 / PR #253

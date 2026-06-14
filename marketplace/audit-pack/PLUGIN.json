@@ -25,15 +25,15 @@
     "apexyard"
   ],
   "skills": [
-    { "name": "launch-check",        "path": ".claude/skills/launch-check/SKILL.md" },
-    { "name": "seo-audit",           "path": ".claude/skills/seo-audit/SKILL.md" },
-    { "name": "geo-audit",           "path": ".claude/skills/geo-audit/SKILL.md" },
-    { "name": "accessibility-audit", "path": ".claude/skills/accessibility-audit/SKILL.md" },
-    { "name": "compliance-check",    "path": ".claude/skills/compliance-check/SKILL.md" },
-    { "name": "analytics-audit",     "path": ".claude/skills/analytics-audit/SKILL.md" },
-    { "name": "monitoring-audit",    "path": ".claude/skills/monitoring-audit/SKILL.md" },
-    { "name": "docs-audit",          "path": ".claude/skills/docs-audit/SKILL.md" },
-    { "name": "performance-audit",   "path": ".claude/skills/performance-audit/SKILL.md" }
+    { "name": "launch-check",        "path": ".apexyard/skills/launch-check/SKILL.md" },
+    { "name": "seo-audit",           "path": ".apexyard/skills/seo-audit/SKILL.md" },
+    { "name": "geo-audit",           "path": ".apexyard/skills/geo-audit/SKILL.md" },
+    { "name": "accessibility-audit", "path": ".apexyard/skills/accessibility-audit/SKILL.md" },
+    { "name": "compliance-check",    "path": ".apexyard/skills/compliance-check/SKILL.md" },
+    { "name": "analytics-audit",     "path": ".apexyard/skills/analytics-audit/SKILL.md" },
+    { "name": "monitoring-audit",    "path": ".apexyard/skills/monitoring-audit/SKILL.md" },
+    { "name": "docs-audit",          "path": ".apexyard/skills/docs-audit/SKILL.md" },
+    { "name": "performance-audit",   "path": ".apexyard/skills/performance-audit/SKILL.md" }
   ],
   "graduation_path": {
     "name": "apexyard (full framework)",

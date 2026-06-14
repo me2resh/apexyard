@@ -88,7 +88,7 @@ If **option 3 (layered install)** is chosen:
 
 - Every existing adopter runs a migration skill (provisional `/migrate-to-layered`) before their next framework update
 - Framework refactor relocates `.claude/`, `roles/`, `workflows/`, `templates/` under a new install dir
-- `CLAUDE.md` rewrites its `@.claude/rules/*.md` imports to point at the new install dir
+- `CLAUDE.md` rewrites its `@.apexyard/rules/*.md` imports to point at the new install dir
 - A new manifest file records framework version + file checksums; `/update` becomes a manifest-driven file-replace
 - `/update` no longer touches git for framework files; version drift is reported from manifest mtime + version field
 - `custom-templates/`, `custom-skills/`, `custom-handbooks/` overlay patterns generalise: adopter can also overlay `.claude/settings.json`, individual hooks, individual rules — all from outside the install dir

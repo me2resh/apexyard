@@ -20,7 +20,7 @@
 #   Split-portfolio (v2): <private_repo>/agent-routing.yaml
 #                         (committed to your private sibling repo;
 #                         resolved via .portfolio.agent_routing in
-#                         .claude/project-config.json)
+#                         .apexyard/project-config.json)
 #
 #   Single-fork:          <fork>/agent-routing.yaml
 #                         (gitignored — adopter-specific routing
@@ -36,9 +36,9 @@
 # - An empty `agents: {}` block is identical to "no file" — the public
 #   fork ships with framework default models that work out-of-box.
 # - Omitted agents inherit the framework default from
-#   .claude/agents/<name>.md frontmatter.
+#   .apexyard/agents/<name>.md frontmatter.
 # - At SessionStart, the sync hook (`apply-agent-routing.sh`) rewrites
-#   the affected `.claude/agents/*.md` frontmatter in-place. Pre-commit
+#   the affected `.apexyard/agents/*.md` frontmatter in-place. Pre-commit
 #   and pre-push guards (`block-agent-routing-drift.sh`) catch accidental
 #   commits of the rewritten frontmatter so adopter routing choices never
 #   leak to the public fork.
@@ -65,7 +65,7 @@ version: 1
 # Agents
 # -----------------------------------------------------------------------------
 # Map of agent name → override entry. Agent names match the filename
-# (without `.md`) under .claude/agents/, e.g. `qa-engineer`, `tech-lead`,
+# (without `.md`) under .apexyard/agents/, e.g. `qa-engineer`, `tech-lead`,
 # `code-reviewer`, `backend-engineer`.
 #
 # Per-entry fields:
@@ -102,9 +102,10 @@ version: 1
 # (Note: `allowed_tools_override` was advertised in earlier drafts of
 # this schema but never wired into the parser / consumer. Dropped in
 # #358 for v1; the shipped per-agent allowed-tools list in each
-# .claude/agents/<name>.md frontmatter is the source of truth. Edit
-# the agent file directly with a `# routing-config:override <reason>`
-# comment in the YAML frontmatter if you need a one-off override.)
+# .apexyard/agents/<name>.md frontmatter is the source of truth. Edit
+# the agent file directly under .apexyard/agents/<name>.md with a
+# `# routing-config:override <reason>` comment in the YAML frontmatter
+# if you need a one-off override.)
 
 agents: {}
 

@@ -1,6 +1,6 @@
 # apexyard/audit-pack
 
-**Production-readiness audit suite for Claude Code.** Drop this `.claude/` into any project, run `/launch-check`, get a one-page go/no-go verdict across 9 quality dimensions. Pairs with 8 deep-dive expert skills when you need to investigate a finding.
+**Production-readiness audit suite for Claude Code.** Drop this `.apexyard/` into any project, run `/launch-check`, get a one-page go/no-go verdict across 9 quality dimensions. Pairs with 8 deep-dive expert skills when you need to investigate a finding.
 
 > One tooth of the [ApexYard](https://github.com/me2resh/apexyard) governance comb — extracted as a standalone marketplace plugin for individual engineers who want the audits without forking the full framework. Read on for what's included, the 30-second quickstart, and the graduation path to the full ApexYard fork.
 
@@ -24,9 +24,9 @@
 
 **Supporting files (extracted from upstream):**
 
-- `.claude/hooks/_lib-audit-history.sh` — shared per-run JSON + per-run MD persistence + ASCII trend renderer; the same lib every audit skill uses for "are we trending up?" reporting
-- `.claude/hooks/_lib-read-config.sh` — config reader (post-#310 ops-root fix; falls back gracefully outside an apexyard fork)
-- `.claude/registries/ai-crawlers.json` — the v1 AI-crawler list `/geo-audit` consults (12 entries: GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, PerplexityBot, CCBot, Bytespider, Applebot-Extended, cohere-ai)
+- `.apexyard/hooks/_lib-audit-history.sh` — shared per-run JSON + per-run MD persistence + ASCII trend renderer; the same lib every audit skill uses for "are we trending up?" reporting
+- `.apexyard/hooks/_lib-read-config.sh` — config reader (post-#310 ops-root fix; falls back gracefully outside an apexyard fork)
+- `.apexyard/registries/ai-crawlers.json` — the v1 AI-crawler list `/geo-audit` consults (12 entries: GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, PerplexityBot, CCBot, Bytespider, Applebot-Extended, cohere-ai)
 - `templates/audits/*.md` — one template per deep-dive skill (8 templates)
 
 ## 30-second quickstart
@@ -65,13 +65,13 @@ If any of that list resonates, the next step is [the full framework](#graduation
 
 This sub-pack is **extracted** from the upstream ApexYard framework, not rewritten for the marketplace. The skill / hook / lib files retain prose references to upstream framework primitives — by design, as funnel pointers, not as bugs. Specifically:
 
-- **SKILL.md author guidance** in several audit skills (e.g. `compliance-check`, `launch-check`, `geo-audit`, `seo-audit`) mentions reading project names from `apexyard.projects.yaml` or invoking `/handover`. These appear in "Process" / "Implementation notes" sections as hints to the full-framework experience. In a plain `.claude/` drop-in (no fork, no `apexyard.projects.yaml`), the skills fall back to the current working directory — they work, the prose just over-promises portfolio-aware features the standalone install doesn't have.
+- **SKILL.md author guidance** in several audit skills (e.g. `compliance-check`, `launch-check`, `geo-audit`, `seo-audit`) mentions reading project names from `apexyard.projects.yaml` or invoking `/handover`. These appear in "Process" / "Implementation notes" sections as hints to the full-framework experience. In a plain `.apexyard/` drop-in (no fork, no `apexyard.projects.yaml`), the skills fall back to the current working directory — they work, the prose just over-promises portfolio-aware features the standalone install doesn't have.
 - **`_lib-audit-history.sh`** conditionally sources `_lib-portfolio-paths.sh` (which is NOT shipped — the `command -v` fallback handles the missing-lib case) and calls `portfolio_projects_dir()` to find where audit-run history lives. Outside an apexyard fork, the fallback writes to `$(git rev-parse --show-toplevel)/projects/<name>/audits/`. This is graceful-degrade — your audit history will accumulate under `projects/<name>/audits/` in whatever repo you ran it in, even if that's a single-project repo with no portfolio model. If you don't want a `projects/` dir created, run the audit from a tmp dir or symlink it elsewhere.
 - **Broken relative links** to upstream `docs/agdr/AgDR-NNNN-*.md` files in some skills' Implementation notes / See-also sections. These point at design rationale that lives in the full framework. Visit <https://github.com/me2resh/apexyard/tree/main/docs/agdr> to read them.
 
-The path-leak smoke test (`.claude/hooks/tests/test_subpack_extraction.sh`) catches **file-path leaks** (e.g. accidentally extracting `_lib-portfolio-paths.sh` itself), not **content-leaks** like the prose hints above. The trade-off was deliberate: a content-scrub would either kill the funnel pitch (sub-packs become orphans, no graduation path visible) OR fork the source files (which contradicts the framework's "generated-not-forked" maintenance contract — see AgDR-0049). v2 of the marketplace plugins may revisit this if adopters consistently surface the prose hints as friction.
+The path-leak smoke test (`.apexyard/hooks/tests/test_subpack_extraction.sh`) catches **file-path leaks** (e.g. accidentally extracting `_lib-portfolio-paths.sh` itself), not **content-leaks** like the prose hints above. The trade-off was deliberate: a content-scrub would either kill the funnel pitch (sub-packs become orphans, no graduation path visible) OR fork the source files (which contradicts the framework's "generated-not-forked" maintenance contract — see AgDR-0049). v2 of the marketplace plugins may revisit this if adopters consistently surface the prose hints as friction.
 
-If your use case requires zero references to the full framework — e.g. you're shipping the audit-pack into a non-apexyard org's `.claude/` and explicitly don't want to advertise the framework — please file an issue at the upstream repo. v2 scope.
+If your use case requires zero references to the full framework — e.g. you're shipping the audit-pack into a non-apexyard org's `.apexyard/` and explicitly don't want to advertise the framework — please file an issue at the upstream repo. v2 scope.
 
 ## Graduation path: the full framework
 

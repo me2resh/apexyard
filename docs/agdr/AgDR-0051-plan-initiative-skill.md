@@ -4,7 +4,7 @@
 >
 > **Status**: ACCEPTED — implementation lives in #377. This AgDR is the design record referenced by that PR.
 
-**Metadata** — Status: ACCEPTED · Category: process · Supersedes: none · Related: [AgDR-0023](AgDR-0023-custom-templates-override-semantics.md) (template-override semantics the new template plugs into), the `/handover` step-7.5 filing pattern (`.claude/skills/handover/SKILL.md` § 7.5 — the UX mirror) ; tracked by GitHub Issue [#376](https://github.com/me2resh/apexyard/issues/376) (the handover sibling that established the per-item filing UX). (Body-H1 only, no YAML frontmatter — per the live convention since markdownlint MD025 trips on YAML title + body H1 simultaneously.)
+**Metadata** — Status: ACCEPTED · Category: process · Supersedes: none · Related: [AgDR-0023](AgDR-0023-custom-templates-override-semantics.md) (template-override semantics the new template plugs into), the `/handover` step-7.5 filing pattern (`.apexyard/skills/handover/SKILL.md` § 7.5 — the UX mirror) ; tracked by GitHub Issue [#376](https://github.com/me2resh/apexyard/issues/376) (the handover sibling that established the per-item filing UX). (Body-H1 only, no YAML frontmatter — per the live convention since markdownlint MD025 trips on YAML title + body H1 simultaneously.)
 
 ## Context
 
@@ -89,7 +89,7 @@ Four load-bearing decisions are presented as one option-matrix each. Implementat
 
 - No new hooks. The skill writes markdown (exempt from `require-active-ticket.sh`) and dispatches to `/feature` (which manages its own `active-issue-skill` marker per AgDR-0030). No `active-issue-skill` write inside `/plan-initiative` itself.
 - No new agents. The Socratic interview runs in the calling thread; no sub-agent dispatch.
-- One new entry in the `.claude/skills/` directory + one new template + one new AgDR + a CLAUDE.md skill-table row.
+- One new entry in the `.apexyard/skills/` directory + one new template + one new AgDR + a CLAUDE.md skill-table row.
 - No `/setup` / `/handover` changes — the skill is invokable standalone; not part of bootstrap.
 
 **For adopters**:
@@ -105,9 +105,9 @@ Four load-bearing decisions are presented as one option-matrix each. Implementat
 
 ## Artifacts
 
-- `.claude/skills/plan-initiative/SKILL.md` — the skill (implementation of this design)
+- `.apexyard/skills/plan-initiative/SKILL.md` — the skill (implementation of this design)
 - `templates/initiative.md` — the master initiative-doc template (with inline milestone blocks + DAG section)
 - `CLAUDE.md` § "Available skills" — new row for `/plan-initiative`
-- `.claude/skills/handover/SKILL.md` § 7.5 — the UX mirror for the filing step
+- `.apexyard/skills/handover/SKILL.md` § 7.5 — the UX mirror for the filing step
 - GitHub Issue [#377](https://github.com/me2resh/apexyard/issues/377) — the feature ticket this AgDR implements
 - GitHub Issue [#376](https://github.com/me2resh/apexyard/issues/376) — the sibling that established the per-item filing UX pattern

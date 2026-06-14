@@ -24,11 +24,11 @@ The file-vs-directory duality of `tickets/<project>` is safe because every looku
 
 - Orchestrators can fan out independent tickets to parallel sub-agents on one repo without marker collision.
 - New test cases (15/15 in `test_require_active_ticket_bash.sh`): worktree marker honored on matching branch, branch-B isolation (not satisfied by branch-A's marker), per-project file still works.
-- Docs updated: hooks header comment, `.claude/hooks/README.md` (diagram + description), `/start-ticket` SKILL (layout table + write logic).
+- Docs updated: hooks header comment, `.apexyard/hooks/README.md` (diagram + description), `/start-ticket` SKILL (layout table + write logic).
 - Orphaned per-worktree markers after a worktree is removed are acceptable (same stale-marker behaviour as today).
 
 ## Artifacts
 
 - Issue: me2resh/apexyard#513
-- Files: `.claude/hooks/require-active-ticket.sh`, `.claude/hooks/require-migration-ticket.sh`, `.claude/skills/start-ticket/SKILL.md`, `.claude/hooks/README.md`, `.claude/hooks/tests/test_require_active_ticket_bash.sh`
+- Files: `.apexyard/hooks/require-active-ticket.sh`, `.apexyard/hooks/require-migration-ticket.sh`, `.apexyard/skills/start-ticket/SKILL.md`, `.apexyard/hooks/README.md`, `.apexyard/hooks/tests/test_require_active_ticket_bash.sh`
 - Builds on #41 (two-tier per-project layout)

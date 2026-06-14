@@ -9,7 +9,7 @@ Commit messages explain **WHY**, not WHAT. The diff already shows what changed; 
 
 | Required element | Detail |
 |---|---|
-| Subject line | `type(#TICKET): description` per `.claude/rules/git-conventions.md` (e.g. `feat(#218): add audit-history shared lib`). Imperative mood ("add", not "added"). Under 70 chars. No trailing period. |
+| Subject line | `type(#TICKET): description` per `.apexyard/rules/git-conventions.md` (e.g. `feat(#218): add audit-history shared lib`). Imperative mood ("add", not "added"). Under 70 chars. No trailing period. |
 | Body | Present for any non-trivial change. Explains the WHY: what problem the change addresses, what alternatives were considered (briefly), what risks remain. Wrap at 72 cols. |
 | Ticket reference | `Closes #N` or `Refs #N` near the bottom of the body, single occurrence (the framework's hook blocks multi-Closes). |
 | Co-authorship | When pair-programming or AI-assisted, include `Co-Authored-By:` lines. |

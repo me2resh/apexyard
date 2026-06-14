@@ -158,7 +158,7 @@ Significant. Process diagrams are the artefact stakeholders use to review busine
 
 ## Artifacts
 
-- Skill: `.claude/skills/process/SKILL.md` + `discover.sh` + `cross-repo.sh` + `generate-bpmn.sh` + `lint.sh`
-- Tests: `.claude/skills/process/tests/smoke.sh` (single-repo discovery), `tests/test_cross_repo.sh` (two-repo handoff trace), `tests/test_bpmn_emit.sh` (XML validity + `<bpmndi>` presence + lint exit code)
+- Skill: `.apexyard/skills/process/SKILL.md` + `discover.sh` + `cross-repo.sh` + `generate-bpmn.sh` + `lint.sh`
+- Tests: `.apexyard/skills/process/tests/smoke.sh` (single-repo discovery), `tests/test_cross_repo.sh` (two-repo handoff trace), `tests/test_bpmn_emit.sh` (XML validity + `<bpmndi>` presence + lint exit code)
 - Ticket: [me2resh/apexyard#256](https://github.com/me2resh/apexyard/issues/256)
 - PR: (filled at merge time)

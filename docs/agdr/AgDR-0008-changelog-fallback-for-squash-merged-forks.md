@@ -59,6 +59,6 @@ Option D was rejected for this round because it requires a new file convention (
 ## Artifacts
 
 - Implementing ticket: `me2resh/apexyard#106`
-- Hook diff: `.claude/hooks/check-upstream-drift.sh` (added `changelog_has_version` helper + two fallback gates)
+- Hook diff: `.apexyard/hooks/check-upstream-drift.sh` (added `changelog_has_version` helper + two fallback gates)
 - Reference for CHANGELOG format: `CHANGELOG.md` on `me2resh/apexyard` `main` (v1.1.0 onward)
 - Prior decision this extends: AgDR-0005 (tag-based drift)

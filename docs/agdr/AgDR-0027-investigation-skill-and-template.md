@@ -127,8 +127,8 @@ When invoked from the ops fork root (no project context), the live-doc lands at 
 
 - `me2resh/apexyard#245` — feature ticket
 - `templates/investigation.md` — new template
-- `.claude/skills/investigation/SKILL.md` — new skill
-- `.claude/skills/investigation/tests/smoke.sh` — smoke test asserting template structure
-- `.claude/project-config.defaults.json` — `Investigation` added to `.ticket.prefix_whitelist` + `.ticket.required_sections`
+- `.apexyard/skills/investigation/SKILL.md` — new skill
+- `.apexyard/skills/investigation/tests/smoke.sh` — smoke test asserting template structure
+- `.apexyard/project-config.defaults.json` — `Investigation` added to `.ticket.prefix_whitelist` + `.ticket.required_sections`
 - `CLAUDE.md` — skill registry row + count bump
 - `templates/README.md` — investigation entry in the override table

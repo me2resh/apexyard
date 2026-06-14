@@ -89,7 +89,7 @@ Higher. Without a journey-preview skill, PMs and designers continue building iso
 
 ## Artifacts
 
-- Skill: `.claude/skills/journey/SKILL.md`
+- Skill: `.apexyard/skills/journey/SKILL.md`
 - Documentation: `workflows/sdlc.md` (linked between Phase 1 Planning and Phase 2 Technical Design)
 - Ticket: [me2resh/apexyard#179](https://github.com/me2resh/apexyard/issues/179)
 - PR: (filled at merge time)

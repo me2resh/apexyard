@@ -37,7 +37,7 @@ Each of these becomes a load-bearing decision that shapes adoption — get any o
 |--------|------|------|
 | **Gitignored by default, presence-only marker file opts in** (chosen) | Most adopters won't want O(N) JSON files in the repo polluting diffs. Zero-config silence is the right default. Single-file opt-in is unambiguous. | Adopters who DO want trend history archived must remember to `touch .launch-check-history-tracked` once per project. |
 | Committed by default | Trend visible to teammates without setup. | Bloat for adopters who don't care about historical trend. PR diffs noisy on every audit run. Common case loses. |
-| Config-block toggle in `.claude/project-config.json` | Centralised. | Adopters managing multiple projects need to know which projects opted in; a per-project marker is more locally readable. |
+| Config-block toggle in `.apexyard/project-config.json` | Centralised. | Adopters managing multiple projects need to know which projects opted in; a per-project marker is more locally readable. |
 
 ## Decision
 
@@ -58,6 +58,6 @@ Chosen: **ASCII chart in the per-run markdown report, open additive JSON schema,
 ## Artifacts
 
 - PR: feature/GH-183-launch-check-trend → me2resh/apexyard#183
-- Skill: `.claude/skills/launch-check/SKILL.md`
-- Renderer: `.claude/skills/launch-check/render-trend.sh`
-- Test: `.claude/hooks/tests/test_launch_check_trend.sh`
+- Skill: `.apexyard/skills/launch-check/SKILL.md`
+- Renderer: `.apexyard/skills/launch-check/render-trend.sh`
+- Test: `.apexyard/hooks/tests/test_launch_check_trend.sh`

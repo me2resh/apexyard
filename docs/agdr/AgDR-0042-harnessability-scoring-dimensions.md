@@ -76,7 +76,7 @@ Verbatim because the wording is the contract — the operator should see exactly
 
 ## Consequences
 
-- **Conservative thresholds are explicit and tunable.** v1 hard-codes the truth table in `.claude/skills/handover/SKILL.md` as a bash-shaped pseudocode block. A future AgDR can revisit the thresholds with adoption data ("we saw 80% of adopters land in `low` and ignored the warning — relax the thresholds"). The current table is the v1 baseline; this AgDR is the citation for any future change.
+- **Conservative thresholds are explicit and tunable.** v1 hard-codes the truth table in `.apexyard/skills/handover/SKILL.md` as a bash-shaped pseudocode block. A future AgDR can revisit the thresholds with adoption data ("we saw 80% of adopters land in `low` and ignored the warning — relax the thresholds"). The current table is the v1 baseline; this AgDR is the citation for any future change.
 - **Stack-blind for Go and Rust.** Both languages get `strong` on type safety implicitly because the language itself is strongly typed. This may over-credit Go projects that ship interface-heavy code without any static analysis (`golangci-lint` config still needed for lint baseline, but type safety auto-passes). Acceptable v1 trade-off — the alternative is a per-stack scoring matrix, which is more code and more litigation per stack. Re-evaluate if Go / Rust adopters surface real false positives.
 - **Single-dimension gaming is possible.** A project with one rule in `.eslintrc.json` passes lint baseline; a `coverageThreshold: { global: { lines: 1 } }` passes coverage signal. v1 accepts this — the score is a starting point for an honest conversation, not a regression test. An operator who's gaming the score is implicitly opting out of the warning, which is their call.
 - **Re-running `/handover` re-scores from the live tree.** The score is not persisted as a tracked metric over time — it lives only in the assessment file from the most recent handover run. Tracking the score quarter-over-quarter is out of scope (per the ticket). If a project wants that, it can grep the assessment file across `git log -p` history.
@@ -89,4 +89,4 @@ Verbatim because the wording is the contract — the operator should see exactly
 - GitHub issue: [me2resh/apexyard#298](https://github.com/me2resh/apexyard/issues/298)
 - Branch: `feature/GH-298-handover-harnessability-scoring`
 - Related: [AgDR-0037](AgDR-0037-rex-domain-handbooks.md) (Rex domain handbook discovery), [`handbooks/architecture/clean-architecture-layers.md`](../../handbooks/architecture/clean-architecture-layers.md) (the canonical blocking-handbook example whose false-positive surface this score quantifies).
-- Skill: [`.claude/skills/handover/SKILL.md`](../../.claude/skills/handover/SKILL.md) § "Harnessability assessment".
+- Skill: [`.apexyard/skills/handover/SKILL.md`](../../.apexyard/skills/handover/SKILL.md) § "Harnessability assessment".

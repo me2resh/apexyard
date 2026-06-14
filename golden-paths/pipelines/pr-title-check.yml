@@ -32,7 +32,7 @@ jobs:
             //   GitHub Issues:   #58, #123
             //
             // Note: pattern intentionally aligned with the local hooks
-            // (.claude/hooks/validate-branch-name.sh and validate-pr-create.sh)
+            // (.apexyard/hooks/validate-branch-name.sh and validate-pr-create.sh)
             // so anything that passes the hooks also passes this CI check.
             const trackerPattern = /[A-Z]{2,10}-\d+/;
             const githubPattern = /#\d+/;

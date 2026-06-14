@@ -1,0 +1,238 @@
+# ApexYard mechanical enforcement hooks for Kimi Code CLI.
+#
+# Copy this file to ~/.kimi-code/config.toml (or merge the [[hooks]] entries
+# into your existing config). Then copy apexyard-dispatch.sh to
+# ~/.kimi-code/hooks/apexyard-dispatch.sh and make it executable.
+#
+# The dispatcher walks up from $PWD to locate the requested hook under
+# .apexyard/hooks/ (canonical) or .kimi-code/hooks/ (generated copy), then
+# execs it with stdin preserved. If no hook is found, the dispatcher exits 0
+# (fail-open), matching the design of the ApexYard hooks themselves.
+#
+# After editing files under .apexyard/, run:
+#   bin/apexyard-sync-tool-dirs
+# to regenerate .kimi-code/ and .claude/.
+
+# -----------------------------------------------------------------------------
+# SessionStart — one-time checks and marker cleanup when a session starts/resumes
+# -----------------------------------------------------------------------------
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh pin-ops-root.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh onboarding-check.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh check-upstream-drift.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh check-jq-installed.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh check-portfolio-config.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh clear-bootstrap-marker.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh clear-issue-skill-marker.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh link-custom-skills.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh apply-agent-routing.sh"
+
+[[hooks]]
+event = "SessionStart"
+matcher = "startup|resume"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh remind-mcp-tools.sh"
+
+# -----------------------------------------------------------------------------
+# UserPromptSubmit — role/persona triggers from the user's message
+# -----------------------------------------------------------------------------
+
+[[hooks]]
+event = "UserPromptSubmit"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh detect-role-trigger.sh"
+
+# -----------------------------------------------------------------------------
+# PreToolUse — gate tool calls before they execute
+# -----------------------------------------------------------------------------
+
+# File-write tools: ticket-first, migration-ticket, and role gates.
+[[hooks]]
+event = "PreToolUse"
+matcher = "Edit|Write|MultiEdit"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-active-ticket.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Edit|Write|MultiEdit"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-migration-ticket.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Edit|Write|MultiEdit"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh detect-role-trigger.sh"
+
+# Read tools: suggest semantic search when reading the codebase.
+[[hooks]]
+event = "PreToolUse"
+matcher = "Read|Glob|Grep"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh suggest-mcp-search.sh"
+
+# Direct file writes: warn before writing review-marker files.
+[[hooks]]
+event = "PreToolUse"
+matcher = "Write"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh warn-review-marker-write.sh"
+
+# Bash: git, gh, and general command gates.
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-git-add-all.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-main-push.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh validate-branch-name.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh check-secrets.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-onboarding-in-git.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh verify-commit-refs.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh validate-commit-format.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-agdr-for-arch-changes.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh pre-push-gate.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-agent-routing-drift.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh warn-bootstrap-scope.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-skill-for-issue-create.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh suggest-ticket-template.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh validate-issue-structure.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-private-refs-in-public-repos.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh validate-pr-create.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-agdr-for-arch-pr.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-unreviewed-merge.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-design-review-for-ui.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh block-merge-on-red-ci.sh"
+
+[[hooks]]
+event = "PreToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh require-architecture-review.sh"
+
+# -----------------------------------------------------------------------------
+# PostToolUse — advisory reminders after a tool call succeeds
+# -----------------------------------------------------------------------------
+
+[[hooks]]
+event = "PostToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh auto-code-review.sh"
+
+[[hooks]]
+event = "PostToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh warn-stale-review-markers.sh"
+
+[[hooks]]
+event = "PostToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh suggest-mcp-reindex-after-clone.sh"
+
+[[hooks]]
+event = "PostToolUse"
+matcher = "Bash"
+command = "bash ~/.kimi-code/hooks/apexyard-dispatch.sh suggest-mcp-reindex-after-pull.sh"

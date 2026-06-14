@@ -5,7 +5,7 @@
 **Date**: 2026-05-11
 **Ticket**: [me2resh/apexyard#218](https://github.com/me2resh/apexyard/issues/218)
 **Related AgDR**: [AgDR-0019 — Audit-skill artefact persistence schema and lib](../agdr/AgDR-0019-audit-artefact-persistence.md)
-**Prior art**: [AgDR-0014 — `/launch-check` historical trend tracking](../agdr/AgDR-0014-launch-check-trend-tracking.md), `.claude/skills/launch-check/`
+**Prior art**: [AgDR-0014 — `/launch-check` historical trend tracking](../agdr/AgDR-0014-launch-check-trend-tracking.md), `.apexyard/skills/launch-check/`
 
 ---
 
@@ -17,7 +17,7 @@ Generalise `/launch-check`'s existing per-run artefact convention (per-run JSON 
 
 ### Goals
 
-- One shared shell library (`.claude/hooks/_lib-audit-history.sh`) handles persistence + trend rendering for all audit skills
+- One shared shell library (`.apexyard/hooks/_lib-audit-history.sh`) handles persistence + trend rendering for all audit skills
 - Consistent on-disk shape: `projects/<name>/audits/<dimension>/runs/<ts>.json` + `projects/<name>/audits/<dimension>/<ts>.md`
 - Common frontmatter contract: `date`, `sha`, `dimension`, `verdict`, `findings[]` — extensible per-dimension via the markdown body
 - Pilot retrofit of `/threat-model` and `/security-review`; follow-up ticket retrofits the remaining seven dimensions
@@ -164,12 +164,12 @@ The skill's stdout summary (the human-readable verdict + findings table the oper
 
 ## API Design
 
-### Shared library — `.claude/hooks/_lib-audit-history.sh`
+### Shared library — `.apexyard/hooks/_lib-audit-history.sh`
 
 Sourced by audit skills via:
 
 ```bash
-source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-audit-history.sh"
+source "$(git rev-parse --show-toplevel)/.apexyard/hooks/_lib-audit-history.sh"
 ```
 
 Exposes four shell functions. Each is a thin shell wrapper — no heavy logic, easily testable.
@@ -276,8 +276,8 @@ The opt-in commit marker is **per-dimension** — adopters might want trend hist
 
 | # | Task | Estimate | Dependencies |
 |---|---|---|---|
-| 1 | Write `.claude/hooks/_lib-audit-history.sh` (4 functions, ~150 LOC bash) | 3h | — |
-| 2 | Write `.claude/hooks/tests/test_audit_history.sh` (write/read/trend/marker) | 2h | 1 |
+| 1 | Write `.apexyard/hooks/_lib-audit-history.sh` (4 functions, ~150 LOC bash) | 3h | — |
+| 2 | Write `.apexyard/hooks/tests/test_audit_history.sh` (write/read/trend/marker) | 2h | 1 |
 | 3 | Write canonical templates: `templates/audits/threat-model.md`, `templates/audits/security-review.md` | 1h | — |
 | 4 | Retrofit `/threat-model` SKILL — Step 3 calls lib for persistence + appends trend | 1h | 1, 3 |
 | 5 | Retrofit `/security-review` SKILL — same shape | 1h | 1, 3 |

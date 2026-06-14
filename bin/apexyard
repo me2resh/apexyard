@@ -10,7 +10,7 @@
 #   apexyard status [-b|--briefing]   # 4-line "where am I" briefing
 #   apexyard --help
 #
-# The script delegates to .claude/skills/status/briefing.sh inside the
+# The script delegates to .apexyard/skills/status/briefing.sh inside the
 # nearest apexyard fork (it walks up from $PWD looking for a directory
 # that contains both onboarding.yaml AND apexyard.projects.yaml). This
 # means `apexyard status` works from anywhere inside the fork or any of
@@ -71,7 +71,7 @@ case "$cmd" in
       exit 1
     fi
 
-    helper="$ops_root/.claude/skills/status/briefing.sh"
+    helper="$ops_root/.apexyard/skills/status/briefing.sh"
     if [ ! -x "$helper" ] && [ ! -f "$helper" ]; then
       echo "apexyard: briefing helper not found at $helper" >&2
       echo "  Update your fork: git pull upstream dev (or run /update)." >&2

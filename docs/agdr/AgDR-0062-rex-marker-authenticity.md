@@ -6,8 +6,8 @@
 
 The merge gate in `block-unreviewed-merge.sh` requires two local files before permitting a `gh pr merge`:
 
-- `.claude/session/reviews/<repo>__<pr>-rex.approved` (bare SHA) — meant to be written by the `code-reviewer` agent (Rex) after posting a GitHub review
-- `.claude/session/reviews/<repo>__<pr>-ceo.approved` (structured key/value) — written by `/approve-merge` on explicit CEO authorisation
+- `.apexyard/session/reviews/<repo>__<pr>-rex.approved` (bare SHA) — meant to be written by the `code-reviewer` agent (Rex) after posting a GitHub review
+- `.apexyard/session/reviews/<repo>__<pr>-ceo.approved` (structured key/value) — written by `/approve-merge` on explicit CEO authorisation
 
 The CEO marker is already hardened: its structured format (`sha=`, `approved_by=user`, `skill_version=2`) makes fabrication a deliberate, visible rule violation. The Rex marker remained a bare SHA — easy to fabricate.
 
@@ -50,7 +50,7 @@ These are not defeated by a build agent writing a local marker file, because the
 
 Each of the seven build-class agent definitions (backend-engineer, frontend-engineer, platform-engineer, product-manager, data-engineer, ui-designer, ux-designer) now contains an explicit "You cannot self-review" section that:
 
-- Prohibits writing any file under `.claude/session/reviews/`
+- Prohibits writing any file under `.apexyard/session/reviews/`
 - Prohibits framing final reports as "Rex Code Review — Verdict: APPROVED/CHANGES REQUESTED"
 - Instructs the agent to report build results plainly and hand off to the orchestrator
 
@@ -58,9 +58,9 @@ This catches the well-intentioned case: an agent over-interpreting "verify your 
 
 **Layer 2 — Advisory pre-write hook (`warn-review-marker-write.sh`, exit 0 always):**
 
-Fires when any Write or Bash call targets `*-rex.approved` or `*-ceo.approved` under `.claude/session/reviews/`. Non-blocking; makes the violation visible in-session before the file lands on disk. Follows the same advisory-hook pattern as `check-upstream-drift.sh` and `detect-role-trigger.sh`.
+Fires when any Write or Bash call targets `*-rex.approved` or `*-ceo.approved` under `.apexyard/session/reviews/`. Non-blocking; makes the violation visible in-session before the file lands on disk. Follows the same advisory-hook pattern as `check-upstream-drift.sh` and `detect-role-trigger.sh`.
 
-The corresponding rule text in `.claude/rules/pr-workflow.md` § "Build agents cannot self-review" documents both layers and links here for the deferred-gate rationale.
+The corresponding rule text in `.apexyard/rules/pr-workflow.md` § "Build agents cannot self-review" documents both layers and links here for the deferred-gate rationale.
 
 ### Residual risk (honest)
 
@@ -68,7 +68,7 @@ The rex marker remains forgeable: a build agent that reads this AgDR could still
 
 - Every merge requires a human CEO nod via `/approve-merge` — the gate is not bypassed by a fabricated marker alone
 - The warn hook makes the violation visible at write time
-- If/when unattended merging becomes a goal, or a separate reviewer identity exists, the mechanical gate from option 2 above can be re-enabled behind a config flag (`require_independent_github_review: true` in `.claude/project-config.json`)
+- If/when unattended merging becomes a goal, or a separate reviewer identity exists, the mechanical gate from option 2 above can be re-enabled behind a config flag (`require_independent_github_review: true` in `.apexyard/project-config.json`)
 
 ## Consequences
 
@@ -83,15 +83,15 @@ The rex marker remains forgeable: a build agent that reads this AgDR could still
 - PR: me2resh/apexyard#504 — the re-scoped fix (layers 1+2 only; mechanical gate deferred)
 - Issue: me2resh/apexyard#494 — the bug report with observed platform-engineer self-review behaviour
 - Changed files:
-  - `.claude/agents/backend-engineer.md` — "You cannot self-review" guardrail section
-  - `.claude/agents/frontend-engineer.md` — guardrail section
-  - `.claude/agents/platform-engineer.md` — guardrail section
-  - `.claude/agents/product-manager.md` — guardrail section
-  - `.claude/agents/data-engineer.md` — guardrail section
-  - `.claude/agents/ui-designer.md` — guardrail section
-  - `.claude/agents/ux-designer.md` — guardrail section
-  - `.claude/rules/pr-workflow.md` — "Build agents cannot self-review" section (mechanical backstop description updated to reflect deferred gate)
-  - `.claude/hooks/warn-review-marker-write.sh` — new advisory hook (layer 2)
-  - `.claude/settings.json` — wiring for warn hook (Write + Bash matchers)
-  - `.claude/hooks/tests/test_block_unreviewed_merge.sh` — warn-hook tests (W1–W4) only; G1–G4 gate cases removed (not applicable with deferred mechanical gate)
-  - **Not changed**: `.claude/hooks/block-unreviewed-merge.sh` — restored to upstream/dev baseline
+  - `.apexyard/agents/backend-engineer.md` — "You cannot self-review" guardrail section
+  - `.apexyard/agents/frontend-engineer.md` — guardrail section
+  - `.apexyard/agents/platform-engineer.md` — guardrail section
+  - `.apexyard/agents/product-manager.md` — guardrail section
+  - `.apexyard/agents/data-engineer.md` — guardrail section
+  - `.apexyard/agents/ui-designer.md` — guardrail section
+  - `.apexyard/agents/ux-designer.md` — guardrail section
+  - `.apexyard/rules/pr-workflow.md` — "Build agents cannot self-review" section (mechanical backstop description updated to reflect deferred gate)
+  - `.apexyard/hooks/warn-review-marker-write.sh` — new advisory hook (layer 2)
+  - `.apexyard/settings.json` — wiring for warn hook (Write + Bash matchers)
+  - `.apexyard/hooks/tests/test_block_unreviewed_merge.sh` — warn-hook tests (W1–W4) only; G1–G4 gate cases removed (not applicable with deferred mechanical gate)
+  - **Not changed**: `.apexyard/hooks/block-unreviewed-merge.sh` — restored to upstream/dev baseline

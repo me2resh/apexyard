@@ -3,7 +3,7 @@ Allow: /
 
 # Explicit AI-crawler directives — intent-recorded.
 # All currently allowed; flip Allow → Disallow per-crawler to opt out.
-# Maintained against .claude/registries/ai-crawlers.json (12 entries).
+# Maintained against .apexyard/registries/ai-crawlers.json (12 entries).
 
 User-agent: GPTBot
 Allow: /

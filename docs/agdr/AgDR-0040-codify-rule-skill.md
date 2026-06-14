@@ -104,8 +104,8 @@ The gate could in theory be `--auto-write` opt-out. It deliberately isn't:
 
 ## Artifacts
 
-- `.claude/skills/codify-rule/SKILL.md` — the skill spec
-- `.claude/skills/codify-rule/tests/smoke.sh` — shape-contract smoke test
+- `.apexyard/skills/codify-rule/SKILL.md` — the skill spec
+- `.apexyard/skills/codify-rule/tests/smoke.sh` — shape-contract smoke test
 - `CLAUDE.md` — skill table updated to 51 entries
 - `docs/multi-project.md` — skill-behaviour table updated
 - Ticket me2resh/apexyard#296 — feature spec for Stage 2

@@ -45,7 +45,7 @@ Out of scope: auto-generating the missing artefacts, content-quality grading for
 
 ## Notes
 
-- AI-crawler reference list: `.claude/registries/ai-crawlers.json` — 12 entries spanning training-time and retrieval-at-inference crawlers.
+- AI-crawler reference list: `.apexyard/registries/ai-crawlers.json` — 12 entries spanning training-time and retrieval-at-inference crawlers.
 - Token-count heuristic: `char_count / 4`. Adopters who want precision should swap in `tiktoken` (OpenAI) or Anthropic's tokens API.
 - This audit is **advisory** — severity ceiling is `high`, not `critical`. Hostile robots.txt against AI crawlers reports as `info` (policy choice, not defect).
 - GEO vs AEO sub-scope distinction: GEO = "will an LLM cite this?", AEO = "will a coding agent prefer this docs over its training data?". Both consume the same artefacts (`llms.txt`, `AGENTS.md`, JSON-LD), so they share the audit.
@@ -53,5 +53,5 @@ Out of scope: auto-generating the missing artefacts, content-quality grading for
 ## See also
 
 - `docs/agdr/AgDR-0043-geo-audit-skill.md` — design rationale, including the `skill.md` vs Claude Code `SKILL.md` naming clash
-- `.claude/skills/seo-audit/SKILL.md` — the Google-shaped SEO sibling
-- `.claude/skills/launch-check/SKILL.md` — milestone-boundary audit that fans out to both
+- `.apexyard/skills/seo-audit/SKILL.md` — the Google-shaped SEO sibling
+- `.apexyard/skills/launch-check/SKILL.md` — milestone-boundary audit that fans out to both

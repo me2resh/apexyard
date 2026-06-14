@@ -1,0 +1,163 @@
+#!/bin/bash
+# apexyard-sync-tool-dirs — keep tool-specific directories in sync with
+# the canonical .apexyard/ source of truth.
+#
+# Usage:
+#   bin/apexyard-sync-tool-dirs [<tool>...]
+#
+# With no arguments, syncs all known tools (claude, kimi).
+# With tool names, syncs only those.
+#
+# Adapter architecture:
+#   bin/apexyard-sync-tool-dirs.d/<tool>.sh  → custom transformer
+#   builtin copy adapter                     → used when no custom adapter exists
+#
+# This lets future tools with different file layouts add a custom adapter
+# without touching the canonical .apexyard/ content.
+
+set -u
+
+REPO_ROOT=""
+_cur="$PWD"
+while [ -n "$_cur" ] && [ "$_cur" != "/" ]; do
+  if [ -f "$_cur/.apexyard-fork" ]; then
+    REPO_ROOT="$_cur"
+    break
+  fi
+  if [ -f "$_cur/onboarding.yaml" ] && [ -f "$_cur/apexyard.projects.yaml" ]; then
+    REPO_ROOT="$_cur"
+    break
+  fi
+  _cur=$(dirname "$_cur")
+done
+
+if [ -z "$REPO_ROOT" ]; then
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+fi
+
+if [ -z "$REPO_ROOT" ] || [ ! -d "$REPO_ROOT/.apexyard" ]; then
+  echo "ApexYard: could not find ops root with .apexyard/ directory" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ADAPTER_DIR="$SCRIPT_DIR/apexyard-sync-tool-dirs.d"
+
+# Tools we know about, in preferred sync order.
+KNOWN_TOOLS="claude kimi"
+
+# Files/dirs inside each tool directory that are hand-maintained and must
+# never be overwritten or removed by the sync.
+declare -A PROTECTED
+declare -A TOOL_KINDS
+
+PROTECTED[claude]="settings.json settings.local.json CLAUDE.md"
+PROTECTED[kimi]="config.toml KIMI.md"
+
+# Directory name on disk for each tool.
+declare -A TOOL_DIRS
+TOOL_DIRS[claude]=".claude"
+TOOL_DIRS[kimi]=".kimi-code"
+
+# Kinds of canonical content to copy into each tool directory.
+TOOL_KINDS[claude]="hooks skills agents rules migrations registries project-config.defaults.json project-config.json framework-version"
+TOOL_KINDS[kimi]="hooks skills agents rules migrations registries project-config.defaults.json project-config.json framework-version"
+
+# Builtin copy adapter: mirror <src> into <dst>, removing stale entries
+# but preserving PROTECTED entries declared for the tool.
+sync_kind_copy() {
+  local tool="$1"
+  local kind="$2"
+  local tool_dir="${TOOL_DIRS[$tool]}"
+  local src="$REPO_ROOT/.apexyard/$kind"
+  local dst="$REPO_ROOT/$tool_dir/$kind"
+
+  if [ ! -e "$src" ]; then
+    # Canonical kind does not exist; leave target alone unless it is now
+    # stale and not protected.
+    if [ -e "$dst" ]; then
+      rm -rf "$dst"
+    fi
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$dst")" || true
+
+  # Remove stale target entries before copying. We rebuild from canonical so
+  # deleted canonical files disappear from generated copies.
+  if [ -d "$dst" ]; then
+    local entry
+    for entry in "$dst"/* "$dst"/.*; do
+      [ -e "$entry" ] || [ -L "$entry" ] || continue
+      local base
+      base=$(basename "$entry")
+      case " $base " in
+        " . "|" .. ") continue ;;
+      esac
+      if [ -e "$src/$base" ] || [ -L "$src/$base" ]; then
+        continue
+      fi
+      rm -rf "$entry"
+    done
+  fi
+
+  # Copy canonical content. cp -R is portable and preserves permissions.
+  # We delete then copy the top-level kind dir to avoid stale nested files.
+  rm -rf "$dst"
+  cp -R "$src" "$dst"
+}
+
+# Run the adapter for a single tool/kind. Falls back to builtin copy adapter.
+run_adapter() {
+  local tool="$1"
+  local kind="$2"
+  local adapter="$ADAPTER_DIR/$tool.sh"
+
+  if [ -f "$adapter" ]; then
+    # shellcheck source=/dev/null
+    . "$adapter"
+    if type "sync_kind_${tool}" >/dev/null 2>&1; then
+      "sync_kind_${tool}" "$tool" "$kind"
+      return $?
+    fi
+  fi
+
+  sync_kind_copy "$tool" "$kind"
+}
+
+# Sync one tool directory.
+sync_tool() {
+  local tool="$1"
+  local kinds="${TOOL_KINDS[$tool]:-}"
+  [ -n "$kinds" ] || return 0
+
+  echo "ApexYard: syncing .apexyard/ → ${TOOL_DIRS[$tool]}/"
+
+  mkdir -p "$REPO_ROOT/${TOOL_DIRS[$tool]}"
+
+  local kind
+  for kind in $kinds; do
+    run_adapter "$tool" "$kind"
+  done
+}
+
+# Determine which tools to sync.
+TOOLS=""
+if [ $# -gt 0 ]; then
+  TOOLS="$*"
+else
+  TOOLS="$KNOWN_TOOLS"
+fi
+
+for tool in $TOOLS; do
+  case "$tool" in
+    claude|kimi) sync_tool "$tool" ;;
+    *)
+      echo "ApexYard: unknown tool '$tool' (known: $KNOWN_TOOLS)" >&2
+      exit 1
+      ;;
+  esac
+done
+
+echo "ApexYard: tool directories synced."
+exit 0

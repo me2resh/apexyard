@@ -242,12 +242,12 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (59
-   slash commands), `.claude/agents/` (24 sub-agents incl. Rex), and
-   `.claude/hooks/` (39 mechanical enforcement scripts).
-3. **Framework defaults layer** — `.claude/project-config.defaults.json`
+2. **Capability layer** — the runnable spec: `.apexyard/skills/` (59
+   slash commands), `.apexyard/agents/` (24 sub-agents incl. Rex), and
+   `.apexyard/hooks/` (39 mechanical enforcement scripts).
+3. **Framework defaults layer** — `.apexyard/project-config.defaults.json`
    ships the framework's opinions; adopters override per-repo in
-   `.claude/project-config.json` (shallow merge).
+   `.apexyard/project-config.json` (shallow merge).
 4. **Customisation overlay** — adopter-authored `custom-skills/`,
    `custom-handbooks/`, and `custom-templates/` (path-mirrored override
    of framework templates). For split-portfolio adopters, this layer
@@ -286,7 +286,7 @@ customisations. Private sibling holds `apexyard.projects.yaml`,
 `projects/<name>/`, `onboarding.yaml`, `workspace/<name>/`, plus the
 custom-skills and custom-handbooks dirs.
 
-The config block at `.claude/project-config.json → portfolio.*`
+The config block at `.apexyard/project-config.json → portfolio.*`
 resolves the paths transparently. Use this mode if you're on GitHub
 Free with any project you don't want named publicly.
 
@@ -296,7 +296,7 @@ Free with any project you don't want named publicly.
 
 59 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
-`.claude/skills/<name>/`.
+`.apexyard/skills/<name>/`.
 
 ## Keep quality high
 

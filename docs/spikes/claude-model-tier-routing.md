@@ -11,7 +11,7 @@
 ## TL;DR
 
 1. **The invocation primitive already exists.** Claude Code v2.x ships first-class per-skill and per-subagent `model:` frontmatter fields (sources: [Model configuration](https://code.claude.com/docs/en/model-config), [Skills](https://code.claude.com/docs/en/skills), [Subagents](https://code.claude.com/docs/en/sub-agents)). A skill can declare `model: haiku` and Claude Code routes that skill's turn to Haiku. A subagent invoked from any skill can be pinned to a different tier than the orchestrator. The 2026-04 ticket framed this as an open question — *"can a skill dispatch to a different tier for one tool call?"* — and the answer is **yes, and shipped, and adopters can use it today**.
-2. **The taxonomy is the load-bearing output.** I walked the 42 skills under `.claude/skills/` and the 5 sub-agents under `.claude/agents/` and assigned each a target tier from the hierarchy below. The walk surfaced 8 skills clearly justifying Opus, 19 clearly justifying Sonnet, 9 clearly justifying Haiku, and 6 that should stay on `inherit` because they're orchestration shells with a few mixed sub-decisions inside.
+2. **The taxonomy is the load-bearing output.** I walked the 42 skills under `.apexyard/skills/` and the 5 sub-agents under `.apexyard/agents/` and assigned each a target tier from the hierarchy below. The walk surfaced 8 skills clearly justifying Opus, 19 clearly justifying Sonnet, 9 clearly justifying Haiku, and 6 that should stay on `inherit` because they're orchestration shells with a few mixed sub-decisions inside.
 3. **Token-cost savings are modest, but are not the headline.** At April-2026 pricing (Haiku $1/$5 per 1M, Sonnet $3/$15, Opus $5/$25 per 1M input/output), routing a heavy-adopter's mechanical workload (status briefings, glossary stubs, slug derivation, ticket-creation prose) from Opus to Haiku saves on the order of **~$0.50-3 per adopter per week** — real but not dramatic. The headline is **latency** (Haiku is 2-4× faster) and **principle** (use the cheaper tool when good enough is good enough — the same pattern that gave us pure-tool hooks).
 4. **There is one blocker class for measurement.** I do not have an `ANTHROPIC_API_KEY` available in this spike's runtime, and the spike scope did not justify provisioning one. All five Phase-2 measurements are honest **estimates** built from public token counts of representative apexyard prompts and the published $/1M pricing. The relative ranking — Haiku ≪ Sonnet ≪ Opus on cost; Haiku < Sonnet ≪ Opus on quality for synthesis-shaped tasks; Haiku ≈ Sonnet ≈ Opus on quality for short classifier-shaped tasks — is well-evidenced in independent benchmarks and does not depend on the missing live numbers. The **absolute** numbers should be treated as ±30%.
 5. **Convergence with #195 produces a clean per-task tier hierarchy** (full table in [Phase 5](#phase-5--convergence-with-195-pure-tool--haiku--sonnet--opus--local)):
@@ -39,7 +39,7 @@ The ticket's tier-by-use-case table is the right shape; the apexyard-specific qu
 | **Opus** | Heavy synthesis, novel reasoning, judgment with consequences, long context. Architecture review, threat modelling, deciding between three+ libraries, root-cause debugging chains, substantive code review, AgDR drafting where the trade-offs are non-obvious. | Opus 4.7 is needed when the wrong call has lasting consequences (architecture commitment, security posture, design pattern lock-in). Worth the 5× premium because the task lives in `docs/agdr/` for years. | <5 s p50 |
 | **Local** (opt-in, sibling spike #195) | Same shape as Haiku tasks, alternate path. Privacy-sensitive sub-tasks where prompt content (PR titles, ticket text) shouldn't leave the machine. | Quality floor lower than Haiku at 7B Q4; redeemable via a regex-extracts-facts / LLM-narrates hybrid (#195's recommendation). Per-machine opt-in. Not a default for any task. | 2-5 s (warm) |
 
-### Walkthrough — every skill in `.claude/skills/`
+### Walkthrough — every skill in `.apexyard/skills/`
 
 Categorisation rule: **what's the model actually doing in this skill's body?** If the skill is mostly `gh ... | jq ...` and a short paragraph of synthesis, it's Haiku-shaped. If it's a multi-section structured artefact (PRD, handover assessment, ticket body), it's Sonnet-shaped. If it requires comparing options and recording rationale that lives for years, it's Opus-shaped.
 
@@ -88,9 +88,9 @@ Categorisation rule: **what's the model actually doing in this skill's body?** I
 | `/validate-idea` | **Sonnet** | 5-question pre-spec triage. Structured prose. |
 | `/write-spec` | **Sonnet** *(typical)* + **Opus** *(novel domain)* | PRD drafting is Sonnet-shaped for routine features; first PRD on a new product surface justifies Opus. |
 
-### Walkthrough — sub-agents in `.claude/agents/`
+### Walkthrough — sub-agents in `.apexyard/agents/`
 
-Sub-agents are the cleanest place to apply per-task routing because each is a single role with a single shape. Today every apexyard agent declares `model: inherit` (verified in `.claude/agents/*.md`). The walkthrough below assigns each a target tier:
+Sub-agents are the cleanest place to apply per-task routing because each is a single role with a single shape. Today every apexyard agent declares `model: inherit` (verified in `.apexyard/agents/*.md`). The walkthrough below assigns each a target tier:
 
 | Agent | Today | Recommended | Reasoning |
 |-------|-------|-------------|-----------|
@@ -126,7 +126,7 @@ Five representative sub-tasks, three model tiers each. **All numbers in this sec
 
 **Shape**: take a 10-line bulleted fact-block (branch, dirty files, recent commits, open PRs with CI status, in-progress issue), produce a 5-line "where am I" prose paragraph.
 
-**Representative prompt** (constructed from `.claude/skills/status/SKILL.md`):
+**Representative prompt** (constructed from `.apexyard/skills/status/SKILL.md`):
 
 ```
 Render a concise status briefing from these facts:
@@ -197,7 +197,7 @@ The companion spike's heuristic measured 5/10 on subject-only data. With the dif
 | **$ / 1k calls** | **$0.0011** | **$0.0032** | **$0.0054** |
 | Quality | Sonnet > Haiku here. Sonnet picks better domain phrasing and avoids tautology ("the X is the X that..."). Opus's gain over Sonnet is marginal. | Best balance for this shape. | Marginal gain. |
 
-**Verdict**: **Sonnet.** This is the first sub-task where Haiku's quality drop is felt — domain phrasing on a glossary stub matters because the glossary is a learning artefact (per `.claude/rules/pr-quality.md`).
+**Verdict**: **Sonnet.** This is the first sub-task where Haiku's quality drop is felt — domain phrasing on a glossary stub matters because the glossary is a learning artefact (per `.apexyard/rules/pr-quality.md`).
 
 ### Sub-task 5 — Threat model STRIDE pass on a small service (single bounded context)
 
@@ -258,7 +258,7 @@ The 2026-04 ticket flagged this as the major risk:
 The recommendation shape becomes mechanical, not infrastructural:
 
 ```yaml
-# Example: .claude/skills/status/SKILL.md (after recommendation lands)
+# Example: .apexyard/skills/status/SKILL.md (after recommendation lands)
 ---
 name: status
 description: Snapshot of the current project — git state, open PRs with CI, recent merges, in-progress issue. Multi-project aware. Use to orient yourself in a fresh session.
@@ -268,7 +268,7 @@ model: haiku       # ← new, declared from Phase 1's taxonomy
 ```
 
 ```yaml
-# Example: .claude/agents/code-reviewer.md (after recommendation lands)
+# Example: .apexyard/agents/code-reviewer.md (after recommendation lands)
 ---
 name: code-reviewer
 description: Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review.
@@ -285,7 +285,7 @@ For mixed-tier skills, the cleanest shape is **one skill per tier** invoking a s
 A small router skill dispatches to one of two pinned-model agents based on PR diff size:
 
 ```yaml
-# .claude/agents/code-reviewer-deep.md
+# .apexyard/agents/code-reviewer-deep.md
 ---
 name: code-reviewer-deep
 description: Deep code review for substantial PRs (>200 lines diff)
@@ -296,7 +296,7 @@ model: opus
 ```
 
 ```yaml
-# .claude/agents/code-reviewer-light.md
+# .apexyard/agents/code-reviewer-light.md
 ---
 name: code-reviewer-light
 description: Quick code review for small PRs (<=200 lines diff)
@@ -307,7 +307,7 @@ model: sonnet
 ```
 
 ```markdown
-# .claude/skills/code-review/SKILL.md (router section)
+# .apexyard/skills/code-review/SKILL.md (router section)
 After computing diff size via `gh pr diff <N> --name-only | wc -l`,
 spawn `code-reviewer-deep` for >200 lines and `code-reviewer-light`
 otherwise. The agent's model: frontmatter handles tier routing.
@@ -489,7 +489,7 @@ None that block GO. Three caveats worth carrying into the AgDR:
 - [Claude Code Subagents: Complete Guide — Medium](https://medium.com/@sathishkraju/claude-code-subagents-the-complete-guide-to-ai-agent-delegation-d0a9aba419d0) — subagent model field, "Control costs by routing tasks to faster, cheaper models like Haiku" pattern
 - Sibling spike: [me2resh/apexyard#195 → PR #196](https://github.com/me2resh/apexyard/pull/196) — local-model routing recommendation that this spike converges with in Phase 5 (file lands at `docs/spikes/local-model-routing.md` once #196 merges)
 - Predecessor spike: [me2resh/apexyard#178 → PR #184](./lsp-token-savings.md) — same shape: measure first, recommend second, implement in follow-ups
-- Apexyard skill files surveyed: `.claude/skills/*/SKILL.md` (42 skills) and `.claude/agents/*.md` (5 sub-agents) — Phase 1 taxonomy is built from a walkthrough of every entry
+- Apexyard skill files surveyed: `.apexyard/skills/*/SKILL.md` (42 skills) and `.apexyard/agents/*.md` (5 sub-agents) — Phase 1 taxonomy is built from a walkthrough of every entry
 
 ---
 

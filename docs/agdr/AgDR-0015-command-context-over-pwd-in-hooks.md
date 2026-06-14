@@ -97,7 +97,7 @@ substitution) move from blocked to allowed.
 
 - Issue: [me2resh/apexyard#194](https://github.com/me2resh/apexyard/issues/194)
 - Related: [me2resh/apexyard#47](https://github.com/me2resh/apexyard/issues/47) (`gh api .../merge` bypass — same root cause class)
-- Helper: `.claude/hooks/_lib-extract-push-ref.sh`
-- Patched hooks: `.claude/hooks/validate-branch-name.sh`, `.claude/hooks/validate-pr-create.sh`, `.claude/hooks/validate-commit-format.sh`
-- Tests: `.claude/hooks/tests/test_validate_branch_name_pushref.sh`, `.claude/hooks/tests/test_validate_pr_create_head.sh`, `.claude/hooks/tests/test_validate_commit_format_heredoc.sh`
-- Doc: `.claude/hooks/README.md` § "PWD-vs-command-context distinction"
+- Helper: `.apexyard/hooks/_lib-extract-push-ref.sh`
+- Patched hooks: `.apexyard/hooks/validate-branch-name.sh`, `.apexyard/hooks/validate-pr-create.sh`, `.apexyard/hooks/validate-commit-format.sh`
+- Tests: `.apexyard/hooks/tests/test_validate_branch_name_pushref.sh`, `.apexyard/hooks/tests/test_validate_pr_create_head.sh`, `.apexyard/hooks/tests/test_validate_commit_format_heredoc.sh`
+- Doc: `.apexyard/hooks/README.md` § "PWD-vs-command-context distinction"

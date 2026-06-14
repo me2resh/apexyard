@@ -13,7 +13,7 @@ Split-portfolio mode (introduced in AgDR-0010 / framework #145) moved the regist
 | Option | Pros | Cons |
 |---|---|---|
 | **Marker file `.apexyard-fork` (chosen)** | One-line presence check, language-agnostic, no parsing. Trivial to write at `/setup` or `/update` migration time. Idempotent (`touch`). | Adopters who manually `rm` it after a v2 migration silently break the walk. Mitigated by a clear filename + README mention. |
-| Sentinel config key in `.claude/project-config.json` (e.g. `apexyard.fork_anchor: true`) | Co-located with other config. Parseable. | Requires reading/parsing JSON on every walk-up step (~7 hooks call this). A presence-check is ~10× cheaper. Operators who hand-edit the config can accidentally remove the key with no visible feedback. |
+| Sentinel config key in `.apexyard/project-config.json` (e.g. `apexyard.fork_anchor: true`) | Co-located with other config. Parseable. | Requires reading/parsing JSON on every walk-up step (~7 hooks call this). A presence-check is ~10× cheaper. Operators who hand-edit the config can accidentally remove the key with no visible feedback. |
 | `.git` + heuristic (e.g. `.git` + `.claude/` + `roles/` present) | No new file. | Heuristic. Brittle. Any repo with a similar structure passes the check (e.g. a fork-of-fork that's renaming things). False positives are confusing. |
 | New top-level dotfile like `.apexyard` (single file, JSON inside) | Carries metadata (framework version, fork ID). | Overkill for v2's needs. Migration burden — adopters now have to maintain JSON. Reach for it later if metadata grows. |
 
@@ -108,7 +108,7 @@ onboarding.yaml                 ←─ snapshot  workspace/
 workspace/                                     <project-2>/
   README.md (kept)                             ...
 .gitignore                      ← extended  apexyard.projects.yaml
-.claude/project-config.json     ← v2 keys   projects/
+.apexyard/project-config.json     ← v2 keys   projects/
                                               ...
 ```
 
@@ -118,9 +118,9 @@ The public fork has a snapshot of `onboarding.yaml` plus everything it needs to 
 
 | File | Change |
 |---|---|
-| `.claude/skills/split-portfolio/SKILL.md` Steps 9a–9d | New sub-steps that produce the v2 layout in a single skill invocation. Without this, `/split-portfolio` landed adopters on v1 and they had to run `/update` to finish the migration. |
-| `.claude/skills/update/SKILL.md` Step 8a | `onboarding.yaml` switches from `mv` to `cp -p` + `git rm --cached`. `workspace/` stays as `mv`. The per-file-class confirmation prose updates accordingly. |
-| `.claude/hooks/tests/test_split_portfolio_v2_migration.sh` | Case 1 assertions extended (both copies of `onboarding.yaml` exist, contents are identical, public-fork copy is untracked, `.gitignore` carries the entry). New Case 4 explicitly pins the copy-not-move semantics. Case 2 (idempotence) extended to cover the new copy path. `workspace/` assertions unchanged. |
+| `.apexyard/skills/split-portfolio/SKILL.md` Steps 9a–9d | New sub-steps that produce the v2 layout in a single skill invocation. Without this, `/split-portfolio` landed adopters on v1 and they had to run `/update` to finish the migration. |
+| `.apexyard/skills/update/SKILL.md` Step 8a | `onboarding.yaml` switches from `mv` to `cp -p` + `git rm --cached`. `workspace/` stays as `mv`. The per-file-class confirmation prose updates accordingly. |
+| `.apexyard/hooks/tests/test_split_portfolio_v2_migration.sh` | Case 1 assertions extended (both copies of `onboarding.yaml` exist, contents are identical, public-fork copy is untracked, `.gitignore` carries the entry). New Case 4 explicitly pins the copy-not-move semantics. Case 2 (idempotence) extended to cover the new copy path. `workspace/` assertions unchanged. |
 
 ### What we are explicitly NOT doing
 
@@ -142,10 +142,10 @@ The public fork has a snapshot of `onboarding.yaml` plus everything it needs to 
 
 - Ticket: [me2resh/apexyard#242](https://github.com/me2resh/apexyard/issues/242)
 - Implementation PR: feature/GH-242-split-portfolio-v2 → PR #248
-- Lib changes: `.claude/hooks/_lib-ops-root.sh`, `.claude/hooks/_lib-portfolio-paths.sh`
+- Lib changes: `.apexyard/hooks/_lib-ops-root.sh`, `.apexyard/hooks/_lib-portfolio-paths.sh`
 - Consumer updates: 7 hooks + `bin/apexyard` + `briefing.sh` + `/handover`
-- Migration: `.claude/skills/update/SKILL.md` step 8a
-- New-adopter path: `.claude/skills/setup/SKILL.md` step 2b
-- Tests: `.claude/hooks/tests/test_ops_root.sh` (new case 8: v2-marker precedence), `.claude/hooks/tests/test_split_portfolio_v2_migration.sh` (13 cases incl. idempotence)
+- Migration: `.apexyard/skills/update/SKILL.md` step 8a
+- New-adopter path: `.apexyard/skills/setup/SKILL.md` step 2b
+- Tests: `.apexyard/hooks/tests/test_ops_root.sh` (new case 8: v2-marker precedence), `.apexyard/hooks/tests/test_split_portfolio_v2_migration.sh` (13 cases incl. idempotence)
 - Docs: `docs/multi-project.md` § "Migrating from split-portfolio v1 to v2"
 - Prior art: [AgDR-0010 — Portfolio config + self-healing](AgDR-0010-portfolio-config-and-self-healing.md) (split-portfolio v1), [AgDR-0011 — Bootstrap-skill exemption](AgDR-0011-bootstrap-skill-exemption.md) (related session-state pattern), [#229 + #230 fix](https://github.com/me2resh/apexyard/issues/229) (ops-root walk-up consolidation that introduced `_lib-ops-root.sh`)

@@ -1,6 +1,6 @@
 # apexyard/safety-hooks
 
-**Production-grade safety hooks for Claude Code.** Drop this `.claude/` into any project and get seven shell hooks that mechanically prevent the most common git foot-guns: leaked secrets, direct pushes to main, `git add -A` over the whole tree, pushes without local lint/test, commits referencing non-existent issues, malformed PR titles, malformed branch names.
+**Production-grade safety hooks for Claude Code.** Drop this `.apexyard/` into any project, merge the `.apexyard/settings.snippet.json` entries into your `.claude/settings.json`, and get seven shell hooks that mechanically prevent the most common git foot-guns: leaked secrets, direct pushes to main, `git add -A` over the whole tree, pushes without local lint/test, commits referencing non-existent issues, malformed PR titles, malformed branch names.
 
 > One tooth of the [ApexYard](https://github.com/me2resh/apexyard) governance comb — extracted as a standalone marketplace plugin for individual engineers who want the safety net without forking the full framework. Read on for what's included, the 30-second quickstart, and the graduation path to the full ApexYard fork.
 
@@ -22,14 +22,14 @@
 
 **Supporting libs (extracted from upstream):**
 
-- `_lib-tracker.sh` — **tracker-agnostic** existence check. Default `gh` (GitHub Issues); configure `linear` / `jira` / `asana` / `custom` via `.claude/project-config.json`. Pluggable per AgDR-0033.
+- `_lib-tracker.sh` — **tracker-agnostic** existence check. Default `gh` (GitHub Issues); configure `linear` / `jira` / `asana` / `custom` via `.apexyard/project-config.json`. Pluggable per AgDR-0033.
 - `_lib-read-config.sh` — config reader (post-#310 ops-root fix; falls back gracefully outside an apexyard fork)
 - `_lib-ops-root.sh` — ops-fork anchor resolver (walks up looking for `.apexyard-fork` v2 marker or legacy v1 anchor pair; falls back to `git rev-parse --show-toplevel` outside a fork)
 - `_lib-extract-pr.sh` — extracts PR number from `gh pr ...` / `gh api .../pulls/<N>/...` command shapes
 
 **Recommended wiring:**
 
-See `.claude/settings.snippet.json` — copy the relevant `PreToolUse` entries into your project's `.claude/settings.json`.
+See `.apexyard/settings.snippet.json` — copy the relevant `PreToolUse` entries into your project's `.claude/settings.json`.
 
 ## 30-second quickstart
 
@@ -39,7 +39,7 @@ See `.claude/settings.snippet.json` — copy the relevant `PreToolUse` entries i
    /plugin install apexyard/safety-hooks
    ```
 
-2. Merge the `PreToolUse` entries from `.claude/settings.snippet.json` into your `.claude/settings.json` (your file already exists; you're appending to its `hooks.PreToolUse` array).
+2. Merge the `PreToolUse` entries from `.apexyard/settings.snippet.json` into your `.claude/settings.json` (your file already exists; you're appending to its `hooks.PreToolUse` array).
 
 3. Start your next Claude Code session. From this point:
 
@@ -47,7 +47,7 @@ See `.claude/settings.snippet.json` — copy the relevant `PreToolUse` entries i
    - A `git push origin main` blocks at the shell level.
    - A PR title `feat: add CSV export` (missing ticket ID) blocks `gh pr create`.
 
-Optional: configure your tracker by adding a `tracker` block to `.claude/project-config.json` if you're on Linear / Jira / Asana — see the [tracker config](#tracker-configuration) section below.
+Optional: configure your tracker by adding a `tracker` block to `.apexyard/project-config.json` if you're on Linear / Jira / Asana — see the [tracker config](#tracker-configuration) section below.
 
 That's it. No portfolio setup, no fork, no registry.
 
@@ -55,7 +55,7 @@ That's it. No portfolio setup, no fork, no registry.
 
 Honest list of what stays in the full framework:
 
-- **The two-marker merge gate** (`block-unreviewed-merge.sh`) — requires the Rex code-reviewer agent + the per-PR CEO approval pattern. Both depend on framework session-state at `.claude/session/reviews/` that doesn't make sense as a standalone hook.
+- **The two-marker merge gate** (`block-unreviewed-merge.sh`) — requires the Rex code-reviewer agent + the per-PR CEO approval pattern. Both depend on framework session-state at `.apexyard/session/reviews/` that doesn't make sense as a standalone hook.
 - **The migration gate** (`require-migration-ticket.sh`) — requires a labelled tracker issue + AgDR pattern that depends on the framework's `/migration` skill and AgDR memory.
 - **The active-ticket gate** (`require-active-ticket.sh`) — requires the framework's `/start-ticket` flow and the per-session current-ticket marker.
 - **Leak protection** (`block-private-refs-in-public-repos.sh`) — requires the portfolio registry (`apexyard.projects.yaml`) to know what counts as "private project name".
@@ -65,7 +65,7 @@ If any of that list resonates, the next step is [the full framework](#graduation
 
 ## Tracker configuration
 
-By default, hooks call `gh issue view <N>` against your repo's `origin`. To use a different tracker, drop a `tracker` block into `.claude/project-config.json`:
+By default, hooks call `gh issue view <N>` against your repo's `origin`. To use a different tracker, drop a `tracker` block into `.apexyard/project-config.json`:
 
 ```json
 {

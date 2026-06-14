@@ -6,7 +6,7 @@
 >
 > Audience: tech leads, head of engineering, the CTO. Reviewed every quarter (default cadence — see § Review cadence below). One vision per system / domain.
 >
-> **Recommended authoring path:** run `/tech-vision <project-name>` — interactive section-by-section interviewer that forces the load-bearing sections (Current-vs-Target, Anti-scope, Migration path) to actually get filled in instead of left as stubs. Markdown-only output written to `projects/<project-name>/architecture/vision.md`. Re-run quarterly with `r` (refresh) to preserve content across reviews. See [`.claude/skills/tech-vision/SKILL.md`](../../.claude/skills/tech-vision/SKILL.md).
+> **Recommended authoring path:** run `/tech-vision <project-name>` — interactive section-by-section interviewer that forces the load-bearing sections (Current-vs-Target, Anti-scope, Migration path) to actually get filled in instead of left as stubs. Markdown-only output written to `projects/<project-name>/architecture/vision.md`. Re-run quarterly with `r` (refresh) to preserve content across reviews. See [`.apexyard/skills/tech-vision/SKILL.md`](../../.apexyard/skills/tech-vision/SKILL.md).
 
 ## Scope
 

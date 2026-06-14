@@ -27,7 +27,7 @@ ticket: me2resh/apexyard#244
 |--------|------|------|
 | **Path-mirroring (chosen)** — drop file at `custom-templates/<path>` matching `templates/<path>` | Zero config; convention-over-configuration; same shape as `handbooks/<dim>/` discovery (#232); no registry to maintain | Adopters who place files at wrong path get silent framework-default fallback (no error) |
 | **Frontmatter pointer** — frontmatter in framework templates names override candidates | Explicit; framework can document its own override surface | Requires template-author cooperation; adopters can't add new override paths without framework changes |
-| **Config-block table** — `.claude/project-config.json` lists override pairs | Explicit override list; auditable; no "where does this go?" question | Operator maintenance burden; adding a new override = config edit + file write (two steps instead of one) |
+| **Config-block table** — `.apexyard/project-config.json` lists override pairs | Explicit override list; auditable; no "where does this go?" question | Operator maintenance burden; adding a new override = config edit + file write (two steps instead of one) |
 
 Path-mirroring won on operator UX (zero config) and consistency with the existing `handbooks/` discovery convention.
 
@@ -74,6 +74,6 @@ Updated consuming skills: `/decide`, `/write-spec`, `/c4`, `/migration`, `/spike
 ## Artifacts
 
 - PR for me2resh/apexyard#244
-- Helper addition: `.claude/hooks/_lib-portfolio-paths.sh` → `portfolio_resolve_template`
-- Tests: `.claude/hooks/tests/test_portfolio_paths.sh` (cases 17-20)
+- Helper addition: `.apexyard/hooks/_lib-portfolio-paths.sh` → `portfolio_resolve_template`
+- Tests: `.apexyard/hooks/tests/test_portfolio_paths.sh` (cases 17-20)
 - Docs: `templates/README.md`, `templates/custom-templates.README.example.md`, `docs/multi-project.md` § "Custom templates"

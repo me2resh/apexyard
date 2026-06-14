@@ -57,8 +57,8 @@ To unblock:
 ### The contract per section
 
 - **BLOCKED line**: one sentence, present tense, names the violation. No emoji, no exclamation. Plain `BLOCKED:` prefix so log-grep stays trivial.
-- **Context**: enough to identify which rule fired and (where applicable) where the rule lives in `.claude/rules/`. The agent uses this to decide whether the rule is genuinely the issue or whether something else is in play.
-- **To unblock**: numbered list of **concrete actions**. Each entry names a skill (`/start-ticket`), a command (`git rebase main`), a file edit (`add path/to/file to .gitignore`), or a marker (`write .claude/session/reviews/<pr>-ceo.approved`). **Not** "fix the issue" or "address the violation" — those force the agent to guess.
+- **Context**: enough to identify which rule fired and (where applicable) where the rule lives in `.apexyard/rules/`. The agent uses this to decide whether the rule is genuinely the issue or whether something else is in play.
+- **To unblock**: numbered list of **concrete actions**. Each entry names a skill (`/start-ticket`), a command (`git rebase main`), a file edit (`add path/to/file to .gitignore`), or a marker (`write .apexyard/session/reviews/<pr>-ceo.approved`). **Not** "fix the issue" or "address the violation" — those force the agent to guess.
 - **Escape hatch**: when there's a legitimate-but-rare bypass (false-positive on `check-secrets.sh`, override of `protected_branches` in project-config), document the bypass at the end. Keep it short — the goal is to make the bypass visible, not to encourage it.
 
 ### Canonical phrasing

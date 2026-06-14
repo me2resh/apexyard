@@ -1,6 +1,6 @@
 # AgDR-0050 — Agent runtime overhaul
 
-> In the context of ApexYard's 19-role persona taxonomy (in `roles/<dept>/`) running today as **in-thread role-adoption** — no model isolation, no tool restriction, no separated context — plus 5 utility agents (Rex, Hatim, Munir, Tariq, Idris) running as ad-hoc sub-agents with no centralised routing surface, facing the operator-stated need to (a) assign models per role (Opus / Sonnet / Haiku / local Ollama) for cost + quality optimisation, (b) restrict tools per role (Backend Engineer needs Edit/Write; QA Engineer doesn't), (c) isolate context (a role's specialised prompt shouldn't pollute the main thread until invoked), and (d) edit the agent → model mapping in ONE central file kept in the private portfolio repo — I decided to promote all 19 roles to first-class Claude Code sub-agents (24 total with utility agents folded in), ship them with framework default models from a 24-entry decision matrix, and layer an adopter-facing `agent-routing.yaml` customisation file that propagates per-agent model + endpoint overrides into `.claude/agents/*.md` frontmatter at SessionStart, to achieve per-agent cost / quality / privacy optimisation at adopter scale while keeping the public fork shipped with framework defaults that work out-of-box, accepting the maintenance cost of 24 agent files + a new YAML config surface + a SessionStart sync hook + drift-prevention guards + an external local-routing feasibility spike (#348) whose verdict gates which agents qualify for local-routing entries in the customisation surface.
+> In the context of ApexYard's 19-role persona taxonomy (in `roles/<dept>/`) running today as **in-thread role-adoption** — no model isolation, no tool restriction, no separated context — plus 5 utility agents (Rex, Hatim, Munir, Tariq, Idris) running as ad-hoc sub-agents with no centralised routing surface, facing the operator-stated need to (a) assign models per role (Opus / Sonnet / Haiku / local Ollama) for cost + quality optimisation, (b) restrict tools per role (Backend Engineer needs Edit/Write; QA Engineer doesn't), (c) isolate context (a role's specialised prompt shouldn't pollute the main thread until invoked), and (d) edit the agent → model mapping in ONE central file kept in the private portfolio repo — I decided to promote all 19 roles to first-class Claude Code sub-agents (24 total with utility agents folded in), ship them with framework default models from a 24-entry decision matrix, and layer an adopter-facing `agent-routing.yaml` customisation file that propagates per-agent model + endpoint overrides into `.apexyard/agents/*.md` frontmatter at SessionStart, to achieve per-agent cost / quality / privacy optimisation at adopter scale while keeping the public fork shipped with framework defaults that work out-of-box, accepting the maintenance cost of 24 agent files + a new YAML config surface + a SessionStart sync hook + drift-prevention guards + an external local-routing feasibility spike (#348) whose verdict gates which agents qualify for local-routing entries in the customisation surface.
 >
 > **Status**: ACCEPTED — cross-cutting design. Each axis below is a load-bearing decision. Implementation lives in tickets #347 (promotion + matrix), #351 (routing config + sync hook), #348 (local-routing spike). This AgDR is referenced by the first PR of each.
 
@@ -8,7 +8,7 @@
 
 ## Context
 
-ApexYard's runtime model for personas has been **in-thread role-adoption** since v1: 19 markdown files in `roles/{engineering,product,design,security,data}/` define identities, responsibilities, CAN/CANNOT lists, and handoff artefacts. When a trigger fires (per [`role-triggers.md`](../../.claude/rules/role-triggers.md)) — auto-detection on PR-diff paths, tracker labels, or operator prompts like "act as the QA Engineer" — the main thread reads the role file and adopts the persona FOR THE DURATION of the work.
+ApexYard's runtime model for personas has been **in-thread role-adoption** since v1: 19 markdown files in `roles/{engineering,product,design,security,data}/` define identities, responsibilities, CAN/CANNOT lists, and handoff artefacts. When a trigger fires (per [`role-triggers.md`](../../.apexyard/rules/role-triggers.md)) — auto-detection on PR-diff paths, tracker labels, or operator prompts like "act as the QA Engineer" — the main thread reads the role file and adopts the persona FOR THE DURATION of the work.
 
 This shape has three structural limits:
 
@@ -32,9 +32,9 @@ The six load-bearing decisions are presented as one option-matrix each. Cross-ax
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **A. Wrap** — `roles/<dept>/<role>.md` keeps the persona definition; `.claude/agents/<role>.md` is a thin wrapper with `model:` + `allowed-tools:` + a one-line `## Role` section that references `@roles/<dept>/<role>.md` | No content duplication; `roles/` stays as canonical persona definition + AgDR cross-reference target; smallest delta to existing structure | Two-file lookup at agent-invocation time (negligible cost); operators must understand the wrap relationship |
+| **A. Wrap** — `roles/<dept>/<role>.md` keeps the persona definition; `.apexyard/agents/<role>.md` is a thin wrapper with `model:` + `allowed-tools:` + a one-line `## Role` section that references `@roles/<dept>/<role>.md` | No content duplication; `roles/` stays as canonical persona definition + AgDR cross-reference target; smallest delta to existing structure | Two-file lookup at agent-invocation time (negligible cost); operators must understand the wrap relationship |
 | **B. Merge** — content moves into the agent file; `roles/` deprecated-aliased or retired | Single source of truth at the runtime point; simpler mental model for new adopters | Loses the `roles/` directory as an organisational artefact (org-chart shape); breaks every AgDR + workflow cross-reference to `roles/` paths; one-time migration is a churn-pull |
-| **C. Mirror** — full content in BOTH `roles/` and `.claude/agents/` | Either lookup path works | Permanent duplication = drift surface; sync-check via smoke test is additional infra; persona-definition edits land in two places |
+| **C. Mirror** — full content in BOTH `roles/` and `.apexyard/agents/` | Either lookup path works | Permanent duplication = drift surface; sync-check via smoke test is additional infra; persona-definition edits land in two places |
 
 ### Axis 2 — Default model matrix (the 24 entries the public fork ships)
 
@@ -73,18 +73,18 @@ Adopters override via the routing config (Axis 3). The matrix is the **default**
 | Option | Pros | Cons |
 |--------|------|------|
 | **A. YAML config in private repo** (`<private_repo>/agent-routing.yaml`, single-fork: gitignored `<fork>/agent-routing.yaml`) | One file edit, source-controlled in private repo; reviewable diffs; survives across machines | New file class; sync mechanism needed |
-| **B. JSON config block in `.claude/project-config.json`** | Reuses existing config infrastructure | Mixes adopter routing config with framework defaults; YAML is more readable for nested per-agent entries |
-| **C. Per-user `~/.claude/agents/<name>.md` overrides** (Claude Code's existing user-level pattern) | No framework changes needed | Per-user, not per-fork — adopter has to set up overrides on every machine; loses the "private repo as source of truth" property |
+| **B. JSON config block in `.apexyard/project-config.json`** | Reuses existing config infrastructure | Mixes adopter routing config with framework defaults; YAML is more readable for nested per-agent entries |
+| **C. Per-user `~/.apexyard/agents/<name>.md` overrides** (Claude Code's existing user-level pattern) | No framework changes needed | Per-user, not per-fork — adopter has to set up overrides on every machine; loses the "private repo as source of truth" property |
 | **D. Env vars per agent** (`APEXYARD_AGENT_<name>_MODEL=opus`) | Trivial to implement | Doesn't scale beyond model choice — endpoints, env vars, timeouts need more structure |
 
 ### Axis 4 — Sync mechanism (how routing overrides get applied)
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **A. SessionStart hook rewrites `.claude/agents/*.md` frontmatter** | Transparent to adopter (re-session = re-apply); Claude Code reads the rewritten file natively; idempotent | Modifies working-tree files at session start (must be gitignored or clean-filtered); pre-commit guard required |
+| **A. SessionStart hook rewrites `.apexyard/agents/*.md` frontmatter** | Transparent to adopter (re-session = re-apply); Claude Code reads the rewritten file natively; idempotent | Modifies working-tree files at session start (must be gitignored or clean-filtered); pre-commit guard required |
 | **B. CLI tool the adopter runs after editing the routing config** (`bin/apply-agent-routing.sh`) | Explicit + reviewable | Adopters forget to run; bad UX |
 | **C. Generated agent files via clean-filter** (`.gitattributes` strips `model:` at git-add time) | Working tree dirty / commit clean | Complex; rare-knowledge git feature; debugging is painful |
-| **D. Shadow agent files at `.claude/agents-effective/`** | No mutation of canonical files | Claude Code's agent-discovery glob is `.claude/agents/*` — can't easily redirect without upstream changes |
+| **D. Shadow agent files at `.claude/agents-effective/`** | No mutation of canonical files | Claude Code's agent-discovery glob is `.apexyard/agents/*` — can't easily redirect without upstream changes |
 
 ### Axis 5 — Local-routing integration (how Ollama / LiteLLM endpoints work)
 
@@ -107,7 +107,7 @@ Adopters override via the routing config (Axis 3). The matrix is the **default**
 
 Chosen per axis:
 
-1. **Axis 1 — Wrap (A)**. `roles/<dept>/<role>.md` keeps the persona definition; `.claude/agents/<role>.md` is a thin wrapper with `name`, `description`, `model`, `allowed-tools`, `persona_name` frontmatter, plus a `## Role` section that references `@roles/<dept>/<role>.md`. Two-file lookup is acceptable; the `roles/` directory is too central to AgDRs + workflow cross-references to retire.
+1. **Axis 1 — Wrap (A)**. `roles/<dept>/<role>.md` keeps the persona definition; `.apexyard/agents/<role>.md` is a thin wrapper with `name`, `description`, `model`, `allowed-tools`, `persona_name` frontmatter, plus a `## Role` section that references `@roles/<dept>/<role>.md`. Two-file lookup is acceptable; the `roles/` directory is too central to AgDRs + workflow cross-references to retire.
 
 2. **Axis 2 — The 24-entry default matrix above**. Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work. Adopters override per agent via Axis 3 routing config. Matrix is reviewable + reversible.
 
@@ -199,4 +199,4 @@ Chosen per axis:
   - [AgDR-0021 — split-portfolio v2 path resolution](AgDR-0021-split-portfolio-v2-path-resolution.md) — the private-repo-as-source-of-truth pattern this AgDR builds on
 - Related role-system docs:
   - [`roles/`](../../roles/) — 19 persona definitions (the source-of-truth for Axis 1's wrap pattern)
-  - [`.claude/rules/role-triggers.md`](../../.claude/rules/role-triggers.md) — the auto-activation table this AgDR's Axis 6 refines
+  - [`.apexyard/rules/role-triggers.md`](../../.apexyard/rules/role-triggers.md) — the auto-activation table this AgDR's Axis 6 refines

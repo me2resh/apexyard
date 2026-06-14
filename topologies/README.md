@@ -52,7 +52,7 @@ Each topology has its own `VERSION` file with a semver string. Bump rules:
 | Remove a file (delete a handbook, drop a pipeline) | major (breaks adopter expectations) |
 | New topology, first ship | `1.0.0` |
 
-When an adopter runs `/update`, the skill diffs the framework's topology `VERSION` against the adopter's instantiated `VERSION` (copied at handover time). On drift, it offers per-file re-instantiation. See `.claude/skills/update/SKILL.md` § "Topology drift detection".
+When an adopter runs `/update`, the skill diffs the framework's topology `VERSION` against the adopter's instantiated `VERSION` (copied at handover time). On drift, it offers per-file re-instantiation. See `.apexyard/skills/update/SKILL.md` § "Topology drift detection".
 
 ## Out of scope (v1)
 

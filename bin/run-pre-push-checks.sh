@@ -3,13 +3,13 @@
 #
 # Shared implementation used by:
 #   - .githooks/pre-push   (terminal `git push`)
-#   - .claude/hooks/pre-push-gate.sh reads .pre_push.commands from
-#     .claude/project-config.json directly and calls bash -c on each entry,
+#   - .apexyard/hooks/pre-push-gate.sh reads .pre_push.commands from
+#     .apexyard/project-config.json directly and calls bash -c on each entry,
 #     so it doesn't invoke this script — but the command strings in config are
 #     defined to match what this script does.
 #
 # This script is the canonical reference for "what checks run before push".
-# If you add a check, add it here AND mirror it in .claude/project-config.json
+# If you add a check, add it here AND mirror it in .apexyard/project-config.json
 # → pre_push.commands so both paths stay in sync.
 #
 # Exit codes:
@@ -86,7 +86,7 @@ run_check() {
 }
 
 # ---------------------------------------------------------------------------
-# Check set — keep in sync with .claude/project-config.json pre_push.commands
+# Check set — keep in sync with .apexyard/project-config.json pre_push.commands
 # ---------------------------------------------------------------------------
 
 cd "$REPO_ROOT"
@@ -98,16 +98,16 @@ echo "pre-push checks:" >&2
 MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; npx --yes markdownlint-cli2 '**/*.md' '#node_modules' '#.git' '#workspace' 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
-# 2. shellcheck — .claude/hooks/*.sh, severity=warning
+# 2. shellcheck — .apexyard/hooks/*.sh, severity=warning
 # Missing shellcheck → skip with note.
-SHELLCHECK_CMD="command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed — shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .claude/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
+SHELLCHECK_CMD="command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed — shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .apexyard/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
 run_check "shellcheck" "$SHELLCHECK_CMD" || true
 
 # 3. site-counts drift detection
-run_check "site-counts" "bash .claude/hooks/tests/test_site_counts.sh 2>&1" || true
+run_check "site-counts" "bash .apexyard/hooks/tests/test_site_counts.sh 2>&1" || true
 
 # 4. subpack extraction smoke test
-run_check "subpacks" "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1" || true
+run_check "subpacks" "bash .apexyard/hooks/tests/test_subpack_extraction.sh 2>&1" || true
 
 # ---------------------------------------------------------------------------
 # Result
@@ -125,7 +125,7 @@ To bypass for a genuine emergency (checks still run in CI):
   ${SKIP_MARKER}"
 
 Bypasses are grep-able on purpose — they should be rare and auditable.
-See .claude/rules/pr-workflow.md "Before git push (HARD STOP)".
+See .apexyard/rules/pr-workflow.md "Before git push (HARD STOP)".
 MSG
   exit 1
 fi

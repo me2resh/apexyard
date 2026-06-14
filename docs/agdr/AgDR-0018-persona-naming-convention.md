@@ -43,7 +43,7 @@ Rationale for the choice of Arabic-name corpus:
 
 The brief presented two placement options. Both are used, on a clear axis:
 
-- **Agents** (`.claude/agents/*.md`): YAML frontmatter, `persona_name: <Name>`. Agents already have YAML frontmatter consumed by Claude Code (`name`, `description`, `tools`, `model`); adding `persona_name` there is structurally consistent with the existing schema and machine-readable.
+- **Agents** (`.apexyard/agents/*.md`): YAML frontmatter, `persona_name: <Name>`. Agents already have YAML frontmatter consumed by Claude Code (`name`, `description`, `tools`, `model`); adding `persona_name` there is structurally consistent with the existing schema and machine-readable.
 - **Role files** (`roles/**/*.md`): bold line under the H1, `**Persona name**: <Name>`. Role files have no existing frontmatter — introducing it here would force adopters to learn a new format for a single field. The bold line under the H1 is human-readable, immediately visible, and consistent with the existing role-file conventions (the next line is `## Identity`, which the persona name fronts naturally).
 
 The split is documented here so adopters can rely on it.
@@ -85,10 +85,10 @@ The split is documented here so adopters can rely on it.
 
 ## Consequences
 
-- **Conversation idiom** — role activations can now use the short name. "Salim, verify ticket #42" is shorter and more conversational than "Act as the QA Engineer and verify ticket #42". Both forms remain valid; the trigger table in [`.claude/rules/role-triggers.md`](../../.claude/rules/role-triggers.md) is unchanged.
+- **Conversation idiom** — role activations can now use the short name. "Salim, verify ticket #42" is shorter and more conversational than "Act as the QA Engineer and verify ticket #42". Both forms remain valid; the trigger table in [`.apexyard/rules/role-triggers.md`](../../.apexyard/rules/role-triggers.md) is unchanged.
 - **Demo scripts and PR comments** stay coherent across agents — every reviewer / orchestrator has a name. The marketing slide at [`site/index.html`](../../site/index.html) and the skills index at [`site/skills.html`](../../site/skills.html) now name all five agents instead of two.
 - **Adopters can override per-fork** by editing the `persona_name` field in each agent's YAML frontmatter or the `**Persona name**:` line under each role's H1. No skill or hook reads `persona_name` for matching today, so overriding is purely cosmetic and safe.
-- **Rex is the one exception to the rename**. Downstream references in demo scripts, PR markers (the `rex.approved` marker name is unchanged — see `.claude/hooks/block-unreviewed-merge.sh`), and historical conversation memories continue to work without churn.
+- **Rex is the one exception to the rename**. Downstream references in demo scripts, PR markers (the `rex.approved` marker name is unchanged — see `.apexyard/hooks/block-unreviewed-merge.sh`), and historical conversation memories continue to work without churn.
 - **Shield → Hatim**, **Guardian → Munir**: any third-party docs / external blog posts / demo recordings that reference the old names will look dated. Acceptable cost — these are framework-internal names, not API contracts.
 - **No machine-readable usage today**, but the structured `persona_name` field in YAML frontmatter enables future hooks or skills to surface the name without parsing prose.
 
@@ -97,7 +97,7 @@ The split is documented here so adopters can rely on it.
 - Issue: [me2resh/apexyard#204](https://github.com/me2resh/apexyard/issues/204)
 - PR: (to be added on creation)
 - Files touched:
-  - 5 agent files under `.claude/agents/` (frontmatter + body signature lines)
+  - 5 agent files under `.apexyard/agents/` (frontmatter + body signature lines)
   - 19 role files under `roles/` (bold persona-name line under H1)
   - `CLAUDE.md` (Departments table + agent-list cell + `/security-review` skill row)
   - `site/index.html` (agents marketing slide)

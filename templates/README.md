@@ -47,11 +47,11 @@ Templates are **forms**, not **content**. Overriding them means *replace*, not *
 
 ## Mechanism — `portfolio_resolve_template`
 
-Skills route through the helper at `.claude/hooks/_lib-portfolio-paths.sh`:
+Skills route through the helper at `.apexyard/hooks/_lib-portfolio-paths.sh`:
 
 ```bash
-source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
-source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+source "$(git rev-parse --show-toplevel)/.apexyard/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.apexyard/hooks/_lib-portfolio-paths.sh"
 template=$(portfolio_resolve_template prd.md)
 # → <private_repo>/custom-templates/prd.md if it exists
 # → <ops_root>/templates/prd.md otherwise

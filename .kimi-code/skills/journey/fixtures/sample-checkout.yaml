@@ -1,0 +1,53 @@
+version: 1
+feature: sample-checkout
+project: example-app
+title: Sample Checkout Flow
+description: Three-page checkout flow used as the smoke-test fixture for /journey.
+generated_at: 2026-05-03T00:00:00Z
+generated_by: /journey
+
+personas: []
+
+pages:
+  - id: cart
+    title: Cart
+    description: User reviews items they intend to purchase.
+    contents:
+      - List of cart items (image, name, price, quantity)
+      - Subtotal + estimated tax
+      - "Proceed to checkout" button
+      - "Continue shopping" link
+    success_state: User clicks "Proceed to checkout" with at least one item in cart.
+    error_state: Empty cart shows a placeholder and disables the proceed button.
+  - id: payment
+    title: Payment
+    description: User enters payment details and confirms the order.
+    contents:
+      - Address summary (read-only, with edit link)
+      - Payment-method selector (card / wallet)
+      - Card-details form (number, expiry, CVV)
+      - "Place order" button
+    success_state: Payment processor returns success → navigate to confirmation.
+    error_state: Validation errors inline; processor failure shows a retry banner.
+  - id: confirmation
+    title: Confirmation
+    description: Order placed. User sees their order number and next steps.
+    contents:
+      - Order number + estimated delivery date
+      - Receipt summary
+      - "View order status" link
+      - "Continue shopping" link
+
+transitions:
+  - from: cart
+    to: payment
+    trigger: clicks "Proceed to checkout"
+  - from: payment
+    to: confirmation
+    trigger: payment processor returns success
+
+entry: cart
+
+notes: |
+  Smoke-test fixture. Three pages, two transitions — the minimal shape the
+  layout algorithm needs to exercise (entry, intermediate, terminal).

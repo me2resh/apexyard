@@ -17,7 +17,7 @@ This is **opt-in**. The default `agent-routing.yaml` shape is empty; absence of 
 # first-declared reachable endpoint in agent-routing.yaml.
 
 ops_root="${APEXYARD_OPS_ROOT:-$HOME/projects/apexyard}"   # or your fork's path
-session_env="${ops_root}/.claude/session/agent-env/__session__.env"
+session_env="${ops_root}/.apexyard/session/agent-env/__session__.env"
 [ -f "$session_env" ] && . "$session_env" && export ANTHROPIC_BASE_URL
 ```
 
@@ -116,9 +116,9 @@ Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.
 2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model isn't pulled → emit `⚠ agent-routing: ticket-manager — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
-3. Rewrite `.claude/agents/ticket-manager.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
-4. Write `.claude/session/agent-env/ticket-manager.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
-5. Write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code actually reads at startup.
+3. Rewrite `.apexyard/agents/ticket-manager.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
+4. Write `.apexyard/session/agent-env/ticket-manager.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
+5. Write `.apexyard/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code actually reads at startup.
 6. Emit a one-line banner: `ApexYard: applied 1 agent-routing override(s) from agent-routing.yaml [1 Ollama, 0 warning(s)]`.
 
 The `block-agent-routing-drift.sh` pre-commit/pre-push hooks will refuse to let the rewritten frontmatter escape to the public framework remote — adopter routing choices stay local.
@@ -129,10 +129,10 @@ Open a new Claude Code session in your apexyard fork. Trigger a ticket-manager i
 
 If the routing didn't take effect, check in this order:
 
-1. `cat .claude/session/agent-env/__session__.env` — does it contain `ANTHROPIC_BASE_URL=http://localhost:4000`?
-2. `echo $ANTHROPIC_BASE_URL` — has the env file been sourced by your shell profile? (You may need to add `. .claude/session/agent-env/__session__.env` to your `.zshrc`/`.bashrc`.)
+1. `cat .apexyard/session/agent-env/__session__.env` — does it contain `ANTHROPIC_BASE_URL=http://localhost:4000`?
+2. `echo $ANTHROPIC_BASE_URL` — has the env file been sourced by your shell profile? (You may need to add `. .apexyard/session/agent-env/__session__.env` to your `.zshrc`/`.bashrc`.)
 3. Was the LiteLLM proxy reachable when Claude Code started? (Check the SessionStart banner — `0 warning(s)` means the reachability check passed.)
-4. `grep model .claude/agents/ticket-manager.md` — has the model frontmatter been rewritten?
+4. `grep model .apexyard/agents/ticket-manager.md` — has the model frontmatter been rewritten?
 
 ## Constraints (read these before relying on local routing for anything important)
 

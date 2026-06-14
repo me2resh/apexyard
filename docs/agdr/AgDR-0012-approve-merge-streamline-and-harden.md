@@ -94,7 +94,7 @@ Considered and rejected. The threat model is "agent makes a procedural mistake o
 ### Future work — out of scope here
 
 - **Rex marker hardening.** This PR only hardens the CEO marker. Rex's marker stays bare-SHA because it's written by the automated review agent, not a human-authorization moment — different threat model. If Rex marker forgery becomes a concern, file a separate ticket.
-- **`merge_strategy` config.** The skill currently hardcodes `--squash --delete-branch`. A future ticket could read this from `.claude/project-config.json` (e.g. `merge: { strategy: "squash"|"merge"|"rebase", delete_branch: true|false }`).
+- **`merge_strategy` config.** The skill currently hardcodes `--squash --delete-branch`. A future ticket could read this from `.apexyard/project-config.json` (e.g. `merge: { strategy: "squash"|"merge"|"rebase", delete_branch: true|false }`).
 - **Cryptographic marker.** If the threat model ever shifts to "untrusted agent" / "untrusted operator", revisit Option D above. Not a near-term concern.
 - **`--no-merge` test coverage.** The current test file covers the hook's marker-validation logic end-to-end. The skill itself doesn't have automated tests yet (skills are markdown-driven instructions to the model). A separate ticket could add a manual checklist.
 
@@ -107,9 +107,9 @@ Considered and rejected. The threat model is "agent makes a procedural mistake o
 
 - `me2resh/apexyard#132` — drop the "stop before merge" rule
 - `me2resh/apexyard#48` — harden CEO merge marker against self-approval bypass
-- `.claude/skills/approve-merge/SKILL.md` — single-turn flow + structured marker docs
-- `.claude/hooks/block-unreviewed-merge.sh` — structured-marker validation
-- `.claude/rules/pr-workflow.md` — reframed rule prose
-- `.claude/hooks/tests/test_block_unreviewed_merge.sh` — 12 cases covering the hook end-to-end
+- `.apexyard/skills/approve-merge/SKILL.md` — single-turn flow + structured marker docs
+- `.apexyard/hooks/block-unreviewed-merge.sh` — structured-marker validation
+- `.apexyard/rules/pr-workflow.md` — reframed rule prose
+- `.apexyard/hooks/tests/test_block_unreviewed_merge.sh` — 12 cases covering the hook end-to-end
 - AgDR-0011 / PR #152 — precedent for bundling two coupled tickets in one AgDR
 - AgDR-0010 / PR #147 — precedent for bundling + manual second-issue closure

@@ -44,11 +44,11 @@ If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode--
 
 ## Why fork instead of clone?
 
-Earlier versions of apexyard told you to clone the repo into a hidden `.apexyard/` directory inside a separate ops repo and symlink the `.claude/` folder. That pattern worked but it had three problems:
+Earlier versions of apexyard told you to clone the repo into a hidden `.apexyard/` directory inside a separate ops repo and symlink the `.apexyard/` folder. That pattern worked but it had three problems:
 
 1. **Brand invisibility** — `.apexyard/` is a dotfile, hidden from `ls` and GitHub views. Nobody knew you were using apexyard.
 2. **Two repos to maintain** — your ops repo plus the nested clone. Upgrades meant `git pull` in `.apexyard/`, which felt off-piste.
-3. **Symlink fragility** — the `.claude/` symlink broke on dotfile sync tools and Windows setups.
+3. **Symlink fragility** — the `.apexyard/` symlink broke on dotfile sync tools and Windows setups.
 
 Forking solves all three:
 
@@ -186,7 +186,7 @@ The default sibling-dir name is **`<fork>-portfolio`**, so the relationship betw
 
 Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml`, `projects/`, **`onboarding.yaml`** (v2), and **`workspace/`** (v2) through one of two mechanisms:
 
-- **Config block (recommended, framework ≥ #145; v2 keys added in #242).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml`, `../apexyard-portfolio/projects`, `../apexyard-portfolio/onboarding.yaml`, and `../apexyard-portfolio/workspace`. The `_lib-portfolio-paths.sh` helper resolves all five (`registry`, `projects_dir`, `ideas_backlog`, `onboarding`, `workspace_dir`). A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
+- **Config block (recommended, framework ≥ #145; v2 keys added in #242).** A `portfolio:` block in `.apexyard/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml`, `../apexyard-portfolio/projects`, `../apexyard-portfolio/onboarding.yaml`, and `../apexyard-portfolio/workspace`. The `_lib-portfolio-paths.sh` helper resolves all five (`registry`, `projects_dir`, `ideas_backlog`, `onboarding`, `workspace_dir`). A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
 - **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block. The v2 additions (`onboarding`, `workspace_dir`) are config-block only — there is no legacy symlink path for them.
 
 **The v2 additions: why both `onboarding.yaml` and `workspace/` move to the private repo.** Earlier split-portfolio releases (v1, framework < #242) kept `onboarding.yaml` (your company name, mission, team list, tech stack) AND `workspace/<name>/` (the local clones of your managed projects) in the public fork. Both leak. The v1 layout meant a CTO running ApexYard on a private SaaS effectively published their team roster + tech-stack + every project name on a public GitHub repo via routine session activity. v2 closes that gap: every adopter-specific artefact lives in the private sibling repo; the public fork holds only framework files plus the operator's customisations to skills/hooks/rules.
@@ -304,7 +304,7 @@ git rm -r --cached projects onboarding.yaml workspace 2>/dev/null || true
 # Paths resolve relative to the ops-fork root (this directory).
 # If you used a different sibling-dir name than apexyard-portfolio,
 # substitute it in all five paths below.
-cat > .claude/project-config.json <<'JSON'
+cat > .apexyard/project-config.json <<'JSON'
 {
   "portfolio": {
     "registry": "../apexyard-portfolio/apexyard.projects.yaml",
@@ -323,7 +323,7 @@ JSON
 # fallback for un-migrated forks).
 echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
 
-git add .gitignore .claude/project-config.json .apexyard-fork
+git add .gitignore .apexyard/project-config.json .apexyard-fork
 git commit -m "chore: configure split-portfolio v2 (config-block path resolution + marker)"
 git push
 ```
@@ -425,13 +425,13 @@ Most ApexYard skills (`/projects`, `/inbox`, `/status`, `/tasks`, `/stakeholder-
 
 #### Where session-state files live
 
-Framework session state — active-ticket markers, code-review approvals, CEO approvals, the bootstrap-skill marker — always lives at `<ops_fork_root>/.claude/session/`. **Not** inside any `workspace/<project>/` clone.
+Framework session state — active-ticket markers, code-review approvals, CEO approvals, the bootstrap-skill marker — always lives at `<ops_fork_root>/.apexyard/session/`. **Not** inside any `workspace/<project>/` clone.
 
 This matters when you `cd workspace/<project>/` to do project-specific work: even though `git rev-parse --show-toplevel` from inside the clone returns the project clone (not the ops fork), the framework's hooks, agents, and skills (Rex, `/start-ticket`, `/approve-merge`, the merge-gate hooks) all walk up to find the ops fork and write/read session state from there. The `_lib-ops-root.sh` helper (added in me2resh/apexyard#229 + #230, extended for v2 in #242) centralises the walk and recognises BOTH the v2 `.apexyard-fork` marker AND the legacy v1 pair (`onboarding.yaml + apexyard.projects.yaml`) — so all components agree on the canonical path under either layout.
 
-The same dual-anchor rule applies to the `.claude/settings.json` hook wrappers themselves (every `SessionStart` / `PreToolUse` / `PostToolUse` entry walks up to locate `.claude/hooks/<name>.sh` before exec'ing it). Adopters writing new entries — or framework PRs adding new SessionStart hooks — should use the canonical v2-aware wrapper documented in [`AgDR-0041`](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md). The old `onboarding.yaml`-only walk-up shape silently fails on v2 forks.
+The same dual-anchor rule applies to the `.claude/settings.json` hook wrappers themselves (every `SessionStart` / `PreToolUse` / `PostToolUse` entry walks up to locate `.apexyard/hooks/<name>.sh` before exec'ing it). Adopters writing new entries — or framework PRs adding new SessionStart hooks — should use the canonical v2-aware wrapper documented in [`AgDR-0041`](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md). The old `onboarding.yaml`-only walk-up shape silently fails on v2 forks.
 
-> **Note on wrapper-level v1 detection laxness.** The wrappers accept `onboarding.yaml` alone as the v1 anchor, while `_lib-ops-root.sh` (the in-hook resolver) requires BOTH `onboarding.yaml` AND `apexyard.projects.yaml`. This is deliberate: the wrapper only needs to locate `.claude/hooks/<name>.sh` and `exec` it, so a single marker suffices. The hook itself does the stricter canonical ops-root check internally via the lib. See [AgDR-0041](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md) § "Decision" point 2 for the full rationale.
+> **Note on wrapper-level v1 detection laxness.** The wrappers accept `onboarding.yaml` alone as the v1 anchor, while `_lib-ops-root.sh` (the in-hook resolver) requires BOTH `onboarding.yaml` AND `apexyard.projects.yaml`. This is deliberate: the wrapper only needs to locate `.apexyard/hooks/<name>.sh` and `exec` it, so a single marker suffices. The hook itself does the stricter canonical ops-root check internally via the lib. See [AgDR-0041](agdr/AgDR-0041-sessionstart-v2-anchor-sweep.md) § "Decision" point 2 for the full rationale.
 
 You'll never need to manage session-state files by hand. If you ever see a "BLOCKED: PR has no recorded code-reviewer approval" error after the agent visibly approved, check that at least one of the ops-fork anchors is present at the fork root: `.apexyard-fork` (v2) OR both `onboarding.yaml` AND `apexyard.projects.yaml` (v1).
 
@@ -459,8 +459,8 @@ Split-portfolio mode also houses two layers of company-specific customisation th
 
 #### How discovery works
 
-- **Custom skills** — Claude Code discovers skills by walking `.claude/skills/<name>/SKILL.md` in the active fork. We don't control that glob path. The `link-custom-skills.sh` SessionStart hook fixes that gap: on every session start it iterates `<private_repo>/custom-skills/<name>/`, and for each subdirectory containing a `SKILL.md` it creates a gitignored symlink at `.claude/skills/<name>/` pointing into the private dir. Claude Code then sees the skill transparently. **Custom skills with the same name as a framework skill win** — the hook moves the framework version to `.claude/skills/<name>.framework.bak/` (gitignored) and prints a one-line warning at SessionStart so the override is visible. **Windows is not supported in v1**; the hook prints a one-line manual-install pointer and skips. Same shape as the LSP install on Windows.
-- **Custom handbooks** — Rex's agent prompt (`.claude/agents/code-reviewer.md` § 8) gains a second discovery path. The `portfolio_custom_handbooks_dir` resolver in `_lib-portfolio-paths.sh` returns the private dir; Rex globs both the public `handbooks/` tree AND the private one using the same architecture/general/language convention. No symlinks involved — handbooks aren't discovered by Claude Code, only by Rex's prompt, so a second glob is enough. Per-handbook precedence on overlapping topics: **Rex applies BOTH layers** and cites both when relevant; conflict resolution is the operator's responsibility (write it as prose in the custom handbook).
+- **Custom skills** — Claude Code discovers skills by walking `.apexyard/skills/<name>/SKILL.md` in the active fork. We don't control that glob path. The `link-custom-skills.sh` SessionStart hook fixes that gap: on every session start it iterates `<private_repo>/custom-skills/<name>/`, and for each subdirectory containing a `SKILL.md` it creates a gitignored symlink at `.apexyard/skills/<name>/` pointing into the private dir. Claude Code then sees the skill transparently. **Custom skills with the same name as a framework skill win** — the hook moves the framework version to `.apexyard/skills/<name>.framework.bak/` (gitignored) and prints a one-line warning at SessionStart so the override is visible. **Windows is not supported in v1**; the hook prints a one-line manual-install pointer and skips. Same shape as the LSP install on Windows.
+- **Custom handbooks** — Rex's agent prompt (`.apexyard/agents/code-reviewer.md` § 8) gains a second discovery path. The `portfolio_custom_handbooks_dir` resolver in `_lib-portfolio-paths.sh` returns the private dir; Rex globs both the public `handbooks/` tree AND the private one using the same architecture/general/language convention. No symlinks involved — handbooks aren't discovered by Claude Code, only by Rex's prompt, so a second glob is enough. Per-handbook precedence on overlapping topics: **Rex applies BOTH layers** and cites both when relevant; conflict resolution is the operator's responsibility (write it as prose in the custom handbook).
 
 #### Setup
 
@@ -490,7 +490,7 @@ Manual `cp + edit` is fine for v1 — there's no `/custom-skill` authoring helpe
 cd ~/ops/apexyard-portfolio
 
 # Copy a framework skill as a starting shape (or write from scratch)
-cp -R ~/ops/apexyard/.claude/skills/feature custom-skills/file-internal-bug
+cp -R ~/ops/apexyard/.apexyard/skills/feature custom-skills/file-internal-bug
 $EDITOR custom-skills/file-internal-bug/SKILL.md   # adjust frontmatter (name, description, argument-hint)
 
 git add custom-skills/file-internal-bug
@@ -498,7 +498,7 @@ git commit -m "feat: add /file-internal-bug for the internal tracker"
 git push
 ```
 
-Next session start in the public fork, the `link-custom-skills.sh` SessionStart hook surfaces the new skill as `.claude/skills/file-internal-bug/` and Claude Code starts discovering it.
+Next session start in the public fork, the `link-custom-skills.sh` SessionStart hook surfaces the new skill as `.apexyard/skills/file-internal-bug/` and Claude Code starts discovering it.
 
 #### Authoring a custom handbook
 
@@ -533,7 +533,7 @@ This sibling pattern to **Custom templates** (path-mirroring overrides; see AgDR
 
 | Mode | Path | Visibility |
 | --- | --- | --- |
-| **Split-portfolio (v2)** | `<private_repo>/agent-routing.yaml` | Private — committed to the sibling repo, resolved via `.portfolio.agent_routing` in `.claude/project-config.json` |
+| **Split-portfolio (v2)** | `<private_repo>/agent-routing.yaml` | Private — committed to the sibling repo, resolved via `.portfolio.agent_routing` in `.apexyard/project-config.json` |
 | **Single-fork** | `<fork>/agent-routing.yaml` | Local — gitignored by the framework (`/agent-routing.yaml` in `.gitignore`), never pushed to the public fork |
 
 Seed from the framework example. **Split-portfolio adopters get this done automatically by `/setup --split-portfolio`** (#351 PR 3) — the skill copies the example into the private repo as part of Step 5 (private-repo init). Single-fork adopters do the `cp` manually when they want to start customising; the framework deliberately doesn't auto-seed for single-fork because an empty override file accumulating in the fork root before any overrides exist is more ceremony than value.
@@ -575,7 +575,7 @@ The pattern lives in `agent-routing.yaml.example` Example C as a commented-out t
 
 Adopters who want to validate specific models against their machine before committing can use the operator-prep doc at `projects/apexyard/spike-348-prep.md` as a starting checklist (hardware checks, fixture pack for the 3 candidate sub-agents, scoring matrix).
 
-> The `allowed_tools_override` field was advertised in early drafts of this schema but never wired through the parser. Dropped in #358 for v1; the per-agent allowed-tools list in each `.claude/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter (same escape-hatch pattern that handles framework-default `model:` overrides).
+> The `allowed_tools_override` field was advertised in early drafts of this schema but never wired through the parser. Dropped in #358 for v1; the per-agent allowed-tools list in each `.apexyard/agents/<name>.md` frontmatter is the source of truth. To override on a specific fork, edit the agent file directly with a `# routing-config:override <reason>` comment in the YAML frontmatter (same escape-hatch pattern that handles framework-default `model:` overrides).
 
 #### Config-block wiring (split-portfolio v2)
 
@@ -602,11 +602,11 @@ The `_lib-portfolio-paths.sh` helper exposes the resolver as `portfolio_agent_ro
 
 #### How the overrides get applied
 
-The `apply-agent-routing.sh` SessionStart hook reads `agent-routing.yaml` on every session start and rewrites the affected `.claude/agents/*.md` frontmatter in-place. Adopter routing choices land in the rendered agent files for that session and stay there until the hook re-runs.
+The `apply-agent-routing.sh` SessionStart hook reads `agent-routing.yaml` on every session start and rewrites the affected `.apexyard/agents/*.md` frontmatter in-place. Adopter routing choices land in the rendered agent files for that session and stay there until the hook re-runs.
 
 Two **drift-prevention guards** (PreToolUse on `git commit *` and `git push *`) catch the rewritten frontmatter before it leaves the local environment so adopter overrides never leak to the public fork:
 
-- **`block-agent-routing-drift.sh`** — fires on staged `.claude/agents/*.md` diffs whose `model:` frontmatter no longer matches the framework default. Exits 2 with an explanation; the operator restores the default and re-stages, OR explicitly opts in via the `# routing-config:override <reason>` escape-hatch comment when an intentional framework-default change is the *point* of the commit (rare, framework-PR territory).
+- **`block-agent-routing-drift.sh`** — fires on staged `.apexyard/agents/*.md` diffs whose `model:` frontmatter no longer matches the framework default. Exits 2 with an explanation; the operator restores the default and re-stages, OR explicitly opts in via the `# routing-config:override <reason>` escape-hatch comment when an intentional framework-default change is the *point* of the commit (rare, framework-PR territory).
 
 Per AgDR-0050 § Axis 4.
 
@@ -648,7 +648,7 @@ Migrate now? This will:
   - Move workspace/<name>/ contents to the sibling private repo
   - Add gitignore entries for both in the public fork
   - Write a .apexyard-fork marker (the v2 ops-fork anchor)
-  - Add portfolio.{onboarding,workspace_dir} keys to .claude/project-config.json
+  - Add portfolio.{onboarding,workspace_dir} keys to .apexyard/project-config.json
 
 Per-file-class semantics: onboarding.yaml is COPIED (small text file, sibling is
 the canonical source of truth); workspace/ is MOVED (size constraint — clones
@@ -715,9 +715,9 @@ jq --arg onb "$SIBLING/onboarding.yaml" \
    --arg ws  "$SIBLING/workspace" \
    '.portfolio.onboarding = (.portfolio.onboarding // $onb)
     | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
-   .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
+   .apexyard/project-config.json > /tmp/pc.json && mv /tmp/pc.json .apexyard/project-config.json
 
-git add .gitignore .apexyard-fork .claude/project-config.json
+git add .gitignore .apexyard-fork .apexyard/project-config.json
 ```
 
 ### Migrating from single-fork to split-portfolio
@@ -736,7 +736,7 @@ The skill performs:
 2. Reset main to the commit before the bulk-handover (or use `git filter-repo` for older history) to remove the registry + `projects/` from public main.
 3. Force-push main with `--force-with-lease`.
 4. Create the private portfolio repo and push the extracted registry + `projects/` content into it.
-5. Write the `portfolio:` config block in `.claude/project-config.json` pointing at the sibling repo (or symlinks if you'd rather — your choice, prompted at the relevant step).
+5. Write the `portfolio:` config block in `.apexyard/project-config.json` pointing at the sibling repo (or symlinks if you'd rather — your choice, prompted at the relevant step).
 6. **Redact any GitHub Issue or Pull Request bodies** that named the projects — surfaces the timeline-API survival caveat explicitly so you don't have false confidence.
 7. Offer to delete the backup branch after a soak window (default: keep for 7 days).
 
@@ -752,7 +752,7 @@ your-org/apexyard/                ← your fork, cloned locally (the "ops repo")
 ├── onboarding.yaml                ← company + team + stack config
 ├── apexyard.projects.yaml        ← the portfolio registry
 │
-├── .claude/                       ← shared rules, skills, hooks, agents
+├── .apexyard/                       ← shared rules, skills, hooks, agents
 │   ├── rules/
 │   ├── skills/
 │   ├── hooks/
@@ -818,11 +818,11 @@ Every portfolio skill reads `apexyard.projects.yaml` and iterates the registry.
 | `/extract-features` | Scans a project's codebase across six discovery axes (HTTP routes, data models, async jobs, test names, UI screens, documented features) and writes a consolidated Feature Inventory at `projects/<name>/feature-inventory.md`. Pairs with `/handover` as the **greenfield-rewrite path** — `/handover` produces the high-level project assessment, `/extract-features` produces the granular "what we must preserve" catalogue. One-off scan, not a recurring audit; re-runs OFFER (default-no) to overwrite. Opt-in `--with-mockups` flag adds a `## Screens` section with AI-inferred ASCII wireframes per UI screen — boxed layouts, form-field bindings inferred from static analysis, every wireframe carries a mandatory disclaimer header (`> AI-inferred sketch — verify before relying on`). See AgDR-0036 for the trust-contract rationale. |
 | `/feature-diagram` | Slice the system by feature — reads one row from `projects/<name>/feature-inventory.md` and emits a Mermaid `flowchart LR` at `projects/<name>/features/<slug>.md` showing the routes / models / jobs / screens that participate in that feature. Sibling to `/c4` (system topology) and `/dfd` (data flows) — different lens (per-feature slice) on the same codebase. Inventory is a hard dependency: run `/extract-features` first. Re-runs prompt to overwrite; `--force` bypasses. See AgDR-0035. |
 | `/process` | Anchor-scoped scan across **seven** process-discovery axes (explicit workflow definitions, queue/job chains, cron triggers, state-column transitions, API choreography, existing BPMN/Mermaid, documented steps) — optionally cross-repo via `apexyard.projects.yaml`. Interviews only on the gaps the code couldn't answer, then emits a lint-clean BPMN 2.0 file at `projects/<name>/processes/<slug>.bpmn`. Sibling to `/c4` (static system topology) and `/extract-features` (exhaustive feature catalogue) — same read-first-then-ask shape, BPMN as the output. Requires Node + npm for `bpmn-auto-layout` + `bpmnlint`; falls back to bare BPMN when Node is missing. |
-| `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.claude/skills/c4/SKILL.md`) |
+| `/c4` | Reads a project's codebase and writes filled-in C4 L1 + L2 Mermaid diagrams (location depends on invocation context — see `.apexyard/skills/c4/SKILL.md`) |
 | `/tech-vision` | Interactive section-by-section author for the **technical / architecture** vision template (named `tech-vision` to disambiguate from product / company vision). Walks the operator through Scope, Principles, Target-state C4 L1, Current vs Target gap table, multi-quarter Migration path, explicit Anti-scope ("things we explicitly chose NOT to build"), and Review cadence — then writes `projects/<name>/architecture/vision.md`. Resolves the template via `portfolio_resolve_template architecture/vision.md` so adopters with `<private_repo>/custom-templates/architecture/vision.md` see their shape. Re-runs OFFER (default-no) to overwrite; refresh mode preserves existing content as defaults for a quarterly review. Markdown-only output — Mermaid C4 block renders inline on GitHub, same as `/c4` / `/dfd`. See AgDR-0028. |
 | `/pdf` | Convert any framework-generated doc (markdown, HTML, BPMN) to PDF. Asks where the PDF should land via a 4-option prompt: `workspace/<name>/docs/` (travels with the code), `projects/<name>/pdfs/` (ApexYard's view), a custom path, or "keep next to source". Converter dispatch is pandoc → md-to-pdf → wkhtmltopdf for markdown/HTML, and bpmn-to-image → SVG → pandoc for BPMN. Graceful-degrades when no converter is installed (exit 3 + advisory). See AgDR-0034. |
 | `/codify-rule` | Turn a human (or Copilot, or any second-pass) review comment that caught a Rex-miss into a draft handbook entry. Resolves the source PR (current branch's open PR, `--pr <N>`, or a full GitHub PR-comment URL), prompts for the comment text + file:line context, routes to the right bucket (domain / architecture / general / language), and gates the full draft on Y/edit/no before any file is written. Every entry carries a `_Source: PR #N comment by @author on YYYY-MM-DD_` footer for traceability. Defaults to advisory enforcement; `--blocking` flag opts in to `ENFORCEMENT: blocking`. Domain bucket pre-populates a `paths:` frontmatter glob from the file:line context for the operator to refine. For split-portfolio adopters with a configured `custom_handbooks_dir`, the skill offers to land the entry in the private layer instead of the public `handbooks/`. Stage 2 of #293 (Rex domain-aware handbooks); sibling to the future `/enrich-domain` skill (Stage 3). See AgDR-0040. |
-| `/geo-audit` | LLM/agent discoverability audit (GEO + AEO) — six check buckets (Discovery / Capability-signaling / Content-format / Token-economics / Analytics / UX) covering `llms.txt`, `llms-full.txt`, AI-crawler directives in `robots.txt`, `AGENTS.md`, `skill.md` capability manifest, JSON-LD citation grounding (`author` / `dateModified` / `datePublished` / `publisher`), snippet-extractable Q&A shape, markdown alternates, first-500-tokens lead, prompt-injection hygiene, per-page token-count thresholds, and an AI-traffic fingerprint advisory. Covers GEO (LLM citations) + AEO (coding-agent consumption). Sibling to `/seo-audit`; `/launch-check` fans out to both at milestone boundaries. v1 AI-crawler list (12 entries: GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, PerplexityBot, CCBot, Bytespider, Applebot-Extended, cohere-ai) lives at `.claude/registries/ai-crawlers.json`. The audit's `skill.md` capability-manifest check is the upstream GEO/AEO convention — **distinct from Claude Code's `SKILL.md`** slash-command spec; AgDR-0043 documents the naming clash. Auto-PASS for non-web projects (APIs, CLIs, libraries). Advisory posture — severity ceiling is `high`, not `critical`. Persists via `_lib-audit-history.sh` (AgDR-0019). Originally shipped as `/generative-engine-audit` (PR #315); renamed in #334. See AgDR-0043. |
+| `/geo-audit` | LLM/agent discoverability audit (GEO + AEO) — six check buckets (Discovery / Capability-signaling / Content-format / Token-economics / Analytics / UX) covering `llms.txt`, `llms-full.txt`, AI-crawler directives in `robots.txt`, `AGENTS.md`, `skill.md` capability manifest, JSON-LD citation grounding (`author` / `dateModified` / `datePublished` / `publisher`), snippet-extractable Q&A shape, markdown alternates, first-500-tokens lead, prompt-injection hygiene, per-page token-count thresholds, and an AI-traffic fingerprint advisory. Covers GEO (LLM citations) + AEO (coding-agent consumption). Sibling to `/seo-audit`; `/launch-check` fans out to both at milestone boundaries. v1 AI-crawler list (12 entries: GPTBot, ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, anthropic-ai, Google-Extended, PerplexityBot, CCBot, Bytespider, Applebot-Extended, cohere-ai) lives at `.apexyard/registries/ai-crawlers.json`. The audit's `skill.md` capability-manifest check is the upstream GEO/AEO convention — **distinct from Claude Code's `SKILL.md`** slash-command spec; AgDR-0043 documents the naming clash. Auto-PASS for non-web projects (APIs, CLIs, libraries). Advisory posture — severity ceiling is `high`, not `critical`. Persists via `_lib-audit-history.sh` (AgDR-0019). Originally shipped as `/generative-engine-audit` (PR #315); renamed in #334. See AgDR-0043. |
 
 Skills that aren't portfolio-aware (`/decide`, `/write-spec`, `/code-review`, `/security-review`, `/audit-deps`) operate on the current working directory — `cd workspace/<name>/` first if you want them to run against a specific project's code.
 
@@ -858,7 +858,7 @@ The `/pdf` skill (introduced in framework #284) converts framework-generated doc
 | `workspace/<name>/docs/<stem>.pdf` | `projects/<name>/pdfs/<stem>.pdf` |
 | Examples: API spec PDF, deployment runbook PDF, internal sequence diagram | Examples: handover assessment, stakeholder update, audit verdict, multi-quarter roadmap snapshot |
 
-The prompt also offers a custom-path slot and a "keep next to source" slot for one-off shares. Defaults can be locked via the `pdf.default_destination` key in `.claude/project-config.json` — see `.claude/skills/pdf/SKILL.md` and [`docs/agdr/AgDR-0034-pdf-export-and-converter-dispatch.md`](agdr/AgDR-0034-pdf-export-and-converter-dispatch.md).
+The prompt also offers a custom-path slot and a "keep next to source" slot for one-off shares. Defaults can be locked via the `pdf.default_destination` key in `.apexyard/project-config.json` — see `.apexyard/skills/pdf/SKILL.md` and [`docs/agdr/AgDR-0034-pdf-export-and-converter-dispatch.md`](agdr/AgDR-0034-pdf-export-and-converter-dispatch.md).
 
 `/pdf` graceful-degrades when no PDF converter is installed — same shape as `/process` (bpmnlint) and `/c4` (Mermaid lint): exit 3 with an advisory naming each install option, so adopters who never need PDFs still pay zero install cost.
 
@@ -872,7 +872,7 @@ A typical morning as a CTO / Chief of Staff using apexyard:
 2. **`apexyard status`** (or `/status --briefing` inside Claude Code) — 4-line "where am I" briefing: active workspace, active ticket, branch, role. Covers the orient-yourself question in one paragraph.
 3. **`/inbox`** — see everything waiting on you across every managed project
 4. **`/status`** — full snapshot of git + CI health for each project (verbose form when you want the per-project breakdown)
-5. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md))
+5. Pick a ticket, **`cd workspace/<project>/`**, pick up the ticket as the appropriate role (see [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md))
 6. Work the ticket — the role file drives behaviour, the lifecycle demo in the hero of the landing site walks through the full flow
 7. Back at the fork root, **`/stakeholder-update weekly`** on Fridays to generate the summary
 
@@ -894,7 +894,7 @@ Branch:            feature/GH-42-csv-export
 Role set:          backend
 ```
 
-The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves: workspace from cwd, ticket from the per-project marker (`<ops_root>/.claude/session/tickets/<name>`) or the ops fallback (`<ops_root>/.claude/session/current-ticket`), branch from `git branch --show-current`, role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
+The same output appears when you run `/status --briefing` (or `/status -b`) inside Claude Code. The four fields all infer themselves: workspace from cwd, ticket from the per-project marker (`<ops_root>/.apexyard/session/tickets/<name>`) or the ops fallback (`<ops_root>/.apexyard/session/current-ticket`), branch from `git branch --show-current`, role from the active ticket's labels. Where any of those is unknown, the briefing prints an explicit `(none)` / `(unknown)` / `<none — inferred per task>` placeholder so the four-line shape is constant regardless of state.
 
 Default `/status` (no flags) still produces the long per-project breakdown — `--briefing` only opts into the compact form.
 
@@ -932,9 +932,9 @@ Every few weeks, pull the latest apexyard improvements into your fork. The easy 
 /update --dry-run    # preview only, no state change
 ```
 
-`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.claude/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), and leaves the branch ready to push as a PR. See `.claude/skills/update/SKILL.md` for the full process.
+`/update` does the work of the manual flow below: fetches `upstream`, previews the commit delta, creates a sync branch (because `block-main-push.sh` forbids direct pushes to `main`), merges or rebases, walks through any conflicts with per-file options, surfaces any **deprecated config keys** in your `.apexyard/project-config.json` that no longer exist in upstream defaults (advisory y/n/s offer — see step 8 of the skill), and leaves the branch ready to push as a PR. See `.apexyard/skills/update/SKILL.md` for the full process.
 
-> **Pre-release testing (`/update --from-dev`).** A hidden `--from-dev` flag pulls from `upstream/dev` instead of the latest tagged release on `upstream/main`. Intended for the framework maintainer testing pre-release work on a separate machine, and for adopters who explicitly want to validate an upcoming framework change before the release tag is cut. **Not a supported general-adopter path** — the adopter contract is tagged releases from `upstream/main` (see [AgDR-0007](agdr/AgDR-0007-release-cut-branch-model.md)). Prints a `⚠ PRE-RELEASE SYNC` banner before any state mutation, uses the same sync-branch + conflict-resolution flow, and lands on a `chore/sync-upstream-dev` branch. Revert with `git reset --hard origin/main` if needed. See `.claude/skills/update/SKILL.md` § Options for details.
+> **Pre-release testing (`/update --from-dev`).** A hidden `--from-dev` flag pulls from `upstream/dev` instead of the latest tagged release on `upstream/main`. Intended for the framework maintainer testing pre-release work on a separate machine, and for adopters who explicitly want to validate an upcoming framework change before the release tag is cut. **Not a supported general-adopter path** — the adopter contract is tagged releases from `upstream/main` (see [AgDR-0007](agdr/AgDR-0007-release-cut-branch-model.md)). Prints a `⚠ PRE-RELEASE SYNC` banner before any state mutation, uses the same sync-branch + conflict-resolution flow, and lands on a `chore/sync-upstream-dev` branch. Revert with `git reset --hard origin/main` if needed. See `.apexyard/skills/update/SKILL.md` § Options for details.
 
 If you prefer the raw commands:
 
@@ -967,9 +967,9 @@ Files you're most likely to customise:
 
 Files that stay close to upstream (merge cleanly most of the time):
 
-- `.claude/hooks/` — shell scripts
-- `.claude/rules/` — modular rule files
-- `.claude/agents/` — sub-agent definitions
+- `.apexyard/hooks/` — shell scripts
+- `.apexyard/rules/` — modular rule files
+- `.apexyard/agents/` — sub-agent definitions
 - `workflows/` — SDLC, code review, deployment
 - `templates/` — PRD, tech design, ADR, AgDR
 - `golden-paths/` — reusable CI pipelines
@@ -1009,7 +1009,7 @@ Files that stay close to upstream (merge cleanly most of the time):
 
 **Does the registry support globs?** No. It's an explicit list. If you want all repos in an org, use `gh repo list` to generate the file once and commit the result — but you should still curate it.
 
-**Can I use this with Linear / Jira / etc.?** Yes — and the framework's mechanical hooks (`/start-ticket`, `validate-pr-create.sh`, `verify-commit-refs.sh`, `validate-branch-name.sh`) verify ticket existence against your tracker via the `tracker` config block. The default `kind = gh` calls `gh issue view`; swap it for `linear` / `jira` / `asana` / `custom` to dispatch a different CLI. See AgDR-0033 and `.claude/hooks/_lib-tracker.sh`. Example override in `.claude/project-config.json`:
+**Can I use this with Linear / Jira / etc.?** Yes — and the framework's mechanical hooks (`/start-ticket`, `validate-pr-create.sh`, `verify-commit-refs.sh`, `validate-branch-name.sh`) verify ticket existence against your tracker via the `tracker` config block. The default `kind = gh` calls `gh issue view`; swap it for `linear` / `jira` / `asana` / `custom` to dispatch a different CLI. See AgDR-0033 and `.apexyard/hooks/_lib-tracker.sh`. Example override in `.apexyard/project-config.json`:
 
 ```json
 {
@@ -1061,6 +1061,6 @@ If your tracker has no CLI, use `kind: "custom"` with a `view_command` that call
 - `workspace/README.md` — the live working copies convention
 - `projects/README.md` — the per-project docs convention
 - `onboarding.yaml` — company + team + stack config
-- `.claude/rules/role-triggers.md` — when to activate which role
-- `.claude/skills/projects/SKILL.md` — the `/projects` skill spec
-- `.claude/skills/handover/SKILL.md` — the `/handover` skill spec
+- `.apexyard/rules/role-triggers.md` — when to activate which role
+- `.apexyard/skills/projects/SKILL.md` — the `/projects` skill spec
+- `.apexyard/skills/handover/SKILL.md` — the `/handover` skill spec

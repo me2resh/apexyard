@@ -1,6 +1,6 @@
 # Site framework-counts drift prevention via CI workflow
 
-> In the context of marketing-site copy that mentions specific framework counts ("53 skills, 29 hooks, 19 roles"), facing recurring drift every time a skill or hook is added or removed, I decided to add a CI workflow that asserts the count claims in `site/*.html` against the real `find`/`ls` counts on every PR, plus a smoke-test invariant under `.claude/hooks/tests/`, to achieve fail-fast detection at the moment drift is introduced, accepting one extra job in the CI matrix and the maintenance overhead of keeping the assertion list in sync with new site files.
+> In the context of marketing-site copy that mentions specific framework counts ("53 skills, 29 hooks, 19 roles"), facing recurring drift every time a skill or hook is added or removed, I decided to add a CI workflow that asserts the count claims in `site/*.html` against the real `find`/`ls` counts on every PR, plus a smoke-test invariant under `.apexyard/hooks/tests/`, to achieve fail-fast detection at the moment drift is introduced, accepting one extra job in the CI matrix and the maintenance overhead of keeping the assertion list in sync with new site files.
 
 ## Context
 
@@ -10,7 +10,7 @@ The drift was caught by the `/seo-audit` finding S13 + `/generative-engine-audit
 
 Three viable mechanisms were proposed in the ticket body for `#325`:
 
-1. Release-cut script (extends `.claude/skills/release/`)
+1. Release-cut script (extends `.apexyard/skills/release/`)
 2. CI workflow (per-PR assertion)
 3. SessionStart advisory banner
 
@@ -26,22 +26,22 @@ Each has a different blast radius and feedback latency.
 
 The deciding factor is **feedback latency**. CI runs on every PR; the author sees the failure within minutes of pushing the commit that introduced the drift. Release-cut detection means drift can sit on `dev` for weeks before anyone notices. SessionStart is advisory and noisy. The CI shape closes the feedback loop tightest.
 
-The smoke-test invariant (`.claude/hooks/tests/test_site_counts.sh`) is an additive backstop that runs the same assertions as the CI workflow but is invokable locally — operators can run it before pushing, and it's part of the framework's own test suite so it never silently breaks.
+The smoke-test invariant (`.apexyard/hooks/tests/test_site_counts.sh`) is an additive backstop that runs the same assertions as the CI workflow but is invokable locally — operators can run it before pushing, and it's part of the framework's own test suite so it never silently breaks.
 
 ## Decision
 
-Chosen: **CI workflow (`.github/workflows/site-counts-check.yml`) plus a smoke-test invariant (`.claude/hooks/tests/test_site_counts.sh`)**, because per-PR feedback is the only mechanism that catches drift at the moment it's introduced rather than after it has compounded.
+Chosen: **CI workflow (`.github/workflows/site-counts-check.yml`) plus a smoke-test invariant (`.apexyard/hooks/tests/test_site_counts.sh`)**, because per-PR feedback is the only mechanism that catches drift at the moment it's introduced rather than after it has compounded.
 
-The workflow runs on every PR that touches `.claude/skills/**`, `.claude/hooks/**`, `roles/**`, or `site/**`:
+The workflow runs on every PR that touches `.apexyard/skills/**`, `.apexyard/hooks/**`, `roles/**`, or `site/**`:
 
-1. Count `find .claude/skills -name SKILL.md | wc -l` → `actual_skills`
-2. Count `ls .claude/hooks/*.sh | grep -v "_lib\|/tests/" | wc -l` → `actual_hooks`
+1. Count `find .apexyard/skills -name SKILL.md | wc -l` → `actual_skills`
+2. Count `ls .apexyard/hooks/*.sh | grep -v "_lib\|/tests/" | wc -l` → `actual_hooks`
 3. Count `find roles -name "*.md" -not -name "README*" -not -path "*/agdr/*" | wc -l` → `actual_roles`
 4. Grep `site/*.html` for patterns like `>(\d+)< skills`, `>(\d+)< hooks`, `>(\d+)< roles`, `(\d+) slash commands`
 5. Assert every match equals the corresponding actual count
 6. On mismatch: fail the job with a one-line-per-drift report naming file + line + expected + actual
 
-The smoke-test invariant is the same assertion library, invokable as `bash .claude/hooks/tests/test_site_counts.sh` for pre-push verification.
+The smoke-test invariant is the same assertion library, invokable as `bash .apexyard/hooks/tests/test_site_counts.sh` for pre-push verification.
 
 ## Consequences
 
@@ -55,7 +55,7 @@ The smoke-test invariant is the same assertion library, invokable as `bash .clau
 ## Artifacts
 
 - `.github/workflows/site-counts-check.yml` — the CI workflow
-- `.claude/hooks/tests/test_site_counts.sh` — the smoke-test invariant
+- `.apexyard/hooks/tests/test_site_counts.sh` — the smoke-test invariant
 - `site/index.html`, `site/architecture.html`, `site/skills.html` — count-refresh commit lands alongside this AgDR
 - Closes: `me2resh/apexyard#325`
 - Related findings: SEO-audit S13, GEO-audit (count claims appear in structured data)

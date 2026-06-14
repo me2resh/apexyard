@@ -14,7 +14,7 @@ ticket: me2resh/apexyard#13
 
 ## Context
 
-Three sibling incidents in the same session (2026-04-11) all traced back to the same root cause: rules written as prose in `CLAUDE.md` / `.claude/rules/*.md` / `workflows/*.md` are advice the model drops under pressure.
+Three sibling incidents in the same session (2026-04-11) all traced back to the same root cause: rules written as prose in `CLAUDE.md` / `.apexyard/rules/*.md` / `workflows/*.md` are advice the model drops under pressure.
 
 - **Incident 1** — plan-level "go" was inferred as merge approval. Fixed in [#11](https://github.com/me2resh/apexyard/issues/11) / commit `646302e`: explicit per-merge CEO approval rule, two-marker merge gate, `/approve-merge` skill.
 - **Incident 2** — agent presented a fabricated 10-ticket tree in chat using tracker vocabulary. Fixed in [#14](https://github.com/me2resh/apexyard/issues/14) / commit `d0a2128`: ticket-vocabulary rule + verify-issue-exists backstops.
@@ -41,7 +41,7 @@ Four hooks with narrow, project-configurable path lists:
 - `block-merge-on-red-ci.sh` — fires on `gh pr merge`, runs `gh pr checks` on the target PR, blocks on any failing/pending check. Allows the "no checks configured" case (some projects don't have CI) with a NOTE.
 - `validate-commit-format.sh` — fires on `git commit`, checks that the subject matches `type: subject` or `type(scope): subject` with type from `{feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert}`. Matches the PR-title type list in `git-conventions.md`.
 
-Each hook has default path lists that can be overridden via `.claude/project-config.json` (`architecture_paths`, `ui_paths` — `commit_types` is a future extension if a project wants a stricter or looser type list).
+Each hook has default path lists that can be overridden via `.apexyard/project-config.json` (`architecture_paths`, `ui_paths` — `commit_types` is a future extension if a project wants a stricter or looser type list).
 
 **Pros:** low false-positive rate by construction. Projects can tighten the defaults if they want broader coverage. The rules that *can't* be mechanized cleanly are explicit about that — they stay prose and the audit doc (follow-up) will label them.
 
@@ -63,7 +63,7 @@ One PR per hook, each with its own Rex review cycle and CEO approval.
 
 1. The audit's core finding is "mechanize the ones you can without creating false-positive spam." Option A loses that by being too broad. Option C fragments the work.
 2. Narrow defaults + config overrides is the right shape because apexyard is a forkable framework. The defaults should be safe-for-everyone; each fork tightens/loosens to match its own tech stack.
-3. All four hooks share infrastructure (`settings.json` wiring, `.claude/hooks/README.md` section, multi-line `-m` parsing from the verify-commit-refs fix in #14). Shipping as one PR avoids duplicating that machinery across four PRs.
+3. All four hooks share infrastructure (`settings.json` wiring, `.apexyard/hooks/README.md` section, multi-line `-m` parsing from the verify-commit-refs fix in #14). Shipping as one PR avoids duplicating that machinery across four PRs.
 4. One PR = one Rex cycle = one CEO approval moment. Current session throughput is the binding constraint, not review-surface width.
 
 ## Rules explicitly staying advisory (not mechanized by this ticket)

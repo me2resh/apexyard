@@ -29,7 +29,7 @@ An authored override **replaces** the framework default — partial overrides ar
 
 ## How resolution works
 
-Every template-consuming skill (`/decide`, `/write-spec`, `/c4`, `/migration`, `/spike`, `/investigation`, `/feature`, `/bug`, `/task`, `/idea`, `/handover`) routes through `portfolio_resolve_template` from `.claude/hooks/_lib-portfolio-paths.sh`:
+Every template-consuming skill (`/decide`, `/write-spec`, `/c4`, `/migration`, `/spike`, `/investigation`, `/feature`, `/bug`, `/task`, `/idea`, `/handover`) routes through `portfolio_resolve_template` from `.apexyard/hooks/_lib-portfolio-paths.sh`:
 
 1. If `<this_dir>/<path>` exists → use it.
 2. Else if `<ops_root>/templates/<path>` exists → use the framework default.

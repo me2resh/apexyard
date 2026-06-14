@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git add *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/block-git-add-all.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/block-main-push.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/validate-branch-name.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/check-secrets.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/verify-commit-refs.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/pre-push-gate.sh\"'"
+          },
+          {
+            "type": "command",
+            "if": "Bash(gh pr create *)",
+            "command": "bash -c 'r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do [ -d \"$r/.apexyard/hooks\" ] && break;r=${r%/*};done;[ -d \"$r/.apexyard/hooks\" ] || exit 0;exec \"$r/.apexyard/hooks/validate-pr-create.sh\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

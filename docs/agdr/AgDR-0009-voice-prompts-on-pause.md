@@ -31,7 +31,7 @@ Chosen: **macOS `say` Stop hook + regex trigger heuristic, default OFF, project-
 Three reasons it wins:
 
 1. **Initial-phase scope matches the user's framing.** They asked for "speak the question; I'll reply via keyboard". `say` does that and nothing more.
-2. **Default-OFF makes this a pure-additive change for upstream.** Adopters who pull this commit see no behaviour change until they explicitly flip `voice_prompts.enabled` in their `.claude/project-config.json`.
+2. **Default-OFF makes this a pure-additive change for upstream.** Adopters who pull this commit see no behaviour change until they explicitly flip `voice_prompts.enabled` in their `.apexyard/project-config.json`.
 3. **The trigger model is the load-bearing piece, not the TTS provider.** Once the heuristic is proven on real conversations, swapping `say` for OpenAI TTS (Phase 3) is a small change behind the same trigger gate. Starting with `say` lets us iterate on the trigger without the cost/privacy decisions.
 
 ### Trigger heuristic (default `questions-only`)
@@ -70,7 +70,7 @@ This produces utterances like *"Reply approve 354 to write the CEO marker, or sh
 
 ### Reversibility
 
-Fully reversible. Set `voice_prompts.enabled` to `false` in `.claude/project-config.json` (or remove the key entirely) and the hook is a sub-millisecond no-op on every Stop event. To remove the hook entirely, drop the `Stop` entry from `.claude/settings.json` and the hook script no longer fires. No data, no config drift.
+Fully reversible. Set `voice_prompts.enabled` to `false` in `.apexyard/project-config.json` (or remove the key entirely) and the hook is a sub-millisecond no-op on every Stop event. To remove the hook entirely, drop the `Stop` entry from `.claude/settings.json` and the hook script no longer fires. No data, no config drift.
 
 ## Future phases (NOT in this AgDR)
 
@@ -83,5 +83,5 @@ Fully reversible. Set `voice_prompts.enabled` to `false` in `.claude/project-con
 
 - Branch: `feature/#134-voice-prompts`
 - Ticket: me2resh/apexyard#134 — *"[Chore] Configurable Jarvis-style voice prompts when waiting for user input"*
-- Files: `.claude/hooks/voice-prompt-on-pause.sh`, `.claude/hooks/tests/test_voice_prompt_on_pause.sh`, `.claude/project-config.defaults.json` (new `voice_prompts` block), `.claude/settings.json` (new `Stop` hook entry), `docs/project-config.md` (new section), this AgDR.
+- Files: `.apexyard/hooks/voice-prompt-on-pause.sh`, `.apexyard/hooks/tests/test_voice_prompt_on_pause.sh`, `.apexyard/project-config.defaults.json` (new `voice_prompts` block), `.claude/settings.json` (new `Stop` hook entry), `docs/project-config.md` (new section), this AgDR.
 - Related AgDRs: AgDR-0007 (release-cut branch model — this PR targets `dev`), AgDR-0001 (rule-mechanization-hooks — establishes the Stop hook as the right shape).

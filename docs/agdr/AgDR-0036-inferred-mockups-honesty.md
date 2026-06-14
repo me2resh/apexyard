@@ -76,6 +76,6 @@ Specifically:
 ## Artifacts
 
 - Issue: [me2resh/apexyard#290](https://github.com/me2resh/apexyard/issues/290)
-- Skill: `.claude/skills/extract-features/SKILL.md` § "`--with-mockups`" and § "4b. Emit ASCII wireframes"
-- Tests: `.claude/skills/extract-features/tests/smoke-mockups.sh`
+- Skill: `.apexyard/skills/extract-features/SKILL.md` § "`--with-mockups`" and § "4b. Emit ASCII wireframes"
+- Tests: `.apexyard/skills/extract-features/tests/smoke-mockups.sh`
 - Sibling discussions: [`AgDR-0016-journey-html-rendering.md`](./AgDR-0016-journey-html-rendering.md) (per-flow HTML; different epistemic contract)
