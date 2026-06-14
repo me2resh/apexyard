@@ -5,6 +5,8 @@ All notable changes to ApexYard are documented here.
 
 ## Unreleased — model-neutral ApexYard refactor
 
+Decision record: `docs/agdr/AgDR-0070-model-neutral-apexyard.md`
+
 ### Changed
 
 - Canonical framework content moved from `.claude/` to `.apexyard/` (agent/tool-neutral source of truth).
