@@ -39,6 +39,7 @@ Chosen: **Option 1 — `.apexyard/` becomes canonical; `.claude/` and `.kimi-cod
 
 ## Artifacts
 
-- Branch: `refactor/GH-0-model-neutral-apexyard`
+- Ticket: me2resh/apexyard#649
+- Branch: `refactor/GH-649-model-neutral-apexyard`
 - Touches: `.apexyard/`, `.claude/`, `.kimi-code/`, `bin/apexyard-sync-tool-dirs`, `bin/extract-subpacks.sh`, `templates/kimi-setup/`, `docs/`, `agent-routing.yaml.example`, `CHANGELOG.md`, `KIMI.md`, `.github/workflows/tool-dirs-sync.yml`
 - Migration: `.apexyard/migrations/v3.1.4-to-v4.0.0.sh`
