@@ -43,15 +43,17 @@ Or: `python3 -m http.server 8080`
 
 | File | Use |
 |------|-----|
-| `assets/images/posters/poster-lifestyle.png` | Meta trial B1 only — **do not ship** (Gemini watermark baked in; regenerate) |
-| `assets/images/hero-stir-yoghurt.png` | Hero lifestyle (cropped, no watermark) |
-| `assets/images/posters/poster-split-gummy.png` | Science section — gummy vs sachet (B2) |
-| `assets/images/posters/poster-variants.png` | Products section + PDP OG (B3) |
-| `assets/images/hero-stir-yoghurt.png` | Usage steps (stir yoghurt) |
-| `assets/images/usage-stir-yoghurt.png` | Step 2 — mix into yoghurt |
-| `assets/images/usage-oats-bowl.png` | Steps 1 & 3 — sachets / serve |
+| `assets/images/hero-stir-yoghurt.webp` | Hero + step 5 lifestyle (no baked copy) |
+| `assets/images/usage-stir-yoghurt.webp` | Step 4 — mix into yoghurt |
+| `assets/images/campaign/pack-toddlers.png` | Product card (Toddlers), hub, PDP |
+| `assets/images/campaign/pack-kids.png` | Product card (Kids), PDP default, hub hero |
+| `assets/images/campaign/sachet-kids.png` | Step 2 — open sachet |
+| `assets/images/campaign/science-receipt-sugar.png` | Science — sugar receipt comparison |
+| `assets/images/campaign/science-shelf-sugar.png` | Compare section shelf visual |
+| `assets/images/campaign/nutrients-flatlay.png` | Science secondary flatlay |
 | `assets/icons/trust/stamp-*.svg` | Trust strip (direction B) |
-| `assets/images/WhatsApp_*.png` | Pack shots (product cards + PDP) |
+
+Legacy `assets/images/posters/*` and June 02 WhatsApp pack crops are superseded by `campaign/`.
 
 ## Brand tokens (from `main.css` / `DESIGN.md`)
 

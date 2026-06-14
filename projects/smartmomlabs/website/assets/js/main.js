@@ -18,7 +18,11 @@
     );
     return {
       pack: card?.dataset.pack || card?.dataset.image,
+      packWebp: card?.dataset.packWebp,
       altKey: card?.dataset.altKey,
+      lifestyle: card?.dataset.lifestyle,
+      lifestyleWebp: card?.dataset.lifestyleWebp,
+      lifestyleAltKey: card?.dataset.lifestyleAltKey,
     };
   }
 
@@ -32,8 +36,15 @@
   function syncPdpPresentation(formulaId) {
     const meta = variantMeta(formulaId);
     const img = document.getElementById("pdp-image");
+    const webp = document.getElementById("pdp-image-webp");
     if (img && meta.pack) img.src = meta.pack;
+    if (webp && meta.packWebp) webp.srcset = meta.packWebp;
     applyImageAlt(img, meta.altKey);
+    const lifestyle = document.getElementById("pdp-lifestyle");
+    const lifestyleWebp = document.getElementById("pdp-lifestyle-webp");
+    if (lifestyle && meta.lifestyle) lifestyle.src = meta.lifestyle;
+    if (lifestyleWebp && meta.lifestyleWebp) lifestyleWebp.srcset = meta.lifestyleWebp;
+    applyImageAlt(lifestyle, meta.lifestyleAltKey);
     const kids = document.getElementById("panel-kids");
     const todd = document.getElementById("panel-toddlers");
     if (kids && todd) {

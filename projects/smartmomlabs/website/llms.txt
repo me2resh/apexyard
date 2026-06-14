@@ -4,11 +4,11 @@
 
 ## Primary pages
 
-- [Home](https://website-dun-zeta-85.vercel.app/): Hero, product cards (Toddlers 1–3, Kids 4+), evidence row, science stats, FAQ, newsletter capture
-- [Product](https://website-dun-zeta-85.vercel.app/product.html): PDP with variant tabs, nutrient panel, launch pricing
-- [Parent hub](https://website-dun-zeta-85.vercel.app/hub/): Smart Mom Labs portfolio — blendavit live, other brands coming soon
-- [Privacy](https://website-dun-zeta-85.vercel.app/privacy.html)
-- [Terms](https://website-dun-zeta-85.vercel.app/terms.html)
+- [Home](https://blendavit.com/): Hero, product cards (Toddlers 1–3, Kids 4+), evidence row, science stats, FAQ, newsletter capture
+- [Product](https://blendavit.com/product.html): PDP with variant tabs, nutrient panel, launch pricing
+- [Parent hub](https://blendavit.com/hub/): Smart Mom Labs portfolio — blendavit live, other brands coming soon
+- [Privacy](https://blendavit.com/privacy.html)
+- [Terms](https://blendavit.com/terms.html)
 
 ## Product facts (citation-first)
 
@@ -19,5 +19,5 @@
 
 ## Optional
 
-- [AGENTS.md](https://website-dun-zeta-85.vercel.app/AGENTS.md): Agent entry for this static site
+- [AGENTS.md](https://blendavit.com/AGENTS.md): Agent entry for this static site
 - [DESIGN.md](./DESIGN.md): Visual tokens (committed in repo, not deployed as standalone URL)

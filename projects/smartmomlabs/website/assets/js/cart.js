@@ -8,14 +8,12 @@
   const PRODUCT_META = {
     toddlers: {
       titleKey: "card.t.title",
-      image:
-        "assets/images/WhatsApp_Image_2026-06-02_at_15.33.29__1_-311c9c0f-d5cc-43dc-a74a-3c9c6c2ce54b.png",
+      image: "assets/images/campaign/pack-toddlers.png",
       priceKey: "toddlers_ksa",
     },
     kids: {
       titleKey: "card.k.title",
-      image:
-        "assets/images/WhatsApp_Image_2026-06-02_at_15.33.29-0ef57a1c-28be-4ac3-8c8d-68b498609c95.png",
+      image: "assets/images/campaign/pack-kids.png",
       priceKey: "kids_ksa",
     },
   };

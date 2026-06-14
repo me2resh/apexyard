@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://website-dun-zeta-85.vercel.app/sitemap.xml
+Sitemap: https://blendavit.com/sitemap.xml

@@ -1609,9 +1609,50 @@ html[dir="rtl"] .compare-table td::before { text-align: start; }
   color: var(--text);
 }
 
-/* Science — consolidated stats grid */
-.science-section .science-poster {
+/* Science — dual campaign posters */
+.science-visuals {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
   margin-bottom: 28px;
+  align-items: stretch;
+}
+.science-poster--secondary {
+  margin-bottom: 0;
+}
+.compare-figure {
+  margin-bottom: 24px;
+}
+.products-duo-figure {
+  margin-bottom: 28px;
+  max-width: 720px;
+  margin-inline: auto;
+}
+.science-sugar-jars {
+  margin-bottom: 28px;
+  max-width: 880px;
+  margin-inline: auto;
+}
+.lang-visual--ar {
+  display: none;
+}
+html[lang="ar"] .lang-visual--ar {
+  display: block;
+}
+.campaign-ar {
+  margin-top: 32px;
+}
+.campaign-ar__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.pdp-lifestyle {
+  margin-top: 14px;
+}
+.pdp-lifestyle img {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
 }
 .science-stats {
   display: grid;
@@ -2193,6 +2234,8 @@ body:has(.shop-bar.is-visible) .consent-banner:not([hidden]) {
   .footer-grid,
   .pdp-layout,
   .compare-visual,
+  .science-visuals,
+  .campaign-ar__grid,
   .expert-row,
   .timeline,
   .science-stats,

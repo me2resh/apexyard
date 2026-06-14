@@ -129,14 +129,21 @@ Strategy: **Committed restrained** — mint field + green accent ≤15%, gold fo
 
 | File | Role |
 |------|------|
-| `assets/images/hero-stir-yoghurt.png` | Hero lifestyle — yoghurt stir |
-| `assets/images/usage-stir-yoghurt.png` | Step 2 — mix into yoghurt |
-| `assets/images/usage-oats-bowl.png` | Steps 1 & 3 — sachets / serve (different crops) |
-| `assets/images/WhatsApp_*.png` | Pack shots — duo cards + PDP |
+| `assets/images/hero-stir-yoghurt.webp` | Hero lifestyle — yoghurt stir (bilingual-safe, no baked copy) |
+| `assets/images/usage-stir-yoghurt.webp` | Step 4 — mix into yoghurt |
+| `assets/images/campaign/pack-toddlers.png` | Product duo (Toddlers) + hub grid + PDP variant |
+| `assets/images/campaign/pack-kids.png` | Product duo (Kids) + PDP default + hub hero card + OG |
+| `assets/images/campaign/sachet-kids.png` | Step 2 — open sachet |
+| `assets/images/campaign/science-receipt-sugar.png` | Science section — gummy 8g vs blendavit 0g receipt |
+| `assets/images/campaign/science-shelf-sugar.png` | Compare section — shelf sugar comparison |
+| `assets/images/campaign/nutrients-flatlay.png` | Science secondary — whole foods around sachet |
+| `assets/images/campaign/sugar-jars.png` | Reserved — monthly vitamin sugar vs 0g (social / future proof2 visual) |
 | `assets/icons/trust/stamp-{sugar,sfda,sachet,nutrients,halal}.svg` | Trust strip Direction B |
 | `previews/trust-stamps-preview.html` | A/B/C stamp comparison board |
 
-Do not swap hero or step images without explicit approval. Do not use the rejected “BLENDAVITE” jar mock or `hero-scene-kitchen.jpg` interim.
+**Do not use on bilingual pages:** campaign shots with baked Arabic headlines (pasta pour, foods flatlay) or the zero-effort hand graphic (sachet typo). Legacy `assets/images/posters/*` and June 02 WhatsApp pack crops are superseded by `campaign/`.
+
+Do not swap hero or step lifestyle images without explicit approval. Do not use the rejected “BLENDAVITE” jar mock or `hero-scene-kitchen.jpg` interim.
 
 ## Do's and Don'ts
 
