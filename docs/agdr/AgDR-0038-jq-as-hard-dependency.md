@@ -1,10 +1,10 @@
 # AgDR-0038 — `jq` as a hard dependency (declare + check + warn)
 
-> In the context of 22+ framework hooks reading `.claude/project-config.json` via `jq` to honour adopter overrides, facing the failure mode where a jq-less machine silently degrades every override to the framework default with no error and no warning, I decided to **declare `jq` as a hard dependency** with **`/setup` pre-flight detection**, a **SessionStart advisory hook**, and a **prerequisite line in `docs/getting-started.md`**, accepting that locked-down corporate environments without jq install rights cannot run the framework until they get jq onto PATH.
+> In the context of 22+ framework hooks reading `.apexyard/project-config.json` via `jq` to honour adopter overrides, facing the failure mode where a jq-less machine silently degrades every override to the framework default with no error and no warning, I decided to **declare `jq` as a hard dependency** with **`/setup` pre-flight detection**, a **SessionStart advisory hook**, and a **prerequisite line in `docs/getting-started.md`**, accepting that locked-down corporate environments without jq install rights cannot run the framework until they get jq onto PATH.
 
 ## Context
 
-Framework hooks lean on `jq` to read adopter overrides from `.claude/project-config.json` and `.claude/project-config.defaults.json`. A non-exhaustive sample of what depends on it: `.ui_paths` + `.ui_paths_exclude` (design-review gate), `.tracker.*` (multi-tracker dispatch — AgDR-0033), `.migration_paths` (migration gate), `.ticket.bootstrap_skills` (bootstrap exemption — AgDR-0011), `.ticket.create_command_patterns` (skill-gated ticket-create — AgDR-0030), `.git.protected_branches`, `.leak_protection.public_framework_repos`, etc. All of those reads route through `_lib-read-config.sh → config_get → jq … 2>/dev/null`.
+Framework hooks lean on `jq` to read adopter overrides from `.apexyard/project-config.json` and `.apexyard/project-config.defaults.json`. A non-exhaustive sample of what depends on it: `.ui_paths` + `.ui_paths_exclude` (design-review gate), `.tracker.*` (multi-tracker dispatch — AgDR-0033), `.migration_paths` (migration gate), `.ticket.bootstrap_skills` (bootstrap exemption — AgDR-0011), `.ticket.create_command_patterns` (skill-gated ticket-create — AgDR-0030), `.git.protected_branches`, `.leak_protection.public_framework_repos`, etc. All of those reads route through `_lib-read-config.sh → config_get → jq … 2>/dev/null`.
 
 The failure mode surfaced on 2026-05-18 in an adopter fork: a `.ui_paths` override was added to silence a design-review-gate false positive on a non-UI `.jsx` file. The override appeared to have no effect because `jq` wasn't installed on the machine. `jq … 2>/dev/null` returned empty, the hook silently fell back to the default UI-paths array, the false positive kept firing. No error, no warning, no log line — just an invisible "your override doesn't work, and we won't tell you why".
 
@@ -60,17 +60,17 @@ The SessionStart hook **does not block** — it's an advisory in the same vein a
 ### Migration / rollback
 
 - **No data migration needed.** This is additive: new hook + new doc line + new `/setup` pre-flight step.
-- **Rollback** is `git revert` of the introducing PR. No state in `.claude/session/` is created. Adopters who had jq-less forks continue to work (silently degraded) the way they always did.
+- **Rollback** is `git revert` of the introducing PR. No state in `.apexyard/session/` is created. Adopters who had jq-less forks continue to work (silently degraded) the way they always did.
 - **Adopters who hit the SessionStart banner and don't want it** can either install jq (the intended path) or stop using ApexYard. There's no escape-hatch env var in v1 — adding one (`APEXYARD_ALLOW_NO_JQ=1`) is a follow-up if real adopter pressure surfaces; for now the explicit refusal is the point.
 
 ## Artifacts
 
 - PR: <to be filled at merge time>
 - Issue: [me2resh/apexyard#280](https://github.com/me2resh/apexyard/issues/280)
-- Skill: `.claude/skills/setup/SKILL.md` (new Step −1 pre-flight check)
-- Hook: `.claude/hooks/check-jq-installed.sh` (new SessionStart advisory)
+- Skill: `.apexyard/skills/setup/SKILL.md` (new Step −1 pre-flight check)
+- Hook: `.apexyard/hooks/check-jq-installed.sh` (new SessionStart advisory)
 - Hook wiring: `.claude/settings.json` (new SessionStart entry, sibling to `check-upstream-drift.sh`)
-- Tests: `.claude/hooks/tests/test_check_jq_installed.sh`
+- Tests: `.apexyard/hooks/tests/test_check_jq_installed.sh`
 - Docs: `docs/getting-started.md § Prerequisites` (new bullet)
 - Sibling patterns this AgDR reuses:
   - AgDR-0005 — tag-based upstream drift detection (same SessionStart advisory shape, exit 0 always)

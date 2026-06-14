@@ -1,12 +1,12 @@
 # Handbooks — adopter coding standards consumed by Rex
 
-Handbooks are markdown files containing **company-specific coding standards** that the Code Reviewer agent (Rex) consults during PR review, alongside the framework's generic rules in `.claude/rules/`. Adopters customise this directory; the framework ships a small set of opinionated samples to demonstrate the convention.
+Handbooks are markdown files containing **company-specific coding standards** that the Code Reviewer agent (Rex) consults during PR review, alongside the framework's generic rules in `.apexyard/rules/`. Adopters customise this directory; the framework ships a small set of opinionated samples to demonstrate the convention.
 
 This is the place to encode the rules your team would otherwise enforce by Slack message, by lore, or by ad-hoc PR comments — *but only the ones that are stable enough to write down once and apply forever*.
 
 Decision rationale: [`docs/agdr/AgDR-0020-adopter-handbooks-for-rex.md`](../docs/agdr/AgDR-0020-adopter-handbooks-for-rex.md).
 
-> **Two layers, same convention.** This `handbooks/` tree lives in the public ops fork — handbooks here are safe to publish on a public framework fork. Split-portfolio adopters who want company-confidential handbooks (naming internal systems, referring to proprietary policy, etc.) can additionally drop them at `<private_repo>/custom-handbooks/{architecture,general,language/<lang>}/*.md`. Rex discovers both layers using the **same path-convention** described below and applies findings from both. Resolution helper: `portfolio_custom_handbooks_dir` in `.claude/hooks/_lib-portfolio-paths.sh`. Setup pointer: `docs/multi-project.md` § "Private custom skills + handbooks". Single-fork adopters typically only use this `handbooks/` tree.
+> **Two layers, same convention.** This `handbooks/` tree lives in the public ops fork — handbooks here are safe to publish on a public framework fork. Split-portfolio adopters who want company-confidential handbooks (naming internal systems, referring to proprietary policy, etc.) can additionally drop them at `<private_repo>/custom-handbooks/{architecture,general,language/<lang>}/*.md`. Rex discovers both layers using the **same path-convention** described below and applies findings from both. Resolution helper: `portfolio_custom_handbooks_dir` in `.apexyard/hooks/_lib-portfolio-paths.sh`. Setup pointer: `docs/multi-project.md` § "Private custom skills + handbooks". Single-fork adopters typically only use this `handbooks/` tree.
 
 ## Discovery
 
@@ -19,13 +19,13 @@ Rex finds handbooks by **path convention** — there is no YAML frontmatter, no 
 | `handbooks/language/<lang>/*.md` | **On diff match** — only when the PR touches files of that language. `<lang>` matches by extension: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`, etc. |
 | `handbooks/domain/<area>/*.md` | **On diff match via opt-in `paths:` frontmatter** — domain-specific review knowledge (GitHub EMU semantics, Stripe webhook validation, SSO SAML claim shapes, etc.). Each handbook may declare a `paths:` YAML frontmatter list of globs; Rex loads the handbook only when the PR diff matches at least one glob. Handbooks without a `paths:` field load always (foundational domain rules with no path boundary). See [`handbooks/domain/README.md`](domain/README.md) and AgDR-0037. |
 
-If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.claude/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
+If you need a fifth bucket beyond these four, add the directory and update Rex's discovery logic in `.apexyard/agents/code-reviewer.md`. The path convention is open — Rex falls back to "always-load" for any directory it doesn't have specific rules for.
 
 ### Semantic supplement (apexyard#449)
 
 When the MCP search server (`apexyard-search`) is installed and the framework has been reindexed, Rex **additionally** consults the vector index for handbooks that semantically match the PR's content but didn't match a path glob. This is purely additive — the path-convention table above is the floor and never shrinks. Semantically-discovered handbooks are loaded on top with the same enforcement semantics as path-discovered ones, and citations in the review output carry an explicit `*(semantic match — discovery: semantic-search)*` annotation so the reader can see why a handbook fired for a diff that didn't match its paths.
 
-Adopters who don't run MCP get path-convention discovery only — Rex's behaviour is byte-for-byte identical to pre-#449 for them, with no warning emitted. See `.claude/agents/code-reviewer.md` § 8 "Semantic supplement" for the discovery shape and fail-soft semantics.
+Adopters who don't run MCP get path-convention discovery only — Rex's behaviour is byte-for-byte identical to pre-#449 for them, with no warning emitted. See `.apexyard/agents/code-reviewer.md` § 8 "Semantic supplement" for the discovery shape and fail-soft semantics.
 
 ## File format
 
@@ -94,7 +94,7 @@ When a blocking handbook is violated, Rex's overall review verdict becomes `requ
 1. **One rule cluster per file.** A handbook on "TypeScript" is too broad; split into "strict-mode", "naming", "error-handling". Smaller files keep Rex's per-PR token cost bounded.
 2. **Be specific about the trigger.** "Use good types" is unenforceable. "`function fetchUser(id: any)` should declare `id: string` or `id: UserId`" is enforceable.
 3. **Include the false-positive list.** Every "What Rex flags" section should be paired with a "What's NOT a violation" section. Without it, Rex over-flags and operators tune the layer out.
-4. **Reference framework rules by `@.claude/rules/<file>.md` path** when a handbook extends or refines a generic framework rule. Don't duplicate; link.
+4. **Reference framework rules by `@.apexyard/rules/<file>.md` path** when a handbook extends or refines a generic framework rule. Don't duplicate; link.
 5. **Reference AgDRs** when a rule has a documented decision rationale. The handbook is the rule; the AgDR is the why.
 
 ## Adding a new handbook

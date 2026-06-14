@@ -2,7 +2,7 @@
 
 **Persona name**: Saif
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Saif (Site Reliability Engineer (SRE)) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Saif (Site Reliability Engineer (SRE)) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -154,9 +154,9 @@ For each service:
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/sre.md` (shipped in #347 PR 1; uses model `opus` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/sre.md` (shipped in #347 PR 1; uses model `opus` + restricted tools per AgDR-0050 Axis 2)
 
-**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/sre.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.apexyard/agents/sre.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
 **Rationale**: incident response is bounded + needs isolated diagnosis context.
 

@@ -1,6 +1,6 @@
 # ShellCheck — dogfood apexyard itself
 #
-# Runs shellcheck against the hook scripts under .claude/hooks/ to catch
+# Runs shellcheck against the hook scripts under .apexyard/hooks/ to catch
 # portability bugs, quoting mistakes, and common shell pitfalls. The hook
 # scripts are the mechanical enforcement layer for the apexyard workflow,
 # so any bug there weakens the whole stack.
@@ -10,12 +10,12 @@ name: ShellCheck
 on:
   pull_request:
     paths:
-      - ".claude/hooks/**"
+      - ".apexyard/hooks/**"
       - ".github/workflows/shellcheck.yml"
   push:
     branches: [main]
     paths:
-      - ".claude/hooks/**"
+      - ".apexyard/hooks/**"
       - ".github/workflows/shellcheck.yml"
 
 permissions:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   shellcheck:
-    name: shellcheck .claude/hooks
+    name: shellcheck .apexyard/hooks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,7 +32,7 @@ jobs:
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
         with:
-          scandir: "./.claude/hooks"
+          scandir: "./.apexyard/hooks"
           severity: warning
           ignore_paths: >-
-            .claude/hooks/README.md
+            .apexyard/hooks/README.md

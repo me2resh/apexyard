@@ -2,6 +2,17 @@
 
 All notable changes to ApexYard are documented here.
 
+
+## Unreleased — model-neutral ApexYard refactor
+
+### Changed
+
+- Canonical framework content moved from `.claude/` to `.apexyard/` (agent/tool-neutral source of truth).
+- `.claude/` is now a generated registration layer synced from `.apexyard/` by `bin/apexyard-sync-tool-dirs`.
+- Added `.kimi-code/` as the Kimi Code CLI registration layer, also synced from `.apexyard/`.
+- Hook paths in `.claude/settings.json` now point to `.apexyard/hooks/`.
+- Added `.github/workflows/tool-dirs-sync.yml` to guard against drift between `.apexyard/` and generated tool directories.
+
 ## [3.1.4] — 2026-06-09
 
 Patch release — game polish.

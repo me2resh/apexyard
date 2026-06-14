@@ -14,7 +14,7 @@ ticket: me2resh/apexyard#281
 
 ## Context
 
-- AgDR-0023 (#244) established path-mirroring discovery + full-replacement override semantics for templates. The resolver lives at `portfolio_resolve_template <relative_path>` in `.claude/hooks/_lib-portfolio-paths.sh`.
+- AgDR-0023 (#244) established path-mirroring discovery + full-replacement override semantics for templates. The resolver lives at `portfolio_resolve_template <relative_path>` in `.apexyard/hooks/_lib-portfolio-paths.sh`.
 - The contract worked for `/decide`, `/write-spec`, `/c4`, `/handover`, `/migration` (AgDR side), `/spike`, and `/investigation` — every skill that read a real template file.
 - It silently failed for the 5 older ticket-creating skills (`/feature`, `/bug`, `/task`, `/migration` ticket-body side, `/idea`) because they constructed their issue body **inline via heredoc** — no template file existed for an adopter override to win over.
 - The leak is invisible from the adopter's perspective: a `custom-templates/feature.md` is well-formed, lands at a path the README documents, and… does nothing. No error, no warning, no fallback. Just the framework's hardcoded heredoc body, unchanged.
@@ -85,7 +85,7 @@ Resolution order (unchanged from AgDR-0023):
 
 Updated consuming skills: `/feature`, `/bug`, `/task`, `/migration`, `/idea`, `/spike`, `/investigation`.
 
-The `.ticket.required_sections` schema in `.claude/project-config.defaults.json` is **unchanged** — `validate-issue-structure.sh` still reads section names from the config, not from the template. The template controls the issue body's shape; the config controls what sections are mandatory. They overlap by design but stay independently editable.
+The `.ticket.required_sections` schema in `.apexyard/project-config.defaults.json` is **unchanged** — `validate-issue-structure.sh` still reads section names from the config, not from the template. The template controls the issue body's shape; the config controls what sections are mandatory. They overlap by design but stay independently editable.
 
 ## Consequences
 
@@ -102,7 +102,7 @@ The `.ticket.required_sections` schema in `.claude/project-config.defaults.json`
 - PR for me2resh/apexyard#281
 - New ticket templates: `templates/tickets/feature.md`, `templates/tickets/bug.md`, `templates/tickets/task.md`, `templates/tickets/migration.md`, `templates/tickets/idea.md`
 - Moved templates: `templates/spike.md` → `templates/tickets/spike.md`; `templates/investigation.md` → `templates/tickets/investigation.md`
-- Refactored skills: `.claude/skills/{feature,bug,task,migration,idea,spike,investigation}/SKILL.md`
-- New tests: `.claude/hooks/tests/test_ticket_template_resolution.sh` (36 cases covering default-resolution, custom-templates override, split-portfolio sibling override, heredoc fallback, and mixed-override scenarios across all 7 ticket types)
+- Refactored skills: `.apexyard/skills/{feature,bug,task,migration,idea,spike,investigation}/SKILL.md`
+- New tests: `.apexyard/hooks/tests/test_ticket_template_resolution.sh` (36 cases covering default-resolution, custom-templates override, split-portfolio sibling override, heredoc fallback, and mixed-override scenarios across all 7 ticket types)
 - Updated docs: `templates/README.md`, `templates/custom-templates.README.example.md`, `docs/multi-project.md` § "Custom templates", `CLAUDE.md` § "Templates"
 - Out of scope (separate ticket): the `/update` migration step that detects `custom-templates/{spike,investigation}.md` (old top-level path) and offers to move them to `custom-templates/tickets/<name>.md` — couples with the existing update-chain ticket.

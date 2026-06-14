@@ -1,10 +1,10 @@
 # Review Marker Repo Qualifier — Scoping Markers to (repo, pr) Pairs
 
-> In the context of a multi-repo portfolio where `.claude/session/reviews/` holds approval markers keyed by bare PR number, facing a collision hazard when two different managed repos share the same PR number, I decided to encode the repo as a double-underscore-separated owner/repo prefix in the marker filename to achieve unambiguous (repo, pr) scoping, accepting a one-time re-approval cost for any markers that existed before the upgrade.
+> In the context of a multi-repo portfolio where `.apexyard/session/reviews/` holds approval markers keyed by bare PR number, facing a collision hazard when two different managed repos share the same PR number, I decided to encode the repo as a double-underscore-separated owner/repo prefix in the marker filename to achieve unambiguous (repo, pr) scoping, accepting a one-time re-approval cost for any markers that existed before the upgrade.
 
 ## Context
 
-Review markers (`<pr>-rex.approved`, `<pr>-ceo.approved`, `<pr>-design.approved`, `<pr>-architecture.approved`) are written to `.claude/session/reviews/` and are consumed by four gate hooks: `block-unreviewed-merge.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`, and `warn-stale-review-markers.sh`. The markers are also written by the `/approve-merge`, `/approve-design`, `/approve-architecture`, and `/design-review` skills, plus the `code-reviewer` (Rex) and `solution-architect` (Tariq) agents.
+Review markers (`<pr>-rex.approved`, `<pr>-ceo.approved`, `<pr>-design.approved`, `<pr>-architecture.approved`) are written to `.apexyard/session/reviews/` and are consumed by four gate hooks: `block-unreviewed-merge.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`, and `warn-stale-review-markers.sh`. The markers are also written by the `/approve-merge`, `/approve-design`, `/approve-architecture`, and `/design-review` skills, plus the `code-reviewer` (Rex) and `solution-architect` (Tariq) agents.
 
 Because PR numbers are per-repository and routinely overlap across repos (every new repo starts from #1), two distinct managed repos can each have a PR #429. The bare-number scheme means `429-rex.approved` is indistinguishable at read-time regardless of which repo's PR produced it. Observed in practice: a leftover CEO marker from repo A's PR #429 sitting in `reviews/` appeared as if it belonged to repo B's freshly-opened PR #429 in a later session. The SHA-match check in the merge gate prevents a *wrong merge* from occurring (the stale marker's SHA will not match the new PR's GitHub HEAD), but the correctness/hygiene defect is real:
 
@@ -31,7 +31,7 @@ Chosen: **`<owner>__<repo>__<pr>-<role>.approved` flat-file scheme**, because:
 2. The flat `reviews/` directory stays flat — no subdirectory creation required, existing glob logic (`"$REVIEWS_DIR"/"$PR_NUMBER"-*.approved`) becomes `"$REVIEWS_DIR"/"$OWNER_REPO"__"$PR_NUMBER"-*.approved`; `warn-stale-review-markers.sh` still iterates with a simple for-loop.
 3. A single shared lib (`_lib-review-markers.sh`) owns path construction; all four gate hooks and all six writers (four skills + two agents) source it. One change point for any future scheme evolution.
 
-Implementation: the `review_marker_path <owner/repo> <pr> <role>` function in `_lib-review-markers.sh` sanitises the repo string (`/` → `__`) and returns the absolute path anchored at the resolved `MARKER_HOME/.claude/session/reviews/` directory.
+Implementation: the `review_marker_path <owner/repo> <pr> <role>` function in `_lib-review-markers.sh` sanitises the repo string (`/` → `__`) and returns the absolute path anchored at the resolved `MARKER_HOME/.apexyard/session/reviews/` directory.
 
 ## Backward Compatibility
 

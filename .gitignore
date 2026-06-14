@@ -1,6 +1,10 @@
 # ApexYard per-session state — active ticket, pending / completed reviews,
 # onboarding flag. Per-machine, per-clone. Never committed.
+# .apexyard/session/ is the agent-neutral shared location; .claude/session/
+# is the legacy location kept for backward compatibility during migration.
+.apexyard/session/
 .claude/session/
+.kimi-code/session/
 
 # Real onboarding config (#517). The tracked template is onboarding.example.yaml;
 # /setup copies it to onboarding.yaml (this file) and fills in real values that
@@ -8,9 +12,19 @@
 # block-onboarding-in-git.sh backstops this gitignore at commit time.
 onboarding.yaml
 
+# Scheduled-task lock written by the loop/schedule runner. Per-process,
+# ephemeral, never useful in git.
+.claude/scheduled_tasks.lock
+.kimi-code/scheduled_tasks.lock
+
+# Coverage reports downloaded from CI artifacts. Build output, never source.
+coverage-xml/
+
 # ApexYard per-project config written by /onboard. Contains deploy URLs and
 # sensitive-topic notes that should not leak to git — keep it local.
+.apexyard/project-config.json
 .claude/project-config.json
+.kimi-code/project-config.json
 
 # Claude Code per-machine settings (permission overrides, local tool config)
 .claude/settings.local.json
@@ -30,23 +44,31 @@ workspace/*/
 # to know what each agent's framework-default model: line was BEFORE the
 # adopter's routing override rewrote the agent file. Adopter-local; the
 # sync hook regenerates it each session, so committing would be churn.
+.apexyard/agents/.framework-defaults.json
 .claude/agents/.framework-defaults.json
+.kimi-code/agents/.framework-defaults.json
 
 # Per-agent env files written by apply-agent-routing.sh — endpoint,
 # env vars, timeout markers per agent. Session-scoped; never committed
 # (the routing config in agent-routing.yaml is the source of truth).
+.apexyard/session/agent-env/
 .claude/session/agent-env/
+.kimi-code/session/agent-env/
 
 # Backups of framework skills that were overridden by an adopter's
 # private custom skill (link-custom-skills.sh moves the framework version
 # aside as <skill-name>.framework.bak so the symlink can take its place).
 # These are per-machine artefacts; never committed.
+.apexyard/skills/*.framework.bak/
 .claude/skills/*.framework.bak/
+.kimi-code/skills/*.framework.bak/
 
-# Symlinks at .claude/skills/<name>/ created by link-custom-skills.sh
+# Symlinks at .apexyard/skills/<name>/ created by link-custom-skills.sh
 # pointing into the private sibling repo's custom-skills/ are NOT covered
 # by a globbed gitignore (we can't predict adopter skill names without
 # clobbering framework skill names). The hook never stages them, and
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+# The same applies to generated copies under .claude/skills/ and
+# .kimi-code/skills/.

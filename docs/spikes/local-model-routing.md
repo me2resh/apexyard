@@ -304,7 +304,7 @@ Two layers of opt-in, one per machine, one per skill:
 1. **Per-machine**: the helper is a no-op fallback when `ollama` isn't reachable. Adopters who don't install ollama see no behaviour change. This is the floor.
 2. **Per-skill**: the skill's `SKILL.md` declares which sub-tasks it would route, in a small `local-routes:` block. Today only the `inbox-summary` route is recommended (Phase 3 below). Adding more is a per-task decision, not a global flag.
 
-A new `.claude/project-config.json` key — `local_routing.enabled` (default `false`) — gates whether the routing happens at all. Adopters who installed ollama for other reasons but don't want their framework calls going through it can set it `false`. Adopters who set it `true` and don't have ollama running silently get the Claude path (the helper's exit-2 fallback is the safety net).
+A new `.apexyard/project-config.json` key — `local_routing.enabled` (default `false`) — gates whether the routing happens at all. Adopters who installed ollama for other reasons but don't want their framework calls going through it can set it `false`. Adopters who set it `true` and don't have ollama running silently get the Claude path (the helper's exit-2 fallback is the safety net).
 
 ### Fallback story
 
@@ -372,7 +372,7 @@ If this spike says GO on anything, it says GO on this one. Reasons:
 ### Migration shape sketch (for the AgDR)
 
 1. Add `bin/apexyard-local` (bash helper, ~80 lines).
-2. Add `local_routing.enabled` (default `false`) to `.claude/project-config.json` schema.
+2. Add `local_routing.enabled` (default `false`) to `.apexyard/project-config.json` schema.
 3. Update `/inbox` SKILL.md to:
    - Extract structured facts (count, type tally, P0/P1 list) via the existing portfolio paths and `gh` queries.
    - **If** `local_routing.enabled=true` AND `bin/apexyard-local available=yes`: send the facts + a narration prompt to local; validate output (count must match, P0s must appear); on failure, fall back.
@@ -408,7 +408,7 @@ If this spike says GO on anything, it says GO on this one. Reasons:
 ### Rollout sketch
 
 1. Land `bin/apexyard-local` (new file, ~80 lines bash + tests).
-2. Add `local_routing.enabled` to `.claude/project-config.json` schema; default `false`; document the override.
+2. Add `local_routing.enabled` to `.apexyard/project-config.json` schema; default `false`; document the override.
 3. Update `/inbox` SKILL.md to add the regex-extracts-facts step, the local-LLM narration step, and the validator-with-fallback step.
 4. Add a "Optional: local model routing" subsection to `docs/getting-started.md` covering ollama install, model pull, and the opt-in flag.
 5. Add a follow-up ticket: "Add bracket-prefix regex shortcut to `/feature`/`/bug`/`/task`" — orthogonal to local routing, independently valuable.

@@ -2,7 +2,7 @@
 
 **Persona name**: Karim
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Karim (Backend Engineer) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Karim (Backend Engineer) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -105,7 +105,7 @@ Before creating a PR:
 
 **Class**: in-flow-class
 
-**Sub-agent file**: `.claude/agents/backend-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/backend-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 

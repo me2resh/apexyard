@@ -1,0 +1,25 @@
+name: Tool directories in sync
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate tool directories from .apexyard/
+        run: ./bin/apexyard-sync-tool-dirs
+
+      - name: Fail if generated directories drift from canonical
+        run: |
+          if [ -n "$(git status --porcelain .claude .kimi-code)" ]; then
+            echo "ERROR: .claude/ or .kimi-code/ are out of sync with .apexyard/" >&2
+            echo "Run './bin/apexyard-sync-tool-dirs' and commit the result." >&2
+            git status --short .claude .kimi-code >&2
+            exit 1
+          fi

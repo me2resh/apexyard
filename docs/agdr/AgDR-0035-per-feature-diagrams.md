@@ -98,10 +98,10 @@ If the inventory file is missing, the skill stops with a helpful error pointing 
 
 ## Artifacts
 
-- `.claude/skills/feature-diagram/SKILL.md` — skill spec
-- `.claude/skills/feature-diagram/lint.sh` — Mermaid lint wrapper (one-line thin wrapper around `_lib-mermaid-lint.sh`, same shape as `/c4` / `/dfd`)
-- `.claude/skills/feature-diagram/tests/smoke.sh` — fixture-driven smoke covering inventory parsing + per-feature emit + Mermaid lint + missing-slug error
+- `.apexyard/skills/feature-diagram/SKILL.md` — skill spec
+- `.apexyard/skills/feature-diagram/lint.sh` — Mermaid lint wrapper (one-line thin wrapper around `_lib-mermaid-lint.sh`, same shape as `/c4` / `/dfd`)
+- `.apexyard/skills/feature-diagram/tests/smoke.sh` — fixture-driven smoke covering inventory parsing + per-feature emit + Mermaid lint + missing-slug error
 - `templates/architecture/README.md` — updated to list per-feature diagrams alongside the existing five templates
 - `CLAUDE.md` skills table — `/feature-diagram` row added
-- `.claude/skills/extract-features/SKILL.md` — "see also" pointer added
+- `.apexyard/skills/extract-features/SKILL.md` — "see also" pointer added
 - Issue: [me2resh/apexyard#288](https://github.com/me2resh/apexyard/issues/288)

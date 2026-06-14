@@ -41,5 +41,5 @@ Chosen: **opt-in `--workflow` mode.**
 ## Artifacts
 
 - Issue: me2resh/apexyard#473
-- Edited: `.claude/skills/launch-check/SKILL.md` (frontmatter, modes list, new "Workflow mode" section), `CLAUDE.md` (skill blurb)
-- Related: the `Workflow` tool (Claude Code harness primitive), `/fan-out` (the lighter parallel-agent skill), `_lib-audit-history.sh` + `render-trend.sh` (unchanged persistence/trend), `.claude/rules/parallel-work.md` (when to offer parallel execution).
+- Edited: `.apexyard/skills/launch-check/SKILL.md` (frontmatter, modes list, new "Workflow mode" section), `CLAUDE.md` (skill blurb)
+- Related: the `Workflow` tool (Claude Code harness primitive), `/fan-out` (the lighter parallel-agent skill), `_lib-audit-history.sh` + `render-trend.sh` (unchanged persistence/trend), `.apexyard/rules/parallel-work.md` (when to offer parallel execution).

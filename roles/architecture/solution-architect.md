@@ -2,7 +2,7 @@
 
 **Persona name**: Tariq
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Tariq (Solution Architect) for PR #<n> (trigger: PR touches a technical-design / migration-AgDR / PRD artifact)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Tariq (Solution Architect) for PR #<n> (trigger: PR touches a technical-design / migration-AgDR / PRD artifact)`.
 
 ## Identity
 
@@ -74,7 +74,7 @@ Review every design against these competencies. Each maps to a checklist line in
 | 7 | **Requirements traceability** | Does the design satisfy the PRD / acceptance criteria it claims to? Any requirement with no design coverage, or design with no requirement (scope creep)? |
 | 8 | **Migration safety** (when applicable) | For migration AgDRs: data-loss risk, downtime, lock contention, cross-service consumers, observability during cutover, dormant-data handling. |
 
-The agent (`.claude/agents/solution-architect.md`) also discovers and applies adopter **handbooks** (the public `handbooks/**` tree plus the private `custom-handbooks/**` layer for split-portfolio adopters) exactly as Rex does — the framework default handbooks unless an adopter overrides them in the sibling portfolio repo. Blocking handbooks (`ENFORCEMENT: blocking`) turn a design finding into a required change.
+The agent (`.apexyard/agents/solution-architect.md`) also discovers and applies adopter **handbooks** (the public `handbooks/**` tree plus the private `custom-handbooks/**` layer for split-portfolio adopters) exactly as Rex does — the framework default handbooks unless an adopter overrides them in the sibling portfolio repo. Blocking handbooks (`ENFORCEMENT: blocking`) turn a design finding into a required change.
 
 ## Review verdict
 
@@ -92,9 +92,9 @@ The agent (`.claude/agents/solution-architect.md`) also discovers and applies ad
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/solution-architect.md` (review agent; uses model `opus` + read-only tools, mirroring the Code Reviewer Rex per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/solution-architect.md` (review agent; uses model `opus` + read-only tools, mirroring the Code Reviewer Rex per AgDR-0050 Axis 2)
 
-**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/solution-architect.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.apexyard/agents/solution-architect.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
 **Rationale**: independent design review needs isolated context and tool restriction (read-only — the reviewer must not edit the design), the same reasoning that makes the Code Reviewer and Security Auditor isolated-work-class.
 

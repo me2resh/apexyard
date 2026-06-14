@@ -33,9 +33,9 @@ Chosen: **one review-only Solution Architect (Tariq), gated before Build.**
 
 ## Consequences
 
-- New `roles/architecture/` department (6th) + `roles/architecture/solution-architect.md`; `.claude/agents/solution-architect.md` review agent.
+- New `roles/architecture/` department (6th) + `roles/architecture/solution-architect.md`; `.apexyard/agents/solution-architect.md` review agent.
 - New skills: `/design-review` (invoke Tariq) and `/approve-architecture` (record the marker).
-- New gate hook `require-architecture-review.sh` wired into both merge shapes (`gh pr merge` + `gh api .../merge`) in `.claude/settings.json`; tests at `.claude/hooks/tests/test_require_architecture_review.sh`.
+- New gate hook `require-architecture-review.sh` wired into both merge shapes (`gh pr merge` + `gh api .../merge`) in `.apexyard/settings.json`; tests at `.apexyard/hooks/tests/test_require_architecture_review.sh`.
 - `detect-role-trigger.sh` fires Tariq on design-artifact edits (additive to the Tech Lead `docs/agdr/**` trigger — a migration AgDR fires both); `role-triggers.md`, `workflow-gates.md` (Gate 3b), and `workflows/sdlc.md` (Phase 2) updated.
 - Framework counts: roles 19→20, agents 23→24, hooks 24→25 (36→37 committed shell scripts), skills 55→57. `CLAUDE.md` + `site/*` refreshed; `test_site_counts.sh` green.
 - A design-artifact PR now needs three markers to merge when it's also a code PR: Rex (`-rex`), architecture (`-architecture`), CEO (`-ceo`) — plus design (`-design`) if it touches UI.
@@ -44,6 +44,6 @@ Chosen: **one review-only Solution Architect (Tariq), gated before Build.**
 ## Artifacts
 
 - Issue: me2resh/apexyard#471
-- New: `roles/architecture/solution-architect.md`, `.claude/agents/solution-architect.md`, `.claude/skills/design-review/SKILL.md`, `.claude/skills/approve-architecture/SKILL.md`, `.claude/hooks/require-architecture-review.sh`, `.claude/hooks/tests/test_require_architecture_review.sh`
-- Edited: `.claude/rules/role-triggers.md`, `.claude/hooks/detect-role-trigger.sh` (+ test), `.claude/rules/workflow-gates.md`, `workflows/sdlc.md`, `.claude/settings.json`, `CLAUDE.md`, `site/*`
-- Related: AgDR-0050 (agent runtime / Axis 6 isolated-vs-in-flow class), AgDR-0018 (persona naming), the Rex pattern (`.claude/agents/code-reviewer.md`), and the UI design-review gate (`require-design-review-for-ui.sh` + `/approve-design`).
+- New: `roles/architecture/solution-architect.md`, `.apexyard/agents/solution-architect.md`, `.apexyard/skills/design-review/SKILL.md`, `.apexyard/skills/approve-architecture/SKILL.md`, `.apexyard/hooks/require-architecture-review.sh`, `.apexyard/hooks/tests/test_require_architecture_review.sh`
+- Edited: `.apexyard/rules/role-triggers.md`, `.apexyard/hooks/detect-role-trigger.sh` (+ test), `.apexyard/rules/workflow-gates.md`, `workflows/sdlc.md`, `.apexyard/settings.json`, `CLAUDE.md`, `site/*`
+- Related: AgDR-0050 (agent runtime / Axis 6 isolated-vs-in-flow class), AgDR-0018 (persona naming), the Rex pattern (`.apexyard/agents/code-reviewer.md`), and the UI design-review gate (`require-design-review-for-ui.sh` + `/approve-design`).

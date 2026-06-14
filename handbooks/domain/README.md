@@ -106,7 +106,7 @@ Neither is shipping in this MVP. The path-glob discovery is the foundation; the 
 - A language-specific rule. → `handbooks/language/<lang>/`
 - A cross-cutting team-communication rule (commit messages, glossary discipline). → `handbooks/general/`
 - A one-time decision record. → `docs/agdr/` (an AgDR, not a handbook)
-- A skill spec. → `.claude/skills/<name>/SKILL.md`
+- A skill spec. → `.apexyard/skills/<name>/SKILL.md`
 
 If you find yourself writing a domain handbook that has no `paths:` field AND no obvious domain boundary, it probably belongs in `architecture/` or `general/` instead.
 

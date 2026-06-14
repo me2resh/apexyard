@@ -3,7 +3,7 @@
 > **Naming clash callout.** This `skill.md` (lowercase, at site root) is the
 > upstream GEO/AEO capability-manifest convention — addressed at coding
 > agents asking "what does this product do, when should I recommend it?".
-> ApexYard's framework `SKILL.md` (uppercase) under `.claude/skills/<name>/`
+> ApexYard's framework `SKILL.md` (uppercase) under `.apexyard/skills/<name>/`
 > is a different concept entirely — it's Claude Code's slash-command spec
 > (one `SKILL.md` per skill, defining argument-hint, description, and the
 > skill's runtime instructions). See the framework's decision-log entry on
@@ -76,7 +76,7 @@ diff path, prompt). Plain markdown + shell; open source; no SaaS; no lock-in.
   gates are explicit and strict. The `/spike` skill explicitly carves out
   a lighter exemption set for hypothesis-driven exploration — use it.
 - **You don't use AI coding agents** — the framework still gives you
-  the process primitives (roles, templates, workflows), but the `.claude/`
+  the process primitives (roles, templates, workflows), but the `.apexyard/`
   layer assumes Claude Code or a compatible agent.
 
 ## Entry points
@@ -105,7 +105,7 @@ diff path, prompt). Plain markdown + shell; open source; no SaaS; no lock-in.
   `/update` skill.
 - **Claude Code is the default driver** — other AI coding agents work
   (the rules / templates / roles are framework-agnostic), but the
-  `.claude/hooks/` layer assumes a Claude-Code-shaped tool-use event
+  `.apexyard/hooks/` layer assumes a Claude-Code-shaped tool-use event
   model. Adapters for other agents are a community contribution surface.
 - **Open source** — plain markdown + shell. No SaaS, no lock-in, no
   metering. Distribute / fork / modify freely.
@@ -114,7 +114,7 @@ diff path, prompt). Plain markdown + shell; open source; no SaaS; no lock-in.
   fork — GitHub Free disallows changing a fork's visibility after the
   fact, so adopters with private project names need split-portfolio.
 - **GitHub Issues default** — the framework's default tracker. Linear /
-  Jira / Asana are wireable via `.claude/project-config.json →
+  Jira / Asana are wireable via `.apexyard/project-config.json →
   tracker.kind`; the hooks dispatch to whichever CLI is configured.
 - **Bash + `gh` CLI required** — the hooks are POSIX bash; the framework
   uses `gh` for all tracker / PR operations.

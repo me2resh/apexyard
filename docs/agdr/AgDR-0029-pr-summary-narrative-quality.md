@@ -1,6 +1,6 @@
 # AgDR-0029 — PR summary narrative quality: prose rule + Rex advisory check
 
-> In the context of PR descriptions generated under ApexYard's existing structural rules (glossary mandatory, ticket link mandatory, Summary section present) consistently shipping with **label-only summary bullets** ("State fix", "OPA/Rego compliance policies", "CI pipeline changes", "Pre-commit hooks") that force reviewers into diff archaeology before they can pick a review focus, facing the question of how strongly to enforce the new "every bullet states *what changed* AND *why it matters*" rule, I decided to ship a **prose-only rule in `.claude/rules/pr-quality.md` + a `nit:` / `suggestion:`-shaped advisory check in Rex** (non-blocking; the false-positive rate on the label-only heuristic is too high for a blocking gate to be worth the merge-gate churn), to achieve a measurable lift in narrative quality across PRs without trapping legitimate one-line bug fixes or dependency bumps behind a request-changes verdict, accepting that adoption is gradual (self-discipline-first, Rex-advisory as the back-pressure) rather than instant, and that we may need to revisit blocking enforcement once the heuristic's false-positive rate is measured under real traffic.
+> In the context of PR descriptions generated under ApexYard's existing structural rules (glossary mandatory, ticket link mandatory, Summary section present) consistently shipping with **label-only summary bullets** ("State fix", "OPA/Rego compliance policies", "CI pipeline changes", "Pre-commit hooks") that force reviewers into diff archaeology before they can pick a review focus, facing the question of how strongly to enforce the new "every bullet states *what changed* AND *why it matters*" rule, I decided to ship a **prose-only rule in `.apexyard/rules/pr-quality.md` + a `nit:` / `suggestion:`-shaped advisory check in Rex** (non-blocking; the false-positive rate on the label-only heuristic is too high for a blocking gate to be worth the merge-gate churn), to achieve a measurable lift in narrative quality across PRs without trapping legitimate one-line bug fixes or dependency bumps behind a request-changes verdict, accepting that adoption is gradual (self-discipline-first, Rex-advisory as the back-pressure) rather than instant, and that we may need to revisit blocking enforcement once the heuristic's false-positive rate is measured under real traffic.
 
 ## Context
 
@@ -41,11 +41,11 @@ Chosen: **Option A — prose-only rule + Rex advisory check**.
 
 Concretely:
 
-1. **Rule** lives at `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality (MANDATORY)". Contains the rule statement, a bad/good worked example pair (verbatim from the originating ticket), a three-question author self-check, and an explicit legitimate-exceptions list (dependency bumps, mechanical refactors, single-line bug fixes whose fix IS the rationale).
+1. **Rule** lives at `.apexyard/rules/pr-quality.md` § "Summary bullets — narrative quality (MANDATORY)". Contains the rule statement, a bad/good worked example pair (verbatim from the originating ticket), a three-question author self-check, and an explicit legitimate-exceptions list (dependency bumps, mechanical refactors, single-line bug fixes whose fix IS the rationale).
 
 2. **Cross-link** from `workflows/code-review.md` § "PR Description Format" — one paragraph that names the rule and links into `pr-quality.md` for the worked examples. PR authors reading the workflow doc see the standard before they write the description.
 
-3. **Rex check** in `.claude/agents/code-reviewer.md` § 6 "PR Description Quality". Detection heuristic: bullet text after stripping list punctuation is ≤ 6 words AND contains no verb. Verdict effect: surface as `nit:` / `suggestion:`, do NOT downgrade verdict from APPROVED. Skip the check entirely on pure-dependency-bump and pure-rename diffs (both of which legitimately produce short bullets).
+3. **Rex check** in `.apexyard/agents/code-reviewer.md` § 6 "PR Description Quality". Detection heuristic: bullet text after stripping list punctuation is ≤ 6 words AND contains no verb. Verdict effect: surface as `nit:` / `suggestion:`, do NOT downgrade verdict from APPROVED. Skip the check entirely on pure-dependency-bump and pure-rename diffs (both of which legitimately produce short bullets).
 
 4. **No PR template change** — the framework repo currently ships no `.github/PULL_REQUEST_TEMPLATE.md`. Adding one for a single advisory bullet would create a new framework file that adopters have to merge on every upstream sync, for marginal benefit. The rule + cross-link + Rex check covers the same surface without that maintenance tax.
 
@@ -64,8 +64,8 @@ Concretely:
 
 - Issue: me2resh/apexyard#312
 - PR: `feat(#312): PR summary narrative-quality rule + Rex advisory check` against `dev`
-- Rule: `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality (MANDATORY)"
+- Rule: `.apexyard/rules/pr-quality.md` § "Summary bullets — narrative quality (MANDATORY)"
 - Workflow cross-link: `workflows/code-review.md` § "PR Description Format"
-- Rex agent: `.claude/agents/code-reviewer.md` § 6 — new sub-section "Label-only summary bullets — advisory check (non-blocking)"
-- Smoke test: `.claude/rules/tests/test_pr_quality_narrative_rule.sh`
+- Rex agent: `.apexyard/agents/code-reviewer.md` § 6 — new sub-section "Label-only summary bullets — advisory check (non-blocking)"
+- Smoke test: `.apexyard/rules/tests/test_pr_quality_narrative_rule.sh`
 - Related: AgDR-0020 (adopter handbooks for Rex — same advisory-by-default pattern), #232 (handbook discovery system that established the advisory/blocking convention)

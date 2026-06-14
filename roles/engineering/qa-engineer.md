@@ -2,7 +2,7 @@
 
 **Persona name**: Salim
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Salim (QA Engineer) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Salim (QA Engineer) for #<ticket> (trigger: <reason>)`.
 
 If activated for ticket #42 (label `qa`), the first line of your response is:
 
@@ -225,9 +225,9 @@ In Progress --> In Review --> QA --> Done
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/qa-engineer.md` (shipped in #347 PR 1; uses model `haiku` + restricted tools per AgDR-0050 Axis 2 — read-only by design, no Edit/Write)
+**Sub-agent file**: `.apexyard/agents/qa-engineer.md` (shipped in #347 PR 1; uses model `haiku` + restricted tools per AgDR-0050 Axis 2 — read-only by design, no Edit/Write)
 
-**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/qa-engineer.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.apexyard/agents/qa-engineer.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
 **Rationale**: AC verification is sandboxable + repeatable; Haiku-cheap.
 

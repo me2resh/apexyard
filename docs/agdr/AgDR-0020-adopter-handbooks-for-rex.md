@@ -1,10 +1,10 @@
 # AgDR-0020 — Adopter handbooks consumed by Rex during code review: scope, discovery, format, enforcement
 
-> In the context of letting adopters layer company-specific coding standards on top of the framework's generic rules without forcing them to fork `.claude/rules/` (#232), facing five load-bearing choices (handbook scope, discovery mechanism, file format, sample-scaffold-per-feature, enforcement default), I decided **framework-level handbooks only (no per-project layering in v1), path-convention discovery (`architecture/` always-loads, `language/<lang>/` loads on diff match, `general/` always-loads), flat markdown without YAML frontmatter, ship 4 sample handbooks demonstrating each shape (no auto-scaffold per feature), and advisory-by-default with explicit `ENFORCEMENT: blocking` opt-in**, to achieve a low-friction handbook layer that grows organically with the framework while staying mechanically enforceable for the rules that genuinely warrant blocking, accepting that v1 has no per-project handbook scope and that the path-convention discovery requires authors to put files in the right directory.
+> In the context of letting adopters layer company-specific coding standards on top of the framework's generic rules without forcing them to fork `.apexyard/rules/` (#232), facing five load-bearing choices (handbook scope, discovery mechanism, file format, sample-scaffold-per-feature, enforcement default), I decided **framework-level handbooks only (no per-project layering in v1), path-convention discovery (`architecture/` always-loads, `language/<lang>/` loads on diff match, `general/` always-loads), flat markdown without YAML frontmatter, ship 4 sample handbooks demonstrating each shape (no auto-scaffold per feature), and advisory-by-default with explicit `ENFORCEMENT: blocking` opt-in**, to achieve a low-friction handbook layer that grows organically with the framework while staying mechanically enforceable for the rules that genuinely warrant blocking, accepting that v1 has no per-project handbook scope and that the path-convention discovery requires authors to put files in the right directory.
 
 ## Context
 
-[me2resh/apexyard#232](https://github.com/me2resh/apexyard/issues/232) introduces a new "handbook" concept — adopter-authored markdown files containing company-specific coding standards that Rex (the code-reviewer agent) consults during PR review, alongside the framework-wide rules in `.claude/rules/`. The CEO answered five design questions in conversation; this AgDR records those answers as the load-bearing decisions because each shapes how adopters interact with the layer.
+[me2resh/apexyard#232](https://github.com/me2resh/apexyard/issues/232) introduces a new "handbook" concept — adopter-authored markdown files containing company-specific coding standards that Rex (the code-reviewer agent) consults during PR review, alongside the framework-wide rules in `.apexyard/rules/`. The CEO answered five design questions in conversation; this AgDR records those answers as the load-bearing decisions because each shapes how adopters interact with the layer.
 
 ## Options Considered
 
@@ -12,7 +12,7 @@
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Framework-level only** (chosen) | Simple. Handbooks travel with the ops fork; one source of truth across all managed projects. Matches the way `.claude/rules/` already works — adopters know the pattern. | Adopters with truly project-specific patterns can't express them. Migration to per-project later is additive — no breaking change. |
+| **Framework-level only** (chosen) | Simple. Handbooks travel with the ops fork; one source of truth across all managed projects. Matches the way `.apexyard/rules/` already works — adopters know the pattern. | Adopters with truly project-specific patterns can't express them. Migration to per-project later is additive — no breaking change. |
 | Per-project only | Matches the per-project nature of audits + tickets. | Most coding standards are organisation-wide ("never use floats for currency", "API responses are camelCase") — forcing per-project duplication creates drift. Adopter has to author the handbook N times for N projects. |
 | Both, layered (project overrides framework) | Maximum flexibility. | The conflict-resolution rules (project wins? merge? warn-on-conflict?) become a design surface of their own. v1 should not carry that complexity until an adopter asks. |
 
@@ -28,7 +28,7 @@
 
 | Option | Pros | Cons |
 |---|---|---|
-| **Flat markdown** (chosen) | Same as `.claude/rules/` — adopters already know the format. Rex reads as prose, no parser needed. Authors write English, not config. | No machine-readable metadata — discovery has to live in path conventions (which it does, per choice B). |
+| **Flat markdown** (chosen) | Same as `.apexyard/rules/` — adopters already know the format. Rex reads as prose, no parser needed. Authors write English, not config. | No machine-readable metadata — discovery has to live in path conventions (which it does, per choice B). |
 | Markdown with YAML frontmatter | Captures `enforcement`, `applies_to`, `severity`, `version` as structured data. | Authors learn YAML. Discovery touches every file even when irrelevant. Every example handbook becomes a vehicle for documenting the schema. |
 | Pure YAML / JSON | Rex can introspect every field. | Handbook prose has nowhere to live; rules degenerate into one-liners that lose explanatory context (the WHY behind the rule). Loses the "Rex reads as prose" property that makes the layer trivial to extend. |
 
@@ -69,7 +69,7 @@ Why this combination:
 
 - The four sample handbooks shipped in this PR are also the *recommended defaults*. Adopters who don't author their own get a non-trivial baseline of standards Rex enforces. Adopters who do author their own can keep, edit, or replace the samples freely.
 - Rex's review prompt grows by the loaded handbook count per PR. Diff-match for `language/<lang>/` keeps the per-PR cost bounded. If a future adopter has 50 architecture handbooks (always-load), follow-up work could add a `glob:` directive in handbook prose to narrow further — but v1 ships without it because no adopter has hit the limit yet.
-- The `ENFORCEMENT: blocking` marker is a magic phrase. If a future schema bump introduces a YAML frontmatter (reversal of choice C), the marker becomes a frontmatter field. The phrase is documented in `handbooks/README.md` and cited in `.claude/agents/code-reviewer.md` so the convention is discoverable.
+- The `ENFORCEMENT: blocking` marker is a magic phrase. If a future schema bump introduces a YAML frontmatter (reversal of choice C), the marker becomes a frontmatter field. The phrase is documented in `handbooks/README.md` and cited in `.apexyard/agents/code-reviewer.md` so the convention is discoverable.
 - Per-project handbook scope is filed as a follow-up consideration in the ticket's "Out of Scope" section. Adding it later is additive (introduce a `projects/<name>/handbooks/` resolution path; layer over framework handbooks) and reversible (remove the per-project arm if it doesn't get traction).
 - Handbook violations surface in Rex's existing review-comment shape — no new UI or output channel. Operators see them inline alongside framework-rule findings.
 - The `/handbook` authoring skill (interactive scaffold for new handbooks) is also out of scope. v1 expects adopters to copy a sample and edit. If authoring friction shows up, file a follow-up.
@@ -79,6 +79,6 @@ Why this combination:
 - Ticket: [me2resh/apexyard#232](https://github.com/me2resh/apexyard/issues/232)
 - Implementation PR: feature/GH-232-adopter-handbooks (this branch)
 - Sample handbooks: `handbooks/architecture/clean-architecture-layers.md`, `handbooks/architecture/migration-safety.md` (blocking), `handbooks/language/typescript/strict-mode.md`, `handbooks/general/commit-message-quality.md`
-- Rex agent update: `.claude/agents/code-reviewer.md`
+- Rex agent update: `.apexyard/agents/code-reviewer.md`
 - Index: `handbooks/README.md`
 - CLAUDE.md QUICK REFERENCE updated to surface `handbooks/`

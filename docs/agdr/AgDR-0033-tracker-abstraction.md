@@ -64,7 +64,7 @@ The upstream-fallback logic (#207) — important for fork → upstream PRs in `m
 
 **Zero behaviour change for existing GH adopters.** The default config matches today's calls byte-for-byte (same template, same flags, same JSON fields requested). The regression test in `test_tracker_aware_hooks.sh` exercises this path with a mock `gh` to lock the default in.
 
-**Adding a new tracker is one file edit.** Drop a `view_command` template + `id_pattern` into `.claude/project-config.json` and (if its JSON shape doesn't match the lib's six built-in adapters) write a `normalise_jq` expression. No hook edits required.
+**Adding a new tracker is one file edit.** Drop a `view_command` template + `id_pattern` into `.apexyard/project-config.json` and (if its JSON shape doesn't match the lib's six built-in adapters) write a `normalise_jq` expression. No hook edits required.
 
 **Per-tracker authentication remains the operator's problem.** The lib doesn't try to set up `gh auth login` / `linear login` / `jira config init`. If the CLI is missing or unauthenticated, `tracker_view` exits non-zero with empty stdout — the consumers see "ticket not found" and emit a clear blocked-message that points the operator at their CLI's docs.
 
@@ -74,13 +74,13 @@ The upstream-fallback logic (#207) — important for fork → upstream PRs in `m
 
 ## Artifacts
 
-- `.claude/hooks/_lib-tracker.sh` — new library
-- `.claude/project-config.defaults.json` — new `tracker` block
-- `.claude/hooks/validate-pr-create.sh` — refactored to call `tracker_view`
-- `.claude/hooks/verify-commit-refs.sh` — refactored to call `tracker_view`
-- `.claude/hooks/validate-branch-name.sh` — regex sourced from `tracker_id_pattern`
-- `.claude/skills/start-ticket/SKILL.md` — refactored to use the tracker lib
-- `.claude/hooks/tests/test_tracker_aware_hooks.sh` — regression + Linear / Jira / none / custom coverage
-- `.claude/rules/git-conventions.md` — points at `tracker.id_pattern` instead of hardcoding the regex
+- `.apexyard/hooks/_lib-tracker.sh` — new library
+- `.apexyard/project-config.defaults.json` — new `tracker` block
+- `.apexyard/hooks/validate-pr-create.sh` — refactored to call `tracker_view`
+- `.apexyard/hooks/verify-commit-refs.sh` — refactored to call `tracker_view`
+- `.apexyard/hooks/validate-branch-name.sh` — regex sourced from `tracker_id_pattern`
+- `.apexyard/skills/start-ticket/SKILL.md` — refactored to use the tracker lib
+- `.apexyard/hooks/tests/test_tracker_aware_hooks.sh` — regression + Linear / Jira / none / custom coverage
+- `.apexyard/rules/git-conventions.md` — points at `tracker.id_pattern` instead of hardcoding the regex
 - `docs/multi-project.md` — Linear/Jira/Asana setup examples added to the FAQ
 - me2resh/apexyard#283

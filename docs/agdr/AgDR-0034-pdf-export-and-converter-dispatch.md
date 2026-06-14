@@ -43,7 +43,7 @@ The decision space had three live axes:
 |--------|------|------|
 | Auto-pick based on input path | Zero-prompt UX. If `<input>` is under `projects/<name>/`, write to `projects/<name>/pdfs/<stem>.pdf` and call it done. | Wrong for the most important class of PDF (customer-facing docs that need to ship in the project repo). Auto-picking the wrong dir creates cleanup work. Mirrors AgDR-0007's "skill should ask, not guess" principle from the release-cut decision. |
 | Always prompt | The skill asks once at export time, matching the operator's mental model of "this PDF is going to {a customer / the board / my own files}". Same shape as the C4 / DFD / vision skills' "edit list, accept" loop. | Slightly slower (one extra prompt). |
-| Operator config locks the default | Adopters who always pick `workspace` can set `default_destination: workspace` in `.claude/project-config.json` + pass `--no-prompt`. | Two layers of indirection — the prompt + the override. But these are independently useful. |
+| Operator config locks the default | Adopters who always pick `workspace` can set `default_destination: workspace` in `.apexyard/project-config.json` + pass `--no-prompt`. | Two layers of indirection — the prompt + the override. But these are independently useful. |
 
 ## Decision
 
@@ -57,7 +57,7 @@ Per-skill `--pdf` flags are listed as **deferred (v1.5)** in the ticket. If adop
 
 `convert.sh` detects which converters are on `PATH` (pandoc / wkhtmltopdf / npx-for-md-to-pdf-and-bpmn-to-image) and picks the best fit for the input format. When none are installed, exit 3 with an advisory naming each install option — same shape as `/process`'s `lint.sh` and `_lib-mermaid-lint.sh`.
 
-The "preferred" converter is configurable (`pdf.preferred_converter` in `.claude/project-config.json`) for adopters who explicitly want md-to-pdf (Node shop, no LaTeX) over pandoc.
+The "preferred" converter is configurable (`pdf.preferred_converter` in `.apexyard/project-config.json`) for adopters who explicitly want md-to-pdf (Node shop, no LaTeX) over pandoc.
 
 Browser-based puppeteer/playwright was rejected for the Chromium-cache pain — adopters who want browser-based rendering can install `md-to-pdf` (which uses chromium under the hood) and the dispatch picks it up automatically.
 
@@ -96,19 +96,19 @@ The hint text explicitly references the framework rule: *"Pick (1) if a downstre
 ### Migration / rollback
 
 - **No data migration needed** — the skill is additive. No existing docs are touched.
-- **Rollback** is `git revert` of the introducing PR; no state in `.claude/session/` is created.
+- **Rollback** is `git revert` of the introducing PR; no state in `.apexyard/session/` is created.
 - **Adopters with `default_destination: ask` and `--no-prompt` get an exit 2** with a clear message — by design, not regression.
 
 ## Artifacts
 
 - PR: <to be filled at merge time>
 - Issue: [me2resh/apexyard#284](https://github.com/me2resh/apexyard/issues/284)
-- Skill: `.claude/skills/pdf/SKILL.md`
-- Converter dispatch: `.claude/skills/pdf/convert.sh`
-- Tests: `.claude/skills/pdf/tests/smoke.sh`
+- Skill: `.apexyard/skills/pdf/SKILL.md`
+- Converter dispatch: `.apexyard/skills/pdf/convert.sh`
+- Tests: `.apexyard/skills/pdf/tests/smoke.sh`
 - Docs: `docs/multi-project.md` § "Architecture diagrams" → "PDF exports follow the same rule"
 - Sibling patterns this AgDR reuses:
   - AgDR-0019 — dated audit subdirectory convention (filename rule)
   - AgDR-0023 — custom templates override semantics (the path-mirroring shape — similar discovery pattern but for templates rather than converters)
   - AgDR-0025 — `/process` graceful-degrade shape for `bpmnlint`
-  - `.claude/skills/_lib-mermaid-lint.sh` — same shape, npx-fallback case
+  - `.apexyard/skills/_lib-mermaid-lint.sh` — same shape, npx-fallback case

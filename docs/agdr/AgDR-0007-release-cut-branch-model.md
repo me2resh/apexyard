@@ -67,7 +67,7 @@ Naming: this is **NOT** git flow. It's "release-cut" or "gitflow-lite". Be preci
 ## Artifacts
 
 - Implementing ticket: `me2resh/apexyard#116`
-- `/release` skill: `.claude/skills/release/SKILL.md`
+- `/release` skill: `.apexyard/skills/release/SKILL.md`
 - Process doc: `docs/release-process.md`
-- Hook update: `.claude/hooks/block-main-push.sh` (now also blocks `dev`)
+- Hook update: `.apexyard/hooks/block-main-push.sh` (now also blocks `dev`)
 - CLAUDE.md + `docs/multi-project.md` updated to clarify framework-only scope

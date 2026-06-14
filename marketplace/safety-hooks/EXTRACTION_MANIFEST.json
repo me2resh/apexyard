@@ -5,16 +5,16 @@
   "extracted_at": "2026-05-20T13:10:36Z",
   "extracted_by": "bin/extract-subpacks.sh",
   "files": [
-    ".claude/hooks/_lib-extract-pr.sh",
-    ".claude/hooks/_lib-ops-root.sh",
-    ".claude/hooks/_lib-read-config.sh",
-    ".claude/hooks/_lib-tracker.sh",
-    ".claude/hooks/block-git-add-all.sh",
-    ".claude/hooks/block-main-push.sh",
-    ".claude/hooks/check-secrets.sh",
-    ".claude/hooks/pre-push-gate.sh",
-    ".claude/hooks/validate-branch-name.sh",
-    ".claude/hooks/validate-pr-create.sh",
-    ".claude/hooks/verify-commit-refs.sh"
+    ".apexyard/hooks/_lib-extract-pr.sh",
+    ".apexyard/hooks/_lib-ops-root.sh",
+    ".apexyard/hooks/_lib-read-config.sh",
+    ".apexyard/hooks/_lib-tracker.sh",
+    ".apexyard/hooks/block-git-add-all.sh",
+    ".apexyard/hooks/block-main-push.sh",
+    ".apexyard/hooks/check-secrets.sh",
+    ".apexyard/hooks/pre-push-gate.sh",
+    ".apexyard/hooks/validate-branch-name.sh",
+    ".apexyard/hooks/validate-pr-create.sh",
+    ".apexyard/hooks/verify-commit-refs.sh"
   ]
 }

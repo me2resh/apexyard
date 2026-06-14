@@ -60,7 +60,7 @@ TESTS=()
 while IFS= read -r _t; do
   [ -n "$_t" ] && TESTS+=("$_t")
 done < <(
-  find .claude/hooks/tests .claude/agents/tests .claude/rules/tests .claude/skills \
+  find .apexyard/hooks/tests .apexyard/agents/tests .apexyard/rules/tests .apexyard/skills \
        -type f \( -name 'test_*.sh' -o -name '*.test.sh' \) 2>/dev/null | sort
 )
 

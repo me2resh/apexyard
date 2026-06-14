@@ -41,12 +41,12 @@ Chosen: **interactive-by-default checklist with an `--all` non-interactive escap
 
 - Existing no-flag `/handover` runs now show a one-line document-selection prompt with the L2 container diagram pre-ticked; pressing enter/`default` reproduces close to today's output. `--all` restores the exact old no-prompt flow.
 - Operators can now reach their `custom-templates/**` overrides per doc, and pick non-conventional sibling templates, without touching skill plumbing.
-- No new skill, hook, or role — site counts (57 skills / 37 hooks / 20 roles) are unchanged. The change is confined to `.claude/skills/handover/SKILL.md`, the CLAUDE.md one-liner, and this AgDR.
+- No new skill, hook, or role — site counts (57 skills / 37 hooks / 20 roles) are unchanged. The change is confined to `.apexyard/skills/handover/SKILL.md`, the CLAUDE.md one-liner, and this AgDR.
 - The bootstrap exemption scope was widened to cover the new `architecture/context.md` and `architecture/sequence-<flow>.md` writes (same `projects/<name>/` class already exempt).
 - Re-handover preservation extends to the new stubs: like the container stub, context/sequence are written once and never overwritten.
 
 ## Artifacts
 
-- `.claude/skills/handover/SKILL.md` — step 5.6 (checklist + per-doc template pick), step 6.1 (in-skill context/sequence stubs), Usage flags, Output-location + summary updates, Rules 19–20
+- `.apexyard/skills/handover/SKILL.md` — step 5.6 (checklist + per-doc template pick), step 6.1 (in-skill context/sequence stubs), Usage flags, Output-location + summary updates, Rules 19–20
 - `CLAUDE.md` — `/handover` one-line description
 - Closes me2resh/apexyard#480

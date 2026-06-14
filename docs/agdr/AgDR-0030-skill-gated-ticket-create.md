@@ -15,7 +15,7 @@ related: me2resh/apexyard#268, AgDR-0011-bootstrap-skill-exemption.md
 
 The framework is also multi-tracker by design. Per `docs/multi-project.md` § FAQ ("Can I use this with Linear / Jira / etc.?"), adopters set per-project `ticket_prefix` and may use Linear, Jira, Asana, or another tracker. The gate must not bake `gh`/GitHub in as the only CLI shape.
 
-The bootstrap-skill exemption (AgDR-0011) already establishes the marker-file pattern for "this skill is in flight, exempt me from a gate" — `.claude/session/active-bootstrap` + `clear-bootstrap-marker.sh` SessionStart cleaner + config-driven `ticket.bootstrap_skills` list. Mirroring that pattern keeps the framework internally consistent.
+The bootstrap-skill exemption (AgDR-0011) already establishes the marker-file pattern for "this skill is in flight, exempt me from a gate" — `.apexyard/session/active-bootstrap` + `clear-bootstrap-marker.sh` SessionStart cleaner + config-driven `ticket.bootstrap_skills` list. Mirroring that pattern keeps the framework internally consistent.
 
 ## Options Considered
 
@@ -29,26 +29,26 @@ The bootstrap-skill exemption (AgDR-0011) already establishes the marker-file pa
 
 ## Decision
 
-Chosen: **skill-marker + config-driven matcher list**, because it (a) mirrors the existing bootstrap-skill exemption (AgDR-0011) so the framework stays internally consistent; (b) is tracker-agnostic by construction — only the matcher list knows about specific CLIs and adopters extend it via shallow-merge in `.claude/project-config.json`; and (c) supports the recovery scenario through a per-session env-var escape hatch (`APEXYARD_ALLOW_RAW_TICKET_CREATE=1`) with a visible stderr warning.
+Chosen: **skill-marker + config-driven matcher list**, because it (a) mirrors the existing bootstrap-skill exemption (AgDR-0011) so the framework stays internally consistent; (b) is tracker-agnostic by construction — only the matcher list knows about specific CLIs and adopters extend it via shallow-merge in `.apexyard/project-config.json`; and (c) supports the recovery scenario through a per-session env-var escape hatch (`APEXYARD_ALLOW_RAW_TICKET_CREATE=1`) with a visible stderr warning.
 
 Concretely:
 
-1. New hook `.claude/hooks/require-skill-for-issue-create.sh` (PreToolUse:Bash). Reads `ticket.create_command_patterns` from project config; substring-matches the (whitespace-collapsed) bash command. On match:
+1. New hook `.apexyard/hooks/require-skill-for-issue-create.sh` (PreToolUse:Bash). Reads `ticket.create_command_patterns` from project config; substring-matches the (whitespace-collapsed) bash command. On match:
    - If bootstrap marker present AND active bootstrap skill is on `ticket.bootstrap_skills` → allow (e.g. `/handover` filing its bookkeeping issues).
-   - Else if `.claude/session/active-issue-skill` present → allow (one of the seven ticket skills is in flight).
+   - Else if `.apexyard/session/active-issue-skill` present → allow (one of the seven ticket skills is in flight).
    - Else if `APEXYARD_ALLOW_RAW_TICKET_CREATE=1` → allow with stderr warning.
    - Else → BLOCK with exit 2 and a clear message naming the seven skill alternatives + the env-var bypass.
 
-2. New SessionStart hook `.claude/hooks/clear-issue-skill-marker.sh` (mirror of `clear-bootstrap-marker.sh`) sweeps stale markers from killed sessions.
+2. New SessionStart hook `.apexyard/hooks/clear-issue-skill-marker.sh` (mirror of `clear-bootstrap-marker.sh`) sweeps stale markers from killed sessions.
 
 3. New config key `ticket.create_command_patterns` in `project-config.defaults.json` with default patterns covering GitHub CLI (`gh issue create`, `gh api repos/`), Linear (`linear issue create`), Jira (`jira issue create`, `jira create`), Asana (`asana task create`). Adopters extend via shallow-merge.
 
-4. The seven ticket skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) each write `.claude/session/active-issue-skill` on entry and remove it on completion / cancel.
+4. The seven ticket skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) each write `.apexyard/session/active-issue-skill` on entry and remove it on completion / cancel.
 
 ## Consequences
 
 - Every new ticket from a Claude Code session is filed through a structured skill that runs the contract-shaped interview, OR through an explicitly-acknowledged env-var bypass. No more silent ad-hoc filings.
-- Adopters on Linear / Jira / Asana / custom trackers extend the matcher list in `.claude/project-config.json` without touching framework code.
+- Adopters on Linear / Jira / Asana / custom trackers extend the matcher list in `.apexyard/project-config.json` without touching framework code.
 - Marker lifecycle is operator-managed inside the seven ticket skills — if a skill is updated to add new exit paths, the marker-cleanup step must be added to each. The SessionStart cleaner is the safety net for the crash-mid-skill failure mode.
 - Bootstrap-skill exemption continues to work — `/handover` filing tickets for newly-adopted projects is unaffected because the bootstrap marker takes precedence.
 - `validate-issue-structure.sh` continues to compose downstream: it validates body structure; this hook validates origin. Both fire on `gh issue create`.
@@ -58,8 +58,8 @@ Concretely:
 
 - Issue: [me2resh/apexyard#268](https://github.com/me2resh/apexyard/issues/268)
 - PR: `feat(#268): skill-gated ticket-create hook (multi-tracker)` against `dev`
-- New hook: `.claude/hooks/require-skill-for-issue-create.sh`
-- New SessionStart hook: `.claude/hooks/clear-issue-skill-marker.sh`
-- Config: `.claude/project-config.defaults.json` → `ticket.create_command_patterns`
-- Tests: `.claude/hooks/tests/test_require_skill_for_issue_create.sh`
+- New hook: `.apexyard/hooks/require-skill-for-issue-create.sh`
+- New SessionStart hook: `.apexyard/hooks/clear-issue-skill-marker.sh`
+- Config: `.apexyard/project-config.defaults.json` → `ticket.create_command_patterns`
+- Tests: `.apexyard/hooks/tests/test_require_skill_for_issue_create.sh`
 - Related: AgDR-0011 (bootstrap-skill exemption — the pattern this mirrors)

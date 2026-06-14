@@ -4,7 +4,7 @@ How code moves from development to production.
 
 ## Roles
 
-Deployment is a **role-activated** workflow. Roles activate automatically per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md).
+Deployment is a **role-activated** workflow. Roles activate automatically per [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md).
 
 | Stage | Primary role | Trigger |
 |-------|--------------|---------|

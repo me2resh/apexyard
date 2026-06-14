@@ -8,7 +8,7 @@ Industry-standard prior art on Generative Engine Optimization (GEO) and Agentic 
 
 - **Discovery files** at the site root that LLM crawlers and coding agents are starting to look for: `llms.txt` / `llms-full.txt` (analogue of `sitemap.xml` but for LLM-friendly content), `/.well-known/ai-plugin.json`, `agent-permissions.json`, and at the source-repo root `AGENTS.md`.
 - **AI-crawler directives** in `robots.txt` — distinct from the SEO-shaped `Googlebot` and `Bingbot` directives. The v1 list spans 11 user-agents covering training, retrieval-at-inference, and both: `GPTBot`, `ChatGPT-User`, `OAI-SearchBot`, `ClaudeBot`, `Claude-Web`, `anthropic-ai`, `Google-Extended`, `PerplexityBot`, `CCBot`, `Bytespider`, `Applebot-Extended`, `cohere-ai`. (We ship 12 in `ai-crawlers.json`; the README list in the ticket was 11 — the addition is `OAI-SearchBot`, the SearchGPT indexer.)
-- **Capability manifests** at the site root — the upstream `skill.md` convention (a one-page capability description, distinct from Claude Code's `.claude/skills/<name>/SKILL.md` slash-command spec — the naming clash is a known footgun, addressed below).
+- **Capability manifests** at the site root — the upstream `skill.md` convention (a one-page capability description, distinct from Claude Code's `.apexyard/skills/<name>/SKILL.md` slash-command spec — the naming clash is a known footgun, addressed below).
 - **Content-format signals** that improve LLM extractability: JSON-LD with `author` / `dateModified` / `datePublished` / `publisher` for citation grounding; Q&A-shaped H2 sections that snippet-extract cleanly; markdown alternates served via `Link: <foo.md>; rel="alternate"; type="text/markdown"` or a `/foo.md` route; first-500-tokens lead that answers "what / can-do / needed-to-start".
 - **Token economics** — coding agents and LLM crawlers fetch pages and pay token costs at inference. Pages over ~25K tokens (≈ 100KB of plain markdown) get truncated or expensive. Surfacing per-page token estimates (meta tag, HTTP header, or `llms.txt` entry) lets agents budget their reads.
 - **Prompt-injection hygiene** — pages that include literal `<system>`, `<assistant>`, or instruction-style tags can be picked up as prompts when an agent feeds the page into its own context. A page-level audit can flag this.
@@ -33,7 +33,7 @@ Three live problems followed:
 
 ### Axis 2 — `skill.md` (the upstream capability-manifest convention) vs the existing `SKILL.md` Claude Code uses
 
-The upstream GEO/AEO prior art proposes a `skill.md` file at the site or project root as a *capability manifest* — a one-page description of what a product / docs site offers, addressed at coding agents. This is **not** the same as Claude Code's `.claude/skills/<name>/SKILL.md` (which is a slash-command spec read by the harness). The two filenames differ only in case (`skill.md` vs `SKILL.md`); on case-insensitive filesystems (macOS default, Windows always) they're the same file.
+The upstream GEO/AEO prior art proposes a `skill.md` file at the site or project root as a *capability manifest* — a one-page description of what a product / docs site offers, addressed at coding agents. This is **not** the same as Claude Code's `.apexyard/skills/<name>/SKILL.md` (which is a slash-command spec read by the harness). The two filenames differ only in case (`skill.md` vs `SKILL.md`); on case-insensitive filesystems (macOS default, Windows always) they're the same file.
 
 | Option | Pros | Cons |
 |--------|------|------|
@@ -55,7 +55,7 @@ The upstream GEO/AEO prior art proposes a `skill.md` file at the site or project
 |--------|------|------|
 | Inline in `SKILL.md` as a markdown table | One file to read. | Skill body becomes the source of truth for a list that adopters might legitimately want to extend (e.g. an enterprise that wants to allow-list a specific internal crawler). Edits collide with skill prose changes. |
 | Inline in `_lib-ai-crawlers.sh` as an associative array | Easy to source. | Shell-only consumption locks out future TypeScript / Python tooling that might want to read the list. |
-| Dedicated registry file at `.claude/registries/ai-crawlers.json` (chosen) | Single source of truth. Easy to extend (PR a JSON entry). Adopters can override in their fork without forking the skill. Consumable by any language. | One new dir (`.claude/registries/`) — no current sibling, so this is a precedent. Acceptable: the framework has set similar precedents (`golden-paths/`, `handbooks/`, `custom-skills/`) every time a new file class earns its own home. |
+| Dedicated registry file at `.apexyard/registries/ai-crawlers.json` (chosen) | Single source of truth. Easy to extend (PR a JSON entry). Adopters can override in their fork without forking the skill. Consumable by any language. | One new dir (`.apexyard/registries/`) — no current sibling, so this is a precedent. Acceptable: the framework has set similar precedents (`golden-paths/`, `handbooks/`, `custom-skills/`) every time a new file class earns its own home. |
 
 ## Decision
 
@@ -67,9 +67,9 @@ The one-pager shape is preserved: findings table → score → verdict → opt-i
 
 ### Chosen on axis 2 — **Check `skill.md`, name the clash**
 
-The audit checks for `skill.md` at the site root (capability-manifest convention). The SKILL.md for `/geo-audit` contains a verbatim callout: *"This is the upstream `skill.md` convention (a capability manifest). It is **distinct from Claude Code's `SKILL.md`** (the slash-command spec at `.claude/skills/<name>/SKILL.md`)."* The smoke test pins the presence of this exact phrase so the callout can't silently drift.
+The audit checks for `skill.md` at the site root (capability-manifest convention). The SKILL.md for `/geo-audit` contains a verbatim callout: *"This is the upstream `skill.md` convention (a capability manifest). It is **distinct from Claude Code's `SKILL.md`** (the slash-command spec at `.apexyard/skills/<name>/SKILL.md`)."* The smoke test pins the presence of this exact phrase so the callout can't silently drift.
 
-On case-insensitive filesystems an adopter could in principle have one file serve both purposes, but this is rare in practice — Claude Code skill specs live under `.claude/skills/<name>/`, not at the site root.
+On case-insensitive filesystems an adopter could in principle have one file serve both purposes, but this is rare in practice — Claude Code skill specs live under `.apexyard/skills/<name>/`, not at the site root.
 
 ### Chosen on axis 3 — **Advisory**
 
@@ -77,7 +77,7 @@ Severity ceiling for the GEO/AEO checks is `high` (not `critical`). Missing `llm
 
 A future `--strict` flag is left open; v1 is advisory-only.
 
-### Chosen on axis 4 — **`.claude/registries/ai-crawlers.json`**
+### Chosen on axis 4 — **`.apexyard/registries/ai-crawlers.json`**
 
 The file ships with 12 entries (the 11 named in the ticket plus `OAI-SearchBot`, the SearchGPT indexer — surfaced during research and added for completeness). Schema is intentionally tiny:
 
@@ -113,18 +113,18 @@ Adopters who want to add an internal crawler edit the file in their fork. Upstre
 ### Migration / rollback
 
 - **No data migration.** The skill is purely additive — no existing artefact is touched.
-- **Rollback** is `git revert` of the introducing PR. No state in `.claude/session/` is created. The registry file sits at `.claude/registries/ai-crawlers.json`; adopters who delete the file will get a no-op skill (the SKILL.md flow checks for the file and exits with an advisory when missing).
+- **Rollback** is `git revert` of the introducing PR. No state in `.apexyard/session/` is created. The registry file sits at `.apexyard/registries/ai-crawlers.json`; adopters who delete the file will get a no-op skill (the SKILL.md flow checks for the file and exits with an advisory when missing).
 - **Future evolution path.** When the upstream conventions stabilise (the `skill.md` capability-manifest naming clash gets resolved by the wider ecosystem, the `llms.txt` spec ships a v1.0), we re-evaluate the advisory→strict posture and the registry schema in a follow-up AgDR.
 
 ### Post-v1 rename — `/generative-engine-audit` → `/geo-audit`
 
-2026-05-20 — renamed from `/generative-engine-audit` per #334; clean rename, no shim. Reason: industry GEO term + `/seo-audit` sibling shape + terseness in `/launch-check` output tables. The skill shipped under the original name on 2026-05-19 (PR #315) and was renamed less than a week later, before any meaningful adopter usage accrued. No backward-compatibility symlink — adopters who typed the old name see "command not found" and switch. The AI-crawler registry file (`.claude/registries/ai-crawlers.json`) keeps its path; only the skill name (and its directory, AgDR filename, template filename, and cross-reference text) changed.
+2026-05-20 — renamed from `/generative-engine-audit` per #334; clean rename, no shim. Reason: industry GEO term + `/seo-audit` sibling shape + terseness in `/launch-check` output tables. The skill shipped under the original name on 2026-05-19 (PR #315) and was renamed less than a week later, before any meaningful adopter usage accrued. No backward-compatibility symlink — adopters who typed the old name see "command not found" and switch. The AI-crawler registry file (`.apexyard/registries/ai-crawlers.json`) keeps its path; only the skill name (and its directory, AgDR filename, template filename, and cross-reference text) changed.
 
 ## Artifacts
 
 - Issue: [me2resh/apexyard#311](https://github.com/me2resh/apexyard/issues/311) (original v1 ship), [me2resh/apexyard#334](https://github.com/me2resh/apexyard/issues/334) (rename)
-- Skill: `.claude/skills/geo-audit/SKILL.md`
-- Registry: `.claude/registries/ai-crawlers.json`
+- Skill: `.apexyard/skills/geo-audit/SKILL.md`
+- Registry: `.apexyard/registries/ai-crawlers.json`
 - Audit template: `templates/audits/geo-audit.md`
-- Smoke test: `.claude/skills/geo-audit/tests/smoke.sh`
-- Related: AgDR-0019 (audit-artefact persistence), AgDR-0014 (launch-check trend tracking), `.claude/skills/seo-audit/SKILL.md` (the SEO sibling)
+- Smoke test: `.apexyard/skills/geo-audit/tests/smoke.sh`
+- Related: AgDR-0019 (audit-artefact persistence), AgDR-0014 (launch-check trend tracking), `.apexyard/skills/seo-audit/SKILL.md` (the SEO sibling)

@@ -6,7 +6,7 @@
 
 ## Context
 
-PR #135 / AgDR-0009 shipped the voice-prompts-on-pause feature with a phase plan: macOS `say` first, cross-platform second, cloud TTS third. The feature was always opt-in OFF; an adopter had to flip `voice_prompts.enabled` to `true` in `.claude/project-config.json` to wake the Stop hook.
+PR #135 / AgDR-0009 shipped the voice-prompts-on-pause feature with a phase plan: macOS `say` first, cross-platform second, cloud TTS third. The feature was always opt-in OFF; an adopter had to flip `voice_prompts.enabled` to `true` in `.apexyard/project-config.json` to wake the Stop hook.
 
 What actually happened:
 
@@ -65,11 +65,11 @@ Rejected. AgDRs are append-only — they describe decisions made at a point in t
 
 Concrete deletions (all in the same PR as this AgDR):
 
-1. `.claude/hooks/voice-prompt-on-pause.sh` — gone
-2. `.claude/hooks/tests/test_voice_prompt_on_pause.sh` — gone
+1. `.apexyard/hooks/voice-prompt-on-pause.sh` — gone
+2. `.apexyard/hooks/tests/test_voice_prompt_on_pause.sh` — gone
 3. `.claude/settings.json` — Stop hook entry removed (the entire `Stop` matcher block became empty after this and is removed)
-4. `.claude/project-config.defaults.json` — `voice_prompts` block removed
-5. `.claude/project-config.json` (this fork's local override) — `voice_prompts` block removed (file becomes `{}`)
+4. `.apexyard/project-config.defaults.json` — `voice_prompts` block removed
+5. `.apexyard/project-config.json` (this fork's local override) — `voice_prompts` block removed (file becomes `{}`)
 6. `docs/project-config.md` — entire `## Voice prompts` section removed
 7. `docs/agdr/AgDR-0010-portfolio-config-and-self-healing.md` — line 32 example reference to `voice_prompts` swapped for `leak_protection` / `ticket` (still-current config blocks)
 
@@ -86,7 +86,7 @@ Bundled with [#77](https://github.com/me2resh/apexyard/issues/77) — the bundle
 
 - 24 hooks instead of 25 (one removed). The hook count line in `CLAUDE.md` is updated.
 - `/setup` config dumps no longer surface a `voice_prompts` block on fresh forks. Cleaner first-impression.
-- `.claude/project-config.defaults.json` is shorter; the schema is one block lighter.
+- `.apexyard/project-config.defaults.json` is shorter; the schema is one block lighter.
 
 ### Now lossier
 

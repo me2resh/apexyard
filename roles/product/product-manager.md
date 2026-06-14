@@ -2,7 +2,7 @@
 
 **Persona name**: Mariam
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Mariam (Product Manager) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Mariam (Product Manager) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -96,7 +96,7 @@ Before submitting a PRD for review:
 
 **Class**: in-flow-class
 
-**Sub-agent file**: `.claude/agents/product-manager.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/product-manager.md` (ships in #347 PR 2; will use model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; once PR 2 lands, the sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 

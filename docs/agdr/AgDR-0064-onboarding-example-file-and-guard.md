@@ -28,11 +28,11 @@ The placeholder-diff (compare staged config to the shipped `*.example`) gives a 
 
 - Default single-fork forks no longer publish private config; the safe path is the default.
 - Each fresh single-fork clone runs `/setup` once (copies the example, fills it in locally). v2 adopters are unaffected (private committed config carries across clones).
-- A new commit-time gate exists; covered by `.claude/hooks/tests/test_block_onboarding_in_git.sh` (filled-in blocked, placeholder allowed, both escape hatches honored, non-config unaffected, non-commit ignored).
+- A new commit-time gate exists; covered by `.apexyard/hooks/tests/test_block_onboarding_in_git.sh` (filled-in blocked, placeholder allowed, both escape hatches honored, non-config unaffected, non-commit ignored).
 - **Already-committed history** still contains prior real values until a separate full-history scrub (tracked under the security-hardening work, #518). This PR untracks going forward; it does not rewrite history.
 
 ## Artifacts
 
 - Issue: me2resh/apexyard#517
-- Files: `onboarding.example.yaml`, `.gitignore`, `.claude/hooks/block-onboarding-in-git.sh`, `.claude/hooks/tests/test_block_onboarding_in_git.sh`, `.claude/hooks/onboarding-check.sh`, `.claude/settings.json`, `.claude/skills/setup/SKILL.md`, `docs/multi-project.md`, `.claude/hooks/README.md`
+- Files: `onboarding.example.yaml`, `.gitignore`, `.apexyard/hooks/block-onboarding-in-git.sh`, `.apexyard/hooks/tests/test_block_onboarding_in_git.sh`, `.apexyard/hooks/onboarding-check.sh`, `.apexyard/settings.json`, `.apexyard/skills/setup/SKILL.md`, `docs/multi-project.md`, `.apexyard/hooks/README.md`
 - Related: #518 (release-artifact guard reuses the placeholder-diff), #242 (split-portfolio v2)

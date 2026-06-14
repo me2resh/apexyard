@@ -55,11 +55,11 @@ A handful of skills landed in the 121–138 char range after compression because
 
 ## Consequences
 
-- **CLAUDE.md** is materially smaller and the skill table is now a one-line-per-row index. Operators looking for skill detail follow the convention of reading `.claude/skills/<name>/SKILL.md`, which is what the harness does internally too.
+- **CLAUDE.md** is materially smaller and the skill table is now a one-line-per-row index. Operators looking for skill detail follow the convention of reading `.apexyard/skills/<name>/SKILL.md`, which is what the harness does internally too.
 - **Every `SKILL.md` `description:` field** is now closer to the ~120-char index-line shape that the harness's "available skills" reminder is designed for. Skill bodies retain all detail — adopters editing a skill see no readability change inside the file they actually edit.
 - **The chatty `onboarding-check.sh` banner** is now a single actionable line. The compressed line still names the offending file (`onboarding.yaml`), the offending state (placeholder present), and the corrective action (`/setup`). Nothing actionable was lost; the multi-paragraph explanation moved to the skill's `SKILL.md` where adopters who don't recognise the banner will go next.
 - **`/c4`, `/debug`, `/onboard`, `/split-portfolio`** are now individually catalogued rows in the CLAUDE.md skill table. The table count claim ("52 skills") now matches the actual row count for the first time since these skills landed.
-- **A smoke test** at `.claude/hooks/tests/test_token_efficiency_wave1.sh` pins the three constraints (CLAUDE.md skill-row brevity, `description:` length budget with documented exceptions, SessionStart happy-path char budget) so future Wave 2/3 PRs can verify they aren't regressing Wave 1's invariants.
+- **A smoke test** at `.apexyard/hooks/tests/test_token_efficiency_wave1.sh` pins the three constraints (CLAUDE.md skill-row brevity, `description:` length budget with documented exceptions, SessionStart happy-path char budget) so future Wave 2/3 PRs can verify they aren't regressing Wave 1's invariants.
 - **Wave 2 + Wave 3 stay separately scoped.** Future PRs that extract the shared "Path resolution" preamble out of every `SKILL.md`, or compress long skill bodies (`/update` ~912 lines, `/handover` ~600, `/tickets-batch` ~280), will reference this AgDR for the methodology and add their own number for the structural shift. The smoke-test invariants document what each successive wave must preserve.
 - **Reversibility.** Each of the three commit chunks reverts cleanly with one `git revert`. Operator can roll back any single technique without affecting the others.
 
@@ -67,7 +67,7 @@ A handful of skills landed in the 121–138 char range after compression because
 
 Verified at the close of Wave 1:
 
-- **No primitives removed.** `ls .claude/skills/ | grep -v ^_lib | wc -l` = 52, unchanged. Hooks (29), rules (11), agents (5), templates, roles (19) all present in their original counts.
+- **No primitives removed.** `ls .apexyard/skills/ | grep -v ^_lib | wc -l` = 52, unchanged. Hooks (29), rules (11), agents (5), templates, roles (19) all present in their original counts.
 - **Every skill findable in `CLAUDE.md`.** All 52 skill directory names appear as `\`/<name>\`` rows in the table.
 - **Every skill findable in the harness skill index.** Every `SKILL.md` still has a `description:` field (none deleted); shortened, never blanked.
 - **Sub-skill composition preserved.** `/launch-check` description still names its 9-dimension fan-out; deep-dive siblings (`/threat-model`, `/seo-audit`, `/geo-audit`, etc.) all reference `/launch-check` in their descriptions. `/dfd` → `/threat-model` + `/compliance-check` link preserved. `/extract-features` → `/feature-diagram` link preserved.
@@ -76,5 +76,5 @@ Verified at the close of Wave 1:
 ## Artifacts
 
 - Commit chunks: `refactor(#322): CLAUDE.md skill-table compression`, `refactor(#322): trim skill description frontmatter`, `refactor(#322): hook silence audit`, `docs(#322): AgDR-0044 + smoke test`
-- Smoke test: `.claude/hooks/tests/test_token_efficiency_wave1.sh`
+- Smoke test: `.apexyard/hooks/tests/test_token_efficiency_wave1.sh`
 - Ticket: me2resh/apexyard#322

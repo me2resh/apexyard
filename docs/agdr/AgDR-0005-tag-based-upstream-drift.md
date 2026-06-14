@@ -73,6 +73,6 @@ Negative / accepted:
 ## Artifacts
 
 - PR: https://github.com/me2resh/apexyard/pull/103
-- Hook: `.claude/hooks/check-upstream-drift.sh`
-- Skill: `.claude/skills/update/SKILL.md` § Preview
+- Hook: `.apexyard/hooks/check-upstream-drift.sh`
+- Skill: `.apexyard/skills/update/SKILL.md` § Preview
 - CHANGELOG: `[1.1.0] — 2026-04-19 — Tag-based upstream drift detection`

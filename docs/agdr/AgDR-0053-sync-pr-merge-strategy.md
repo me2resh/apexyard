@@ -117,8 +117,8 @@ next release — is lower-risk and requires no out-of-band intervention.
 
 ## Artifacts
 
-- `.claude/skills/release-sync/SKILL.md` — step 7 expanded with merge-strategy requirement + rationale; rule 5 updated; AgDR-0053 referenced
-- `.claude/skills/approve-merge/SKILL.md` — step 6 (sync detection) and step 7 (merge command) updated; step 8 report updated; AgDR-0053 referenced
-- `.claude/hooks/block-unreviewed-merge.sh` — sync-PR squash guard added after PR-number extraction
-- `.claude/hooks/tests/test_block_unreviewed_merge.sh` — three new cases covering the guard
+- `.apexyard/skills/release-sync/SKILL.md` — step 7 expanded with merge-strategy requirement + rationale; rule 5 updated; AgDR-0053 referenced
+- `.apexyard/skills/approve-merge/SKILL.md` — step 6 (sync detection) and step 7 (merge command) updated; step 8 report updated; AgDR-0053 referenced
+- `.apexyard/hooks/block-unreviewed-merge.sh` — sync-PR squash guard added after PR-number extraction
+- `.apexyard/hooks/tests/test_block_unreviewed_merge.sh` — three new cases covering the guard
 - Implementing ticket: `me2resh/apexyard#459`

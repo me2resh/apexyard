@@ -8,7 +8,7 @@
 #
 # Surface coverage — honest accounting for a markdown/shell framework:
 #   Secrets     : gitleaks — full tree scan. Real risk: API keys in examples/configs.
-#   SAST        : Semgrep r/bash — shell hook scripts under .claude/hooks/**
+#   SAST        : Semgrep r/bash — shell hook scripts under .apexyard/hooks/**
 #                 No JS/TS source (site/ is static HTML; copy-for-ai.js is a
 #                 client-side snippet). CodeQL/ESLint would have nothing to scan.
 #   Dep audits  : N/A — no package.json, requirements.txt, or pyproject.toml

@@ -37,7 +37,7 @@ So branch off `upstream/dev` and target `dev` in your PR. A PR opened against `m
 
 ## Conventions the hooks enforce
 
-These aren't style suggestions — `.claude/hooks/` blocks them mechanically, so following them up front saves a round-trip:
+These aren't style suggestions — `.apexyard/hooks/` blocks them mechanically, so following them up front saves a round-trip:
 
 | Rule | Shape |
 |------|-------|
@@ -47,7 +47,7 @@ These aren't style suggestions — `.claude/hooks/` blocks them mechanically, so
 | **Commits** | Conventional commits: `type: subject`. No `git add -A` / `.` — stage specific files. No direct pushes to `main`. |
 | **Secrets / private config** | No hardcoded secrets; don't commit a filled-in `onboarding.yaml` (it's gitignored). The commit guards will stop you. |
 
-Full detail lives in `.claude/rules/` (`git-conventions.md`, `pr-quality.md`, `pr-workflow.md`).
+Full detail lives in `.apexyard/rules/` (`git-conventions.md`, `pr-quality.md`, `pr-workflow.md`).
 
 ## Before you open a PR
 
@@ -56,10 +56,10 @@ Run what CI runs, locally:
 ```bash
 bash bin/run-hook-tests.sh        # ~65 hook/behaviour tests — must be green
 npx markdownlint-cli2 '**/*.md'   # if you touched markdown
-shellcheck .claude/hooks/*.sh     # if you touched hooks
+shellcheck .apexyard/hooks/*.sh     # if you touched hooks
 ```
 
-If you add or remove a skill / hook / role, update the counts the `site-counts-check` workflow verifies (see `.claude/hooks/tests/test_site_counts.sh` for what's checked).
+If you add or remove a skill / hook / role, update the counts the `site-counts-check` workflow verifies (see `.apexyard/hooks/tests/test_site_counts.sh` for what's checked).
 
 ## Making a technical decision?
 

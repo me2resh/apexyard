@@ -16,7 +16,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 
 > **Primary role**: [Tech Lead](../roles/engineering/tech-lead.md) · **Supporting**: [Product Manager](../roles/product/product-manager.md), [Head of Engineering](../roles/engineering/head-of-engineering.md) · **Trigger**: new feature enters the sprint with an approved PRD
 >
-> Read the Tech Lead role file and adopt it before starting this phase. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) for the full activation protocol.
+> Read the Tech Lead role file and adopt it before starting this phase. See [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md) for the full activation protocol.
 
 ### Entry Criteria
 
@@ -40,7 +40,7 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 - Tickets created and prioritized
 - Work scheduled in sprint/cycle
 
-> **Sidebar — when to file a `/spike` instead of a `/feature`.** If you can answer the technical question through reasoning alone (will library X work, does this approach scale, does this UX make sense), feel free to draft the feature directly. If you genuinely don't know, file a `[Spike]` first via `/spike` — a 1-3 day, hypothesis-driven, throw-away-by-default ticket. The spike's output is the answer, not shippable code; once the answer is in, run `/spike-close --promote` (file a fresh `[Feature]` for production-shaped delivery) or `/spike-close --discard` (write a memo to `docs/spike-memos/<slug>.md` so future-us doesn't re-explore the same ground). Spike PRs are exempt from the AgDR + 80% coverage gates; code review (Rex) and the security auditor still apply. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
+> **Sidebar — when to file a `/spike` instead of a `/feature`.** If you can answer the technical question through reasoning alone (will library X work, does this approach scale, does this UX make sense), feel free to draft the feature directly. If you genuinely don't know, file a `[Spike]` first via `/spike` — a 1-3 day, hypothesis-driven, throw-away-by-default ticket. The spike's output is the answer, not shippable code; once the answer is in, run `/spike-close --promote` (file a fresh `[Feature]` for production-shaped delivery) or `/spike-close --discard` (write a memo to `docs/spike-memos/<slug>.md` so future-us doesn't re-explore the same ground). Spike PRs are exempt from the AgDR + 80% coverage gates; code review (Rex) and the security auditor still apply. See `.apexyard/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
 
 ---
 
@@ -63,7 +63,7 @@ Output: `projects/<name>/journeys/<feature-slug>.html` (preview) + `<feature-slu
 - **Entry**: PRD approved, multi-page flow involved.
 - **Exit**: stakeholders have reviewed the journey HTML, missing states / transitions filed back into the PRD or a backlog item, journey YAML committed alongside the PRD.
 
-Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0016-journey-html-rendering.md`.
+Skill reference: `.apexyard/skills/journey/SKILL.md`. Rendering decision rationale: `docs/agdr/AgDR-0016-journey-html-rendering.md`.
 
 ---
 
@@ -176,7 +176,7 @@ RIGHT:
 > |---|---|
 > | **Simple bug** — clear repro, obvious cause, one-line fix | `/bug` → fix → PR. **No `/debug`.** The cost of hypothesis-tree ceremony exceeds the fix cost. |
 > | **Resistant bug** — naïve fix didn't hold OR cause unclear after grep + Read | `/bug` → **`/debug`** → fix → PR. Forces architecture-first reading + evidence-before-fix. Prevents shotgun debugging. |
-> | **Sustained mystery** — multi-session archaeology, performance puzzle, regression hunt, incident retro | `/investigation` (live-doc workflow) — different skill entirely. Days of effort, cross-session continuity matters. See `.claude/skills/investigation/SKILL.md`. |
+> | **Sustained mystery** — multi-session archaeology, performance puzzle, regression hunt, incident retro | `/investigation` (live-doc workflow) — different skill entirely. Days of effort, cross-session continuity matters. See `.apexyard/skills/investigation/SKILL.md`. |
 >
 > Self-check before `/debug`: have I tried the obvious fix? Did it work? If NO → `/debug`. If didn't try yet → try the obvious thing first. Same shape as `/spike` from Phase 1 — file when you genuinely don't know; just code when you do.
 
@@ -215,7 +215,7 @@ Flow:
 
 Rollback readiness is checked at the migration-ticket-creation stage, not at PR review — the AgDR forces the author to articulate rollback steps + a tested-against environment before the feature work begins. A migration that only articulates rollback post-hoc during PR review is already too late.
 
-See `.claude/rules/workflow-gates.md` § "Migration Gate (3a)" for the mechanical check, and `.claude/skills/migration/SKILL.md` for the skill's process.
+See `.apexyard/rules/workflow-gates.md` § "Migration Gate (3a)" for the mechanical check, and `.apexyard/skills/migration/SKILL.md` for the skill's process.
 
 ---
 
@@ -354,7 +354,7 @@ In Progress --> In Review --> QA --> Done
 
 ## Roles Summary
 
-Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate, hand off, or exit a phase's role, print the single-line marker from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" (e.g. `▸ Activating Hisham (Tech Lead) for #42 (trigger: planning phase)`) so operators can see the phase transition in the conversation.
+Every phase has a primary role that activates automatically when the phase starts. Full trigger table: [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md). When you activate, hand off, or exit a phase's role, print the single-line marker from [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md) § "How to signal activation" (e.g. `▸ Activating Hisham (Tech Lead) for #42 (trigger: planning phase)`) so operators can see the phase transition in the conversation.
 
 | Phase | Primary role | Supporting roles |
 |-------|--------------|------------------|

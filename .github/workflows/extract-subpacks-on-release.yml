@@ -23,30 +23,30 @@ on:
   pull_request:
     paths:
       - 'bin/extract-subpacks.sh'
-      - '.claude/hooks/tests/test_subpack_extraction.sh'
+      - '.apexyard/hooks/tests/test_subpack_extraction.sh'
       - 'marketplace/**'
-      - '.claude/skills/launch-check/**'
-      - '.claude/skills/seo-audit/**'
-      - '.claude/skills/geo-audit/**'
-      - '.claude/skills/accessibility-audit/**'
-      - '.claude/skills/compliance-check/**'
-      - '.claude/skills/analytics-audit/**'
-      - '.claude/skills/monitoring-audit/**'
-      - '.claude/skills/docs-audit/**'
-      - '.claude/skills/performance-audit/**'
-      - '.claude/hooks/_lib-audit-history.sh'
-      - '.claude/hooks/_lib-read-config.sh'
-      - '.claude/hooks/_lib-ops-root.sh'
-      - '.claude/hooks/_lib-tracker.sh'
-      - '.claude/hooks/_lib-extract-pr.sh'
-      - '.claude/hooks/check-secrets.sh'
-      - '.claude/hooks/block-main-push.sh'
-      - '.claude/hooks/block-git-add-all.sh'
-      - '.claude/hooks/pre-push-gate.sh'
-      - '.claude/hooks/verify-commit-refs.sh'
-      - '.claude/hooks/validate-pr-create.sh'
-      - '.claude/hooks/validate-branch-name.sh'
-      - '.claude/registries/ai-crawlers.json'
+      - '.apexyard/skills/launch-check/**'
+      - '.apexyard/skills/seo-audit/**'
+      - '.apexyard/skills/geo-audit/**'
+      - '.apexyard/skills/accessibility-audit/**'
+      - '.apexyard/skills/compliance-check/**'
+      - '.apexyard/skills/analytics-audit/**'
+      - '.apexyard/skills/monitoring-audit/**'
+      - '.apexyard/skills/docs-audit/**'
+      - '.apexyard/skills/performance-audit/**'
+      - '.apexyard/hooks/_lib-audit-history.sh'
+      - '.apexyard/hooks/_lib-read-config.sh'
+      - '.apexyard/hooks/_lib-ops-root.sh'
+      - '.apexyard/hooks/_lib-tracker.sh'
+      - '.apexyard/hooks/_lib-extract-pr.sh'
+      - '.apexyard/hooks/check-secrets.sh'
+      - '.apexyard/hooks/block-main-push.sh'
+      - '.apexyard/hooks/block-git-add-all.sh'
+      - '.apexyard/hooks/pre-push-gate.sh'
+      - '.apexyard/hooks/verify-commit-refs.sh'
+      - '.apexyard/hooks/validate-pr-create.sh'
+      - '.apexyard/hooks/validate-branch-name.sh'
+      - '.apexyard/registries/ai-crawlers.json'
       - 'templates/audits/**'
   workflow_dispatch:
 
@@ -66,7 +66,7 @@ jobs:
         run: bash bin/extract-subpacks.sh
 
       - name: Run the extraction smoke test
-        run: bash .claude/hooks/tests/test_subpack_extraction.sh
+        run: bash .apexyard/hooks/tests/test_subpack_extraction.sh
 
       # Release-artifact content guard (#518): scan the BUILT bundle (filesystem,
       # not git history) for secrets, and for a filled-in onboarding.yaml (the

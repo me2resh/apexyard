@@ -78,7 +78,7 @@ Sub-decisions:
 
 ## Artifacts
 
-- Hook: `.claude/hooks/suggest-mcp-reindex-after-pull.sh`
-- Test: `.claude/hooks/tests/test_suggest_mcp_reindex_after_pull.sh`
-- Wiring: `.claude/settings.json` (PostToolUse → Bash)
+- Hook: `.apexyard/hooks/suggest-mcp-reindex-after-pull.sh`
+- Test: `.apexyard/hooks/tests/test_suggest_mcp_reindex_after_pull.sh`
+- Wiring: `.apexyard/settings.json` (PostToolUse → Bash)
 - Issue: me2resh/apexyard#478 (companion to #475)

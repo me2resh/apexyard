@@ -1,7 +1,7 @@
 name: tests
 
 # Runs the framework's mechanical-enforcement test suites (the ~60 test_*.sh
-# under .claude/**/tests/) on every PR and on push to dev/main. Until now these
+# under .apexyard/**/tests/) on every PR and on push to dev/main. Until now these
 # tests were advisory — only 2 ran in CI — so a hook regression could ship
 # green. This job makes the whole suite a gate. See me2resh/apexyard#526.
 

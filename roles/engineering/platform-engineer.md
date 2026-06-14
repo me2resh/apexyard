@@ -2,7 +2,7 @@
 
 **Persona name**: Adel
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Adel (Platform Engineer) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Adel (Platform Engineer) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -134,7 +134,7 @@ Before deploying infrastructure:
 
 **Class**: in-flow-class
 
-**Sub-agent file**: `.claude/agents/platform-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/platform-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 

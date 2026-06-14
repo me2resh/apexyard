@@ -4,7 +4,7 @@
 
 ## Context
 
-The framework already enforces a **> 80% coverage gate** on new code via `.claude/rules/workflow-gates.md` and the PR-quality checklist. But coverage % answers only one question — *"did the test run this line?"* — which is a necessary-but-not-sufficient signal for "the test suite constrains behaviour". The pathological case (100% coverage with `assert(true)` in every test) passes the gate and constrains nothing.
+The framework already enforces a **> 80% coverage gate** on new code via `.apexyard/rules/workflow-gates.md` and the PR-quality checklist. But coverage % answers only one question — *"did the test run this line?"* — which is a necessary-but-not-sufficient signal for "the test suite constrains behaviour". The pathological case (100% coverage with `assert(true)` in every test) passes the gate and constrains nothing.
 
 Industry **behaviour harness** writing names this gap explicitly as the third regulation dimension after maintainability and architecture fitness:
 
@@ -77,11 +77,11 @@ The dispatch table:
 | Go | go-mutesting | `*.go` file count dominant; `go.mod` present | `go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest` |
 | Ruby | mutant | `*.rb` file count dominant; `Gemfile` present | `gem install mutant-rspec` (or `mutant-minitest`) |
 
-Language detection is a file-count heuristic. The configured runner (`mutation.runner` in `.claude/project-config.json`) wins when set; otherwise the language detection picks. Mixed-language projects (e.g. a TS frontend + Python backend) default to the dominant language and surface a note that the other language's coverage isn't audited in this run — the operator can re-run with `--language=python` to audit the other side.
+Language detection is a file-count heuristic. The configured runner (`mutation.runner` in `.apexyard/project-config.json`) wins when set; otherwise the language detection picks. Mixed-language projects (e.g. a TS frontend + Python backend) default to the dominant language and surface a note that the other language's coverage isn't audited in this run — the operator can re-run with `--language=python` to audit the other side.
 
 ### Chosen on axis 2 — 60% default
 
-`mutation.threshold` defaults to `60` in `.claude/project-config.defaults.json`. Below-threshold reports flag in `/launch-check` output as `WARN` (not `FAIL` — see axis 3). Adopters override per-project in `.claude/project-config.json`.
+`mutation.threshold` defaults to `60` in `.apexyard/project-config.defaults.json`. Below-threshold reports flag in `/launch-check` output as `WARN` (not `FAIL` — see axis 3). Adopters override per-project in `.apexyard/project-config.json`.
 
 Operators who hit the threshold in their first run and want to push higher should bump it incrementally — a 60→70 jump usually surfaces a long tail of work that's better as multiple small PRs than one mutation-mass-fix PR.
 
@@ -131,17 +131,17 @@ Six sections, in order:
 ### Migration / rollback
 
 - **No data migration needed** — the skill is additive. No existing artefacts touched.
-- **Rollback** is `git revert` of the introducing PR; no state in `.claude/session/` is created.
+- **Rollback** is `git revert` of the introducing PR; no state in `.apexyard/session/` is created.
 - **Adopters with no mutation runner installed** see exit 3 + advisory; the rest of `/launch-check` (the other 9 dimensions) runs unaffected.
 
 ## Artifacts
 
 - Issue: [me2resh/apexyard#299](https://github.com/me2resh/apexyard/issues/299)
 - PR: <to be filled at merge time>
-- Skill: `.claude/skills/mutation-test/SKILL.md`
-- Config defaults: `.claude/project-config.defaults.json` → `mutation.runner` map + `mutation.threshold`
-- Launch-check wiring: `.claude/skills/launch-check/SKILL.md` § "The 10 dimensions" + § "Deep-dive companions"
-- Tests: `.claude/skills/mutation-test/tests/smoke.sh`
+- Skill: `.apexyard/skills/mutation-test/SKILL.md`
+- Config defaults: `.apexyard/project-config.defaults.json` → `mutation.runner` map + `mutation.threshold`
+- Launch-check wiring: `.apexyard/skills/launch-check/SKILL.md` § "The 10 dimensions" + § "Deep-dive companions"
+- Tests: `.apexyard/skills/mutation-test/tests/smoke.sh`
 - Sibling patterns this AgDR reuses:
   - AgDR-0034 — graceful-degradation shape (exit 3 + install advisory) from `/pdf`
   - AgDR-0025 — `/process` graceful-degrade for `bpmnlint`

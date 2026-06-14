@@ -30,8 +30,8 @@ Three problems pointed at the same gap:
 |------|------|
 | Addresses all three problems coherently | More surface — new skill, new template, new exemption logic in two hooks |
 | Schema differences mirror the conceptual difference (a spike's contract IS a hypothesis, not a story) | Disposition gate is prose-only on the close path — no hard block; relies on operator running `/spike-close` |
-| Uses existing config layer (`.claude/project-config.defaults.json`) — no new mechanisms | Three exemption signals to maintain (prefix / label / branch); detection complexity grows linearly |
-| Hooks read schema from defaults, so adopters can add or rename via `.claude/project-config.json` | Adopters who customise `prefix_whitelist` to drop `Spike` get a graceful warning from the skill, not a hard pass-through |
+| Uses existing config layer (`.apexyard/project-config.defaults.json`) — no new mechanisms | Three exemption signals to maintain (prefix / label / branch); detection complexity grows linearly |
+| Hooks read schema from defaults, so adopters can add or rename via `.apexyard/project-config.json` | Adopters who customise `prefix_whitelist` to drop `Spike` get a graceful warning from the skill, not a hard pass-through |
 
 ### Option C — Boolean `is_throwaway` flag on every ticket type instead of a separate `Spike` type
 
@@ -69,7 +69,7 @@ Detection prefers **any one match wins**, not "all three must match", because th
 | Signal | Where it lives | When it's available |
 |--------|----------------|---------------------|
 | PR title type = `spike(...)` | The PR title at `gh pr create` time | At PR-create time. Cleanest signal — the PR is already shaped as a spike |
-| Active ticket marker title starts with `[Spike]` | `.claude/session/{current-ticket,tickets/<project>}` | Whenever `/start-ticket` ran |
+| Active ticket marker title starts with `[Spike]` | `.apexyard/session/{current-ticket,tickets/<project>}` | Whenever `/start-ticket` ran |
 | Branch name starts with `spike/` | `git branch --show-current` | Whenever the operator created the branch |
 
 The redundancy is deliberate. An operator who created the branch via `git checkout -b spike/GH-123-x` but never ran `/start-ticket` should still get the exemption. An operator inside a managed-project clone where the per-project marker resolves correctly should still get the exemption when their PR title carries `spike(N): ...`.
@@ -111,16 +111,16 @@ Both branches produce a durable artefact:
 ## Artifacts
 
 - `me2resh/apexyard#180` — feature ticket
-- `.claude/project-config.defaults.json` — schema additions (`Spike` prefix, `Spike` required-sections, `spike` commit type, `spike` PR-title type)
-- `.claude/skills/spike/SKILL.md` — new skill
-- `.claude/skills/spike-close/SKILL.md` — disposition-gate skill
+- `.apexyard/project-config.defaults.json` — schema additions (`Spike` prefix, `Spike` required-sections, `spike` commit type, `spike` PR-title type)
+- `.apexyard/skills/spike/SKILL.md` — new skill
+- `.apexyard/skills/spike-close/SKILL.md` — disposition-gate skill
 - `templates/spike.md` — ticket template
-- `.claude/hooks/require-agdr-for-arch-pr.sh` — spike-PR exemption (3-signal)
-- `.claude/hooks/require-agdr-for-arch-changes.sh` — spike-commit exemption (2-signal)
-- `.claude/hooks/validate-issue-structure.sh` — `Spike` whitelist + `Spike` required-sections inline fallback + `/spike` skill suggestion
-- `.claude/hooks/validate-pr-create.sh` — `spike` in PR-title-type fallback
-- `.claude/hooks/validate-commit-format.sh` — `spike` in commit-type fallback + BLOCKED message
-- `.claude/rules/workflow-gates.md` — § "Spike work" rule statement
+- `.apexyard/hooks/require-agdr-for-arch-pr.sh` — spike-PR exemption (3-signal)
+- `.apexyard/hooks/require-agdr-for-arch-changes.sh` — spike-commit exemption (2-signal)
+- `.apexyard/hooks/validate-issue-structure.sh` — `Spike` whitelist + `Spike` required-sections inline fallback + `/spike` skill suggestion
+- `.apexyard/hooks/validate-pr-create.sh` — `spike` in PR-title-type fallback
+- `.apexyard/hooks/validate-commit-format.sh` — `spike` in commit-type fallback + BLOCKED message
+- `.apexyard/rules/workflow-gates.md` — § "Spike work" rule statement
 - `workflows/sdlc.md` — Phase 1 sidebar
-- `.claude/hooks/tests/test_validate_issue_structure.sh` — `[Spike]` accepted; required-sections enforced
-- `.claude/hooks/tests/test_require_agdr_for_arch_pr.sh` — spike PR-title / branch / marker exemptions
+- `.apexyard/hooks/tests/test_validate_issue_structure.sh` — `[Spike]` accepted; required-sections enforced
+- `.apexyard/hooks/tests/test_require_agdr_for_arch_pr.sh` — spike PR-title / branch / marker exemptions

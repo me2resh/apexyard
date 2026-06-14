@@ -2,7 +2,7 @@
 
 **Persona name**: Nadia
 
-**Signalling activation**: when activated, print the marker convention from `.claude/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Nadia (Data Analyst) for #<ticket> (trigger: <reason>)`.
+**Signalling activation**: when activated, print the marker convention from `.apexyard/rules/role-triggers.md` § "How to signal activation". Example: `▸ Activating Nadia (Data Analyst) for #<ticket> (trigger: <reason>)`.
 
 ## Identity
 
@@ -124,9 +124,9 @@ Every analysis should have:
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/data-analyst.md` (ships in #347 PR 3; will use model `haiku` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.apexyard/agents/data-analyst.md` (ships in #347 PR 3; will use model `haiku` + restricted tools per AgDR-0050 Axis 2)
 
-**On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/data-analyst.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
+**On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.apexyard/agents/data-analyst.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism.
 
 **Rationale**: SQL / dashboard runs — Haiku-cheap, isolated.
 

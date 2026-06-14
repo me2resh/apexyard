@@ -13,7 +13,9 @@ This directory holds **live working copies** of projects that ApexYard manages. 
 
 ```
 your-org/apexyard/                ← your fork of apexyard, cloned locally (the "ops repo")
-├── .claude/                       ← shared rules, skills, hooks
+├── .apexyard/                     ← shared rules, skills, hooks (canonical)
+├── .claude/                       ← Claude Code registration layer (generated from .apexyard/)
+├── .kimi-code/                    ← Kimi Code CLI registration layer (generated from .apexyard/)
 ├── apexyard.projects.yaml        ← the registry (which projects ApexYard manages)
 ├── onboarding.yaml                ← company, team, tech stack
 │

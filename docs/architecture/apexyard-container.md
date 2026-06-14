@@ -14,10 +14,10 @@ C4Container
 
     System_Boundary(apex, "ApexYard (ops fork)") {
         Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code reads this first. Imports rules and role-triggers.")
-        Container(rules, ".claude/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
-        Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart events.")
-        Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (31 skills)")
-        Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), pr-manager (Tariq), ticket-manager (Idris).")
+        Container(rules, ".apexyard/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
+        Container(hooks, ".apexyard/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart events.")
+        Container(skills, ".apexyard/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (31 skills)")
+        Container(agents, ".apexyard/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), pr-manager (Tariq), ticket-manager (Idris).")
         Container(roles, "roles/", "Markdown role files", "19 role definitions across engineering / product / design / security / data. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
         Container(registry, "apexyard.projects.yaml", "YAML", "Portfolio registry. Lists every managed project. Skills iterate this to aggregate across projects.")
@@ -28,7 +28,7 @@ C4Container
 
     Rel(ops, claudemd, "Reads / edits", "via Claude Code or editor")
     Rel(claude, claudemd, "Loads on session start")
-    Rel(claudemd, rules, "Imports via @.claude/rules/*.md")
+    Rel(claudemd, rules, "Imports via @.apexyard/rules/*.md")
     Rel(claude, hooks, "Executes on tool events", "bash")
     Rel(claude, skills, "Invokes on /slash-command", "Skill tool")
     Rel(claude, agents, "Spawns sub-agents", "Agent tool")
@@ -52,7 +52,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 ## Key relationships
 
-- **CLAUDE.md → rules** is the single most important arrow. Every rule file is imported via `@.claude/rules/*.md` from `CLAUDE.md`, and Claude Code applies them. Without that import chain, rules are orphaned prose.
+- **CLAUDE.md → rules** is the single most important arrow. Every rule file is imported via `@.apexyard/rules/*.md` from `CLAUDE.md`, and Claude Code applies them. Without that import chain, rules are orphaned prose.
 - **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
@@ -61,7 +61,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
 - The full list of 31 skills — see CLAUDE.md § "Available skills".
-- The full list of 19 roles — see `.claude/rules/role-triggers.md`.
+- The full list of 19 roles — see `.apexyard/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
 ## Related diagrams
@@ -74,7 +74,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 Updates when:
 
-- A new top-level directory is added or removed (e.g. if `.claude/skills/` were renamed)
+- A new top-level directory is added or removed (e.g. if `.apexyard/skills/` were renamed)
 - A new "container" type joins the architecture (e.g. a `templates/` folder were promoted to first-class)
 - The Claude Code integration model changes (new event type, new agent shape)
 

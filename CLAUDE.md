@@ -9,7 +9,7 @@ You are the **Chief of Staff** running a portfolio of projects inside apexyard. 
 1. Read `onboarding.yaml` for company-specific configuration. Resolve the path via the portfolio paths helper so split-portfolio v2 adopters read the sibling repo's copy instead of the (template-default) one in the fork:
 
    ```bash
-   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+   source "$(git rev-parse --show-toplevel)/.apexyard/hooks/_lib-portfolio-paths.sh"
    onboarding=$(portfolio_onboarding_path)
    # Read "$onboarding" with the Read tool
    ```
@@ -55,7 +55,7 @@ Each role has a **persona name** — a short identifier used in conversation, PR
 
 ### Activation — roles are first-class participants, not reference docs
 
-Roles activate **on specific conditions**. The full trigger table lives in `@.claude/rules/role-triggers.md` (imported below). The short version:
+Roles activate **on specific conditions**. The full trigger table lives in `@.apexyard/rules/role-triggers.md` (imported below). The short version:
 
 - **Auto-activation** — certain signals fire a role automatically. Examples: ticket moves to `qa` label → QA Engineer; PR diff touches `**/auth/**` → Security Auditor; production incident → SRE; new PRD drafted → Product Manager.
 - **Prompted activation** — the user can explicitly activate any role: *"act as the QA Engineer for ticket #42"*, *"put on your Tech Lead hat"*, etc.
@@ -67,9 +67,9 @@ When a role activates:
 3. Follow the handoff rules in the role file — who you receive from, who you deliver to
 4. Stay in the role until the task completes or a different trigger activates a different role
 
-When you activate, hand off, or exit a role, print a single-line marker (e.g. `▸ Activating Salim (QA Engineer) for #42 (trigger: ticket labeled qa)`) so operators can see who's driving the work — full marker convention in [`.claude/rules/role-triggers.md`](.claude/rules/role-triggers.md) § "How to signal activation".
+When you activate, hand off, or exit a role, print a single-line marker (e.g. `▸ Activating Salim (QA Engineer) for #42 (trigger: ticket labeled qa)`) so operators can see who's driving the work — full marker convention in [`.apexyard/rules/role-triggers.md`](.apexyard/rules/role-triggers.md) § "How to signal activation".
 
-Full trigger table and handoff artefacts: @.claude/rules/role-triggers.md
+Full trigger table and handoff artefacts: @.apexyard/rules/role-triggers.md
 
 ---
 
@@ -104,15 +104,15 @@ Work on ONE ticket at a time. Complete fully before starting next. Each PR = one
 
 ### Quality Rules
 
-- **Branch names and PR titles are enforced, not warned** -- as of 2026-04-12 (#20), `validate-branch-name.sh` and `validate-pr-create.sh` block (exit 2) instead of warn on malformed branch names, PR titles, missing glossary, and missing branch ticket IDs. Fix the format — see @.claude/rules/git-conventions.md
+- **Branch names and PR titles are enforced, not warned** -- as of 2026-04-12 (#20), `validate-branch-name.sh` and `validate-pr-create.sh` block (exit 2) instead of warn on malformed branch names, PR titles, missing glossary, and missing branch ticket IDs. Fix the format — see @.apexyard/rules/git-conventions.md
 - **No direct pushes to main** -- every change through a PR
 - **Tests required** -- >80% coverage for domain logic
 - **Lint, typecheck, test, build** must pass before pushing
 - **Code review required** before merge
-- **Explicit per-PR CEO approval required for every merge** -- plan-level "go" / "continue" / "ship it" does NOT authorize any `gh pr merge`. Stop before each merge and ask for a per-PR explicit nod. Mechanically enforced by `block-unreviewed-merge.sh` + the `/approve-merge` skill. Full rationale and examples: @.claude/rules/pr-workflow.md
-- **Tracker vocabulary is reserved** -- the words `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real GitHub issues that exist in a tracker. Never apply them to in-conversation plan items. When decomposing work in chat, use `Step N` / `Item N` / plain bullets. Crossing the boundary from "plan item" to "tracker item" requires an explicit `gh issue create`. Full rule and anti-pattern example: @.claude/rules/ticket-vocabulary.md
-- **Plan mode for multi-step or risky work** -- enter plan mode when the task is ≥4 dependent steps, the path is unclear, or you're about to do something hard-to-reverse (force push, schema migration, batch PR/issue creation). Same self-discipline shape as parallel-work; harness-owned, no hook. Full heuristic: @.claude/rules/plan-mode.md
-- **Loop mode for repetitive, verifiable work** -- proactively offer (or, on opt-in, run) a closed loop when the task is the same build→verify cycle over ≥2 items, has a machine-checkable eval (build/tests/Rex/count), and a clear stop. Pick the primitive (`/loop` single-agent · `/fan-out` parallel · `Workflow` verifying fleet) and state the guardrails: the loop **halts at the per-PR CEO merge gate (never self-approves)**, its **verify stage runs build + tests + Rex (not just build)**, and it has a budget/iteration ceiling. Self-discipline shape like parallel-work; merge-gate hooks are the backstop. Full heuristic: @.claude/rules/loop-mode.md (rationale: AgDR-0068)
+- **Explicit per-PR CEO approval required for every merge** -- plan-level "go" / "continue" / "ship it" does NOT authorize any `gh pr merge`. Stop before each merge and ask for a per-PR explicit nod. Mechanically enforced by `block-unreviewed-merge.sh` + the `/approve-merge` skill. Full rationale and examples: @.apexyard/rules/pr-workflow.md
+- **Tracker vocabulary is reserved** -- the words `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real GitHub issues that exist in a tracker. Never apply them to in-conversation plan items. When decomposing work in chat, use `Step N` / `Item N` / plain bullets. Crossing the boundary from "plan item" to "tracker item" requires an explicit `gh issue create`. Full rule and anti-pattern example: @.apexyard/rules/ticket-vocabulary.md
+- **Plan mode for multi-step or risky work** -- enter plan mode when the task is ≥4 dependent steps, the path is unclear, or you're about to do something hard-to-reverse (force push, schema migration, batch PR/issue creation). Same self-discipline shape as parallel-work; harness-owned, no hook. Full heuristic: @.apexyard/rules/plan-mode.md
+- **Loop mode for repetitive, verifiable work** -- proactively offer (or, on opt-in, run) a closed loop when the task is the same build→verify cycle over ≥2 items, has a machine-checkable eval (build/tests/Rex/count), and a clear stop. Pick the primitive (`/loop` single-agent · `/fan-out` parallel · `Workflow` verifying fleet) and state the guardrails: the loop **halts at the per-PR CEO merge gate (never self-approves)**, its **verify stage runs build + tests + Rex (not just build)**, and it has a budget/iteration ceiling. Self-discipline shape like parallel-work; merge-gate hooks are the backstop. Full heuristic: @.apexyard/rules/loop-mode.md (rationale: AgDR-0068)
 - **No hardcoded secrets** -- use environment variables
 
 ### Code Review
@@ -195,16 +195,16 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| Hooks | `.claude/hooks/` | 40 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, MCP-reindex-after-clone/-pull advisories, bootstrap-skill exemption |
-| Rules | `.claude/rules/` | 12 modular rule files (AgDR triggers, code standards, git conventions, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
+| Hooks | `.apexyard/hooks/` | 40 shell scripts that mechanically enforce SDLC rules — ticket-first (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design review + architecture review), red-CI block, commit format, AgDR for arch changes, branch/PR-title validation, secrets scanning, onboarding-config guard, upstream-drift banner, leak protection, MCP-reindex-after-clone/-pull advisories, bootstrap-skill exemption |
+| Rules | `.apexyard/rules/` | 12 modular rule files (AgDR triggers, code standards, git conventions, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
-| Agents | `.claude/agents/` | 24 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect). |
-| Skills | `.claude/skills/` | 59 slash commands — see the full list below |
+| Agents | `.apexyard/agents/` | 24 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect). |
+| Skills | `.apexyard/skills/` | 59 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
 ### Available skills (59)
 
-One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
+One-line summary per skill; canonical details live in each `.apexyard/skills/<name>/SKILL.md`.
 
 | Skill | Purpose |
 |-------|---------|
@@ -268,7 +268,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/stakeholder-update` | Generate weekly / monthly / launch stakeholder updates |
 | `/fan-out` | Spawn N parallel agents in one message (per-task agent type, worktree isolation) |
 
-The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. The rules are imported via `@.claude/rules/*.md` from your project's `CLAUDE.md`.
+The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. The rules are imported via `@.apexyard/rules/*.md` from your project's `CLAUDE.md`.
 
 See `docs/getting-started.md` for the integration model — including how to install the `.claude/` layer alongside the rest of the stack.
 
@@ -300,11 +300,11 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Role Definitions | `roles/` |
 | Workflows | `workflows/` |
 | Templates | `templates/` |
-| Hooks | `.claude/hooks/` |
-| Rules (modular, framework-wide) | `.claude/rules/` |
+| Hooks | `.apexyard/hooks/` |
+| Rules (modular, framework-wide) | `.apexyard/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
-| Agents | `.claude/agents/` |
-| Skills (59 slash commands) | `.claude/skills/` |
+| Agents | `.apexyard/agents/` |
+| Skills (59 slash commands) | `.apexyard/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

@@ -5,13 +5,13 @@
 This doc covers:
 
 - The TL;DR flow
-- The version anchor file (`.claude/framework-version`)
+- The version anchor file (`.apexyard/framework-version`)
 - What each migration does (table)
 - Common scenarios (multi-hop, missing anchor, skip-migrations, dry-run)
 - **When `/update` isn't enough — re-forking and keeping your data**
 - Authoring a new migration (framework maintainers only)
 
-For the daily-sync UX, see `.claude/skills/update/SKILL.md`. For the design rationale, see [`docs/agdr/AgDR-0032-update-chain-migrations.md`](agdr/AgDR-0032-update-chain-migrations.md).
+For the daily-sync UX, see `.apexyard/skills/update/SKILL.md`. For the design rationale, see [`docs/agdr/AgDR-0032-update-chain-migrations.md`](agdr/AgDR-0032-update-chain-migrations.md).
 
 ---
 
@@ -25,11 +25,11 @@ cd ~/ops/apexyard          # your fork
 That's it. On a fork that's three releases behind, `/update`:
 
 1. Fetches `upstream/main`.
-2. Detects your current framework version from `.claude/framework-version` (or prompts you once if the file is missing).
+2. Detects your current framework version from `.apexyard/framework-version` (or prompts you once if the file is missing).
 3. Builds the migration chain — e.g. v1.0.0 → v1.1.0 → v1.2.0 → v1.3.0.
 4. Offers each migration with `[Y / n / show-diff / skip-all]`.
 5. Stages all changes; you commit + push on a sync branch.
-6. Advances `.claude/framework-version` to the new latest tag.
+6. Advances `.apexyard/framework-version` to the new latest tag.
 
 You're never more than one `/update` away from running every migration the framework needs you to run, even if you've been gone six months.
 
@@ -38,7 +38,7 @@ You're never more than one `/update` away from running every migration the frame
 ## The version anchor
 
 ```
-.claude/framework-version    # one line, e.g. "v1.4.0"
+.apexyard/framework-version    # one line, e.g. "v1.4.0"
 ```
 
 This file records the framework version your fork was last synced against. `/update` reads it on entry, walks the chain to the new release tag, and writes the new value at the end. Forks created **before v1.4.0** don't have this file yet — `/update` will prompt you once to bootstrap it.
@@ -63,7 +63,7 @@ The override applies once. After a successful sync, the anchor is rewritten from
 
 | Migration | Adds / changes | Affects |
 |-----------|---------------|---------|
-| `v1.2.0-to-v1.3.0.sh` | Moves `onboarding.yaml` and `workspace/<name>/` from the public fork to the private sibling repo (split-portfolio v2). Writes the `.apexyard-fork` anchor. Adds the `portfolio.{onboarding,workspace_dir}` keys to `.claude/project-config.json`. Updates `.gitignore`. | Split-portfolio adopters on the v1 layout. No-op for single-fork adopters. |
+| `v1.2.0-to-v1.3.0.sh` | Moves `onboarding.yaml` and `workspace/<name>/` from the public fork to the private sibling repo (split-portfolio v2). Writes the `.apexyard-fork` anchor. Adds the `portfolio.{onboarding,workspace_dir}` keys to `.apexyard/project-config.json`. Updates `.gitignore`. | Split-portfolio adopters on the v1 layout. No-op for single-fork adopters. |
 | `v1.3.0-to-v1.4.0.sh` | Currently a no-op placeholder. v1.4.0-cycle tickets that need per-adopter migrations (e.g. templates/tickets reorg) will populate the body before release-cut. | TBD when v1.4.0 ships. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
@@ -89,10 +89,10 @@ Approve all of them and the chain runs end-to-end. The fork lands on v1.4.0 with
 
 ### Missing anchor file (pre-v1.4.0 fork)
 
-If `.claude/framework-version` doesn't exist, `/update` prompts:
+If `.apexyard/framework-version` doesn't exist, `/update` prompts:
 
 ```
-No .claude/framework-version anchor in this fork.
+No .apexyard/framework-version anchor in this fork.
 Which release was this fork last aligned with?
 
   [a] v1.0.0
@@ -107,7 +107,7 @@ Choose [d]:
 
 Pick the version you believe your fork is on. If you're not sure — when did you last run `/update`? Check `git log --grep='sync.*upstream' --oneline` for the date and match to a release tag.
 
-If you genuinely don't know, picking `[e] skip migrations` advances the anchor without running any chain steps. That's safe — but you can replay any individual migration later with `bash .claude/migrations/<pair>.sh`.
+If you genuinely don't know, picking `[e] skip migrations` advances the anchor without running any chain steps. That's safe — but you can replay any individual migration later with `bash .apexyard/migrations/<pair>.sh`.
 
 ### Skip migrations (files-only sync)
 
@@ -126,7 +126,7 @@ Why this exists:
 Replay later:
 
 ```bash
-bash .claude/migrations/v1.2.0-to-v1.3.0.sh
+bash .apexyard/migrations/v1.2.0-to-v1.3.0.sh
 ```
 
 Each migration is idempotent — safe to re-run any number of times.
@@ -158,7 +158,7 @@ way, the only thing you have to protect is **your own work**.
 One idea makes this easy: everything in your fork is either **the framework** or
 **your data**.
 
-- **The framework** — `.claude/`, `workflows/`, `templates/`, `docs/`. Upstream
+- **The framework** — `.apexyard/`, `workflows/`, `templates/`, `docs/`. Upstream
   owns it; upgrades overwrite it. Let them.
 - **Your data** — your registry (`apexyard.projects.yaml`), `onboarding.yaml`,
   `projects/`, `workspace/`, `handbooks/`, and any custom skills. This is what
@@ -167,7 +167,7 @@ One idea makes this easy: everything in your fork is either **the framework** or
 ### Upgrade or re-fork?
 
 Run `/update --dry-run`. A clean or small merge → just `/update`. Conflicts
-across most of `.claude/` — or a PR from your fork to upstream that touches the
+across most of `.apexyard/` — or a PR from your fork to upstream that touches the
 *whole* framework tree → your base has drifted too far; re-fork.
 
 ### Re-forking without losing anything
@@ -202,7 +202,7 @@ public trackers.
 
 When cutting a release that introduces a per-adopter change:
 
-1. Create `.claude/migrations/v<current>-to-v<next>.sh`. Use `v1.2.0-to-v1.3.0.sh` as a template — note the env knobs (`APEXYARD_MIGRATION_PROMPT`, `APEXYARD_MIGRATION_QUIET`), the four-exit-code contract, and the staging-not-committing stance.
+1. Create `.apexyard/migrations/v<current>-to-v<next>.sh`. Use `v1.2.0-to-v1.3.0.sh` as a template — note the env knobs (`APEXYARD_MIGRATION_PROMPT`, `APEXYARD_MIGRATION_QUIET`), the four-exit-code contract, and the staging-not-committing stance.
 2. `chmod +x` the script.
 3. Add a row to the "What each migration does" table above.
 4. Update `CHANGELOG.md` with a one-line callout that the migration exists.
@@ -229,9 +229,9 @@ What does NOT belong in a migration script:
 
 ## Related
 
-- `.claude/skills/update/SKILL.md` — the `/update` skill spec.
-- `.claude/hooks/_lib-migration-chain.sh` — the chain-walking helper library.
-- `.claude/migrations/README.md` — convention reference for migration scripts.
+- `.apexyard/skills/update/SKILL.md` — the `/update` skill spec.
+- `.apexyard/hooks/_lib-migration-chain.sh` — the chain-walking helper library.
+- `.apexyard/migrations/README.md` — convention reference for migration scripts.
 - `docs/agdr/AgDR-0032-update-chain-migrations.md` — design rationale.
 - `docs/agdr/AgDR-0007-release-cut-branch-model.md` — the release-cut model the chain depends on.
 - `docs/multi-project.md` § "Upgrades — pulling from upstream" — the wider sync flow.

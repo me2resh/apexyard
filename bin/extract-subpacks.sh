@@ -138,25 +138,25 @@ AUDIT_DIR="$OUT_DIR/audit-pack"
 say "Extracting audit-pack → $AUDIT_DIR"
 
 for skill in "${AUDIT_SKILLS[@]}"; do
-  copy_file ".claude/skills/$skill/SKILL.md" "$AUDIT_DIR/.claude/skills/$skill/SKILL.md"
+  copy_file ".apexyard/skills/$skill/SKILL.md" "$AUDIT_DIR/.apexyard/skills/$skill/SKILL.md"
   # Carry sibling files (render-trend.sh for /launch-check, tests/ for /geo-audit)
-  if [ -d "$REPO_ROOT/.claude/skills/$skill" ]; then
-    for sibling in "$REPO_ROOT/.claude/skills/$skill"/*; do
+  if [ -d "$REPO_ROOT/.apexyard/skills/$skill" ]; then
+    for sibling in "$REPO_ROOT/.apexyard/skills/$skill"/*; do
       [ -e "$sibling" ] || continue
       name="$(basename "$sibling")"
       [ "$name" = "SKILL.md" ] && continue
       [ -d "$sibling" ] && continue   # skip nested dirs (e.g. tests/) for v1
-      copy_file ".claude/skills/$skill/$name" "$AUDIT_DIR/.claude/skills/$skill/$name"
+      copy_file ".apexyard/skills/$skill/$name" "$AUDIT_DIR/.apexyard/skills/$skill/$name"
     done
   fi
 done
 
 for lib in "${AUDIT_HOOK_LIBS[@]}"; do
-  copy_file ".claude/hooks/$lib" "$AUDIT_DIR/.claude/hooks/$lib"
+  copy_file ".apexyard/hooks/$lib" "$AUDIT_DIR/.apexyard/hooks/$lib"
 done
 
 for reg in "${AUDIT_REGISTRIES[@]}"; do
-  copy_file ".claude/registries/$reg" "$AUDIT_DIR/.claude/registries/$reg"
+  copy_file ".apexyard/registries/$reg" "$AUDIT_DIR/.apexyard/registries/$reg"
 done
 
 for tmpl in "${AUDIT_TEMPLATES[@]}"; do
@@ -173,11 +173,11 @@ SAFETY_DIR="$OUT_DIR/safety-hooks"
 say "Extracting safety-hooks → $SAFETY_DIR"
 
 for hook in "${SAFETY_HOOKS[@]}"; do
-  copy_file ".claude/hooks/$hook" "$SAFETY_DIR/.claude/hooks/$hook"
+  copy_file ".apexyard/hooks/$hook" "$SAFETY_DIR/.apexyard/hooks/$hook"
 done
 
 for lib in "${SAFETY_HOOK_LIBS[@]}"; do
-  copy_file ".claude/hooks/$lib" "$SAFETY_DIR/.claude/hooks/$lib"
+  copy_file ".apexyard/hooks/$lib" "$SAFETY_DIR/.apexyard/hooks/$lib"
 done
 
 # ----- write manifests -------------------------------------------------------
@@ -209,6 +209,7 @@ write_manifest() {
       [ "$rel" = "README.md" ] && continue
       [ "$rel" = "PLUGIN.json" ] && continue
       [ "$rel" = ".claude/settings.snippet.json" ] && continue
+    [ "$rel" = ".apexyard/settings.snippet.json" ] && continue
       if [ "$first" -eq 1 ]; then
         first=0
       else
@@ -241,6 +242,6 @@ say "  safety-hooks: $safety_count files at $SAFETY_DIR"
 say ""
 say "Next steps:"
 say "  1. Review marketplace/<pack>/EXTRACTION_MANIFEST.json"
-say "  2. Run .claude/hooks/tests/test_subpack_extraction.sh to verify"
+say "  2. Run .apexyard/hooks/tests/test_subpack_extraction.sh to verify"
 say "     no framework-distinctive elements leaked"
 say "  3. On a release tag, push to the marketplace (manual operator step in v1)"

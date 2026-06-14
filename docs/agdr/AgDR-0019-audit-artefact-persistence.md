@@ -39,7 +39,7 @@ Four decisions in the design needed an explicit airing because each has a viable
 | Option | Pros | Cons |
 |---|---|---|
 | **Four discrete functions** (chosen): `audit_resolve_dir`, `audit_run_persist`, `audit_run_list`, `audit_render_trend` | Each has one job; each is testable in isolation. Skills only call what they need (e.g. trend-only mode skips `_persist`). Mirrors the `_lib-portfolio-paths.sh` / `_lib-read-config.sh` shape adopters already know. | Four functions to learn instead of one. |
-| One omnibus `audit_run` with subcommands (`audit_run persist …`, `audit_run trend …`) | Single entry point. Looks like `git`. | Bash subcommand dispatch is awkward; arg parsing duplicates work. Tests harder to scope. Doesn't match the existing lib conventions in `.claude/hooks/`. |
+| One omnibus `audit_run` with subcommands (`audit_run persist …`, `audit_run trend …`) | Single entry point. Looks like `git`. | Bash subcommand dispatch is awkward; arg parsing duplicates work. Tests harder to scope. Doesn't match the existing lib conventions in `.apexyard/hooks/`. |
 | Skip the lib, copy-paste persistence into each skill | Zero coupling; each skill controls its own destiny. | Defeats the whole ticket. Drift across nine skills is exactly what the ticket is preventing. |
 
 ## Decision
@@ -49,7 +49,7 @@ Chosen — for all four:
 **A.** Paired JSON + MD per run (preserves `/launch-check` exactly).
 **B.** Rigid common-denominator `findings[]` shape; per-dimension extras in the MD body via per-dim templates.
 **C.** Read launch-check's old + new paths, write only to new — no destructive migration.
-**D.** Four-function shell lib at `.claude/hooks/_lib-audit-history.sh`.
+**D.** Four-function shell lib at `.apexyard/hooks/_lib-audit-history.sh`.
 
 Why this combination:
 
@@ -72,4 +72,4 @@ Why this combination:
 - Ticket: [me2resh/apexyard#218](https://github.com/me2resh/apexyard/issues/218)
 - Technical design: [`docs/technical-designs/audit-artefact-persistence.md`](../technical-designs/audit-artefact-persistence.md)
 - Prior-art AgDR: [`AgDR-0014 — /launch-check trend tracking`](AgDR-0014-launch-check-trend-tracking.md)
-- Existing skill (model for the convention): `.claude/skills/launch-check/SKILL.md` + `render-trend.sh`
+- Existing skill (model for the convention): `.apexyard/skills/launch-check/SKILL.md` + `render-trend.sh`

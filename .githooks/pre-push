@@ -1,5 +1,5 @@
 #!/bin/bash
-# .githooks/pre-push — terminal-push companion to .claude/hooks/pre-push-gate.sh.
+# .githooks/pre-push — terminal-push companion to .apexyard/hooks/pre-push-gate.sh.
 #
 # pre-push-gate.sh fires only on Claude Code-driven pushes (it is a
 # PreToolUse hook). This git hook covers the same check set for terminal

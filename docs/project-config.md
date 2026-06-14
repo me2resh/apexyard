@@ -1,6 +1,6 @@
 # Project Config
 
-`.claude/project-config.defaults.json` ships the framework defaults. Each fork optionally creates `.claude/project-config.json` to override specific top-level keys. Both files live inside `.claude/`, so edits are exempt from the ticket-first hook (per `.claude/rules/workflow-gates.md`).
+`.apexyard/project-config.defaults.json` ships the framework defaults. Each fork optionally creates `.apexyard/project-config.json` to override specific top-level keys. Both files live inside `.apexyard/`, so edits are exempt from the ticket-first hook (per `.apexyard/rules/workflow-gates.md`).
 
 Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #114, #115 all read from it.
 
@@ -8,8 +8,8 @@ Related: apexyard#109 introduced this scheme; apexyard#107, #111, #112, #113, #1
 
 | File | Who maintains | Purpose |
 | --- | --- | --- |
-| `.claude/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork — upstream syncs via `/update`. |
-| `.claude/project-config.json` | fork owner | Overrides. Optional. Commit or gitignore per the fork's preference. |
+| `.apexyard/project-config.defaults.json` | apexyard upstream | Shipped defaults. Do not edit in a fork — upstream syncs via `/update`. |
+| `.apexyard/project-config.json` | fork owner | Overrides. Optional. Commit or gitignore per the fork's preference. |
 
 ## Merge semantics
 
@@ -80,7 +80,7 @@ Every consumer (skills + validator) picks this up on next invocation — no fram
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
-. "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
+. "$REPO_ROOT/.apexyard/hooks/_lib-read-config.sh"
 
 # Get a list of values
 types=$(config_get '.branch.type_whitelist[]' | paste -sd'|' -)
@@ -93,4 +93,4 @@ The reader uses `jq` for merging and path lookups. If `jq` is unavailable, the r
 
 ## Backward compatibility
 
-`validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.claude/project-config.json`. That reader is still honoured as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.
+`validate-commit-format.sh` previously read a flat `commit_types` top-level key from `.apexyard/project-config.json`. That reader is still honoured as a fallback, so forks that customised commit types before apexyard#109 keep working without edits. New customisations should use the nested `commit.type_whitelist` form.

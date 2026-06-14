@@ -9,7 +9,7 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 - A GitHub account and an org you can fork into
 - [Claude Code](https://claude.com/claude-code) installed
 - [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
-- [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
+- [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.apexyard/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
 
 ---
@@ -176,7 +176,7 @@ git commit --amend -m "$(git log -1 --format=%B)
 | Check | What it catches | Tool required |
 |-------|----------------|---------------|
 | `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
-| `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
+| `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.apexyard/hooks/*.sh` | `shellcheck` |
 | `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
 | `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
 
@@ -316,7 +316,7 @@ Cargo workspaces with many crates have a slow first index — see the caveat bel
 
 ## Optional: Fallow static analysis (JS/TS)
 
-For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run a [Fallow](https://docs.fallow.tools) static-analysis pass as part of every code review — surfacing dead code, unused exports/dependencies, duplication, circular dependencies, and complexity hotspots in the **changed code**, plus a dry-run preview of the fixes it would apply. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
+For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run a [Fallow](https://docs.fallow.tools) static-analysis pass as part of every code review — surfacing dead code, unused exports/dependencies, duplication, circular dependencies, and complexity hotspots in the **changed code**, plus a dry-run preview of the fixes it would apply. See `.apexyard/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
 
 **This is opt-in and fail-soft.** Rex only runs it when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI is on `PATH`. If the CLI is absent, the step is skipped silently — there is no "broken without fallow" path, only a richer review with it. Findings are **advisory** (`nit:` / `suggestion:`); they never flip a verdict on their own, and the review only previews fixes (`fallow fix --dry-run`) — it never mutates your tree.
 

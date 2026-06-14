@@ -11,7 +11,7 @@ Six framework primitives already exist that an adopter must wire up per project 
 3. `handbooks/domain/<area>/*.md` — per-codebase domain knowledge (the `paths:` frontmatter convention from #293)
 4. `golden-paths/pipelines/*.yml` — reusable CI workflows (code-quality, security, dependency-audit)
 5. `templates/agdr*.md` + `templates/architecture/*.md` — decision-record forms
-6. Rex's discovery globs in `.claude/agents/code-reviewer.md` § 8 — what gets loaded per PR
+6. Rex's discovery globs in `.apexyard/agents/code-reviewer.md` § 8 — what gets loaded per PR
 
 Today, the adopter reassembles these by hand on every `/handover`. The output is **a different mix every time**, which produces three problems:
 
@@ -30,7 +30,7 @@ The ticket (#297) framed the move as **harness templates** — a term from indus
 | **Path-mirrored directory tree (chosen)** — `topologies/<name>/{handbooks,golden-paths,templates,VERSION}/...` mirrors the framework's own layout | Discovery is the convention; no registry to maintain; mirrors how `handbooks/`, `templates/custom-templates/`, and `custom-handbooks/` already work (#232, AgDR-0023); operator opens a topology dir and sees exactly what they're getting | Repeats the framework's own layout once per topology (some file duplication — but copies, not shared state) |
 | Frontmatter-tagged single tree — every framework file gets a `topologies: [typescript-nextjs, python-fastapi]` YAML key; `/handover` filters | Single source for each file; no duplication | Coupling explodes — a TS handbook editor must remember the topology tag; the framework's other consumers (Rex's globs) would need to grow a topology-aware filter; partial discovery (file present in one topology and not another) is hard to express; adopter-authored extensions break the closed-world frontmatter |
 | Central JSON manifest — `topologies.json` at the framework root maps each topology to a list of files | One file describes the world | The manifest IS a registry by another name; every framework PR has to remember to update it; conflict-prone (two parallel PRs both touch the manifest); no per-file isolation when reading a topology |
-| Config-block in `.claude/project-config.defaults.json` — `topologies.<name>.{handbooks, pipelines, ...}` arrays | Reuses the existing config-resolution infrastructure | Same downsides as the JSON manifest, plus the config defaults file is already a busy surface |
+| Config-block in `.apexyard/project-config.defaults.json` — `topologies.<name>.{handbooks, pipelines, ...}` arrays | Reuses the existing config-resolution infrastructure | Same downsides as the JSON manifest, plus the config defaults file is already a busy surface |
 
 Chosen: **path-mirrored directory tree**. Mirrors the existing `handbooks/` + `custom-templates/` + `custom-handbooks/` conventions (path IS the metadata — AgDR-0023). Adopter-authored topologies in v2.1 will be a trivial extension (drop a sibling directory under `<private_repo>/custom-topologies/`).
 
@@ -55,7 +55,7 @@ Chosen: **three categorically different stacks**. Each one demonstrates that the
 | Git-tag-based — `topology-typescript-nextjs-v1.0.0` tags on the framework repo | Free for the framework (tag once, ignore); no per-topology file | Adopter's instantiated copy carries no marker; `/update` has to re-derive the version from the diff content, which is brittle |
 | Content-hash comparison — `/update` hashes the live framework bundle and compares to the adopter's | Self-healing; no version file needed | Hashes are noisy (whitespace, line endings); the operator can't read "we're on 1.0.0" from a hash; no human-readable bump signal |
 
-Chosen: **`VERSION` file**. Semver, human-readable, trivially diffable, matches the per-version migration anchor in `.claude/migrations/`. The skill writes the file when it instantiates; `/update` reads both sides and offers re-instantiation when they differ.
+Chosen: **`VERSION` file**. Semver, human-readable, trivially diffable, matches the per-version migration anchor in `.apexyard/migrations/`. The skill writes the file when it instantiates; `/update` reads both sides and offers re-instantiation when they differ.
 
 ### D) `/handover` integration shape — where the topology pick goes in the flow
 
@@ -119,7 +119,7 @@ Files are **copied, not symlinked**. Symlinks would couple the adopter's instant
 - The path-mirroring convention is open — a v2.1 PR can add `<private_repo>/custom-topologies/<name>/` with the same shape, and `/handover` will discover it the same way (sibling to AgDR-0022's custom-skills layer).
 - A new row in `CLAUDE.md` quick-reference table names `topologies/` so adopters can find it. The description stays ≤ 25 words to satisfy the Wave 1 invariant.
 - Rex does **not** grow topology awareness in v1. Discovery is still per-handbook via the path convention; the topology only seeded the handbooks. Rex's review behaviour stays unchanged.
-- Smoke test at `.claude/skills/handover/tests/test_topology_pick.sh` asserts the three starter topology dirs exist + have the five required files (`VERSION`, `README.md`, ≥ 1 handbook per axis). Wave 1 invariants stay green — the new CLAUDE.md row is terse.
+- Smoke test at `.apexyard/skills/handover/tests/test_topology_pick.sh` asserts the three starter topology dirs exist + have the five required files (`VERSION`, `README.md`, ≥ 1 handbook per axis). Wave 1 invariants stay green — the new CLAUDE.md row is terse.
 
 ## Artifacts
 
@@ -127,9 +127,9 @@ Files are **copied, not symlinked**. Symlinks would couple the adopter's instant
 - `topologies/python-fastapi/` — full bundle
 - `topologies/go-data-pipeline/` — full bundle
 - `topologies/README.md` — convention pointer + "how to pick"
-- `.claude/skills/handover/SKILL.md` — extended with topology-pick step + bundle-instantiation
-- `.claude/skills/update/SKILL.md` — extended with topology-version drift detection
-- `.claude/skills/handover/tests/test_topology_pick.sh` — smoke test
+- `.apexyard/skills/handover/SKILL.md` — extended with topology-pick step + bundle-instantiation
+- `.apexyard/skills/update/SKILL.md` — extended with topology-version drift detection
+- `.apexyard/skills/handover/tests/test_topology_pick.sh` — smoke test
 - `CLAUDE.md` — new row in QUICK REFERENCE table
 - Closes: `me2resh/apexyard#297`
 - Related: AgDR-0020 (handbooks foundation), AgDR-0023 (path-mirroring template overrides), AgDR-0032 (per-version migration chain), AgDR-0037 (domain handbooks + `paths:` frontmatter), AgDR-0042 (harnessability dimensions)

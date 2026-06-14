@@ -6,12 +6,12 @@ Ensure code quality, share knowledge, and catch issues before they reach product
 
 ## Roles
 
-Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md). When you activate one of these roles for a review, signal it with the single-line marker convention from [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) § "How to signal activation" — e.g. `▸ Activating Hakim (Security Auditor) for PR #42 (trigger: diff touches **/auth/**)`.
+Code review is a **role-activated** workflow. The roles below activate automatically when a PR is opened, per [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md). When you activate one of these roles for a review, signal it with the single-line marker convention from [`.apexyard/rules/role-triggers.md`](../.apexyard/rules/role-triggers.md) § "How to signal activation" — e.g. `▸ Activating Hakim (Security Auditor) for PR #42 (trigger: diff touches **/auth/**)`.
 
 | Role | Responsibility | Role file |
 |------|----------------|-----------|
 | **Author** | Creates PR, responds to feedback. The engineer who wrote the code: [Backend Engineer](../roles/engineering/backend-engineer.md) or [Frontend Engineer](../roles/engineering/frontend-engineer.md). | `roles/engineering/{backend,frontend}-engineer.md` |
-| **Code Reviewer agent (Rex)** | Automated first-pass review on every commit. Checks architecture, tests, security, AgDR, glossary. | `.claude/agents/code-reviewer.md` |
+| **Code Reviewer agent (Rex)** | Automated first-pass review on every commit. Checks architecture, tests, security, AgDR, glossary. | `.apexyard/agents/code-reviewer.md` |
 | **Tech Lead reviewer** | Human approval gate. Signs off on architecture, design patterns, team conventions. | [`roles/engineering/tech-lead.md`](../roles/engineering/tech-lead.md) |
 | **Security Auditor** (conditional) | Activates when the PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`, or similar. | [`roles/security/security-auditor.md`](../roles/security/security-auditor.md) |
 | **UI Designer** (conditional) | Activates when the PR diff touches UI components, design tokens, or visible layout. | [`roles/design/ui-designer.md`](../roles/design/ui-designer.md) |
@@ -46,7 +46,7 @@ Fixes #[ticket-id]
 | [Term] | [What it means in this context] |
 ```
 
-**Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.claude/rules/pr-quality.md`](../.claude/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (`nit:` / `suggestion:`, non-blocking).
+**Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.apexyard/rules/pr-quality.md`](../.apexyard/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (`nit:` / `suggestion:`, non-blocking).
 
 **Why a Glossary?** Every PR is a learning opportunity. Explaining concepts helps:
 
@@ -127,7 +127,7 @@ QUESTION:   "Why did you choose Map over Object here?"
 - [ ] No code duplication
 - [ ] No dead code
 - [ ] Comments explain why, not what
-- [ ] Fallow static-analysis pass reviewed (JS/TS) — dead code, unused exports/deps, duplication, circular deps, complexity hotspots (advisory; Rex runs it automatically on JS/TS diffs when the `fallow` CLI is available — see `.claude/agents/code-reviewer.md` § 9)
+- [ ] Fallow static-analysis pass reviewed (JS/TS) — dead code, unused exports/deps, duplication, circular deps, complexity hotspots (advisory; Rex runs it automatically on JS/TS diffs when the `fallow` CLI is available — see `.apexyard/agents/code-reviewer.md` § 9)
 
 ### Security
 

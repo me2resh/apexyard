@@ -1,6 +1,6 @@
 # apexyard release process
 
-apexyard uses a **release-cut** branch model (sometimes called gitflow-lite) for the framework repo. This doc is the prose runbook for cutting a release. The `/release` skill at `.claude/skills/release/SKILL.md` automates most of the steps; this doc is the manual fallback and the conceptual reference.
+apexyard uses a **release-cut** branch model (sometimes called gitflow-lite) for the framework repo. This doc is the prose runbook for cutting a release. The `/release` skill at `.apexyard/skills/release/SKILL.md` automates most of the steps; this doc is the manual fallback and the conceptual reference.
 
 **Important — framework only.** This release model is for `me2resh/apexyard` itself, not for managed projects under apexyard governance. Managed projects stay trunk-based (PRs merge to `main`); only the framework has dev/main + tags. See `docs/multi-project.md` for the rationale.
 
@@ -115,6 +115,6 @@ Branch protection on `dev` matches the prior `main` setup — required reviews +
 ## Related
 
 - `AgDR-0007` — the decision record
-- `.claude/skills/release/SKILL.md` — the automated flow
-- `.claude/skills/update/SKILL.md` — the inverse skill, for adopters pulling new releases
+- `.apexyard/skills/release/SKILL.md` — the automated flow
+- `.apexyard/skills/update/SKILL.md` — the inverse skill, for adopters pulling new releases
 - `docs/multi-project.md § "Upgrades — pulling from upstream"` — adopter side of the relationship

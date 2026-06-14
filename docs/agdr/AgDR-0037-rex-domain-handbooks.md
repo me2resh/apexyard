@@ -38,7 +38,7 @@ Domain rules don't have a clean extension-based trigger. EMU rules apply to what
 |---|---|---|
 | **A. Frontmatter `paths:` field on each handbook** (chosen) | Per-file granularity (foundational always-load handbooks AND path-triggered ones coexist in the same area dir); discovery stays path-mirroring (`<area>/` IS the targeting metadata at the directory level); the trigger is co-located with the rule, so authors maintain one file not two; consistent with how Claude Code skills already use frontmatter | Introduces a small YAML-parser surface in Rex's prompt (the other buckets are frontmatter-free); the `paths:` semantics are domain-bucket-specific and need to be documented separately |
 | **B. Sidecar `paths.txt` per area dir** | No frontmatter parser; one path-list per area covers all handbooks under it | Loses per-handbook granularity (a foundational always-load rule and a path-scoped rule in the same area can't coexist); two files to keep in sync; less consistent with the rest of the framework's frontmatter-on-things-that-have-load-conditions convention |
-| **C. Config table in `.claude/project-config.json`** | Centralised — operators see all path-mappings in one place | Distance between the rule (handbook file) and its load condition (config file) makes drift inevitable; adopters who edit the handbook frequently have to remember to update the config; doesn't fit the path-mirroring discovery convention used elsewhere |
+| **C. Config table in `.apexyard/project-config.json`** | Centralised — operators see all path-mappings in one place | Distance between the rule (handbook file) and its load condition (config file) makes drift inevitable; adopters who edit the handbook frequently have to remember to update the config; doesn't fit the path-mirroring discovery convention used elsewhere |
 | **D. Hard-code area→paths mapping in Rex's prompt** | Zero config — Rex "knows" `github-emu/` means `scripts/github-emu-migration/**` | Framework-side maintenance for every adopter's domains; defeats the point of adopter handbooks (the framework cannot know which paths a given adopter's domain lives at) |
 
 ## Decision
@@ -79,6 +79,6 @@ Both stages are tracked in #293's ACs but implemented as separate follow-up tick
 
 - `handbooks/domain/README.md` — operator-facing convention doc
 - `handbooks/README.md` — updated to mention the new bucket
-- `.claude/agents/code-reviewer.md` § 8 — Rex's prompt with the fourth bucket + frontmatter-parse + path-match step
+- `.apexyard/agents/code-reviewer.md` § 8 — Rex's prompt with the fourth bucket + frontmatter-parse + path-match step
 - PR me2resh/apexyard#294 — implementation
 - Ticket me2resh/apexyard#293 — feature spec with the three-stage plan

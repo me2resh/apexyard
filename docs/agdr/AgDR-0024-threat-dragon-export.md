@@ -69,7 +69,7 @@ Chosen: **OWASP Threat Dragon v2 JSON, with an auto-grid layout**.
 Concretely:
 
 - **Flag surface**: `--format=markdown` (default, unchanged), `--format=dragon` (JSON only), `--format=both` (markdown + JSON). Markdown-only stays default to preserve backward compatibility.
-- **Serialiser**: a self-contained Python script at `.claude/skills/threat-model/serialize_dragon.py`. Input is a small YAML/JSON structured-input file (entities + flows + boundaries + threats) the skill builds while running. Output is Threat Dragon v2 JSON at `<output-dir>/threat-model.json`.
+- **Serialiser**: a self-contained Python script at `.apexyard/skills/threat-model/serialize_dragon.py`. Input is a small YAML/JSON structured-input file (entities + flows + boundaries + threats) the skill builds while running. Output is Threat Dragon v2 JSON at `<output-dir>/threat-model.json`.
 - **Shape mapping**:
   - External actors → `shape: actor`, `data.type: tm.Actor`
   - Processes → `shape: process`, `data.type: tm.Process`
@@ -109,10 +109,10 @@ Adopters who want visual editing keep hand-redrawing models in Dragon from the m
 
 ## Artifacts
 
-- Skill: `.claude/skills/threat-model/SKILL.md` (extended)
-- Serialiser: `.claude/skills/threat-model/serialize_dragon.py`
-- Fixture: `.claude/skills/threat-model/fixtures/sample-input.yaml`
-- Tests: `.claude/skills/threat-model/tests/test_serialize_dragon.sh`
+- Skill: `.apexyard/skills/threat-model/SKILL.md` (extended)
+- Serialiser: `.apexyard/skills/threat-model/serialize_dragon.py`
+- Fixture: `.apexyard/skills/threat-model/fixtures/sample-input.yaml`
+- Tests: `.apexyard/skills/threat-model/tests/test_serialize_dragon.sh`
 - Schema reference: [OWASP/threat-dragon `threat-dragon-v2.schema.json`](https://github.com/OWASP/threat-dragon/blob/main/td.vue/src/assets/schema/threat-dragon-v2.schema.json)
 - Ticket: [me2resh/apexyard#255](https://github.com/me2resh/apexyard/issues/255)
 - PR: (filled at merge time)

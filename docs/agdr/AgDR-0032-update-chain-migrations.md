@@ -35,15 +35,15 @@ status: executed
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **A. File at `.claude/framework-version` (CHOSEN)** | One line, one job; trivial to read/write; robust to history rewrites; visible in `git status` after `/update` advances it | Adds one tracked file; adopters who delete it lose the chain start (mitigated by interactive bootstrap prompt) |
+| **A. File at `.apexyard/framework-version` (CHOSEN)** | One line, one job; trivial to read/write; robust to history rewrites; visible in `git status` after `/update` advances it | Adds one tracked file; adopters who delete it lose the chain start (mitigated by interactive bootstrap prompt) |
 | B. Derive from the most recent merge-from-upstream commit's tag | Zero new files | Fragile under squash-merge, rebase, `/update --rebase`; silent drift; relies on a stable tag-on-commit story that adopters don't always preserve |
-| C. `framework_version` key in `.claude/project-config.json` | Lives next to existing config | Mixes a *measured* fact with *configured* facts; adopters edit project-config by hand and risk stale values; partial-merge across the existing override block is awkward |
+| C. `framework_version` key in `.apexyard/project-config.json` | Lives next to existing config | Mixes a *measured* fact with *configured* facts; adopters edit project-config by hand and risk stale values; partial-merge across the existing override block is awkward |
 
 ### How do per-release migrations get expressed?
 
 | Option | Pros | Cons |
 |--------|------|------|
-| **A. Per-pair shell scripts in `.claude/migrations/` named `v<from>-to-v<to>.sh` (CHOSEN)** | Bounded to one transition; replayable in isolation; chain shape is git-visible; new releases add one file or one no-op placeholder | Discipline at release-cut: skipping a release means the chain refuses to walk past it (mitigated by `/release` skill template) |
+| **A. Per-pair shell scripts in `.apexyard/migrations/` named `v<from>-to-v<to>.sh` (CHOSEN)** | Bounded to one transition; replayable in isolation; chain shape is git-visible; new releases add one file or one no-op placeholder | Discipline at release-cut: skipping a release means the chain refuses to walk past it (mitigated by `/release` skill template) |
 | B. One monolithic `migrate.sh` with internal version-routing | Fewer files | Hard to bisect failures across releases; hard to replay a single step; opaque diff at release time |
 | C. Markdown-described migrations in CHANGELOG.md that adopters run by hand | Already documented | Adopters routinely skip migrations; the framework gets blamed for "silent" misses; defeats the whole point of the ticket |
 
@@ -59,9 +59,9 @@ status: executed
 
 **Chosen**:
 
-1. **File anchor** at `<ops_fork>/.claude/framework-version`, single-line `vMAJOR.MINOR.PATCH`. Written by `/update` after a successful sync. `migration_current_version` returns "unknown" when missing OR malformed.
-2. **Per-pair shell scripts** at `.claude/migrations/v<from>-to-v<to>.sh`. Seeded with two real scripts: `v1.2.0-to-v1.3.0.sh` (the split-portfolio v1→v2 recipe extracted from `/update` step 8a) and `v1.3.0-to-v1.4.0.sh` (placeholder for v1.4.0-cycle migrations).
-3. **Chain walking helper** at `.claude/hooks/_lib-migration-chain.sh`. Exposes `migration_current_version`, `migration_write_anchor`, `migration_known_versions`, `migration_chain <from> <to>`, `migration_run <pair>`, `migration_script_path <pair>`. Greedy walk: start at `<from>`, advance by matching `<current>-to-v...` pairs, stop at `<to>`. Refuses with empty output on missing link OR backwards walk.
+1. **File anchor** at `<ops_fork>/.apexyard/framework-version`, single-line `vMAJOR.MINOR.PATCH`. Written by `/update` after a successful sync. `migration_current_version` returns "unknown" when missing OR malformed.
+2. **Per-pair shell scripts** at `.apexyard/migrations/v<from>-to-v<to>.sh`. Seeded with two real scripts: `v1.2.0-to-v1.3.0.sh` (the split-portfolio v1→v2 recipe extracted from `/update` step 8a) and `v1.3.0-to-v1.4.0.sh` (placeholder for v1.4.0-cycle migrations).
+3. **Chain walking helper** at `.apexyard/hooks/_lib-migration-chain.sh`. Exposes `migration_current_version`, `migration_write_anchor`, `migration_known_versions`, `migration_chain <from> <to>`, `migration_run <pair>`, `migration_script_path <pair>`. Greedy walk: start at `<from>`, advance by matching `<current>-to-v...` pairs, stop at `<to>`. Refuses with empty output on missing link OR backwards walk.
 4. **Per-step confirmable prompt** in `/update` step 8b, matching the `/split-portfolio` shape.
 5. **Two new flags**: `--from-version vN.N.N` (override anchor) and `--skip-migrations` (advance anchor only). `--from-dev` automatically skips the chain (pre-release has no tag).
 
@@ -81,13 +81,13 @@ The chain script contract is the four-exit-code shape from the ticket:
 
 **Added:**
 
-- `.claude/migrations/` directory + two seed scripts + README.
-- `.claude/hooks/_lib-migration-chain.sh` (5 public functions + 1 helper).
+- `.apexyard/migrations/` directory + two seed scripts + README.
+- `.apexyard/hooks/_lib-migration-chain.sh` (5 public functions + 1 helper).
 - `/update` step 8b (chain walk).
 - `/update --from-version` + `/update --skip-migrations` flags.
-- `.claude/framework-version` anchor file (written on first successful `/update` post-#282).
+- `.apexyard/framework-version` anchor file (written on first successful `/update` post-#282).
 - `docs/upgrading.md` adopter-facing reference.
-- Test suite at `.claude/hooks/tests/test_update_chain.sh` (11 cases).
+- Test suite at `.apexyard/hooks/tests/test_update_chain.sh` (11 cases).
 
 **Dropped:**
 
@@ -96,7 +96,7 @@ The chain script contract is the four-exit-code shape from the ticket:
 **Discipline added:**
 
 - Every release that goes out MUST land a migration script — real or no-op placeholder. The `/release` skill template will gain a checklist item to enforce this; CHANGELOG-level mention isn't sufficient because the chain refuses to walk past a missing pair.
-- Adopters who delete `.claude/framework-version` get an interactive bootstrap prompt with the known-version menu the next time they run `/update`. One-time cost.
+- Adopters who delete `.apexyard/framework-version` get an interactive bootstrap prompt with the known-version menu the next time they run `/update`. One-time cost.
 
 **Non-consequences (explicit):**
 
@@ -107,9 +107,9 @@ The chain script contract is the four-exit-code shape from the ticket:
 ## Artifacts
 
 - Implementing ticket: `me2resh/apexyard#282`
-- Library: `.claude/hooks/_lib-migration-chain.sh`
-- Migrations dir: `.claude/migrations/{README.md, v1.2.0-to-v1.3.0.sh, v1.3.0-to-v1.4.0.sh}`
-- Skill update: `.claude/skills/update/SKILL.md` (step 8b + new flags + design notes)
-- Tests: `.claude/hooks/tests/test_update_chain.sh` (11 cases)
+- Library: `.apexyard/hooks/_lib-migration-chain.sh`
+- Migrations dir: `.apexyard/migrations/{README.md, v1.2.0-to-v1.3.0.sh, v1.3.0-to-v1.4.0.sh}`
+- Skill update: `.apexyard/skills/update/SKILL.md` (step 8b + new flags + design notes)
+- Tests: `.apexyard/hooks/tests/test_update_chain.sh` (11 cases)
 - Adopter doc: `docs/upgrading.md`
 - Doc update: `docs/multi-project.md` § "Upgrades — pulling from upstream"

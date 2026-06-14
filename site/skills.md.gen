@@ -12,7 +12,7 @@ ApexYard ships 59 slash commands grouped under outcome headings — Keep quality
 
 ## What can it do?
 
-Each `/<name>` is a structured workflow with safety rails. The right framework checks fire at the right moments — `/approve-merge` writes a record that the merge gate verifies before the merge actually runs. Every skill ships in `.claude/skills/<name>/SKILL.md`.
+Each `/<name>` is a structured workflow with safety rails. The right framework checks fire at the right moments — `/approve-merge` writes a record that the merge gate verifies before the merge actually runs. Every skill ships in `.apexyard/skills/<name>/SKILL.md`.
 
 ## What's needed to start?
 
@@ -107,4 +107,4 @@ Sync the framework, parallelise independent work, cut a release, debug something
 - Home: <https://yard.apexscript.com/index.md>
 - How it works: <https://yard.apexscript.com/how-it-works.md>
 - Architecture: <https://yard.apexscript.com/architecture.md>
-- GitHub source for each skill: <https://github.com/me2resh/apexyard/tree/main/.claude/skills>
+- GitHub source for each skill: <https://github.com/me2resh/apexyard/tree/main/.apexyard/skills>

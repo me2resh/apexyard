@@ -50,7 +50,7 @@ The common confusion is that the issue description (#403) initially frames this 
 
 ## Artifacts
 
-- `.claude/skills/release-sync/SKILL.md` — new skill implementation
-- `.claude/skills/release/SKILL.md` — updated to document Step 9 (invoke `/release-sync`)
-- `.claude/hooks/tests/test_release_sync.sh` — smoke tests for the sync branch/PR shape
+- `.apexyard/skills/release-sync/SKILL.md` — new skill implementation
+- `.apexyard/skills/release/SKILL.md` — updated to document Step 9 (invoke `/release-sync`)
+- `.apexyard/hooks/tests/test_release_sync.sh` — smoke tests for the sync branch/PR shape
 - Implementing ticket: `me2resh/apexyard#403`
