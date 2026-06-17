@@ -42,13 +42,30 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
-# the `gh api .../pulls/<N>/merge` URL path so `gh pr checks` below is still
-# scoped correctly.
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+# Variable-substituted merge (#643): if the PR arg or --repo value is an
+# unexpanded shell variable, this hook can't resolve the real target from the
+# command text — the old code fell back to the CWD's PR and checked an
+# UNRELATED PR's CI (and passed `$REPO` to gh, producing garbage errors). A CI
+# gate must not guess. Block with a clear, accurate instruction instead.
+if merge_command_uses_variable "$COMMAND"; then
+  cat >&2 <<'EOF'
+BLOCKED: cannot verify CI on a variable-substituted merge command.
+
+This gate reads the literal command text and can't resolve shell variables
+(e.g. `gh pr merge $PR --repo $REPO`) to the real PR / repo, so it cannot
+check the correct PR's CI status. Re-run with literal values:
+
+  gh pr merge <number> --repo <owner>/<repo> --squash
+
+(Use the actual PR number and owner/repo — not shell variables.)
+EOF
+  exit 2
 fi
+
+# Parse --repo (for `gh pr merge --repo owner/repo`). Uses the shared extractor,
+# which also recovers the repo from a `gh api .../pulls/<N>/merge` URL path so
+# `gh pr checks` below is still scoped correctly.
+CMD_REPO=$(extract_repo_from_command "$COMMAND")
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"
