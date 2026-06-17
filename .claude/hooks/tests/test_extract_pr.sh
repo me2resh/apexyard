@@ -158,6 +158,9 @@ assert_var "var PR \${PR_NUMBER}"  'gh pr merge ${PR_NUMBER} --squash'          
 # Variable --repo value → yes (even with a literal PR number)
 assert_var "var repo \$REPO"       'gh pr merge 378 --repo $REPO --squash'            "yes"
 assert_var "var repo \${REPO}"     'gh pr merge 378 --repo ${REPO} --squash'          "yes"
+# Quoted variable forms → yes (the common shape agents/operators write)
+assert_var "quoted var PR \"\$PR\""    'gh pr merge "$PR" --repo me2resh/apexyard'    "yes"
+assert_var "quoted var repo \"\$REPO\"" 'gh pr merge 378 --repo "$REPO" --squash'      "yes"
 # Both literal → no
 assert_var "literal PR + repo"     'gh pr merge 378 --repo me2resh/apexyard --squash' "no"
 assert_var "literal PR no repo"    'gh pr merge 42 --squash'                          "no"

@@ -159,14 +159,17 @@ merge_command_uses_variable() {
     -e 's/>>[^[:space:]]*/  /g' \
     -e 's/>[^[:space:]]*/  /g')
   first_token=$(echo "$clean_span" | grep -oE '\bmerge\b[[:space:]]+[^[:space:]]*' | awk 'NR==1 {print $NF}')
-  if echo "$first_token" | grep -qE '^\$\{?[A-Za-z_]'; then
+  # Match `$VAR`, `${VAR}`, and the quoted forms `"$VAR"` / `'$VAR'` — agents and
+  # operators routinely quote the substitution. The optional leading quote keeps
+  # the anchor from being defeated by it.
+  if echo "$first_token" | grep -qE '^["'"'"']?\$\{?[A-Za-z_]'; then
     return 0
   fi
 
-  # --repo value.
+  # --repo value (same quoted-or-bare variable forms).
   local repo_token
   repo_token=$(echo "$cmd" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-  if echo "$repo_token" | grep -qE '^\$\{?[A-Za-z_]'; then
+  if echo "$repo_token" | grep -qE '^["'"'"']?\$\{?[A-Za-z_]'; then
     return 0
   fi
 
