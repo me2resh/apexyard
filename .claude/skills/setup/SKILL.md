@@ -614,6 +614,34 @@ session start. See docs/multi-project.md § "Centralised agent routing".
 
 No file writes here — purely informational. Added in #351 PR 3.
 
+### Step 7b: Check GitHub Issues is enabled (github tracker only — #653)
+
+GitHub disables **Issues on forks by default**, so a fresh fork that tracks via GitHub Issues will fail every issue-creating skill (`/feature`, `/bug`, `/task`, `/tickets-batch`, `/idea`, `/migration`, …) with a cryptic `the '<owner>/<repo>' repository has disabled issues` error. Catch it here, at first-run, instead.
+
+This step is **gated on `tracker.kind`** — for `linear` / `jira` / `none` adopters, GitHub Issues being off is correct, so the probe is a silent no-op. Source the tracker lib and probe the ops fork's repo:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
+FORK_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)
+# tracker_check_issues prints a warning + the enable hint to stderr and returns
+# 1 ONLY when this is a github tracker AND issues are confirmed disabled.
+if [ -n "$FORK_REPO" ] && ! tracker_check_issues "$FORK_REPO"; then
+  : # warning already shown — offer to enable below
+fi
+```
+
+If `tracker_check_issues` reported disabled, **offer** (do not auto-run) to enable it:
+
+```
+GitHub Issues is off on <owner/repo> and your tracker is GitHub Issues.
+Enable it now? (needs admin on the repo)
+  [y] run: gh repo edit <owner/repo> --enable-issues
+  [n] skip — I'll print the command for later
+```
+
+On **y**, run `gh repo edit <FORK_REPO> --enable-issues` and confirm. On **n**, print the one-liner and move on. Never enable silently — it's an externally-visible repo-settings change requiring admin scope, and the adopter may intend to track elsewhere. (In split-portfolio mode, the issue-hosting repo is the **public fork**, not the private portfolio — probe the fork, which is what `gh repo view` returns here.)
+
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
 ```bash

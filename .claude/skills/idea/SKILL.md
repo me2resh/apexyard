@@ -214,6 +214,7 @@ Common failure modes and what to do:
 | `could not resolve repository` | Ask the user which repo to file the issue in; the backlog entry was already saved |
 | `missing scope: issues:write` | Tell the user to run `gh auth refresh -s issues` and offer to retry |
 | `label "idea" not found` | Create the label first (`gh label create idea`) then retry |
+| `repository has disabled issues` (#653) | GitHub Issues is off on the repo. Surface the fix: `gh repo edit <owner/repo> --enable-issues` (needs admin), or set `tracker.kind` to your real tracker. Reuse `tracker_check_issues` from `_lib-tracker.sh` to print the hint. The backlog entry is already saved. |
 | `HTTP 403 rate-limited` | Offer to retry after a short wait |
 | Any other error | Show the raw `gh` output, skip the tracking issue, keep the backlog entry |
 
