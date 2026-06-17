@@ -152,6 +152,72 @@ assert_silent "Write tool: not triggered" \
 assert_silent "Edit tool: not triggered" \
   '{"hook_event_name":"PreToolUse","tool_name":"Edit","tool_input":{"file_path":"workspace/example-app/src/foo.ts","old_string":"x","new_string":"y"}}' "$MCP_DIR"
 
+# ===========================================================================
+# Gate mode (#651, AgDR-0070): opt-in soft-block (exit 2) on gate-eligible
+# Bash searches, with a per-call escape hatch. Read/Glob/Grep never blocked.
+# ===========================================================================
+
+# A temp ops root the config lib will resolve to (via the `.apexyard-fork`
+# anchor) with mcp_search.gate_mode enabled + apexyard-search configured.
+GATE_ROOT=$(mktemp -d)
+touch "$GATE_ROOT/.apexyard-fork"
+mkdir -p "$GATE_ROOT/.claude"
+printf '%s' '{"mcp_search":{"gate_mode":false}}' > "$GATE_ROOT/.claude/project-config.defaults.json"
+printf '%s' '{"mcp_search":{"gate_mode":true}}' > "$GATE_ROOT/.claude/project-config.json"
+printf '%s' '{"mcpServers":{"apexyard-search":{"command":"apexyard-search"}}}' > "$GATE_ROOT/.mcp.json"
+cleanup_gate() { rm -rf "$GATE_ROOT"; }
+trap 'cleanup; cleanup_gate' EXIT
+
+# run from cwd=GATE_ROOT so config resolves gate_mode=true; APEXYARD_PORTFOLIO_ROOT
+# points the install-gate at the apexyard-search .mcp.json. Pin disabled so the
+# resolver walks up to the GATE_ROOT anchor rather than a session pin.
+# args: <input-json> [extra env assignment]  → echoes exit code
+gate_exit() {
+  local input="$1" extra="${2:-}"
+  ( cd "$GATE_ROOT" && echo "$input" | \
+      env APEXYARD_OPS_DISABLE_PIN=1 APEXYARD_PORTFOLIO_ROOT="$GATE_ROOT" $extra bash "$HOOK" >/dev/null 2>&1 )
+  echo $?
+}
+
+assert_exit() {
+  local desc="$1" want="$2" got="$3"
+  if [ "$got" = "$want" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    echo "FAIL: $desc — expected exit $want, got $got"
+  fi
+}
+
+SEARCH_CMD='{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"grep -r \"activation\" roles/"}}'
+ESCAPE_CMD='{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"APEXYARD_MCP_FALLBACK=1 grep -r \"activation\" roles/"}}'
+READ_CMD='{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"workspace/example-app/src/index.ts"}}'
+
+assert_exit "gate ON: exploratory Bash search soft-blocks (exit 2)" 2 "$(gate_exit "$SEARCH_CMD")"
+assert_exit "gate ON + per-call escape token → proceeds (exit 0)" 0 "$(gate_exit "$ESCAPE_CMD")"
+assert_exit "gate ON + env escape APEXYARD_MCP_FALLBACK=1 → proceeds (exit 0)" 0 "$(gate_exit "$SEARCH_CMD" "APEXYARD_MCP_FALLBACK=1")"
+assert_exit "gate ON: Read on workspace/ is NOT blocked (read→edit, exit 0)" 0 "$(gate_exit "$READ_CMD")"
+
+# Gate ON but apexyard-search NOT configured → install-gate keeps it silent (0).
+NOGATE_ROOT=$(mktemp -d)
+touch "$NOGATE_ROOT/.apexyard-fork"; mkdir -p "$NOGATE_ROOT/.claude"
+printf '%s' '{"mcp_search":{"gate_mode":false}}' > "$NOGATE_ROOT/.claude/project-config.defaults.json"
+printf '%s' '{"mcp_search":{"gate_mode":true}}' > "$NOGATE_ROOT/.claude/project-config.json"
+printf '%s' '{"mcpServers":{"other":{}}}' > "$NOGATE_ROOT/.mcp.json"
+nogate_exit=$( cd "$NOGATE_ROOT" && echo "$SEARCH_CMD" | env APEXYARD_OPS_DISABLE_PIN=1 APEXYARD_PORTFOLIO_ROOT="$NOGATE_ROOT" bash "$HOOK" >/dev/null 2>&1; echo $? )
+assert_exit "gate ON but no apexyard-search → install-gate silent (exit 0)" 0 "$nogate_exit"
+rm -rf "$NOGATE_ROOT"
+
+# Gate OFF (default) + exploratory search → advisory, never blocks (exit 0).
+GATEOFF_ROOT=$(mktemp -d)
+touch "$GATEOFF_ROOT/.apexyard-fork"; mkdir -p "$GATEOFF_ROOT/.claude"
+printf '%s' '{"mcp_search":{"gate_mode":false}}' > "$GATEOFF_ROOT/.claude/project-config.defaults.json"
+printf '%s' '{"mcp_search":{"gate_mode":false}}' > "$GATEOFF_ROOT/.claude/project-config.json"
+printf '%s' '{"mcpServers":{"apexyard-search":{"command":"apexyard-search"}}}' > "$GATEOFF_ROOT/.mcp.json"
+gateoff_exit=$( cd "$GATEOFF_ROOT" && echo "$SEARCH_CMD" | env APEXYARD_OPS_DISABLE_PIN=1 APEXYARD_PORTFOLIO_ROOT="$GATEOFF_ROOT" bash "$HOOK" >/dev/null 2>&1; echo $? )
+assert_exit "gate OFF (default) → advisory, never blocks (exit 0)" 0 "$gateoff_exit"
+rm -rf "$GATEOFF_ROOT"
+
 # --- Report ----------------------------------------------------------------
 echo ""
 echo "suggest-mcp-search: $PASS passed, $FAIL failed"
