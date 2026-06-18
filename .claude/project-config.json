@@ -1,6 +1,17 @@
 {
   "_comment": "Framework-repo overrides for project-config.defaults.json. The apexyard framework repo itself dog-foods its own pre-push gate here — see .claude/hooks/pre-push-gate.sh and docs/getting-started.md § 'Terminal push hook'. Managed projects under governance set their own pre_push.commands per their stack.",
 
+  "portfolio": {
+    "registry": "../monomachos/apexyard.projects.yaml",
+    "projects_dir": "../monomachos/projects",
+    "ideas_backlog": "../monomachos/projects/ideas-backlog.md",
+    "onboarding": "../monomachos/onboarding.yaml",
+    "workspace_dir": "../monomachos/workspace",
+    "custom_skills_dir": "../monomachos/custom-skills",
+    "custom_handbooks_dir": "../monomachos/custom-handbooks",
+    "agent_routing": "../monomachos/agent-routing.yaml"
+  },
+
   "pre_push": {
     "_comment": "Commands mirror the locally-runnable CI jobs from .github/workflows/. Each entry guards for a missing tool: a missing tool prints an actionable install message and exits 0 (skip-with-note) so a contributor without the tool is not hard-blocked. Link-check (lychee) is intentionally excluded — it is slow and network-flaky, unsuitable for pre-push. See docs/getting-started.md for the git pre-push hook (core.hooksPath) wiring.",
     "commands": [

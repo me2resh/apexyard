@@ -15,10 +15,14 @@ onboarding.yaml
 # Claude Code per-machine settings (permission overrides, local tool config)
 .claude/settings.local.json
 
+# Portfolio registry and docs (split-portfolio mode lives in private sibling repo)
+apexyard.projects.yaml
+projects/
+!projects/.gitkeep
+
 # Live working copies of managed projects. Each is its own git repo — they
 # must not be double-tracked from the ops repo.
-workspace/*/
-!workspace/README.md
+workspace/
 
 # Adopter-specific agent routing (single-fork mode; split-portfolio mode
 # keeps this in the private repo). See docs/multi-project.md § "Centralised
