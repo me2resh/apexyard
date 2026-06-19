@@ -1,0 +1,16 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+# Register managed projects here. Add projects later with /handover or by
+# editing this file with entries that include name, repo, docs, and status.
+
+version: 1
+
+projects: []
+
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead

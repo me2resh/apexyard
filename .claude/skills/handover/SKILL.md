@@ -1016,6 +1016,21 @@ Skipping the auto-append. If you want to add it later, copy this into apexyard.p
 
 The assessment's `## Next Steps` section (written in step 5) enumerates concrete follow-up work derived from the risks found. By default those entries are static prose — the operator reads them in the markdown and translates each to a `/feature` / `/task` / `/bug` invocation by hand. Recommendations rot when that translation step has friction. This step closes the loop: surface each next-step entry inline, prompt y/n per item, and dispatch the right ticket-creation skill per accepted item.
 
+#### Pre-check: is GitHub Issues enabled on the project repo? (github tracker only — #653)
+
+Tickets filed here land in the **project's own** repo, and GitHub disables Issues on forks/new repos by default — so this is the moment a `gh issue create` would fail with `the '<owner>/<repo>' repository has disabled issues`. Probe it first (gated on `tracker.kind` — silent no-op for linear/jira/none):
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
+# <owner/repo> is the project's repo resolved in step 1 / appended in step 7.
+if ! tracker_check_issues "<owner/repo>"; then
+  : # warning + enable hint already printed to stderr — advisory, non-blocking
+fi
+```
+
+This is **advisory** — if issues are disabled, surface the warning + the `gh repo edit <owner/repo> --enable-issues` hint and let the operator decide before the per-item filing loop (offering to enable it is fine on explicit y/n; never auto-enable). If they decline, skip the filing offer (the tickets can't be created) and note the next steps remain in the assessment markdown.
+
 #### Skip conditions
 
 - **Zero next-step entries** (no risks found, no synthetic "calibrate review standards" / "stakeholder sync" entries either) → skip this step silently

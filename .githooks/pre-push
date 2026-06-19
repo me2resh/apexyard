@@ -24,6 +24,27 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
+HOOK_DIR="$REPO_ROOT/.claude/hooks"
+
+run_claude_hook() {
+  hook="$1"
+  command="$2"
+
+  [ -f "$hook" ] || return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "WARN: jq not found — skipping $(basename "$hook") in .githooks/pre-push." >&2
+    return 0
+  fi
+
+  payload=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  printf '%s\n' "$payload" | bash "$hook"
+}
+
+PUSH_COMMAND="git push"
+run_claude_hook "$HOOK_DIR/block-main-push.sh" "$PUSH_COMMAND"
+run_claude_hook "$HOOK_DIR/validate-branch-name.sh" "$PUSH_COMMAND"
+run_claude_hook "$HOOK_DIR/block-agent-routing-drift.sh" "$PUSH_COMMAND"
+
 RUNNER="$REPO_ROOT/bin/run-pre-push-checks.sh"
 if [ ! -f "$RUNNER" ]; then
   # Runner not present (e.g. old clone before this hook was added).

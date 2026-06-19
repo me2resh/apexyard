@@ -815,7 +815,80 @@
     .cost-bill{font-size:26px;}
     .rag-tile{min-width:78px;}
   }
+/* begin: consent-css — keep in sync across all site/*.html pages (#399) */
+.consent {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border-top: 1px solid var(--ink);
+  z-index: 100;
+  font-size: 12px;
+  padding: 1rem var(--gutter);
+}
+.consent[hidden] { display: none; }
+.consent__inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.consent__msg {
+  flex: 1;
+  min-width: 260px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.consent__msg a { color: var(--accent); }
+.consent__actions { display: flex; gap: 0.5rem; }
+.consent__btn {
+  font: inherit;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.consent__btn:hover { border-color: var(--ink); }
+.consent__btn--accept {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.consent__btn--accept:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+/* end: consent-css */
 </style>
+
+<!-- begin: gtag — keep in sync across all site/*.html pages (#399) -->
+<!-- Google tag (gtag.js) with Consent Mode v2 - analytics_storage defaults to denied
+     until the consent banner below records an explicit choice. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-G3EMR3CB02"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'ad_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'analytics_storage': 'denied'
+  });
+  try {
+    if (localStorage.getItem('ay-consent') === 'granted') {
+      gtag('consent', 'update', { 'analytics_storage': 'granted' });
+    }
+  } catch (e) {}
+  gtag('js', new Date());
+  gtag('config', 'G-G3EMR3CB02');
+</script>
+<!-- end: gtag -->
 </head>
 <body>
 <div id="app">
@@ -2724,5 +2797,58 @@ const LEVELS = [
 // boot
 renderIntro();
 </script>
+<!-- begin: consent — keep in sync across all site/*.html pages (#399) -->
+<!-- ============================================================
+     COOKIE CONSENT BANNER
+     Hidden if a prior choice is stored. On Accept, updates gtag
+     Consent Mode to grant analytics_storage.
+     ============================================================ -->
+<div id="consent" class="consent" role="region" aria-label="Cookie consent" hidden>
+  <div class="consent__inner">
+    <p class="consent__msg">
+      This site uses Google Analytics to count visits. No ads, no cross-site tracking.
+      <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy</a>.
+    </p>
+    <div class="consent__actions">
+      <button type="button" class="consent__btn" data-consent="denied">Decline</button>
+      <button type="button" class="consent__btn consent__btn--accept" data-consent="granted">Accept</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var KEY = 'ay-consent';
+  var el = document.getElementById('consent');
+  if (!el) return;
+  var stored = null;
+  try { stored = localStorage.getItem(KEY); } catch (e) {}
+  if (stored !== 'granted' && stored !== 'denied') {
+    el.hidden = false;
+  }
+  function record(choice) {
+    if (el.hidden) return;
+    try { localStorage.setItem(KEY, choice); } catch (e) {}
+    if (choice === 'granted' && typeof gtag === 'function') {
+      gtag('consent', 'update', { 'analytics_storage': 'granted' });
+    }
+    el.hidden = true;
+  }
+  el.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-consent]');
+    if (!btn) return;
+    record(btn.getAttribute('data-consent'));
+  });
+  // Escape dismisses the banner as "denied" - keyboard users without
+  // a mouse shouldn't be stuck with a fixed-bottom banner they can't
+  // dismiss. "Denied" is the non-consenting default per Consent Mode v2.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !el.hidden) {
+      record('denied');
+    }
+  });
+})();
+</script>
+<!-- end: consent -->
+
 </body>
 </html>

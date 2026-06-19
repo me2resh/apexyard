@@ -2,7 +2,7 @@
 
 > ApexYard lets founders ship AI-built software like a real engineering team —
 > without hiring one. Automatic code review, launch-readiness checks, and
-> one place for all your products, built on top of Claude Code. 59 skills,
+> one place for all your products, built on top of Claude Code. 60 skills,
 > 40 hooks, 20 role definitions. Open source, plain markdown and shell, no SaaS,
 > no lock-in.
 
@@ -242,7 +242,7 @@ each owned by different parts of the framework:
 1. **Governance layer** — the markdown spec: `CLAUDE.md`, `roles/`,
    `workflows/`, `templates/`, `handbooks/`. The "what good looks like"
    for the framework.
-2. **Capability layer** — the runnable spec: `.claude/skills/` (59
+2. **Capability layer** — the runnable spec: `.claude/skills/` (60
    slash commands), `.claude/agents/` (24 sub-agents incl. Rex), and
    `.claude/hooks/` (39 mechanical enforcement scripts).
 3. **Framework defaults layer** — `.claude/project-config.defaults.json`
@@ -294,7 +294,7 @@ Free with any project you don't want named publicly.
 
 # Skills (https://yard.apexscript.com/skills)
 
-59 slash commands grouped by what you're trying to do — not by what's
+60 slash commands grouped by what you're trying to do — not by what's
 under the hood. Each is a markdown SKILL.md file under
 `.claude/skills/<name>/`.
 
@@ -335,6 +335,8 @@ everything that turns half-formed thoughts into shipped software.
 - `/approve-merge` — record per-PR CEO approval and merge in one turn.
 - `/approve-design` — record per-PR design-review approval (UI merge
   gate).
+- `/ui-ux-pro-max` — UI/UX design intelligence for frontend interface
+  planning, building, review, and polish.
 - `/decide` — make a technical decision and record it permanently.
 - `/idea` — capture a new product idea to the shared backlog.
 - `/validate-idea` — lightweight 5-question pre-spec gate.

@@ -41,7 +41,8 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 3. Review against the checklist (architecture, code quality, testing, security, performance)
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
-6. Submit a GitHub review via `gh pr review`
+6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
+7. Submit a GitHub review via `gh pr review`
 
 ## Review Checklist
 
@@ -99,6 +100,7 @@ Posts a GitHub review comment with:
 - Commit SHA reviewed
 - Checklist results
 - Issues found
+- Fallow findings (advisory; JS/TS diffs only, when the `fallow` CLI is available)
 - Verdict: APPROVED / CHANGES REQUESTED / COMMENT
 
 Invokes: Code Reviewer Agent (Rex)

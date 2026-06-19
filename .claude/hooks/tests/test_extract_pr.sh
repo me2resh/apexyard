@@ -137,6 +137,38 @@ assert_pr "gh pr view is not a merge command" \
   "gh pr view 42" \
   ""
 
+# --- #643: merge_command_uses_variable (variable-substituted merge detection) ---
+
+assert_var() {
+  local label="$1" cmd="$2" want="$3"   # want: "yes" (uses var) | "no"
+  local got="no"
+  merge_command_uses_variable "$cmd" && got="yes"
+  if [ "$got" = "$want" ]; then
+    echo "PASS [$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: cmd=[$cmd]  want=[$want]  got=[$got]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+  fi
+}
+
+# Variable PR arg → yes
+assert_var "var PR \$PR"            'gh pr merge $PR --repo me2resh/apexyard --squash' "yes"
+assert_var "var PR \${PR_NUMBER}"  'gh pr merge ${PR_NUMBER} --squash'                "yes"
+# Variable --repo value → yes (even with a literal PR number)
+assert_var "var repo \$REPO"       'gh pr merge 378 --repo $REPO --squash'            "yes"
+assert_var "var repo \${REPO}"     'gh pr merge 378 --repo ${REPO} --squash'          "yes"
+# Quoted variable forms → yes (the common shape agents/operators write)
+assert_var "quoted var PR \"\$PR\""    'gh pr merge "$PR" --repo me2resh/apexyard'    "yes"
+assert_var "quoted var repo \"\$REPO\"" 'gh pr merge 378 --repo "$REPO" --squash'      "yes"
+# Both literal → no
+assert_var "literal PR + repo"     'gh pr merge 378 --repo me2resh/apexyard --squash' "no"
+assert_var "literal PR no repo"    'gh pr merge 42 --squash'                          "no"
+# Redirections must not be mistaken for a variable PR arg
+assert_var "literal + 2>&1 pipe"   'gh pr merge 42 --squash 2>&1 | tail -5'           "no"
+# gh api shape (literal path) → no
+assert_var "gh api literal path"   'gh api repos/o/r/pulls/42/merge -X PUT'           "no"
+
 # --- Cleanup -------------------------------------------------------------
 rm -rf "$SHIM_DIR"
 

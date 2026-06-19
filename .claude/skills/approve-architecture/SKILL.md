@@ -1,4 +1,10 @@
-# /approve-architecture — Record Per-PR Design-Review Approval
+---
+name: approve-architecture
+description: Record per-PR architecture-review approval for design-artifact PRs (required by the architecture gate).
+argument-hint: "<pr-number>"
+---
+
+# /approve-architecture — Record Per-PR Architecture-Review Approval
 
 Writes `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.
 

@@ -29,9 +29,19 @@
 
 set -u
 
+# shellcheck source=/dev/null
+. "$(dirname "${BASH_SOURCE[0]}")/_lib-read-config.sh" 2>/dev/null || true
+
 INPUT=$(cat)
 
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+
+# Gate mode (#651): only the Bash exploratory-search branch is gate-eligible;
+# Read/Glob/Grep stay advisory-only so read→edit is never blocked. `escape`
+# is the per-call/operator opt-out that lets a search proceed when MCP can't
+# serve it (empty index, non-indexable repo, stale index).
+gate_eligible=false
+escape=false
 
 # ---------------------------------------------------------------------------
 # Branch on tool type. Bash uses the original grep/find command scanner.
@@ -101,6 +111,14 @@ if [ "$TOOL_NAME" = "Bash" ]; then
 
   $targets_framework || exit 0
 
+  # This Bash exploratory search over indexed paths is gate-eligible (#651).
+  gate_eligible=true
+  # Escape hatch: a real env var (operator/session) OR the per-call token in
+  # the command itself (`APEXYARD_MCP_FALLBACK=1 grep …` on a retry).
+  if [ "${APEXYARD_MCP_FALLBACK:-}" = "1" ] || printf '%s' "$COMMAND" | grep -q 'APEXYARD_MCP_FALLBACK=1'; then
+    escape=true
+  fi
+
 else
   # -------------------------------------------------------------------------
   # READ / GLOB / GREP BRANCH (#489): fire when the target path is inside a
@@ -143,6 +161,33 @@ for mcp_json in "$ops_root/.mcp.json" "${APEXYARD_PORTFOLIO_ROOT:-}/.mcp.json"; 
 done
 
 $mcp_has_search || exit 0
+
+# --- Gate mode (#651): opt-in soft-block before the advisory ----------------
+# When `mcp_search.gate_mode` is true AND this is a gate-eligible Bash search
+# AND the escape hatch isn't set, soft-block (exit 2) and instruct MCP-first.
+# Default-off, so this is a no-op for everyone who hasn't opted in. AgDR-0070.
+
+GATE_MODE=$(config_get_or '.mcp_search.gate_mode' 'false' 2>/dev/null || echo false)
+
+if $gate_eligible && [ "$GATE_MODE" = "true" ] && ! $escape; then
+  cat >&2 <<'EOF'
+BLOCKED (mcp_search.gate_mode): use the apexyard-search MCP index first.
+
+This is an exploratory grep/find over indexed framework/project paths. Run
+  mcp__apexyard-search__search_code   (managed-project codebases)
+  mcp__apexyard-search__search_docs   (framework docs)
+instead — semantic, targeted excerpts, ~3-5x fewer tokens. Load via
+  ToolSearch("select:mcp__apexyard-search__search_code,mcp__apexyard-search__search_docs").
+
+If MCP already returned nothing (empty/stale index, or a non-indexable repo),
+retry the exact command with the escape hatch prefix:
+  APEXYARD_MCP_FALLBACK=1 <your command>
+
+(Gate mode is opt-in via .claude/project-config.json → mcp_search.gate_mode.
+ Read/Glob/Grep are never blocked — only exploratory shell search.)
+EOF
+  exit 2
+fi
 
 # --- Emit advisory as additionalContext on stdout (non-blocking) -----------
 

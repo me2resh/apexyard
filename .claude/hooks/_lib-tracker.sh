@@ -152,10 +152,10 @@ _tracker_normalise_gh() {
     return 1
   fi
   # If raw isn't valid JSON, bail.
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then
     return 1
   fi
-  echo "$raw" | jq -c '{
+  printf '%s' "$raw" | jq -c '{
     state:  (.state // ""),
     title:  (.title // ""),
     url:    (.url // ""),
@@ -174,8 +174,8 @@ _tracker_normalise_gh() {
 _tracker_normalise_linear() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '{
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '{
     state:  ((.state | if type == "object" then .name else . end) // ""),
     title:  (.title // ""),
     url:    (.url // ""),
@@ -193,8 +193,8 @@ _tracker_normalise_linear() {
 _tracker_normalise_jira() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '{
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '{
     state:  ((.fields.status.name // .status // "") | tostring),
     title:  ((.fields.summary // .summary // .title // "") | tostring),
     url:    ((.self // .url // "") | tostring),
@@ -212,8 +212,8 @@ _tracker_normalise_jira() {
 _tracker_normalise_asana() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
-  echo "$raw" | jq -c '
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  printf '%s' "$raw" | jq -c '
     (.data // .) as $t |
     {
       state:  (if ($t.completed == true) then "Closed" else "Open" end),
@@ -235,7 +235,7 @@ _tracker_normalise_asana() {
 _tracker_normalise_custom() {
   local raw="$1"
   if [ -z "$raw" ]; then return 1; fi
-  if ! echo "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
+  if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
 
   _tracker_load_config_lib
   local jq_expr
@@ -243,7 +243,7 @@ _tracker_normalise_custom() {
   if [ -z "$jq_expr" ] || [ "$jq_expr" = "null" ]; then
     jq_expr='.'
   fi
-  echo "$raw" | jq -c "$jq_expr" 2>/dev/null
+  printf '%s' "$raw" | jq -c "$jq_expr" 2>/dev/null
 }
 
 # ------------------------------------------------------------------------------
@@ -319,7 +319,77 @@ tracker_view() {
 tracker_state() {
   local json
   json=$(tracker_view "$@") || return $?
-  echo "$json" | jq -r '.state // empty' 2>/dev/null
+  printf '%s' "$json" | jq -r '.state // empty' 2>/dev/null
+}
+
+# ------------------------------------------------------------------------------
+# GitHub-Issues-enabled detection (#653, AgDR-0071)
+#
+# GitHub disables Issues on forks by default, so a fresh github-kind fork will
+# fail every issue-creating skill with a cryptic `gh` error. These helpers let
+# /setup + /handover detect that early and offer to fix it — gated on
+# tracker.kind so linear/jira/none adopters (who legitimately have GH Issues
+# off) are never warned.
+# ------------------------------------------------------------------------------
+
+# Public: tracker_issues_verdict <kind> <has_issues_enabled>
+#   PURE decision (no I/O) — the unit-testable core. Echoes one of:
+#     skip      — non-github tracker; the GH-Issues state is irrelevant
+#     disabled  — github tracker AND issues are off → warn
+#     ok        — github tracker with issues on, OR unknown (don't false-alarm)
+tracker_issues_verdict() {
+  local kind="$1" has="$2"
+  case "$kind" in
+    gh|github) ;;
+    *) echo "skip"; return 0 ;;
+  esac
+  case "$has" in
+    false|False|FALSE) echo "disabled" ;;
+    *) echo "ok" ;;   # true / unknown / empty → never false-alarm
+  esac
+}
+
+# Public: tracker_issues_enabled_raw <owner_repo>
+#   Echoes gh's hasIssuesEnabled ("true"/"false"), or "" when gh is missing or
+#   the call fails (network/auth) — callers treat "" as "unknown, don't warn".
+tracker_issues_enabled_raw() {
+  local repo="$1"
+  command -v gh >/dev/null 2>&1 || { echo ""; return 0; }
+  gh repo view "$repo" --json hasIssuesEnabled -q '.hasIssuesEnabled' 2>/dev/null || echo ""
+}
+
+# Public: tracker_issues_enable_hint <owner_repo>
+#   Echoes the one-line command to enable Issues on <owner_repo>.
+tracker_issues_enable_hint() {
+  echo "gh repo edit $1 --enable-issues"
+}
+
+# Public: tracker_check_issues <owner_repo>
+#   For a github-kind tracker, print a warning + enable hint to STDERR when
+#   Issues are disabled on <owner_repo>. No-op (return 0) for non-github
+#   trackers, enabled repos, or when gh can't answer. Returns 1 ONLY when
+#   issues are confirmed disabled — so a caller can branch on it to offer the
+#   fix. Never mutates anything (enabling is the caller's explicit, opt-in step).
+tracker_check_issues() {
+  local repo="$1"
+  [ -n "$repo" ] || return 0
+  local kind has verdict
+  kind=$(tracker_kind)
+  # Short-circuit: skip the gh round-trip entirely for non-github trackers.
+  case "$kind" in gh|github) ;; *) return 0 ;; esac
+  has=$(tracker_issues_enabled_raw "$repo")
+  verdict=$(tracker_issues_verdict "$kind" "$has")
+  if [ "$verdict" = "disabled" ]; then
+    {
+      echo "⚠ GitHub Issues is DISABLED on $repo, but tracker.kind is \"$kind\"."
+      echo "  Issue-creating skills (/feature, /bug, /task, /tickets-batch, /idea, …) will fail."
+      echo "  Enable it (needs admin):  $(tracker_issues_enable_hint "$repo")"
+      echo "  Or: Settings → General → Features → Issues."
+      echo "  (Tracking elsewhere? Set tracker.kind to linear/jira/none in .claude/project-config.json.)"
+    } >&2
+    return 1
+  fi
+  return 0
 }
 
 # ------------------------------------------------------------------------------

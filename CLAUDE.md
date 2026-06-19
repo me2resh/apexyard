@@ -199,10 +199,10 @@ ApexYard ships with a `.claude/` directory containing the Claude Code primitives
 | Rules | `.claude/rules/` | 12 modular rule files (AgDR triggers, code standards, git conventions, leak protection, loop mode, parallel work, plan mode, PR quality, PR workflow, role triggers, ticket vocabulary, workflow gates) |
 | Handbooks | `handbooks/` | Adopter-authored coding standards consumed by Rex during code review. Discovery by path-convention (`architecture/` + `general/` always-load; `language/<lang>/` loads on diff-match). Advisory by default; opt in to blocking via `ENFORCEMENT: blocking` marker. See [`handbooks/README.md`](handbooks/README.md). |
 | Agents | `.claude/agents/` | 24 sub-agents (5 utility incl. Hakim post-consolidation + 7 engineering + 1 architecture (Tariq) + 6 product-design + 5 security-data). Per AgDR-0050 + the #347 PR 3 Hatim→Hakim consolidation decision + AgDR-0054 (Solution Architect). |
-| Skills | `.claude/skills/` | 59 slash commands — see the full list below |
+| Skills | `.claude/skills/` | 60 slash commands — see the full list below |
 | Settings | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### Available skills (59)
+### Available skills (60)
 
 One-line summary per skill; canonical details live in each `.claude/skills/<name>/SKILL.md`.
 
@@ -223,6 +223,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/start-ticket` | Declare an active ticket for this session (required before code edits) |
 | `/approve-merge` | Record per-PR CEO approval and merge (required by merge gate) |
 | `/approve-design` | Record per-PR design-review approval for UI PRs (required by design gate) |
+| `/ui-ux-pro-max` | UI/UX design intelligence for planning, building, reviewing, and polishing frontend interfaces |
 | `/decide` | Make a technical decision and create an Agent Decision Record (AgDR) |
 | `/agdr` | Browse / search / show / stats across the portfolio's AgDR library |
 | `/code-review` | Invoke the Code Reviewer agent (Rex) on a PR |
@@ -304,7 +305,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Rules (modular, framework-wide) | `.claude/rules/` |
 | **Adopter handbooks** (consumed by Rex during code review) | `handbooks/` — see [`handbooks/README.md`](handbooks/README.md) for the discovery + advisory/blocking conventions |
 | Agents | `.claude/agents/` |
-| Skills (59 slash commands) | `.claude/skills/` |
+| Skills (60 slash commands) | `.claude/skills/` |
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |

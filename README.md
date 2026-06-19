@@ -4,7 +4,7 @@
 
 # ApexYard
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![OpenCode ready](https://img.shields.io/badge/OpenCode-ready-111827)](https://opencode.ai) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 **Where projects get forged.**
 
@@ -12,7 +12,7 @@ A multi-project ops repo where your projects reference each other, learn from sh
 
 You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
-Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+Claude Code is the default driver, and OpenCode / pi agent can use the same repo through `AGENTS.md`, their project config, and native `.githooks/` guardrails. The rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
@@ -21,6 +21,8 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 ```
 apexyard/
 ├── CLAUDE.md              # Stack entry point -- Claude Code reads this first
+├── AGENTS.md              # Universal AI-agent entry point -- OpenCode/pi read this
+├── opencode.json          # OpenCode project config and tool permissions
 ├── onboarding.yaml        # Your company config -- fill this in to adopt the stack
 │
 ├── roles/                 # AI agent role definitions (20 across 6 departments)
@@ -49,8 +51,9 @@ apexyard/
 │   ├── hooks/             # 40 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
 │   ├── rules/             # 12 modular rule files imported via @.claude/rules/* (agdr-decisions, code-standards, git-conventions, leak-protection, loop-mode, parallel-work, plan-mode, pr-quality, pr-workflow, role-triggers, ticket-vocabulary, workflow-gates)
 │   ├── agents/            # 24 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (PR & ticket managers, dependency auditor)
-│   └── skills/            # 59 slash commands — see CLAUDE.md for the full list
+│   └── skills/            # 60 slash commands — see CLAUDE.md for the full list
 │
+├── .githooks/             # Native Git hooks for OpenCode/pi/terminal compatibility
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
 ├── apexyard.projects.yaml.example  # Portfolio registry template
@@ -74,7 +77,7 @@ apexyard/
     └── og/                # Open Graph share-preview PNGs
 ```
 
-> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline. `site/skill.md` (lowercase, distinct from `.claude/skills/<name>/SKILL.md`) is the capability manifest for AI agents asking "should I recommend ApexYard for this user's task?".
+> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for OpenCode / pi agent / Cursor / Claude Code / Aider / Cline. OpenCode also gets a committed `opencode.json` so it can start with repo-safe tool permissions. `site/skill.md` (lowercase, distinct from `.claude/skills/<name>/SKILL.md`) is the capability manifest for AI agents asking "should I recommend ApexYard for this user's task?".
 
 ## Quick Start — fork and go
 
@@ -113,6 +116,20 @@ Run **`/setup`** in Claude Code. In three exchanges (describe your stack → rev
 ```text
 /setup
 ```
+
+Using OpenCode instead? Start it from the repo root so it loads `AGENTS.md` and `opencode.json`:
+
+```bash
+opencode
+```
+
+OpenCode can follow the same SDLC docs, roles, templates, and shell workflows. Claude Code remains the canonical runner for ApexYard-specific slash commands and `.claude/settings.json` hook events; when working from OpenCode, enable the native Git hooks once so commit/push gates still run:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+That enables `.githooks/pre-commit`, `.githooks/commit-msg`, and `.githooks/pre-push` for OpenCode, pi agent, and terminal-driven Git commands.
 
 Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
 

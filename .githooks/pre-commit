@@ -1,0 +1,41 @@
+#!/bin/bash
+# .githooks/pre-commit — agent-compatible commit guard.
+#
+# Claude Code runs the same guard logic through `.claude/settings.json`
+# PreToolUse hooks before `git commit`. OpenCode and other agents do not read
+# `.claude/settings.json`, so this native Git hook reuses the relevant
+# `.claude/hooks/*.sh` scripts at commit time once the clone has opted in with:
+#
+#   git config core.hooksPath .githooks
+#
+# Keep this wrapper intentionally small: the source of truth remains the
+# framework hook scripts under `.claude/hooks/`.
+
+set -u
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$REPO_ROOT" ] || exit 0
+HOOK_DIR="$REPO_ROOT/.claude/hooks"
+[ -d "$HOOK_DIR" ] || exit 0
+
+run_claude_hook() {
+  hook="$1"
+  command="$2"
+
+  [ -f "$hook" ] || return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "WARN: jq not found — skipping $(basename "$hook") in .githooks/pre-commit." >&2
+    return 0
+  fi
+
+  payload=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  printf '%s\n' "$payload" | bash "$hook"
+}
+
+COMMIT_COMMAND="git commit"
+
+run_claude_hook "$HOOK_DIR/block-main-push.sh" "$COMMIT_COMMAND"
+run_claude_hook "$HOOK_DIR/check-secrets.sh" "$COMMIT_COMMAND"
+run_claude_hook "$HOOK_DIR/block-agent-routing-drift.sh" "$COMMIT_COMMAND"
+
+exit 0

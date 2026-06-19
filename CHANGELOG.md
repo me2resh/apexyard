@@ -2,6 +2,35 @@
 
 All notable changes to ApexYard are documented here.
 
+## [3.2.0] — 2026-06-17
+
+Minor release — agent-routing cost levers, MCP-search enforcement, GitHub-Issues onboarding, and merge-gate hardening.
+
+### Added
+
+- (#652) Opt-in gate mode for `suggest-mcp-search.sh` — when `mcp_search.gate_mode` is enabled and `apexyard-search` is configured, the hook soft-blocks (exit 2) exploratory `grep -r`/`find` over indexed paths and instructs MCP-first, with an `APEXYARD_MCP_FALLBACK=1` per-call escape hatch. Default-off, install-gated, Read/Glob/Grep never blocked (AgDR-0070)
+- (#654) Detect (and offer to enable) GitHub Issues during `/setup` + `/handover` when `tracker.kind=github` — new `tracker_check_issues` helper in `_lib-tracker.sh` warns + offers `gh repo edit --enable-issues` (never auto-enables; gated on tracker kind; fails open) so a fresh fork doesn't hit a cryptic `repository has disabled issues` error (AgDR-0071)
+- (#641) Consent-gated GA + cookie banner on all marketing-site pages
+- (#633) Grant Rex `search_code` and prefer semantic MCP search over grep when available
+- (#628) Support `fallow` static-analysis pass in code review (JS/TS dead-code, unused exports, duplication)
+
+### Fixed
+
+- (#656) `block-merge-on-red-ci` now refuses variable-substituted merges (`gh pr merge $PR --repo $REPO`, incl. quoted forms) with a clear message instead of silently checking an unrelated CWD PR — new shared `merge_command_uses_variable` guard
+- (#639) Escape DOM-sourced email parts in the site mailto builder
+- (#634) `extract_push_ref` no longer over-matches the arrow (`→`) in commit messages
+- (#632) Use `printf` not `echo` when re-emitting captured JSON (pre-push-gate + tracker lib)
+- (#630) `config_get` no longer drops ALL overrides when the config contains a backslash escape
+
+### Changed
+
+- (#636) Harden CI workflows — SHA-pin all Actions + least-privilege `permissions`
+- (#598) Bump `actions/checkout` 4 → 6
+
+### Closes
+
+- Closes #651, #653, #643, #626, #627, #638, #635, #584, #631, #629
+
 ## [3.1.4] — 2026-06-09
 
 Patch release — game polish.

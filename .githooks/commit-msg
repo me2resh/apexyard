@@ -1,0 +1,37 @@
+#!/bin/bash
+# .githooks/commit-msg — agent-compatible commit-message guard.
+#
+# Reuses ApexYard's Claude Code hook scripts for native Git commits. This
+# covers OpenCode / pi agent / terminal commits once the clone has opted in via:
+#
+#   git config core.hooksPath .githooks
+
+set -u
+
+MSG_FILE="$1"
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+[ -n "$REPO_ROOT" ] || exit 0
+HOOK_DIR="$REPO_ROOT/.claude/hooks"
+[ -d "$HOOK_DIR" ] || exit 0
+
+run_claude_hook() {
+  hook="$1"
+  command="$2"
+
+  [ -f "$hook" ] || return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "WARN: jq not found — skipping $(basename "$hook") in .githooks/commit-msg." >&2
+    return 0
+  fi
+
+  payload=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  printf '%s\n' "$payload" | bash "$hook"
+}
+
+COMMIT_COMMAND="git commit -F $MSG_FILE"
+
+run_claude_hook "$HOOK_DIR/validate-commit-format.sh" "$COMMIT_COMMAND"
+run_claude_hook "$HOOK_DIR/verify-commit-refs.sh" "$COMMIT_COMMAND"
+run_claude_hook "$HOOK_DIR/block-onboarding-in-git.sh" "$COMMIT_COMMAND"
+
+exit 0

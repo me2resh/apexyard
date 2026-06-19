@@ -1,6 +1,6 @@
 # ApexYard Skills
 
-> 59 slash commands grouped by what you're trying to do — not by what's under the hood. Drop into your Claude Code session inside an apexyard fork.
+> 60 slash commands grouped by what you're trying to do — not by what's under the hood. Drop into your Claude Code session inside an apexyard fork.
 
 ## In plain English
 
@@ -8,7 +8,7 @@ These are the commands you type into Claude Code to get ApexYard to do something
 
 ## What is it?
 
-ApexYard ships 59 slash commands grouped under outcome headings — Keep quality high, Move work forward, See everything at once, Onboard new code, Run things.
+ApexYard ships 60 slash commands grouped under outcome headings — Keep quality high, Move work forward, See everything at once, Onboard new code, Run things.
 
 ## What can it do?
 
@@ -46,6 +46,7 @@ Capture an idea, file a ticket, record a decision, approve a merge — everythin
 - `/start-ticket <N> | <owner>/<repo>#<N>` — Declare an active ticket for this session so the ticket-first hook lets code edits through.
 - `/approve-merge <pr>` — Record per-PR CEO approval and merge in one turn. Only on an explicit per-PR "approved" — never on umbrella "go".
 - `/approve-design <pr>` — Record per-PR design-review approval for UI PRs.
+- `/ui-ux-pro-max` — UI/UX design intelligence for planning, building, reviewing, and polishing frontend interfaces.
 - `/decide` — Make a technical decision and record it permanently — what you considered, what you picked, why. Required before architecture changes.
 - `/idea` — Capture a new product idea / feature concept / internal tool proposal to the shared backlog.
 - `/validate-idea` — Lightweight 5-question pre-spec gate between `/idea` and `/write-spec`.

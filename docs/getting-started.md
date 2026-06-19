@@ -7,7 +7,8 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 ## Prerequisites
 
 - A GitHub account and an org you can fork into
-- [Claude Code](https://claude.com/claude-code) installed
+- [Claude Code](https://claude.com/claude-code) installed for the canonical ApexYard slash-command and hook experience
+- [OpenCode](https://opencode.ai) installed if you want to drive the repo from OpenCode; ApexYard ships `AGENTS.md` and `opencode.json` for this path
 - [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
 - [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
@@ -97,11 +98,29 @@ Even if you have just one repo, register it — the skills work the same whether
 
 The `CLAUDE.md` at the root of your fork is the stack entry point. Claude Code reads it automatically when you start a session inside the fork — no additional wiring needed.
 
+For OpenCode, start it from the repo root. OpenCode reads `AGENTS.md` as the project rule file and uses the committed `opencode.json` for project-level tool permissions.
+
 ---
 
 ## Step 4: Start Using It
 
-### Ask Claude Code to act as a role
+### Choose a driver
+
+Claude Code is the canonical runner for ApexYard-specific slash commands and `.claude/settings.json` hook events:
+
+```bash
+claude
+```
+
+OpenCode works as an alternate driver for the same markdown/shell framework. Start it from the repo root so it loads `AGENTS.md` and `opencode.json`:
+
+```bash
+opencode
+```
+
+When using OpenCode, follow the same workflow gates in `CLAUDE.md`, `AGENTS.md`, and `.claude/rules/`. The `.claude/skills/` slash commands remain the canonical Claude Code implementation; OpenCode can still read those `SKILL.md` files as workflow documentation when performing equivalent work.
+
+### Ask the agent to act as a role
 
 ```
 Review this PR as the QA Engineer
@@ -136,11 +155,11 @@ Create an AgDR.
 
 ---
 
-## Optional: Terminal push hook (`core.hooksPath`)
+## Optional: Agent-compatible Git hooks (`core.hooksPath`)
 
-The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, site-counts drift, and subpack extraction smoke test — for terminal `git push` commands.
+The framework ships native Git hooks under `.githooks/` for agents that do not execute Claude Code's `.claude/settings.json` hook events. This is the recommended compatibility layer for OpenCode, pi agent, and terminal-driven work.
 
-The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Claude Code_. The git hook covers pushes made directly from the terminal.
+Claude Code runs most gates through `.claude/settings.json` (`PreToolUse`, `PostToolUse`, `SessionStart`). OpenCode reads `AGENTS.md`, but it does not execute those Claude Code hook events. Once `core.hooksPath` is enabled, Git itself runs the shared commit and push gates regardless of whether the command came from Claude Code, OpenCode, pi agent, or a plain terminal.
 
 ### One-time opt-in per clone
 
@@ -148,7 +167,7 @@ The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Cla
 git config core.hooksPath .githooks
 ```
 
-Run this once inside your apexyard clone. Git then picks up `.githooks/pre-push` on every `git push` regardless of how you invoke it.
+Run this once inside your apexyard clone. Git then picks up `.githooks/pre-commit`, `.githooks/commit-msg`, and `.githooks/pre-push` regardless of how you invoke `git commit` or `git push`.
 
 To enable it globally for all clones of apexyard (useful if you work across multiple machines or re-clone often):
 
@@ -160,7 +179,7 @@ Note: `--global` affects every git repo on your machine, not just apexyard. If o
 
 ### Missing tools degrade gracefully
 
-Each check guards for its tool: if `shellcheck` or `npx` is missing, the check prints an actionable install message and skips (exit 0). A contributor without a tool is never hard-blocked; the check still runs in CI.
+Each check guards for its tool: if `shellcheck` or `npx` is missing, the check prints an actionable install message and skips (exit 0). A contributor without a tool is never hard-blocked; the check still runs in CI. `jq` is required for the `.claude/hooks/*.sh` compatibility wrappers; if it is missing, the wrapper prints a warning and skips that specific reused hook rather than breaking Git.
 
 ### Emergency bypass
 
@@ -173,14 +192,23 @@ git commit --amend -m "$(git log -1 --format=%B)
 
 ### Checks in the set
 
-| Check | What it catches | Tool required |
-|-------|----------------|---------------|
-| `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
-| `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
-| `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
-| `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
+| Hook | Check | What it catches | Tool required |
+|------|-------|-----------------|---------------|
+| `pre-commit` | `block-main-push.sh` | Commits attempted directly on protected branches | `jq` |
+| `pre-commit` | `check-secrets.sh` | Secret-shaped values in staged diffs | `jq` |
+| `pre-commit` | `block-agent-routing-drift.sh` | Local `agent-routing.yaml` model rewrites leaking into committed `.claude/agents/*.md` files | `jq` |
+| `commit-msg` | `validate-commit-format.sh` | Non-conventional commit subjects | `jq` |
+| `commit-msg` | `verify-commit-refs.sh` | Fabricated `Closes #N` / `Refs #N` references when the tracker is queryable | `jq`, tracker CLI such as `gh` |
+| `commit-msg` | `block-onboarding-in-git.sh` | Filled-in private `onboarding.yaml` being committed | `jq` |
+| `pre-push` | `block-main-push.sh` | Direct pushes to protected branches | `jq` |
+| `pre-push` | `validate-branch-name.sh` | Branch names outside the ApexYard convention | `jq` |
+| `pre-push` | `block-agent-routing-drift.sh` | Agent-routing drift in unpushed commits | `jq` |
+| `pre-push` | `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
+| `pre-push` | `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
+| `pre-push` | `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
+| `pre-push` | `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
 
-Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
+Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency. File-edit-time gates such as `require-active-ticket.sh` still only run inside Claude Code because Git has no hook that fires when an editor writes a file; OpenCode users should follow the ticket-first rule from `AGENTS.md` and rely on commit/push/CI gates as the mechanical backstop.
 
 ---
 
@@ -313,6 +341,19 @@ Cargo workspaces with many crates have a slow first index — see the caveat bel
 - **Cross-project portfolio queries still need grep.** LSP indexes one project at a time. Skills that walk the whole portfolio (`/inbox`, `/tasks`, `/stakeholder-update`, anything that aggregates across `apexyard.projects.yaml`) read across many repos and stay on grep + Read regardless of LSP state.
 - **No new failure mode.** Skills that benefit from LSP (`/code-review`, `/threat-model`, `/security-review`) fall back to grep + Read transparently when LSP is absent. There is no "broken without LSP" path — only a faster one with it.
 - **Plugin marketplace links may move.** The plugin ecosystem is young. If a marketplace search turns up multiple options for one language, prefer the one maintained by the language's own community (e.g. official `tsserver` over a third-party wrapper).
+
+## Optional: Fallow static analysis (JS/TS)
+
+For JavaScript / TypeScript projects, the Code Reviewer agent (Rex) can run a [Fallow](https://docs.fallow.tools) static-analysis pass as part of every code review — surfacing dead code, unused exports/dependencies, duplication, circular dependencies, and complexity hotspots in the **changed code**, plus a dry-run preview of the fixes it would apply. See `.claude/agents/code-reviewer.md` § 9 and [AgDR-0069](agdr/AgDR-0069-fallow-in-code-review.md).
+
+**This is opt-in and fail-soft.** Rex only runs it when the diff touches `**/*.{js,jsx,mjs,cjs,ts,tsx}` AND the `fallow` CLI is on `PATH`. If the CLI is absent, the step is skipped silently — there is no "broken without fallow" path, only a richer review with it. Findings are **advisory** (`nit:` / `suggestion:`); they never flip a verdict on their own, and the review only previews fixes (`fallow fix --dry-run`) — it never mutates your tree.
+
+To enable it on a JS/TS project:
+
+1. **Install the `fallow` CLI** — `cargo install fallow-cli`, or run it ad-hoc with `npx fallow`.
+2. **(Optional) toggle it in `onboarding.yaml`** — set `quality.fallow_review: false` to keep the CLI installed but disable the review pass. Absent or `true` → enabled when the CLI is present.
+
+Non-JS/TS stacks need do nothing — the language gate means the pass never fires on a non-JS/TS diff regardless of the flag, and an absent `fallow` CLI skips it anyway. (Leaving `quality.fallow_review` unset is equivalent to `true`; it only matters on JS/TS projects that have the CLI installed and want to turn the pass *off*.)
 
 ## Optional: Local agent routing
 

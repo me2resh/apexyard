@@ -1,0 +1,5 @@
+{
+  "skills": ["../.claude/skills"],
+  "extensions": ["extensions/apexyard.ts"],
+  "enableSkillCommands": true
+}

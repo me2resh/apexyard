@@ -127,6 +127,55 @@ extract_pr_number() {
   echo "$pr"
 }
 
+# Returns 0 if the merge command's PR positional arg OR its --repo value is an
+# UNEXPANDED shell variable ($VAR / ${VAR}). (#643)
+#
+# WHY THIS EXISTS
+# ---------------
+# Hooks see the LITERAL command string, before the shell expands variables. For
+# `gh pr merge $PR --repo $REPO`, the hook cannot know the real PR/repo:
+#   - extract_pr_number returns empty for `$PR` (good, #568) but then falls back
+#     to `gh pr view` in the CWD — checking a totally UNRELATED PR's CI.
+#   - extract_repo_from_command captures the literal `$REPO`, which `gh` then
+#     rejects with `expected the "[HOST/]OWNER/REPO" format`.
+# Both produce misleading output and can evaluate the wrong PR. A gate that
+# can't resolve its target must not guess — callers should BLOCK with a
+# "re-run with literal values" message. This helper is that detector.
+#
+# Matches `$VAR`, `${VAR}` (the leading char after $ / ${ is a letter or _).
+# Does NOT match a literal repo/number, and does NOT match `$(...)` command
+# substitution as a PR/repo token (those aren't valid PR/repo values anyway).
+merge_command_uses_variable() {
+  local cmd="$1"
+
+  # PR positional arg: first token after `gh pr merge` (reuse the same span +
+  # redirection-stripping discipline as extract_pr_number so `2>&1` etc. don't
+  # masquerade as the positional arg).
+  local span clean_span first_token
+  span=$(echo "$cmd" | grep -oE '\bgh\s+pr\s+merge\b[^|;&]*')
+  clean_span=$(echo "$span" | sed \
+    -e 's/[0-9]*>&[0-9]*/  /g' \
+    -e 's/&>[^[:space:]]*/  /g' \
+    -e 's/>>[^[:space:]]*/  /g' \
+    -e 's/>[^[:space:]]*/  /g')
+  first_token=$(echo "$clean_span" | grep -oE '\bmerge\b[[:space:]]+[^[:space:]]*' | awk 'NR==1 {print $NF}')
+  # Match `$VAR`, `${VAR}`, and the quoted forms `"$VAR"` / `'$VAR'` — agents and
+  # operators routinely quote the substitution. The optional leading quote keeps
+  # the anchor from being defeated by it.
+  if echo "$first_token" | grep -qE '^["'"'"']?\$\{?[A-Za-z_]'; then
+    return 0
+  fi
+
+  # --repo value (same quoted-or-bare variable forms).
+  local repo_token
+  repo_token=$(echo "$cmd" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  if echo "$repo_token" | grep -qE '^["'"'"']?\$\{?[A-Za-z_]'; then
+    return 0
+  fi
+
+  return 1
+}
+
 # Echoes the PR's HEAD SHA as reported by GitHub, or empty on failure.
 #
 # Why this exists (see #55): merge-gate hooks previously compared approval
