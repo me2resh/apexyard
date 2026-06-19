@@ -160,6 +160,22 @@ projects:
       - dev-productivity
     ticket_prefix: GH
 
+  - name: ponytail
+    repo: Dr-kersho/ponytail
+    workspace: workspace/ponytail
+    docs: projects/ponytail
+    status: handover
+    tier: P1
+    roles:
+      - tech-lead
+      - platform-engineer
+      - backend-engineer
+    tags:
+      - tool-only
+      - ai-tools
+      - dev-productivity
+    ticket_prefix: GH
+
 defaults:
   status: active
   tier: P1
