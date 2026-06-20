@@ -58,11 +58,9 @@ apexyard/
 ├── golden-paths/          # Reusable infra & ops templates
 │   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, Swift CI, security, dependency audit, PR title check, review check, SEO check)
 │
-├── docs/                  # Documentation
-│   ├── getting-started.md # Setup guide
-│   └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
-│
-└── golden-paths/          # Reusable infra & ops templates (continued above)
+└── docs/                  # Documentation
+    ├── getting-started.md # Setup guide
+    └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
 ```
 
 > **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [yard.apexscript.com](https://yard.apexscript.com).
