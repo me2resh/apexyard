@@ -5,7 +5,7 @@ name: CodeQL
 # r/bash in security-scan.yml) — but it DOES cover:
 #   - actions: the GitHub Actions workflows themselves (workflow injection,
 #     unpinned actions, excessive token scope)
-#   - javascript-typescript: site/copy-for-ai.js and any future JS/TS
+#   - javascript-typescript: any future JS/TS (site/ moved to me2resh/apexyard-site, #663)
 #
 # Results surface in the repo's Security > Code scanning tab. #518.
 

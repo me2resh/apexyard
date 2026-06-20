@@ -177,7 +177,7 @@ git commit --amend -m "$(git log -1 --format=%B)
 |-------|----------------|---------------|
 | `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
 | `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
-| `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
+| ~~`site-counts`~~ | Retired — the marketing site moved to me2resh/apexyard-site (#663) | — |
 | `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
 
 Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
