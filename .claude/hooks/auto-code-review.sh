@@ -12,6 +12,8 @@
 # the merge-gate hook so a PR cannot be merged without a corresponding Rex
 # approval file at .apexyard/session/reviews/<pr>-rex.approved.
 
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -40,27 +42,29 @@ else
   PR_REF="PR #$PR_NUMBER"
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 mkdir -p "${REPO_ROOT:-.}/.apexyard/session/pending-reviews"
 if [ -n "$PR_NUMBER" ]; then
   echo "${PR_URL}" > "${REPO_ROOT:-.}/.apexyard/session/pending-reviews/${PR_NUMBER}"
 fi
 
-cat >&2 <<MSG
-AUTO CODE REVIEW REQUIRED
-
-You just created ${PR_REF}. ApexYard requires the code-reviewer agent (Rex)
-to run on every PR before it can be merged — see workflows/code-review.md
-and .apexyard/rules/pr-workflow.md. Invoke Rex NOW using the Agent tool:
-
-  subagent_type: code-reviewer
-  prompt: "Review ${PR_REF} at ${PR_URL}. Check the diff, tests, coverage,
-           AgDR linkage, glossary, and commit SHA consistency. Report verdict."
-
-The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
-file exists at .apexyard/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
-
-This message is a reminder from the PostToolUse hook, not a tool error. The PR
-was created successfully.
-MSG
-exit 2
+# Disabled: boss handles code-review via --review flag; impl_worker no longer
+# triggers Rex directly. The pending-review marker above is still needed by
+# the merge-gate hook and by boss's _resolve_pending_pr.
+#cat >&2 <<MSG
+#AUTO CODE REVIEW REQUIRED
+#
+#You just created ${PR_REF}. ApexYard requires the code-reviewer agent (Rex)
+#to run on every PR before it can be merged — see workflows/code-review.md
+#and .apexyard/rules/pr-workflow.md. Invoke Rex NOW using the Agent tool:
+#
+#  subagent_type: code-reviewer
+#  prompt: "Review ${PR_REF} at ${PR_URL}. Check the diff, tests, coverage,
+#           AgDR linkage, glossary, and commit SHA consistency. Report verdict."
+#
+#The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
+#file exists at .apexyard/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
+#
+#This message is a reminder from the PostToolUse hook, not a tool error. The PR
+#was created successfully.
+#MSG
+#exit 2

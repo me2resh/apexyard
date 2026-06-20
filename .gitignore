@@ -72,3 +72,8 @@ workspace/*/
 # specific name to .git/info/exclude on each clone.
 # The same applies to generated copies under .claude/skills/ and
 # .kimi-code/skills/.
+
+# Adopter portfolio registry — lists managed projects with private repo slugs,
+# workspace paths, and internal descriptions. Never committed to the public
+# framework fork. Split-portfolio adopters keep this in their private ops repo.
+apexyard.projects.yaml
