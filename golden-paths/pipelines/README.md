@@ -13,6 +13,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `swift-ci.yml` | Rex | Swift Package Manager build + guarded test (macOS runner) | Every PR, push to default branch |
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
+| `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
 | `ci.yml` | Combined | All checks in one pipeline | Every PR |
 
 ---
