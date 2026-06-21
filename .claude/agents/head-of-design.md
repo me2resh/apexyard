@@ -2,6 +2,7 @@
 name: head-of-design
 description: Owns the design system, UX principles, and visual standards across products. Activates on design-system changes, UX principles decisions, or cross-project visual-standards calls.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Maha
 ---

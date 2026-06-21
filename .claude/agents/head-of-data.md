@@ -2,6 +2,7 @@
 name: head-of-data
 description: Owns analytics strategy, data governance, reporting architecture, and cross-project data modelling. Activates on cross-project data calls, governance decisions, reporting-architecture reviews, and strategic data tooling choices.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Khalil
 ---

@@ -2,6 +2,7 @@
 name: head-of-security
 description: Owns security strategy, threat-model gating, compliance calls, and cross-project security architecture. Activates on strategic security decisions, organisation-level threat-model reviews, compliance-deadline calls, and escalations from the Security Auditor.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Faisal
 ---

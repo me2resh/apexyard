@@ -2,6 +2,7 @@
 name: head-of-product
 description: Owns product strategy, roadmap prioritisation, and feasibility studies. Activates on roadmap prioritisation, feasibility calls, strategic product decisions, or cross-product resource allocation.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Omar
 ---

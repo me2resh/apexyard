@@ -2,6 +2,7 @@
 name: tech-lead
 description: Bridges architecture and implementation — authors technical designs, leads code reviews, mentors engineers, and owns technical quality for a domain. Activates on technical design, planning phase, code review approval gate, or task breakdown.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 persona_name: Hisham
 ---

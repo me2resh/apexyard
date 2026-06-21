@@ -5,6 +5,7 @@ description: Solution Architect — independent design reviewer. Reviews technic
 tools: Read, Grep, Glob, Bash, mcp__apexyard-search__search_docs, mcp__apexyard-search__search_code, WebSearch, WebFetch
 disallowedTools: Write, Edit
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 ---
 
 # Tariq — Solution Architect

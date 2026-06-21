@@ -2,6 +2,7 @@
 name: data-engineer
 description: Builds ETL pipelines, designs data models, owns data-quality work, and manages warehouse schema changes. Activates on ETL / data-modelling / warehouse-schema / data-quality work — pipeline implementation, often in-flow with Backend Engineer handoff.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 persona_name: Anwar
 ---

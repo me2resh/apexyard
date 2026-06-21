@@ -2,6 +2,7 @@
 name: penetration-tester
 description: Adversarial security testing, exploit discovery, API security review, and pre-release security sign-off. Activates on explicit invocation for active testing, exploit reasoning, or hardening checks; not auto-fired on diff content.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Hamza
 ---

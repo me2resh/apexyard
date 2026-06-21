@@ -2,6 +2,7 @@
 name: frontend-engineer
 description: Builds user interfaces following the design system — accessible, performant, and delightful. Activates during the Build phase on UI code, component work, design-system integration, or accessibility review.
 model: inherit
+# routing-config:override model-agnostic framework default (all agents use inherit)
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 persona_name: Yasmin
 ---
