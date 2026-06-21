@@ -190,26 +190,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 2b. Spike exemption (apexyard#180).
+# 2b. Spike + prototype exemption (apexyard#180, #673).
 #
-# Spike work is hypothesis-driven, time-boxed, throw-away exploration. AgDRs
-# capture decisions that should persist; spikes write disposition memos
-# instead. The exemption fires when ANY of:
+# Spike work (technical) and prototype work (throw-away UX/demo) are both
+# time-boxed exploration. AgDRs capture decisions that should persist; these
+# write disposition memos instead. The exemption fires when ANY of:
 #
-#   (a) the PR title carries `spike(...)` as the conventional-commit type
-#   (b) the active ticket marker references a `[Spike]`-prefixed ticket
-#   (c) the branch is named `spike/<TICKET-ID>-...`
+#   (a) the PR title carries `spike(...)` or `prototype(...)` as the type
+#   (b) the active ticket marker references a `[Spike]` or `[Prototype]` ticket
+#   (c) the branch is named `spike/<TICKET-ID>-...` or `prototype/...`
 #
 # Code review (Rex) and the security auditor still apply — exemptions are
 # surgical, not blanket. See .claude/rules/workflow-gates.md § Spike work.
 # ---------------------------------------------------------------------------
 spike_pr_exempt() {
-  # (a) spike(...) PR title
-  if echo "$TITLE" | grep -qE '^spike\([^)]+\)!?:'; then
+  # (a) spike(...) PR title. Prototype work (apexyard#673) is throw-away
+  # UX/demo exploration and shares the spike exemption: `prototype(...)` PR
+  # type, `[Prototype]` ticket prefix, or `prototype/` branch all bypass too.
+  if echo "$TITLE" | grep -qE '^(spike|prototype)\([^)]+\)!?:'; then
     return 0
   fi
 
-  # (b) active ticket marker has [Spike] prefix
+  # (b) active ticket marker has [Spike] or [Prototype] prefix
   local marker_home="${REPO_ROOT}"
   # Walk up to find the ops root. Honours both the v2 `.apexyard-fork`
   # marker and the legacy v1 anchor (onboarding.yaml + apexyard.projects.yaml).
@@ -237,23 +239,23 @@ spike_pr_exempt() {
   fi
 
   if [ -f "$marker_home/.claude/session/current-ticket" ]; then
-    if grep -qE '^title=\[Spike\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
+    if grep -qE '^title=\[(Spike|Prototype)\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
       return 0
     fi
   fi
   if [ -d "$marker_home/.claude/session/tickets" ]; then
     for marker in "$marker_home/.claude/session/tickets"/*; do
       [ -f "$marker" ] || continue
-      if grep -qE '^title=\[Spike\]' "$marker" 2>/dev/null; then
+      if grep -qE '^title=\[(Spike|Prototype)\]' "$marker" 2>/dev/null; then
         return 0
       fi
     done
   fi
 
-  # (c) branch named spike/...
+  # (c) branch named spike/... or prototype/...
   local branch
   branch=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)
-  if echo "$branch" | grep -qE '^spike/'; then
+  if echo "$branch" | grep -qE '^(spike|prototype)/'; then
     return 0
   fi
 
@@ -261,7 +263,7 @@ spike_pr_exempt() {
 }
 
 if spike_pr_exempt; then
-  echo "WARN: spike PR detected — require-agdr-for-arch-pr bypassed. AgDRs not required for hypothesis-driven throw-away work; ship a memo on /spike-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  echo "WARN: spike/prototype PR detected — require-agdr-for-arch-pr bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike-close or /prototype-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
   exit 0
 fi
 

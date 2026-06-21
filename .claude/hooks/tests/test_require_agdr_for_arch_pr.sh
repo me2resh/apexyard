@@ -233,7 +233,7 @@ run_case "non-gh command → no-op" \
 # in body — production rule would BLOCK; spike exemption flips to PASS.
 DIR=$(setup_repo c1_base c1_feat)
 run_case "spike PR title (arch change, no AgDR) → PASS via spike exemption" \
-  "$DIR" 0 "spike PR detected" \
+  "$DIR" 0 "spike/prototype PR detected" \
   "gh pr create --base main --title 'spike(#180): explore X' --body 'just a spike'"
 
 # Spike signal (c): branch name starts with `spike/`. Set the feature branch
@@ -247,7 +247,7 @@ spike_branch_setup() {
 
 DIR=$(spike_branch_setup)
 run_case "spike branch name (arch change, no AgDR, non-spike PR title) → PASS via branch signal" \
-  "$DIR" 0 "spike PR detected" \
+  "$DIR" 0 "spike/prototype PR detected" \
   "gh pr create --base main --title 'feat(#180): tweak domain' --body 'just exploring'"
 
 # Spike signal (b): active-ticket marker references a [Spike] ticket.
@@ -278,8 +278,42 @@ EOF
 
 DIR=$(spike_marker_setup)
 run_case "spike active-ticket marker (arch change, non-spike branch + title) → PASS via marker signal" \
-  "$DIR" 0 "spike PR detected" \
+  "$DIR" 0 "spike/prototype PR detected" \
   "gh pr create --base main --title 'feat(#180): tweak domain' --body 'no AgDR'"
+
+# ---------------------------------------------------------------------------
+# Prototype exemption (apexyard#673) — same three signals as spike; any one
+# wins. Prototype work is throw-away UX/demo exploration and shares the spike
+# AgDR exemption.
+# ---------------------------------------------------------------------------
+
+# Prototype signal (a): PR title type = `prototype(...)`.
+DIR=$(setup_repo c1_base c1_feat)
+run_case "prototype PR title (arch change, no AgDR) → PASS via prototype exemption" \
+  "$DIR" 0 "spike/prototype PR detected" \
+  "gh pr create --base main --title 'prototype(#673): explore look-and-feel' --body 'just a prototype'"
+
+# Prototype signal (c): branch name starts with `prototype/`.
+prototype_branch_setup() {
+  local dir
+  dir=$(setup_repo c1_base c1_feat)
+  ( cd "$dir" && git branch -m prototype/GH-673-explore ) >/dev/null 2>&1
+  echo "$dir"
+}
+
+DIR=$(prototype_branch_setup)
+run_case "prototype branch name (arch change, no AgDR, non-prototype PR title) → PASS via branch signal" \
+  "$DIR" 0 "spike/prototype PR detected" \
+  "gh pr create --base main --title 'feat(#673): tweak domain' --body 'just exploring UX'"
+
+# Prototype signal (b): active-ticket marker referencing a [Prototype] ticket
+# is supported by the hook (see require-agdr-for-arch-pr.sh — the marker grep
+# matches `^title=\[(Spike|Prototype)\]`). It is NOT asserted here because it
+# shares the same in-sandbox ops-root resolution limitation as the pre-existing
+# "spike active-ticket marker" case above (the marker fixture's ops root isn't
+# resolved inside the test sandbox). Signals (a) PR-title-type and (c)
+# branch-name — both exercised above — give the prototype exemption equivalent
+# coverage to the spike exemption's reliably-green signals.
 
 # ---------------------------------------------------------------------------
 # Regression: embedded-quote truncation bug (apexyard#461).
