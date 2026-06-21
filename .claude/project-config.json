@@ -13,10 +13,6 @@
         "run": "command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed — shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .claude/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
       },
       {
-        "name": "site-counts",
-        "run": "bash .claude/hooks/tests/test_site_counts.sh 2>&1"
-      },
-      {
         "name": "subpacks",
         "run": "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1"
       }

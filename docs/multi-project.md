@@ -769,7 +769,6 @@ your-org/apexyard/                ← your fork, cloned locally (the "ops repo")
 ├── workflows/                     ← SDLC, code review, deployment
 ├── templates/                     ← PRD, tech design, ADR, AgDR
 ├── golden-paths/                  ← reusable CI pipelines
-├── site/                          ← the apexyard landing page (feel free to delete or replace)
 │
 ├── workspace/                     ← LIVE WORKING COPIES (gitignored)
 │   ├── README.md
@@ -962,7 +961,7 @@ Files you're most likely to customise:
 - `onboarding.yaml` — always yours, never upstream
 - `apexyard.projects.yaml` — always yours
 - `projects/<name>/` — always yours
-- `site/index.html` — delete or replace with your own landing page
+- (no site/ directory — the marketing site moved to me2resh/apexyard-site)
 - Role files in `roles/` — usually upstream, but feel free to edit for your team's voice
 
 Files that stay close to upstream (merge cleanly most of the time):
@@ -1049,7 +1048,7 @@ If your tracker has no CLI, use `kind: "custom"` with a `view_command` that call
 
 **What if I only have one repo?** Fork apexyard anyway and register that one repo. The skills work the same way. When you add a second project, just append to the registry — no migration, no re-setup.
 
-**Can I delete the landing page (`site/`)?** Yes — it's the apexyard marketing site. Feel free to delete, replace, or leave it in place. It doesn't affect the rest of the stack.
+**Where is the marketing site?** The landing page that used to live in `site/` has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed at yard.apexscript.com. It is no longer bundled in the framework fork.
 
 **Can I rename my fork?** Yes. GitHub handles rename redirects cleanly. Your local clone will need `git remote set-url origin` after the rename.
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://yard.apexscript.com"><img src="site/og/index.png" alt="ApexYard — where projects get forged" width="640"></a>
+  <a href="https://yard.apexscript.com"><img src="https://yard.apexscript.com/og/index.png" alt="ApexYard — where projects get forged" width="640"></a>
 </p>
 
 # ApexYard
@@ -58,23 +58,14 @@ apexyard/
 ├── golden-paths/          # Reusable infra & ops templates
 │   └── pipelines/         # Drop-in GitHub Actions workflows (CI, code quality, Swift CI, security, dependency audit, PR title check, review check, SEO check)
 │
-├── docs/                  # Documentation
-│   ├── getting-started.md # Setup guide
-│   └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
-│
-└── site/                  # Landing page (deployed to yard.apexscript.com)
-    ├── index.html
-    ├── architecture.html
-    ├── skills.html
-    ├── robots.txt         # Crawler directives + sitemap pointer
-    ├── sitemap.xml        # XML sitemap for search engines
-    ├── llms.txt           # llmstxt.org manifest — AI/LLM crawler index
-    ├── llms-full.txt      # Full-content concatenation for one-shot LLM consumption
-    ├── skill.md           # Capability manifest for AI coding agents (upstream GEO/AEO convention)
-    └── og/                # Open Graph share-preview PNGs
+└── docs/                  # Documentation
+    ├── getting-started.md # Setup guide
+    └── multi-project.md   # Full setup guide (fork flow, directory layout, daily workflow, FAQ)
 ```
 
-> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline. `site/skill.md` (lowercase, distinct from `.claude/skills/<name>/SKILL.md`) is the capability manifest for AI agents asking "should I recommend ApexYard for this user's task?".
+> **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [yard.apexscript.com](https://yard.apexscript.com).
+>
+> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline.
 
 ## Quick Start — fork and go
 

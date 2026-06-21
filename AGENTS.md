@@ -19,7 +19,7 @@ This file is **distinct from `CLAUDE.md`** — `CLAUDE.md` is the framework-leve
 - `docs/` — adopter docs (`getting-started.md`, `multi-project.md`, `release-process.md`, `agdr/`)
 - `projects/<name>/` — per-managed-project docs (committed to the ops fork)
 - `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote)
-- `site/` — marketing site (HTML, deployed via Netlify to `yard.apexscript.com`)
+- `site/` — **moved** to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site); live at yard.apexscript.com
 - `golden-paths/pipelines/` — reusable GitHub Actions workflows for adopter projects
 - `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing)
 
@@ -83,7 +83,7 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 
 ## Related entry-point conventions
 
-- **`site/skill.md`** — capability manifest at site root (lowercase, distinct from `.claude/skills/<name>/SKILL.md` — see the naming-clash callout inside that file)
-- **`site/llms.txt`** — markdown manifest per the llmstxt.org convention; index for AI crawlers
-- **`site/llms-full.txt`** — full content concatenation for one-shot LLM consumption
+- **[yard.apexscript.com/skill.md](https://yard.apexscript.com/skill.md)** — capability manifest for AI coding agents (served from me2resh/apexyard-site)
+- **[yard.apexscript.com/llms.txt](https://yard.apexscript.com/llms.txt)** — llmstxt.org manifest; index for AI crawlers (served from me2resh/apexyard-site)
+- **[yard.apexscript.com/llms-full.txt](https://yard.apexscript.com/llms-full.txt)** — full content concatenation for one-shot LLM consumption (served from me2resh/apexyard-site)
 - **`README.md`** — public-facing intro (humans + agents)

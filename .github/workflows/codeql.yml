@@ -5,7 +5,11 @@ name: CodeQL
 # r/bash in security-scan.yml) — but it DOES cover:
 #   - actions: the GitHub Actions workflows themselves (workflow injection,
 #     unpinned actions, excessive token scope)
-#   - javascript-typescript: site/copy-for-ai.js and any future JS/TS
+#
+# javascript-typescript was removed from the matrix in #663 because
+# site/ moved to me2resh/apexyard-site, leaving no JS/TS source in
+# this repo. CodeQL exits 32 with "no files found" when the language
+# matrix includes a language with zero source files.
 #
 # Results surface in the repo's Security > Code scanning tab. #518.
 
@@ -33,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, javascript-typescript]
+        language: [actions]
 
     steps:
       - name: Checkout

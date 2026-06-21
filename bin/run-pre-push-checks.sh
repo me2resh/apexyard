@@ -37,7 +37,6 @@ fi
 if [ "${1:-}" = "--list" ]; then
   echo "markdownlint"
   echo "shellcheck"
-  echo "site-counts"
   echo "subpacks"
   exit 0
 fi
@@ -103,10 +102,7 @@ run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 SHELLCHECK_CMD="command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed — shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .claude/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
 run_check "shellcheck" "$SHELLCHECK_CMD" || true
 
-# 3. site-counts drift detection
-run_check "site-counts" "bash .claude/hooks/tests/test_site_counts.sh 2>&1" || true
-
-# 4. subpack extraction smoke test
+# 3. subpack extraction smoke test
 run_check "subpacks" "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1" || true
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,9 @@
 # Site framework-counts drift prevention via CI workflow
 
+**Superseded (2026-06-20):** The marketing site moved to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site) and is deployed independently. The `site/` directory, `netlify.toml`, `site-counts-check.yml` workflow, `link-check.yml` workflow, and `test_site_counts.sh` hook test were all removed from this repo in #663. This cross-repo drift guard is retired — count assertions now live in the apexyard-site repo. Kept here for historical context.
+
+---
+
 > In the context of marketing-site copy that mentions specific framework counts ("53 skills, 29 hooks, 19 roles"), facing recurring drift every time a skill or hook is added or removed, I decided to add a CI workflow that asserts the count claims in `site/*.html` against the real `find`/`ls` counts on every PR, plus a smoke-test invariant under `.claude/hooks/tests/`, to achieve fail-fast detection at the moment drift is introduced, accepting one extra job in the CI matrix and the maintenance overhead of keeping the assertion list in sync with new site files.
 
 ## Context

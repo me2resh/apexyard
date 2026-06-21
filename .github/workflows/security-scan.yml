@@ -9,8 +9,8 @@
 # Surface coverage — honest accounting for a markdown/shell framework:
 #   Secrets     : gitleaks — full tree scan. Real risk: API keys in examples/configs.
 #   SAST        : Semgrep r/bash — shell hook scripts under .claude/hooks/**
-#                 No JS/TS source (site/ is static HTML; copy-for-ai.js is a
-#                 client-side snippet). CodeQL/ESLint would have nothing to scan.
+#                 No JS/TS source (site/ moved to me2resh/apexyard-site, #663).
+#                 CodeQL/ESLint would have nothing to scan.
 #   Dep audits  : N/A — no package.json, requirements.txt, or pyproject.toml
 #                 in this repo. Marked explicitly so adopters aren't confused.
 #   SBOM/licence: N/A — no third-party deps. Trivial SBOM = not worth generating.
@@ -156,8 +156,7 @@ jobs:
           # Note: JS/TS, CodeQL, ESLint are N/A — no JS/TS source in this repo
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "> **Note**: JS/TS SAST (CodeQL/ESLint) is N/A — the framework" \
-               "contains no JS/TS source files. \`site/copy-for-ai.js\` is a" \
-               "static client snippet with no npm install surface." >> "$GITHUB_STEP_SUMMARY"
+               "contains no JS/TS source files. (\`site/\` moved to me2resh/apexyard-site, #663)" >> "$GITHUB_STEP_SUMMARY"
 
           # Fail if medium+ findings exist (WARNING or ERROR)
           FAIL_SEV="${{ env.SEMGREP_FAIL_SEVERITY }}"
