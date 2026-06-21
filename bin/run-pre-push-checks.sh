@@ -95,7 +95,7 @@ echo "pre-push checks:" >&2
 
 # 1. markdownlint
 # Uses npx so no global install is required. Missing npx → skip with note.
-MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; npx --yes markdownlint-cli2 '**/*.md' '#node_modules' '#.git' '#workspace' '#graphify-out' 2>&1"
+MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; npx --yes markdownlint-cli2 '**/*.md' '#node_modules' '#.git' '#workspace' '#graphify-out' '#.opencode' 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
 # 2. shellcheck — .claude/hooks/*.sh, severity=warning
