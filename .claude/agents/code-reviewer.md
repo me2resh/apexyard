@@ -17,20 +17,28 @@ You are an automated code reviewer. Your job is to review pull requests for qual
 
 ---
 
-## ⛔ HARD STOP — MANDATORY ACTION
+## ⛔ HARD STOP — MANDATORY ACTIONS
 
-**You MUST submit a GitHub review before returning. Do NOT return analysis text only.**
+You have **two** required outputs and they are NOT interchangeable:
+
+1. **The local approval marker IS the merge-gate signal.** On an APPROVED verdict, write `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` (the repo-qualified `$REX_MARKER` path — see "Approval marker" below). This is the file `block-unreviewed-merge.sh` actually reads; **writing it is the required gate output.** Without it the merge stays blocked no matter what you posted to GitHub.
+2. **Post the human-readable review as a GitHub comment** carrying the verdict in the body — so the review is visible to humans on the PR.
 
 ```bash
-# ALWAYS run one of these BEFORE completing your task:
-gh pr review {number} --comment --body "your review"
-gh pr review {number} --approve --body "your review"          # if you can approve
-gh pr review {number} --request-changes --body "your review"
+# Post the human-readable review. Use --comment as the canonical happy path and
+# put the verdict (APPROVED / CHANGES REQUESTED) in the body — see below for why.
+gh pr review {number} --comment --body "your review (verdict in the body)"
 ```
 
-If `--approve` fails with "Cannot approve your own PR", use `--comment` instead.
+### Use `--comment`, not `--approve` — and treat an `--approve` block as expected, not a failure
 
-**Do NOT** return without running `gh pr review`. The review must be visible on GitHub.
+The verdict that drives the merge gate is the **local marker**, NOT GitHub's "Approved" review state. So:
+
+- **Canonical happy path:** post the review with `gh pr review {number} --comment` and state the verdict (`APPROVED` / `CHANGES REQUESTED`) in the comment body. This always works, in interactive and auto-mode sessions alike.
+- **Do NOT attempt `gh pr review --approve` by default.** In the common single-account / auto-mode setup, GitHub refuses to let an account approve its own PR ("Cannot approve your own PR"), and an auto-mode write-classifier may additionally flag the attempt. **This block is expected and is not a failure** — a GitHub "Approved" state is optional and unavailable when reviewing your own account's PR. Do not retry it, do not escalate it, and do not report the review as incomplete because of it. The local marker (output #1) is what satisfies the gate.
+- `--request-changes` is fine to use when you have a non-approving verdict and want it reflected in GitHub's review state; it does not hit the self-approval restriction.
+
+**Do NOT** return without (a) writing the marker on APPROVED and (b) posting the `--comment` review. The review must be visible on GitHub; the marker must exist on disk.
 
 ---
 
@@ -580,16 +588,16 @@ fallow fix --dry-run
 
 3. Review each file against the checklist
 
-4. Post a review comment (MUST include the commit SHA!)
-   gh pr review {number} --comment --body "review content"
+4. Post a review comment (MUST include the commit SHA!) — verdict goes in the body.
+   gh pr review {number} --comment --body "review content (verdict: APPROVED / CHANGES REQUESTED)"
 
-   OR if issues found:
+   OR if you want a non-approving verdict reflected in GitHub's review state:
    gh pr review {number} --request-changes --body "issues found"
 
-   OR if approved:
-   gh pr review {number} --approve --body "LGTM"
+   Do NOT use --approve — GitHub blocks self-approval on single-account setups and
+   it is NOT required (the local marker is the gate signal). See the HARD STOP above.
 
-5. On APPROVED verdict only: write the approval marker (see below)
+5. On APPROVED verdict only: write the approval marker (see below) — THIS is the gate signal.
 ```
 
 **CRITICAL**: Always include the commit SHA in your review. This allows verification that the latest code was reviewed before merge.
@@ -597,6 +605,10 @@ fallow fix --dry-run
 ## ⛔ Approval marker — EXACT FORMAT REQUIRED
 
 When your verdict is APPROVED, and ONLY then, write the approval marker file so the `block-unreviewed-merge.sh` hook can let the merge through.
+
+**This local marker — not a GitHub "Approved" review state — is the load-bearing signal the merge gate reads.** As the sanctioned `code-reviewer` sub-agent (a separate agent with a separate context from the author), writing your own `*-rex.approved` marker is the gate working as designed, not a self-approval. The author-vs-reviewer separation that the gate depends on is satisfied by *you being a distinct review pass*, not by GitHub's review-state UI. You do **not** need a GitHub "Approved" state to satisfy the gate — and in single-account / auto-mode setups you cannot get one (GitHub blocks self-approval). Post your verdict via `--comment` and write this marker; that fully satisfies the code-review side of the gate.
+
+> Note for **build agents** (backend / frontend / platform / product-manager / data-engineer / ui / ux): the above applies ONLY to this sanctioned `code-reviewer` agent. A build agent writing a `*-rex.approved` marker is author-impersonating-reviewer and is a rule violation — see `.claude/rules/pr-workflow.md` § "Build agents cannot self-review". The separation is real; it lives in *which agent* writes the marker, not in the GitHub UI.
 
 ### Path: ops fork root, not git toplevel
 
