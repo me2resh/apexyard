@@ -105,7 +105,7 @@ If you're an AI agent landing in this repo for the first time:
 2. If you are OpenCode, keep using `AGENTS.md` as the loaded project rule file and treat `.claude/` as the framework implementation directory, not as OpenCode-only configuration
 3. If you are OpenCode or another non-Claude driver, run `git config core.hooksPath .githooks` once per clone so Git-level commit/push gates run
 4. Skim `docs/multi-project.md` (full setup guide, directory layout, daily workflow)
-5. Browse `.claude/skills/` for the 53 slash commands (each `SKILL.md` is one capability)
+5. Browse `.claude/skills/` for the 63+ slash commands (each `SKILL.md` is one capability). The `/graphify` skill is foundational — it turns any folder into a persistent knowledge graph.
 6. Browse `roles/` to understand the role-activation model
 7. Browse `templates/` for the standard document shapes
 8. Check `.claude/rules/` for the mechanical rules (ticket vocabulary, PR workflow, plan mode, parallel work, leak protection, etc.)
@@ -118,3 +118,33 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 - **`site/llms.txt`** — markdown manifest per the llmstxt.org convention; index for AI crawlers
 - **`site/llms-full.txt`** — full content concatenation for one-shot LLM consumption
 - **`README.md`** — public-facing intro (humans + agents)
+
+## graphify — foundational knowledge-graph skill
+
+graphify (`/graphify`) is a **foundational skill** baked into every apexyard project. It turns any folder (codebase, docs, research, design specs) into a navigable knowledge graph with community detection, an honest audit trail, and three outputs: interactive HTML, GraphRAG-ready JSON, and a plain-language GRAPH_REPORT.md.
+
+**Source**: https://github.com/safishamsi/graphify · `pip install graphifyy`
+
+### How to use
+
+| Command | What it does |
+|---------|-------------|
+| `/graphify` | Full pipeline on current directory |
+| `/graphify <path>` | Full pipeline on specific path |
+| `/graphify <path> --update` | Incremental — re-extract only changed files |
+| `/graphify query "<question>"` | BFS traversal of the graph for broad context |
+| `/graphify path "A" "B"` | Shortest path between two concepts |
+| `/graphify explain "concept"` | Everything connected to a node |
+| `/graphify <path> --mode deep` | Extra INFERRED edges for deeper insight |
+
+### Rules for agents
+
+- Before answering architecture or codebase questions, check if `graphify-out/GRAPH_REPORT.md` exists and read it for god nodes and community structure
+- If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)
+- If graphify is not installed yet, run `/graphify` which auto-installs `pip install graphifyy`
+
+### Why foundational
+
+graphify is the **persistent memory layer** for AI-assisted development. Unlike a context window that resets every session, the graph survives across sessions, storing relationships, community structures, and cross-module connections. Every project scaffolded via apexyard inherits this skill automatically — no setup, no configuration, no extra cost.

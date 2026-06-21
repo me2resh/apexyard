@@ -614,7 +614,28 @@ session start. See docs/multi-project.md § "Centralised agent routing".
 
 No file writes here — purely informational. Added in #351 PR 3.
 
-### Step 7b: Check GitHub Issues is enabled (github tracker only — #653)
+### Step 7b: Install graphify (foundational knowledge-graph skill)
+
+graphify (`/graphify`) is a foundational skill shipped with every apexyard project. It turns any folder into a navigable knowledge graph with community detection, interactive HTML, GraphRAG-ready JSON, and a plain-language audit report.
+
+Install it now (or confirm it's already installed). This is idempotent — safe to run regardless of current state:
+
+```bash
+PYTHON=$(command -v uv || command -v python3 || command -v python)
+if [ -z "$PYTHON" ]; then
+  echo "⚠ Python/uv not found — can't install graphify. Install Python 3.8+ then re-run /setup."
+  echo "  graphify is a foundational skill: https://github.com/safishamsi/graphify"
+else
+  "$PYTHON" tool install graphifyy -q 2>/dev/null || \
+    { command -v uv >/dev/null 2>&1 && uv pip install graphifyy -q 2>/dev/null; } || \
+    { "$PYTHON" -c "import graphify" 2>/dev/null && echo "✓ graphify already installed" || \
+      echo "⚠ graphify install failed. Try: uv tool install graphifyy"; }
+fi
+```
+
+Note: The result (installed/failed) is informational — it does not block the rest of setup. Even if installation fails here, the `/graphify` skill handles auto-install on first invocation.
+
+### Step 7c: Check GitHub Issues is enabled (github tracker only — #653)
 
 GitHub disables **Issues on forks by default**, so a fresh fork that tracks via GitHub Issues will fail every issue-creating skill (`/feature`, `/bug`, `/task`, `/tickets-batch`, `/idea`, `/migration`, …) with a cryptic `the '<owner>/<repo>' repository has disabled issues` error. Catch it here, at first-run, instead.
 

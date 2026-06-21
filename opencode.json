@@ -10,6 +10,10 @@
   "skills": {
     "paths": [".claude/skills", ".opencode/skills"]
   },
+  "graphify": {
+    "_comment": "graphify is a foundational skill — turns any folder into a knowledge graph. Ships with every apexyard project. See AGENTS.md § 'graphify — foundational knowledge-graph skill' for usage.",
+    "auto_install": true
+  },
   "agent": {
     "rex": {
       "description": "Code reviewer that inspects PR diffs and posts GitHub reviews",
