@@ -67,8 +67,8 @@ The optional block at the top of each AgDR markdown file:
 ---
 id: AgDR-NNNN
 timestamp: 2026-05-03T10:30:00Z
-agent: claude
-model: claude-opus-4-7
+agent: {agent-name}
+model: {model-id}
 trigger: user-prompt
 status: executed
 category: architecture | tech-stack | security | patterns | integrations | other

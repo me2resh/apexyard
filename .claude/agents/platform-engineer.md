@@ -1,7 +1,7 @@
 ---
 name: platform-engineer
 description: Builds and maintains infrastructure, CI/CD pipelines, and developer tooling — the platform that lets engineers ship fast and safely. Activates on CI/CD pipeline changes, developer tooling, infrastructure-as-code work, or golden-path templates.
-model: sonnet
+model: inherit
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 persona_name: Adel
 ---

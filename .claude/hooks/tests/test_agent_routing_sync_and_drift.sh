@@ -131,12 +131,12 @@ YAML
     cp "$DRIFT_HOOK" .claude/hooks/block-agent-routing-drift.sh
     chmod +x .claude/hooks/apply-agent-routing.sh .claude/hooks/block-agent-routing-drift.sh
 
-    # Framework-default agent files (matrix per AgDR-0050 § Axis 2).
+    # Framework-default agent files (model-agnostic — all use inherit).
     cat > .claude/agents/qa-engineer.md <<'MD'
 ---
 name: qa-engineer
 description: QA Engineer wrapper.
-model: haiku
+model: inherit
 allowed-tools: Bash, Read, Grep, Glob
 persona_name: Salim
 ---
@@ -147,7 +147,7 @@ MD
 ---
 name: tech-lead
 description: Tech Lead wrapper.
-model: opus
+model: inherit
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Hisham
 ---
@@ -158,7 +158,7 @@ MD
 ---
 name: backend-engineer
 description: Backend Engineer wrapper.
-model: sonnet
+model: inherit
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 persona_name: Karim
 ---
@@ -172,11 +172,11 @@ MD
     # SessionStart sync covers the utility class too.
     cat > .claude/agents/ticket-manager.md <<'MD'
 ---
-# routing-config:override Idris bumped inherit → sonnet per AgDR-0050 § Axis 2 line 65. Wave 2 PR 4 fixture.
+# routing-config:override Idris bumped inherit → inherit per AgDR-0050 § Axis 2 line 65. Wave 2 PR 4 fixture.
 name: ticket-manager
 description: Ticket Manager wrapper.
 tools: Bash, Read
-model: sonnet
+model: inherit
 persona_name: Idris
 ---
 
@@ -468,7 +468,7 @@ allowed-tools: Bash, Read, Grep, Glob
 persona_name: Salim
 ---
 
-# routing-config:override deliberate framework-default bump from haiku to opus
+# routing-config:override deliberate framework-default bump from inherit to opus
 
 # Salim — QA Engineer
 MD

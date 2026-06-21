@@ -5,7 +5,7 @@ persona_name: Rex
 description: Expert code review specialist. Reviews PRs for quality, security, and standards compliance. Use proactively after code changes or when a PR needs review.
 tools: Read, Grep, Glob, Bash, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 disallowedTools: Write, Edit
-model: opus
+model: inherit
 ---
 
 # Code Reviewer Agent

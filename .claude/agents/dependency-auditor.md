@@ -5,7 +5,7 @@ persona_name: Munir
 description: Monitors dependencies for vulnerabilities, outdated packages, and license compliance. Run weekly or when package.json changes.
 tools: Bash, Read, Grep, Glob
 disallowedTools: Write, Edit
-model: sonnet
+model: inherit
 ---
 
 # Dependency Auditor Agent

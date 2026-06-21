@@ -83,7 +83,7 @@ make_portfolio() {
 ---
 id: AgDR-0001
 timestamp: 2026-05-01T10:00:00Z
-agent: claude
+agent: generic
 status: executed
 category: architecture
 ---
@@ -114,7 +114,7 @@ MD
 ---
 id: AgDR-0003
 timestamp: 2026-05-02T10:00:00Z
-agent: claude
+agent: generic
 status: executed
 category: security
 projects: [example-app, billing-api]

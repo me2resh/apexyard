@@ -1,7 +1,7 @@
 ---
 name: backend-engineer
 description: Implements domain logic, APIs, and infrastructure following clean architecture principles. Activates during the Build phase on backend code (domain / application / infrastructure layers), API work, or database schema changes.
-model: sonnet
+model: inherit
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__apexyard-search__search_code, mcp__apexyard-search__search_docs
 persona_name: Karim
 ---

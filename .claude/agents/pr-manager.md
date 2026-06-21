@@ -4,7 +4,7 @@ name: pr-manager
 persona_name: Tariq
 description: Coordinates PR lifecycle from creation to merge. Enforces 2-review workflow, commit SHA verification, and auto-merge on human approval.
 tools: Bash, Read, Grep, Glob
-model: sonnet
+model: inherit
 ---
 
 # PR Manager Agent
