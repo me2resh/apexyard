@@ -23,7 +23,7 @@ organisation. Three load-bearing outcomes:
    surfaced from every registered project in one prompt.
 
 Persistent decision-log across every managed project; strict merge gates
-(code-reviewer agent + per-PR CEO approval); 60 slash commands grouped by
+(code-reviewer agent + per-PR CEO approval); 61 slash commands grouped by
 what you're trying to do:
 
 - **Keep quality high** (`/code-review`, `/security-review`, `/audit-deps`,
@@ -32,7 +32,7 @@ what you're trying to do:
   `/performance-audit`, `/monitoring-audit`, `/docs-audit`,
   `/mutation-test`)
 - **Move work forward** (`/start-ticket`, `/approve-merge`,
-  `/approve-design`, `/ui-ux-pro-max`, `/decide`, `/idea`, `/validate-idea`, `/write-spec`,
+  `/approve-design`, `/ui-ux-pro-max`, `/graphify`, `/decide`, `/idea`, `/validate-idea`, `/write-spec`,
   `/plan-initiative`, `/feature`, `/bug`, `/task`, `/spike`, `/spike-close`,
   `/migration`, `/investigation`, `/tickets-batch`)
 - **See everything at once** (`/projects`, `/inbox`, `/status`, `/tasks`,
