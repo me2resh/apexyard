@@ -51,6 +51,9 @@ workspace/*/
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
 
+# Graphify knowledge-graph output (auto-generated, rebuild on demand)
+graphify-out/
+
 # Python-generated cache files are local execution artefacts.
 __pycache__/
 *.pyc

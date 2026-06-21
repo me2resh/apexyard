@@ -53,7 +53,7 @@ fi
 
 # Allow trunk and shared integration branches.
 # Match the dev/main release model (apexyard#116) — dev is a valid trunk.
-if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "develop" ] || [ "$CURRENT_BRANCH" = "dev" ]; then
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "develop" ] || [ "$CURRENT_BRANCH" = "dev" ] || [ "$CURRENT_BRANCH" = "opencode" ]; then
   exit 0
 fi
 
