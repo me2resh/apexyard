@@ -80,6 +80,15 @@ projects/<name>/architecture/sequence-<flow>.md ← if selected + a clear flow e
 
 Richer artefacts the operator can select but which are owned by dedicated skills — DFD (`/dfd`), Feature Inventory (`/extract-features`), user-journey HTML (`/journey`), Architecture Vision (`/tech-vision`) — are **handed off** rather than generated inline (see step 5.6).
 
+One **opt-in (default-OFF)** artefact is written into the **target repo** instead of the ops fork — the in-repo operating manual:
+
+```
+<target repo>/AGENTS.md         ← if selected (default-OFF) + not already present — concise agent operating manual, delivered via a branch + PR (step 8.5)
+<target repo>/CLAUDE.md         ← only if no CLAUDE.md exists — a one-line `@AGENTS.md` import shim
+```
+
+This is the single exception to "read-only against the target repo" (Rule 1) — it is opt-in, confirmed per run, and PR-delivered (never a direct commit). See step 8.5 and AgDR-0073.
+
 The folder lives in the ops repo (your fork of apexyard), alongside the rest of `projects/`.
 
 If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/README.md` stub if missing — see `projects/README.md` for the convention.
@@ -658,8 +667,11 @@ Present this as a numbered checklist. The "default" column marks what `--all` (a
 | 5 | User-journey preview (`journeys/<flow>.html`) | computed (HTML, from flows) | — | — | hand off to `/journey <name>` |
 | 6 | Architecture Vision draft (`architecture/vision.md`) | template-backed | `architecture/vision.md` | — | hand off to `/tech-vision <name>` |
 | 7 | Sequence diagram (`architecture/sequence-<flow>.md`) | template-backed | `architecture/sequence.md` | — | step 6.1 (sequence pass) |
+| 8 | In-repo `AGENTS.md` (written into the **target repo** via a PR) | computed (from the live assessment) | — | **— (default-OFF)** | step 8.5 (PR into the target repo) |
 
 > The handover assessment + harnessability score are NOT in this catalogue — they are always written (step 5 / 4.5). The catalogue is only the *optional* surface.
+>
+> **Row 8 (`AGENTS.md`) is special**: it is the only catalogue row that writes into the **target repo** (everything else lands in the ops fork). It is **default-OFF** so the "read-only against the target repo" rule (Rule 1) stays true unless the operator consciously opts in. When selected, it is delivered via a branch + PR in step 8.5 — never a direct commit, never via the ops-fork bootstrap-exempt path. See AgDR-0073.
 
 Render the prompt like this (pre-tick the default rows; the operator toggles):
 
@@ -674,6 +686,11 @@ always written. Pick which additional docs to generate (default-ticked shown wit
   [ ] 5. User-journey preview          (computed — HTML)
   [ ] 6. Architecture Vision draft     (template-backed → vision)
   [ ] 7. Sequence diagram              (template-backed → sequence)
+  [ ] 8. In-repo AGENTS.md             (computed → PR into the TARGET repo)
+
+Note: item 8 writes into the adopted repo itself (via a branch + PR) — the only
+item that does. It is default-OFF; tick it only if you want the repo to be
+self-describing to agents that work in it.
 
 Reply with: 'default' (keep ticks as-is), 'all', 'none',
 a comma-list of numbers to GENERATE (e.g. '1,3,4'),
@@ -730,7 +747,7 @@ Rules for the pick:
 
 #### Hand-offs vs in-skill generation
 
-Rows 1, 2, 7 are generated **in this skill** (steps 6 / 6.1). Rows 3–6 are richer artefacts owned by dedicated skills — for those, the checklist records the selection and, after the summary (step 10), the skill **offers to hand off** to the matching skill rather than reimplementing it:
+Rows 1, 2, 7 are generated **in this skill** (steps 6 / 6.1). Row 8 (`AGENTS.md`) is also generated in this skill but in a dedicated step (8.5) because it is the only row that writes into the **target repo** via a PR. Rows 3–6 are richer artefacts owned by dedicated skills — for those, the checklist records the selection and, after the summary (step 10), the skill **offers to hand off** to the matching skill rather than reimplementing it:
 
 ```
 You selected: Data Flow Diagram, Feature Inventory.
@@ -1197,6 +1214,152 @@ or /code-review against it directly.
 
 Then continue to the final summary.
 
+### 8.5. Generate the in-repo `AGENTS.md` (only if row 8 was selected — default-OFF)
+
+This is the **only** step that writes into the **target repo**, and it does so the same way any change to that repo would: a branch + PR, reviewed by the repo owner before merge. It is a deliberate, scoped exception to Rule 1 ("read-only against the target repo") — see Rule 1's "Exception" note and AgDR-0073.
+
+#### Selection + preconditions
+
+- **Selection condition**: run this step only when row 8 (`In-repo AGENTS.md`) was selected in step 5.6. It is **default-OFF** — the operator must consciously tick it (or name it in the comma-list, or pass `--all`). If not selected, skip silently and note `AGENTS.md: not selected` in the summary.
+- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `AGENTS.md: skipped (no local clone — re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
+- **Confirm before any target-repo write**. This is the first time `/handover` writes into the target repo, so make it explicit:
+
+  ```
+  Generate AGENTS.md for <name> and open a PR against its repo?
+
+  This is the only step that writes into the adopted repo itself. It will:
+    • create a branch (docs/agents-md) in workspace/<name>/
+    • write AGENTS.md (derived from this handover's assessment)
+    • {if no CLAUDE.md exists} write a one-line CLAUDE.md importing it
+    • push and open a PR for the repo owner to review
+
+  No direct commit to the default branch. Existing AGENTS.md / CLAUDE.md
+  are PRESERVED (never overwritten).
+
+  Proceed? [y/N — default N]
+  ```
+
+  Default **N**. On anything other than an explicit yes, skip and note `AGENTS.md: declined` in the summary.
+
+#### Never-overwrite check (preserve, like the architecture stubs)
+
+Before writing anything, check the target repo's working tree:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+REPO="$WORKSPACE_DIR/<name>"
+
+AGENTS_EXISTS=no; [ -f "$REPO/AGENTS.md" ] && AGENTS_EXISTS=yes
+CLAUDE_EXISTS=no; [ -f "$REPO/CLAUDE.md" ] && CLAUDE_EXISTS=yes
+```
+
+- If `AGENTS.md` already exists → **do not write it, do not open a PR**. Note `AGENTS.md: preserved (already present in repo)` and skip the rest of this step. A human-maintained operating manual always wins (Rule 21). Refresh is manual: the operator deletes the file and re-runs.
+- If `AGENTS.md` is absent but `CLAUDE.md` exists → write `AGENTS.md` only; do **not** touch the existing `CLAUDE.md` (preserve it).
+- If both are absent → write `AGENTS.md` **and** a one-line `CLAUDE.md` that imports it.
+
+#### Compose `AGENTS.md` from the live assessment (NOT a generic template)
+
+Derive the content from what this handover already discovered (steps 2–5). Keep it focused on **stable** information — the things an agent needs to start working and that don't change every commit (commands, layout, conventions). Leave the volatile risk/integration analysis in `handover-assessment.md` (the role-split — see Rule 22). Use this shape:
+
+````markdown
+# AGENTS.md
+
+> Generated by apexyard `/handover` on YYYY-MM-DD — review & refine. Keep this file focused on stable operating info (commands, layout, conventions); it is the operating manual for any agent (Claude Code, Cursor, Codex, …) working in this repo.
+
+## What this is
+
+{One or two sentences: what the project is, derived from README + step 3 tech-stack detection.}
+
+## Tech stack
+
+- Language / runtime: {from step 3}
+- Framework: {from step 3}
+- Database: {from step 3, if any}
+- Test framework: {from step 3}
+
+## Commands
+
+{Real commands discovered in step 3 (package.json scripts / Makefile / pyproject) and verified in step 4 where a build was attempted. Do NOT invent commands — list only what the repo actually defines. Mark unverified ones.}
+
+```bash
+# install
+{e.g. npm install}
+# build
+{e.g. npm run build}
+# test
+{e.g. npm test}
+# lint
+{e.g. npm run lint}
+# run / dev
+{e.g. npm run dev}
+```
+
+## Project layout
+
+{The top-level tree from step 2, annotated with what each dir holds where known. Keep it short — the load-bearing dirs, not an exhaustive listing.}
+
+## Conventions
+
+{Type-safety / module-boundary / lint conventions from the step 4.5 harnessability scan, stated as "how code is expected to look here" — e.g. "TypeScript strict mode is on; keep new code strict-clean", "ESLint runs in CI; run `npm run lint` before pushing".}
+
+## Gotchas
+
+{The key gotchas/risks from step 5 that an agent needs to know up front — stated as operating cautions, not the full risk register. For LOW-harnessability repos, surface what's fragile or missing explicitly, e.g. "No coverage threshold configured — tests may pass with low coverage", "No lint baseline — style is inconsistent across the codebase". Honesty over polish.}
+````
+
+For **low-harnessability** repos (step 4.5 verdict `low`), the Conventions + Gotchas sections MUST surface what's fragile/missing (no strict types, no lint baseline, no coverage signal) rather than implying a maturity the repo doesn't have. This is the in-repo echo of the assessment's LOW warning — agents working in the repo need to know the guardrails aren't there.
+
+#### Write, branch, and open the PR
+
+All of this happens inside the target repo clone (`$REPO`), on a dedicated branch — never the default branch:
+
+```bash
+cd "$REPO"
+DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+git checkout -b docs/agents-md "origin/$DEFAULT_BRANCH" 2>/dev/null || git checkout -b docs/agents-md
+
+# Write the composed AGENTS.md (Write tool) to "$REPO/AGENTS.md".
+# If both AGENTS.md and CLAUDE.md were absent, also write the one-line shim:
+#   echo '@AGENTS.md' > "$REPO/CLAUDE.md"
+# (a CLAUDE.md whose entire content is the @AGENTS.md import — canonical content
+#  lives in AGENTS.md; CLAUDE.md just pulls it in for Claude Code.)
+
+git add AGENTS.md   # plus CLAUDE.md only if it was newly created — add SPECIFIC files, never -A
+[ "$CLAUDE_EXISTS" = no ] && [ -f CLAUDE.md ] && git add CLAUDE.md
+git commit -m "docs: add AGENTS.md operating manual (generated by apexyard /handover)"
+git push -u origin docs/agents-md
+gh pr create --base "$DEFAULT_BRANCH" --head docs/agents-md \
+  --title "docs: add AGENTS.md operating manual" \
+  --body-file <(cat <<'BODY'
+## Summary
+- Adds an `AGENTS.md` operating manual generated by apexyard `/handover` from a deep read of this repo (build/test/run commands, layout, conventions, gotchas).
+- `AGENTS.md` is the canonical, tool-agnostic file; any agent (Claude Code, Cursor, Codex, …) auto-loads it on entry, so build commands / layout / gotchas don't have to be re-discovered each session.
+- {If a CLAUDE.md shim was added:} Adds a one-line `CLAUDE.md` that imports it (`@AGENTS.md`) so Claude Code picks it up without duplicating content.
+
+## Testing
+- Open `AGENTS.md` and confirm the commands match how you actually build/test/run this repo; refine anything the static read got wrong.
+
+_Generated by apexyard `/handover` — review & refine._
+BODY
+)
+```
+
+Notes:
+
+- **Specific-file staging only** — `git add AGENTS.md` (and `CLAUDE.md` only when newly created). Never `git add -A` / `git add .`.
+- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
+- This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply — this is the target repo's own review.
+- On `gh pr create` failure (issues disabled, no push rights, etc.): report the error and the branch name, leave the local branch in place, and continue to step 9. Do not retry.
+
+#### Record for the summary
+
+```bash
+AGENTS_MD_STATUS="PR opened: <url>"   # or "preserved" | "declined" | "not selected" | "skipped (no clone)" | "failed: <reason>"
+```
+
 ### 9. Offer validation (conditional, default-no)
 
 If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:
@@ -1216,6 +1379,7 @@ If the project is healthy (recent commits, active PRs/issues), skip the prompt e
 Handover assessment written: projects/{name}/handover-assessment.md
 Document selection:          {"checklist — generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped | skipped (deselected)})
+In-repo AGENTS.md:           {PR opened: <url> | preserved (already present) | declined | not selected | skipped (no clone) | failed: <reason>}
 Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
 Next-step tickets filed:     {N filed of M offered | none offered (zero risks) | declined (skipped all) | skipped (registry not appended)}
@@ -1241,6 +1405,8 @@ Filed follow-up tickets:
 ## Rules
 
 1. **Read-only against the target repo** — never modify the target repo without explicit permission. (The ops repo IS modified — you append to the registry and create the assessment file — but that's the point.)
+
+   **Exception (explicit, opt-in, PR-delivered): in-repo `AGENTS.md` generation.** Step 8.5 is the single sanctioned write into the target repo. It is **opt-in and default-OFF** (row 8 of the step 5.6 checklist), requires an explicit per-run confirmation, and is delivered via a **branch + PR** the repo owner reviews — never a direct commit to the default branch, and never via the ops-fork bootstrap-exempt write path. With the row left unticked (the default), this rule holds unchanged: `/handover` writes nothing into the target repo. See step 8.5, Rules 21–22, and AgDR-0073.
 2. **Honest assessment** — if a build fails, say so. Don't paper over problems.
 3. **Always seed `projects/<name>/`** — even if minimal.
 4. **Auto-append to the registry** (with confirmation) — don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
@@ -1260,6 +1426,8 @@ Filed follow-up tickets:
 18. **Re-runs surface deltas, not redundancy** — the filed-marker presence on each next-step entry is the source of truth for "already done". On re-handover, step 5's regeneration of `## Next Steps` MUST preserve any `~~strikethrough~~ → Filed as [#N](url)` markers from prior runs (don't blow away the operator's filing history). Step 7.5 then prompts only on the entries that lack a `Filed as` link, so the operator never re-sees what they've already filed. If every entry already carries a `Filed as` link, the whole step skips (see § Skip conditions). Byte-equivalence of the section text is NOT the test — only the per-entry marker presence is.
 19. **Document selection is a checklist, not a fixed pipeline** — step 5.6 presents the generatable artefacts as an opt-in checklist (default-ticked: the L2 container diagram). The handover assessment + harnessability score are ALWAYS written and never appear in the checklist — they are the skill's core output. `--all` is the non-interactive escape that generates the full default set with conventional templates (byte-for-byte the pre-checklist behaviour); `--interactive` (the default) presents the checklist. Distinguish computed/toggle-only rows (no template to pick) from template-backed rows (per-doc template pick).
 20. **Per-doc template pick defaults to the conventional template** — for each selected template-backed doc, list the resolved candidates (framework `templates/**` + adopter `custom-templates/**` via `portfolio_resolve_template`) and default to the conventional one (candidate `[1]`, i.e. the path `portfolio_resolve_template` would pick unprompted). Empty input takes the default, keeping `--all` and "default" runs byte-stable. Only list the adopter override candidate when it actually exists. Never reimplement a dedicated skill's artefact — DFD / Feature Inventory / journey / vision hand off to `/dfd` / `/extract-features` / `/journey` / `/tech-vision`.
+21. **`AGENTS.md` is opt-in, PR-delivered, and never overwrites** — the in-repo `AGENTS.md` (step 8.5) is the only artefact written into the target repo, and it is **default-OFF** so Rule 1 holds unless the operator opts in. It is delivered via a branch + PR (never a direct commit to the default branch; never via the ops-fork bootstrap-exempt path). An existing `AGENTS.md` or `CLAUDE.md` is **preserved, never overwritten** — exactly like the architecture stubs (Rule 11). `AGENTS.md` is canonical; a one-line `CLAUDE.md` importing it (`@AGENTS.md`) is offered only when no `CLAUDE.md` exists. The file carries a "generated by `/handover` on `<date>` — review & refine" note and stays focused on stable info (commands, layout, conventions). Refresh is manual (delete + re-run). See AgDR-0073.
+22. **`AGENTS.md` and `handover-assessment.md` don't duplicate — they split by reader** — `handover-assessment.md` (ops fork) is the **operator's** full analysis: risks, harnessability verdict, integration plan, next-step tickets. `AGENTS.md` (in the target repo) is the **agent's** concise operating manual: stable commands, layout, conventions, and the up-front gotchas an agent needs to start working. The volatile risk/integration analysis stays in the assessment; it is not copied into `AGENTS.md`. For low-harnessability repos, `AGENTS.md`'s Gotchas section surfaces what's fragile/missing (no strict types, no lint baseline, no coverage signal) — the in-repo echo of the assessment's LOW warning.
 
 ## When to use this
 
