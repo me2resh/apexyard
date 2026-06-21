@@ -32,7 +32,7 @@ jobs:
             // bump PRs ("chore: bump X from A to B") and release-sync merges.
             // Exempt them, mirroring the local hooks' sync/ exemption (#545).
             // See #588.
-            if (/^(dependabot\/|sync\/)/.test(headRef)) {
+            if (/^(dependabot\/|sync\/|release\/)/.test(headRef)) {
               console.log(`✅ Exempt automation branch (${headRef}) — ticket ID not required.`);
               return;
             }

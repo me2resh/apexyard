@@ -7,6 +7,7 @@ All notable changes to ApexYard are documented here.
 Major release — 94 features, 50 fixes, 75 improvements.
 
 ### Added (feat)
+
 - (#672) add /walking-skeleton + /prototype skills — 0544797
 - (#674) automate /release — one-command bump + changelog + release PR — 2072eb5
 - (#675) /handover offers in-repo AGENTS.md generation — 1ffb639
@@ -103,6 +104,7 @@ Major release — 94 features, 50 fixes, 75 improvements.
 - (#108) add /tickets-batch skill for bulk-file flow — dea0055
 
 ### Fixed (fix)
+
 - (#677) code-reviewer flow is auto-mode-friendly — local marker is the gate signal — 51f270e
 - (#643) block-merge-on-red-ci refuses variable-substituted merges instead of guessing — ff3bcfc
 - (#638) escape DOM-sourced email parts in site mailto builder — 3116eed
@@ -155,6 +157,7 @@ Major release — 94 features, 50 fixes, 75 improvements.
 - (#106) CHANGELOG fallback in drift hook for squash-merged forks — dd85a13
 
 ### Changed (refactor / chore / docs)
+
 - (#679) set scorecard publish_results false to stop the action failing — 2f572ec
 - (#536) add Code of Conduct + fix stale counts — 9307f75
 - (#676) document orchestrator cost model + cost levers — fbc0668
@@ -231,6 +234,7 @@ Major release — 94 features, 50 fixes, 75 improvements.
 - (#109) project-configurable ticket / branch / commit / PR schema — 1586d44
 
 ### Breaking
+
 - (#347) Hatim→Hakim consolidation + security + data sub-agents (Wave 2 PR 3) — bcbb121
 
 ### Closes

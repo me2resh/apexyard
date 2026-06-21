@@ -190,30 +190,35 @@ echo "$release_desc"
 if [ "${#added_lines[@]}" -gt 0 ]; then
   echo ""
   echo "### Added (feat)"
+  echo ""
   for l in "${added_lines[@]}"; do echo "$l"; done
 fi
 
 if [ "${#fixed_lines[@]}" -gt 0 ]; then
   echo ""
   echo "### Fixed (fix)"
+  echo ""
   for l in "${fixed_lines[@]}"; do echo "$l"; done
 fi
 
 if [ "${#changed_lines[@]}" -gt 0 ]; then
   echo ""
   echo "### Changed (refactor / chore / docs)"
+  echo ""
   for l in "${changed_lines[@]}"; do echo "$l"; done
 fi
 
 if [ "${#breaking_lines[@]}" -gt 0 ]; then
   echo ""
   echo "### Breaking"
+  echo ""
   for l in "${breaking_lines[@]}"; do echo "$l"; done
 fi
 
 if [ "${#closes_nums[@]}" -gt 0 ]; then
   echo ""
   echo "### Closes"
+  echo ""
   # Deduplicate and sort
   unique_nums=$(printf '%s\n' "${closes_nums[@]}" | sort -un | tr '\n' ' ' | sed 's/ $//')
   closes_str=""
