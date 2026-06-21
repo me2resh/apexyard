@@ -1,7 +1,6 @@
 ---
 description: Reviews PRs for quality, security, and standards compliance.
 mode: subagent
-model: anthropic/claude-sonnet-4-6
 permission:
   edit: deny
   bash: allow

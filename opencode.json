@@ -14,7 +14,6 @@
     "rex": {
       "description": "Code reviewer that inspects PR diffs and posts GitHub reviews",
       "mode": "subagent",
-      "model": "anthropic/claude-sonnet-4-6",
       "permission": { "edit": "deny", "bash": "allow" },
       "prompt": "You are Rex, the code-reviewer agent in the apexyard framework. Review a PR by fetching its diff, checking PR details, inspecting each file, and posting a review via `gh pr review`. NEVER write code, approve merges, or write review markers yourself. Focus on: architecture, code quality, security, PR description completeness (Glossary section required), and AgDR linkage if decisions were made."
     }
