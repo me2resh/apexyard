@@ -37,7 +37,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true   # enables the README badge
+          publish_results: false  # disabled: publish step failed the run (#679); SARIF still uploads to code-scanning
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
