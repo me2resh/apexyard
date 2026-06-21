@@ -12,6 +12,7 @@
       "CI",
       "Docs",
       "Spike",
+      "Prototype",
       "Investigation"
     ],
     "label_priority_scheme": "P0,P1,P2,P3",
@@ -24,6 +25,7 @@
       "Docs": ["Driver", "Acceptance Criteria"],
       "Bug": ["Given / When / Then", "Repro"],
       "Spike": ["Hypothesis", "Budget", "Kill Criteria", "Disposition"],
+      "Prototype": ["Direction Question", "Fidelity", "Budget", "Disposition"],
       "Investigation": ["Trigger", "Hypothesis being tested", "Method", "Findings", "Conclusion", "Follow-up actions"]
     },
     "skip_marker": "<!-- validate-issue-structure: skip -->",
@@ -54,6 +56,7 @@
       "docs",
       "test",
       "spike",
+      "prototype",
       "ci",
       "build",
       "perf",
@@ -75,6 +78,7 @@
       "ci",
       "revert",
       "spike",
+      "prototype",
       "sync"
     ]
   },
@@ -94,6 +98,7 @@
       "revert",
       "release",
       "spike",
+      "prototype",
       "sync"
     ],
     "required_sections": [

@@ -2,7 +2,7 @@
 
 A "loop" is a setup where you stop prompting an agent step-by-step and instead design a bounded cycle — discover → plan → execute → **verify** → iterate — that runs until a goal is met inside guardrails you set. The shift the field is naming ("design loops that prompt your agents, don't prompt steps") is real, but the durable lesson underneath it is narrower: **a loop is only as good as the skills it calls and its ability to check its own work, and it is only safe if it halts.**
 
-This rule is the **trigger heuristic** — it defines when an agent should *proactively offer* (or, on opt-in, run) a closed loop instead of grinding through repetitive work one prompt at a time. It is the sibling of [`parallel-work.md`](parallel-work.md) (offer `/fan-out`) and [`plan-mode.md`](plan-mode.md) (enter plan mode). ApexYard is unusually well-suited to looping because it already ships the two things a loop needs and most setups lack: a library of **skills** (the 59 slash commands) and a real **eval layer** (Rex, the design/architecture reviews, CI, the merge gates, QA).
+This rule is the **trigger heuristic** — it defines when an agent should *proactively offer* (or, on opt-in, run) a closed loop instead of grinding through repetitive work one prompt at a time. It is the sibling of [`parallel-work.md`](parallel-work.md) (offer `/fan-out`) and [`plan-mode.md`](plan-mode.md) (enter plan mode). ApexYard is unusually well-suited to looping because it already ships the two things a loop needs and most setups lack: a library of **skills** (the 62 slash commands) and a real **eval layer** (Rex, the design/architecture reviews, CI, the merge gates, QA).
 
 ## When to OFFER loop mode (proactively)
 
