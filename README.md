@@ -269,7 +269,7 @@ ApexYard is designed to be customized. Every role, workflow, and template can be
 
 ## Contributing
 
-Contributions are welcome — **start with [CONTRIBUTING.md](CONTRIBUTING.md)** for the full fork → PR → review flow, and open issues with the **Bug report** / **Feature request** templates. Security issues go through [SECURITY.md](SECURITY.md) (private reporting), not public issues.
+Contributions are welcome — **start with [CONTRIBUTING.md](CONTRIBUTING.md)** for the full fork → PR → review flow, and open issues with the **Bug report** / **Feature request** templates. All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md) (private reporting), not public issues.
 
 ApexYard runs on its own rules, so the flow mirrors any project under ApexYard governance:
 
