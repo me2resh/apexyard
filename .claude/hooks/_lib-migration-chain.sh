@@ -52,7 +52,7 @@ _migration_ops_root() {
       echo "$cur"
       return 0
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
   echo "$r"
 }

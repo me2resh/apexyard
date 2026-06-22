@@ -98,7 +98,7 @@ if [ -n "$REPO_ROOT" ]; then
         OPS_ROOT="$r"
         break
       fi
-      r=$(dirname "$r")
+      parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
     done
   fi
 fi

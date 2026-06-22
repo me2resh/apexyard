@@ -234,7 +234,7 @@ spike_pr_exempt() {
         marker_home="$r"
         break
       fi
-      r=$(dirname "$r")
+      parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
     done
   fi
 
