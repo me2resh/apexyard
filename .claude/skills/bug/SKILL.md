@@ -185,20 +185,43 @@ Create this ticket? (yes / edit / cancel)
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 7. Create the GitHub Issue
+### 7. Create the issue (via the tracker abstraction)
+
+Dispatch through `tracker_create` (#670 / AgDR-0072) so the issue lands in
+**this project's** tracker (GitHub / GitLab / `custom`) per its `tracker:` block
+in `apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
+unchanged.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[{P0|P1|P2}] {title}" \
-  --label "bug,{priority}" \
-  --body "{formatted body}"
+# Resolve + source the tracker lib (it lives in the ops fork's hooks dir).
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# Gated by require-skill-for-issue-create.sh; the step-0 marker keeps it allowed.
+result="$(tracker_create "{owner/repo}" "[{P0|P1|P2}] {title}" "$body_file" "bug,{priority}")" || {
+  rm -f "$body_file"
+  echo "Issue creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+}
+rm -f "$body_file"
 ```
 
-### 8. Return the URL
+### 8. Return the result
 
-```
-Created: {owner/repo}#{number} — {title}
-{url}
+```bash
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
+echo "Created: {owner/repo}#${ref} — {title}"
+echo "${url}"
 ```
 
 ## Rules

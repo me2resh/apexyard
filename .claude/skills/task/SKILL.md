@@ -180,20 +180,48 @@ A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 7. Create the GitHub Issue
+### 7. Create the issue (via the tracker abstraction)
+
+Dispatch creation through `tracker_create` (#670 / AgDR-0072) so the issue lands
+in **this project's** tracker — GitHub, GitLab, or a `custom` CLI — per its
+`tracker:` block in `apexyard.projects.yaml`. For a GitHub adopter this runs
+`gh issue create` exactly as before; no behaviour change.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[{type}] {title}" \
-  --label "{priority}" \
-  --body "{formatted body}"
+# Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
+# from the cwd; source it.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# It is gated by require-skill-for-issue-create.sh; the active-issue-skill
+# marker written in step 0 keeps this call allowed.
+result="$(tracker_create "{owner/repo}" "[{type}] {title}" "$body_file" "{priority}")" || {
+  rm -f "$body_file"
+  echo "Ticket creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+}
+rm -f "$body_file"
 ```
 
-### 8. Return the URL
+### 8. Return the result
 
-```
-Created: {owner/repo}#{number} — {title}
-{url}
+Parse the normalised `{ref, url}` from `tracker_create`:
+
+```bash
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
+echo "Created: {owner/repo}#${ref} — {title}"
+echo "${url}"
 ```
 
 ## Rules
