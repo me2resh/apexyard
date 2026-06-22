@@ -8,6 +8,14 @@
 
 set -u
 
+# Pin isolation: the hook resolves its ops-root (and thus the sandbox markers /
+# config) via the session pin. Run interactively inside a live apexyard session,
+# the pin resolves PAST each mktemp sandbox to the operator's real fork, so the
+# marker-present cases look in the wrong place. The authoritative runner
+# (bin/run-hook-tests.sh) disables the pin; unset here too so a direct
+# `bash test_require_skill_for_issue_create.sh` is robust under nesting.
+unset APEXYARD_OPS_PIN_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/require-skill-for-issue-create.sh"
 LIB_OPS="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
@@ -101,6 +109,20 @@ in=$(jq -nc --arg c "asana task create --name x" \
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "asana task create blocked w/o marker" 2 "BLOCKED" "$in" "$sb"
 
+# tracker_create (the #670 creation abstraction) is itself an issue-creation
+# entry point — it MUST be gated, or `tracker_create <repo> <title> <body>` run
+# outside a skill is a bypass of the structured-create rule.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'tracker_create foo/bar "my title" /tmp/body.md' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "tracker_create blocked w/o marker (#670)" 2 "BLOCKED" "$in" "$sb"
+
+# glab (GitLab) create — the create-guard previously didn't recognise it (#670).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "glab issue create -R foo/bar --title x" \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "glab issue create blocked w/o marker (#670)" 2 "BLOCKED" "$in" "$sb"
+
 # --- Marker present → ALLOW on each default matcher ------------------------
 
 sb=$(make_sandbox); echo "feature" > "$sb/.claude/session/active-issue-skill"
@@ -114,6 +136,10 @@ run_case "gh api allowed with skill marker" 0 "" "$in" "$sb"
 sb=$(make_sandbox); echo "bug" > "$sb/.claude/session/active-issue-skill"
 in=$(jq -nc --arg c "linear issue create --title x" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "linear allowed with skill marker" 0 "" "$in" "$sb"
+
+sb=$(make_sandbox); echo "task" > "$sb/.claude/session/active-issue-skill"
+in=$(jq -nc --arg c 'tracker_create foo/bar "my title" /tmp/body.md' '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "tracker_create allowed with skill marker (#670)" 0 "" "$in" "$sb"
 
 # --- Non-matching commands → no-op -----------------------------------------
 

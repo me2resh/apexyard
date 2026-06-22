@@ -442,6 +442,162 @@ tracker_state() {
   printf '%s' "$json" | jq -r '.state // empty' 2>/dev/null
 }
 
+# ==============================================================================
+# Creation (tracker_create) — the #670 / AgDR-0072 creation abstraction.
+#
+# tracker_create is the creation analog of tracker_view. Unlike view (which only
+# substitutes the simple {id}/{owner_repo} tokens), create carries an ARBITRARY
+# title + body. So tracker_create is a FUNCTION taking args — title/labels pass
+# as proper `--flag "$val"` arguments and the body via `--body-file` — NEVER a
+# string-templated eval of the title/body. Built-in adapters cover gh + glab;
+# the `create_command` TEMPLATE is reserved for the trusted `custom` kind (same
+# trust class as view_command's custom adapter).
+#
+# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+#   On success: emits normalised JSON {"ref":..., "url":...} on stdout, exit 0.
+#     - ref is the tracker's issue reference as a STRING (callers must not do
+#       arithmetic on it — a future tracker may return a key like LIN-42). The
+#       built-in gh/glab adapters below emit the trailing NUMBER; trackers with
+#       non-numeric keys supply their own adapter + extractor (Part C).
+#   On failure (CLI missing/errored, kind=none, no parseable result): exit 1,
+#     empty stdout — callers treat empty as "not created".
+# ------------------------------------------------------------------------------
+
+# Internal: parse a gh/glab create output into {ref, url}. gh prints just the
+# issue URL; glab prints several lines including it. Finds the issue URL and
+# derives the ref from its trailing NUMERIC path segment — sufficient for gh and
+# glab. Trackers with non-numeric keys (Linear LIN-42, Jira PROJ-789) need a
+# dedicated extractor in their own adapter (Part C), not this numeric helper.
+_tracker_extract_ref_url() {
+  local raw="$1" url ref
+  url=$(printf '%s\n' "$raw" | grep -oE 'https?://[^[:space:]]+' | grep -E '/issues/[0-9]+' | head -1)
+  if [ -z "$url" ]; then
+    return 1
+  fi
+  ref=$(printf '%s' "$url" | grep -oE '[0-9]+$')
+  jq -nc --arg ref "$ref" --arg url "$url" '{ref:$ref, url:$url}' 2>/dev/null
+}
+
+# Internal adapter: gh → run `gh issue create` with safe arg passing.
+_tracker_create_gh() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local -a args
+  args=(issue create --repo "$repo" --title "$title")
+  if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+    args+=(--body-file "$body_file")
+  fi
+  if [ -n "$labels" ]; then
+    local l
+    local IFS=','
+    for l in $labels; do
+      [ -n "$l" ] && args+=(--label "$l")
+    done
+  fi
+  gh "${args[@]}" 2>/dev/null
+}
+
+# Internal adapter: glab (GitLab) → `glab issue create`. GitLab's CLI has no
+# --body-file, so the body is passed via --description with the file contents
+# as a single quoted arg (injection-safe — not re-evaluated). Labels are a
+# single comma-separated --label value. --yes skips the interactive prompt.
+_tracker_create_glab() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local -a args
+  args=(issue create -R "$repo" --title "$title")
+  if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+    args+=(--description "$(cat "$body_file")")
+  fi
+  if [ -n "$labels" ]; then
+    args+=(--label "$labels")
+  fi
+  args+=(--yes)
+  glab "${args[@]}" 2>/dev/null
+}
+
+# Internal: resolve the create_command template for the `custom` kind — the
+# per-project override (registry) wins over a global .tracker.create_command.
+# Empty when neither is set (custom kind without a template can't create).
+_tracker_create_template() {
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" create_command) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  _tracker_load_config_lib
+  local tpl
+  tpl=$(config_get_or '.tracker.create_command' '' 2>/dev/null)
+  if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
+    echo "$tpl"
+  fi
+}
+
+# Internal adapter: custom → operator-supplied create_command template.
+#
+# Injection model (deliberate): this is the ONE eval path in tracker_create, and
+# it is scoped to the trusted, operator-authored `custom` template. Only the
+# {owner_repo} placeholder — a safe slug — is substituted into the command
+# string. The arbitrary values (title / body file / labels) are exposed as
+# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS)
+# that the operator references with double-quoted expansions — so they are
+# quoted VALUES at eval time, never re-tokenised as command syntax. A title full
+# of `; rm -rf …` is inert. The custom command is expected to emit the issue URL
+# on stdout (parsed like gh/glab).
+#
+# Note: {owner_repo} IS substituted into the eval'd string. This is the same
+# trust model as view_command — owner_repo is a registry-sourced slug (trusted
+# config authored by the maintainer), not agent/user-supplied free text. Only
+# the arbitrary, untrusted values (title/body/labels) go via env.
+_tracker_create_custom() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local tpl
+  tpl=$(_tracker_create_template "$repo")
+  if [ -z "$tpl" ]; then
+    return 1
+  fi
+  local cmd="$tpl"
+  cmd="${cmd//\{owner_repo\}/$repo}"
+  TRACKER_REPO="$repo" TRACKER_TITLE="$title" TRACKER_BODY_FILE="$body_file" TRACKER_LABELS="$labels" \
+    eval "$cmd" 2>/dev/null
+}
+
+# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+tracker_create() {
+  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}"
+  if [ -z "$repo" ] || [ -z "$title" ]; then
+    return 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    none) return 1 ;;
+  esac
+
+  local raw rc
+  case "$kind" in
+    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;  # best-effort default
+  esac
+  if [ $rc -ne 0 ] || [ -z "$raw" ]; then
+    return 1
+  fi
+
+  local result
+  result=$(_tracker_extract_ref_url "$raw")
+  if [ -z "$result" ] || [ "$result" = "null" ]; then
+    return 1
+  fi
+  echo "$result"
+}
+
 # ------------------------------------------------------------------------------
 # GitHub-Issues-enabled detection (#653, AgDR-0071)
 #

@@ -40,10 +40,12 @@
     "create_command_patterns": [
       "gh issue create",
       "gh api repos/",
+      "glab issue create",
       "linear issue create",
       "jira issue create",
       "jira create",
-      "asana task create"
+      "asana task create",
+      "tracker_create"
     ]
   },
 
