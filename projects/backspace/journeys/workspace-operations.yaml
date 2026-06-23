@@ -1,0 +1,162 @@
+version: 1
+feature: workspace-operations
+project: backspace
+title: Backspace Workspace Operations Journey
+description: Staff-only Visit-first journey from arrival through checkout, payment/receivable, and space readiness.
+generated_at: 2026-06-23T00:00:00Z
+generated_by: /journey
+personas:
+  - staff
+  - manager
+  - facilities
+pages:
+  - id: login
+    title: Login
+    persona: staff
+    description: Staff authenticate through Better Auth before entering the console.
+    contents:
+      - Email and password form.
+      - Error state for invalid credentials.
+      - Redirect to Today after session is established.
+    success_state: Staff session exists and protected routes can load.
+    error_state: Generic invalid credentials or server unavailable message.
+  - id: today
+    title: Today Dashboard
+    persona: staff
+    description: Operational launchpad for arrivals, active visits, bookings, open bills, spaces, cleaning, maintenance, and approvals.
+    contents:
+      - KPI cards for occupancy, active visits, revenue, open bills, upcoming bookings, overdue sessions.
+      - Quick actions for new walk-in, check-in booking, check-in guest, add charge, open/close shift.
+      - Queues for cleaning, maintenance, approvals, expiring memberships.
+    success_state: Staff can start the right workflow without deep navigation.
+    error_state: Permission-limited cards show disabled actions with explanation.
+  - id: new-visit
+    title: New Visit / Check-in
+    persona: staff
+    description: Staff search or quick-create a person and choose the visit type and billing responsibility.
+    contents:
+      - Person search by phone/name.
+      - Visit type selector: walk-in, member, booking customer, hosted guest, event attendee, non-billable.
+      - Host, membership, booking, or event context when relevant.
+      - Billing responsibility selector.
+    success_state: Visit is created for every physical entrant.
+    error_state: Missing host/event/booking context blocks specialized visit types.
+  - id: space-selection
+    title: Space Selection
+    persona: staff
+    description: Staff pick an available space when the visit needs a Usage Session.
+    contents:
+      - Space Map by branch/floor/status.
+      - Availability and double-booking warnings.
+      - Maintenance, cleaning, blocked, inactive, occupied, and reserved states.
+    success_state: Usage Session starts and space becomes occupied.
+    error_state: Invalid space state blocks session start with actionable reason.
+  - id: active-visit
+    title: Active Visit
+    persona: staff
+    description: Staff monitor the visit, session duration, charges, responsibility, and allowed actions.
+    contents:
+      - Visit details drawer.
+      - Usage Session timer and overtime signals.
+      - Charge list and responsibility badges.
+      - Audit timeline for sensitive changes.
+    success_state: Staff can add charges or proceed to checkout.
+    error_state: Unauthorized actions are disabled server-side and explained in UI.
+  - id: add-charge
+    title: Add Charge
+    persona: staff
+    description: Staff add products, services, fees, discounts, or complimentary lines to an operational target without standalone POS.
+    contents:
+      - Required target: visit, usage session, event, host account, or invoice draft.
+      - Catalog search and manual charge option.
+      - Stock check, responsibility selector, discount/override reason.
+      - Approval state for restricted changes.
+    success_state: Draft Charge is attached to its target and appears on the visit.
+    error_state: Out-of-stock, missing target, missing reason, or approval required.
+  - id: checkout
+    title: Checkout
+    persona: staff
+    description: Staff preview usage, coverage, charges, discounts, tax, responsibility split, invoice(s), and payment requirements.
+    contents:
+      - Usage/session totals.
+      - Membership or included coverage.
+      - Responsibility split: visitor, host, company, event, subscription, complimentary, pay-later.
+      - Open shift and payment validation.
+    success_state: Staff can finalize immediate payment or receivable/included checkout.
+    error_state: Stale visit state, unresolved approval, or missing open shift blocks finalization.
+  - id: payment-or-receivable
+    title: Payment / Receivable
+    persona: staff
+    description: Staff record internal payment method/reference or confirm pay-later/host/event responsibility.
+    contents:
+      - Cash, card terminal, wallet, bank transfer, Instapay, mixed, pay-later, host account.
+      - Shift requirement for cash.
+      - Payment reference and amount validation.
+      - Generated invoice/receipt summary.
+    success_state: Invoice(s), payment(s), or receivable records are finalized.
+    error_state: Cash without open shift or disallowed responsibility blocks completion.
+  - id: facilities-readiness
+    title: Facilities Readiness
+    persona: facilities
+    description: Checkout closes the session and moves the space to cleaning, maintenance, or available according to rules.
+    contents:
+      - Space state change.
+      - Cleaning task creation.
+      - Maintenance ticket path if damage or block reason exists.
+      - Cleaner/maintenance queues.
+    success_state: Space is no longer incorrectly available/occupied.
+    error_state: Staff must choose a readiness outcome when required.
+  - id: reports-admin
+    title: Reports / Admin
+    persona: manager
+    description: Managers review daily operations, occupancy, revenue, open receivables, staff roles, settings, approvals, and audit log.
+    contents:
+      - Daily, occupancy, revenue, receivables reports.
+      - Staff roles, branch access, permission settings.
+      - Audit log and approval queue.
+      - Operational exceptions.
+    success_state: Managers can verify the day and govern sensitive actions.
+    error_state: Non-manager users cannot access admin/reporting routes.
+transitions:
+  - from: login
+    to: today
+    trigger: successful staff authentication
+  - from: today
+    to: new-visit
+    trigger: staff chooses New Walk-in / Check-in Booking / Guest / Member / Event Attendee
+  - from: new-visit
+    to: space-selection
+    trigger: visit requires billable or covered space use
+  - from: new-visit
+    to: active-visit
+    trigger: non-billable visit or no immediate space selection
+  - from: space-selection
+    to: active-visit
+    trigger: usage session starts successfully
+  - from: active-visit
+    to: add-charge
+    trigger: staff chooses Add Charge
+  - from: add-charge
+    to: active-visit
+    trigger: charge is saved or cancelled
+  - from: active-visit
+    to: checkout
+    trigger: staff chooses Checkout
+  - from: checkout
+    to: payment-or-receivable
+    trigger: staff confirms checkout split
+  - from: payment-or-receivable
+    to: facilities-readiness
+    trigger: checkout finalizes and session closes
+  - from: facilities-readiness
+    to: today
+    trigger: space state/task is recorded
+  - from: today
+    to: reports-admin
+    trigger: manager opens Reports/Admin
+  - from: reports-admin
+    to: today
+    trigger: manager returns to operations
+entry: login
+notes: |
+  This journey is a planning preview, not production UI. It enforces the product rule that add-ons are contextual Charges attached to Visit/session/event/host/invoice draft rather than a standalone anonymous POS flow.

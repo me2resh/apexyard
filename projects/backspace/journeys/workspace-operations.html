@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backspace Workspace Operations - User Journey</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172033; background: #f6f3ee; }
+    header { padding: 28px 36px; background: #121826; color: #f8fafc; border-bottom: 4px solid #d4a72c; }
+    header .project { color: #d4a72c; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; font-weight: 700; }
+    header h1 { margin: 6px 0 8px; font-size: clamp(1.6rem, 3vw, 2.4rem); }
+    header .description { max-width: 940px; color: #dbe4ef; line-height: 1.45; }
+    header .disclaimer { display: inline-block; margin-top: 14px; padding: 5px 10px; background: #fff3c4; color: #6f4d00; border-radius: 999px; font-size: .78rem; font-weight: 800; }
+    main { padding: 32px; }
+    .graph-wrap { overflow-x: auto; padding: 20px; background: #fffaf0; border: 1px solid #eadfc8; border-radius: 18px; box-shadow: 0 18px 60px rgba(18, 24, 38, .08); }
+    svg { min-width: 1040px; width: 100%; height: auto; }
+    .lane-label { fill: #6b5e45; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .page-box rect { fill: #ffffff; stroke: #22314f; stroke-width: 2; rx: 14; cursor: pointer; filter: drop-shadow(0 8px 12px rgba(20, 31, 50, .09)); transition: fill .15s, stroke .15s, transform .15s; }
+    .page-box:hover rect, .page-box:focus rect { fill: #fff3d8; stroke: #a76d00; }
+    .page-box text { pointer-events: none; }
+    .page-title { font-size: 14px; font-weight: 800; fill: #172033; }
+    .page-persona { font-size: 11px; fill: #7a6b52; text-transform: uppercase; letter-spacing: .05em; }
+    .arrow { fill: none; stroke: #8d816b; stroke-width: 1.7; marker-end: url(#arrowhead); }
+    .arrow-label { font-size: 11px; fill: #5c513f; font-weight: 650; }
+    .modal[hidden] { display: none; }
+    .modal { position: fixed; inset: 0; z-index: 10; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(18, 24, 38, .62); }
+    .modal-card { position: relative; max-width: 720px; max-height: 88vh; overflow: auto; margin: 5vh auto; background: #fffdf8; border-radius: 18px; border: 1px solid #eadfc8; padding: 26px; box-shadow: 0 30px 90px rgba(0,0,0,.28); }
+    .modal-card h2 { margin: 0; color: #172033; }
+    .modal-card .meta { margin-top: 6px; color: #8a6a12; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; }
+    .modal-card p { line-height: 1.55; }
+    .modal-card h3 { margin: 20px 0 8px; font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: #67583f; }
+    .modal-card ul { margin: 0; padding-left: 20px; line-height: 1.55; }
+    .close { position: absolute; top: 18px; right: 18px; border: 0; background: #172033; color: #fff; width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px; }
+    footer { padding: 24px 36px; color: #695f50; font-size: .88rem; }
+    code { background: #ece3d1; padding: 2px 6px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="project">backspace</div>
+    <h1>Workspace Operations Journey</h1>
+    <div class="description">Staff-only Visit-first journey from arrival through checkout, payment/receivable, and space readiness. Add-ons are contextual Charges, not standalone anonymous POS sales.</div>
+    <div class="disclaimer">DRAFT - preview before implementation</div>
+  </header>
+
+  <main>
+    <section class="graph-wrap" aria-label="Workspace operations journey graph">
+      <svg viewBox="0 0 1040 840" role="img">
+        <defs>
+          <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8d816b"></path>
+          </marker>
+        </defs>
+        <text class="lane-label" x="34" y="36">Entry</text>
+        <text class="lane-label" x="34" y="206">Operations</text>
+        <text class="lane-label" x="34" y="376">Billing</text>
+        <text class="lane-label" x="34" y="546">Facilities / Governance</text>
+
+        <path class="arrow" d="M520,105 C520,135 520,145 520,175"></path>
+        <text class="arrow-label" x="535" y="145">auth success</text>
+        <path class="arrow" d="M520,255 C410,285 270,300 210,345"></path>
+        <text class="arrow-label" x="285" y="294">new check-in</text>
+        <path class="arrow" d="M280,425 C310,455 380,455 430,425"></path>
+        <text class="arrow-label" x="327" y="471">space needed</text>
+        <path class="arrow" d="M610,425 C655,455 700,455 760,425"></path>
+        <text class="arrow-label" x="656" y="471">session starts</text>
+        <path class="arrow" d="M840,430 C840,470 800,500 730,535"></path>
+        <text class="arrow-label" x="820" y="500">add charge</text>
+        <path class="arrow" d="M730,575 C770,590 835,540 842,430"></path>
+        <text class="arrow-label" x="775" y="602">save/cancel</text>
+        <path class="arrow" d="M840,430 C790,505 680,625 600,675"></path>
+        <text class="arrow-label" x="702" y="605">checkout</text>
+        <path class="arrow" d="M430,715 C345,720 270,720 225,705"></path>
+        <text class="arrow-label" x="292" y="742">confirm split</text>
+        <path class="arrow" d="M360,715 C475,730 605,725 720,705"></path>
+        <text class="arrow-label" x="505" y="758">finalize</text>
+        <path class="arrow" d="M860,675 C930,580 885,315 620,255"></path>
+        <text class="arrow-label" x="875" y="523">space ready</text>
+        <path class="arrow" d="M635,215 C760,195 855,215 895,340"></path>
+        <text class="arrow-label" x="775" y="201">manager view</text>
+        <path class="arrow" d="M895,405 C850,470 690,340 610,255"></path>
+        <text class="arrow-label" x="782" y="390">return</text>
+
+        <g class="page-box" id="page-login" data-page-id="login" tabindex="0" role="button" aria-label="Open Login details">
+          <rect x="420" y="50" width="200" height="70"></rect>
+          <text x="520" y="80" text-anchor="middle"><tspan class="page-title" x="520">Login</tspan><tspan class="page-persona" x="520" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-today" data-page-id="today" tabindex="0" role="button" aria-label="Open Today details">
+          <rect x="420" y="190" width="200" height="70"></rect>
+          <text x="520" y="220" text-anchor="middle"><tspan class="page-title" x="520">Today Dashboard</tspan><tspan class="page-persona" x="520" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-new-visit" data-page-id="new-visit" tabindex="0" role="button" aria-label="Open New Visit details">
+          <rect x="110" y="360" width="200" height="70"></rect>
+          <text x="210" y="390" text-anchor="middle"><tspan class="page-title" x="210">New Visit</tspan><tspan class="page-persona" x="210" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-space-selection" data-page-id="space-selection" tabindex="0" role="button" aria-label="Open Space Selection details">
+          <rect x="430" y="360" width="200" height="70"></rect>
+          <text x="530" y="390" text-anchor="middle"><tspan class="page-title" x="530">Space Selection</tspan><tspan class="page-persona" x="530" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-active-visit" data-page-id="active-visit" tabindex="0" role="button" aria-label="Open Active Visit details">
+          <rect x="740" y="360" width="200" height="70"></rect>
+          <text x="840" y="390" text-anchor="middle"><tspan class="page-title" x="840">Active Visit</tspan><tspan class="page-persona" x="840" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-add-charge" data-page-id="add-charge" tabindex="0" role="button" aria-label="Open Add Charge details">
+          <rect x="520" y="520" width="200" height="70"></rect>
+          <text x="620" y="550" text-anchor="middle"><tspan class="page-title" x="620">Add Charge</tspan><tspan class="page-persona" x="620" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-checkout" data-page-id="checkout" tabindex="0" role="button" aria-label="Open Checkout details">
+          <rect x="400" y="670" width="200" height="70"></rect>
+          <text x="500" y="700" text-anchor="middle"><tspan class="page-title" x="500">Checkout</tspan><tspan class="page-persona" x="500" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-payment-or-receivable" data-page-id="payment-or-receivable" tabindex="0" role="button" aria-label="Open Payment details">
+          <rect x="110" y="690" width="230" height="70"></rect>
+          <text x="225" y="720" text-anchor="middle"><tspan class="page-title" x="225">Payment / Receivable</tspan><tspan class="page-persona" x="225" dy="18">staff</tspan></text>
+        </g>
+        <g class="page-box" id="page-facilities-readiness" data-page-id="facilities-readiness" tabindex="0" role="button" aria-label="Open Facilities details">
+          <rect x="720" y="670" width="220" height="70"></rect>
+          <text x="830" y="700" text-anchor="middle"><tspan class="page-title" x="830">Facilities Readiness</tspan><tspan class="page-persona" x="830" dy="18">facilities</tspan></text>
+        </g>
+        <g class="page-box" id="page-reports-admin" data-page-id="reports-admin" tabindex="0" role="button" aria-label="Open Reports Admin details">
+          <rect x="790" y="345" width="200" height="70"></rect>
+          <text x="890" y="375" text-anchor="middle"><tspan class="page-title" x="890">Reports / Admin</tspan><tspan class="page-persona" x="890" dy="18">manager</tspan></text>
+        </g>
+      </svg>
+    </section>
+  </main>
+
+  <div class="modal" id="modal-login" hidden><div class="modal-backdrop" data-close-modal="login"></div><div class="modal-card"><button class="close" data-close-modal="login">x</button><h2>Login</h2><div class="meta">staff</div><p>Staff authenticate through Better Auth before entering the console.</p><h3>Page contents</h3><ul><li>Email and password form.</li><li>Error state for invalid credentials.</li><li>Redirect to Today after session is established.</li></ul></div></div>
+  <div class="modal" id="modal-today" hidden><div class="modal-backdrop" data-close-modal="today"></div><div class="modal-card"><button class="close" data-close-modal="today">x</button><h2>Today Dashboard</h2><div class="meta">staff</div><p>Operational launchpad for arrivals, active visits, bookings, open bills, spaces, cleaning, maintenance, and approvals.</p><h3>Page contents</h3><ul><li>KPI cards for occupancy, active visits, revenue, open bills, upcoming bookings, overdue sessions.</li><li>Quick actions for staff workflows.</li><li>Queues for cleaning, maintenance, approvals, expiring memberships.</li></ul></div></div>
+  <div class="modal" id="modal-new-visit" hidden><div class="modal-backdrop" data-close-modal="new-visit"></div><div class="modal-card"><button class="close" data-close-modal="new-visit">x</button><h2>New Visit / Check-in</h2><div class="meta">staff</div><p>Staff search or quick-create a person and choose the visit type and billing responsibility.</p><h3>Page contents</h3><ul><li>Person search by phone/name.</li><li>Visit type and billing responsibility selectors.</li><li>Host, membership, booking, or event context when relevant.</li></ul></div></div>
+  <div class="modal" id="modal-space-selection" hidden><div class="modal-backdrop" data-close-modal="space-selection"></div><div class="modal-card"><button class="close" data-close-modal="space-selection">x</button><h2>Space Selection</h2><div class="meta">staff</div><p>Staff pick an available space when the visit needs a Usage Session.</p><h3>Page contents</h3><ul><li>Space Map by branch/floor/status.</li><li>Availability and double-booking warnings.</li><li>Maintenance, cleaning, blocked, inactive, occupied, and reserved states.</li></ul></div></div>
+  <div class="modal" id="modal-active-visit" hidden><div class="modal-backdrop" data-close-modal="active-visit"></div><div class="modal-card"><button class="close" data-close-modal="active-visit">x</button><h2>Active Visit</h2><div class="meta">staff</div><p>Staff monitor the visit, session duration, charges, responsibility, and allowed actions.</p><h3>Page contents</h3><ul><li>Visit details drawer.</li><li>Usage Session timer and overtime signals.</li><li>Charge list, responsibility badges, and audit timeline.</li></ul></div></div>
+  <div class="modal" id="modal-add-charge" hidden><div class="modal-backdrop" data-close-modal="add-charge"></div><div class="modal-card"><button class="close" data-close-modal="add-charge">x</button><h2>Add Charge</h2><div class="meta">staff</div><p>Staff add products, services, fees, discounts, or complimentary lines to an operational target without standalone POS.</p><h3>Page contents</h3><ul><li>Required target: visit, usage session, event, host account, or invoice draft.</li><li>Catalog search and manual charge option.</li><li>Stock check, responsibility selector, discount/override reason.</li></ul></div></div>
+  <div class="modal" id="modal-checkout" hidden><div class="modal-backdrop" data-close-modal="checkout"></div><div class="modal-card"><button class="close" data-close-modal="checkout">x</button><h2>Checkout</h2><div class="meta">staff</div><p>Staff preview usage, coverage, charges, discounts, tax, responsibility split, invoice(s), and payment requirements.</p><h3>Page contents</h3><ul><li>Usage/session totals.</li><li>Membership or included coverage.</li><li>Responsibility split and open shift validation.</li></ul></div></div>
+  <div class="modal" id="modal-payment-or-receivable" hidden><div class="modal-backdrop" data-close-modal="payment-or-receivable"></div><div class="modal-card"><button class="close" data-close-modal="payment-or-receivable">x</button><h2>Payment / Receivable</h2><div class="meta">staff</div><p>Staff record internal payment method/reference or confirm pay-later/host/event responsibility.</p><h3>Page contents</h3><ul><li>Cash, card terminal, wallet, bank transfer, Instapay, mixed, pay-later, host account.</li><li>Shift requirement for cash.</li><li>Generated invoice/receipt summary.</li></ul></div></div>
+  <div class="modal" id="modal-facilities-readiness" hidden><div class="modal-backdrop" data-close-modal="facilities-readiness"></div><div class="modal-card"><button class="close" data-close-modal="facilities-readiness">x</button><h2>Facilities Readiness</h2><div class="meta">facilities</div><p>Checkout closes the session and moves the space to cleaning, maintenance, or available according to rules.</p><h3>Page contents</h3><ul><li>Space state change.</li><li>Cleaning task creation.</li><li>Maintenance ticket path if damage or block reason exists.</li></ul></div></div>
+  <div class="modal" id="modal-reports-admin" hidden><div class="modal-backdrop" data-close-modal="reports-admin"></div><div class="modal-card"><button class="close" data-close-modal="reports-admin">x</button><h2>Reports / Admin</h2><div class="meta">manager</div><p>Managers review daily operations, occupancy, revenue, open receivables, staff roles, settings, approvals, and audit log.</p><h3>Page contents</h3><ul><li>Daily, occupancy, revenue, receivables reports.</li><li>Staff roles, branch access, permission settings.</li><li>Audit log and approval queue.</li></ul></div></div>
+
+  <footer>
+    <div>Source: <code>projects/backspace/journeys/workspace-operations.yaml</code></div>
+    <div>Regenerate: <code>/journey workspace-operations --update</code></div>
+  </footer>
+
+  <script>
+    (function () {
+      function openModal(id) {
+        var modal = document.getElementById('modal-' + id);
+        if (!modal) return;
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        var close = modal.querySelector('.close');
+        if (close) close.focus();
+      }
+      function closeModal(id) {
+        var modal = document.getElementById('modal-' + id);
+        if (!modal) return;
+        modal.hidden = true;
+        document.body.style.overflow = '';
+        var trigger = document.getElementById('page-' + id);
+        if (trigger) trigger.focus();
+      }
+      document.querySelectorAll('.page-box').forEach(function (box) {
+        var id = box.getAttribute('data-page-id');
+        box.addEventListener('click', function () { openModal(id); });
+        box.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openModal(id); }
+        });
+      });
+      document.querySelectorAll('[data-close-modal]').forEach(function (el) {
+        el.addEventListener('click', function () { closeModal(el.getAttribute('data-close-modal')); });
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        document.querySelectorAll('.modal').forEach(function (modal) {
+          if (!modal.hidden) closeModal(modal.id.replace('modal-', ''));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

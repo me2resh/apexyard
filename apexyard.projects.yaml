@@ -6,7 +6,27 @@
 
 version: 1
 
-projects: []
+projects:
+  - name: backspace
+    repo: zeyadsleem/backspace
+    workspace: workspace/backspace
+    docs: projects/backspace
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - qa-engineer
+      - ui-designer
+      - ux-designer
+      - security-auditor
+    tags:
+      - internal
+      - operations
+      - coworking
+      - staff-console
+    ticket_prefix: GH
 
 defaults:
   status: active
