@@ -80,21 +80,28 @@ extract_flag_value() {
     END {
       s = buf
       # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      # Boundary matches single-dash (`-F`, `-f`, `-t`) OR double-dash
+      # (`--field`, `--body-file`) flags. The earlier `--[a-zA-Z]`-only anchor
+      # failed when a single-dash flag followed a quoted value — e.g.
+      # `--title "[Feature] F" -F body=@file` parsed the title as `"[Feature]`
+      # via the unquoted fallback, so the bracketed prefix never resolved and
+      # the gh-api body-file shape silently bypassed validation
+      # (me2resh/apexyard#695).
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
         sub("\"[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
       # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
         sub(SQ "[[:space:]]*$", "", chunk)
         print chunk
         exit
@@ -127,6 +134,19 @@ if [ -z "$BODY_FILE" ]; then
   fi
   if [ -n "$F_VAL" ] && ! echo "$F_VAL" | grep -q '='; then
     BODY_FILE="$F_VAL"
+  fi
+fi
+
+# `gh api … -F body=@<path>` (or --field / -f, raw `body@=<path>`) is the
+# canonical REST shape for posting an issue body from a file — distinct from
+# the `gh issue create --body-file <path>` form handled above. Here the field
+# VALUE carries the file path after an `@` sigil, so the skip-marker + section
+# checks were blind to the file's content (me2resh/apexyard#695). Extract the
+# path from any `body=@<path>` / `body@=<path>` field on -F / --field / -f.
+if [ -z "$BODY_FILE" ]; then
+  BODY_AT=$(echo "$COMMAND" | sed -nE "s/.*(^|[[:space:]])(-F|--field|-f)[[:space:]]+[\"']?body@?=@([^[:space:]\"']+).*/\3/p" | head -1)
+  if [ -n "$BODY_AT" ]; then
+    BODY_FILE="$BODY_AT"
   fi
 fi
 
