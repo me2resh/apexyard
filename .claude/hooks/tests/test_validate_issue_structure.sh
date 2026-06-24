@@ -291,6 +291,55 @@ run_case "--body-file path with valid Feature body → pass" \
   0 "" \
   "gh issue create --title '[Feature] X' --body-file $BODY_FILE_PATH"
 
+# --- body-file: skip marker honoured (me2resh/apexyard#695) -----------------
+# An off-template epic body that carries the skip marker must bypass
+# validation when supplied via --body-file, exactly like the inline --body
+# case above.
+SKIP_FILE_PATH="$TMPDIR/skip-body.md"
+cat > "$SKIP_FILE_PATH" <<'EOF'
+free-form epic body, no required sections.
+<!-- validate-issue-structure: skip -->
+EOF
+
+run_case "--body-file with skip marker → bypass (#695)" \
+  0 "validate-issue-structure bypassed" \
+  "gh issue create --title '[Feature] epic via file' --body-file $SKIP_FILE_PATH"
+
+# --- body-file: missing required section still blocks -----------------------
+MISSING_FILE_PATH="$TMPDIR/missing-body.md"
+cat > "$MISSING_FILE_PATH" <<'EOF'
+## User Story
+As a user I want a thing.
+EOF
+
+run_case "--body-file missing Acceptance Criteria → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via file' --body-file $MISSING_FILE_PATH"
+
+# --- gh-api field form: -F body=@<path> (me2resh/apexyard#695) --------------
+# `gh api … -F body=@<file>` is the REST shape for posting an issue body from
+# a file. Pre-#695 the field-value path after the `@` sigil was never resolved
+# (the `-F` handler rejected any value containing `=`), AND a single-dash flag
+# after a quoted --title broke title extraction — so the skip marker and the
+# section checks were both blind to the file content. Cover skip-marker-honour
+# and missing-section-block across -F / --field / -f.
+
+run_case "-F body=@file with skip marker → bypass (#695)" \
+  0 "validate-issue-structure bypassed" \
+  "gh issue create --title '[Feature] epic via field' -F body=@$SKIP_FILE_PATH"
+
+run_case "-F body=@file missing Acceptance Criteria → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via field' -F body=@$MISSING_FILE_PATH"
+
+run_case "--field body=@file missing section → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via --field' --field body=@$MISSING_FILE_PATH"
+
+run_case "-f body=@file missing section → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via -f' -f body=@$MISSING_FILE_PATH"
+
 # --- Embedded double quotes in body — me2resh/apexyard#227 -----------------
 # Pre-227 the awk extractor's non-greedy `"([^"]*)"` regex truncated the
 # body at the FIRST embedded `"`, so any `##` heading past that point was
