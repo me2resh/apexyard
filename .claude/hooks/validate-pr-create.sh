@@ -471,8 +471,40 @@ fi
 # harness $PWD may still be a sibling worktree's directory). Falls back
 # to local HEAD when `--head` isn't passed — preserves today's behaviour
 # for anyone using the implicit-branch shape. See me2resh/apexyard#194.
+#
+# The local-HEAD fallback MUST resolve against the repo the command actually
+# runs in — not the hook's own cwd. The harness fires this PreToolUse hook
+# BEFORE the shell executes the command, so a `cd <repo> && gh pr create …`
+# prefix has NOT yet changed the working dir: the hook's cwd is still the ops
+# fork (on, e.g., `dev`). Without re-rooting, the fallback reads the ops-fork's
+# branch and false-blocks a PR for a *different* managed repo (e.g. "Branch
+# 'dev' missing ticket ID"). Same class as #669/#687 for the merge gates +
+# arch-PR hook. See me2resh/apexyard#693.
+#
+# Re-root via pr_cmd_cd_target (from _lib-pr-repo.sh, already sourced above as
+# $CMD_REPO is parsed): if the command begins with `cd <path> && …`, resolve
+# the fallback branch with `git -C <path>`. With no leading `cd` (or <path>
+# not a git tree), this is a no-op and the fallback stays byte-for-byte
+# equivalent to the pre-#693 behaviour. The `--head` path is unaffected, and
+# the PR-title check above is independent of cwd.
+BRANCH_DIR=""
+if command -v pr_cmd_cd_target >/dev/null 2>&1; then
+  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
+  if [ -n "$CD_TARGET" ]; then
+    CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$CD_TOPLEVEL" ]; then
+      BRANCH_DIR="$CD_TOPLEVEL"
+    fi
+  fi
+fi
 HEAD_FLAG=$(echo "$COMMAND" | sed -nE 's/.*--head[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-CURRENT_BRANCH="${HEAD_FLAG:-$(git branch --show-current 2>/dev/null)}"
+if [ -n "$HEAD_FLAG" ]; then
+  CURRENT_BRANCH="$HEAD_FLAG"
+elif [ -n "$BRANCH_DIR" ]; then
+  CURRENT_BRANCH=$(git -C "$BRANCH_DIR" branch --show-current 2>/dev/null)
+else
+  CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+fi
 if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BRANCH" != "master" ]; then
   # Release-cut branches are exempt — same recognition `validate-branch-name.sh`
   # added in me2resh/apexyard#168 / #169. Release branches don't carry a
