@@ -249,6 +249,8 @@ jobs:
           TF_IN_AUTOMATION: "true"
         run: |
           cd "${{ matrix.path }}"
+          # pipefail so `terraform plan | tee` reflects terraform's exit, not tee's
+          set -o pipefail
           max_retries=3
 
           echo "🔧 Initializing Terraform..."
@@ -379,7 +381,17 @@ jobs:
             fi
           done
 
-          terraform plan
+          echo "📋 Pre-apply plan..."
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform plan; then echo "✅ plan ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ plan retry $retry_count/$max_retries"; sleep 15
+            else
+              echo "❌ pre-apply plan failed after $max_retries attempts"; exit 1
+            fi
+          done
 
           retry_count=0
           while [ $retry_count -lt $max_retries ]; do
