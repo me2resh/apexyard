@@ -11,6 +11,7 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `dependency-audit.yml` | Guardian | Dependency vulnerabilities, outdated packages, licenses | Weekly, package changes |
 | `code-quality.yml` | Rex | TypeScript, ESLint, tests, build verification | Every PR |
 | `swift-ci.yml` | Rex | Swift Package Manager build + guarded test (macOS runner) | Every PR, push to default branch |
+| `terraform-ci.yml` | Platform | Terraform/Terramate AWS mono-repo: fmt/validate/tflint/tfsec → per-stack plan (PR comment) → apply on main (OIDC) | Every PR, push to main |
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
 | `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
@@ -173,6 +174,58 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 | 0–49 | Poor |
 
 **Fail conditions**: none by default (warning only). Uncomment the threshold check to fail hard.
+
+---
+
+### Terraform CI (`terraform-ci.yml`)
+
+**Role**: Platform Engineer (Adel)
+
+**For**: an AWS Terraform mono-repo orchestrated with [Terramate](https://terramate.io/), with per-stack remote state and keyless OIDC auth to AWS. It is a **copy-and-customize** template — unlike the Node pipelines, it has `# CUSTOMIZE` markers you must edit before it runs.
+
+**Pipeline shape**:
+
+```
+fmt -check ─┐
+validate    ├─► detect changed stacks ─► PLAN (matrix per stack) ─► APPLY (matrix per stack)
+tflint      │     (Terramate)              • comments plan on PR     • main branch only
+tfsec       ┘                              • plan-only on branches   • OIDC, retry-on-lock
+```
+
+**Checks performed**:
+
+- `terraform fmt -check -recursive`
+- `terraform validate` on changed stacks (`terramate run --changed`)
+- `tflint` on changed stacks
+- `tfsec` on changed stacks (soft-fail by default — see customize note)
+- Change-detection via `terramate list --changed`, fanned out to a per-stack plan/apply matrix with isolated state + retry-on-lock-contention
+
+**Branch behaviour**:
+
+- **Feature branches / PRs** — plan only; the rendered plan is posted as a PR comment per stack. Nothing is applied.
+- **`main`** — plan, then `terraform apply -auto-approve` per changed stack.
+
+**Required secrets / vars** (set in the consuming repo):
+
+| Name | What |
+|------|------|
+| `AWS_CI_ROLE_ARN` (secret) | Full ARN of the IAM role GitHub Actions assumes via OIDC. **Never hardcode an account ID in the workflow.** |
+| `AWS_REGION` (env in file) | Your AWS region — edit the `env:` block. |
+| Provider tokens (secrets) | Any provider/`TF_VAR_*` your stacks need (e.g. a DNS provider token) — wire them in the commented `env:` of the plan/apply steps. |
+
+**Prerequisites (NOT provisioned by this template)**:
+
+- The OIDC IAM role itself must already exist in your AWS account, with a trust policy scoped to your repo. The pipeline *assumes* the role; it does not create it.
+- A Terraform backend (e.g. S3 + DynamoDB lock) configured per stack.
+- Terramate stacks defined in the repo.
+
+**`# CUSTOMIZE` points** (search the file):
+
+- Tool versions (`TERRAMATE_VERSION`, `TF_VERSION`), `AWS_REGION`, `AWS_CI_ROLE_ARN`.
+- The matrix-JSON `jq` block — adjust to your stack-path layout (the default assumes `<root>/<environment>/<account-slug>/<stack>`).
+- The optional **stack-exclusion** filter in `detect-stacks` (`EXCLUDE` grep pattern).
+- The optional **pre-plan/apply build hook** (e.g. building Lambda bundles) — commented out; delete if unused.
+- `tfsec --soft-fail` — drop the flag to make security findings block.
 
 ---
 
