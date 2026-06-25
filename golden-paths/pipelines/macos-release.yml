@@ -72,6 +72,8 @@ jobs:
           set -euo pipefail
           CERT_PATH="$RUNNER_TEMP/cert.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          # Guarantee the decoded cert is shredded even if an import step fails.
+          trap 'rm -f "$CERT_PATH"' EXIT
 
           echo "$CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
 
@@ -140,6 +142,8 @@ jobs:
         run: |
           set -euo pipefail
           KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          # Guarantee the decoded API key is shredded even if notarytool fails.
+          trap 'rm -f "$KEY_PATH"' EXIT
           echo "$AC_API_KEY_P8_BASE64" | base64 --decode > "$KEY_PATH"
 
           # notarytool requires a zip (or dmg/pkg) of the .app to submit.
