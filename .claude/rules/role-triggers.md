@@ -172,4 +172,17 @@ Tests live at `.claude/hooks/tests/test_detect_role_trigger.sh` and cover the th
 
 ---
 
+### The Contrarian (utility agent — premise-level adversary)
+
+Naqid (The Contrarian) is a **utility agent**, not a department role — like Rex (`code-reviewer`) and Tariq (`solution-architect`), it isn't tied to an SDLC phase and has no department file under `roles/`. It challenges the **premise** of an idea/feature/spec/decision/plan, and is **advisory-only** (no marker, no gate). It does **not** auto-fire on diffs — challenging a premise is a human-initiated act, so **prompted activation** is the primary path. The phrases below are mechanically detected by `detect-role-trigger.sh` (which emits an advisory banner suggesting `/challenge`).
+
+| Signal | Activate |
+|--------|----------|
+| `/challenge <target>` | The Contrarian (Naqid) |
+| "play devil's advocate on …" / "challenge this" / "poke holes in …" / "what's the case against …" / "steelman then attack …" | The Contrarian (Naqid) |
+
+**Optional advisory offer (never forced).** At high-stakes moments — a new AgDR via `/decide`, a new PRD via `/write-spec`, or plan-mode exit on a large call — you MAY surface a one-line nudge offering to run `/challenge` first. The operator opts in; never auto-run it, and never let its verdict block work (it informs, it doesn't veto). See `.claude/agents/contrarian.md`, `.claude/skills/challenge/SKILL.md`, and AgDR-0078.
+
+---
+
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

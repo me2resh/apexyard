@@ -328,6 +328,42 @@ else
   PASS=$((PASS+1))
 fi
 
+# --- The Contrarian (utility agent, prompted phrase family — AgDR-0078) -------
+
+# 6a. "play devil's advocate" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "play devil's advocate on adding a second database" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'play devil's advocate' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\).*subagent_type: contrarian" "$in"
+
+# 6b. "poke holes in" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "poke holes in this plan before we commit" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'poke holes in' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\)" "$in"
+
+# 6c. "challenge this" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "challenge this idea" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'challenge this' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\)" "$in"
+
+# 6d. An ordinary build prompt does NOT fire The Contrarian.
+in=$(jq -nc \
+  --arg prm "implement the nav filter feature" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+got=$(printf '%s' "$in" | bash "$HOOK" 2>&1 >/dev/null)
+if echo "$got" | grep -q "The Contrarian"; then
+  echo "FAIL [prompt trigger: build prompt must not fire The Contrarian]" >&2
+  FAIL=$((FAIL+1)); FAILED="${FAILED}contrarian-noise "
+else
+  echo "PASS [prompt trigger: build prompt does not fire The Contrarian]"
+  PASS=$((PASS+1))
+fi
+
 # --- Summary -----------------------------------------------------------------
 
 echo ""
