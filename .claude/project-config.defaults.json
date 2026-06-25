@@ -29,6 +29,11 @@
       "Investigation": ["Trigger", "Hypothesis being tested", "Method", "Findings", "Conclusion", "Follow-up actions"]
     },
     "skip_marker": "<!-- validate-issue-structure: skip -->",
+    "_schema_exempt_skills_comment": "Skills that file [Feature]/[Bug] issues UPSTREAM (me2resh/apexyard) using their own body template, which is deliberately distinct from this project's required_sections schema. When one of these is the active filing skill (marker at .claude/session/active-issue-skill), validate-issue-structure.sh skips the project schema for that create — they are the trusted producers of those bodies. Narrow by design: a project /feature or /bug writes its own name to the marker and is NOT exempted. See me2resh/apexyard#712.",
+    "schema_exempt_skills": [
+      "request-apexyard-feature",
+      "report-apexyard-bug"
+    ],
     "_bootstrap_skills_comment": "Skills that run BEFORE any ticket can exist (fork bootstrap, project handover, framework upstream-sync). When one of these is active (marker at .claude/session/active-bootstrap), require-active-ticket.sh exempts the gate. The marker is written by the skill itself on entry, cleared on completion, AND reset at SessionStart so a stale marker can't carry over. See AgDR-0011-bootstrap-skill-exemption.md and me2resh/apexyard#150.",
     "bootstrap_skills": [
       "setup",
