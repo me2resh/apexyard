@@ -305,7 +305,7 @@ Thanks to everyone who has helped forge ApexYard:
   </tr>
 </table>
 
-<sub>Plus Dependabot and AI agents (Claude) on co-authored commits. PRs from external contributors are squash-merged, so the GitHub commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
+<sub>External contributors' PRs are squash-merged, so GitHub's commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
 
 ## License
 
