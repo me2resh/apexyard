@@ -576,7 +576,16 @@ tracker_create() {
   local kind
   kind=$(tracker_kind "$repo")
   case "$kind" in
-    none) return 1 ;;
+    none)
+      # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
+      # rendered ticket body to stdout so the operator can file it in their
+      # external system, and return 3 (a documented "shape-only / file
+      # externally" code) so callers don't misreport it as a CLI/auth error.
+      if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+        cat "$body_file"
+      fi
+      return 3
+      ;;
   esac
 
   local raw rc

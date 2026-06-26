@@ -95,7 +95,7 @@ carries `main → dev`, so it is always current on `dev`:
 ```bash
 # Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
 # /release-sync, so always the canonical current version on dev).
-FW_VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
+FW_VERSION=$(grep -m1 -oE '^## \[v?[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
   | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 if [ -n "$FW_VERSION" ]; then
   FW_VERSION="v$FW_VERSION"          # keep the `v` prefix the field renders today

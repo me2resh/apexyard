@@ -205,12 +205,21 @@ BODY
 # tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
 # It is gated by require-skill-for-issue-create.sh; the active-issue-skill
 # marker written in step 0 keeps this call allowed.
-result="$(tracker_create "{owner/repo}" "[{type}] {title}" "$body_file" "{priority}")" || {
-  rm -f "$body_file"
+result="$(tracker_create "{owner/repo}" "[{type}] {title}" "$body_file" "{priority}")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 3 ]; then
+  # tracker.kind=none (shape-only): no tracker to create in. tracker_create
+  # printed the rendered ticket body to stdout — surface it for manual /
+  # external filing instead of a non-existent CLI/auth failure.
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  echo "File this in your external system (e.g. Jira/Linear via MCP):" >&2
+  printf '%s\n' "$result"
+  exit 0
+elif [ "$rc" -ne 0 ] || [ -z "$result" ]; then
   echo "Ticket creation failed — check the tracker CLI / auth. Nothing was created." >&2
   exit 1
-}
-rm -f "$body_file"
+fi
 ```
 
 ### 8. Return the result

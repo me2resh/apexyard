@@ -113,7 +113,8 @@ assert_eq "tracker_create gh failure → empty stdout"  ""  "$out"
 
 rm -rf "$SB"
 
-# Failure contract — kind=none disables creation → non-zero exit, no CLI call.
+# Shape-only contract — kind=none does not call a CLI; it returns 3 and emits
+# the body (if given) to stdout for manual/external filing. NOT a failure path.
 SBN=$(make_sandbox)
 cat > "$SBN/.claude/project-config.defaults.json" <<'JSON'
 { "tracker": { "kind": "none" } }
@@ -124,11 +125,16 @@ JSON
   . "$SBN/.claude/hooks/_lib-tracker.sh"
   tracker_clear_cache
   out=$(tracker_create "o/r" "t"); rc=$?
-  printf '%s\t%s\n' "$rc" "$out"
+  bf=$(mktemp); printf 'TICKET BODY LINE\n' > "$bf"
+  out_body=$(tracker_create "o/r" "t" "$bf"); rcb=$?
+  rm -f "$bf"
+  printf '%s|%s|%s|%s\n' "$rc" "$out" "$rcb" "$out_body"
 ) > "$SBN/r"
-IFS=$'\t' read -r n_rc n_out < "$SBN/r"
-assert_eq "tracker_create kind=none → non-zero exit" "1" "$n_rc"
-assert_eq "tracker_create kind=none → empty stdout"  ""  "$n_out"
+IFS="|" read -r n_rc n_out nb_rc nb_out < "$SBN/r"
+assert_eq "tracker_create kind=none → exit 3 (shape-only, not a CLI error)" "3" "$n_rc"
+assert_eq "tracker_create kind=none (no body) → empty stdout" "" "$n_out"
+assert_eq "tracker_create kind=none (with body) → exit 3" "3" "$nb_rc"
+assert_eq "tracker_create kind=none (with body) → emits body for manual filing" "TICKET BODY LINE" "$nb_out"
 rm -rf "$SBN"
 
 # Case 4 — per-project glab override dispatches glab (needs a YAML parser).
