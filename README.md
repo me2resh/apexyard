@@ -296,7 +296,16 @@ For larger changes (new skills, rule changes, workflow redesigns), open a discus
 
 Thanks to everyone who has helped forge ApexYard:
 
-[![Contributors](https://contrib.rocks/image?repo=me2resh/apexyard)](https://github.com/me2resh/apexyard/graphs/contributors)
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/me2resh"><img src="https://github.com/me2resh.png?size=100" width="64" alt="me2resh"><br><sub><b>me2resh</b></sub></a></td>
+    <td align="center"><a href="https://github.com/AbdElrahmaN31"><img src="https://github.com/AbdElrahmaN31.png?size=100" width="64" alt="AbdElrahmaN31"><br><sub>AbdElrahmaN31</sub></a></td>
+    <td align="center"><a href="https://github.com/HishamM1"><img src="https://github.com/HishamM1.png?size=100" width="64" alt="HishamM1"><br><sub>HishamM1</sub></a></td>
+    <td align="center"><a href="https://github.com/tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" alt="tifa64"><br><sub>tifa64</sub></a></td>
+  </tr>
+</table>
+
+<sub>Plus Dependabot and AI agents (Claude) on co-authored commits. PRs from external contributors are squash-merged, so the GitHub commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
 
 ## License
 
