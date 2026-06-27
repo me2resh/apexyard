@@ -209,6 +209,7 @@ case2() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_output=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -235,6 +236,7 @@ case2b() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     board_move_card 42 "review" 2>/dev/null
     rc=$?
@@ -260,6 +262,7 @@ case2c() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     board_move_card 42 "measurement" 2>/dev/null
     rc=$?
@@ -285,6 +288,7 @@ case3() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -310,6 +314,7 @@ case4() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -336,6 +341,7 @@ case5() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -363,6 +369,7 @@ case6() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -390,6 +397,7 @@ JSON
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "in_progress" 2>&1)
     rc=$?
@@ -414,6 +422,7 @@ case8() {
     cd "$sb" || exit 1
     export APEXYARD_OPS_DISABLE_PIN=1
     unset _CONFIG_CACHE _CONFIG_ROOT_CACHE 2>/dev/null || true
+    # shellcheck source=/dev/null
     . "$LIB"
     stderr_out=$(board_move_card 42 "nonexistent_key" 2>&1)
     rc=$?
