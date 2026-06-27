@@ -188,7 +188,22 @@ suggested_branch=<branch>
 started_at=<ISO-8601>
 ```
 
-### 6. Confirm to the User
+### 6. Move the board card to "In progress" (opt-in)
+
+After writing the marker, call `board_move_card` so the GitHub Projects board
+reflects the ticket being picked up. This is a no-op unless `enable_auto_moves`
+is `true` in the fork's `github_projects` config.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-project-board.sh"
+board_move_card "<number>" "in_progress"
+```
+
+`board_move_card` degrades gracefully: if the board is not configured, the item
+is not on the board, or `gh project` scope is absent, it warns to stderr and
+returns 0 — it never blocks the ticket start.
+
+### 7. Confirm to the User
 
 Output a two-line confirmation that names the marker path so the user sees which scope this ticket is active on:
 
