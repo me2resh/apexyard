@@ -26,6 +26,11 @@ You are a build-class sub-agent. You cannot nest the Agent tool, so you cannot s
 
 **DO:** Report your build results plainly — what you designed, what deliverables you produced, what acceptance criteria you verified. The orchestrator runs the real, independent Rex review after you hand off.
 
+## Design tooling (on demand)
+
+- Sync the design system to **claude.ai/design** via the **`/design-sync`** skill (built-in `DesignSync` tool; authorize via claude.ai login / `/design-login`, not `.mcp.json`). Incremental, one component at a time.
+- Use the **figma** plugin only when a Figma source exists. Don't auto-load; invoke when the task needs it. See the role file's "Design Tooling" section.
+
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*

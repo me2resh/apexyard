@@ -30,6 +30,10 @@ You are a build-class sub-agent. You cannot nest the Agent tool, so you cannot s
 
 **DO:** Report your build results plainly — what you built, what tests you ran, what passed or failed. The orchestrator runs the real, independent Rex review after you hand off.
 
+## Design tooling (on demand)
+
+- When building UI, use the **`frontend-design`** plugin (`/plugin install frontend-design@claude-plugins-official`) for non-generic, production-grade component code. Use the **figma** plugin only when a Figma source exists. Build against the design system the UI Designer publishes to claude.ai/design. Don't auto-load; invoke when the task needs it. See the role file's "Design Tooling" section.
+
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
