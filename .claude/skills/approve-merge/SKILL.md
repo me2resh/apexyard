@@ -198,7 +198,27 @@ After a successful merge, capture and report the merge commit SHA:
 gh pr view <pr> --repo <owner/repo> --json mergeCommit -q '.mergeCommit.oid'
 ```
 
-### 8. Report
+### 8. Move the board card to "Measurement" (opt-in)
+
+After a successful merge, call `board_move_card` to signal that the work has
+shipped and is entering the measurement/observe phase. This is a no-op unless
+`enable_auto_moves` is `true` in the fork's `github_projects` config.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-project-board.sh"
+board_move_card "<pr>" "measurement"
+```
+
+`board_move_card` degrades gracefully — any failure warns to stderr and returns
+0. It never blocks the merge report.
+
+> **Tip — GitHub-native "Done" transition:** the "PR merged → Done" and
+> "Item closed → Done" built-in Workflows in GitHub Projects (Settings →
+> Workflows) handle the final Done hop for free. Enable them in the GitHub UI
+> and your board will reflect closed tickets automatically without any
+> additional hook wiring.
+
+### 9. Report
 
 Single-line confirmation (include the merge strategy used so the operator can see it):
 
@@ -218,7 +238,7 @@ If the merge gate blocked, surface the exact error and tell the user how to retr
 ✗ Merge blocked: <reason from gate>. Marker still on disk at <CEO path from review_marker_path> — run `gh pr merge <pr> --repo <owner/repo> <strategy> --delete-branch` once the issue is fixed (no need to re-invoke /approve-merge).
 ```
 
-### 9. Optional: post-merge child-issue closure
+### 10. Optional: post-merge child-issue closure
 
 If the PR's merge commit / PR body contains `Closes <owner/repo>#<N>` references that GitHub's auto-closer didn't catch (squash merges with cross-repo refs sometimes silently miss), you can offer to close them with a comment. This is **out of scope for the default flow** — only do it if the user explicitly asks. Don't auto-close child issues; that's another externally-visible action that needs its own per-issue confirmation.
 

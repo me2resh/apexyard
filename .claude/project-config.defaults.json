@@ -203,5 +203,18 @@
     },
     "threshold": 60,
     "timeout_minutes": 90
+  },
+
+  "github_projects": {
+    "_comment": "GitHub Projects (v2) board integration. Set enable_auto_moves=true to auto-move cards on SDLC lifecycle events (start-ticket → In progress, PR created → In review, merge → Measurement). board_number and owner must identify your project board. status_map keys map to the option labels on your board's Status single-select field — adjust them to match your board's column names. Override this whole block in .claude/project-config.json. See .claude/hooks/_lib-project-board.sh and me2resh/apexyard#725.",
+    "owner": "",
+    "board_number": 0,
+    "enable_auto_moves": false,
+    "status_field_name": "Status",
+    "status_map": {
+      "in_progress": "In progress",
+      "review": "In review",
+      "measurement": "Measurement"
+    }
   }
 }
