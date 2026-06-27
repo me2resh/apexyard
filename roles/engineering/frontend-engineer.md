@@ -101,6 +101,14 @@ Before creating a PR:
 - [ ] Tablet viewport works
 - [ ] Desktop viewport works
 
+## Design Tooling
+
+Invoke **on demand** (don't auto-wire into hooks — context cost; only matters during UI work):
+
+- **`frontend-design` plugin** — use it when building UI so Claude declares design intent first and writes non-generic, production-grade component code (`/plugin install frontend-design@claude-plugins-official`; auto-activates on "build a UI", or invoke `/frontend-design`). It's a code-quality skill, not a visual tool.
+- **figma** plugin — *only when a Figma source exists* (`/plugin install figma@claude-plugins-official`) to pull component specs/reference. Don't require it.
+- For the **design system itself**, consume what the UI Designer publishes to **claude.ai/design** (see their role's Design Tooling) — you build against it, you don't own it.
+
 ## Escalate When
 
 - Design system doesn't cover use case
