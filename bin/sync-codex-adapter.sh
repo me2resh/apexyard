@@ -80,6 +80,15 @@ rewrite_codex_paths() {
   ' "$@"
 }
 
+map_codex_model() {
+  case "$1" in
+    opus) echo "gpt-5.5" ;;
+    sonnet) echo "gpt-5.4" ;;
+    haiku) echo "gpt-5.4-mini" ;;
+    *) echo "$1" ;;
+  esac
+}
+
 copy_tree() {
   local src="$1" dst="$2"
   [ -d "$src" ] || return 0
@@ -108,6 +117,7 @@ generate_agent_toml() {
   name=$(awk -F': ' '/^name: / { print $2; exit }' "$src")
   description=$(awk -F': ' '/^description: / { sub(/^description: /, ""); print; exit }' "$src")
   model=$(awk -F': ' '/^model: / { print $2; exit }' "$src")
+  [ -n "$model" ] && model=$(map_codex_model "$model")
   body=$(awk 'BEGIN { front=0; body=0 } /^---$/ { front++; if (front == 2) { body=1; next } } body { print }' "$src")
   body=$(printf '%s\n' "$body" | perl -0pe '
     s/\.claude\/skills/.agents\/skills/g;
