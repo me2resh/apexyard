@@ -113,6 +113,7 @@ assert_contains "$TMPROOT/.codex/hooks.json" '$HOME/.codex/apexyard' "hooks.json
 assert_not_contains "$TMPROOT/.codex/hooks.json" "$TMPROOT" "hooks.json has no absolute fixture path"
 assert_not_contains "$TMPROOT/.codex/hooks.json" ".claude" "hooks.json has no .claude paths"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'name = "backend-engineer"' "agent TOML includes name"
+assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'model = "gpt-5.4"' "agent TOML maps Claude model to Codex model"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" ".codex/rules/workflow-gates.md" "agent instructions rewrite rule paths"
 assert_not_contains "$TMPROOT/.codex/agents/backend-engineer.toml" "---" "agent TOML excludes YAML frontmatter"
 

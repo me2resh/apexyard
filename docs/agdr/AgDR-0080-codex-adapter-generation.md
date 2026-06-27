@@ -17,6 +17,8 @@
   runtime changes.
 - The framework already prefers plain shell and markdown for portable tooling,
   so a generator fits the existing maintenance model.
+- Claude agent model labels (`opus`, `sonnet`, `haiku`) are not valid Codex
+  model identifiers, so the adapter must translate them during generation.
 
 ## Options Considered
 
@@ -32,7 +34,8 @@ Chosen: **generate the Codex adapter from `.claude/`**, because `.claude/` is th
 existing canonical runtime and the main risk is drift, not lack of files. The
 generator mirrors skills, hooks, agents, rules, migrations, registries, and
 config defaults into `.agents/` and `.codex/`, rewrites repo-local references to
-Codex-facing paths, and exposes `--check` for drift detection.
+Codex-facing paths, maps Claude model labels to Codex model labels, and exposes
+`--check` for drift detection.
 
 ## Consequences
 
@@ -41,6 +44,8 @@ Codex-facing paths, and exposes `--check` for drift detection.
   filesystem paths.
 - Generated output can stay local/untracked while the format settles; a future
   PR can choose to track it and enforce `--check` in CI.
+- The code reviewer maps from `opus` to `gpt-5.5`, preserving the original
+  "strongest reviewer" intent in a Codex-native runtime.
 - The generator becomes the compatibility boundary. If Codex changes its agent,
   hook, or skill formats, this script is where the adapter evolves.
 

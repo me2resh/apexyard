@@ -27,6 +27,14 @@ During generation, repo-local references are rewritten from `.claude/...` to the
 Codex-facing paths. The generated hook wiring remains relocatable: commands find
 the ops root at runtime instead of embedding the local clone path.
 
+Agent model labels are translated to Codex-native equivalents:
+
+| Claude label | Codex label |
+|--------------|-------------|
+| `opus` | `gpt-5.5` |
+| `sonnet` | `gpt-5.4` |
+| `haiku` | `gpt-5.4-mini` |
+
 ## Drift Check
 
 ```bash
