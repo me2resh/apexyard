@@ -8,24 +8,32 @@
 # convention can override the protected list via
 # `.claude/project-config.json` → `.git.protected_branches[]`.
 #
-# WORKTREE-SAFE (me2resh/apexyard#549)
-# -------------------------------------
+# WORKTREE-SAFE (me2resh/apexyard#549, #727)
+# ------------------------------------------
 # Previously both the push-check and the commit-check resolved the current
 # branch via `git branch --show-current` against the hook's cwd (the harness's
 # primary checkout). When the operator runs a command in a separate git worktree
 # while the primary checkout sits on a protected branch, the old code
 # false-blocked legitimate feature-branch work.
 #
-# Fix:
+# Fix (#549):
 #   Push:   reuse `_lib-extract-push-ref.sh` (already used by
 #           validate-branch-name.sh for the same reason) to read the DESTINATION
-#           branch directly from the push command. Tag pushes are no-ops. Falls
-#           back to local HEAD only when no ref is present in the command (e.g.
-#           bare `git push` relying on upstream tracking).
+#           branch directly from the push command. Tag pushes are no-ops.
 #   Commit: detect the `cd <path> && git commit` shell compound pattern and run
 #           `git -C <path> branch --show-current` against the TARGET worktree.
 #           Falls back to the session cwd for plain `git commit` (no `cd`
 #           prefix) — preserving the original behaviour for the normal case.
+#
+# Fix (#727) — push fallback when no explicit ref is given:
+#   `git push -u origin` (and `--set-upstream`) without an explicit branch
+#   name carries no refspec, so extract_push_ref() returns empty and the old
+#   code fell back to `git branch --show-current` in the HOOK's session cwd.
+#   In a worktree session where the primary checkout is on `dev` but the
+#   active worktree is on a feature branch, this falsely blocked a legitimate
+#   push.  Fix: when the ref is absent and the command has a `cd <path>`
+#   prefix, resolve the current branch from that path (same pattern used by
+#   the commit section above).
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -82,8 +90,29 @@ if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   if [ -n "$PUSH_DST" ]; then
     TARGET_PUSH_BRANCH="$PUSH_DST"
   else
-    # Bare `git push` / no explicit ref — fall back to local HEAD.
-    TARGET_PUSH_BRANCH=$(git branch --show-current 2>/dev/null)
+    # No explicit ref in the command (e.g. `git push -u origin` or bare `git
+    # push`): the push targets the current branch of the repo the command runs
+    # in.  For a compound `cd <path> && git push -u origin` (the worktree case
+    # — #727), we must resolve the branch of the TARGET worktree via the `cd`
+    # destination, NOT the hook's session cwd.  Without this, a developer on a
+    # feature-branch worktree who runs `git push -u origin` is falsely blocked
+    # because the hook's session cwd (the primary checkout) may sit on a
+    # protected branch like `dev`.
+    #
+    # This mirrors the same pattern used in the commit section below for #549.
+    PUSH_WORKTREE_PATH=""
+    if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+      PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
+        | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+        | tail -n 1 \
+        | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+    fi
+    if [ -n "$PUSH_WORKTREE_PATH" ]; then
+      TARGET_PUSH_BRANCH=$(git -C "$PUSH_WORKTREE_PATH" branch --show-current 2>/dev/null)
+    else
+      # Plain `git push -u origin` with no `cd` prefix — use session cwd.
+      TARGET_PUSH_BRANCH=$(git branch --show-current 2>/dev/null)
+    fi
   fi
 
   if [ -n "$TARGET_PUSH_BRANCH" ] && echo "$TARGET_PUSH_BRANCH" | grep -qE "^(${PROTECTED})$"; then
