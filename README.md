@@ -28,6 +28,16 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
+## Codex Adapter
+
+ApexYard can generate a Codex-facing adapter from the canonical `.claude/` runtime:
+
+```bash
+bin/sync-codex-adapter.sh
+```
+
+The generator mirrors skills, agents, hooks, rules, and hook wiring into `.agents/` and `.codex/` without embedding local clone paths. See [`docs/codex-adapter.md`](docs/codex-adapter.md) for the tracking policy, AgDR, and drift-check workflow.
+
 ## What's inside
 
 ApexYard is a set of plain-text primitives Claude Code reads automatically — no runtime, no service:
