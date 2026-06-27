@@ -1,16 +1,25 @@
 <p align="center">
-  <a href="https://yard.apexscript.com"><img src="https://yard.apexscript.com/og/index.png" alt="ApexYard — where projects get forged" width="640"></a>
+  <a href="https://yard.apexscript.com"><img src="https://yard.apexscript.com/brand/apexyard-avatar-512.png" alt="ApexYard" width="88"></a>
 </p>
 
-# ApexYard
+<h1 align="center">ApexYard</h1>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Built for Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2)](https://claude.com/claude-code) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+<p align="center">
+  <strong>Ship AI-built software like a real engineering team.</strong><br>
+  <em>Where projects get forged.</em>
+</p>
 
-**Where projects get forged.**
+<p align="center">
+  <a href="https://github.com/me2resh/apexyard/releases"><img src="https://img.shields.io/github/v/release/me2resh/apexyard?color=2F6DF6&label=release" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2" alt="Built for Claude Code"></a>
+  <a href="https://yard.apexscript.com"><img src="https://img.shields.io/badge/site-yard.apexscript.com-2F6DF6" alt="Site"></a>
+  <a href="https://github.com/me2resh/apexyard/stargazers"><img src="https://img.shields.io/github/stars/me2resh/apexyard?style=social" alt="Stars"></a>
+</p>
 
 A multi-project ops repo where your projects reference each other, learn from shared experience, and ship production-ready under a strict SDLC. Built for founders who ship alone, or companies standing up AI-enabled squads.
 
-You don't *add* apexyard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
+You don't *add* ApexYard to a project — projects get forged *inside* it. One ops repo. Every product. Shared memory. Strict gates. Production-ready MVPs.
 
 Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
 
@@ -287,7 +296,16 @@ For larger changes (new skills, rule changes, workflow redesigns), open a discus
 
 Thanks to everyone who has helped forge ApexYard:
 
-[![Contributors](https://contrib.rocks/image?repo=me2resh/apexyard)](https://github.com/me2resh/apexyard/graphs/contributors)
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/me2resh"><img src="https://github.com/me2resh.png?size=100" width="64" alt="me2resh"><br><sub><b>me2resh</b></sub></a></td>
+    <td align="center"><a href="https://github.com/AbdElrahmaN31"><img src="https://github.com/AbdElrahmaN31.png?size=100" width="64" alt="AbdElrahmaN31"><br><sub>AbdElrahmaN31</sub></a></td>
+    <td align="center"><a href="https://github.com/HishamM1"><img src="https://github.com/HishamM1.png?size=100" width="64" alt="HishamM1"><br><sub>HishamM1</sub></a></td>
+    <td align="center"><a href="https://github.com/tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" alt="tifa64"><br><sub>tifa64</sub></a></td>
+  </tr>
+</table>
+
+<sub>External contributors' PRs are squash-merged, so GitHub's commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
 
 ## License
 
