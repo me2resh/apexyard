@@ -45,6 +45,8 @@
 #   These free built-ins handle the closed/merged → Done hop so this lib
 #   doesn't have to. Enable them in the GitHub UI; no config here is needed.
 #
+# Decision record: docs/agdr/AgDR-0080-board-automation-attach-points.md
+#
 # Sourced by hooks and skills; never executed directly. Use the source-guard
 # so multiple sources in one shell process are idempotent.
 
@@ -95,9 +97,9 @@ board_move_card() {
   board_number=$(config_get '.github_projects.board_number' 2>/dev/null)
   status_field_name=$(config_get_or '.github_projects.status_field_name' 'Status')
 
-  if [ -z "$owner" ] || [ "$owner" = "null" ] || [ "$owner" = "" ] || \
+  if [ -z "$owner" ] || [ "$owner" = "null" ] || \
      [ -z "$board_number" ] || [ "$board_number" = "null" ] || \
-     [ "$board_number" = "0" ] || [ "$board_number" = "" ]; then
+     [ "$board_number" = "0" ]; then
     echo "WARN [board_move_card]: github_projects.owner or board_number not configured; skipping card move for #${item_ref}." >&2
     return 0
   fi
@@ -149,8 +151,10 @@ board_move_card() {
 
   # ---- Resolve project item ID --------------------------------------------
   # `gh project item-list` returns {"items": [{"id": "PVTI_xxx", "content": {"number": N, ...}}]}
+  # Pass --limit 200 so boards with >30 items (the gh default page size) don't
+  # silently miss the target card. 200 is the GitHub Projects API maximum per page.
   local item_json item_id
-  item_json=$(gh project item-list "$board_number" --owner "$owner" --format json 2>/dev/null)
+  item_json=$(gh project item-list "$board_number" --owner "$owner" --format json --limit 200 2>/dev/null)
   item_id=$(printf '%s' "$item_json" \
     | jq -r ".items[] | select(.content.number == ${item_ref}) | .id" 2>/dev/null)
   if [ -z "$item_id" ] || [ "$item_id" = "null" ]; then
