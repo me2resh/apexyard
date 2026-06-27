@@ -587,7 +587,7 @@ else
     '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')
   got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
   got_rc=$?
-  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "VIOLATION"; then
     echo "PASS [warn-hook: Write to rex.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
   else
     echo "FAIL [warn-hook: Write to rex.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
@@ -599,7 +599,7 @@ else
     '{tool_name:"Bash", tool_input:{command:$c}}')
   got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
   got_rc=$?
-  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "ADVISORY"; then
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "VIOLATION"; then
     echo "PASS [warn-hook: Bash echo to ceo.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
   else
     echo "FAIL [warn-hook: Bash echo to ceo.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
