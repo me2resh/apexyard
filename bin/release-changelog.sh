@@ -67,9 +67,13 @@ else
   # release, `/release-sync` lands a "sync: merge main into dev after <ver>"
   # commit (and its "...sync/main-to-dev-after-<ver>" PR merge) on dev. Commits
   # AFTER the most recent such marker are exactly the unreleased delta.
+  # Patterns are VERSION-ANCHORED so they only match real sync commits, never a
+  # prose mention of the convention in some other commit body (e.g. this very
+  # fix's commit, or a doc PR) — an unanchored 'sync/main-to-dev-after' would
+  # let a later commit hijack the boundary and DROP unreleased work (#749 review).
   SYNC=$(git log "$HEAD_REF" --max-count=1 --pretty=format:'%H' \
-           --grep='^sync: merge main into dev' \
-           --grep='sync/main-to-dev-after' 2>/dev/null || true)
+           --grep='^sync: merge main into dev after v[0-9]' \
+           --grep='sync/main-to-dev-after-v[0-9]' 2>/dev/null || true)
   if [ -n "$SYNC" ]; then
     LOG_RANGE="${SYNC}..${HEAD_REF}"
   else

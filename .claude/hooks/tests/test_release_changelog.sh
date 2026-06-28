@@ -266,6 +266,21 @@ out=$(run_test '
 ')
 contains "fallback still lists the delta" "first feature since tag" "$out"
 
+# ── Test: #737 grep is version-anchored — a prose mention can't hijack the boundary ──
+# A commit AFTER the real sync whose subject merely mentions the convention must
+# NOT be treated as the boundary. With an unanchored grep it would win
+# --max-count=1, set LOG_RANGE=<that>..HEAD, and drop the unreleased delta.
+echo "--- #737 version-anchored grep (no prose false-positive) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v9.0.0
+  mc "sync: merge main into dev after v9.0.0 release"
+  mc "feat(#900): document the sync/main-to-dev-after convention"
+  PREV_TAG="v9.0.0" HEAD_REF="HEAD" VERSION="v9.1.0" DATE="2026-06-28" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "feat mentioning the unversioned string still included" "document the sync/main-to-dev-after convention" "$out"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""
