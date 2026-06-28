@@ -16,6 +16,14 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+# Normalize backslash line-continuation sequences so multi-line gh commands
+# parse as a single logical line for all subsequent flag extraction.
+# Replaces every '\<newline>' pair with a single space.
+# Fixes apexyard#743 Bug 2: without normalization, a --repo value split onto
+# its own continuation line could be mis-extracted (the trailing '\' captured
+# instead of the repo slug, yielding garbled TRACKER_REPO like "(hook)").
+COMMAND="${COMMAND//$'\\\n'/ }"
+
 # Parse --repo / -R from the gh command for cross-repo PR creation.
 # Handles: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.
 # Source _lib-pr-repo.sh when available (DRY — it owns the canonical parser).
@@ -46,10 +54,31 @@ else
   fi
 fi
 
-# Only check on gh pr create
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
+# Extract the cd-target early so it is available for --body-file path
+# resolution below AND for the branch-name fallback near the end.
+# pr_cmd_cd_target is provided by _lib-pr-repo.sh, sourced above.
+CD_TARGET=""
+if command -v pr_cmd_cd_target >/dev/null 2>&1; then
+  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
+fi
+
+# Gate: only validate when the COMMAND HEAD is 'gh pr create'.
+#
+# Checking the raw command string (the pre-#743 approach) fires on any command
+# whose --body inline content happens to mention "gh pr create" — for example,
+# a bug-report filed via 'gh issue create --body "example: gh pr create ..."'.
+# Stripping the body payload (--body / --body-file / -F and everything after)
+# before the gate check means only the actual command verb is tested.
+# Fixes apexyard#743 Bug 3.
+_cmd_for_gate=$(printf '%s' "$COMMAND" \
+  | sed -E 's/[[:space:]]--body-file[[:space:]].*//' \
+  | sed -E 's/[[:space:]]--body[[:space:]].*//' \
+  | sed -E 's/[[:space:]]-F[[:space:]].*//')
+if ! printf '%s' "$_cmd_for_gate" | grep -qE '\bgh[[:space:]]+pr[[:space:]]+create\b'; then
+  unset _cmd_for_gate
   exit 0
 fi
+unset _cmd_for_gate
 
 ERRORS=""
 
@@ -336,9 +365,26 @@ fi
 # the check with a visible stderr WARN. Default marker is
 # `<!-- pr-sections: skip -->`.
 BODY_CONTENT=""
-BODY_FILE=$(echo "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
-  BODY_CONTENT=$(cat "$BODY_FILE")
+# Extract --body-file path. Handles --body-file and the -F short form.
+# After continuation normalization (above) the command is one logical line.
+BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+if [ -z "$BODY_FILE" ]; then
+  BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-F[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+fi
+if [ -n "$BODY_FILE" ]; then
+  # Resolve relative paths against the command's cd-target (if any), so
+  # 'cd /project && gh pr create --body-file body.md' finds the file at
+  # /project/body.md rather than testing against the hook's own CWD.
+  # Fixes apexyard#743 Bug 1 for the relative-path variant.
+  if [[ "$BODY_FILE" != /* ]] && [ -n "$CD_TARGET" ]; then
+    BODY_FILE="${CD_TARGET}/${BODY_FILE}"
+  fi
+  if [ -f "$BODY_FILE" ]; then
+    BODY_CONTENT=$(cat "$BODY_FILE")
+  else
+    echo "WARN: validate-pr-create.sh: --body-file '${BODY_FILE}' not readable from hook context; section check may miss content." >&2
+    # Do not hard-block: we cannot inspect a file we cannot read.
+  fi
 fi
 
 if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b'; then
@@ -489,14 +535,13 @@ fi
 # not a git tree), this is a no-op and the fallback stays byte-for-byte
 # equivalent to the pre-#693 behaviour. The `--head` path is unaffected, and
 # the PR-title check above is independent of cwd.
+# CD_TARGET was extracted early (near top of script) for --body-file path
+# resolution; reuse it here for the branch-name fallback below.
 BRANCH_DIR=""
-if command -v pr_cmd_cd_target >/dev/null 2>&1; then
-  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
-  if [ -n "$CD_TARGET" ]; then
-    CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
-    if [ -n "$CD_TOPLEVEL" ]; then
-      BRANCH_DIR="$CD_TOPLEVEL"
-    fi
+if [ -n "$CD_TARGET" ]; then
+  CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
+  if [ -n "$CD_TOPLEVEL" ]; then
+    BRANCH_DIR="$CD_TOPLEVEL"
   fi
 fi
 HEAD_FLAG=$(echo "$COMMAND" | sed -nE 's/.*--head[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
