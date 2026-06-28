@@ -388,7 +388,7 @@ _t30_ws_real=$(cd "$_t30_ws" && pwd -P)
 
 # Bootstrap the ops fork
 (
-  cd "$_t30_ops"
+  cd "$_t30_ops" || exit 1
   git init -q
   git config user.email "test@example.com"
   git config user.name "test"
@@ -430,10 +430,11 @@ EOF
 # Project dir in sibling workspace
 mkdir -p "$_t30_ws/myproj/src"
 
-# Write a session pin so resolve_ops_root finds ops_fork from CWD=/tmp
+# Write a session pin so resolve_ops_root finds ops_fork from CWD=/tmp.
+# Use a HERMETIC temp pin dir (not the real $HOME/.claude/apexyard) so the test
+# is deterministic in CI and never reads/pollutes the operator's real pin store.
 _t30_sid="apexyard-test745-$$"
-_t30_pin_dir="$HOME/.claude/apexyard"
-mkdir -p "$_t30_pin_dir"
+_t30_pin_dir=$(mktemp -d)
 printf '%s\n' "$_t30_ops_real" > "$_t30_pin_dir/ops-root-${_t30_sid}"
 
 _t30_in=$(jq -nc --arg p "$_t30_ws_real/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
