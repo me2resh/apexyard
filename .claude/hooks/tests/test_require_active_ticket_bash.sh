@@ -439,9 +439,14 @@ printf '%s\n' "$_t30_ops_real" > "$_t30_pin_dir/ops-root-${_t30_sid}"
 
 _t30_in=$(jq -nc --arg p "$_t30_ws_real/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
 
+# Re-enable the pin for THIS invocation: bin/run-hook-tests.sh exports
+# APEXYARD_OPS_DISABLE_PIN=1 suite-wide (so the suite never reads the operator's
+# real pin), but this case deliberately exercises pin-based split-portfolio
+# resolution, so we override it back to empty for the hook call only.
 _t30_stderr=$(cd /tmp && echo "$_t30_in" | \
   CLAUDE_CODE_SESSION_ID="$_t30_sid" \
   APEXYARD_OPS_PIN_DIR="$_t30_pin_dir" \
+  APEXYARD_OPS_DISABLE_PIN='' \
   bash "$_t30_ops/.claude/hooks/require-active-ticket.sh" 2>&1 >/dev/null)
 _t30_rc=$?
 
