@@ -2,6 +2,25 @@
 
 All notable changes to ApexYard are documented here.
 
+## [v4.2.0] — 2026-06-28
+
+Minor release — 2 features, 3 fixes.
+
+### Added (feat)
+
+- (#741) wire design tooling into roles + add /design-sync skill — f324b59
+- (#740) offer an opt-in /challenge nudge from /decide — 4cd59a7
+
+### Fixed (fix)
+
+- (#737) anchor release-changelog range on the post-sync boundary — ee35238
+- (#744) anchor active-ticket repo resolution to FILE_PATH not CWD — 029c676
+- (#743) parse gh pr create structurally (body-file, multi-line, body-example) (AgDR-0081) — 620da46
+
+### Closes
+
+- Closes #737, #740, #741, #743, #744
+
 ## [v4.1.0] — 2026-06-27
 
 Minor release — 1 feature,3 fixes.
