@@ -101,8 +101,68 @@ if [ -z "$FILE_PATH" ] && [ "$TOOL_NAME" != "Bash" ]; then
   exit 0
 fi
 
-# Normalise to repo-relative path when possible
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# Normalise to repo-relative path when possible.
+#
+# BUG #744 FIX: derive REPO_ROOT from the FILE_PATH's directory, NOT the
+# hook's CWD. The harness can fire with any CWD (e.g. /tmp, the ops root,
+# a totally unrelated directory). Using `git rev-parse --show-toplevel`
+# from the hook process's CWD returns the WRONG root whenever the CWD
+# differs from the file's actual git repo — which breaks the OPS_ROOT
+# walk-up and causes the per-project marker to be missed, blocking edits
+# even when /start-ticket set a valid marker (#744, #745).
+#
+# Resolution order:
+#   1. FILE_PATH is set and absolute: run git in the file's nearest existing
+#      ancestor directory.  Works for new files (dirname of a not-yet-created
+#      path still points at the parent dir).
+#   2. FILE_PATH is set but relative (Bash write-target extracted from the
+#      command): relative paths are relative to the process CWD, so fall
+#      back to the legacy CWD-based git rev-parse — same behaviour as before.
+#   3. FILE_PATH is empty (Bash command, no extractable target): CWD-based
+#      fallback as before.
+REPO_ROOT=""
+if [ -n "$FILE_PATH" ]; then
+  case "$FILE_PATH" in
+    /*)
+      # Absolute path — find the nearest existing ancestor directory.
+      # dirname works on non-existent files; the while loop handles the
+      # case where the new file's parent dir doesn't exist yet.
+      _fp_dir="$(dirname "$FILE_PATH")"
+      while [ -n "$_fp_dir" ] && [ "$_fp_dir" != "/" ] && [ ! -d "$_fp_dir" ]; do
+        _fp_dir="$(dirname "$_fp_dir")"
+      done
+      if [ -d "$_fp_dir" ]; then
+        REPO_ROOT=$(git -C "$_fp_dir" rev-parse --show-toplevel 2>/dev/null)
+        # When the file's repo is a LINKED git worktree the worktree dir
+        # inherits the main branch's files — including anchor files like
+        # onboarding.yaml / apexyard.projects.yaml.  The OPS_ROOT walk-up
+        # below would then stop at the worktree instead of the real ops
+        # fork.  Detect a linked worktree (absolute git-dir ≠ common-dir)
+        # and replace REPO_ROOT with the main-checkout root (dirname of
+        # the common-dir, i.e. parent of the main .git dir).  This keeps
+        # the walk-up anchored to the actual ops fork while leaving the
+        # later per-worktree branch detection (which re-reads git from
+        # _fdir) unaffected.
+        if [ -n "$REPO_ROOT" ]; then
+          _wt_gd=$(git -C "$_fp_dir" rev-parse --absolute-git-dir 2>/dev/null)
+          _wt_gcd=$(git -C "$_fp_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+          if [ -n "$_wt_gd" ] && [ -n "$_wt_gcd" ] && [ "$_wt_gd" != "$_wt_gcd" ]; then
+            _main_root=$(dirname "$_wt_gcd")
+            [ -d "$_main_root" ] && REPO_ROOT="$_main_root"
+          fi
+        fi
+      fi
+      ;;
+    *)
+      # Relative path (Bash write-target): resolve against CWD.
+      REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+      ;;
+  esac
+fi
+# Fallback: FILE_PATH empty (Bash command, no extractable target).
+if [ -z "$REPO_ROOT" ]; then
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+fi
 REL_PATH="$FILE_PATH"
 if [ -n "$REPO_ROOT" ] && [ -n "$FILE_PATH" ]; then
   case "$FILE_PATH" in
@@ -164,27 +224,36 @@ fi
 # v1 anchor (onboarding.yaml + apexyard.projects.yaml). Stop at /. If
 # not found, OPS_ROOT stays empty and we treat the REPO_ROOT itself as
 # the marker home (pre-#41 behaviour).
+#
+# Guard change (#744/#745): the lib-based resolver is always invoked when
+# the lib is available — even when REPO_ROOT is empty. This matters for
+# split-portfolio v2 where the workspace is a sibling repo with no git
+# history: REPO_ROOT is empty (no git in the sibling dir) but the
+# session-pin resolver in _lib-ops-root.sh can still locate the ops fork
+# from the pin written at session-start, regardless of start dir.
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 OPS_ROOT=""
-if [ -n "$REPO_ROOT" ]; then
-  if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$HOOK_DIR/_lib-ops-root.sh"
-    OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
-  else
-    r="$REPO_ROOT"
-    while [ -n "$r" ] && [ "$r" != "/" ]; do
-      if [ -f "$r/.apexyard-fork" ]; then
-        OPS_ROOT="$r"
-        break
-      fi
-      if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-        OPS_ROOT="$r"
-        break
-      fi
-      parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
-    done
-  fi
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  # Pass REPO_ROOT as the walk-up start dir when available; the pin
+  # resolver ignores the start dir and uses the session pin directly.
+  OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-}")
+elif [ -n "$REPO_ROOT" ]; then
+  # Inline walk-up fallback when the lib is absent (e.g. minimal test
+  # sandboxes that only copy the core libs).
+  r="$REPO_ROOT"
+  while [ -n "$r" ] && [ "$r" != "/" ]; do
+    if [ -f "$r/.apexyard-fork" ]; then
+      OPS_ROOT="$r"
+      break
+    fi
+    if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
+      OPS_ROOT="$r"
+      break
+    fi
+    parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
+  done
 fi
 
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
