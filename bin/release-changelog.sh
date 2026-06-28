@@ -58,7 +58,30 @@ REPO_REMOTE="${REPO_REMOTE:-upstream}"
 if [ "$PREV_TAG" = "NONE" ]; then
   LOG_RANGE="${HEAD_REF}"
 else
-  LOG_RANGE="${PREV_TAG}..${HEAD_REF}"
+  # #737: PREV_TAG is a *squash* commit on main. Under the release-cut model the
+  # individual commits it squashed live on HEAD_REF (dev) but are NOT ancestors
+  # of the tag — so a naive PREV_TAG..HEAD_REF range (and even
+  # merge-base(PREV_TAG,dev)..dev) surfaces EVERY already-released commit,
+  # massively over-counting (v4.1.0 reported 102 feats / 263 commits for a
+  # ~1-feature delta). The correct start is the POST-SYNC BOUNDARY: after each
+  # release, `/release-sync` lands a "sync: merge main into dev after <ver>"
+  # commit (and its "...sync/main-to-dev-after-<ver>" PR merge) on dev. Commits
+  # AFTER the most recent such marker are exactly the unreleased delta.
+  # Patterns are VERSION-ANCHORED so they only match real sync commits, never a
+  # prose mention of the convention in some other commit body (e.g. this very
+  # fix's commit, or a doc PR) — an unanchored 'sync/main-to-dev-after' would
+  # let a later commit hijack the boundary and DROP unreleased work (#749 review).
+  SYNC=$(git log "$HEAD_REF" --max-count=1 --pretty=format:'%H' \
+           --grep='^sync: merge main into dev after v[0-9]' \
+           --grep='sync/main-to-dev-after-v[0-9]' 2>/dev/null || true)
+  if [ -n "$SYNC" ]; then
+    LOG_RANGE="${SYNC}..${HEAD_REF}"
+  else
+    # No sync boundary on dev (first release under the model, or sync skipped):
+    # best available fallback is the merge-base, then the raw tag range.
+    BASE=$(git merge-base "$PREV_TAG" "$HEAD_REF" 2>/dev/null || true)
+    LOG_RANGE="${BASE:-$PREV_TAG}..${HEAD_REF}"
+  fi
 fi
 
 # ── Extract commits ──────────────────────────────────────────────────────────

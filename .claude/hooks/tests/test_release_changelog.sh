@@ -204,11 +204,15 @@ contains "feat from beginning" "initial feature" "$out"
 # ── Test: sync and release commits are excluded ──────────────────────────────
 
 echo "--- excluded commit types ---"
+# Ordering mirrors the real release-cut workflow (#737): the sync marker lands
+# FIRST (reconciling the prior release), THEN the new feat for this release, then
+# the release commit. The post-sync-boundary range therefore includes the feat
+# (unreleased) and excludes the sync (it's the boundary) and the release commit.
 out=$(run_test '
   mc "chore: initial"
   git tag v5.0.0
-  mc "feat(#600): real feature"
   mc "sync: merge main into dev after v5.0.0 release"
+  mc "feat(#600): real feature"
   mc "release(#601): v5.1.0"
   PREV_TAG="v5.0.0" HEAD_REF="HEAD" VERSION="v5.1.0" DATE="2026-06-21" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
@@ -230,6 +234,52 @@ out=$(run_test '
 ')
 contains "feat included" "add something" "$out"
 not_contains "branch merge excluded" "Merge branch main" "$out"
+
+# ── Test: #737 post-sync boundary — released commits after the tag excluded ──
+# Squash-model simulation: the tag sits early; "released" commits follow it on
+# dev (they were squashed into the tag on main, so a tag-range over-counts them);
+# a `/release-sync` marker commit lands; then the true unreleased delta. The fix
+# must anchor on the sync marker, NOT the tag — so only the post-sync feat shows.
+echo "--- #737 post-sync boundary ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v7.0.0
+  mc "feat(#710): already-released work one"
+  mc "feat(#711): already-released work two"
+  mc "sync: merge main into dev after v7.0.0 release"
+  mc "feat(#712): the real unreleased delta"
+  PREV_TAG="v7.0.0" HEAD_REF="HEAD" VERSION="v7.1.0" DATE="2026-06-28" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains   "post-sync delta included"       "the real unreleased delta" "$out"
+not_contains "pre-sync released work excluded (1)" "already-released work one" "$out"
+not_contains "pre-sync released work excluded (2)" "already-released work two" "$out"
+
+# ── Test: #737 fallback — no sync marker → merge-base/tag range still works ───
+echo "--- #737 fallback (no sync marker) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v8.0.0
+  mc "feat(#810): first feature since tag"
+  PREV_TAG="v8.0.0" HEAD_REF="HEAD" VERSION="v8.1.0" DATE="2026-06-28" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "fallback still lists the delta" "first feature since tag" "$out"
+
+# ── Test: #737 grep is version-anchored — a prose mention can't hijack the boundary ──
+# A commit AFTER the real sync whose subject merely mentions the convention must
+# NOT be treated as the boundary. With an unanchored grep it would win
+# --max-count=1, set LOG_RANGE=<that>..HEAD, and drop the unreleased delta.
+echo "--- #737 version-anchored grep (no prose false-positive) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v9.0.0
+  mc "sync: merge main into dev after v9.0.0 release"
+  mc "feat(#900): document the sync/main-to-dev-after convention"
+  PREV_TAG="v9.0.0" HEAD_REF="HEAD" VERSION="v9.1.0" DATE="2026-06-28" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "feat mentioning the unversioned string still included" "document the sync/main-to-dev-after convention" "$out"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
