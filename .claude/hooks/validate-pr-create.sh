@@ -22,7 +22,11 @@ fi
 # Fixes apexyard#743 Bug 2: without normalization, a --repo value split onto
 # its own continuation line could be mis-extracted (the trailing '\' captured
 # instead of the repo slug, yielding garbled TRACKER_REPO like "(hook)").
-COMMAND="${COMMAND//$'\\\n'/ }"
+# NOTE: must be bash-3.2-safe (macOS default). The combined ANSI-C pattern
+# ${COMMAND//$'\\\n'/ } is a silent NO-OP under bash 3.2 — the newline in the
+# pattern doesn't match. Holding the newline in a var and escaping the
+# backslash separately works on both 3.2 and 5.x (verified via `od -c`).
+nl=$'\n'; COMMAND="${COMMAND//\\$nl/ }"
 
 # Parse --repo / -R from the gh command for cross-repo PR creation.
 # Handles: --repo VALUE, --repo=VALUE, -R VALUE, -R=VALUE.

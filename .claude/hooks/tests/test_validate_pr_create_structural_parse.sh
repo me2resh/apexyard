@@ -163,10 +163,19 @@ rm -f "$BODY_FILE_FULL" "$BODY_FILE_PARTIAL"
 BF2=$(mktemp /tmp/test-743-bug2-body.XXXXXX.md)
 printf '%s' "$BODY_WITH_SECTIONS" > "$BF2"
 
-# Embed actual backslash-newlines in the command string via $'...'
-MULTI_LINE_CMD=$'gh pr create \\\n  --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/#743-test \\\n  --body-file '"$BF2"
+# Embed actual backslash-newlines via $'...'. The regression is anchored on the
+# --body-file flag split across a continuation with NO space before the '\'
+# ('--body-file\<newline>PATH'). This makes the proof DETERMINISTIC (no network):
+#   - WITHOUT the collapse, the line-oriented extraction can't recover the path,
+#     the body-file is unreadable, the section check falls back to the (section-
+#     less) command text, and the hook BLOCKS for missing ## Testing/## Glossary.
+#   - WITH the collapse, '\<newline>' → space, so '--body-file PATH' resolves,
+#     the sections are found, and the hook passes.
+# (A --repo-only garble degrades gracefully and would pass either way — i.e. it
+# would pass for the wrong reason, which is exactly the gap Rex flagged.)
+MULTI_LINE_CMD=$'gh pr create --repo me2resh/apexyard \\\n  --title \'fix(#743): multiline\' \\\n  --head fix/GH-743-test \\\n  --body-file\\\n'"$BF2"
 
-run_case "Bug2: backslash-continued multi-line --repo resolves cleanly → PASS" \
+run_case "Bug2: backslash-continued multi-line (--body-file on continuation) resolves cleanly → PASS" \
   "$MULTI_LINE_CMD" \
   0 ""
 
