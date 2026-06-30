@@ -307,6 +307,16 @@ Thanks to everyone who has helped forge ApexYard:
 
 <sub>External contributors' PRs are squash-merged, so GitHub's commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
 
+## Star History
+
+<a href="https://star-history.com/#me2resh/apexyard&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=me2resh/apexyard&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=me2resh/apexyard&type=Date" />
+    <img alt="ApexYard Star History Chart" src="https://api.star-history.com/svg?repos=me2resh/apexyard&type=Date" width="600" />
+  </picture>
+</a>
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
