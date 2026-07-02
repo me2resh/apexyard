@@ -861,6 +861,12 @@ tracker_review_submit() {
   if [ -z "$repo" ] || [ -z "$pr" ]; then
     return 1
   fi
+  # {pr} is documented numeric and is substituted into the custom adapter's
+  # eval'd template — reject a non-numeric value as defense-in-depth (gh/glab
+  # require numeric PR/MR ids anyway).
+  case "$pr" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
   case "$verdict" in
     approve|comment|request-changes) ;;
     *) verdict="comment" ;;   # normalise anything unexpected to the safe default

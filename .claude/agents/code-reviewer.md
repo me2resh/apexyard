@@ -27,9 +27,10 @@ You have **two** required outputs and they are NOT interchangeable:
 Post the human-visible review **through the tracker abstraction** (`tracker_review_submit`), NOT a hardcoded `gh pr review` — so the review lands on the right host (GitHub PR, GitLab MR, or a `custom` host) for the project's configured `tracker.kind` (#758). Write your review to a temp body-file and pass the `comment` verdict:
 
 ```bash
-# Full resolution — source the lib, resolve $PR_REPO, write $REVIEW_BODY_FILE —
-# is in the "Approval marker" section below (reuses the same $MARKER_HOME).
-tracker_review_submit "$PR_REPO" {number} comment "$REVIEW_BODY_FILE"
+# Full resolution — source the lib, resolve $PR_HOST_REPO (the PR/MR base repo,
+# NOT the fork), write $REVIEW_BODY_FILE — is in the "Approval marker" section
+# below (reuses the same $MARKER_HOME).
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"
 ```
 
 ### Pass the `comment` verdict, not `approve` — and treat an `approve` block as expected, not a failure
@@ -597,11 +598,12 @@ fallow fix --dry-run
 3. Review each file against the checklist
 
 4. Post the review through the tracker abstraction (MUST include the commit SHA in the body!).
-   Write the review to a temp file, then (after resolving $PR_REPO — see marker section):
-   tracker_review_submit "$PR_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
+   Write the review to a temp file, then (after resolving $PR_HOST_REPO — the PR/MR
+   base repo, NOT the fork; see marker section):
+   tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
 
    OR for a non-approving result you want reflected in the host's review state:
-   tracker_review_submit "$PR_REPO" {number} request-changes "$REVIEW_BODY_FILE"
+   tracker_review_submit "$PR_HOST_REPO" {number} request-changes "$REVIEW_BODY_FILE"
 
    Do NOT pass the `approve` verdict — on gh it maps to --approve, which GitHub blocks on
    single-account setups, and it is NOT required (the local marker is the gate signal).
@@ -659,10 +661,19 @@ MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-tracker.sh"
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
-# Resolve the repo this PR belongs to — required for the qualified marker name
-# AND for tracker_review_submit (it selects the adapter from this repo's config).
+# Resolve the head (fork) repo — used for the qualified marker filename.
 PR_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
 REX_MARKER=$(review_marker_path "$PR_REPO" {number} rex "$MARKER_HOME")
+
+# Resolve the PR/MR HOST (base) repo — where the review must be POSTED and the
+# repo tracker_review_submit selects its adapter from. On a cross-fork PR this
+# differs from the fork above (posting to the fork fails: the PR lives on the
+# base). gh pr view has no baseRepository field, but the PR URL is ALWAYS on the
+# base repo — parse owner/repo from it (works for gh /pull/ and glab
+# /-/merge_requests/, incl. nested GitLab groups). Falls back to PR_REPO when
+# base == head (the common same-repo case).
+PR_HOST_REPO=$(gh pr view {number} --json url --jq '.url' 2>/dev/null | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
+[ -z "$PR_HOST_REPO" ] && PR_HOST_REPO="$PR_REPO"
 
 # Write your review to a temp body-file, then submit it through the abstraction.
 # A file (not inline text) is the uniform path: gh takes --body-file, glab reads
@@ -671,7 +682,7 @@ REVIEW_BODY_FILE=$(mktemp)
 cat > "$REVIEW_BODY_FILE" <<'REVIEW'
 <your full review text — verdict (APPROVED / CHANGES REQUESTED) stated in the body>
 REVIEW
-tracker_review_submit "$PR_REPO" {number} comment "$REVIEW_BODY_FILE"; submit_rc=$?
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; submit_rc=$?
 # submit_rc: 0 = posted · 3 = kind=none (echo the body in your report) · other =
 # host CLI failed (warn + include the body in your report; still write the marker
 # on APPROVED — the review WAS performed and the marker is the orthogonal gate signal).

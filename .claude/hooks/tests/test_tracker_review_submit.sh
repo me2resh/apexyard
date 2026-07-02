@@ -114,6 +114,14 @@ chmod +x "$SB/bin/gh"
 tracker_clear_cache
 PATH="$SB/bin:$PATH" tracker_review_submit "o/r" 42 comment "$BODY"; rc=$?
 assert_eq "gh failure → non-zero exit propagates" "1" "$rc"
+
+# Case 4b — a non-numeric PR id is rejected before any dispatch/eval (matches the
+# documented "{pr} is numeric" contract; defense-in-depth for the custom eval).
+install_gh_mock "$SB"
+tracker_clear_cache
+PATH="$SB/bin:$PATH" GH_CAPTURE="$SB/cbad" tracker_review_submit "o/r" '9; rm -rf /' comment "$BODY"; rc=$?
+assert_eq "non-numeric PR id → rejected (non-zero)" "1" "$rc"
+assert_eq "non-numeric PR id → no CLI invoked"      "no" "$([ -f "$SB/cbad" ] && echo yes || echo no)"
 rm -rf "$SB"
 
 # Case 5 — kind=none: no CLI call; returns 3 and echoes the body for manual
