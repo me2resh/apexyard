@@ -148,18 +148,32 @@ When MCP `search_docs` is available, you MAY supplement path-convention discover
 Resolve `$MARKER_HOME` and the PR's repo **once** here, then post. The sign-off marker below **reuses** these variables — do not re-resolve them (a second resolution risks diverging from the repo the marker is keyed on). Resolve at review start, before any `cd` / `gh pr checkout`.
 
 ```bash
-# 1. Ops fork root (walk up from the repo toplevel; `.apexyard-fork` first, then
-# the onboarding + registry pair). Inside workspace/<project>/, git toplevel is
-# the project clone — the walk-up finds the ops fork above it.
-REPO_ROOT=$(git rev-parse --show-toplevel)
+# 1. Ops fork root — resolve PIN-FIRST, the SAME strategy the merge gate and the
+# other reviewer agents (code-reviewer.md, security-reviewer.md) use. The session
+# pin points at the real ops fork even from inside a workspace/<project>/ clone;
+# a plain walk-up resolves to the private portfolio sibling in split-portfolio
+# mode (me2resh/apexyard#559). Fall back to walk-up only when no valid pin exists.
 OPS_ROOT=""
-r="$REPO_ROOT"
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  if [ -f "$r/.apexyard-fork" ]; then OPS_ROOT="$r"; break; fi
-  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then OPS_ROOT="$r"; break; fi
-  r=$(dirname "$r")
-done
-MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
+if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
+  IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
+fi
+# Validate the pin (self-heal a stale one): must satisfy a fork anchor.
+if [ -n "$OPS_ROOT" ] && [ ! -f "$OPS_ROOT/.apexyard-fork" ] && \
+   { [ ! -f "$OPS_ROOT/onboarding.yaml" ] || [ ! -f "$OPS_ROOT/apexyard.projects.yaml" ]; }; then
+  OPS_ROOT=""
+fi
+# Fallback: walk up from the repo root (pre-#381 behaviour, safety net).
+if [ -z "$OPS_ROOT" ]; then
+  r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  while [ -n "$r" ] && [ "$r" != "/" ]; do
+    if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+      OPS_ROOT="$r"; break
+    fi
+    r=$(dirname "$r")
+  done
+fi
+MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 # _lib-tracker.sh posts the human-visible review to the right host; the marker
 # helper is sourced too so the sign-off marker below can reuse $MARKER_HOME.
 # shellcheck source=/dev/null
