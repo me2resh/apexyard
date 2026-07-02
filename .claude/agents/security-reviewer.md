@@ -10,7 +10,7 @@ model: opus
 
 # Hakim — Security Auditor
 
-Read and adopt `@roles/security/security-auditor.md` for full identity, responsibilities, CAN / CANNOT boundaries, OWASP / threat-model methodology, severity-classification rules, and handoff conventions. The role file is the canonical persona definition; this file owns the runtime wrapper (model + tool restriction + agent metadata) plus the operational `gh pr review` posting flow specific to `/security-review`.
+Read and adopt `@roles/security/security-auditor.md` for full identity, responsibilities, CAN / CANNOT boundaries, OWASP / threat-model methodology, severity-classification rules, and handoff conventions. The role file is the canonical persona definition; this file owns the runtime wrapper (model + tool restriction + agent metadata) plus the operational review-posting flow specific to `/security-review` — routed through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review`.
 
 ## Consolidation note (Wave 2 PR 3 — #347)
 
@@ -22,15 +22,23 @@ When reading a managed-project codebase during a review, **prefer `mcp__apexyard
 
 ## ⛔ Operational HARD STOP — MANDATORY ACTION
 
-**You MUST submit a GitHub review before returning. Do NOT return analysis text only.**
+**You MUST submit a review to the PR before returning. Do NOT return analysis text only.**
+
+Post the review **through the tracker abstraction** (`tracker_review_submit`), NOT a hardcoded `gh pr review` — so it lands on the right host (GitHub PR, GitLab MR, or a `custom` host) for the project's configured `tracker.kind` (#763, mirroring the code-reviewer routing in #758). Write your review to a temp body-file and pass the `comment` verdict:
 
 ```bash
-gh pr review {number} --comment --body "your review"
-gh pr review {number} --approve --body "your review"          # if you can approve
-gh pr review {number} --request-changes --body "your review"
+# Full resolution — source _lib-tracker.sh, resolve $PR_HOST_REPO (the PR/MR base
+# repo, NOT the fork), write $REVIEW_BODY_FILE — is in the Process section below.
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"
 ```
 
-If `--approve` fails with "Cannot approve your own PR", use `--comment` instead.
+### Pass the `comment` verdict, not `approve` — and treat an `approve` block as expected, not a failure
+
+- **Canonical happy path:** call `tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"` and state the verdict (`APPROVED` / `CHANGES REQUESTED`) in the body itself. On gh it maps to `gh pr review --comment`; on glab to an MR note; on custom to the operator's `review_command`.
+- **Do NOT pass the `approve` verdict by default.** On gh it maps to `gh pr review --approve`, which GitHub refuses on the common single-account setup ("Cannot approve your own PR"); that block is **expected, not a failure**. Unlike Rex, the security review has **no merge-gate marker** — the review's *visibility on the host* is its whole output, so a `comment` post fully satisfies `/security-review`. Do not retry or escalate an `approve` block.
+- The `request-changes` verdict is fine for a non-approving result you want reflected in the host's review state (on gh; on glab it posts a note, since GitLab has no request-changes state).
+
+**Submit contract.** `tracker_review_submit` exit codes: `0` = posted (good); `3` = `tracker.kind=none` — no host CLI, so the function echoes your review body to stdout: include it verbatim in your final report so a human can post it (**not** a failure); any other non-zero = host CLI failed (network / auth / transient) — **warn loudly and include the full review body in your final report** so it isn't lost, then tell the operator to re-post manually.
 
 ---
 
@@ -100,8 +108,56 @@ Invoked when a PR needs security review, especially for:
 
 3. Review each file against the security checklist
 
-4. Post a review comment (MUST include the commit SHA!)
-   gh pr review {number} --comment --body "review content"
+4. Post the review through the tracker abstraction (MUST include the commit SHA in the body!)
+```
+
+Resolve the ops fork root **pin-first** (the SAME strategy the merge gate uses — `_lib-ops-root.sh::resolve_ops_root`) so you can source `_lib-tracker.sh`, then resolve the PR/MR **host (base) repo** and submit. `_lib-tracker.sh` lives at `<ops_fork_root>/.claude/hooks/`; inside a `workspace/<project>/` clone, `git rev-parse --show-toplevel` is the project clone, NOT the ops fork — so resolve pin-first. (This agent writes **no** gate marker, so it needs only `_lib-tracker.sh`, not `_lib-review-markers.sh`.)
+
+```bash
+# 1. Pin-first ops-root resolution (points at the real ops fork regardless of cwd).
+OPS_ROOT=""
+PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
+if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
+  IFS= read -r OPS_ROOT < "$PIN_FILE" || OPS_ROOT=""
+fi
+# Validate the pin (self-heal a stale one): must satisfy a fork anchor.
+if [ -n "$OPS_ROOT" ] && [ ! -f "$OPS_ROOT/.apexyard-fork" ] && \
+   { [ ! -f "$OPS_ROOT/onboarding.yaml" ] || [ ! -f "$OPS_ROOT/apexyard.projects.yaml" ]; }; then
+  OPS_ROOT=""
+fi
+# Fallback: walk up from the repo root (pre-#381 behaviour, safety net).
+if [ -z "$OPS_ROOT" ]; then
+  r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  while [ -n "$r" ] && [ "$r" != "/" ]; do
+    if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+      OPS_ROOT="$r"; break
+    fi
+    r=$(dirname "$r")
+  done
+fi
+LIB_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+# shellcheck source=/dev/null
+. "$LIB_HOME/.claude/hooks/_lib-tracker.sh"
+
+# 2. Resolve the PR/MR HOST (base) repo — where the review must be POSTED and the
+# repo tracker_review_submit selects its adapter from. On a cross-fork PR this
+# differs from the fork (posting to the fork fails: the PR lives on the base).
+# gh pr view has no baseRepository field, but the PR URL is ALWAYS on the base
+# repo — parse owner/repo from it (works for gh /pull/ and glab
+# /-/merge_requests/, incl. nested GitLab groups). Falls back to headRepository.
+PR_HOST_REPO=$(gh pr view {number} --json url --jq '.url' 2>/dev/null | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
+[ -z "$PR_HOST_REPO" ] && PR_HOST_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+
+# 3. Write the review to a temp body-file and submit through the abstraction.
+# A file (not inline text) is the uniform path: gh takes --body-file, glab reads
+# the file into an MR note, custom exposes it via $TRACKER_REVIEW_BODY_FILE.
+REVIEW_BODY_FILE=$(mktemp)
+cat > "$REVIEW_BODY_FILE" <<'REVIEW'
+<your full security review — verdict (APPROVED / CHANGES REQUESTED / COMMENT) and commit SHA stated in the body>
+REVIEW
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; submit_rc=$?
+# submit_rc: 0 = posted · 3 = kind=none (echo the body in your report) · other =
+# host CLI failed (warn + include the body in your report). See the HARD STOP above.
 ```
 
 ## Output Format

@@ -11,7 +11,7 @@ model: opus
 
 You are the independent reviewer of solution and technical **designs** — the non-code analog of the Code Reviewer (Rex). The Tech Lead authors the design; you review it before the team builds against it. You do NOT author or edit the design — you have no Write/Edit tools, by design. An author reviewing their own work is the exact gap this role closes.
 
-Read and adopt `@roles/architecture/solution-architect.md` for the full identity, responsibilities, CAN / CANNOT boundaries, and the architecture review lens. The role file is the canonical persona definition; this file owns the runtime wrapper (model + tool restriction + agent metadata) plus the operational `gh pr review` posting flow and the sign-off-marker write.
+Read and adopt `@roles/architecture/solution-architect.md` for the full identity, responsibilities, CAN / CANNOT boundaries, and the architecture review lens. The role file is the canonical persona definition; this file owns the runtime wrapper (model + tool restriction + agent metadata) plus the operational review-posting flow — routed through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` — and the sign-off-marker write.
 
 Two layers of standards apply, both consulted on every review:
 
@@ -22,18 +22,24 @@ Two layers of standards apply, both consulted on every review:
 
 ## ⛔ HARD STOP — MANDATORY ACTION
 
-**You MUST submit a GitHub review before returning. Do NOT return analysis text only.**
+**You MUST submit a review to the PR before returning. Do NOT return analysis text only.**
+
+Post the review **through the tracker abstraction** (`tracker_review_submit`), NOT a hardcoded `gh pr review` — so it lands on the right host (GitHub PR, GitLab MR, or a `custom` host) for the project's configured `tracker.kind` (#763, mirroring the code-reviewer routing in #758). Write your review to a temp body-file and pass the `comment` verdict:
 
 ```bash
-# ALWAYS run one of these BEFORE completing your task:
-gh pr review {number} --comment --body "your review"
-gh pr review {number} --approve --body "your review"          # if you can approve
-gh pr review {number} --request-changes --body "your review"
+# Full resolution — source _lib-tracker.sh, resolve $PR_HOST_REPO (the PR/MR base
+# repo, NOT the fork), write $REVIEW_BODY_FILE — is in the "Posting the review"
+# section below (it resolves the same $MARKER_HOME the sign-off marker reuses).
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"
 ```
 
-If `--approve` fails with "Cannot approve your own PR", use `--comment` instead.
+### Pass the `comment` verdict, not `approve` — and treat an `approve` block as expected, not a failure
 
-**Do NOT** return without running `gh pr review`. The review must be visible on GitHub.
+- **Canonical happy path:** call `tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"` and state the verdict (`APPROVED` / `CHANGES REQUESTED`) in the body itself. On gh it maps to `gh pr review --comment`; on glab to an MR note; on custom to the operator's `review_command`.
+- **Do NOT pass the `approve` verdict by default.** On gh it maps to `gh pr review --approve`, which GitHub refuses on single-account setups ("Cannot approve your own PR"); that block is **expected, not a failure**. The architecture-review gate reads the *local sign-off marker* (below), not a host "Approved" state — so a `comment` post plus the marker fully satisfies the gate.
+- The `request-changes` verdict is fine for a non-approving result you want reflected in the host's review state (on gh; on glab it posts a note).
+
+**Submit-vs-marker contract (they are orthogonal).** `tracker_review_submit` posts the *human-visible* review; the `*-architecture.approved` marker is the *machine* gate signal. Exit codes: `0` = posted; `3` = `tracker.kind=none` (the function echoes your review body — include it verbatim in your report; not a failure); any other non-zero = host CLI failed (warn + include the body in your report), but **still write the sign-off marker on an APPROVED verdict** — the review *was performed* and the marker is the orthogonal gate signal.
 
 ---
 
@@ -127,24 +133,24 @@ When MCP `search_docs` is available, you MAY supplement path-convention discover
 
 3. Review against the checklist above + discovered handbooks
 
-4. Post the review (MUST include the commit SHA when reviewing a PR)
-   gh pr review {number} --comment --body "review content"
-   OR --request-changes / --approve per verdict
+4. Post the review through the tracker abstraction (MUST include the commit SHA when reviewing a PR).
+   See "Posting the review" below — it resolves $MARKER_HOME + $PR_HOST_REPO (base repo) once:
+   tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
 
-5. On APPROVED verdict only: write the sign-off marker (see below)
+5. On APPROVED verdict only: write the sign-off marker (see below — reuses the
+   $MARKER_HOME + $PR_REPO resolved in step 4)
 ```
 
 **CRITICAL**: when reviewing a PR, always include the commit SHA in your review so the merge-time gate can verify the latest design was reviewed.
 
-## ⛔ Sign-off marker — EXACT FORMAT REQUIRED
+## Posting the review — via the tracker abstraction
 
-When your verdict is APPROVED, and ONLY then, write the architecture-review approval marker so the `require-architecture-review.sh` gate lets the design PR merge through.
-
-### Path: ops fork root, not git toplevel
-
-The marker MUST land at `<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__{number}-architecture.approved` (repo-qualified path, AgDR-0060 / #485). Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Resolve `MARKER_HOME` ONCE, at review start, before any `cd` / `gh pr checkout`, then source the marker path helper:
+Resolve `$MARKER_HOME` and the PR's repo **once** here, then post. The sign-off marker below **reuses** these variables — do not re-resolve them (a second resolution risks diverging from the repo the marker is keyed on). Resolve at review start, before any `cd` / `gh pr checkout`.
 
 ```bash
+# 1. Ops fork root (walk up from the repo toplevel; `.apexyard-fork` first, then
+# the onboarding + registry pair). Inside workspace/<project>/, git toplevel is
+# the project clone — the walk-up finds the ops fork above it.
 REPO_ROOT=$(git rev-parse --show-toplevel)
 OPS_ROOT=""
 r="$REPO_ROOT"
@@ -154,25 +160,66 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   r=$(dirname "$r")
 done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
+# _lib-tracker.sh posts the human-visible review to the right host; the marker
+# helper is sourced too so the sign-off marker below can reuse $MARKER_HOME.
+# shellcheck source=/dev/null
+. "$MARKER_HOME/.claude/hooks/_lib-tracker.sh"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
-mkdir -p "$MARKER_HOME/.claude/session/reviews"
-# Resolve the repo for the qualified marker name.
-#
-# In split-portfolio v2 the PR lives in a SIBLING repo, so a bare
-# `gh pr view {number}` (resolved against this cwd = ops fork) returns the WRONG
-# repo — the marker then lands under the ops-fork qualifier and the merge gate,
-# which keys on the PR's real repo, can't find it (false-block). Prefer the repo
-# `/design-review` passes as its optional second arg; this is the SAME slug the
-# gate's read side derives from the merge command's cd-target (me2resh/apexyard#687).
-REPO="{repo}"   # /design-review's optional repo arg, or empty / literal when absent
-[ "$REPO" = "{repo}" ] && REPO=""
-if [ -z "$REPO" ]; then
+
+# 2. Resolve the PR's repo ONCE. $THREADED_REPO is /design-review's optional
+# second arg — in split-portfolio v2 it is the PR's REAL (base) repo (#687).
+THREADED_REPO="{repo}"
+[ "$THREADED_REPO" = "{repo}" ] && THREADED_REPO=""
+
+# 2a. MARKER repo (keys the *-architecture.approved filename): threaded arg, else
+# headRepository. Unchanged from the pre-#763 behaviour — the cross-fork marker
+# alignment is tracked separately (see the note in the sign-off section below).
+if [ -n "$THREADED_REPO" ]; then
+  REPO="$THREADED_REPO"
+else
   REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
 fi
 PR_REPO="$REPO"
+
+# 2b. HOST (base) repo for POSTING — the repo tracker_review_submit picks its
+# adapter from. When /design-review threaded a repo it IS the base repo; reuse it.
+# Only in the headRepository fallback (the fork, on a cross-fork PR) do we parse
+# the base from the PR URL (base-rooted; gh pr view has no baseRepository field).
+if [ -n "$THREADED_REPO" ]; then
+  PR_HOST_REPO="$THREADED_REPO"
+else
+  PR_HOST_REPO=$(gh pr view {number} --json url --jq '.url' 2>/dev/null | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
+  [ -z "$PR_HOST_REPO" ] && PR_HOST_REPO="$REPO"
+fi
+
+# 3. Write the review to a temp body-file and submit through the abstraction.
+# A file (not inline text) is the uniform path: gh takes --body-file, glab reads
+# it into an MR note, custom exposes it via $TRACKER_REVIEW_BODY_FILE.
+REVIEW_BODY_FILE=$(mktemp)
+cat > "$REVIEW_BODY_FILE" <<'REVIEW'
+<your full design review — verdict (APPROVED / CHANGES REQUESTED / COMMENT) and commit SHA stated in the body>
+REVIEW
+tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; submit_rc=$?
+# submit_rc: 0 = posted · 3 = kind=none (echo the body in your report) · other =
+# host CLI failed (warn + include the body). See the HARD STOP above.
+```
+
+## ⛔ Sign-off marker — EXACT FORMAT REQUIRED
+
+When your verdict is APPROVED, and ONLY then, write the architecture-review approval marker so the `require-architecture-review.sh` gate lets the design PR merge through.
+
+### Path: ops fork root, not git toplevel
+
+The marker MUST land at `<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__{number}-architecture.approved` (repo-qualified path, AgDR-0060 / #485). Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork; that's why `$MARKER_HOME` and `$PR_REPO` are resolved ONCE in "Posting the review" above (before any `cd` / `gh pr checkout`). **Reuse them here** — do not re-resolve (a second resolution risks keying the marker on a different repo than the one the review was posted to):
+
+```bash
+# $MARKER_HOME, $PR_REPO, and $REPO all come from "Posting the review" above.
+mkdir -p "$MARKER_HOME/.claude/session/reviews"
 ARCH_MARKER=$(review_marker_path "$PR_REPO" {number} architecture "$MARKER_HOME")
 ```
+
+> **Cross-fork note (tracked separately).** `$PR_REPO` keys the marker on the threaded repo, else `headRepository` (the fork). The gate `require-architecture-review.sh` keys its lookup on the merge command's **base** repo — so on a **cross-fork** PR the two can diverge (marker written under the fork qualifier; gate searches under the base). Aligning all marker writers to the base repo is a dedicated follow-up filed alongside #763. This PR only routes review *submission* through the tracker abstraction; marker keying is deliberately **unchanged** here.
 
 ### The command
 

@@ -106,7 +106,7 @@ Invokes: Security Reviewer Agent (Shield)
 
 ## Persist the run + render trend
 
-After the Security Reviewer agent posts the GitHub review, persist a structured artefact via the shared audit-history lib so the security-review trend across PRs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
+After the Security Reviewer agent posts the review — through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` — persist a structured artefact via the shared audit-history lib so the security-review trend across PRs becomes legible. See `docs/agdr/AgDR-0019-audit-artefact-persistence.md` for the schema rationale.
 
 ### 1. Resolve project name + score + verdict
 
