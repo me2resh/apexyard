@@ -19,9 +19,10 @@
 #                                      JSON shape: {"state":..., "title":..., "url":..., "labels":[...], "body":...}
 #                                      `body` is populated for the gh and glab adapters (the kinds
 #                                      that have a consumer needing it — the migration gate reads it
-#                                      to find the linked AgDR, #755). Other adapters emit body:""
-#                                      until a consumer needs it (jira `.description` is ADF, not a
-#                                      grep-able string; linear/asana bodies have no consumer yet).
+#                                      to find the linked AgDR, #755). Other adapters omit the body
+#                                      key entirely (consumers read it as `.body // empty`) until one
+#                                      needs it (jira `.description` is ADF, not a grep-able string;
+#                                      linear/asana bodies have no consumer yet).
 #
 # Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
 # tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on

@@ -317,6 +317,37 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 12: non-gh/glab tracker (jira) reaches Gate 3 but body is unmapped, so it
+# blocks with the scoping note (documents the known limitation; the migration
+# gate's body read is gh/glab-only until body support is widened).
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "jira", "view_command": "jira issue view {id} --raw" } }
+JSON
+set_marker "$SB" test-org/test-repo JIRA-42
+install_mock "$SB" jira '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf "{\"self\":\"https://jira/JIRA-42\",\"fields\":{\"status\":{\"name\":\"In Progress\"},\"summary\":\"S\",\"labels\":[\"migration\"]}}\n"
+  exit 0
+fi
+exit 0
+'
+# Capture stderr to assert the scoping note is present.
+OUT=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH" .claude/hooks/require-migration-ticket.sh \
+    <<<"$(jq -nc --arg fp "$SB/$MIG" '{tool_name:"Write", tool_input:{file_path:$fp}}')" 2>&1
+)
+RC=$?
+if [ "$RC" = "2" ] && echo "$OUT" | grep -q "tracker.kind=jira"; then
+  record_pass "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)"
+else
+  record_fail "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)" "rc=$RC note-present=$(echo "$OUT" | grep -c 'tracker.kind=jira')"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

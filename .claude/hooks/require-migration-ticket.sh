@@ -362,7 +362,23 @@ MSG
 fi
 
 # --------- Gate 3: body references a migration AgDR ---------
+# The issue body is populated by tracker_view only for the gh and glab adapters
+# (see _lib-tracker.sh). For any other tracker kind the body comes back empty,
+# so this gate cannot see an AgDR link even when one exists — surface that in the
+# failure message rather than blaming the ticket. Adopters on those trackers can
+# set tracker.kind=none to skip online migration verification. (Widening body to
+# jira/linear/asana is tracked separately from #755.)
 if ! echo "$BODY" | grep -qE 'docs/agdr/AgDR-[0-9]+-[^[:space:]]*migration[^[:space:]]*\.md'; then
+  KIND_NOTE=""
+  case "$TICKET_KIND" in
+    gh|glab) ;;
+    *) KIND_NOTE="
+
+NOTE: tracker.kind=${TICKET_KIND} — this gate reads the issue body only for the
+gh and glab trackers, so for ${TICKET_KIND} the body is not fetched and this
+check cannot see an AgDR link even if the ticket has one. Track migrations on a
+gh/glab ticket, or set tracker.kind=none to skip online migration verification." ;;
+  esac
   cat >&2 <<MSG
 BLOCKED: Active ticket ${TICKET_REPO}#${TICKET_NUM} has the
 \`$MIGRATION_LABEL\` label but its body does not reference a migration
@@ -377,7 +393,7 @@ ticket body to include a reference to it:
   gh issue edit $TICKET_NUM --repo $TICKET_REPO --body-file <path>
 
 The regex the hook checks is permissive — any occurrence of the AgDR
-relative path in the body satisfies gate 3.
+relative path in the body satisfies gate 3.${KIND_NOTE}
 MSG
   exit 2
 fi
