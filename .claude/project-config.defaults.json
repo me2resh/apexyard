@@ -134,6 +134,12 @@
     "on_stale": "warn"
   },
 
+  "docs_index": {
+    "_comment": "me2resh/apexyard#753 — the maintain-docs-index.sh PostToolUse hook. OFF by default: it writes a tracked docs/INDEX.md into projects/<name>/docs/ on doc edits, so adopters opt in. When enabled it (1) regenerates the per-project docs/INDEX.md (grouped, git-dated TOC) and (2) nudges when a *.md/*.html lands under projects/<name>/ outside docs/. Advisory only — never blocks.",
+    "enabled": false,
+    "index_filename": "INDEX.md"
+  },
+
   "git": {
     "protected_branches": [
       "main",
