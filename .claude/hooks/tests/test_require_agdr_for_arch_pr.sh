@@ -434,6 +434,61 @@ run_case "cd-target arch PR with AgDR ref → PASS [#669]" \
 rm -rf "$TGT_ARCH2"
 
 # ---------------------------------------------------------------------------
+# #769 bug 1 — diff-base resolves origin/<base> before upstream/<base>.
+# On a fork DIVERGED-behind upstream (its own baseline arch customisations that
+# upstream lacks), diffing against upstream/<base>'s merge-base attributes the
+# fork's OWN baseline files to the PR → false arch-block on a docs-only PR.
+# ---------------------------------------------------------------------------
+setup_diverged_fork() {
+  local dir; dir=$(mktemp -d -t agdr-b1.XXXXXX)
+  (
+    cd "$dir" || exit 1
+    git init -q -b main
+    git config user.email t@t.test; git config user.name test
+    echo "company: test" > onboarding.yaml
+    git add onboarding.yaml; git commit -q -m init
+    local p; p=$(git rev-parse HEAD)
+    # Fork baseline: a CI workflow the fork carries but upstream does not.
+    mkdir -p .github/workflows; echo "on: push" > .github/workflows/fork-custom.yml
+    git add .github/workflows/fork-custom.yml; git commit -q -m "fork: baseline ci"
+    git update-ref refs/remotes/origin/main HEAD       # origin/main = fork main
+    # upstream/main diverged from p — does NOT have the fork's workflow.
+    git checkout -q "$p"
+    echo "# upstream" > UPSTREAM.md; git add UPSTREAM.md; git commit -q -m "upstream: unrelated"
+    git update-ref refs/remotes/upstream/main HEAD
+    # Feature branch off the fork's main: docs only.
+    git checkout -q main; git checkout -q -b feature
+    mkdir -p docs; echo "# new" > docs/new.md
+    git add docs/new.md; git commit -q -m "docs: add"
+  )
+  echo "$dir"
+}
+
+B1_DIR=$(setup_diverged_fork)
+run_case "docs-only PR on a fork diverged-behind upstream → PASS (diffs origin/main, not upstream/main) [#769 bug1]" \
+  "$B1_DIR" 0 "" \
+  "gh pr create --base main --title 'docs(#9): update guide' --body 'Docs only. No decisions.'"
+
+# ---------------------------------------------------------------------------
+# #769 bug 2 — the skip marker (and any AgDR ref) inside a heredoc --body with
+# a trailing pipe is honoured. The --body extractor cannot recover a value that
+# spans newlines or is followed by a shell operator; the raw command is now part
+# of the haystack, so the marker is seen regardless of --body quoting shape.
+# ---------------------------------------------------------------------------
+B2_DIR=$(setup_repo c1_base c1_feat)   # feature touches src/domain/ (arch), no AgDR
+B2_CMD=$'gh pr create --base main --title "feat(#10): domain" --body "$(cat <<\'EOF\'\nSome body text.\n<!-- agdr: not-applicable -->\nEOF\n)" 2>&1 | tail -3'
+run_case "arch PR, skip-marker in a heredoc --body with trailing pipe → PASS (bypassed) [#769 bug2]" \
+  "$B2_DIR" 0 "not-applicable marker present" \
+  "$B2_CMD"
+
+# And the AgDR-reference path through the same heredoc+pipe shape → PASS.
+B2b_DIR=$(setup_repo c1_base c1_feat)
+B2b_CMD=$'gh pr create --base main --title "feat(#11): domain" --body "$(cat <<\'EOF\'\nSee AgDR-0009-portfolio-domain for the rationale.\nEOF\n)" 2>&1 | tail -3'
+run_case "arch PR, AgDR ref in a heredoc --body with trailing pipe → PASS [#769 bug2]" \
+  "$B2b_DIR" 0 "" \
+  "$B2b_CMD"
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 

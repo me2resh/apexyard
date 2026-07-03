@@ -124,9 +124,21 @@ if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
   BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
 fi
 
-# Build the body haystack. Title is included so an AgDR reference in the
-# title also satisfies the requirement (reviewers will see it either way).
-HAYSTACK=$(printf '%s\n%s\n%s\n' "$TITLE" "$BODY" "$BODY_FILE_CONTENT")
+# Build the body haystack. Title is included so an AgDR reference in the title
+# also satisfies the requirement (reviewers will see it either way).
+#
+# The RAW COMMAND is included too (#769 bug 2): the --body extractor cannot
+# reliably recover a value that spans newlines (a `--body "$(cat <<'EOF' … EOF)"`
+# heredoc — awk's `.` doesn't cross lines) or is followed by a shell operator
+# (`… )" 2>&1 | tail` — the closing-quote anchor doesn't match a trailing
+# redirect/pipe). In both shapes BODY comes back as a stub like `"$(cat`, so the
+# skip marker and any AgDR reference INSIDE the body were missed and the PR was
+# false-blocked. The inline body is always a substring of $COMMAND, so grepping
+# the command directly makes the marker + AgDR-ref checks robust to every
+# quoting shape. (--body-file bodies live in a file, handled above; the marker
+# there is a distinctive HTML comment, so a raw-command match is not a false
+# bypass risk.)
+HAYSTACK=$(printf '%s\n%s\n%s\n%s\n' "$TITLE" "$BODY" "$BODY_FILE_CONTENT" "$COMMAND")
 
 # ---------------------------------------------------------------------------
 # 2. Skip marker short-circuit.
@@ -333,8 +345,15 @@ resolve_ref() {
 }
 
 if [ -n "$BASE_ARG" ]; then
-  # Try upstream/<arg>, origin/<arg>, <arg> in that order.
-  for candidate in "upstream/$BASE_ARG" "origin/$BASE_ARG" "$BASE_ARG"; do
+  # Try origin/<arg>, upstream/<arg>, <arg> in that order (#769 bug 1).
+  # origin/<arg> FIRST: a same-repo `--base main` PR merges into the fork's OWN
+  # base (origin/main), so that is the correct diff base. Trying upstream/<arg>
+  # first meant that on a fork whose main is behind upstream (the normal state
+  # before /update), the merge-base was computed against upstream's newer tree,
+  # so every file upstream changed since the last sync surfaced as an
+  # "architecture change" in this PR — false-blocking docs-only PRs. upstream
+  # stays as a fallback for a fresh fork whose origin lacks the base ref.
+  for candidate in "origin/$BASE_ARG" "upstream/$BASE_ARG" "$BASE_ARG"; do
     r=$(resolve_ref "$candidate")
     if [ -n "$r" ]; then BASE_REF="$r"; break; fi
   done
