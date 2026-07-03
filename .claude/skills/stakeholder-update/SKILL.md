@@ -16,6 +16,7 @@ Read the registry path via `portfolio_registry`, the per-project docs dir via `p
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-tracker.sh"
 projects_dir=$(portfolio_projects_dir)
 registry=$(portfolio_registry)
 ```
@@ -52,15 +53,17 @@ Aggregated across every project in `apexyard.projects.yaml` (the registry at the
 
 The skill pulls from:
 
-| Source | What it gives |
-|--------|---------------|
-| `gh pr list --state merged --search "merged:>=<since>"` | What shipped |
-| `gh issue list --state closed --search "closed:>=<since>"` | What got resolved |
-| `git log --since=<since> --oneline` | Commit volume / themes |
-| `docs/agdr/AgDR-*.md` (in this period, inside each project) | Decisions made |
-| `projects/<name>/roadmap.md` | Strategic direction |
-| `gh pr list --state open` | What's in flight |
-| `projects/ideas-backlog.md` | Ideas captured |
+| Source | What it gives | Axis |
+|--------|---------------|------|
+| `gh pr list --state merged --search "merged:>=<since>"` | What shipped | forge (#711) |
+| `tracker_list "$repo" state=closed since=<since>` | What got resolved | issue ✓ |
+| `git log --since=<since> --oneline` | Commit volume / themes | — |
+| `docs/agdr/AgDR-*.md` (in this period, inside each project) | Decisions made | — |
+| `projects/<name>/roadmap.md` | Strategic direction | — |
+| `gh pr list --state open` | What's in flight | forge (#711) |
+| `projects/ideas-backlog.md` | Ideas captured | — |
+
+> **Scope caveat (forge axis, #711).** The **PR** rows still call `gh pr list` (the PR/MR forge abstraction is a separate ticket), so `/stakeholder-update` is *issue-axis* tracker-agnostic — the "resolved issues" row works on GitLab-tracked projects; the "shipped / in-flight PRs" rows are GitHub-only until #711. The `since` filter on non-GitHub trackers is applied client-side on `updatedAt` (gh applies it server-side via the `closed:>=` search qualifier).
 
 `<since>` is computed from the update type:
 

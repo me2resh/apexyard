@@ -681,6 +681,281 @@ tracker_create() {
   echo "$result"
 }
 
+# ==============================================================================
+# Listing (tracker_list) — the #710 / AgDR-0082 read/triage abstraction.
+#
+# tracker_list is the listing analog of tracker_view: it lists a SET of issues
+# from a project's tracker via that tracker's CLI adapter. The read-side skills
+# (/inbox, /tasks, /stakeholder-update) call it instead of hardcoding
+# `gh issue list`, so they work on GitLab-tracked projects too.
+#
+# Design (AgDR-0082): callers express intent in a small GENERIC filter
+# vocabulary; each per-kind adapter renders those generic filters into its own
+# native CLI flags. We do NOT parse GitHub's search string and translate it —
+# that would couple the model to GitHub's DSL. Filters with no cross-tracker
+# equivalent (mentions:, commenter:) stay OUT of this model; skills that want
+# them keep a gh-only path (documented) or filter client-side.
+#
+# Contract: tracker_list <owner/repo> [key=value ...]
+#   Filter keys (all optional): state | assignee | author | labels | search |
+#                               since | limit
+#     state    = open (default) | closed | all
+#     assignee = @me | none | <user>   (none: gh via no:assignee; glab degrades)
+#     author   = @me | <user>
+#     labels   = comma-separated (AND semantics, per each CLI's native behaviour)
+#     search   = free text
+#     since    = ISO date (gh: search qualifier; others: client-side updatedAt)
+#     limit    = max items
+#   On success: emits a JSON ARRAY on stdout, exit 0. Each element:
+#     {"ref":str, "number":num, "state":str, "title":str, "url":str,
+#      "labels":[str], "updatedAt":str}
+#     - ref is the issue reference AS A STRING (callers must not do arithmetic —
+#       a future tracker may key LIN-42). number is the numeric convenience.
+#     - PR-only fields (mergeable/statusCheckRollup/reviewDecision) are excluded
+#       by design — those are the forge axis (#711), not the issue axis.
+#     - An empty result set is `[]` with exit 0 (success, nothing matched).
+#   On failure (CLI missing/errored, kind=none, unparseable): emits `[]` and
+#     exits 1 — callers treat empty output as "nothing / unavailable" uniformly.
+#
+# Filter args are parsed via a `case` statement into plain locals — bash 3.2-safe
+# (no `declare -A`), matching the POSIX-parameter-expansion constraint elsewhere
+# in this file. linear/jira/asana list adapters are a documented follow-up (the
+# #710 parent stack targets GitHub↔GitLab); they fall through to `[]`.
+# ------------------------------------------------------------------------------
+
+# Internal: resolve the list_command template for the `custom` kind — the
+# per-project override (registry) wins over a global .tracker.list_command.
+# Empty when neither is set (custom kind without a template can't list).
+_tracker_list_template() {
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" list_command) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  _tracker_load_config_lib
+  local tpl
+  tpl=$(config_get_or '.tracker.list_command' '' 2>/dev/null)
+  if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
+    echo "$tpl"
+  fi
+}
+
+# Internal adapter: gh → run `gh issue list --json …` with safe argv.
+# Structured filters map to gh's native flags; `assignee=none` and `since` have
+# no dedicated flag, so they append `no:assignee` / `closed:>=`|`updated:>=`
+# qualifiers to the --search string (gh merges --search with the other flags).
+_tracker_list_gh() {
+  local repo="$1" state="$2" assignee="$3" author="$4" labels="$5" search="$6" since="$7" limit="$8"
+  local -a args
+  args=(issue list --repo "$repo" --json number,title,url,labels,state,updatedAt)
+  case "$state" in
+    open|closed|all) args+=(--state "$state") ;;
+    *)               args+=(--state open) ;;
+  esac
+  if [ -n "$assignee" ]; then
+    case "$assignee" in
+      none) search="${search:+$search }no:assignee" ;;
+      *)    args+=(--assignee "$assignee") ;;
+    esac
+  fi
+  [ -n "$author" ] && args+=(--author "$author")
+  [ -n "$labels" ] && args+=(--label "$labels")
+  if [ -n "$since" ]; then
+    if [ "$state" = "closed" ]; then
+      search="${search:+$search }closed:>=$since"
+    else
+      search="${search:+$search }updated:>=$since"
+    fi
+  fi
+  [ -n "$search" ] && args+=(--search "$search")
+  [ -n "$limit" ]  && args+=(--limit "$limit")
+  gh "${args[@]}" 2>/dev/null
+}
+
+# Internal adapter: glab (GitLab) → `glab issue list -O json`. Flags verified
+# against `glab issue list --help`: --assignee/--author/--label(repeatable)/
+# --search+--in/--opened|--closed|--all/--per-page. `assignee=none` has no clean
+# glab flag → degrades (dropped); `since` is applied CLIENT-SIDE by tracker_list.
+_tracker_list_glab() {
+  local repo="$1" state="$2" assignee="$3" author="$4" labels="$5" search="$6" since="$7" limit="$8"
+  local -a args
+  args=(issue list -R "$repo" -O json)
+  case "$state" in
+    closed) args+=(--closed) ;;
+    all)    args+=(--all) ;;
+    *)      args+=(--opened) ;;
+  esac
+  if [ -n "$assignee" ]; then
+    case "$assignee" in
+      none) : ;;  # no clean glab flag — documented degradation (AgDR-0082)
+      *)    args+=(--assignee "$assignee") ;;
+    esac
+  fi
+  [ -n "$author" ] && args+=(--author "$author")
+  if [ -n "$labels" ]; then
+    local l
+    local IFS=','
+    for l in $labels; do
+      [ -n "$l" ] && args+=(--label "$l")
+    done
+  fi
+  if [ -n "$search" ]; then
+    args+=(--search "$search" --in "title,description")
+  fi
+  [ -n "$limit" ] && args+=(--per-page "$limit")
+  glab "${args[@]}" 2>/dev/null
+}
+
+# Internal adapter: custom → operator-supplied list_command template. Same trust
+# model as create: only {owner_repo} is substituted into the eval'd string; the
+# filter values pass via ENV ($TRACKER_STATE / $TRACKER_ASSIGNEE / … ) that the
+# operator references with quoted expansions — inert as command syntax. The
+# custom command is expected to emit a JSON array (normalised via identity, or a
+# configured .tracker.list_normalise_jq).
+_tracker_list_custom() {
+  local repo="$1" state="$2" assignee="$3" author="$4" labels="$5" search="$6" since="$7" limit="$8"
+  local tpl
+  tpl=$(_tracker_list_template "$repo")
+  if [ -z "$tpl" ]; then
+    return 1
+  fi
+  local cmd="$tpl"
+  cmd="${cmd//\{owner_repo\}/$repo}"
+  TRACKER_REPO="$repo" TRACKER_STATE="$state" TRACKER_ASSIGNEE="$assignee" TRACKER_AUTHOR="$author" \
+    TRACKER_LABELS="$labels" TRACKER_SEARCH="$search" TRACKER_SINCE="$since" TRACKER_LIMIT="$limit" \
+    eval "$cmd" 2>/dev/null
+}
+
+# Internal: normalise a gh `issue list --json` array → common array shape.
+_tracker_normalise_list_gh() {
+  local raw="$1"
+  [ -n "$raw" ] || return 1
+  printf '%s' "$raw" | jq -e . >/dev/null 2>&1 || return 1
+  printf '%s' "$raw" | jq -c 'map({
+    ref:       (.number | tostring),
+    number:    .number,
+    state:     (.state // ""),
+    title:     (.title // ""),
+    url:       (.url // ""),
+    labels:    ((.labels // []) | map(if type == "object" then .name else . end)),
+    updatedAt: (.updatedAt // "")
+  })' 2>/dev/null
+}
+
+# Internal: normalise a glab `issue list -O json` array → common array shape.
+# GitLab's REST JSON uses iid / web_url / updated_at, and labels as a string
+# array. state is "opened"/"closed" — normalised to that string verbatim.
+_tracker_normalise_list_glab() {
+  local raw="$1"
+  [ -n "$raw" ] || return 1
+  printf '%s' "$raw" | jq -e . >/dev/null 2>&1 || return 1
+  printf '%s' "$raw" | jq -c 'map({
+    ref:       ((.iid // .id) | tostring),
+    number:    (.iid // .id),
+    state:     (.state // ""),
+    title:     (.title // ""),
+    url:       (.web_url // .url // ""),
+    labels:    ((.labels // []) | map(if type == "object" then .name else . end)),
+    updatedAt: (.updated_at // .updatedAt // "")
+  })' 2>/dev/null
+}
+
+# Internal: normalise a custom list output. The operator's command is expected
+# to emit an already-shaped JSON array; an optional .tracker.list_normalise_jq
+# maps a different raw shape. Default is identity.
+_tracker_normalise_list_custom() {
+  local raw="$1"
+  [ -n "$raw" ] || return 1
+  printf '%s' "$raw" | jq -e . >/dev/null 2>&1 || return 1
+  _tracker_load_config_lib
+  local jq_expr
+  jq_expr=$(config_get_or '.tracker.list_normalise_jq' '.' 2>/dev/null)
+  if [ -z "$jq_expr" ] || [ "$jq_expr" = "null" ]; then
+    jq_expr='.'
+  fi
+  printf '%s' "$raw" | jq -c "$jq_expr" 2>/dev/null
+}
+
+# Public: tracker_list <owner/repo> [key=value ...]
+tracker_list() {
+  local repo="$1"
+  shift 2>/dev/null || true
+  if [ -z "$repo" ]; then
+    printf '[]\n'
+    return 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '[]\n'
+    return 1
+  fi
+
+  # Parse key=value filter args into plain locals (bash 3.2-safe).
+  local f_state="" f_assignee="" f_author="" f_labels="" f_search="" f_since="" f_limit=""
+  local kv key val
+  for kv in "$@"; do
+    key="${kv%%=*}"
+    val="${kv#*=}"
+    case "$key" in
+      state)        f_state="$val" ;;
+      assignee)     f_assignee="$val" ;;
+      author)       f_author="$val" ;;
+      labels|label) f_labels="$val" ;;
+      search)       f_search="$val" ;;
+      since)        f_since="$val" ;;
+      limit)        f_limit="$val" ;;
+    esac
+  done
+
+  # Per-project resolution: the target repo selects the project's tracker
+  # override, else the global block (never cwd, never a session marker).
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    none)
+      printf '[]\n'
+      return 1
+      ;;
+  esac
+
+  local raw rc
+  case "$kind" in
+    gh)     raw=$(_tracker_list_gh     "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit"); rc=$? ;;
+    glab)   raw=$(_tracker_list_glab   "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit"); rc=$? ;;
+    custom) raw=$(_tracker_list_custom "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit"); rc=$? ;;
+    *)      raw=$(_tracker_list_gh     "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit"); rc=$? ;;  # best-effort default
+  esac
+  if [ $rc -ne 0 ] || [ -z "$raw" ]; then
+    printf '[]\n'
+    return 1
+  fi
+
+  local normalised
+  case "$kind" in
+    gh)     normalised=$(_tracker_normalise_list_gh     "$raw") ;;
+    glab)   normalised=$(_tracker_normalise_list_glab   "$raw") ;;
+    custom) normalised=$(_tracker_normalise_list_custom "$raw") ;;
+    *)      normalised=$(_tracker_normalise_list_gh     "$raw") ;;
+  esac
+  if [ -z "$normalised" ] || [ "$normalised" = "null" ]; then
+    printf '[]\n'
+    return 1
+  fi
+
+  # Client-side `since` for adapters that don't apply it server-side (glab /
+  # custom). gh already handled it via the search qualifier above.
+  if [ -n "$f_since" ] && [ "$kind" != "gh" ]; then
+    normalised=$(printf '%s' "$normalised" | jq -c --arg since "$f_since" \
+      'map(select((.updatedAt // "") >= $since))' 2>/dev/null)
+    [ -z "$normalised" ] && normalised='[]'
+  fi
+
+  printf '%s\n' "$normalised"
+  return 0
+}
+
 # ------------------------------------------------------------------------------
 # Label ensure (tracker_label_ensure) — #709 creator-sweep companion to
 # tracker_create.
