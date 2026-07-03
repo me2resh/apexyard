@@ -234,8 +234,8 @@ Substitute the gathered values into the resolved template and write the file via
 
 ### 8. Create the issue (via the tracker abstraction)
 
-Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by the
-#709 creator sweep) so the investigation lands in **this project's** tracker —
+Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
+the #709 creator sweep) so the investigation lands in **this project's** tracker —
 GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
 `apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
 exactly as before.
