@@ -62,3 +62,22 @@ Shipped as **two stacked PRs against `dev`**, to stay under the <400-line review
 - #310 — the fork-global tracker-resolution invariant this relaxes
 - #268 — the create guard / `ticket.create_command_patterns`
 - #670 — the feature request this implements (closed by PR-B)
+
+## Follow-up — #709 creator sweep
+
+PR-B wired `tracker_create` into only the three core creators (`/task`,
+`/feature`, `/bug`). **#709** extends the same pattern to the remaining
+issue-creating skills — `/spike`, `/prototype`, `/investigation`,
+`/walking-skeleton`, `/migration`, `/tickets-batch`, `/plan-initiative`,
+`/spike-close`, `/prototype-close`, `/roadmap` (`/mutation-test` needs no change:
+it routes through `/task`). It also adds a sibling best-effort helper,
+`tracker_label_ensure <owner/repo> <name> [<color>] [<description>]`, as the
+tracker-agnostic analog of the inline `gh label create` steps for the
+`spike` / `prototype` / `investigation` trigger labels (gh + glab adapters;
+jira/linear/asana/custom/none are no-ops; always exits 0 so a duplicate/missing
+label never aborts the create). Kept a **separate** public function rather than
+folding label-ensure into `tracker_create`, to preserve PR-B's already-shipped
+create contract. Issue-state transitions (`gh issue close` in the `-close`
+skills) and body updates (`gh issue edit` in `/plan-initiative` pass 2) stay on
+`gh` — those are the read/update + forge axes, tracked separately (#710 and the
+forge work), out of #709's creation-only scope.
