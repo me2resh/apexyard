@@ -750,7 +750,9 @@ _tracker_list_template() {
 _tracker_list_gh() {
   local repo="$1" state="$2" assignee="$3" author="$4" labels="$5" search="$6" since="$7" limit="$8"
   local -a args
-  args=(issue list --repo "$repo" --json number,title,url,labels,state,updatedAt)
+  # Quote the comma-separated field list so shellcheck doesn't read the commas as
+  # array-element separators (SC2054); gh takes it as a single argument either way.
+  args=(issue list --repo "$repo" --json "number,title,url,labels,state,updatedAt")
   case "$state" in
     open|closed|all) args+=(--state "$state") ;;
     *)               args+=(--state open) ;;
