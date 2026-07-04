@@ -42,11 +42,15 @@ else
   die "CLAUDE.md does not import @.claude/rules/reporting-style.md"
 fi
 
-# 3. CLAUDE.md rules-count line updated (13 + names the rule)
-if grep -qE '13 modular rule files' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md rules count bumped to 13"
+# 3. CLAUDE.md rules-count line is present and at least 13 (>= the count as
+# of this rule's own PR, #783). Checked as a lower bound rather than an exact
+# match so a later rule addition (e.g. #784's isolated-builds.md, which bumps
+# this to 14) doesn't spuriously fail this test — see AgDR-driven rule growth.
+RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$CLAUDE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
+if [ -n "$RULES_COUNT" ] && [ "$RULES_COUNT" -ge 13 ]; then
+  pass "CLAUDE.md rules count present and >= 13 (found: $RULES_COUNT)"
 else
-  die "CLAUDE.md rules-count line not updated to 13"
+  die "CLAUDE.md rules-count line missing or below 13 (found: ${RULES_COUNT:-none})"
 fi
 if grep -qi 'reporting style' "$CLAUDE_MD" 2>/dev/null; then
   pass "CLAUDE.md rules list names 'reporting style'"
