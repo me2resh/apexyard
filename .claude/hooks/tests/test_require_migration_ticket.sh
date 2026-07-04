@@ -15,6 +15,10 @@
 #   9. glab unfetchable → block (2) — migration gate is fail-closed by design
 #  10. non-migration path → pass-through allow (0)
 #  11. no active-ticket marker → block (2)
+#  12. non-gh/glab (jira) reaches Gate 3, blocks with body-scoping note (2)
+#  13. injection: metachar marker `number=` → block (2) and NOT executed
+#  14. injection: metachar marker `repo=` → block (2) and NOT executed
+#  15. guard: `#`-prefixed number passes and is shell-safe (printf %q escapes #)
 #
 # Exit 0 = all pass. Exit 1 on any failure.
 
@@ -344,6 +348,59 @@ if [ "$RC" = "2" ] && echo "$OUT" | grep -q "tracker.kind=jira"; then
   record_pass "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)"
 else
   record_fail "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)" "rc=$RC note-present=$(echo "$OUT" | grep -c 'tracker.kind=jira')"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 13: command-injection guard — a marker `number=` carrying shell
+# metacharacters must be BLOCKED (exit 2) and must NOT execute. Regression for
+# the #755 security review: Gate 2 routes marker-derived TICKET_NUM through
+# tracker_view → eval, so an unvalidated `number=42; touch X` would run the
+# injected command. The shape guard rejects it before the tracker call.
+# =============================================================================
+SB=$(make_fork)
+# gh stub returns a valid OPEN+labelled+AgDR issue, so the ONLY thing that can
+# stop the injected `touch` from running is the caller-side shape guard.
+install_mock "$SB" gh "$GH_OPEN_OK"
+mkdir -p "$SB/.claude/session"
+printf 'repo=test-org/test-repo\nnumber=42; touch %s/PWNED_NUM ;\n' "$SB" > "$SB/.claude/session/current-ticket"
+if run_hook "$SB" "$SB/$MIG" 2 && [ ! -e "$SB/PWNED_NUM" ]; then
+  record_pass "injection: metachar number= blocked (exit 2) and not executed"
+else
+  record_fail "injection: metachar number= blocked (exit 2) and not executed" "pwned-exists=$([ -e "$SB/PWNED_NUM" ] && echo yes || echo no)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 14: command-injection guard — same, via the marker `repo=` field
+# ({owner_repo} is independently substituted into the eval'd command).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh "$GH_OPEN_OK"
+mkdir -p "$SB/.claude/session"
+printf 'repo=x/y; touch %s/PWNED_REPO #\nnumber=42\n' "$SB" > "$SB/.claude/session/current-ticket"
+if run_hook "$SB" "$SB/$MIG" 2 && [ ! -e "$SB/PWNED_REPO" ]; then
+  record_pass "injection: metachar repo= blocked (exit 2) and not executed"
+else
+  record_fail "injection: metachar repo= blocked (exit 2) and not executed" "pwned-exists=$([ -e "$SB/PWNED_REPO" ] && echo yes || echo no)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 15: the shape guard allows a `#`-prefixed number (a legitimate display
+# form). `#` is the one char in the number whitelist with shell meaning — an
+# UNescaped `#` inside the eval'd command would start a comment and swallow the
+# rest of the args. This asserts `#42` passes the guard AND is handled safely
+# (the lib's printf %q escapes the `#`), so the whole flow allows (exit 0).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh "$GH_OPEN_OK"
+mkdir -p "$SB/.claude/session"
+printf 'repo=test-org/test-repo\nnumber=#42\n' > "$SB/.claude/session/current-ticket"
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "guard: #-prefixed number passes and is shell-safe (printf %q escapes #)"
+else
+  record_fail "guard: #-prefixed number passes and is shell-safe (printf %q escapes #)"
 fi
 rm -rf "$SB"
 

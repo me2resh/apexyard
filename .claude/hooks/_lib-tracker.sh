@@ -265,12 +265,25 @@ tracker_owner_repo_param() {
 
 # ------------------------------------------------------------------------------
 # Internal: substitute {id} and {owner_repo} placeholders in the view template.
+#
+# The substituted string is run via `eval` in tracker_view, so the {id} /
+# {owner_repo} values must not be able to inject command syntax. Both are
+# shell-quoted with `printf %q` before substitution — a no-op for legitimate
+# ticket IDs / owner-repo slugs, and a neutraliser for anything containing shell
+# metacharacters. This is defence-in-depth behind each caller's own shape check:
+# validate-pr-create.sh / require-migration-ticket.sh validate before calling in,
+# but quoting here guarantees a future caller that forwards unvalidated input into
+# tracker_view can't reopen the injection hole. (#755 security review — Rex/Hakim.)
 # ------------------------------------------------------------------------------
 _tracker_substitute() {
   local tpl="$1" id="$2" owner_repo="$3"
+  local q_id q_owner_repo
+  # printf -v is available in bash 3.2 (macOS default); %q shell-escapes.
+  printf -v q_id '%q' "$id"
+  printf -v q_owner_repo '%q' "$owner_repo"
   # Use POSIX parameter expansion — portable across bash 3.2 (macOS default).
-  tpl="${tpl//\{id\}/$id}"
-  tpl="${tpl//\{owner_repo\}/$owner_repo}"
+  tpl="${tpl//\{id\}/$q_id}"
+  tpl="${tpl//\{owner_repo\}/$q_owner_repo}"
   echo "$tpl"
 }
 

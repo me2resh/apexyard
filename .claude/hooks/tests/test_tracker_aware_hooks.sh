@@ -678,6 +678,37 @@ else
 fi
 rm -rf "$SB"
 
+# Injection defence-in-depth (#755 security review): tracker_view builds its
+# command via string substitution and runs it through `eval`, so a caller that
+# forwards an unvalidated id must not be able to inject command syntax.
+# _tracker_substitute now printf %q-quotes the {id}/{owner_repo} tokens — verify a
+# metacharacter-laden id neither executes nor produces output, and that a
+# legitimate id still substitutes cleanly (no behaviour change for real values).
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 0'   # any output irrelevant; we assert no execution
+rc=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view "1; touch $SB/LIB_PWNED ;" owner/repo >/dev/null 2>&1
+  echo $?
+)
+sub=$(
+  cd "$SB" || exit 99
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  _tracker_substitute 'gh issue view {id} --repo {owner_repo}' 42 owner/repo
+)
+if [ ! -e "$SB/LIB_PWNED" ] && [ "$sub" = "gh issue view 42 --repo owner/repo" ]; then
+  record_pass "lib: tracker_view neutralises injection via printf %q (metachar id not executed; legit id unchanged)"
+else
+  record_fail "lib: tracker_view neutralises injection via printf %q" "pwned=$([ -e "$SB/LIB_PWNED" ] && echo yes || echo no) legit-sub='$sub'"
+fi
+rm -rf "$SB"
+
 # =============================================================================
 # Case 10 (#501): non-gh tracker, CLI absent / returns empty → shape-only
 # fallback. The existence check can't run (no working CLI), so a well-formed

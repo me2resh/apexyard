@@ -263,6 +263,39 @@ MSG
   exit 2
 fi
 
+# --------- Shape-guard marker-derived values before the tracker call ---------
+# TICKET_NUM / TICKET_REPO come from the session-local active-ticket marker via
+# `cut -d= -f2-`, which keeps everything after the first `=` — so a marker line
+# like `number=42; touch X` yields TICKET_NUM='42; touch X'. Gate 2 below feeds
+# both values into `tracker_view`, which builds its command by string-substituting
+# {id}/{owner_repo} into a template and running `eval` (_lib-tracker.sh). Without a
+# shape check that is a command-injection sink: the base (pre-#755) hook used direct
+# argv (`gh issue view "$TICKET_NUM" --repo "$TICKET_REPO"`), which was
+# injection-immune; routing through the tracker abstraction reintroduces the eval.
+# The sibling caller `validate-pr-create.sh` reaches the same eval only AFTER its
+# ticket number passed a shape check — this hook must not skip the equivalent guard.
+# Whitelist a conservative charset (no shell metacharacters): ticket IDs like 42,
+# #42, GH-42, ABC-123; owner/repo slugs (incl. GitLab nested groups) of letters,
+# digits, `.`, `_`, `-`, `/`. Anything else fails closed. (#755 security review;
+# defence-in-depth alongside the printf %q quoting _tracker_substitute now applies.)
+if ! printf '%s' "$TICKET_NUM" | grep -qE '^#?[A-Za-z0-9_-]+$'; then
+  cat >&2 <<MSG
+BLOCKED: Active ticket marker at $MARKER has a malformed \`number=\` value.
+Only ticket IDs like 42, #42, GH-42, or ABC-123 are allowed (no shell
+metacharacters). Re-run /start-ticket to rewrite the marker cleanly.
+MSG
+  exit 2
+fi
+if ! printf '%s' "$TICKET_REPO" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+  cat >&2 <<MSG
+BLOCKED: Active ticket marker at $MARKER has a malformed \`repo=\` value.
+Only owner/repo slugs (letters, digits, \`.\`, \`_\`, \`-\`, \`/\`) are
+allowed (no shell metacharacters). Re-run /start-ticket to rewrite the
+marker cleanly.
+MSG
+  exit 2
+fi
+
 # --------- Gate 2: issue is open + has migration label ---------
 # Resolve the ticket through the tracker abstraction (_lib-tracker.sh) so this
 # gate works for every configured tracker — GitHub (gh), GitLab (glab), Linear,
