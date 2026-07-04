@@ -178,6 +178,28 @@ assert_eq         "traversal → exit 0"                 "0" "$RC"
 assert_not_exists "traversal → no escaped INDEX write" "$SB/docs/INDEX.md"
 
 # ---------------------------------------------------------------------------
+# Case 9 — content injection: a hostile doc title (HTML) and a filename with
+# markdown-link breakout chars must be escaped in INDEX.md, not emitted raw
+# (me2resh/apexyard#768 security review, LOW).
+# ---------------------------------------------------------------------------
+SB=$(make_sandbox true)
+mkdir -p "$SB/projects/alpha/docs"
+printf '# <img src=x onerror=alert(1)>\n' > "$SB/projects/alpha/docs/evil].md"
+( cd "$SB" && git add -A && git commit -q -m "add evil doc" ) 2>/dev/null
+run_hook "$SB" "$SB/projects/alpha/docs/evil].md"
+IDX=$(cat "$SB/projects/alpha/docs/INDEX.md" 2>/dev/null)
+assert_eq       "injection → exit 0"                 "0" "$RC"
+assert_contains "injection → title HTML-escaped"     "$IDX" "&lt;img src=x onerror=alert(1)&gt;"
+assert_not_exists_str() { # inline: assert the raw payload is NOT present
+  if printf '%s' "$IDX" | grep -qF -- "$1"; then
+    echo "FAIL [$2]: raw payload present: $1" >&2; FAIL=$((FAIL+1)); FAILED="${FAILED}$2 "
+  else PASS=$((PASS+1)); fi
+}
+assert_not_exists_str "<img src=x onerror=alert(1)>" "injection → no raw <img> in INDEX"
+assert_not_exists_str "evil]"                        "injection → filename ] neutralised"
+assert_contains "injection → filename ] percent-encoded" "$IDX" "evil%5D.md"
+
+# ---------------------------------------------------------------------------
 echo "=========================================="
 if [ "$FAIL" -eq 0 ]; then
   echo "PASS: $PASS  FAIL: 0"

@@ -65,6 +65,21 @@ _doc_title() {
   printf '%s' "$t"
 }
 
+# _md_cell <text> — make an untrusted string safe inside a markdown table cell
+# that a downstream consumer (the admin dashboard) may render as HTML: escape
+# the HTML-significant chars and the table delimiter. '&' MUST be first so the
+# entities we introduce below aren't re-escaped (me2resh/apexyard#768 review).
+_md_cell() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/|/\\|/g'
+}
+
+# _md_link <text> — as _md_cell, plus neutralise the markdown-link structural
+# chars so a crafted filename can't break out of `[text](url)` into an injected
+# link / HTML (e.g. a doc literally named `x](javascript:alert(1)).md`).
+_md_link() {
+  _md_cell "$1" | sed -e 's/\[/%5B/g' -e 's/\]/%5D/g' -e 's/(/%28/g' -e 's/)/%29/g'
+}
+
 # _doc_dates <file> — "created<TAB>modified" from git history (ISO dates).
 # Both fall back to "—" when the file is untracked / not in a git repo.
 _doc_dates() {
@@ -81,7 +96,7 @@ _doc_dates() {
 # Rewrites <index_file> as a grouped, date-aware TOC of docs under <docs_dir>.
 _generate_index() {
   local ddir="$1" ifile="$2" pname="$3"
-  local iname tmp files groups g rel abs title dates created modified
+  local iname tmp files groups g rel rel_esc abs title dates created modified
   iname="$(basename "$ifile")"
 
   tmp=$(mktemp) || return 0
@@ -117,9 +132,11 @@ _generate_index() {
       title=$(_doc_title "$abs")
       dates=$(_doc_dates "$abs")
       created="${dates%%$'\t'*}"; modified="${dates##*$'\t'}"
-      # escape pipes so a title with '|' can't break the markdown table
-      title=$(printf '%s' "$title" | sed 's/|/\\|/g')
-      printf '| [%s](%s) | %s | %s | %s |\n' "$rel" "$rel" "$title" "$created" "$modified" >> "$tmp"
+      # Escape untrusted title + path so a hostile filename / heading can't inject
+      # HTML or break the markdown table/link when the dashboard renders INDEX.md.
+      title=$(_md_cell "$title")
+      rel_esc=$(_md_link "$rel")
+      printf '| [%s](%s) | %s | %s | %s |\n' "$rel_esc" "$rel_esc" "$title" "$created" "$modified" >> "$tmp"
     done <<EOF
 $files
 EOF
