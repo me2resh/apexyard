@@ -43,11 +43,16 @@ else
   die "CLAUDE.md does not import @.claude/rules/isolated-builds.md"
 fi
 
-# 3. CLAUDE.md rules-count line updated (14 + names the rule)
-if grep -qE '14 modular rule files' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md rules count bumped to 14"
+# 3. CLAUDE.md rules-count line is present and at least 14 (>= the count as
+# of this rule's own PR, #784). Checked as a lower bound rather than an exact
+# match so a later rule addition (e.g. #788's agent-role-selection.md, which
+# bumps this to 15) doesn't spuriously fail this test — same fix applied
+# retroactively here that test_reporting_style.sh already used for #783.
+RULES_COUNT=$(grep -oE '[0-9]+ modular rule files' "$CLAUDE_MD" 2>/dev/null | grep -oE '^[0-9]+' | head -n 1)
+if [ -n "$RULES_COUNT" ] && [ "$RULES_COUNT" -ge 14 ]; then
+  pass "CLAUDE.md rules count present and >= 14 (found: $RULES_COUNT)"
 else
-  die "CLAUDE.md rules-count line not updated to 14"
+  die "CLAUDE.md rules-count line missing or below 14 (found: ${RULES_COUNT:-none})"
 fi
 if grep -qi 'isolated builds' "$CLAUDE_MD" 2>/dev/null; then
   pass "CLAUDE.md rules list names 'isolated builds'"
