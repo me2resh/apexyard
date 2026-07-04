@@ -12,6 +12,7 @@
       "CI",
       "Docs",
       "Spike",
+      "Prototype",
       "Investigation"
     ],
     "label_priority_scheme": "P0,P1,P2,P3",
@@ -24,9 +25,15 @@
       "Docs": ["Driver", "Acceptance Criteria"],
       "Bug": ["Given / When / Then", "Repro"],
       "Spike": ["Hypothesis", "Budget", "Kill Criteria", "Disposition"],
+      "Prototype": ["Direction Question", "Fidelity", "Budget", "Disposition"],
       "Investigation": ["Trigger", "Hypothesis being tested", "Method", "Findings", "Conclusion", "Follow-up actions"]
     },
     "skip_marker": "<!-- validate-issue-structure: skip -->",
+    "_schema_exempt_skills_comment": "Skills that file [Feature]/[Bug] issues UPSTREAM (me2resh/apexyard) using their own body template, which is deliberately distinct from this project's required_sections schema. When one of these is the active filing skill (marker at .claude/session/active-issue-skill), validate-issue-structure.sh skips the project schema for that create — they are the trusted producers of those bodies. Narrow by design: a project /feature or /bug writes its own name to the marker and is NOT exempted. See me2resh/apexyard#712.",
+    "schema_exempt_skills": [
+      "request-apexyard-feature",
+      "report-apexyard-bug"
+    ],
     "_bootstrap_skills_comment": "Skills that run BEFORE any ticket can exist (fork bootstrap, project handover, framework upstream-sync). When one of these is active (marker at .claude/session/active-bootstrap), require-active-ticket.sh exempts the gate. The marker is written by the skill itself on entry, cleared on completion, AND reset at SessionStart so a stale marker can't carry over. See AgDR-0011-bootstrap-skill-exemption.md and me2resh/apexyard#150.",
     "bootstrap_skills": [
       "setup",
@@ -38,10 +45,12 @@
     "create_command_patterns": [
       "gh issue create",
       "gh api repos/",
+      "glab issue create",
       "linear issue create",
       "jira issue create",
       "jira create",
-      "asana task create"
+      "asana task create",
+      "tracker_create"
     ]
   },
 
@@ -54,6 +63,7 @@
       "docs",
       "test",
       "spike",
+      "prototype",
       "ci",
       "build",
       "perf",
@@ -75,6 +85,7 @@
       "ci",
       "revert",
       "spike",
+      "prototype",
       "sync"
     ]
   },
@@ -94,6 +105,7 @@
       "revert",
       "release",
       "spike",
+      "prototype",
       "sync"
     ],
     "required_sections": [
@@ -191,5 +203,18 @@
     },
     "threshold": 60,
     "timeout_minutes": 90
+  },
+
+  "github_projects": {
+    "_comment": "GitHub Projects (v2) board integration. Set enable_auto_moves=true to auto-move cards on SDLC lifecycle events (start-ticket → In progress, PR created → In review, merge → Measurement). board_number and owner must identify your project board. status_map keys map to the option labels on your board's Status single-select field — adjust them to match your board's column names. Override this whole block in .claude/project-config.json. See .claude/hooks/_lib-project-board.sh and me2resh/apexyard#725.",
+    "owner": "",
+    "board_number": 0,
+    "enable_auto_moves": false,
+    "status_field_name": "Status",
+    "status_map": {
+      "in_progress": "In progress",
+      "review": "In review",
+      "measurement": "Measurement"
+    }
   }
 }

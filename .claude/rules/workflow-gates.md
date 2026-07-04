@@ -98,6 +98,8 @@ Default design-artifact patterns (configurable via `.claude/project-config.json`
 
 Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxed, throw-away exploration. The full production SDLC is the wrong bar — author avoidance is the failure mode. The exemption set below is **surgical, not blanket**:
 
+> **Prototype work shares this exemption.** Prototype tickets (prefix `[Prototype]`, label `prototype`, branch `prototype/...`, PR type `prototype(...)`) are the throw-away **UX/demo** sibling of spikes — same disposable lifecycle, different question ("what should it look/feel like?" vs "will it work?"). The AgDR + coverage exemptions in the table below apply to prototype work identically; substitute `/prototype` for `/spike` and `/prototype-close` for `/spike-close`. The **walking skeleton** (`/walking-skeleton`) is the deliberate opposite — a **kept** thin end-to-end slice held to the FULL SDLC with **no** exemptions. See `.claude/skills/{spike,prototype,walking-skeleton}/SKILL.md`.
+
 | Gate | Production work | Spike work |
 |------|----------------|------------|
 | Pre-Build (parent epic, story tickets, ACs, design review) | Required | Skipped — the spike ticket IS the unit |
@@ -109,13 +111,13 @@ Spike tickets (prefix `[Spike]`, label `spike`) are hypothesis-driven, time-boxe
 | QA Engineer verification | Required (AC verification) | **Required** (Hypothesis verification: did we answer the question?) |
 | Disposition decision before close | N/A | **Required** — operator must declare PROMOTE or DISCARD via `/spike-close` |
 
-**Detection.** AgDR-required hooks detect a spike PR via:
+**Detection.** AgDR-required hooks detect a spike (or prototype) PR via:
 
-1. PR title carries `spike(...)` as the conventional-commit type
-2. Active ticket marker references a `[Spike]`-prefixed ticket
-3. Branch name starts with `spike/`
+1. PR title carries `spike(...)` or `prototype(...)` as the conventional-commit type
+2. Active ticket marker references a `[Spike]`- or `[Prototype]`-prefixed ticket
+3. Branch name starts with `spike/` or `prototype/`
 
-Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/spike-close/SKILL.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
+Any one match exempts the gate; otherwise the production rule applies. See `.claude/skills/spike/SKILL.md`, `.claude/skills/spike-close/SKILL.md`, `.claude/skills/prototype/SKILL.md`, `.claude/skills/prototype-close/SKILL.md`, and `docs/agdr/AgDR-0017-spike-skill-schema-and-exemptions.md`.
 
 ## QA State is Mandatory
 

@@ -80,21 +80,28 @@ extract_flag_value() {
     END {
       s = buf
       # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      # Boundary matches single-dash (`-F`, `-f`, `-t`) OR double-dash
+      # (`--field`, `--body-file`) flags. The earlier `--[a-zA-Z]`-only anchor
+      # failed when a single-dash flag followed a quoted value — e.g.
+      # `--title "[Feature] F" -F body=@file` parsed the title as `"[Feature]`
+      # via the unquoted fallback, so the bracketed prefix never resolved and
+      # the gh-api body-file shape silently bypassed validation
+      # (me2resh/apexyard#695).
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
         sub("\"[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
       # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+-{1,2}[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
         sub(SQ "[[:space:]]*$", "", chunk)
         print chunk
         exit
@@ -130,6 +137,19 @@ if [ -z "$BODY_FILE" ]; then
   fi
 fi
 
+# `gh api … -F body=@<path>` (or --field / -f, raw `body@=<path>`) is the
+# canonical REST shape for posting an issue body from a file — distinct from
+# the `gh issue create --body-file <path>` form handled above. Here the field
+# VALUE carries the file path after an `@` sigil, so the skip-marker + section
+# checks were blind to the file's content (me2resh/apexyard#695). Extract the
+# path from any `body=@<path>` / `body@=<path>` field on -F / --field / -f.
+if [ -z "$BODY_FILE" ]; then
+  BODY_AT=$(echo "$COMMAND" | sed -nE "s/.*(^|[[:space:]])(-F|--field|-f)[[:space:]]+[\"']?body@?=@([^[:space:]\"']+).*/\3/p" | head -1)
+  if [ -n "$BODY_AT" ]; then
+    BODY_FILE="$BODY_AT"
+  fi
+fi
+
 BODY_FILE_CONTENT=""
 if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
   BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
@@ -154,6 +174,7 @@ fi
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 PREFIX_WHITELIST=""
 SKIP_MARKER=""
+EXEMPT_SKILLS=""
 HAVE_CONFIG_LIB=0
 
 if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
@@ -162,6 +183,7 @@ if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ];
   HAVE_CONFIG_LIB=1
   PREFIX_WHITELIST=$(config_get '.ticket.prefix_whitelist[]' 2>/dev/null | tr '\n' ' ')
   SKIP_MARKER=$(config_get_or '.ticket.skip_marker' '<!-- validate-issue-structure: skip -->' 2>/dev/null)
+  EXEMPT_SKILLS=$(config_get '.ticket.schema_exempt_skills[]' 2>/dev/null | tr '\n' ' ')
 fi
 
 # Inline defaults for bare checkouts predating apexyard#109. Mirror the
@@ -170,6 +192,11 @@ if [ -z "$PREFIX_WHITELIST" ]; then
   PREFIX_WHITELIST="Feature Bug Chore Refactor Testing CI Docs Spike"
 fi
 SKIP_MARKER="${SKIP_MARKER:-<!-- validate-issue-structure: skip -->}"
+# Framework-filing skills that file upstream with their own body template
+# (mirrors .ticket.schema_exempt_skills; see the #712 exemption below).
+if [ -z "$EXEMPT_SKILLS" ]; then
+  EXEMPT_SKILLS="request-apexyard-feature report-apexyard-bug"
+fi
 
 # ---------------------------------------------------------------------------
 # Skip marker — visible bypass, logs to stderr.
@@ -178,6 +205,54 @@ SKIP_MARKER="${SKIP_MARKER:-<!-- validate-issue-structure: skip -->}"
 if echo "$FULL_BODY" | grep -qF -- "$SKIP_MARKER"; then
   echo "WARN: $SKIP_MARKER present — validate-issue-structure bypassed." >&2
   exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Framework-filing exemption (me2resh/apexyard#712).
+#
+# /request-apexyard-feature and /report-apexyard-bug file [Feature]/[Bug] issues
+# UPSTREAM (me2resh/apexyard) using their own body template (Problem/Proposed/Why;
+# Affected/Notes), which is deliberately distinct from this project's
+# required_sections schema. When one of those skills is the active filing skill,
+# the project schema does not apply — they are the trusted producers of those
+# bodies. Detected via the SAME active-issue-skill marker that
+# require-skill-for-issue-create.sh reads, so the two hooks agree on its location.
+#
+# Narrow by design: a project /feature or /bug writes ITS OWN name to the marker
+# and is therefore NOT exempt. The exempt list is config-driven
+# (.ticket.schema_exempt_skills) with the inline fallback set above.
+# ---------------------------------------------------------------------------
+
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+OPS_ROOT=""
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-$PWD}" 2>/dev/null)
+else
+  # Inline fallback (mirror of require-skill-for-issue-create.sh): walk up for
+  # the v2 .apexyard-fork anchor or the legacy v1 onboarding+projects pair.
+  cur="${REPO_ROOT:-$PWD}"
+  while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+    if [ -f "$cur/.apexyard-fork" ]; then OPS_ROOT="$cur"; break; fi
+    if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
+      OPS_ROOT="$cur"; break
+    fi
+    cur=$(dirname "$cur")
+  done
+fi
+
+SKILL_MARKER="${OPS_ROOT:-${REPO_ROOT:-.}}/.claude/session/active-issue-skill"
+if [ -f "$SKILL_MARKER" ]; then
+  ACTIVE_SKILL=$(tr -d '[:space:]' < "$SKILL_MARKER" 2>/dev/null)
+  if [ -n "$ACTIVE_SKILL" ]; then
+    for s in $EXEMPT_SKILLS; do
+      if [ "$s" = "$ACTIVE_SKILL" ]; then
+        echo "WARN: active filing skill '$ACTIVE_SKILL' is schema-exempt (.ticket.schema_exempt_skills) — validate-issue-structure skipped." >&2
+        exit 0
+      fi
+    done
+  fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -100,7 +100,7 @@ resolve_ops_root_walk() {
       printf '%s' "$r"
       return 0
     fi
-    r=$(dirname "$r")
+    parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
   done
   return 0
 }

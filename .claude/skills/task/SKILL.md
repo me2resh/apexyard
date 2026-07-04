@@ -36,7 +36,17 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
 
 ```bash
-ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+# Resolve the ops-fork root the SAME way the hooks do (_lib-ops-root.sh):
+# anchor on the .apexyard-fork marker (split-portfolio v2 — onboarding.yaml
+# lives in the sibling portfolio repo, NOT the ops fork), falling back to the
+# onboarding.yaml + apexyard.projects.yaml pair (single-fork v1).
+ops_root="$PWD"; r="$PWD"
+while [ "$r" != / ]; do
+  if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+    ops_root="$r"; break
+  fi
+  r=${r%/*}
+done
 mkdir -p "$ops_root/.claude/session"
 echo "task" > "$ops_root/.claude/session/active-issue-skill"
 ```
@@ -170,20 +180,57 @@ A fork that extends the whitelist (e.g. adds `[Security]`, `[Perf]`, `[Scaffold]
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 7. Create the GitHub Issue
+### 7. Create the issue (via the tracker abstraction)
+
+Dispatch creation through `tracker_create` (#670 / AgDR-0072) so the issue lands
+in **this project's** tracker — GitHub, GitLab, or a `custom` CLI — per its
+`tracker:` block in `apexyard.projects.yaml`. For a GitHub adopter this runs
+`gh issue create` exactly as before; no behaviour change.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[{type}] {title}" \
-  --label "{priority}" \
-  --body "{formatted body}"
+# Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
+# from the cwd; source it.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+# It is gated by require-skill-for-issue-create.sh; the active-issue-skill
+# marker written in step 0 keeps this call allowed.
+result="$(tracker_create "{owner/repo}" "[{type}] {title}" "$body_file" "{priority}")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 3 ]; then
+  # tracker.kind=none (shape-only): no tracker to create in. tracker_create
+  # printed the rendered ticket body to stdout — surface it for manual /
+  # external filing instead of a non-existent CLI/auth failure.
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  echo "File this in your external system (e.g. Jira/Linear via MCP):" >&2
+  printf '%s\n' "$result"
+  exit 0
+elif [ "$rc" -ne 0 ] || [ -z "$result" ]; then
+  echo "Ticket creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+fi
 ```
 
-### 8. Return the URL
+### 8. Return the result
 
-```
-Created: {owner/repo}#{number} — {title}
-{url}
+Parse the normalised `{ref, url}` from `tracker_create`:
+
+```bash
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
+echo "Created: {owner/repo}#${ref} — {title}"
+echo "${url}"
 ```
 
 ## Rules

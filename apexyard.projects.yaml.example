@@ -52,6 +52,18 @@ version: 1
 #               Override the global ticket prefix per project. Useful when
 #               one project uses GH Issues (`GH`) and another uses Linear
 #               (`ENG`).
+#   tracker     Per-project override of the GLOBAL tracker config in
+#               .claude/project-config.json (#670 / AgDR-0072). Same keys as
+#               the global block — any you omit fall back to the global default,
+#               so a project with no `tracker:` behaves exactly as before:
+#                 kind         gh | linear | jira | asana | custom | none
+#                 id_pattern   regex for valid ticket-ID shape
+#                 view_command template with {id} / {owner_repo} placeholders
+#                 create_command  (Part B) template for issue creation
+#               This is what lets one portfolio mix trackers — e.g. a GitHub
+#               project alongside a GitLab one (see Example 4 below). The
+#               tracker is selected by the operation's target repo, so the
+#               right CLI is used per project, not per session.
 #
 
 projects:
@@ -109,6 +121,28 @@ projects:
     tags:
       - customer-facing
       - low-velocity
+
+  # ---------------------------------------------------------------------------
+  # Example 4: a project on GitLab — per-project tracker override (#670)
+  # The global tracker in .claude/project-config.json stays `gh`; THIS project
+  # resolves to GitLab because of its own `tracker:` block. Both coexist under
+  # one portfolio. Omitted tracker keys fall back to the global default.
+  # ---------------------------------------------------------------------------
+  - name: data-pipeline
+    repo: your-group/data-pipeline
+    workspace: workspace/data-pipeline
+    docs: projects/data-pipeline
+    status: active
+    tier: P1
+    roles:
+      - data-engineer
+      - platform-engineer
+    tracker:
+      kind: custom
+      id_pattern: "^#[0-9]+$"
+      view_command: "glab issue view {id} -R {owner_repo} --output json"
+      # create_command lands in Part B (tracker_create); until then, creation
+      # on this project still uses the global path.
 
 # -----------------------------------------------------------------------------
 # Defaults

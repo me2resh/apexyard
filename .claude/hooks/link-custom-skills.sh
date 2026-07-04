@@ -67,7 +67,7 @@ else
     if [ -f "$cur/onboarding.yaml" ] && [ -f "$cur/apexyard.projects.yaml" ]; then
       ops_root="$cur"; break
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 fi
 

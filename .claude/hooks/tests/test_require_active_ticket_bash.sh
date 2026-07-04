@@ -299,6 +299,170 @@ EOF
 in=$(jq -nc --arg c "echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "bash redirect to tracked source allowed WITH active ticket" 0 "" "$in" "$sb"
 
+# --- #744 + #745: REPO_ROOT anchored to FILE_PATH not CWD (#744, #745) ------
+#
+# These tests exercise the fix for me2resh/apexyard#744 / #745.  The core
+# failure: `git rev-parse --show-toplevel` ran from the HOOK'S CWD, not from
+# the edited file's directory.  When the harness fires with CWD=/tmp (or any
+# dir that isn't the file's git repo), REPO_ROOT resolves to "" or the wrong
+# tree, the OPS_ROOT walk-up never finds the ops fork, MARKER_HOME becomes "."
+# (relative), and the per-project marker is missed → gate fails closed even
+# though /start-ticket set a valid marker.
+
+LIB_OPS_SRC="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
+LIB_PORT_SRC="$SRC_ROOT/.claude/hooks/_lib-portfolio-paths.sh"
+
+# Helper: run hook from an arbitrary CWD, using the hook's absolute path.
+# Args: label want_rc want_stderr_regex input sandbox_dir run_cwd
+# Deletes sandbox_dir on completion (same lifecycle as run_case).
+run_case_cwd() {
+  local label="$1" want_rc="$2" want_stderr_regex="$3" input="$4" sb="$5" run_cwd="$6"
+  local got_stderr got_rc
+  got_stderr=$(cd "$run_cwd" && echo "$input" | bash "$sb/.claude/hooks/require-active-ticket.sh" 2>&1 >/dev/null)
+  got_rc=$?
+  rm -rf "$sb"
+
+  if [ "$got_rc" != "$want_rc" ]; then
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc (stderr: ${got_stderr:0:300})" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ -n "$want_stderr_regex" ] && ! echo "$got_stderr" | grep -qE "$want_stderr_regex"; then
+    echo "FAIL [$label]: stderr did not match /$want_stderr_regex/" >&2
+    echo "    stderr: $got_stderr" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
+# 27. #744 core: file under <ops_root>/workspace/myproj/src/x.ts, valid
+#     per-project marker, hook runs with CWD=/tmp.  Before the fix the gate
+#     fails closed (REPO_ROOT="" → MARKER_HOME="." → marker not found).
+#     After the fix REPO_ROOT is derived from FILE_PATH, OPS_ROOT is found
+#     by walking up from the workspace dir, and the marker is found → exit 0.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/workspace/myproj/src"
+mkdir -p "$sb/.claude/session/tickets"
+cat > "$sb/.claude/session/tickets/myproj" <<EOF
+repo=me2resh/myproj
+number=744
+title=anchor fix test
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case_cwd "#744 core: file in workspace, valid marker, CWD=/tmp → exempt" 0 "" "$in" "$sb" "/tmp"
+
+# 28. #744 regression: same layout, NO marker, CWD=/tmp → gate still BLOCKS.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/workspace/myproj/src"
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case_cwd "#744 regression: no marker, CWD=/tmp → still blocked" 2 "BLOCKED" "$in" "$sb" "/tmp"
+
+# 29. #744 .claude/ path still exempt with CWD=/tmp (path-exemption regression).
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+in=$(jq -nc --arg p "$rsb/.claude/hooks/my-hook.sh" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case_cwd "#744 .claude/ path still exempt even with wrong CWD" 0 "" "$in" "$sb" "/tmp"
+
+# 30. #745 split-portfolio: ops fork and workspace are SIBLING directories;
+#     workspace_dir is configured (absolute path) in the ops fork's project-config;
+#     per-project marker lives in the ops fork; ops root is resolved via the
+#     session pin (CLAUDE_CODE_SESSION_ID + pin file at $HOME/.claude/apexyard/).
+#     CWD=/tmp.  Expected: exempt (exit 0).
+#
+#     This mirrors the production split-portfolio v2 scenario where:
+#       <ops_fork>/            ← apexyard framework fork
+#         .apexyard-fork
+#         .claude/project-config.json   (portfolio.workspace_dir = absolute sibling path)
+#         .claude/session/tickets/myproj
+#       <sibling_ws>/          ← private portfolio workspace (sibling, NOT under ops fork)
+#         myproj/src/x.ts      ← file being edited
+#     The session-start pin-ops-root.sh hook records ops_fork in
+#     ~/.claude/apexyard/ops-root-<SESSION_ID> so resolve_ops_root finds it
+#     even when the hook fires with CWD=/tmp.
+_t30_ops=$(mktemp -d)
+_t30_ws=$(mktemp -d)
+_t30_ops_real=$(cd "$_t30_ops" && pwd -P)
+_t30_ws_real=$(cd "$_t30_ws" && pwd -P)
+
+# Bootstrap the ops fork
+(
+  cd "$_t30_ops" || exit 1
+  git init -q
+  git config user.email "test@example.com"
+  git config user.name "test"
+  : > .apexyard-fork
+  : > onboarding.yaml
+  : > apexyard.projects.yaml
+  git add .apexyard-fork onboarding.yaml apexyard.projects.yaml
+  git commit -q -m "init"
+)
+
+# Install hook + libs into ops fork
+mkdir -p "$_t30_ops/.claude/hooks"
+cp "$HOOK_SRC"  "$_t30_ops/.claude/hooks/require-active-ticket.sh"
+cp "$LIB_BASH"  "$_t30_ops/.claude/hooks/_lib-detect-bash-write.sh"
+cp "$LIB_CFG"   "$_t30_ops/.claude/hooks/_lib-read-config.sh"
+cp "$DEFAULTS"  "$_t30_ops/.claude/project-config.defaults.json"
+[ -f "$LIB_OPS_SRC" ]  && cp "$LIB_OPS_SRC"  "$_t30_ops/.claude/hooks/_lib-ops-root.sh"
+[ -f "$LIB_PORT_SRC" ] && cp "$LIB_PORT_SRC" "$_t30_ops/.claude/hooks/_lib-portfolio-paths.sh"
+chmod +x "$_t30_ops/.claude/hooks/require-active-ticket.sh"
+
+# Configure workspace_dir to the sibling path (absolute in config so
+# _portfolio_resolve returns it directly without needing _portfolio_root).
+cat > "$_t30_ops/.claude/project-config.json" <<EOF
+{
+  "portfolio": {
+    "workspace_dir": "$_t30_ws_real"
+  }
+}
+EOF
+
+# Per-project marker in ops fork
+mkdir -p "$_t30_ops/.claude/session/tickets"
+cat > "$_t30_ops/.claude/session/tickets/myproj" <<EOF
+repo=me2resh/myproj
+number=745
+title=split-portfolio anchor fix
+EOF
+
+# Project dir in sibling workspace
+mkdir -p "$_t30_ws/myproj/src"
+
+# Write a session pin so resolve_ops_root finds ops_fork from CWD=/tmp.
+# Use a HERMETIC temp pin dir (not the real $HOME/.claude/apexyard) so the test
+# is deterministic in CI and never reads/pollutes the operator's real pin store.
+_t30_sid="apexyard-test745-$$"
+_t30_pin_dir=$(mktemp -d)
+printf '%s\n' "$_t30_ops_real" > "$_t30_pin_dir/ops-root-${_t30_sid}"
+
+_t30_in=$(jq -nc --arg p "$_t30_ws_real/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+
+# Re-enable the pin for THIS invocation: bin/run-hook-tests.sh exports
+# APEXYARD_OPS_DISABLE_PIN=1 suite-wide (so the suite never reads the operator's
+# real pin), but this case deliberately exercises pin-based split-portfolio
+# resolution, so we override it back to empty for the hook call only.
+_t30_stderr=$(cd /tmp && echo "$_t30_in" | \
+  CLAUDE_CODE_SESSION_ID="$_t30_sid" \
+  APEXYARD_OPS_PIN_DIR="$_t30_pin_dir" \
+  APEXYARD_OPS_DISABLE_PIN='' \
+  bash "$_t30_ops/.claude/hooks/require-active-ticket.sh" 2>&1 >/dev/null)
+_t30_rc=$?
+
+# Cleanup
+rm -rf "$_t30_ops" "$_t30_ws"
+rm -f "$_t30_pin_dir/ops-root-${_t30_sid}"
+
+_t30_label="#745 split-portfolio: sibling workspace, session pin → exempt"
+if [ "$_t30_rc" != "0" ]; then
+  echo "FAIL [$_t30_label]: want rc=0, got $_t30_rc (stderr: ${_t30_stderr:0:300})" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${_t30_label} "
+else
+  echo "PASS [$_t30_label]"
+  PASS=$((PASS+1))
+fi
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

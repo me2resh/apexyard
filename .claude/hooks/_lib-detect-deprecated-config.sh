@@ -91,9 +91,12 @@ detect_deprecated_config_keys() {
   #   - subtract default keys from override keys
   #   - filter out leading-underscore metadata
   #   - emit one per line, sorted for stable output
-  jq -r --slurpfile def "$defaults" '
+  # NOTE: the slurpfile binding is named `defaults_doc`, not `def`. `def` is a
+  # reserved keyword in jq's grammar (function definitions), and jq 1.6 rejects
+  # it as a variable name with a parse error — see me2resh/apexyard#668.
+  jq -r --slurpfile defaults_doc "$defaults" '
     [keys[]] as $okeys
-    | ($def[0] | keys) as $dkeys
+    | ($defaults_doc[0] | keys) as $dkeys
     | $okeys
     | map(select(
         (. as $k | $dkeys | index($k) | not)

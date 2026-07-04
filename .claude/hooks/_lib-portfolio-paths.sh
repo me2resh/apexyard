@@ -78,7 +78,7 @@ _portfolio_root() {
       echo "$cur"
       return 0
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 
   # Not under an apexyard fork — fall back to git toplevel so callers

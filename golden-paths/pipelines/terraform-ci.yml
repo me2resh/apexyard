@@ -1,0 +1,405 @@
+# Terraform CI — golden-path pipeline (ApexYard)
+#
+# A copy-and-customize CI workflow for an AWS Terraform mono-repo orchestrated
+# with Terramate. Quality gates → detect changed stacks → per-stack PLAN matrix
+# (comments the plan on the PR; plan-only on feature branches) → per-stack APPLY
+# matrix gated on `main`, authenticated to AWS via keyless OIDC.
+#
+# ── HOW TO ADOPT ───────────────────────────────────────────────────────────
+# 1. Copy this file to your repo's `.github/workflows/terraform-ci.yml`.
+# 2. Set the repository secrets / vars listed under `env:` and in each
+#    `# CUSTOMIZE` block below (AWS OIDC role ARN, region, provider tokens).
+# 3. Bootstrap the OIDC IAM role in your AWS account first — this pipeline
+#    *assumes* the role, it does not create it. (See README.)
+# 4. Review every `# CUSTOMIZE` marker and delete the optional blocks you
+#    don't need (pre-plan build hook, stack-exclusion filter).
+#
+# Prerequisites in the repo: Terramate stacks, an S3/DynamoDB (or other) TF
+# backend already configured per stack, and provider credentials wired as
+# secrets. See golden-paths/pipelines/README.md § "Terraform CI".
+# ───────────────────────────────────────────────────────────────────────────
+
+name: Terraform CI
+
+on:
+  pull_request:
+    paths: [ '**' ]
+  push:
+    branches: [ main, 'feature/**', 'feat/**', 'fix/**' ]
+    paths: [ '**' ]
+
+env:
+  # CUSTOMIZE: pin the tool versions your repo targets.
+  TERRAMATE_VERSION: "0.8.0"
+  TF_VERSION: "1.5.7"
+  # CUSTOMIZE: your AWS region.
+  AWS_REGION: "us-east-1"
+  # CUSTOMIZE: the IAM role GitHub Actions assumes via OIDC. Store the full ARN
+  # as a repository secret named AWS_CI_ROLE_ARN — never hardcode an account ID.
+  # e.g. arn:aws:iam::<account-id>:role/<your-ci-role>
+  AWS_CI_ROLE_ARN: ${{ secrets.AWS_CI_ROLE_ARN }}
+
+# Least-privilege defaults; jobs that need more request it explicitly.
+permissions:
+  contents: read
+
+jobs:
+  # ── Quality gates ──────────────────────────────────────────────────────────
+  format:
+    name: 🔍 Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+  validate:
+    name: ✅ Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Setup Terramate
+        run: |
+          wget -q -O /tmp/terramate.tar.gz "https://github.com/terramate-io/terramate/releases/download/v${TERRAMATE_VERSION}/terramate_${TERRAMATE_VERSION}_linux_x86_64.tar.gz"
+          sudo tar -xzf /tmp/terramate.tar.gz -C /usr/local/bin terramate
+          sudo chmod +x /usr/local/bin/terramate
+          terramate --version
+      - name: List changed stacks
+        run: |
+          echo "Changed stacks:"
+          terramate list --changed
+      - name: Terraform validate (changed stacks)
+        run: |
+          terramate run --changed terraform init -backend=false
+          terramate run --changed terraform validate
+
+  lint:
+    name: 🧹 Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Setup Terramate
+        run: |
+          wget -q -O /tmp/terramate.tar.gz "https://github.com/terramate-io/terramate/releases/download/v${TERRAMATE_VERSION}/terramate_${TERRAMATE_VERSION}_linux_x86_64.tar.gz"
+          sudo tar -xzf /tmp/terramate.tar.gz -C /usr/local/bin terramate
+          sudo chmod +x /usr/local/bin/terramate
+          terramate --version
+      - name: Setup tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --version
+      - name: Run tflint (changed stacks)
+        run: terramate run --changed tflint
+
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Setup Terramate
+        run: |
+          wget -q -O /tmp/terramate.tar.gz "https://github.com/terramate-io/terramate/releases/download/v${TERRAMATE_VERSION}/terramate_${TERRAMATE_VERSION}_linux_x86_64.tar.gz"
+          sudo tar -xzf /tmp/terramate.tar.gz -C /usr/local/bin terramate
+          sudo chmod +x /usr/local/bin/terramate
+          terramate --version
+      - name: Setup tfsec
+        run: |
+          wget -q -O /tmp/tfsec https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64
+          sudo install /tmp/tfsec /usr/local/bin/tfsec
+          tfsec --version
+      - name: Run tfsec (changed stacks)
+        # CUSTOMIZE: drop --soft-fail to make security findings block the pipeline.
+        run: terramate run --changed -- tfsec . --soft-fail
+
+  # ── Change detection → build the per-stack matrix ──────────────────────────
+  detect-stacks:
+    name: 🔍 Detect Changed Stacks
+    runs-on: ubuntu-latest
+    needs: [format, validate, lint, security]
+    outputs:
+      stacks: ${{ steps.detect.outputs.stacks }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terramate
+        run: |
+          wget -q -O /tmp/terramate.tar.gz "https://github.com/terramate-io/terramate/releases/download/v${TERRAMATE_VERSION}/terramate_${TERRAMATE_VERSION}_linux_x86_64.tar.gz"
+          sudo tar -xzf /tmp/terramate.tar.gz -C /usr/local/bin terramate
+          sudo chmod +x /usr/local/bin/terramate
+          terramate --version
+      - name: Detect changed stacks
+        id: detect
+        run: |
+          CHANGED_STACKS=$(terramate list --changed --quiet)
+          echo "Changed stacks found:"
+          echo "$CHANGED_STACKS"
+
+          # CUSTOMIZE (optional): exclude stacks that must not run in this matrix
+          # (e.g. a stack with a circular/cross-account dependency you apply by
+          # hand). Set EXCLUDE to a pipe-separated grep pattern, or leave empty.
+          EXCLUDE=""
+          if [ -n "$EXCLUDE" ]; then
+            FILTERED_STACKS=$(echo "$CHANGED_STACKS" | grep -Ev "$EXCLUDE" || true)
+          else
+            FILTERED_STACKS="$CHANGED_STACKS"
+          fi
+          echo "Stacks after exclusion filter:"
+          echo "$FILTERED_STACKS"
+
+          if [ -z "$FILTERED_STACKS" ]; then
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
+            echo "stacks=[]" >> "$GITHUB_OUTPUT"
+          else
+            # Build the matrix JSON. This assumes a path layout of
+            # <root>/<environment>/<account-slug>/<stack> — CUSTOMIZE the jq
+            # below to match your repo's stack-path convention.
+            STACKS_JSON=$(echo "$FILTERED_STACKS" | jq -R -s -c '
+              split("\n") |
+              map(select(. != "")) |
+              map({
+                stack: .,
+                name: (. | split("/") | last),
+                path: .,
+                environment: (. | split("/") | .[1]),
+                account: (. | split("/") | .[2]),
+                display_name: ((. | split("/") | .[1]) + "/" + (. | split("/") | last))
+              })
+            ')
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            echo "stacks=$STACKS_JSON" >> "$GITHUB_OUTPUT"
+            echo "Generated matrix JSON:"
+            echo "$STACKS_JSON"
+          fi
+
+  # ── Plan (every branch); comment plan on PRs; no apply ─────────────────────
+  plan:
+    name: 📋 Plan ${{ matrix.display_name }} (${{ matrix.account }})
+    if: needs.detect-stacks.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    needs: detect-stacks
+    strategy:
+      fail-fast: false
+      # No max-parallel: each stack has an isolated state file + lock; the
+      # retry-on-contention logic below absorbs transient backend races.
+      matrix:
+        include: ${{ fromJson(needs.detect-stacks.outputs.stacks) }}
+    permissions:
+      id-token: write       # OIDC
+      contents: read
+      pull-requests: write  # comment the plan on the PR
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Configure AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # CUSTOMIZE (optional): pre-plan build hook. Delete this block unless a
+      # stack packages built artifacts (e.g. Lambda bundles) before plan. Gate
+      # it on a path match so it only runs for the stacks that need it.
+      # - name: Setup Node.js (for artifact builds)
+      #   if: contains(matrix.path, 'my-app')
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '22'
+      # - name: Build artifacts
+      #   if: contains(matrix.path, 'my-app')
+      #   run: |
+      #     cd path/to/build && npm ci && npm run build
+
+      - name: Plan ${{ matrix.display_name }}
+        id: plan
+        env:
+          # CUSTOMIZE: provider/secret env your stacks need. Examples:
+          # CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # TF_VAR_some_input: ${{ secrets.SOME_INPUT }}
+          TF_IN_AUTOMATION: "true"
+        run: |
+          cd "${{ matrix.path }}"
+          # pipefail so `terraform plan | tee` reflects terraform's exit, not tee's
+          set -o pipefail
+          max_retries=3
+
+          echo "🔧 Initializing Terraform..."
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform init; then echo "✅ init ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ init retry $retry_count/$max_retries"; sleep 10
+            else
+              echo "❌ init failed after $max_retries attempts"; exit 1
+            fi
+          done
+
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "🚀 PLAN-ONLY MODE (branch: ${{ github.ref_name }}) — changes apply only after merge to main."
+          fi
+
+          echo "📋 Planning ${{ matrix.display_name }}..."
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform plan -no-color -out=tfplan 2>&1 | tee plan_output.txt; then echo "✅ plan ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ plan retry $retry_count/$max_retries"; sleep 15
+            else
+              echo "❌ plan failed after $max_retries attempts"; cat plan_output.txt; exit 1
+            fi
+          done
+
+          {
+            echo "PLAN_OUTPUT<<EOF"
+            cat plan_output.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const planOutput = `${{ steps.plan.outputs.PLAN_OUTPUT }}`;
+            const displayName = '${{ matrix.display_name }}';
+            const environment = '${{ matrix.environment }}';
+            const account = '${{ matrix.account }}';
+            const stackName = '${{ matrix.name }}';
+            const onMain = '${{ github.ref_name }}' === 'main';
+            const branchEmoji = onMain ? '🚀' : '🔍';
+            const status = onMain ? 'Will be applied automatically' : 'Plan-only (no apply)';
+            const note = onMain
+              ? 'This is the main branch. Changes apply automatically after planning.'
+              : 'This is a feature branch. Changes apply only when this PR is merged to main.';
+            const body = `## ${branchEmoji} Terraform Plan for \`${displayName}\`
+
+            **Branch**: \`${{ github.ref_name }}\`
+            **Status**: ${status}
+            **Environment**: \`${environment}\`
+            **Account**: \`${account}\`
+            **Stack**: \`${stackName}\`
+
+            <details>
+            <summary>📋 Click to view detailed plan</summary>
+
+            \`\`\`terraform
+            ${planOutput}
+            \`\`\`
+
+            </details>
+
+            > **Note**: ${note}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  # ── Apply (main only) ──────────────────────────────────────────────────────
+  apply:
+    name: 🚀 Apply ${{ matrix.display_name }} (${{ matrix.account }})
+    if: github.ref == 'refs/heads/main' && needs.detect-stacks.outputs.has-changes == 'true'
+    needs: [detect-stacks, plan]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect-stacks.outputs.stacks) }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Configure AWS OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # CUSTOMIZE (optional): same pre-apply build hook as in `plan` — keep the
+      # two in sync. Delete unless a stack packages built artifacts before apply.
+      # - name: Build artifacts
+      #   if: contains(matrix.path, 'my-app')
+      #   run: cd path/to/build && npm ci && npm run build
+
+      - name: Apply ${{ matrix.display_name }}
+        env:
+          # CUSTOMIZE: same provider/secret env as the plan step.
+          TF_IN_AUTOMATION: "true"
+        run: |
+          cd "${{ matrix.path }}"
+          max_retries=3
+          echo "🚀 Applying ${{ matrix.display_name }}..."
+
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform init; then echo "✅ init ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ init retry $retry_count/$max_retries"; sleep 10
+            else
+              echo "❌ init failed after $max_retries attempts"; exit 1
+            fi
+          done
+
+          echo "📋 Pre-apply plan..."
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform plan; then echo "✅ plan ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ plan retry $retry_count/$max_retries"; sleep 15
+            else
+              echo "❌ pre-apply plan failed after $max_retries attempts"; exit 1
+            fi
+          done
+
+          retry_count=0
+          while [ $retry_count -lt $max_retries ]; do
+            if terraform apply -auto-approve; then echo "✅ apply ok"; break; fi
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+              echo "⚠️ apply retry $retry_count/$max_retries"; sleep 15
+            else
+              echo "❌ apply failed after $max_retries attempts"; exit 1
+            fi
+          done

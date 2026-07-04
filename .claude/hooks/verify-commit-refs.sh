@@ -162,7 +162,10 @@ TRACKER_KIND="gh"
 if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-tracker.sh"
-  TRACKER_KIND=$(tracker_kind)
+  # Resolve the kind for the OPERATION'S target repo so a per-project tracker
+  # override (apexyard.projects.yaml) wins over the global block (#670). Empty
+  # TRACKER_REPO → no-arg → global default (today's behaviour).
+  TRACKER_KIND=$(tracker_kind "$TRACKER_REPO")
 fi
 
 # `tracker.kind = none` disables existence verification — there's no CLI to

@@ -27,9 +27,11 @@ Valid invocation triggers:
 
 ## Process
 
-### 1. Parse the PR number
+### 1. Parse the PR number — and the repo
 
-Extract from the argument. If none given, infer from the current branch's open PR (`gh pr view --json number --jq '.number'`) or the user's most recent message. If ambiguous, STOP and ask.
+Extract the PR number from the argument. If none given, infer from the current branch's open PR (`gh pr view --json number --jq '.number'`) or the user's most recent message. If ambiguous, STOP and ask.
+
+**Also resolve the repo (`REPO`).** Accept the fully-qualified `owner/repo#N` form, or an explicit `owner/repo` second token. In split-portfolio v2 the PR lives in a *sibling* repo, so a bare `gh pr view <pr>` resolved against the ops-fork cwd hits the WRONG repo — the marker would then be written under the ops-fork qualifier and the `require-architecture-review.sh` gate (which keys on the PR's real repo, derived from the merge command's cd-target, me2resh/apexyard#687) would never find it → false-block. Pass `--repo "$REPO"` to **every** `gh pr view` call below when `REPO` is known. **Fail loud:** if only a bare number was given and `gh pr view <pr>` cannot resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
 
 ### 2. Sanity-check the user's intent
 
@@ -44,7 +46,7 @@ If any are unclear — STOP and ask a per-PR explicit question.
 ### 3. Verify the PR state
 
 ```bash
-gh pr view <pr> --json state,isDraft,mergeable,headRefOid
+gh pr view <pr> ${REPO:+--repo "$REPO"} --json state,isDraft,mergeable,headRefOid
 ```
 
 - `state` must be `OPEN`. Refuse if `MERGED`, `CLOSED`, or `DRAFT`.
@@ -67,7 +69,10 @@ done
 MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
-PR_REPO=$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+# Prefer the repo resolved in step 1 (the base repo the PR lives in — the slug
+# the gate derives from the merge cd-target, #687). Fall back to headRepository
+# only when REPO is unknown (single-fork / same-repo case).
+PR_REPO="${REPO:-$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)}"
 REX=$(review_marker_path "$PR_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```

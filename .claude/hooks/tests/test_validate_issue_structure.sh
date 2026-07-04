@@ -291,6 +291,55 @@ run_case "--body-file path with valid Feature body → pass" \
   0 "" \
   "gh issue create --title '[Feature] X' --body-file $BODY_FILE_PATH"
 
+# --- body-file: skip marker honoured (me2resh/apexyard#695) -----------------
+# An off-template epic body that carries the skip marker must bypass
+# validation when supplied via --body-file, exactly like the inline --body
+# case above.
+SKIP_FILE_PATH="$TMPDIR/skip-body.md"
+cat > "$SKIP_FILE_PATH" <<'EOF'
+free-form epic body, no required sections.
+<!-- validate-issue-structure: skip -->
+EOF
+
+run_case "--body-file with skip marker → bypass (#695)" \
+  0 "validate-issue-structure bypassed" \
+  "gh issue create --title '[Feature] epic via file' --body-file $SKIP_FILE_PATH"
+
+# --- body-file: missing required section still blocks -----------------------
+MISSING_FILE_PATH="$TMPDIR/missing-body.md"
+cat > "$MISSING_FILE_PATH" <<'EOF'
+## User Story
+As a user I want a thing.
+EOF
+
+run_case "--body-file missing Acceptance Criteria → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via file' --body-file $MISSING_FILE_PATH"
+
+# --- gh-api field form: -F body=@<path> (me2resh/apexyard#695) --------------
+# `gh api … -F body=@<file>` is the REST shape for posting an issue body from
+# a file. Pre-#695 the field-value path after the `@` sigil was never resolved
+# (the `-F` handler rejected any value containing `=`), AND a single-dash flag
+# after a quoted --title broke title extraction — so the skip marker and the
+# section checks were both blind to the file content. Cover skip-marker-honour
+# and missing-section-block across -F / --field / -f.
+
+run_case "-F body=@file with skip marker → bypass (#695)" \
+  0 "validate-issue-structure bypassed" \
+  "gh issue create --title '[Feature] epic via field' -F body=@$SKIP_FILE_PATH"
+
+run_case "-F body=@file missing Acceptance Criteria → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via field' -F body=@$MISSING_FILE_PATH"
+
+run_case "--field body=@file missing section → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via --field' --field body=@$MISSING_FILE_PATH"
+
+run_case "-f body=@file missing section → block (#695)" \
+  2 "missing section: ## Acceptance Criteria" \
+  "gh issue create --title '[Feature] incomplete via -f' -f body=@$MISSING_FILE_PATH"
+
 # --- Embedded double quotes in body — me2resh/apexyard#227 -----------------
 # Pre-227 the awk extractor's non-greedy `"([^"]*)"` regex truncated the
 # body at the FIRST embedded `"`, so any `##` heading past that point was
@@ -355,6 +404,76 @@ Then the notice goes away'
 run_case "Bug body with embedded quotes but missing Repro → still blocks" \
   2 "missing section: ## Repro" \
   "gh issue create --title '[Bug] no repro' --body \"$BUG_EMBEDDED_BUT_INCOMPLETE\""
+
+# ---------------------------------------------------------------------------
+# Framework-filing exemption (#712)
+#
+# /request-apexyard-feature and /report-apexyard-bug file [Feature]/[Bug] issues
+# UPSTREAM using their own body template (Problem/Proposed/Why; Given/When/Then),
+# which is deliberately distinct from this project's required-section schema.
+# When one of those skills is the active filing skill (the active-issue-skill
+# marker), the project schema does not apply. The exemption is narrow: only the
+# configured framework-filing skills, detected via the SAME marker that
+# require-skill-for-issue-create.sh reads.
+# ---------------------------------------------------------------------------
+
+# The exemption's ops-root resolution (resolve_ops_root) consults the session
+# pin FIRST — with CLAUDE_CODE_SESSION_ID set it would return the real fork, not
+# this fixture. Disable the pin so it walks up to THIS fixture's anchor. (The
+# authoritative runner bin/run-hook-tests.sh already exports this globally.)
+export APEXYARD_OPS_DISABLE_PIN=1
+
+# Add the v2 ops-root anchor so the hook's ops-root resolution lands on the
+# fixture fork, and create the session dir. The marker is written/removed
+# per-case so it never leaks into the schema cases above.
+touch "$TMPDIR/fork/.apexyard-fork"
+mkdir -p "$TMPDIR/fork/.claude/session"
+MARKER="$TMPDIR/fork/.claude/session/active-issue-skill"
+
+# A [Feature] body in the framework-request template — MISSING the project
+# [Feature] schema (User Story + Acceptance Criteria) by design.
+FRAMEWORK_FEATURE_BODY='## Problem
+The framework lacks X.
+
+## Proposed behaviour
+Add X.
+
+## Why it helps adopters
+Adopters get X today by doing Y manually.'
+
+# Exempt: marker names a framework-filing skill → project schema skipped → pass.
+echo "request-apexyard-feature" > "$MARKER"
+run_case "Framework feature (no User Story/AC), marker=request-apexyard-feature → exempt (pass)" \
+  0 "" \
+  "gh issue create --title '[Feature] add X to the framework' --body \"$FRAMEWORK_FEATURE_BODY\""
+rm -f "$MARKER"
+
+# Report-apexyard-bug is also exempt (covers a [Bug] off-schema body symmetrically).
+FRAMEWORK_BUGISH_BODY='## Affected
+some hook
+
+## Notes
+free-form framework note without the project Bug schema.'
+echo "report-apexyard-bug" > "$MARKER"
+run_case "Framework bug body (no Given/When/Then), marker=report-apexyard-bug → exempt (pass)" \
+  0 "" \
+  "gh issue create --title '[Bug] hook misfires' --body \"$FRAMEWORK_BUGISH_BODY\""
+rm -f "$MARKER"
+
+# NOT exempt: marker names the PROJECT skill (/feature) → schema still enforced.
+echo "feature" > "$MARKER"
+run_case "Framework-shaped [Feature], marker=feature (project skill) → still blocks" \
+  2 "missing section: ## User Story" \
+  "gh issue create --title '[Feature] add X' --body \"$FRAMEWORK_FEATURE_BODY\""
+rm -f "$MARKER"
+
+# NOT exempt: no marker at all → unchanged behaviour, still blocks malformed [Feature].
+run_case "Framework-shaped [Feature], no active-issue-skill marker → still blocks" \
+  2 "missing section: ## User Story" \
+  "gh issue create --title '[Feature] add X' --body \"$FRAMEWORK_FEATURE_BODY\""
+
+# Remove the v2 anchor so it can't influence any later cases.
+rm -f "$TMPDIR/fork/.apexyard-fork"
 
 # ---------------------------------------------------------------------------
 # Result

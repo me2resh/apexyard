@@ -11,8 +11,11 @@ Reusable GitHub Actions workflows that integrate ApexYard's automated agents int
 | `dependency-audit.yml` | Guardian | Dependency vulnerabilities, outdated packages, licenses | Weekly, package changes |
 | `code-quality.yml` | Rex | TypeScript, ESLint, tests, build verification | Every PR |
 | `swift-ci.yml` | Rex | Swift Package Manager build + guarded test (macOS runner) | Every PR, push to default branch |
+| `terraform-ci.yml` | Platform | Terraform/Terramate AWS mono-repo: fmt/validate/tflint/tfsec → per-stack plan (PR comment) → apply on main (OIDC) | Every PR, push to main |
+| `macos-release.yml` | Platform | macOS desktop app: build → Developer-ID sign → notarize + staple → package `.dmg` → GitHub Release | Version tag (`v*`), manual dispatch |
 | `review-check.yml` | Rex (verification) | Block merge if Rex hasn't reviewed the latest commit | Every PR + review event |
 | `seo-check.yml` | SEO Check | SEO analysis for content files | Content changes |
+| `auto-tag-on-release-pr-merge.yml` | CI | Auto-tag squash commit + create GitHub Release when a `release/v*` PR merges | PR closed (merged) |
 | `ci.yml` | Combined | All checks in one pipeline | Every PR |
 
 ---
@@ -172,6 +175,99 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 | 0–49 | Poor |
 
 **Fail conditions**: none by default (warning only). Uncomment the threshold check to fail hard.
+
+---
+
+### Terraform CI (`terraform-ci.yml`)
+
+**Role**: Platform Engineer (Adel)
+
+**For**: an AWS Terraform mono-repo orchestrated with [Terramate](https://terramate.io/), with per-stack remote state and keyless OIDC auth to AWS. It is a **copy-and-customize** template — unlike the Node pipelines, it has `# CUSTOMIZE` markers you must edit before it runs.
+
+**Pipeline shape**:
+
+```
+fmt -check ─┐
+validate    ├─► detect changed stacks ─► PLAN (matrix per stack) ─► APPLY (matrix per stack)
+tflint      │     (Terramate)              • comments plan on PR     • main branch only
+tfsec       ┘                              • plan-only on branches   • OIDC, retry-on-lock
+```
+
+**Checks performed**:
+
+- `terraform fmt -check -recursive`
+- `terraform validate` on changed stacks (`terramate run --changed`)
+- `tflint` on changed stacks
+- `tfsec` on changed stacks (soft-fail by default — see customize note)
+- Change-detection via `terramate list --changed`, fanned out to a per-stack plan/apply matrix with isolated state + retry-on-lock-contention
+
+**Branch behaviour**:
+
+- **Feature branches / PRs** — plan only; the rendered plan is posted as a PR comment per stack. Nothing is applied.
+- **`main`** — plan, then `terraform apply -auto-approve` per changed stack.
+
+**Required secrets / vars** (set in the consuming repo):
+
+| Name | What |
+|------|------|
+| `AWS_CI_ROLE_ARN` (secret) | Full ARN of the IAM role GitHub Actions assumes via OIDC. **Never hardcode an account ID in the workflow.** |
+| `AWS_REGION` (env in file) | Your AWS region — edit the `env:` block. |
+| Provider tokens (secrets) | Any provider/`TF_VAR_*` your stacks need (e.g. a DNS provider token) — wire them in the commented `env:` of the plan/apply steps. |
+
+**Prerequisites (NOT provisioned by this template)**:
+
+- The OIDC IAM role itself must already exist in your AWS account, with a trust policy scoped to your repo. The pipeline *assumes* the role; it does not create it.
+- A Terraform backend (e.g. S3 + DynamoDB lock) configured per stack.
+- Terramate stacks defined in the repo.
+
+**`# CUSTOMIZE` points** (search the file):
+
+- Tool versions (`TERRAMATE_VERSION`, `TF_VERSION`), `AWS_REGION`, `AWS_CI_ROLE_ARN`.
+- The matrix-JSON `jq` block — adjust to your stack-path layout (the default assumes `<root>/<environment>/<account-slug>/<stack>`).
+- The optional **stack-exclusion** filter in `detect-stacks` (`EXCLUDE` grep pattern).
+- The optional **pre-plan/apply build hook** (e.g. building Lambda bundles) — commented out; delete if unused.
+- `tfsec --soft-fail` — drop the flag to make security findings block.
+
+---
+
+### macOS Release (`macos-release.yml`)
+
+**Role**: Platform Engineer (Adel)
+
+**For**: shipping a signed, notarized macOS desktop app. It is the **release** half of the macOS golden path — pair it with `swift-ci.yml`, which handles PR-time build + test. Copy-and-customize (it has `# CUSTOMIZE` markers you must edit before it runs).
+
+**Pipeline shape**:
+
+```
+tag v* ─► import Developer-ID cert (ephemeral keychain) ─► build .app ─► codesign
+          (hardened runtime) ─► notarize + staple (notarytool) ─► package .dmg ─► GitHub Release
+```
+
+**Trigger**: a version tag push (`v*`); also `workflow_dispatch` with a `publish` toggle (build without releasing, e.g. to smoke-test signing).
+
+**Required secrets** (set in the consuming repo):
+
+| Name | What |
+|------|------|
+| `MACOS_CERTIFICATE_P12_BASE64` | base64 of your **Developer ID Application** cert exported as `.p12`. |
+| `MACOS_CERTIFICATE_PASSWORD` | the `.p12` export password. |
+| `KEYCHAIN_PASSWORD` | any random string — the ephemeral keychain's password. |
+| `AC_API_KEY_ID` / `AC_API_ISSUER_ID` / `AC_API_KEY_P8_BASE64` | App Store Connect **API key** used by `notarytool` (Key ID, Issuer ID, and base64 of the `.p8`). The app-specific-password path is the documented alternative. |
+
+**Prerequisites (NOT provisioned by this template)**:
+
+- An **Apple Developer Program** membership.
+- A **Developer ID Application** certificate (exported `.p12`).
+- An **App Store Connect API key** (`.p8` + Issuer ID + Key ID) with access to notarization.
+
+**`# CUSTOMIZE` points** (search the file):
+
+- `APP_NAME` / `SCHEME` / `BUNDLE_ID` / `CONFIGURATION` / `XCODE_VERSION`.
+- The **build step** — `xcodebuild` (shown) vs `swift build` + assembling a `.app`.
+- The **packaging step** — `.dmg` via `create-dmg` (shown) vs a plain `.zip`.
+- The release-tag pattern in `on.push.tags`.
+
+**Security notes**: the signing identity is imported into an **ephemeral keychain** that's deleted in an `always()` cleanup step; secrets are never echoed; `permissions:` is `contents: read` except the release step which gets `contents: write`. Out of scope (documented extension points): Sparkle auto-update feeds, Mac App Store submission, and DMG background/layout design.
 
 ---
 

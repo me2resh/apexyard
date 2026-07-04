@@ -31,6 +31,13 @@
 #       (or if there is no `--repo` flag, in which case they implicitly match).
 #       Returns 1 if they differ (cross-repo context).
 #
+#   pr_cmd_cd_target <command>
+#       Echoes the path from a leading `cd <path> && …` (or `cd <path>; …`)
+#       prefix in the command, or empty string if absent. Used by PR-create
+#       hooks to discover the directory the `gh` call is ABOUT to run in — the
+#       PreToolUse hook fires before the in-command `cd` executes, so the
+#       hook's own cwd is NOT yet the PR's repo (me2resh/apexyard#669).
+#
 # USAGE
 # -----
 #   . "$(dirname "$0")/_lib-pr-repo.sh"
@@ -115,6 +122,26 @@ git_origin_repo() {
   local url
   url=$(git -C "$git_dir" remote get-url origin 2>/dev/null) || return 1
   _git_remote_to_slug "$url"
+}
+
+# Public: pr_cmd_cd_target <command>
+#   Echoes the path from a leading `cd <path> && …` / `cd <path>; …` prefix,
+#   or empty string when the command does not start with a `cd`.
+#
+#   Only a `cd` at the START of the command is honoured (the harness-generated
+#   `cd <repo> && gh pr …` pattern). A `cd` buried later in a pipeline is
+#   intentionally ignored — it does not establish the directory the leading
+#   `gh` runs in. Handles unquoted, single-quoted, and double-quoted paths so
+#   `cd '../my repo' && …` resolves correctly.
+pr_cmd_cd_target() {
+  local cmd="$1"
+  # Strip leading whitespace, then match `cd ` followed by a quoted or bare
+  # path up to the first `&&`, `;`, or `|` separator.
+  printf '%s' "$cmd" | sed -nE \
+    "s/^[[:space:]]*cd[[:space:]]+\"([^\"]+)\"[[:space:]]*(&&|;|\|).*/\1/p;
+     s/^[[:space:]]*cd[[:space:]]+'([^']+)'[[:space:]]*(&&|;|\|).*/\1/p;
+     s/^[[:space:]]*cd[[:space:]]+([^&;|[:space:]]+)[[:space:]]*(&&|;|\|).*/\1/p" \
+    | head -1
 }
 
 # Public: pr_repo_matches_cwd <command> [<git-dir>]

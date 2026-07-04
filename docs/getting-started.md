@@ -138,7 +138,7 @@ Create an AgDR.
 
 ## Optional: Terminal push hook (`core.hooksPath`)
 
-The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, site-counts drift, and subpack extraction smoke test — for terminal `git push` commands.
+The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, and the subpack extraction smoke test — for terminal `git push` commands.
 
 The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Claude Code_. The git hook covers pushes made directly from the terminal.
 
@@ -177,10 +177,20 @@ git commit --amend -m "$(git log -1 --format=%B)
 |-------|----------------|---------------|
 | `markdownlint` | Malformed markdown (broken tables, duplicate headings, etc.) via markdownlint-cli2 | `npx` (Node.js) |
 | `shellcheck` | Shell-script bugs, quoting issues, portability problems in `.claude/hooks/*.sh` | `shellcheck` |
-| `site-counts` | Count drift between `site/*.html` claims and actual on-disk skill/hook/role counts | none (bash) |
+| ~~`site-counts`~~ | Retired — the marketing site moved to me2resh/apexyard-site (#663) | — |
 | `subpacks` | Marketplace sub-pack extraction smoke test — confirms no framework-private files leaked | none (bash) |
 
 Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
+
+---
+
+## Managing model cost — why the main agent dominates spend
+
+The per-agent model matrix ([AgDR-0050](agdr/AgDR-0050-agent-runtime-overhaul.md)) only applies to *spawned* sub-agents (reviews, QA, analysts). *In-flow* work — implementation, PM, design — is adopted **in-thread** by design, so it runs on your primary tier (usually Opus) and the `sonnet` implementation default never takes effect. That's why operators see the main agent dominating token spend.
+
+Three levers manage it, ordered by effort-to-win ratio: (1) **`opusplan`** — Opus plans, Sonnet executes (biggest win, no framework change); (2) the **thin-orchestrator pattern** — keep the Opus loop as a planner / coordinator and delegate implementation to spawned `sonnet` build agents via `/fan-out` or `Workflow`; (3) populate **`agent-routing.yaml`** to pin or route per-agent tiers.
+
+Full explanation + the opt-in thin-orchestrator mode: [`docs/orchestrator-cost-model.md`](orchestrator-cost-model.md).
 
 ---
 

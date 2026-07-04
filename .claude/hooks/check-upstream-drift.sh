@@ -65,7 +65,10 @@ if [ "$SHOULD_FETCH" = "1" ]; then
   # silently — we don't want a startup banner yelling about offline state.
   # `--tags --prune-tags` pulls tag refs and removes local copies of any tag
   # upstream has retracted (rare, but keeps the local tag view honest).
-  if ! timeout 5 git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
+  _TO=""
+  if command -v timeout >/dev/null 2>&1; then _TO="timeout -k 2 5"
+  elif command -v gtimeout >/dev/null 2>&1; then _TO="gtimeout -k 2 5"; fi
+  if ! GIT_TERMINAL_PROMPT=0 $_TO git fetch upstream --tags --prune-tags --quiet 2>/dev/null; then
     exit 0
   fi
   mkdir -p "$CACHE_DIR"

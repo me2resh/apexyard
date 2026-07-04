@@ -158,15 +158,28 @@ MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
 # Resolve the repo for the qualified marker name.
-PR_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+#
+# In split-portfolio v2 the PR lives in a SIBLING repo, so a bare
+# `gh pr view {number}` (resolved against this cwd = ops fork) returns the WRONG
+# repo — the marker then lands under the ops-fork qualifier and the merge gate,
+# which keys on the PR's real repo, can't find it (false-block). Prefer the repo
+# `/design-review` passes as its optional second arg; this is the SAME slug the
+# gate's read side derives from the merge command's cd-target (me2resh/apexyard#687).
+REPO="{repo}"   # /design-review's optional repo arg, or empty / literal when absent
+[ "$REPO" = "{repo}" ] && REPO=""
+if [ -z "$REPO" ]; then
+  REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+fi
+PR_REPO="$REPO"
 ARCH_MARKER=$(review_marker_path "$PR_REPO" {number} architecture "$MARKER_HOME")
 ```
 
 ### The command
 
 ```bash
-# Option B (preferred) — the PR's HEAD on GitHub
-gh pr view {number} --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
+# Option B (preferred) — the PR's HEAD on GitHub. Pass --repo so the SHA is the
+# portfolio PR's HEAD, not an ops-fork PR with the same number (#687).
+gh pr view {number} ${REPO:+--repo "$REPO"} --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
 ```
 
 ### Content — MUST be bare SHA + newline

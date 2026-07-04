@@ -100,6 +100,15 @@ When reviewing implementations, be specific:
 - **Bad**: "Needs more contrast"
 - **Good**: "Text color #9CA3AF on white fails WCAG AA. Use #6B7280 minimum."
 
+## Design Tooling
+
+Invoke these **on demand** (do NOT auto-wire into hooks — they cost context and only matter during design work):
+
+- **claude.ai/design** — the shared design-system library. Sync the local component library to a claude.ai/design project with the **`/design-sync`** skill (it drives the built-in `DesignSync` tool). Authorize via your **claude.ai login** (or `/design-login` for headless sessions) — it is **not** an `.mcp.json` MCP server. Sync **incrementally, one component at a time** — never wholesale-replace a project.
+- **figma** plugin — *only when a Figma source exists* for the work (`/plugin install figma@claude-plugins-official`). Don't require it.
+
+You own the design system; claude.ai/design is where it lives as a shared, browsable source of truth for engineers.
+
 ## Escalate When
 
 - Brand guidelines need updating

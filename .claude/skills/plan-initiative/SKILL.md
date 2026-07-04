@@ -366,10 +366,20 @@ Accept:
 
 #### Pass 1 — file each accepted milestone
 
-Write the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the `gh issue create` calls through (per AgDR-0030):
+Write the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the `tracker_create` calls (a `gh issue create` on a GitHub adopter) through (per AgDR-0030):
 
 ```bash
-ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+# Resolve the ops-fork root the SAME way the hooks do (_lib-ops-root.sh):
+# anchor on the .apexyard-fork marker (split-portfolio v2 — onboarding.yaml
+# lives in the sibling portfolio repo, NOT the ops fork), falling back to the
+# onboarding.yaml + apexyard.projects.yaml pair (single-fork v1).
+ops_root="$PWD"; r="$PWD"
+while [ "$r" != / ]; do
+  if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+    ops_root="$r"; break
+  fi
+  r=${r%/*}
+done
 mkdir -p "$ops_root/.claude/session"
 echo "plan-initiative" > "$ops_root/.claude/session/active-issue-skill"
 ```
@@ -397,22 +407,50 @@ _Source: /plan-initiative on YYYY-MM-DD — see `projects/<name>/initiatives/<sl
 
 Same source-link shape as `/handover` step 7.5 — plain prose path, no markdown link. The initiative doc lives in the ops fork (or private sibling), not in the target repo's URL space; a relative markdown link would be dead-on-render. See AgDR-0051 § Axis 3.
 
-File each via `gh issue create`:
+File each via `tracker_create` (#670 / AgDR-0072, extended by the #709 creator
+sweep) so milestones land in **this project's** tracker — GitHub, GitLab, or a
+`custom` CLI. For a GitHub adopter this runs `gh issue create` exactly as before.
 
 ```bash
-gh issue create --repo "$repo" \
-  --title "[Feature] {milestone-name}" \
-  --label "enhancement,${priority:-P2}" \
-  --body "$body"
+# Resolve + source the tracker lib ONCE, before the pass-1 loop, by walking up from cwd.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# ── per milestone ────────────────────────────────────────────────────────────
+body_file="$(mktemp)"
+printf '%s\n' "$body" > "$body_file"
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+result="$(tracker_create "$repo" "[Feature] {milestone-name}" "$body_file" "enhancement,${priority:-P2}")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -ne 0 ] || [ -z "$result" ]; then
+  : # stop pass 1 — see failure handling below (rc=3 = tracker.kind=none: nothing filed)
+fi
+ref="$(printf '%s' "$result" | jq -r '.ref // empty')"
 ```
 
-Capture the returned issue number from `gh issue create`'s output (the URL contains it, or use `--json url -q '.url'`). Record `milestone_name → issue_number` in an in-memory map for pass 2.
+Capture the returned `ref` (from `tracker_create`'s normalised `{ref,url}` — no
+more URL-parsing). Record `milestone_name → ref` in an in-memory map for pass 2
+(the map now holds tracker references, so a non-numeric tracker key like `LIN-42`
+works unchanged — do not do arithmetic on it).
 
 On non-zero exit, stop pass 1 immediately. Use the same failure-handling shape as `/tickets-batch` § "Failure handling" (4 options: Retry, Skip, Edit, Abort; don't roll back filed tickets on abort).
 
 #### Pass 2 — add cross-references to each filed ticket
 
-Iterate over the just-filed set. For each filed milestone:
+Iterate over the just-filed set. For each filed milestone (`$issue_number` below
+is the tracker `ref` recorded in pass 1's map):
+
+> **Scope note (#709):** the pass-2 cross-ref edit uses `gh issue view` /
+> `gh issue edit` — issue *reads* and *body updates*, which are the read/update
+> axis, **not** creation. The #709 creator sweep converts only the creation call
+> (pass 1); the body-edit here stays on `gh` and is tracker-agnosticised
+> separately (read-side + update axis, tracked in #710 and the forge work). On a
+> non-GitHub project pass 1 files the milestones fine, but this cross-ref pass is
+> a no-op until that follow-up lands.
 
 1. Compute its inbound + outbound DAG edges restricted to the also-filed set.
 2. Build the cross-ref lines:
@@ -495,7 +533,7 @@ Next:
 8. **Idempotence via filed-marker presence.** Re-runs partition milestones into "already filed" (silently skipped at filing step) vs "unfiled" (offered). Step 6's regeneration MUST preserve prior `Filed as [#N](url)` markers — match milestones across runs by name (case-insensitive, normalised whitespace). NOT byte-equivalence on the section (which would break under the post-filing rewrite). Same rule as `/handover` Rule 18.
 9. **Two-pass filing handles cross-refs.** Pass 1 files all accepted milestones (no cross-refs yet — issue numbers not yet known). Pass 2 iterates over the filed set, computes per-milestone cross-refs restricted to the also-filed subset, and rewrites each ticket's body via `gh issue edit`. Pass-2 failures don't abort — partial cross-refs are more useful than zero.
 10. **Source-link every filed ticket back to the initiative doc.** Each filed Feature ticket carries a `_Source: /plan-initiative on YYYY-MM-DD — see projects/<name>/initiatives/<slug>.md in the ops fork (...)_` footer in the body. Plain prose path, no markdown link — the initiative doc isn't in the target repo's URL space. Same shape as `/handover` step 7.5's source-link convention.
-11. **Active-issue-skill marker handling.** Write `plan-initiative` to `<ops_root>/.claude/session/active-issue-skill` before the first `gh issue create` in pass 1; remove on EVERY exit path (success, abort, error). Per AgDR-0030.
+11. **Active-issue-skill marker handling.** Write `plan-initiative` to `<ops_root>/.claude/session/active-issue-skill` before the first `tracker_create` (a `gh issue create` on a GitHub adopter) in pass 1; remove on EVERY exit path (success, abort, error). Per AgDR-0030.
 12. **No bootstrap exemption needed.** The skill writes `*.md` (exempt from `require-active-ticket.sh`) and dispatches `gh` calls (gated separately by `require-skill-for-issue-create.sh`, satisfied by the active-issue-skill marker in step 8 pass 1). Don't add `plan-initiative` to `ticket.bootstrap_skills`.
 13. **Re-run history is append-only.** Each invocation adds one row to the table at the bottom of the doc. Don't truncate; long histories are evidence the initiative is being actively re-planned.
 14. **Out-of-scope items belong in the Anti-scope section.** When the operator names something during the interview as "we considered this but no", capture it in the doc's `## Anti-scope` block. Mirrors `templates/architecture/vision.md` § Anti-scope.

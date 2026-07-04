@@ -219,6 +219,80 @@ assert_eq "cross-repo: correct repo marker allows gate (#485)" "0" "$code"
 rm -rf "$sb"
 
 echo ""
+echo "D) #687 split-portfolio no---repo merge — repo recovered from the cd-target"
+
+# A sibling portfolio repo: its own git tree whose origin is the portfolio slug.
+# The merge command is `cd <portfolio> && gh pr merge <N>` with NO --repo — so
+# the hook must recover the repo from the cd-target's origin (pr_cmd_cd_target +
+# git_origin_repo), set --repo on the diff, AND key the marker on that slug.
+make_portfolio() {
+  local slug="$1" p
+  p=$(mktemp -d)
+  git -C "$p" init -q
+  git -C "$p" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+  git -C "$p" remote add origin "git@github.com:${slug}.git"
+  echo "$p"
+}
+
+# Repo-aware mock gh: answers ONLY when the call carries `--repo <portfolio>`
+# (or the api `repos/<portfolio>/` path). A BARE call (no --repo) models gh
+# resolving against the ops-fork cwd, which does NOT have this PR → empty output.
+# That empty output is exactly what makes the PRE-#687 hook silent-bypass; these
+# cases therefore fail against the old hook and pass against the fixed one.
+install_mock_gh_splitportfolio() {
+  local sb="$1" diff_files="$2" head_sha="$3" portfolio="$4"
+  mkdir -p "$sb/bin"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+args="\$*"
+case "\$args" in
+  *"--repo $portfolio"*|*"repos/$portfolio/"*)
+    case "\$args" in
+      *"pr diff"*"--name-only"*) printf '%s\n' $diff_files ;;
+      *"pr view"*headRefOid*)    printf '%s\n' "$head_sha" ;;
+      *"pr view"*headRepository*) printf '%s\n' "$portfolio" ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  *"pr diff"*"--name-only"*) ;;    # bare → no files (ops-fork resolution)
+  *"pr view"*headRefOid*) ;;        # bare → empty
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$sb/bin/gh"
+}
+
+PF_SLUG="me2resh/portfolio-x"
+
+echo ""
+echo "D) no---repo cd-target + design PR + NO marker -> BLOCK (was a silent-bypass pre-#687)"
+sb=$(make_sandbox); pf=$(make_portfolio "$PF_SLUG")
+install_mock_gh_splitportfolio "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA" "$PF_SLUG"
+code=$(run_gate "$sb" "cd $pf && gh pr merge 77 --squash")
+assert_eq "#687 cd-target: blocks without marker" "2" "$code"
+rm -rf "$sb" "$pf"
+
+echo ""
+echo "D) ROUND-TRIP: no---repo cd-target + marker under the PORTFOLIO qualifier -> ALLOW"
+sb=$(make_sandbox); pf=$(make_portfolio "$PF_SLUG")
+install_mock_gh_splitportfolio "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA" "$PF_SLUG"
+# The fixed write side keys the marker on the portfolio slug — prove the fixed
+# read side finds it (the symmetry the #687 warning section demands).
+printf '%s\n' "$SHA" > "$(review_marker_path "$PF_SLUG" 77 architecture "$sb")"
+code=$(run_gate "$sb" "cd $pf && gh pr merge 77 --squash")
+assert_eq "#687 round-trip: portfolio-qualified marker allows gate" "0" "$code"
+rm -rf "$sb" "$pf"
+
+echo ""
+echo "D) negative: marker under the WRONG (ops-fork) qualifier -> BLOCK (qualifier is load-bearing)"
+sb=$(make_sandbox); pf=$(make_portfolio "$PF_SLUG")
+install_mock_gh_splitportfolio "$sb" '"projects/foo/docs/technical-design-x.md"' "$SHA" "$PF_SLUG"
+printf '%s\n' "$SHA" > "$(review_marker_path "me2resh/ops-fork" 77 architecture "$sb")"
+code=$(run_gate "$sb" "cd $pf && gh pr merge 77 --squash")
+assert_eq "#687 wrong-qualifier marker still blocks" "2" "$code"
+rm -rf "$sb" "$pf"
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

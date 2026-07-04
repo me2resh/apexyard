@@ -11,12 +11,19 @@
 #   tracker.id_pattern   — regex for valid ticket-ID shape (no-existence-check fallback)
 #
 # Public functions:
-#   tracker_kind                       echoes the configured tracker kind
-#   tracker_id_pattern                 echoes the configured ID regex
+#   tracker_kind [<owner/repo>]        echoes the configured tracker kind
+#   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
 #                                      Exit 0 = ticket exists; non-zero = doesn't, or CLI errored.
 #                                      JSON shape: {"state":..., "title":..., "url":..., "labels":[...]}
+#
+# Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
+# tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
+# that project's apexyard.projects.yaml entry overrides the global config block
+# (per key); when omitted, the global block is used — byte-for-byte the original
+# behaviour. The project is chosen by the OPERATION'S TARGET REPO the caller
+# already holds — never by cwd or a session-global marker.
 #
 # Normalisation: each adapter parses the underlying CLI's JSON (gh / linear /
 # jira / asana / custom) into the common shape above. Consumers should only
@@ -52,12 +59,100 @@ _tracker_load_config_lib() {
 }
 
 # ------------------------------------------------------------------------------
-# Public: tracker_kind
-#   Echoes the configured tracker kind. Default "gh" (GitHub Issues).
+# Internal: ensure _lib-portfolio-paths.sh is loaded so portfolio_registry works.
+# ------------------------------------------------------------------------------
+_tracker_load_portfolio_lib() {
+  if command -v portfolio_registry >/dev/null 2>&1; then
+    return 0
+  fi
+  local hook_dir
+  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$hook_dir/_lib-portfolio-paths.sh"
+  fi
+}
+
+# ------------------------------------------------------------------------------
+# Internal: _tracker_project_value <owner/repo> <key>
+#   Reads `.projects[] | select(.repo == <owner/repo>) | .tracker.<key>` from the
+#   portfolio registry (apexyard.projects.yaml) — the per-project override for
+#   one tracker key (kind / id_pattern / view_command / create_command).
+#
+#   The project is selected by the OPERATION'S TARGET REPO passed in by the
+#   caller — never by cwd or a session-global marker (see AgDR-0072 / #670).
+#
+#   Echoes the value and exits 0 when a non-empty override exists; exits 1
+#   (empty stdout) otherwise — so callers fall back to the global config block.
+#
+#   YAML is read via `yq` (mikefarah, matching _lib-portfolio-paths.sh) with a
+#   `python3`+PyYAML fallback. If neither can parse, the lookup returns 1 and the
+#   caller degrades to the global tracker config — single-tracker forks unaffected.
+# ------------------------------------------------------------------------------
+_tracker_project_value() {
+  local repo="$1" key="$2"
+  [ -n "$repo" ] && [ -n "$key" ] || return 1
+  _tracker_load_portfolio_lib
+  command -v portfolio_registry >/dev/null 2>&1 || return 1
+  local registry
+  registry=$(portfolio_registry 2>/dev/null)
+  [ -n "$registry" ] && [ -f "$registry" ] || return 1
+
+  local val=""
+  if command -v yq >/dev/null 2>&1; then
+    # Pass the repo via env + strenv() so an odd repo value can never break out
+    # of the yq expression (defense-in-depth — a real owner/repo can't contain a
+    # quote, but the python3 path below is argv-safe, so match it here). $key is
+    # always a hardcoded literal from callers (kind / id_pattern / view_command),
+    # so substituting it into the path is safe.
+    val=$(REPO="$repo" yq eval ".projects[] | select(.repo == strenv(REPO)) | .tracker.$key // \"\"" "$registry" 2>/dev/null | head -1)
+  fi
+  if { [ -z "$val" ] || [ "$val" = "null" ]; } && command -v python3 >/dev/null 2>&1; then
+    val=$(python3 - "$registry" "$repo" "$key" <<'PY' 2>/dev/null
+import sys
+try:
+    import yaml
+except Exception:
+    sys.exit(0)
+reg, repo, key = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    doc = yaml.safe_load(open(reg)) or {}
+except Exception:
+    sys.exit(0)
+for p in (doc.get("projects") or []):
+    if p.get("repo") == repo:
+        v = (p.get("tracker") or {}).get(key)
+        if v is not None:
+            print(v)
+        break
+PY
+)
+  fi
+
+  if [ -z "$val" ] || [ "$val" = "null" ]; then
+    return 1
+  fi
+  echo "$val"
+}
+
+# ------------------------------------------------------------------------------
+# Public: tracker_kind [<owner/repo>]
+#   Echoes the configured tracker kind. With an optional <owner/repo>, a
+#   per-project `tracker.kind` override in the registry wins; otherwise the
+#   global config block (default "gh"). The no-arg path is byte-for-byte the
+#   original behaviour (cached).
 # ------------------------------------------------------------------------------
 _TRACKER_KIND_CACHE=""
 tracker_kind() {
-  if [ -n "$_TRACKER_KIND_CACHE" ]; then
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" kind) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  if [ -z "$repo" ] && [ -n "$_TRACKER_KIND_CACHE" ]; then
     echo "$_TRACKER_KIND_CACHE"
     return 0
   fi
@@ -67,7 +162,9 @@ tracker_kind() {
   if [ -z "$k" ] || [ "$k" = "null" ]; then
     k="gh"
   fi
-  _TRACKER_KIND_CACHE="$k"
+  if [ -z "$repo" ]; then
+    _TRACKER_KIND_CACHE="$k"
+  fi
   echo "$k"
 }
 
@@ -81,7 +178,15 @@ tracker_kind() {
 # ------------------------------------------------------------------------------
 _TRACKER_ID_PATTERN_CACHE=""
 tracker_id_pattern() {
-  if [ -n "$_TRACKER_ID_PATTERN_CACHE" ]; then
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" id_pattern) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  if [ -z "$repo" ] && [ -n "$_TRACKER_ID_PATTERN_CACHE" ]; then
     echo "$_TRACKER_ID_PATTERN_CACHE"
     return 0
   fi
@@ -91,7 +196,9 @@ tracker_id_pattern() {
   if [ -z "$p" ] || [ "$p" = "null" ]; then
     p='^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$'
   fi
-  _TRACKER_ID_PATTERN_CACHE="$p"
+  if [ -z "$repo" ]; then
+    _TRACKER_ID_PATTERN_CACHE="$p"
+  fi
   echo "$p"
 }
 
@@ -101,7 +208,15 @@ tracker_id_pattern() {
 # ------------------------------------------------------------------------------
 _TRACKER_VIEW_TPL_CACHE=""
 _tracker_view_template() {
-  if [ -n "$_TRACKER_VIEW_TPL_CACHE" ]; then
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" view_command) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  if [ -z "$repo" ] && [ -n "$_TRACKER_VIEW_TPL_CACHE" ]; then
     echo "$_TRACKER_VIEW_TPL_CACHE"
     return 0
   fi
@@ -111,7 +226,9 @@ _tracker_view_template() {
   if [ -z "$tpl" ] || [ "$tpl" = "null" ]; then
     tpl='gh issue view {id} --repo {owner_repo} --json state,title,url,labels'
   fi
-  _TRACKER_VIEW_TPL_CACHE="$tpl"
+  if [ -z "$repo" ]; then
+    _TRACKER_VIEW_TPL_CACHE="$tpl"
+  fi
   echo "$tpl"
 }
 
@@ -262,8 +379,11 @@ tracker_view() {
     return 1
   fi
 
+  # Per-project resolution: when an owner_repo is supplied, the tracker kind
+  # and view_command come from that project's registry override (if any),
+  # falling back to the global config block. See AgDR-0072 / #670.
   local kind
-  kind=$(tracker_kind)
+  kind=$(tracker_kind "$owner_repo")
 
   case "$kind" in
     none)
@@ -279,7 +399,7 @@ tracker_view() {
   fi
 
   local tpl cmd raw rc
-  tpl=$(_tracker_view_template)
+  tpl=$(_tracker_view_template "$owner_repo")
   cmd=$(_tracker_substitute "$tpl" "$id" "$owner_repo")
 
   # Run the command; capture stdout. Suppress stderr (CLI errors are visible
@@ -320,6 +440,237 @@ tracker_state() {
   local json
   json=$(tracker_view "$@") || return $?
   printf '%s' "$json" | jq -r '.state // empty' 2>/dev/null
+}
+
+# ==============================================================================
+# Creation (tracker_create) — the #670 / AgDR-0072 creation abstraction.
+#
+# tracker_create is the creation analog of tracker_view. Unlike view (which only
+# substitutes the simple {id}/{owner_repo} tokens), create carries an ARBITRARY
+# title + body. So tracker_create is a FUNCTION taking args — title/labels pass
+# as proper `--flag "$val"` arguments and the body via `--body-file` — NEVER a
+# string-templated eval of the title/body. Built-in adapters cover gh + glab;
+# the `create_command` TEMPLATE is reserved for the trusted `custom` kind (same
+# trust class as view_command's custom adapter).
+#
+# Contract: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+#   On success: emits normalised JSON {"ref":..., "url":...} on stdout, exit 0.
+#     - ref is the tracker's issue reference as a STRING (callers must not do
+#       arithmetic on it — a future tracker may return a key like LIN-42). The
+#       built-in gh/glab adapters below emit the trailing NUMBER; trackers with
+#       non-numeric keys supply their own adapter + extractor (Part C).
+#   On failure (CLI missing/errored, kind=none, no parseable result): exit 1,
+#     empty stdout — callers treat empty as "not created".
+# ------------------------------------------------------------------------------
+
+# Internal: parse a gh/glab create output into {ref, url}. gh prints just the
+# issue URL; glab prints several lines including it. Finds the issue URL and
+# derives the ref from its trailing NUMERIC path segment — sufficient for gh and
+# glab. Trackers with non-numeric keys (Linear LIN-42, Jira PROJ-789) need a
+# dedicated extractor in their own adapter (Part C), not this numeric helper.
+_tracker_extract_ref_url() {
+  local raw="$1" url ref
+  url=$(printf '%s\n' "$raw" | grep -oE 'https?://[^[:space:]]+' | grep -E '/issues/[0-9]+' | head -1)
+  if [ -z "$url" ]; then
+    return 1
+  fi
+  ref=$(printf '%s' "$url" | grep -oE '[0-9]+$')
+  jq -nc --arg ref "$ref" --arg url "$url" '{ref:$ref, url:$url}' 2>/dev/null
+}
+
+# Internal adapter: gh → run `gh issue create` with safe arg passing.
+_tracker_create_gh() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local -a args
+  args=(issue create --repo "$repo" --title "$title")
+  if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+    args+=(--body-file "$body_file")
+  fi
+  if [ -n "$labels" ]; then
+    local l
+    local IFS=','
+    for l in $labels; do
+      [ -n "$l" ] && args+=(--label "$l")
+    done
+  fi
+  gh "${args[@]}" 2>/dev/null
+}
+
+# Internal adapter: glab (GitLab) → `glab issue create`. GitLab's CLI has no
+# --body-file, so the body is passed via --description with the file contents
+# as a single quoted arg (injection-safe — not re-evaluated). Labels are a
+# single comma-separated --label value. --yes skips the interactive prompt.
+_tracker_create_glab() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local -a args
+  args=(issue create -R "$repo" --title "$title")
+  if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+    args+=(--description "$(cat "$body_file")")
+  fi
+  if [ -n "$labels" ]; then
+    args+=(--label "$labels")
+  fi
+  args+=(--yes)
+  glab "${args[@]}" 2>/dev/null
+}
+
+# Internal: resolve the create_command template for the `custom` kind — the
+# per-project override (registry) wins over a global .tracker.create_command.
+# Empty when neither is set (custom kind without a template can't create).
+_tracker_create_template() {
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" create_command) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  _tracker_load_config_lib
+  local tpl
+  tpl=$(config_get_or '.tracker.create_command' '' 2>/dev/null)
+  if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
+    echo "$tpl"
+  fi
+}
+
+# Internal adapter: custom → operator-supplied create_command template.
+#
+# Injection model (deliberate): this is the ONE eval path in tracker_create, and
+# it is scoped to the trusted, operator-authored `custom` template. Only the
+# {owner_repo} placeholder — a safe slug — is substituted into the command
+# string. The arbitrary values (title / body file / labels) are exposed as
+# ENVIRONMENT VARIABLES ($TRACKER_TITLE / $TRACKER_BODY_FILE / $TRACKER_LABELS)
+# that the operator references with double-quoted expansions — so they are
+# quoted VALUES at eval time, never re-tokenised as command syntax. A title full
+# of `; rm -rf …` is inert. The custom command is expected to emit the issue URL
+# on stdout (parsed like gh/glab).
+#
+# Note: {owner_repo} IS substituted into the eval'd string. This is the same
+# trust model as view_command — owner_repo is a registry-sourced slug (trusted
+# config authored by the maintainer), not agent/user-supplied free text. Only
+# the arbitrary, untrusted values (title/body/labels) go via env.
+_tracker_create_custom() {
+  local repo="$1" title="$2" body_file="$3" labels="$4"
+  local tpl
+  tpl=$(_tracker_create_template "$repo")
+  if [ -z "$tpl" ]; then
+    return 1
+  fi
+  local cmd="$tpl"
+  cmd="${cmd//\{owner_repo\}/$repo}"
+  TRACKER_REPO="$repo" TRACKER_TITLE="$title" TRACKER_BODY_FILE="$body_file" TRACKER_LABELS="$labels" \
+    eval "$cmd" 2>/dev/null
+}
+
+# Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+tracker_create() {
+  local repo="$1" title="$2" body_file="${3:-}" labels="${4:-}"
+  if [ -z "$repo" ] || [ -z "$title" ]; then
+    return 1
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    return 1
+  fi
+
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    none)
+      # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
+      # rendered ticket body to stdout so the operator can file it in their
+      # external system, and return 3 (a documented "shape-only / file
+      # externally" code) so callers don't misreport it as a CLI/auth error.
+      if [ -n "$body_file" ] && [ -f "$body_file" ]; then
+        cat "$body_file"
+      fi
+      return 3
+      ;;
+  esac
+
+  local raw rc
+  case "$kind" in
+    gh)     raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    glab)   raw=$(_tracker_create_glab   "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    custom) raw=$(_tracker_create_custom "$repo" "$title" "$body_file" "$labels"); rc=$? ;;
+    *)      raw=$(_tracker_create_gh     "$repo" "$title" "$body_file" "$labels"); rc=$? ;;  # best-effort default
+  esac
+  if [ $rc -ne 0 ] || [ -z "$raw" ]; then
+    return 1
+  fi
+
+  local result
+  result=$(_tracker_extract_ref_url "$raw")
+  if [ -z "$result" ] || [ "$result" = "null" ]; then
+    return 1
+  fi
+  echo "$result"
+}
+
+# ------------------------------------------------------------------------------
+# Label ensure (tracker_label_ensure) — #709 creator-sweep companion to
+# tracker_create.
+#
+# A few creator skills (/spike, /prototype, /investigation) depend on a trigger
+# label (spike / prototype / investigation) existing on the target repo so
+# downstream hooks can read it and apply their workflow exemptions. On GitHub
+# that label must be created explicitly; tracker_label_ensure is the
+# tracker-agnostic analog of that inline `gh label create` step.
+#
+# Contract: tracker_label_ensure <owner/repo> <name> [<color>] [<description>]
+#   BEST-EFFORT by design — ALWAYS returns 0. A missing/duplicate/errored label
+#   must never abort the subsequent tracker_create (the same "swallow the
+#   duplicate" semantics the inline `gh label create … || true` calls had).
+#   Color is accepted as a bare hex ("FBCA04", the gh convention); the glab
+#   adapter normalises it to "#FBCA04" (GitLab wants the leading #).
+#
+# Adapters: gh + glab do a real create. jira / linear / asana / none have no
+#   built-in gh/glab label CLI here, and `custom` files issues via the operator's
+#   own create_command (which handles labels its own way) — so all of them are
+#   no-ops; a generic label-ensure step doesn't apply. (GitLab additionally
+#   auto-creates a label when it is first applied on issue-create, so even the
+#   glab path is a convenience, not a correctness requirement.)
+# ------------------------------------------------------------------------------
+
+# Internal adapter: gh → `gh label create <name>` (name is positional).
+_tracker_label_ensure_gh() {
+  local repo="$1" name="$2" color="$3" desc="$4"
+  local -a args
+  args=(label create "$name" --repo "$repo")
+  [ -n "$color" ] && args+=(--color "$color")
+  [ -n "$desc" ]  && args+=(--description "$desc")
+  gh "${args[@]}" >/dev/null 2>&1 || true
+}
+
+# Internal adapter: glab → `glab label create --name <name>`. GitLab wants the
+# colour as "#RRGGBB"; normalise a bare-hex input by prepending '#'.
+_tracker_label_ensure_glab() {
+  local repo="$1" name="$2" color="$3" desc="$4"
+  local -a args
+  args=(label create --name "$name" -R "$repo")
+  if [ -n "$color" ]; then
+    case "$color" in \#*) : ;; *) color="#$color" ;; esac
+    args+=(--color "$color")
+  fi
+  [ -n "$desc" ] && args+=(--description "$desc")
+  glab "${args[@]}" >/dev/null 2>&1 || true
+}
+
+# Public: tracker_label_ensure <owner/repo> <name> [<color>] [<description>]
+tracker_label_ensure() {
+  local repo="$1" name="${2:-}" color="${3:-}" desc="${4:-}"
+  # Nothing actionable without a repo + name — never abort the caller.
+  if [ -z "$repo" ] || [ -z "$name" ]; then
+    return 0
+  fi
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    gh)   _tracker_label_ensure_gh   "$repo" "$name" "$color" "$desc" ;;
+    glab) _tracker_label_ensure_glab "$repo" "$name" "$color" "$desc" ;;
+    *)    : ;;  # jira / linear / asana / custom / none — no-op
+  esac
+  return 0
 }
 
 # ------------------------------------------------------------------------------

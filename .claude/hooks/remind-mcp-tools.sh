@@ -27,7 +27,7 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
     mcp_configured=true
     break
   fi
-  r=$(dirname "$r")
+  parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
 done
 
 $mcp_configured || exit 0

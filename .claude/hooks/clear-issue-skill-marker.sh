@@ -41,7 +41,7 @@ else
       ROOT="$cur"
       break
     fi
-    cur=$(dirname "$cur")
+    parent=$(dirname "$cur"); [ "$parent" = "$cur" ] && break; cur="$parent"
   done
 fi
 

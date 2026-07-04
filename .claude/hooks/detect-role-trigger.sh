@@ -184,6 +184,25 @@ detect_path_triggers() {
       ;;
   esac
 
+  # Security Auditor — the TRUST CHAIN (me2resh/apexyard#777).
+  # The framework's most security-critical code is its own enforcement layer:
+  # the hooks that decide whether an action (esp. a merge) is permitted, and the
+  # settings.json matcher wiring that decides whether a gate fires at all. These
+  # are NOT auth/crypto/secrets paths, so the trigger above misses them — yet a
+  # subtle bug here (a path-traversal write, a fail-open gate, an injection in
+  # the tracker/broker lib) is exactly what the adversarial security lens is for.
+  # Over-triggering is cheap (the auditor no-ops on a false positive); leaving
+  # trust-chain edits to the generalist review alone is the gap #777 closes.
+  case "$rel" in
+    .claude/hooks/*|*/.claude/hooks/*|\
+    .claude/settings.json|*/.claude/settings.json)
+      emit_banner \
+        "Security Auditor" \
+        "roles/security/security-auditor.md" \
+        "edit touches the security-critical trust chain ($rel) — run /security-review"
+      ;;
+  esac
+
   # Platform Engineer — CI/CD pipelines + golden-path templates
   case "$rel" in
     .github/workflows/*|*/.github/workflows/*|\
@@ -365,12 +384,43 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Contrarian prompted-activation detection (UserPromptSubmit).
+#
+# The Contrarian (Naqid) is a UTILITY agent (no roles/ file), invoked on the
+# "play devil's advocate" family of phrases rather than the "act as the X"
+# shape the role table uses — so it gets its own matcher + its own banner
+# (emit_banner reads a roles/ Class line that doesn't exist for utility
+# agents). Advisory + on-demand: this fires a suggestion to run /challenge or
+# spawn the contrarian agent; it never blocks. See AgDR-0078.
+#
+# Over-triggering is acceptable (the agent no-ops cheaply on a false positive),
+# consistent with the rest of this hook's philosophy.
+# ---------------------------------------------------------------------------
+detect_contrarian_triggers() {
+  local prompt="$1"
+  [ -z "$prompt" ] && return 0
+
+  local norm
+  norm=$(printf '%s' "$prompt" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr ',.;:!?()[]{}"'"'" ' ' \
+    | tr -s '[:space:]' ' ')
+
+  # Phrase family (normalised — apostrophes are already spaces, so
+  # "devil's advocate" → "devil s advocate", matched by `devil[ s]*advocate`).
+  if printf ' %s ' "$norm" | grep -qE 'devil[ s]*advocate|poke holes|steelman|the case against|challenge this|the contrarian|naqid'; then
+    printf 'ROLE TRIGGER: The Contrarian (Naqid) — prompted premise-level challenge per .claude/rules/role-triggers.md. Run /challenge <target>, OR spawn the agent via the Agent tool with subagent_type: contrarian, to steelman-then-challenge (advisory only — never blocks a gate). See .claude/agents/contrarian.md + .claude/skills/challenge/SKILL.md. Per AgDR-0078.\n' >&2
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch on hook event.
 # ---------------------------------------------------------------------------
 case "$HOOK_EVENT" in
   UserPromptSubmit)
     prompt=$(printf '%s' "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
     detect_prompt_triggers "$prompt"
+    detect_contrarian_triggers "$prompt"
     ;;
   PreToolUse|PostToolUse|"")
     # Hook event name was missing on some older harness versions — fall

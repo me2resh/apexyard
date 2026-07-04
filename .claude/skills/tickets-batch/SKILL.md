@@ -1,6 +1,6 @@
 ---
 name: tickets-batch
-description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `gh issue create`.
+description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
 argument-hint: "<optional bulk description>"
 allowed-tools: Bash, Read, Write
 ---
@@ -18,7 +18,7 @@ Flow shape:
   → 1 shared-context Q batch (priority, epic, area-labels, repo)
   → N micro-interviews (≤ 3 Qs each: type, one-line purpose, optional clarification)
   → 1 confirmation
-  → N `gh issue create` calls (one per ticket — never a single batch dump)
+  → N `tracker_create` calls (one per ticket — never a single batch dump)
 ```
 
 ## Path resolution
@@ -231,15 +231,29 @@ Handle the response:
 
 ### 6. File the batch
 
-For each ticket in order, run a **specific `gh issue create`** — one call per ticket, NEVER a single bulk JSON dump. The validator runs per-issue, so per-issue calls are the only conformant shape.
+For each ticket in order, run a **specific `tracker_create` call** — one call per ticket, NEVER a single bulk JSON dump. The validator runs per-issue, so per-issue calls are the only conformant shape. Dispatch through `tracker_create` (#670 / AgDR-0072, extended by the #709 creator sweep) so the tickets land in **this project's** tracker — GitHub, GitLab, or a `custom` CLI. For a GitHub adopter each call runs `gh issue create` exactly as before.
 
 Build the title as `[<Type>] <title>`. Build the body from the inferred sections, ending with the optional `Refs <epic>` line if a parent was set.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[{Type}] {title}" \
-  --label "{type-label},{priority},{area-labels}" \
-  --body "{formatted body}"
+# Resolve + source the tracker lib ONCE, before the loop, by walking up from cwd.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# ── per ticket ──────────────────────────────────────────────────────────────
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+result="$(tracker_create "{owner/repo}" "[{Type}] {title}" "$body_file" "{type-label},{priority},{area-labels}")"
+rc=$?
+rm -f "$body_file"
+# rc=3 → tracker.kind=none (shape-only); rc!=0/empty → hard failure (see step 7).
+ref="$(printf '%s' "$result" | jq -r '.ref // empty')"   # e.g. 451 — used in the progress line
 ```
 
 Type-label mapping:
@@ -250,7 +264,7 @@ Type-label mapping:
 | Bug | `bug` |
 | Chore / Refactor / Testing / CI / Docs | (none — type is in title prefix; labels stay area + priority) |
 
-Show progress per call:
+Show progress per call, using the `${ref}` parsed from each `tracker_create`:
 
 ```
 [1/12] Filing "Wire OIDC discovery endpoint"… → owner/repo#451 ✓
@@ -259,19 +273,19 @@ Show progress per call:
 
 ### 7. Failure handling
 
-On the first `gh issue create` non-zero exit, **stop the batch immediately**. Do not silently skip. Show:
+On the first `tracker_create` failure (`rc` non-zero **or** empty `result`), **stop the batch immediately**. Do not silently skip. (A `tracker.kind=none` project returns `rc=3` with the rendered body on stdout — treat that as "shape-only, nothing filed" and stop the batch the same way, telling the operator to file the set in their external system.) Show:
 
 ```
 [5/12] Filing "Migrate user table to new auth schema"… ✗
 
-Error from gh / validator:
+Error from the tracker CLI / validator:
 {stderr — usually the validator's "missing section: Driver" line}
 
 Filed so far: 4 tickets ({owner/repo}#451, #452, #453, #454).
 Remaining: 8 tickets (not filed).
 
 What now?
-1. Retry — re-run the same gh call (use this if the failure was transient)
+1. Retry — re-run the same tracker_create call (use this if the failure was transient)
 2. Skip — drop this ticket, continue with the next 7
 3. Edit — re-interview this ticket and retry
 4. Abort — stop here; the 4 already-filed tickets stay (no rollback)
@@ -362,7 +376,7 @@ As a {persona}, I want {goal} so that {benefit}.
 1. **ASK shared-context questions ONCE** at the start (priority, epic, area-labels, repo). NEVER re-ask them per ticket.
 2. **Per-ticket interview is at most THREE questions**: type, one-line purpose, optional clarification. If the type + purpose yield a confident inference, skip the third question.
 3. **Output conforms to `.ticket.required_sections` by construction.** Never produce a body that the `validate-issue-structure.sh` hook would reject. Every required section is present and non-empty (placeholders allowed); section headers match the schema spelling exactly.
-4. **One `gh issue create` per ticket.** NEVER a single batch-mode JSON dump — the validator runs per-issue and a bulk shape silently bypasses it.
+4. **One `tracker_create` per ticket.** NEVER a single batch-mode JSON dump — the validator runs per-issue and a bulk shape silently bypasses it. (For a GitHub adopter each call is a `gh issue create`.)
 5. **Confirm the full batch BEFORE filing any ticket.** No partial commits-before-confirm. A `cancel` at the summary leaves the tracker untouched.
 6. **On failure mid-batch: stop, surface the validator error, ask the user.** Don't silently skip. Don't roll back. Tell them exactly which tickets did file.
 7. **Cap at 20 tickets per invocation.** Above that, ask the user to split into batches.

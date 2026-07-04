@@ -1,0 +1,197 @@
+name: auto-tag-on-release-pr-merge
+
+# Automatically tags the squash commit on main when a release PR merges,
+# and creates a GitHub Release entry from the PR body's changelog section.
+#
+# This workflow closes the post-merge-tagging gap described in AgDR-0076:
+# the v2.3.0 tag was mis-placed on the release-branch HEAD (not the squash
+# commit on main). By triggering on `pull_request` → `closed` after merge,
+# `github.sha` is already the squash commit on main — the exact commit to tag.
+#
+# The tag push uses `git push origin --tags` (not `git push origin <tag>`)
+# to avoid the apexyard branch-name validator hook misfiring on tag-push
+# commands (per ApexYard memory: avoid-apexyard-branch-hook-on-tag-push).
+#
+# Trigger conditions:
+#   - PR closed (merged) where head branch matches `release/v*`
+#   - Manual dispatch (operator can re-run if something fails post-merge)
+#
+# Permissions:
+#   - contents: write (create tag + GitHub Release)
+#
+# No new secrets required — uses the default GITHUB_TOKEN.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag (e.g. v3.3.0) — must already be merged to main"
+        required: true
+      sha:
+        description: "Commit SHA on main to tag (defaults to HEAD of main if omitted)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    name: tag release + create GitHub Release
+    runs-on: ubuntu-latest
+    # Only run on merged release PRs (not just any closed PR, and not on forks)
+    if: |
+      (
+        github.event_name == 'workflow_dispatch'
+      ) || (
+        github.event.pull_request.merged == true &&
+        startsWith(github.event.pull_request.head.ref, 'release/v')
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          # Checkout main so git commands work against the right branch
+          ref: main
+
+      - name: Determine version and SHA
+        id: meta
+        env:
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_INPUT_VERSION: ${{ github.event.inputs.version }}
+          GH_INPUT_SHA: ${{ github.event.inputs.sha }}
+          GH_PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          if [ "$GH_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$GH_INPUT_VERSION"
+            SHA="$GH_INPUT_SHA"
+            if [ -z "$SHA" ]; then
+              SHA=$(git rev-parse HEAD)
+            fi
+          else
+            # Extract version from branch name: release/v3.3.0 → v3.3.0
+            BRANCH="$GH_PR_HEAD_REF"
+            VERSION="${BRANCH#release/}"
+            # github.sha is the merge commit SHA on main for pull_request events
+            SHA="$GH_SHA"
+          fi
+
+          # Validate version format
+          if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: Version '$VERSION' does not match v<major>.<minor>.<patch>" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA"         >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+          echo "SHA:     $SHA"
+
+      - name: Check tag does not already exist
+        id: tag-check
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          if git tag -l "$VERSION" | grep -q "$VERSION"; then
+            echo "Tag $VERSION already exists — skipping tag creation."
+            echo "already_tagged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_tagged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ancestry guard
+        if: steps.tag-check.outputs.already_tagged == 'false'
+        run: |
+          SHA="${{ steps.meta.outputs.sha }}"
+          # Assert the SHA is an ancestor of main (reachable from HEAD which is main)
+          if ! git merge-base --is-ancestor "$SHA" HEAD; then
+            echo "ERROR: $SHA is not an ancestor of main." >&2
+            echo "This indicates the release PR was not squash-merged to main, or" >&2
+            echo "the SHA is mis-specified. Tag creation aborted." >&2
+            exit 1
+          fi
+          echo "Ancestry guard passed: $SHA is reachable from main."
+
+      - name: Create and push annotated tag
+        if: steps.tag-check.outputs.already_tagged == 'false'
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHA="${{ steps.meta.outputs.sha }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" "$SHA" -m "$VERSION"
+          # Use --tags (not the bare tag name) to avoid branch-name validator
+          # hook misfiring on tag-push commands. See AgDR-0076 § auto-tag design.
+          git push origin --tags
+          echo "Pushed tag $VERSION pointing at $SHA"
+
+      - name: Extract CHANGELOG section from PR body
+        id: notes
+        if: github.event_name == 'pull_request'
+        env:
+          GH_PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          PR_BODY="$GH_PR_BODY"
+
+          # Extract the section starting at "## [VERSION]" up to the next "## ["
+          NOTES=$(echo "$PR_BODY" | \
+            awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" \
+          )
+
+          if [ -z "$NOTES" ]; then
+            # Fallback: use the full PR body trimmed of boilerplate markers
+            NOTES=$(echo "$PR_BODY" | grep -v '<!-- multi-close' | head -80)
+          fi
+
+          # Write to a temp file (avoids quoting issues with multiline output)
+          echo "$NOTES" > /tmp/release-notes.md
+          echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.tag-check.outputs.already_tagged == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
+
+          if [ -n "$NOTES_FILE" ] && [ -f "$NOTES_FILE" ]; then
+            gh release create "$VERSION" \
+              --repo "${{ github.repository }}" \
+              --title "$VERSION" \
+              --notes-file "$NOTES_FILE"
+          else
+            # Manual dispatch — no PR body available; create minimal release
+            gh release create "$VERSION" \
+              --repo "${{ github.repository }}" \
+              --title "$VERSION" \
+              --notes "Release $VERSION — see CHANGELOG.md for details."
+          fi
+          echo "GitHub Release $VERSION created."
+
+      - name: Summary
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHA="${{ steps.meta.outputs.sha }}"
+          ALREADY="${{ steps.tag-check.outputs.already_tagged }}"
+          if [ "$ALREADY" = "true" ]; then
+            STATUS="Tag already existed — skipped"
+          else
+            STATUS="Tagged + GitHub Release created"
+          fi
+          {
+            echo "## Release tag summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Version | \`$VERSION\` |"
+            echo "| SHA | \`$SHA\` |"
+            echo "| Status | $STATUS |"
+            echo ""
+            echo "Next step: run \`/release-sync $VERSION\` to sync main→dev."
+          } >> "$GITHUB_STEP_SUMMARY"

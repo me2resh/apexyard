@@ -32,7 +32,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
-1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact.
+1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` / `gh pr review` call, and thread it into Tariq's spawn so his `<owner>__<repo>__<pr>-architecture.approved` marker is keyed on the PR's real repo. This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
 2. Fetch PR details and the latest commit SHA (when reviewing a PR).
 3. Read the design artifact(s).
 4. Review against the architecture review lens (below) plus discovered handbooks.

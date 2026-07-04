@@ -133,6 +133,33 @@ in=$(jq -nc \
   '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "path trigger: ordinary path is silent" 0 "" "$in"
 
+# 2e-i. Trust chain (#777): a merge-gate hook fires Security Auditor.
+in=$(jq -nc \
+  --arg p ".claude/hooks/block-unreviewed-merge.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: .claude/hooks/* fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor.*roles/security/security-auditor\\.md" "$in"
+
+# 2e-ii. Trust chain (#777): settings.json (the matcher wiring) fires Security Auditor.
+in=$(jq -nc \
+  --arg p ".claude/settings.json" \
+  '{hook_event_name:"PreToolUse", tool_name:"Write", tool_input:{file_path:$p}}')
+run_case "trust chain: .claude/settings.json fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+# 2e-iii. Trust chain (#777): a nested hooks path (e.g. a managed-project fork) fires too.
+in=$(jq -nc \
+  --arg p "workspace/proj/.claude/hooks/_lib-tracker.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: */.claude/hooks/* fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+# 2e-iv. A .claude path that is NOT trust-chain (a skill doc) stays silent.
+in=$(jq -nc \
+  --arg p ".claude/skills/roadmap/SKILL.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: non-hook .claude path is silent [#777]" 0 "" "$in"
+
 # 2f. Edit on .github/workflows/ci.yml → Platform Engineer banner.
 in=$(jq -nc \
   --arg p ".github/workflows/ci.yml" \
@@ -325,6 +352,42 @@ if echo "$got" | grep -q "Solution Architect"; then
   FAIL=$((FAIL+1)); FAILED="${FAILED}sa-source-noise "
 else
   echo "PASS [path trigger: source file does not fire Solution Architect]"
+  PASS=$((PASS+1))
+fi
+
+# --- The Contrarian (utility agent, prompted phrase family — AgDR-0078) -------
+
+# 6a. "play devil's advocate" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "play devil's advocate on adding a second database" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'play devil's advocate' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\).*subagent_type: contrarian" "$in"
+
+# 6b. "poke holes in" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "poke holes in this plan before we commit" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'poke holes in' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\)" "$in"
+
+# 6c. "challenge this" fires The Contrarian.
+in=$(jq -nc \
+  --arg prm "challenge this idea" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+run_case "prompt trigger: 'challenge this' fires The Contrarian" 0 \
+  "The Contrarian \(Naqid\)" "$in"
+
+# 6d. An ordinary build prompt does NOT fire The Contrarian.
+in=$(jq -nc \
+  --arg prm "implement the nav filter feature" \
+  '{hook_event_name:"UserPromptSubmit", prompt:$prm}')
+got=$(printf '%s' "$in" | bash "$HOOK" 2>&1 >/dev/null)
+if echo "$got" | grep -q "The Contrarian"; then
+  echo "FAIL [prompt trigger: build prompt must not fire The Contrarian]" >&2
+  FAIL=$((FAIL+1)); FAILED="${FAILED}contrarian-noise "
+else
+  echo "PASS [prompt trigger: build prompt does not fire The Contrarian]"
   PASS=$((PASS+1))
 fi
 

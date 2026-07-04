@@ -59,7 +59,7 @@ npx markdownlint-cli2 '**/*.md'   # if you touched markdown
 shellcheck .claude/hooks/*.sh     # if you touched hooks
 ```
 
-If you add or remove a skill / hook / role, update the counts the `site-counts-check` workflow verifies (see `.claude/hooks/tests/test_site_counts.sh` for what's checked).
+If you add or remove a skill / hook / role, verify that `bash bin/run-pre-push-checks.sh` still passes locally — it runs markdownlint, shellcheck, and the subpack extraction smoke test.
 
 ## Making a technical decision?
 

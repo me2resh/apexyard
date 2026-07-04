@@ -50,7 +50,7 @@ else
     if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
       ops_root="$r"; break
     fi
-    r=$(dirname "$r")
+    parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
   done
 fi
 

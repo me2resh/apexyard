@@ -98,14 +98,15 @@ if [ -z "$TOUCHED_ARCH" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Spike exemption (apexyard#180).
+# Spike + prototype exemption (apexyard#180, #673).
 #
-# Spike work is hypothesis-driven, time-boxed, throw-away exploration; AgDRs
-# capture decisions that should persist, while spikes write disposition memos
-# instead. Exempt the commit-time AgDR check if ANY of:
+# Spike work (technical) and prototype work (throw-away UX/demo) are both
+# time-boxed exploration; AgDRs capture decisions that should persist, while
+# these write disposition memos instead. Exempt the commit-time AgDR check if
+# ANY of:
 #
-#   (a) the active ticket marker references a `[Spike]`-prefixed ticket
-#   (b) the current branch is named `spike/<TICKET-ID>-...`
+#   (a) the active ticket marker references a `[Spike]` or `[Prototype]` ticket
+#   (b) the current branch is named `spike/<TICKET-ID>-...` or `prototype/...`
 #
 # See .claude/rules/workflow-gates.md § Spike work.
 # ---------------------------------------------------------------------------
@@ -132,19 +133,19 @@ spike_commit_exempt() {
         marker_home="$r"
         break
       fi
-      r=$(dirname "$r")
+      parent=$(dirname "$r"); [ "$parent" = "$r" ] && break; r="$parent"
     done
   fi
 
   if [ -f "$marker_home/.claude/session/current-ticket" ]; then
-    if grep -qE '^title=\[Spike\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
+    if grep -qE '^title=\[(Spike|Prototype)\]' "$marker_home/.claude/session/current-ticket" 2>/dev/null; then
       return 0
     fi
   fi
   if [ -d "$marker_home/.claude/session/tickets" ]; then
     for marker in "$marker_home/.claude/session/tickets"/*; do
       [ -f "$marker" ] || continue
-      if grep -qE '^title=\[Spike\]' "$marker" 2>/dev/null; then
+      if grep -qE '^title=\[(Spike|Prototype)\]' "$marker" 2>/dev/null; then
         return 0
       fi
     done
@@ -152,7 +153,7 @@ spike_commit_exempt() {
 
   local branch
   branch=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null)
-  if echo "$branch" | grep -qE '^spike/'; then
+  if echo "$branch" | grep -qE '^(spike|prototype)/'; then
     return 0
   fi
 
@@ -160,7 +161,7 @@ spike_commit_exempt() {
 }
 
 if spike_commit_exempt; then
-  echo "WARN: spike commit detected — require-agdr-for-arch-changes bypassed. AgDRs not required for hypothesis-driven throw-away work; ship a memo on /spike-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
+  echo "WARN: spike/prototype commit detected — require-agdr-for-arch-changes bypassed. AgDRs not required for throw-away exploration; ship a memo on /spike-close or /prototype-close instead. See .claude/rules/workflow-gates.md § Spike work." >&2
   exit 0
 fi
 

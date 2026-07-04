@@ -1,13 +1,13 @@
 ---
 name: release
-description: Cut an apexyard release — diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, tag + push after merge.
-argument-hint: "<optional explicit version, e.g. v1.2.0>"
+description: Cut an apexyard release — diff dev↔main, pick semver bump, generate CHANGELOG, open release PR, auto-tag on merge.
+argument-hint: "[--dry-run] [<version, e.g. v1.2.0>]"
 allowed-tools: Bash, Read, Write
 ---
 
 # /release — Cut an apexyard release
 
-Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, generates a CHANGELOG entry, opens the release PR, and (after the user merges) tags the resulting commit and pushes the tag.
+Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. Design rationale: AgDR-0076.
 
 This skill is **framework-only** — it's for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and don't have a release-cut flow.
 
@@ -16,7 +16,8 @@ This skill is **framework-only** — it's for cutting apexyard releases, not for
 ```
 /release             # auto-detect bump from conventional commits
 /release v1.2.0      # explicit version, skip auto-detect
-/release --dry-run   # preview only, don't create the PR
+/release --dry-run   # preview changelog + PR body without writing any files
+/release --dry-run v1.2.0
 ```
 
 ## Process
@@ -34,7 +35,7 @@ Verify:
 
 If `<version>` arg was passed, use it (must match `v\d+\.\d+\.\d+`).
 
-Otherwise auto-detect from the conventional-commit types in `git log main..upstream/dev`:
+Otherwise auto-detect from the conventional-commit types in `git log upstream/main..upstream/dev`:
 
 | Found | Bump |
 |-------|------|
@@ -42,7 +43,15 @@ Otherwise auto-detect from the conventional-commit types in `git log main..upstr
 | Any `feat:` / `feat(...):` (and no breaking) | **MINOR** |
 | Only `fix:` / `chore:` / `docs:` / `refactor:` / `test:` / `style:` / `perf:` / `build:` / `ci:` (and no `feat:` or breaking) | **PATCH** |
 
-Read the current latest tag (`git describe --tags --abbrev=0 main` or `gh api repos/me2resh/apexyard/releases/latest`) and bump accordingly. Show the user:
+Read the current latest tag:
+
+```bash
+PREV_TAG=$(git describe --tags --abbrev=0 upstream/main 2>/dev/null \
+           || gh api repos/me2resh/apexyard/releases/latest --jq '.tag_name' 2>/dev/null \
+           || echo "NONE")
+```
+
+Bump accordingly. Show the user:
 
 ```
 Current latest tag: vX.Y.Z
@@ -52,14 +61,26 @@ Override? [Enter to accept, or type a version like v1.3.0]
 
 ### 3. Generate the CHANGELOG draft
 
-Run `git log <prev-tag>..upstream/dev --pretty=format:'%h %s'` and group by conventional-commit type:
+Call the helper script `bin/release-changelog.sh`, which encapsulates the `git log` + conventional-commit grouping + PR-number extraction logic and is independently tested:
+
+```bash
+PREV_TAG="vX.Y.Z" \
+HEAD_REF="upstream/dev" \
+VERSION="vA.B.C" \
+DATE="$(date +%F)" \
+  bash bin/release-changelog.sh
+```
+
+The helper emits markdown to stdout in the format:
 
 ```markdown
-## vX.Y.Z — YYYY-MM-DD
+## [vA.B.C] — YYYY-MM-DD
+
+Minor release — N features, M fixes.
 
 ### Added (feat)
 - (#NN) <subject> — <short-sha>
-- ...
+...
 
 ### Fixed (fix)
 - (#NN) <subject> — <short-sha>
@@ -71,139 +92,150 @@ Run `git log <prev-tag>..upstream/dev --pretty=format:'%h %s'` and group by conv
 - <only if breaking-marker commits exist>
 
 ### Closes
-- <enumerate every `Closes #N` from PR bodies merged to dev since last tag>
+- Closes #N, #M, ...
 ```
 
-Show the draft and let the user edit interactively before opening the PR.
+**Show the draft** and let the user edit interactively before proceeding. On `--dry-run`, print the draft and stop here with:
 
-### 3.5. Bump the marketing-site version strings (`site/index.html`)
+```
+Dry run — no changes made. Remove --dry-run to execute.
+```
 
-The marketing site hard-codes the framework version in several places. `/release`
-bumps the git tag + CHANGELOG but historically did NOT touch these, so they
-drifted across ~5 release cycles before anyone noticed (#491 / #493). Update them
-**in the same commit that lands the CHANGELOG entry**, driven by the version being
-cut (`vX.Y.Z`, with `X.Y.Z` the bare semver and `X.Y` the major.minor) and the
-release date (`YYYY-MM-DD`):
+### 4. Prepare and push the release branch
 
-| Location in `site/index.html` | What to set | Approx. line |
-|------|------|------|
-| JSON-LD `softwareVersion` | `X.Y.Z` (no `v` prefix — matches CHANGELOG `## [X.Y.Z]`) | ~L54 |
-| JSON-LD `dateModified` | release date `YYYY-MM-DD` | ~L57 |
-| Hero pill `apexyard vX.Y` | `apexyard vX.Y` | ~L1568 |
-| Hero version link **text** | `vX.Y.Z` | ~L1576 |
-| Hero version link **href** | `…/releases/tag/vX.Y.Z` | ~L1576 |
-| Releases-shipped metric **count** | number of `## [` release entries in `CHANGELOG.md` | ~L1696 |
-| Releases-shipped metric **range** | `(v0.1 → vX.Y)` | ~L1696 |
-
-Derive every value from the version being cut — do not hand-pick. Suggested
-computation:
+Skip all of steps 4–5 on `--dry-run`.
 
 ```bash
-VER="${VERSION#v}"                       # 2.2.0  (strip leading v if present)
-MAJOR_MINOR="${VER%.*}"                   # 2.2
-RELEASE_DATE=$(date +%F)                  # YYYY-MM-DD (or the CHANGELOG entry's date)
-RELEASE_COUNT=$(grep -cE '^## \[[0-9]' "$ops_root/CHANGELOG.md")  # count of release entries
+# Check out the release branch from dev
+git fetch upstream
+git checkout -b "release/vA.B.C" upstream/dev
+
+# Write the CHANGELOG entry at the top of CHANGELOG.md
+# (prepend the draft from step 3 above the previous top entry)
+
+git add CHANGELOG.md
+git commit -m "chore: release vA.B.C
+
+- Prepend CHANGELOG section for vA.B.C
+
+Refs #<release-ticket>"
+
+# Push to upstream (not origin — release PRs target me2resh/apexyard)
+git push upstream "release/vA.B.C"
 ```
 
-**Leave historical version strings untouched** — CHANGELOG entries, migration-script
-filenames (e.g. `migrate-v1-to-v2.ts`), and AgDR examples that quote an old version
-are history, not the current-version advertisement. Only the seven locations above
-move with each cut.
+### 5. Open the release PR
 
-Show the resulting `site/index.html` diff alongside the CHANGELOG diff in the
-dry-run / preview so the operator sees both before the PR opens.
+```bash
+gh pr create \
+  --repo me2resh/apexyard \
+  --base main \
+  --head "release/vA.B.C" \
+  --title "release(#<release-ticket>): vA.B.C" \
+  --body-file /tmp/release-pr-body.md
+```
 
-> **Durable guard:** `test_site_counts.sh` asserts that `site/index.html`'s
-> JSON-LD `softwareVersion`, the **hero pill** (`apexyard vX.Y`), and the
-> **releases-shipped metric** (count + `(v0.1 → vX.Y)` range) all match the
-> top-most `## [X.Y.Z]` entry in `CHANGELOG.md` (the count matches
-> `grep -cE '^## \[[0-9]' CHANGELOG.md`). The CI workflow `site-counts-check.yml`
-> runs it on every PR. If you bump the CHANGELOG without bumping these site
-> strings (or vice-versa), CI goes red — the drift can no longer accumulate
-> silently. (Before #562 only `softwareVersion` was guarded, which is how the
-> pill + metric drifted to v2.2 at the v3.0.0 cut.)
+**PR body template** (write to `/tmp/release-pr-body.md` before the `gh pr create` call):
 
-### 4. Open the release PR
+```markdown
+<!-- multi-close: approved -->
 
-Branch from `dev`: `release/vA.B.C`. Push to `upstream`. Open PR:
+## Summary
 
-- **Base**: `main`
-- **Head**: `release/vA.B.C`
-- **Title**: `release(#<release-ticket>): vA.B.C` — e.g. `release(#160): v1.2.0`. The release-cut ticket (filed via the standard ticket flow) is the natural scope, and `release` was added to the `pr.title_type_whitelist` in #168 so this title shape passes `validate-pr-create.sh` like every other PR title.
-- **Body**: the CHANGELOG draft + an explicit "this PR will tag `vA.B.C` on `main` after merge"
+- **Releases vA.B.C** — see CHANGELOG section below for the full list of changes included in this release
+- **CHANGELOG.md updated** — new section prepended at the top with grouped feat/fix/chore entries and PR refs
+- **Auto-tag on merge** — `.github/workflows/auto-tag-on-release-pr-merge.yml` will tag the squash commit on main and create a GitHub Release entry automatically when this PR merges (AgDR-0076)
 
-The PR body should aggregate every `Closes #N` from the included commits so that merging the release PR auto-closes all of them on GitHub at once.
+## CHANGELOG
 
-Skip-marker note: the release PR's body legitimately has many `Closes #N`. The hook from #114 (single-Closes-per-PR) will block it. Use `<!-- multi-close: approved -->` to bypass — release PRs are exactly the umbrella case the marker is designed for.
+<paste the draft from step 3>
 
-### 5. Wait for review + merge
+## Testing
+
+1. After merge, confirm CI creates tag `vA.B.C` on `main` (check the `auto-tag-on-release-pr-merge` workflow run)
+2. Verify `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
+3. Run `/release-sync vA.B.C` to sync main→dev and prevent squash divergence
+
+Refs #<release-ticket>
+
+---
+
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| Squash merge | GitHub merges all commits on the PR branch into a single commit on main; the branch HEAD is discarded and the resulting main tip has a new SHA |
+| Auto-tag | The `auto-tag-on-release-pr-merge.yml` workflow fires on `pull_request` → `closed` + `merged` for `release/v*` branches, tags `github.sha` (the squash commit), and creates a GitHub Release |
+| Ancestry guard | `git merge-base --is-ancestor <sha> main` — fails if the tag would not be reachable from main, preventing a mis-placed tag like v2.3.0 |
+| `/release-sync` | The mandatory follow-up skill that merges main→dev after a squash-merge release, preventing SHA divergence accumulation |
+```
+
+**PR title format** (`release` is whitelisted in `pr.title_type_whitelist` since #168):
+
+```
+release(#<release-ticket>): vA.B.C
+```
+
+### 6. Wait for review + merge (operator step)
 
 The release PR runs through the normal flow:
 
-- Code Reviewer (Rex) on the PR
+- Code Reviewer (Rex) on the PR via `/code-review`
 - CEO `/approve-merge`
 - Merge gate green
 - Squash-merge to `main`
 
-`/release` does not auto-merge. The CEO retains the discrete moment.
+`/release` does **not** auto-merge. The CEO retains the discrete moment. The tag and GitHub Release are created automatically by the `auto-tag-on-release-pr-merge.yml` CI workflow **after** the merge.
 
-### 6. Tag + push (after merge)
+### 7. Tag + GitHub Release (automated via CI)
 
-Once the release PR squash-merges to `main`, the tag must point at the **squash commit that landed on `main`** — never at the release-branch HEAD. When a PR is squash-merged, GitHub creates a single new commit on `main` whose SHA is different from every commit on the source branch. Tagging the release-branch HEAD produces a tag that is not reachable from `main`, breaking `git describe`, `git merge-base`, and any ancestry-based tooling (see issue #550).
+When the release PR is squash-merged to `main`, the `.github/workflows/auto-tag-on-release-pr-merge.yml` workflow fires automatically:
 
-The user invokes `/release --tag vA.B.C` (or runs the suggested commands manually):
+1. Extracts the version from the branch name (`release/vA.B.C` → `vA.B.C`).
+2. Uses `github.sha` (the squash commit SHA — already the correct commit on `main`).
+3. Runs the ancestry guard: `git merge-base --is-ancestor <sha> main`.
+4. Creates an annotated tag and pushes it with `git push origin --tags`.
+5. Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow).
+
+**No manual tagging required** after merge. The workflow handles it.
+
+#### Manual fallback (if CI workflow fails)
+
+If the auto-tag workflow fails for any reason, follow the manual steps:
 
 ```bash
-# Step 1 — fetch so upstream/main points at the squash commit just merged.
+# 1. Fetch so upstream/main points at the squash commit.
 git fetch upstream
 
-# Step 2 — tag the tip of upstream/main.
-#           This IS the squash commit. Do NOT use the release-branch HEAD —
-#           it was discarded by the squash and is no longer in main's ancestry.
+# 2. Tag the tip of upstream/main (the squash commit, NOT the branch HEAD).
 git tag vA.B.C upstream/main
 
-# Step 3 — ancestry guard: assert the tag is reachable from main BEFORE pushing.
-#           If this exits non-zero, the tag is mis-placed — delete and re-tag.
+# 3. Ancestry guard before pushing.
 if ! git merge-base --is-ancestor vA.B.C upstream/main; then
-  echo "ERROR: vA.B.C is not an ancestor of upstream/main — tag is mis-placed." >&2
-  echo "Delete the tag with: git tag -d vA.B.C" >&2
-  echo "Then re-run from Step 1 after confirming the PR was squash-merged." >&2
+  echo "ERROR: tag is mis-placed — delete and re-tag." >&2
   exit 1
 fi
 
-# Step 4 — push only after the guard passes.
-git push upstream vA.B.C
+# 4. Push the tag (use --tags, not the bare tag name, to avoid the
+#    branch-name validator hook misfiring on tag-push commands).
+git push upstream --tags
 ```
 
 #### Post-tag release checklist
 
-Before announcing the release, verify all three assertions hold:
+Verify all three assertions hold (CI workflow also checks these):
 
-- [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0 (tag is an ancestor of main)
-- [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C` (tag is discoverable from main)
-- [ ] `git rev-parse vA.B.C^{}` equals `git rev-parse upstream/main` (tag points at the exact tip — true for a clean release with no post-merge commits; will differ if post-merge work has landed, which is fine as long as the first two assertions hold)
-
-> **One-time note on v2.3.0:** the existing `v2.3.0` tag is mis-placed (release-branch HEAD, not the squash commit on `main`). Re-pointing it is an operational step — force-updating a published tag — that must be done by the maintainer outside this skill. This fix prevents the same mistake on all future releases.
-
-### 7. Optional: GitHub Release
-
-If the user wants a Release entry on GitHub:
-
-```bash
-gh release create vA.B.C \
-  --repo me2resh/apexyard \
-  --title "vA.B.C" \
-  --notes-file <changelog-section>
-```
-
-The CHANGELOG section from step 3 is the body.
+- [ ] `git merge-base --is-ancestor vA.B.C upstream/main` exits 0
+- [ ] `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
+- [ ] GitHub Release entry exists at `https://github.com/me2resh/apexyard/releases/tag/vA.B.C`
 
 ### 8. Confirm
 
 ```
-Released vA.B.C — tag pushed to upstream/main.
+Released vA.B.C — auto-tag workflow running on CI, will tag main + create GitHub Release.
 N tickets auto-closed via the release PR.
 Drift banner on adopters' forks will fire on next session.
+Next: /release-sync vA.B.C
 ```
 
 ### 9. Open the main→dev sync PR (MANDATORY after every release)
@@ -227,13 +259,18 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 3. **Always show the bump for confirmation** — auto-detection is a proposal, not a fait accompli. The CEO's eyes are the final check on semver intent.
 4. **CHANGELOG is editable** before the release PR opens. Don't auto-file what hasn't been reviewed.
 5. **Never auto-merge the release PR.** Rex + CEO approval applies as for any PR. The skill stops at "PR opened."
-6. **Never tag before merge, and never tag the release-branch HEAD.** After a squash-merge the release branch's HEAD is not in `main`'s ancestry. Always tag `upstream/main` (the squash commit) and assert `git merge-base --is-ancestor vA.B.C upstream/main` before pushing the tag. See step 6 for the full guard.
+6. **Never tag before merge, and never tag the release-branch HEAD.** The auto-tag workflow handles tagging after merge, always using `github.sha` (the squash commit). The manual fallback similarly tags `upstream/main`. See step 7 for the full guard.
 7. **`<!-- multi-close: approved -->`** in the release PR body is required — release PRs legitimately close many tickets at once.
+8. **`--dry-run` stops before writing any files.** The draft CHANGELOG section and PR body are shown; nothing is committed, branched, pushed, or filed.
 
 ## Related
 
-- `AgDR-0007` — the decision record this skill enacts
+- `AgDR-0007` — the release-cut branch model this skill enacts
+- `AgDR-0076` — the automation design record (this enhancement)
+- `bin/release-changelog.sh` — the changelog generation helper script, independently tested
 - `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
+- `.github/workflows/auto-tag-on-release-pr-merge.yml` — the CI workflow that tags the squash commit after merge
+- `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` — the reusable template for managed projects
 - `.claude/skills/update/SKILL.md` — the inverse skill, used by adopters pulling new releases into their fork
 - `.claude/skills/release-sync/SKILL.md` — the mandatory follow-up skill that syncs main back to dev after every release, preventing squash-divergence accumulation
 

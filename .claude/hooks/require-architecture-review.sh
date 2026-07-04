@@ -50,28 +50,50 @@ fi
 . "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 . "$(dirname "$0")/_lib-review-markers.sh"
+# cd-target → origin recovery for the no---repo split-portfolio merge (#687).
+. "$(dirname "$0")/_lib-pr-repo.sh"
 
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). Fallback: recover from
-# the `gh api .../pulls/<N>/merge` URL path so downstream `gh pr diff` calls
-# still know which repo to talk to.
+# Resolve the PR's repo. Each step runs only if the prior left CMD_REPO empty:
+#   1. --repo flag      (`gh pr merge --repo owner/repo`)
+#   2. gh api URL path  (`gh api repos/<owner>/<repo>/pulls/<N>/merge`)
+#   3. cd-target origin (`cd <portfolio> && gh pr merge <N>` with NO --repo —
+#                        the split-portfolio v2 pattern; the hook fires BEFORE
+#                        the in-command `cd`, so its own cwd is the ops fork,
+#                        not the PR's repo. me2resh/apexyard#687, the merge-time
+#                        sibling of the create-time fix #669.)
+#   4. extract_repo_from_command fallback (current-branch `gh pr view`)
 CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
 if [ -z "$CMD_REPO" ]; then
   CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
 fi
-REPO_FLAG=""
-if [ -n "$CMD_REPO" ]; then
-  REPO_FLAG="--repo $CMD_REPO"
+if [ -z "$CMD_REPO" ]; then
+  # Recover the repo from a leading `cd <path> &&` prefix — only when the path
+  # resolves to a real git tree (relative paths resolve against the hook's cwd,
+  # which is correct: the hook runs pre-`cd`). Otherwise fall through.
+  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
+  if [ -n "$CD_TARGET" ] && git -C "$CD_TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+    CMD_REPO=$(git_origin_repo "$CD_TARGET")
+  fi
 fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
 # Resolve the repo for qualified marker paths (#485).
-# CMD_REPO already parsed above; fall back via helper if blank.
+# CMD_REPO already resolved above; fall back via helper if still blank.
 if [ -z "$CMD_REPO" ]; then
   CMD_REPO=$(extract_repo_from_command "$COMMAND")
+fi
+
+# Derive REPO_FLAG from the FULLY-resolved CMD_REPO (#687) so the `gh pr diff`
+# below targets the PR's real repo. If this were set before the cd-target /
+# fallback steps, the no---repo split-portfolio case would diff the ops fork,
+# find no design artifact, and silently bypass the gate.
+REPO_FLAG=""
+if [ -n "$CMD_REPO" ]; then
+  REPO_FLAG="--repo $CMD_REPO"
 fi
 
 if [ -z "$PR_NUMBER" ]; then

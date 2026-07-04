@@ -203,6 +203,33 @@ fi
 rm -rf "$SB7"
 
 # ---------------------------------------------------------------------------
+# Case 8: no jq binding (--arg / --argjson / --slurpfile / --rawfile) in the
+# helper uses a reserved jq keyword as its variable name (regression for
+# me2resh/apexyard#668). `def` et al. are grammar keywords; jq 1.6 rejects
+# them as variable names with a parse error, while jq 1.8+ is lenient — so a
+# behavioural test on a modern jq can't catch this. A static grep can, on any
+# jq version.
+# ---------------------------------------------------------------------------
+echo
+echo "Case 8: no reserved jq keyword used as a binding name"
+# jq grammar keywords that are invalid as $-variable names.
+reserved="def as import include if then elif else end and or reduce foreach try catch label __loc__"
+bad_bindings=""
+for kw in $reserved; do
+  if grep -Eq -- "--(arg|argjson|slurpfile|rawfile)[[:space:]]+${kw}([[:space:]]|\$)" "$LIB_SRC"; then
+    bad_bindings="$bad_bindings $kw"
+  fi
+done
+if [ -z "$bad_bindings" ]; then
+  PASS=$((PASS + 1))
+  echo "PASS: no reserved jq keyword used as a binding name"
+else
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  - reserved jq keyword binding(s):$bad_bindings"
+  echo "FAIL: reserved jq keyword(s) used as binding name(s):$bad_bindings"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo

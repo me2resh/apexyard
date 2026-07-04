@@ -46,6 +46,18 @@ if [ -n "$PR_NUMBER" ]; then
   echo "${PR_URL}" > "${REPO_ROOT:-.}/.claude/session/pending-reviews/${PR_NUMBER}"
 fi
 
+# Auto-move board card to "In review" (opt-in via github_projects.enable_auto_moves).
+# Board owner/number come from github_projects config, resolved via the ops root.
+# Degrades gracefully — never blocks on failure.
+if [ -n "$PR_NUMBER" ]; then
+  HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ -f "$HOOKS_DIR/_lib-project-board.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOKS_DIR/_lib-project-board.sh"
+    board_move_card "$PR_NUMBER" "review"
+  fi
+fi
+
 cat >&2 <<MSG
 AUTO CODE REVIEW REQUIRED
 

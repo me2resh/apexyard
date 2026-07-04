@@ -27,6 +27,7 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/validate-branch-name.sh"
 LIB_SRC="$SRC_ROOT/.claude/hooks/_lib-extract-push-ref.sh"
 LIB_CONFIG_SRC="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
+LIB_PR_REPO_SRC="$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh"
 
 for f in "$HOOK_SRC" "$LIB_SRC"; do
   if [ ! -f "$f" ]; then
@@ -62,6 +63,9 @@ make_sandbox_with_wrong_local_branch() {
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
   if [ -f "$LIB_CONFIG_SRC" ]; then
     cp "$LIB_CONFIG_SRC" "$sb/.claude/hooks/_lib-read-config.sh"
+  fi
+  if [ -f "$LIB_PR_REPO_SRC" ]; then
+    cp "$LIB_PR_REPO_SRC" "$sb/.claude/hooks/_lib-pr-repo.sh"
   fi
   if [ -f "$SRC_ROOT/.claude/project-config.defaults.json" ]; then
     cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
@@ -195,6 +199,91 @@ run_case "regression: explicit ref passes (no refspec)" \
 
 run_case "regression: non-conforming explicit ref still blocks" \
   "git push origin bogus-branch" 2
+
+# ---- #693: cd-target re-root for the no-ref fallback --------------------
+#
+# Scenario: from an ops-fork session whose cwd branch is non-conforming
+# (`dev` / a bogus host branch), the operator runs
+#   `cd <other-repo> && git push origin`
+# with NO explicit source ref. The hook fires BEFORE the shell `cd` runs,
+# so its cwd is still the host sandbox. Pre-#693 the fallback resolves the
+# branch via `git branch --show-current` in the host cwd (non-conforming →
+# false BLOCK, e.g. "Branch 'dev' missing ticket ID"). Post-#693 the hook
+# re-roots the fallback to the cd-target via pr_cmd_cd_target.
+#
+# These cases need a SECOND repo (the cd-target) checked out on a known
+# branch, while the host sandbox stays on the non-conforming branch.
+
+# Build a target repo checked out on the given branch. Echoes its path.
+make_target_repo_on_branch() {
+  local target_branch="$1" tdir
+  tdir=$(mktemp -d)
+  (
+    cd "$tdir" || exit 1
+    git init -q
+    git config user.email "test@example.com"
+    git config user.name "test"
+    : > onboarding.yaml
+    git add onboarding.yaml
+    git commit -q -m "init"
+    git checkout -q -B "$target_branch"
+  )
+  echo "$tdir"
+}
+
+# Like run_case, but the command `cd`s into a separate target repo that is
+# checked out on $target_branch. The host sandbox's local branch stays
+# non-conforming, so a correct re-root is the ONLY way these pass/fail as
+# expected.
+run_cd_case() {
+  local label="$1" target_branch="$2" want_rc="$3"
+  local sb tgt; sb=$(make_sandbox_with_wrong_local_branch)
+  tgt=$(make_target_repo_on_branch "$target_branch")
+  local cmd="cd $tgt && git push origin"
+  local input
+  input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
+  local got_rc got_stderr
+  got_stderr=$(cd "$sb" && echo "$input" | bash .claude/hooks/validate-branch-name.sh 2>&1 >/dev/null)
+  got_rc=$?
+  rm -rf "$sb" "$tgt"
+
+  if [ "$got_rc" != "$want_rc" ]; then
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc" >&2
+    echo "    cmd: $cmd" >&2
+    echo "    stderr: ${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
+# (a) False-positive gone: cd-target is on a CONFORMING branch, host cwd is
+#     non-conforming, no source ref → PASS (pre-#693 this BLOCKED on the
+#     host's bogus branch).
+run_cd_case "#693: cd-target on conforming branch, no ref → PASS (false-positive gone)" \
+  "feature/GH-693-cd-target" 0
+
+# (b) cd-target on the framework trunk `dev` → exempt → PASS. (Proves the
+#     re-root reads the TARGET's branch: host is bogus, target is dev.)
+run_cd_case "#693: cd-target on dev (trunk), no ref → PASS via trunk exemption" \
+  "dev" 0
+
+# (c) Still fires: cd-target itself is on a genuinely non-conforming branch →
+#     BLOCK. Proves the re-root targets the right tree, not a blanket no-op.
+run_cd_case "#693: cd-target on non-conforming branch, no ref → still BLOCKS (true-negative)" \
+  "bogus-no-ticket-branch" 2
+
+# (d) No-`cd` path unchanged: explicit conforming ref still passes; explicit
+#     non-conforming ref still blocks; no-ref falls back to host HEAD (bogus)
+#     and blocks. (These mirror the existing cases above but are re-asserted
+#     here to lock the byte-for-byte no-`cd` equivalence the #693 fix promises.)
+run_case "#693: no-cd explicit conforming ref still passes" \
+  "git push origin feature/GH-693-no-cd" 0
+run_case "#693: no-cd explicit non-conforming ref still blocks" \
+  "git push origin bogus-branch" 2
+run_case "#693: no-cd no-ref falls back to host HEAD (bogus) → blocks" \
+  "git push origin" 2
 
 # ---- Summary ------------------------------------------------------------
 

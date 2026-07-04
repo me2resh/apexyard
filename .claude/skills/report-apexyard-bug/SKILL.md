@@ -42,7 +42,17 @@ Before any `gh issue create`, write this skill's name to the active-issue-skill
 marker so `require-skill-for-issue-create.sh` lets the command through. At entry:
 
 ```bash
-ops_root="$(r=$PWD;while [ ! -f \"$r/onboarding.yaml\" ] && [ \"$r\" != / ];do r=${r%/*};done;echo $r)"
+# Resolve the ops-fork root the SAME way the hooks do (_lib-ops-root.sh):
+# anchor on the .apexyard-fork marker (split-portfolio v2 — onboarding.yaml
+# lives in the sibling portfolio repo, NOT the ops fork), falling back to the
+# onboarding.yaml + apexyard.projects.yaml pair (single-fork v1).
+ops_root="$PWD"; r="$PWD"
+while [ "$r" != / ]; do
+  if [ -f "$r/.apexyard-fork" ] || { [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; }; then
+    ops_root="$r"; break
+  fi
+  r=${r%/*}
+done
 mkdir -p "$ops_root/.claude/session"
 echo "report-apexyard-bug" > "$ops_root/.claude/session/active-issue-skill"
 ```
@@ -85,7 +95,7 @@ carries `main → dev`, so it is always current on `dev`:
 ```bash
 # Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
 # /release-sync, so always the canonical current version on dev).
-FW_VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
+FW_VERSION=$(grep -m1 -oE '^## \[v?[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
   | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 if [ -n "$FW_VERSION" ]; then
   FW_VERSION="v$FW_VERSION"          # keep the `v` prefix the field renders today

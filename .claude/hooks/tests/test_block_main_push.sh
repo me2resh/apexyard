@@ -256,6 +256,43 @@ run_case "plain git commit on feature branch passes" \
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
+# (f) cd <wt> && git push -u/--set-upstream origin (no explicit refspec)
+#     resolves the WORKTREE branch, not the hook's session cwd — #727
+#
+# Bug: when `extract_push_ref` returns empty (no explicit ref in the command),
+#      the hook fell back to `git branch --show-current` in the session cwd.
+#      In a worktree session cwd=dev, `git push -u origin` from a feature
+#      worktree was falsely blocked.
+# ---------------------------------------------------------------------------
+SB=$(make_sandbox "dev")   # primary checkout on protected 'dev'
+WT=$(make_worktree "$SB" "feature/GH-727-push-u")
+
+# Hook cwd = $SB (on dev). Command cd-s into feature worktree then pushes
+# without an explicit branch name — must resolve wt branch, not cwd branch.
+run_case "cd wt && push -u origin (no ref) passes (wt=feature, cwd=dev)" \
+  "$SB" "$SB" "cd ${WT} && git push -u origin" 0
+run_case "cd wt && push --set-upstream origin (no ref) passes (wt=feature, cwd=dev)" \
+  "$SB" "$SB" "cd ${WT} && git push --set-upstream origin" 0
+run_case "cd wt && push -u upstream (no ref) passes (wt=feature, cwd=dev)" \
+  "$SB" "$SB" "cd ${WT} && git push -u upstream" 0
+
+# cd into a protected-branch repo + bare -u push must still block.
+SB_PROT=$(make_sandbox "main")
+run_case "cd main-repo && push -u origin blocks (repo=main, cwd=dev)" \
+  "$SB" "$SB" "cd ${SB_PROT} && git push -u origin" 2
+rm -rf "$SB_PROT"
+
+# Bare `git push -u origin` with NO cd prefix — session cwd is dev → blocks.
+run_case "bare push -u origin on dev cwd blocks (no cd)" \
+  "$SB" "$SB" "git push -u origin" 2
+
+# Quoted cd into feature wt must still pass (same quote-stripping as #580).
+run_case "cd \"wt\" && push -u origin (double-quoted) passes" \
+  "$SB" "$SB" "cd \"${WT}\" && git push -u origin" 0
+
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Non-git commands must be no-ops.
 # ---------------------------------------------------------------------------
 SB=$(make_sandbox "dev")

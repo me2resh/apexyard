@@ -1,0 +1,198 @@
+# macOS build + release — golden-path pipeline (ApexYard)
+#
+# A copy-and-customize CI workflow that builds a macOS desktop app, signs it with
+# a Developer ID identity, notarizes + staples it via notarytool, packages a .dmg
+# (or .zip), and publishes it to a GitHub Release — triggered on a version tag.
+#
+# It is the RELEASE half of the macOS golden path; pair it with `swift-ci.yml`
+# (PR-time build + test). See golden-paths/pipelines/README.md § "macOS release".
+#
+# ── HOW TO ADOPT ───────────────────────────────────────────────────────────
+# 1. Copy this file to your repo's `.github/workflows/macos-release.yml`.
+# 2. Set the repository secrets listed under "Required secrets" in the README
+#    (signing cert + password, App Store Connect API key for notarization).
+# 3. Edit every `# CUSTOMIZE` marker (app name, scheme, bundle id, build command).
+# 4. Tag a release: `git tag v1.2.3 && git push origin v1.2.3`.
+#
+# Prerequisites NOT provisioned by this template: an Apple Developer Program
+# membership, a "Developer ID Application" certificate exported as .p12, and an
+# App Store Connect API key (Issuer ID + Key ID + .p8). See the README.
+# ───────────────────────────────────────────────────────────────────────────
+
+name: macOS Release
+
+on:
+  push:
+    tags: [ 'v*' ]          # CUSTOMIZE: your release-tag pattern
+  workflow_dispatch:        # allow manual runs (build without publishing)
+    inputs:
+      publish:
+        description: "Create a GitHub Release and upload the artifact"
+        type: boolean
+        default: false
+
+# Least-privilege: only the release step needs write; everything else is read.
+permissions:
+  contents: read
+
+env:
+  # CUSTOMIZE: your app + build identifiers.
+  APP_NAME: "MyApp"                       # the .app product name (without .app)
+  SCHEME: "MyApp"                         # xcodebuild scheme (ignore if using SPM)
+  BUNDLE_ID: "com.example.myapp"          # used for notarytool / logging
+  CONFIGURATION: "Release"
+  # CUSTOMIZE: pin the Xcode you build against (must exist on the runner image).
+  XCODE_VERSION: "16.0"
+
+jobs:
+  release:
+    name: 🍎 Build · Sign · Notarize · Release
+    runs-on: macos-14
+    permissions:
+      contents: write       # create the GitHub Release + upload assets
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app"
+
+      # ── Import the Developer ID signing identity into an ephemeral keychain ──
+      # Secrets:
+      #   MACOS_CERTIFICATE_P12_BASE64 — base64 of your Developer ID .p12
+      #   MACOS_CERTIFICATE_PASSWORD   — the .p12 export password
+      #   KEYCHAIN_PASSWORD            — any random string (ephemeral keychain pw)
+      - name: Import signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          # Guarantee the decoded cert is shredded even if an import step fails.
+          trap 'rm -f "$CERT_PATH"' EXIT
+
+          echo "$CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          # Prepend our keychain to the search list so codesign finds the identity.
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$CERT_PATH"
+
+          # Surface the identity name for the codesign step.
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "✅ Imported signing identity: $IDENTITY"
+
+      # ── Build the .app ──────────────────────────────────────────────────────
+      # CUSTOMIZE: replace with your real build. Two common shapes:
+      #   • Xcode app target → xcodebuild (shown below)
+      #   • SwiftPM executable → `swift build -c release` then assemble a .app
+      - name: Build ${{ env.APP_NAME }}.app
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/build"
+          mkdir -p "$BUILD_DIR"
+
+          xcodebuild \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -derivedDataPath "$BUILD_DIR/DerivedData" \
+            -destination 'generic/platform=macOS' \
+            CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
+            CODE_SIGNING_REQUIRED=YES \
+            OTHER_CODE_SIGN_FLAGS="--options=runtime --timestamp" \
+            build
+
+          APP_PATH=$(find "$BUILD_DIR/DerivedData/Build/Products/$CONFIGURATION" \
+            -maxdepth 1 -name "*.app" | head -1)
+          [ -n "$APP_PATH" ] || { echo "❌ no .app produced"; exit 1; }
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "✅ Built $APP_PATH"
+
+      # Re-sign defensively with hardened runtime (xcodebuild usually signs, but
+      # this guarantees the hardened-runtime + timestamp flags notarization needs).
+      - name: Codesign (Developer ID, hardened runtime)
+        run: |
+          set -euo pipefail
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          echo "✅ Signed + verified"
+
+      # ── Notarize via App Store Connect API key, then staple ─────────────────
+      # Secrets:
+      #   AC_API_KEY_ID, AC_API_ISSUER_ID, AC_API_KEY_P8_BASE64 (the .p8 key)
+      - name: Notarize + staple
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY_P8_BASE64: ${{ secrets.AC_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          # Guarantee the decoded API key is shredded even if notarytool fails.
+          trap 'rm -f "$KEY_PATH"' EXIT
+          echo "$AC_API_KEY_P8_BASE64" | base64 --decode > "$KEY_PATH"
+
+          # notarytool requires a zip (or dmg/pkg) of the .app to submit.
+          NOTARIZE_ZIP="$RUNNER_TEMP/${APP_NAME}-notarize.zip"
+          /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$NOTARIZE_ZIP"
+
+          xcrun notarytool submit "$NOTARIZE_ZIP" \
+            --key "$KEY_PATH" \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          rm -f "$KEY_PATH"
+
+          # Staple the ticket onto the .app so Gatekeeper validates offline.
+          xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          echo "✅ Notarized + stapled"
+
+      # ── Package: .dmg (default) or .zip ─────────────────────────────────────
+      # CUSTOMIZE: pick one. .dmg needs `create-dmg`; .zip needs nothing.
+      - name: Package .dmg
+        run: |
+          set -euo pipefail
+          brew install create-dmg
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG_PATH="$RUNNER_TEMP/${APP_NAME}-${VERSION}.dmg"
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-size 540 380 \
+            --icon-size 100 \
+            --app-drop-link 380 180 \
+            --icon "$(basename "$APP_PATH")" 160 180 \
+            "$DMG_PATH" "$APP_PATH" || true   # create-dmg returns nonzero on cosmetic warnings
+          [ -f "$DMG_PATH" ] || { echo "❌ dmg not produced"; exit 1; }
+          # Sign + staple the dmg too so the download itself is Gatekeeper-clean.
+          codesign --force --sign "$SIGN_IDENTITY" --timestamp "$DMG_PATH"
+          xcrun stapler staple "$DMG_PATH" || true
+          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
+          echo "✅ Packaged $DMG_PATH"
+
+      # ── Publish the GitHub Release (tag pushes, or dispatch with publish=true) ─
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.DMG_PATH }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
