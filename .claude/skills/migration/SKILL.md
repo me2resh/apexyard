@@ -215,36 +215,67 @@ migration-gate hook (`require-migration-ticket.sh`) verifies the
 `migration` label is present before allowing edits to migration files.
 ```
 
-Create via:
+Create via the tracker abstraction (`tracker_create`, #670 / AgDR-0072, extended
+by the #709 creator sweep) so the ticket lands in **this project's** tracker —
+GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
+`apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
+exactly as before.
 
 ```bash
-gh issue create \
-  --repo "<owner/repo>" \
-  --title "[Migration] <type>: <summary>" \
-  --label "migration" \
-  --label "<priority>" \
-  --body "$BODY"
+# Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
+# from the cwd; source it.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# $BODY was assembled above; hand it to tracker_create via a file (arbitrary
+# markdown — never inline-interpolated). Labels pass as a comma-separated list.
+body_file="$(mktemp)"
+printf '%s\n' "$BODY" > "$body_file"
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+result="$(tracker_create "<owner/repo>" "[Migration] <type>: <summary>" "$body_file" "migration,<priority>")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 3 ]; then
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  echo "File this in your external system (e.g. Jira/Linear via MCP):" >&2
+  printf '%s\n' "$result"
+  exit 0
+elif [ "$rc" -ne 0 ] || [ -z "$result" ]; then
+  echo "Migration ticket creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+fi
+
+# Capture the reference + URL for the AgDR back-fill below.
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
-Capture the returned URL and issue number.
+The `migration` label is what `require-migration-ticket.sh` reads to gate edits
+to migration files (Gate 3a). On GitHub it must already exist on the repo; on
+GitLab it is auto-created when first applied.
 
 ### 6. Back-fill the AgDR with the issue reference
 
-Open the AgDR written in step 4 and update:
+Open the AgDR written in step 4 and update (using the `ref` / `url` captured
+above):
 
-- Frontmatter `ticket: <owner/repo>#<number>`
-- The Artifacts section: add the ticket URL
+- Frontmatter `ticket: <owner/repo>#${ref}`
+- The Artifacts section: add the ticket `${url}`
 
 This lets a future reader land on the AgDR and find the ticket, and land on the ticket and find the AgDR.
 
 ### 7. Return a summary
 
-Single-line output:
+Single-line output (using the `ref` / `url` captured above):
 
 ```
-Migration ticket: <ticket-url>
+Migration ticket: ${url}
 Migration AgDR:   <relative-path-to-AgDR>
-Next step:        run /start-ticket <owner/repo>#<number>, then begin editing the migration files
+Next step:        run /start-ticket <owner/repo>#${ref}, then begin editing the migration files
 ```
 
 **Do NOT automatically run `/start-ticket`** — the user may have other context to set first, and the explicit handoff makes the workflow legible. The migration gate will block edits until the marker points at this ticket.

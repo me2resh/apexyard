@@ -243,26 +243,66 @@ Create this ticket? (yes / edit / cancel)
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 7. Create the GitHub Issue
+### 7. Create the issue (via the tracker abstraction)
+
+Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
+the #709 creator sweep) so the skeleton lands in **this project's** tracker —
+GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
+`apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
+exactly as before.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[Feature] Walking skeleton — {title}" \
-  --label "enhancement" \
-  --body "{formatted body}"
+# Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
+# from the cwd; source it.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+result="$(tracker_create "{owner/repo}" "[Feature] Walking skeleton — {title}" "$body_file" "enhancement")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 3 ]; then
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  echo "File this in your external system (e.g. Jira/Linear via MCP):" >&2
+  printf '%s\n' "$result"
+  exit 0
+elif [ "$rc" -ne 0 ] || [ -z "$result" ]; then
+  echo "Walking-skeleton creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+fi
+
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
-Note: a walking skeleton is filed under the normal feature label (`enhancement` by default) — **NOT** under `spike`. The label matters: there is **no** `walking-skeleton` exemption label, because the skeleton is held to the full SDLC. If your fork uses a different feature label, use that.
+Note: a walking skeleton is filed under the normal feature label (`enhancement`
+by default) — **NOT** under `spike`. The label matters: there is **no**
+`walking-skeleton` exemption label, because the skeleton is held to the full
+SDLC. If your fork uses a different feature label, pass that instead. (No
+`tracker_label_ensure` step here — `enhancement` is a default tracker label, so
+unlike the `spike` / `prototype` / `investigation` trigger labels it does not
+need to be created.)
 
 ### 8. Return the URL + branch suggestion
 
+Use the `ref` / `url` parsed from `tracker_create` in step 7:
+
 ```
-Created: {owner/repo}#{number} — Walking skeleton — {title}
-{url}
+Created: {owner/repo}#${ref} — Walking skeleton — {title}
+${url}
 
 When you start work:
-  /start-ticket {owner/repo}#{number}
-  git checkout -b feature/GH-{number}-{slug}-skeleton
+  /start-ticket {owner/repo}#${ref}
+  git checkout -b feature/GH-${ref}-{slug}-skeleton
 ```
 
 ### 9. Remind the operator this is KEPT — full SDLC

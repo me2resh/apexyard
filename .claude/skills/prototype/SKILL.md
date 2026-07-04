@@ -221,26 +221,67 @@ Create this ticket? (yes / edit / cancel)
 - **edit** / **change X** → ask what to change, update, re-show
 - **cancel** / **no** → abort
 
-### 7. Create the GitHub Issue
+### 7. Create the issue (via the tracker abstraction)
+
+Dispatch creation through `tracker_create` (#670 / AgDR-0072, extended by
+the #709 creator sweep) so the prototype lands in **this project's** tracker —
+GitHub, GitLab, or a `custom` CLI — per its `tracker:` block in
+`apexyard.projects.yaml`. For a GitHub adopter this runs `gh issue create`
+exactly as before.
 
 ```bash
-gh issue create --repo {owner/repo} \
-  --title "[Prototype] {title}" \
-  --label "prototype" \
-  --body "{formatted body}"
+# Resolve the tracker lib (it lives in the ops fork's hooks dir) by walking up
+# from the cwd; source it.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
+# Ensure the `prototype` trigger label exists on the target tracker. Best-effort
+# (tracker_label_ensure always exits 0). Same mechanism `/spike` uses with the
+# `spike` label — downstream hooks read it to apply the workflow exemptions.
+tracker_label_ensure "{owner/repo}" "prototype" "C5DEF5" "Throw-away UX/demo prototype; exempt from AgDR + coverage gates"
+
+# Pass the body via a file (arbitrary markdown — never inline-interpolated).
+body_file="$(mktemp)"
+cat > "$body_file" <<'BODY'
+{formatted body}
+BODY
+
+# tracker_create <owner/repo> <title> <body_file> [<labels_csv>] → {"ref","url"}.
+result="$(tracker_create "{owner/repo}" "[Prototype] {title}" "$body_file" "prototype")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 3 ]; then
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  echo "File this in your external system (e.g. Jira/Linear via MCP):" >&2
+  printf '%s\n' "$result"
+  exit 0
+elif [ "$rc" -ne 0 ] || [ -z "$result" ]; then
+  echo "Prototype creation failed — check the tracker CLI / auth. Nothing was created." >&2
+  exit 1
+fi
+
+ref="$(printf '%s' "$result" | jq -r '.ref')"
+url="$(printf '%s' "$result" | jq -r '.url')"
 ```
 
-The `prototype` label is the trigger that downstream hooks (AgDR-required hooks, coverage gates) read to apply the workflow exemptions — the same mechanism `/spike` uses with the `spike` label. If the label doesn't exist on the target repo, the skill will create it via `gh label create prototype --color "C5DEF5" --description "Throw-away UX/demo prototype; exempt from AgDR + coverage gates"` (idempotent — `gh label create` errors on duplicate, the skill swallows that).
+The `prototype` label is the trigger that downstream hooks (AgDR-required hooks,
+coverage gates) read to apply the workflow exemptions — the same mechanism
+`/spike` uses with the `spike` label.
 
 ### 8. Return the URL + branch suggestion
 
+Use the `ref` / `url` parsed from `tracker_create` in step 7:
+
 ```
-Created: {owner/repo}#{number} — {title}
-{url}
+Created: {owner/repo}#${ref} — {title}
+${url}
 
 When you start work:
-  /start-ticket {owner/repo}#{number}
-  git checkout -b prototype/GH-{number}-{slug}
+  /start-ticket {owner/repo}#${ref}
+  git checkout -b prototype/GH-${ref}-{slug}
 ```
 
 ### 9. Remind the operator about the disposition gate

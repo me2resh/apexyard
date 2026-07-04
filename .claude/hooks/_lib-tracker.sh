@@ -608,6 +608,72 @@ tracker_create() {
 }
 
 # ------------------------------------------------------------------------------
+# Label ensure (tracker_label_ensure) — #709 creator-sweep companion to
+# tracker_create.
+#
+# A few creator skills (/spike, /prototype, /investigation) depend on a trigger
+# label (spike / prototype / investigation) existing on the target repo so
+# downstream hooks can read it and apply their workflow exemptions. On GitHub
+# that label must be created explicitly; tracker_label_ensure is the
+# tracker-agnostic analog of that inline `gh label create` step.
+#
+# Contract: tracker_label_ensure <owner/repo> <name> [<color>] [<description>]
+#   BEST-EFFORT by design — ALWAYS returns 0. A missing/duplicate/errored label
+#   must never abort the subsequent tracker_create (the same "swallow the
+#   duplicate" semantics the inline `gh label create … || true` calls had).
+#   Color is accepted as a bare hex ("FBCA04", the gh convention); the glab
+#   adapter normalises it to "#FBCA04" (GitLab wants the leading #).
+#
+# Adapters: gh + glab do a real create. jira / linear / asana / none have no
+#   built-in gh/glab label CLI here, and `custom` files issues via the operator's
+#   own create_command (which handles labels its own way) — so all of them are
+#   no-ops; a generic label-ensure step doesn't apply. (GitLab additionally
+#   auto-creates a label when it is first applied on issue-create, so even the
+#   glab path is a convenience, not a correctness requirement.)
+# ------------------------------------------------------------------------------
+
+# Internal adapter: gh → `gh label create <name>` (name is positional).
+_tracker_label_ensure_gh() {
+  local repo="$1" name="$2" color="$3" desc="$4"
+  local -a args
+  args=(label create "$name" --repo "$repo")
+  [ -n "$color" ] && args+=(--color "$color")
+  [ -n "$desc" ]  && args+=(--description "$desc")
+  gh "${args[@]}" >/dev/null 2>&1 || true
+}
+
+# Internal adapter: glab → `glab label create --name <name>`. GitLab wants the
+# colour as "#RRGGBB"; normalise a bare-hex input by prepending '#'.
+_tracker_label_ensure_glab() {
+  local repo="$1" name="$2" color="$3" desc="$4"
+  local -a args
+  args=(label create --name "$name" -R "$repo")
+  if [ -n "$color" ]; then
+    case "$color" in \#*) : ;; *) color="#$color" ;; esac
+    args+=(--color "$color")
+  fi
+  [ -n "$desc" ] && args+=(--description "$desc")
+  glab "${args[@]}" >/dev/null 2>&1 || true
+}
+
+# Public: tracker_label_ensure <owner/repo> <name> [<color>] [<description>]
+tracker_label_ensure() {
+  local repo="$1" name="${2:-}" color="${3:-}" desc="${4:-}"
+  # Nothing actionable without a repo + name — never abort the caller.
+  if [ -z "$repo" ] || [ -z "$name" ]; then
+    return 0
+  fi
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    gh)   _tracker_label_ensure_gh   "$repo" "$name" "$color" "$desc" ;;
+    glab) _tracker_label_ensure_glab "$repo" "$name" "$color" "$desc" ;;
+    *)    : ;;  # jira / linear / asana / custom / none — no-op
+  esac
+  return 0
+}
+
+# ------------------------------------------------------------------------------
 # GitHub-Issues-enabled detection (#653, AgDR-0071)
 #
 # GitHub disables Issues on forks by default, so a fresh github-kind fork will

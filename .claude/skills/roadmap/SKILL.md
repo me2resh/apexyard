@@ -138,17 +138,35 @@ The default milestones are **Now / Next / Later / Done** (Now-Next-Later format)
 
 ## Linking to GitHub Issues
 
-If the user passes `--with-issues`, also create or update GitHub Issues to mirror the roadmap:
+If the user passes `--with-issues`, also create or update tracker issues to
+mirror the roadmap. Dispatch through `tracker_create` (#670 / AgDR-0072,
+extended by the #709 creator sweep) so the issues land in **this project's**
+tracker — GitHub, GitLab, or a `custom` CLI. For a GitHub adopter this runs
+`gh issue create` exactly as before.
 
 ```bash
+# Resolve + source the tracker lib once (before the loop) by walking up from cwd.
+tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
+  [ -f "$r/.claude/hooks/_lib-tracker.sh" ] && { echo "$r/.claude/hooks/_lib-tracker.sh"; break; }; \
+  r="${r%/*}"; done)"
+# shellcheck source=/dev/null
+. "$tracker_lib"
+
 # For each item in Now and Next without a GH link in Notes:
-gh issue create \
-  --title "[Roadmap] {item}" \
-  --body "Tracking issue for roadmap item {RM-NNN}" \
-  --label "roadmap,{priority}"
+body_file="$(mktemp)"
+printf 'Tracking issue for roadmap item %s\n' "{RM-NNN}" > "$body_file"
+result="$(tracker_create "{owner/repo}" "[Roadmap] {item}" "$body_file" "roadmap,{priority}")"
+rc=$?
+rm -f "$body_file"
+if [ "$rc" -eq 0 ] && [ -n "$result" ]; then
+  ref="$(printf '%s' "$result" | jq -r '.ref')"
+  # write ${ref} back into the item's Notes column
+fi
 ```
 
-Then write the issue number back into the Notes column.
+Then write the issue reference (`${ref}`) back into the Notes column. (When
+`tracker.kind=none`, `tracker_create` exits 3 and prints the body for external
+filing — skip the Notes back-write in that case.)
 
 ## Output format (show)
 
