@@ -133,6 +133,33 @@ in=$(jq -nc \
   '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
 run_case "path trigger: ordinary path is silent" 0 "" "$in"
 
+# 2e-i. Trust chain (#777): a merge-gate hook fires Security Auditor.
+in=$(jq -nc \
+  --arg p ".claude/hooks/block-unreviewed-merge.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: .claude/hooks/* fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor.*roles/security/security-auditor\\.md" "$in"
+
+# 2e-ii. Trust chain (#777): settings.json (the matcher wiring) fires Security Auditor.
+in=$(jq -nc \
+  --arg p ".claude/settings.json" \
+  '{hook_event_name:"PreToolUse", tool_name:"Write", tool_input:{file_path:$p}}')
+run_case "trust chain: .claude/settings.json fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+# 2e-iii. Trust chain (#777): a nested hooks path (e.g. a managed-project fork) fires too.
+in=$(jq -nc \
+  --arg p "workspace/proj/.claude/hooks/_lib-tracker.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: */.claude/hooks/* fires Security Auditor [#777]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+# 2e-iv. A .claude path that is NOT trust-chain (a skill doc) stays silent.
+in=$(jq -nc \
+  --arg p ".claude/skills/roadmap/SKILL.md" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: non-hook .claude path is silent [#777]" 0 "" "$in"
+
 # 2f. Edit on .github/workflows/ci.yml → Platform Engineer banner.
 in=$(jq -nc \
   --arg p ".github/workflows/ci.yml" \

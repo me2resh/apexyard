@@ -184,6 +184,25 @@ detect_path_triggers() {
       ;;
   esac
 
+  # Security Auditor — the TRUST CHAIN (me2resh/apexyard#777).
+  # The framework's most security-critical code is its own enforcement layer:
+  # the hooks that decide whether an action (esp. a merge) is permitted, and the
+  # settings.json matcher wiring that decides whether a gate fires at all. These
+  # are NOT auth/crypto/secrets paths, so the trigger above misses them — yet a
+  # subtle bug here (a path-traversal write, a fail-open gate, an injection in
+  # the tracker/broker lib) is exactly what the adversarial security lens is for.
+  # Over-triggering is cheap (the auditor no-ops on a false positive); leaving
+  # trust-chain edits to the generalist review alone is the gap #777 closes.
+  case "$rel" in
+    .claude/hooks/*|*/.claude/hooks/*|\
+    .claude/settings.json|*/.claude/settings.json)
+      emit_banner \
+        "Security Auditor" \
+        "roles/security/security-auditor.md" \
+        "edit touches the security-critical trust chain ($rel) — run /security-review"
+      ;;
+  esac
+
   # Platform Engineer — CI/CD pipelines + golden-path templates
   case "$rel" in
     .github/workflows/*|*/.github/workflows/*|\
