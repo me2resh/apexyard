@@ -200,6 +200,27 @@ assert_not_exists_str "evil]"                        "injection → filename ] n
 assert_contains "injection → filename ] percent-encoded" "$IDX" "evil%5D.md"
 
 # ---------------------------------------------------------------------------
+# Case 10 — content injection via DIRECTORY-derived sinks (me2resh/apexyard#768
+# re-review): the group heading (## <subdir>) and the project-name header
+# (# Docs Index — <project>) must be HTML-escaped too, not just the table cells.
+# An attacker who can name a leaf file can equally name a directory/project.
+# ---------------------------------------------------------------------------
+SB=$(make_sandbox true)
+PROJ='<svg onload=alert(1)>'
+SUB='<img src=x onerror=alert(1)>'
+mkdir -p "$SB/projects/$PROJ/docs/$SUB"
+printf '# Note\n' > "$SB/projects/$PROJ/docs/$SUB/note.md"
+( cd "$SB" && git add -A && git commit -q -m "add hostile dirs" ) 2>/dev/null
+run_hook "$SB" "$SB/projects/$PROJ/docs/$SUB/note.md"
+IDX=$(cat "$SB/projects/$PROJ/docs/INDEX.md" 2>/dev/null)
+assert_eq       "dir-injection → exit 0"                  "0" "$RC"
+assert_contains "dir-injection → group heading escaped"   "$IDX" "## &lt;img src=x onerror=alert(1)&gt;"
+assert_contains "dir-injection → project header escaped"  "$IDX" "# Docs Index — &lt;svg onload=alert(1)&gt;"
+if printf '%s' "$IDX" | grep -qF -- "## <img src=x onerror=alert(1)>"; then
+  echo "FAIL [dir-injection → no raw group heading]: raw heading present" >&2; FAIL=$((FAIL+1)); FAILED="${FAILED}dir-injection-raw-heading "
+else PASS=$((PASS+1)); fi
+
+# ---------------------------------------------------------------------------
 echo "=========================================="
 if [ "$FAIL" -eq 0 ]; then
   echo "PASS: $PASS  FAIL: 0"
