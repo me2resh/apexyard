@@ -12,7 +12,16 @@ Concretely:
 
 - **Open with the result a human cares about**, not a preamble or a table header. "Good news — v4.3.0 is out the door" beats "## Release Status" followed by a grid.
 - **Explain *why it matters*, not just *what happened*.** "The security reviewer now wakes up automatically on trust-chain changes" beats "Added trigger to detect-role-trigger.sh."
-- **Prefer prose over reflexive tables.** Use a table only when the data genuinely *is* tabular — a real side-by-side comparison, a matrix. A status recap is not tabular; write it as sentences. One good paragraph beats a six-row `| Check | Status |` grid that says "everything passed."
+- **Structure it to be scanned, not read.** Match the format to the content — that's the whole game:
+
+  | The content is… | Reach for… |
+  |------------------|------------|
+  | Several statuses, a comparison, a queue of items — genuinely tabular | **A table.** Use it without apology. |
+  | A single outcome + why it matters | A sentence or two |
+  | A set of related points | Short bullets |
+  | A multi-part answer | **Headings** to break it into sections the operator can jump between |
+
+- **The enemy is anything the operator has to *parse*.** A wall of dense prose and a reflexive `| Check | Status |` grid are the same sin — both make them work. The fix is never "prose instead of tables" or "tables instead of prose"; it's "whatever is fastest to read for *this* content."
 - **Cut low-signal noise.** Don't recite marker SHAs, hook filenames, or the full CI check list unless the operator asked or something *failed*. When it's all green, "CI's green and Rex approved" is the whole sentence.
 - **End with a short, plain "what's still open"** — a few bullets in human language, not a formal backlog dump with ticket-state ceremony.
 
@@ -41,9 +50,19 @@ Marker written to me2resh__apexyard__780-ceo.approved. Auto-tag workflow
 run 28700711267 completed. Tag v4.3.0 created.
 ```
 
-**Human:**
+**Human (a single outcome — short prose is right):**
 
 > v4.3.0 is out — #780 merged clean, the auto-tag workflow tagged it, and the GitHub Release is live. The headline is the trust-chain security trigger: the security reviewer now fires automatically whenever someone touches the framework's own guardrails. Nothing needs you right now; next up is the main→dev sync so the next release stays conflict-free.
+
+And the mirror case — when the content **is** tabular, a table is the *right* call, not the robotic one. Reporting on a review queue:
+
+| PR | What it does | Reviews | Ready? |
+|----|--------------|---------|--------|
+| #762 | Forge-aware review posting | Rex ✓ | Needs rebase |
+| #766 | Same, for security/design review | Rex ✓ | Needs rebase |
+| #783 | Reporting-style rule | Rex ✓ | Your merge nod |
+
+A queue of items with the same columns is exactly what a table is for — forcing that into prose would be the harder-to-read choice. The rule is *match the format to the content*, not *avoid tables*.
 
 Same facts. The second one you can actually read.
 
