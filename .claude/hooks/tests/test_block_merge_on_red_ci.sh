@@ -43,10 +43,19 @@ TEST_REPO="me2resh/apexyard"
 
 # make_sandbox <gh_mode> <glab_mode>
 #   gh_mode:   green | red | none | ""  (mock `gh pr checks` behaviour)
-#   glab_mode: success | pending | failure | none | unresolvable | ""
+#   glab_mode: success | pending | failure | none | unresolvable |
+#              nonzero_exit | auth_error | http_error | truncated |
+#              scalar | array | ""
 #              (mock `glab mr view --output json` behaviour)
 # Empty mode = mock exits 0 with no output (only relevant CLI is installed
 # per test; the other is left as a stub that should never be called).
+#
+# The "success" / "pending" / "failure" / "none" bodies all include an
+# `.iid` field, matching a real `glab mr view --output json` response —
+# this is what `resolve_ci_status_glab`'s MR-object validity check keys
+# off (#793 fail-open fix). The new failure-shape modes below deliberately
+# omit `.iid` (or aren't a JSON object at all), the way a broken/hostile
+# response would be.
 make_sandbox() {
   local gh_mode="$1" glab_mode="$2"
   local sb
@@ -77,11 +86,28 @@ EOF
 case "\$*" in
   *"mr view"*)
     case "$glab_mode" in
-      success)      echo '{"head_pipeline":{"status":"success"}}' ;;
-      pending)      echo '{"head_pipeline":{"status":"running"}}' ;;
-      failure)      echo '{"head_pipeline":{"status":"failed"}}' ;;
-      none)         echo '{"head_pipeline":null}' ;;
+      success)      echo '{"iid":1,"head_pipeline":{"status":"success"}}' ;;
+      pending)      echo '{"iid":1,"head_pipeline":{"status":"running"}}' ;;
+      failure)      echo '{"iid":1,"head_pipeline":{"status":"failed"}}' ;;
+      none)         echo '{"iid":1,"head_pipeline":null}' ;;
       unresolvable) exit 1 ;;
+      # --- fail-open regression cases (#793) ---
+      # glab exits non-zero but still prints something on stdout (a
+      # content-only emptiness check would miss this; the exit code
+      # must be honored).
+      nonzero_exit) echo '{"iid":1,"head_pipeline":{"status":"success"}}'; exit 1 ;;
+      # GitLab REST error envelopes — valid JSON, exit 0, but NOT an MR
+      # object (no .iid). Previously mapped to "none" -> ALLOW.
+      auth_error)   echo '{"message":"401 Unauthorized"}' ;;
+      # An intermediary (proxy / captive portal / SSO gateway) returning
+      # an HTML error page on stdout instead of JSON.
+      http_error)   echo '<html><body>502 Bad Gateway</body></html>' ;;
+      # Truncated/partial JSON body.
+      truncated)    echo '{"head_pipeline":' ;;
+      # A bare JSON scalar (not an object).
+      scalar)       echo '"unexpected"' ;;
+      # A JSON array (not an object).
+      array)        echo '[1,2,3]' ;;
       *)            exit 0 ;;
     esac
     ;;
@@ -167,6 +193,38 @@ run_case "glab: no pipeline configured -> allows (no-op note)" 0 "" "$sb" \
 sb=$(make_sandbox "" unresolvable)
 run_case "glab: unresolvable status -> blocks (fail closed)" 2 "unresolvable" "$sb" \
   "glab mr merge 404 -R $TEST_REPO --squash"
+
+# ----------------------------------------------------------------------
+# Fail-OPEN regression suite (#793 / Hakim HIGH finding): a non-empty
+# glab response that ISN'T a valid MR object must still BLOCK, not fall
+# through to the "none" allow-arm. The pre-fix implementation only
+# checked stdout emptiness, so every case below used to resolve to
+# "none" -> exit 0 (ALLOW) despite being an error/garbage response.
+# ----------------------------------------------------------------------
+
+sb=$(make_sandbox "" nonzero_exit)
+run_case "glab: non-zero exit (even with stdout output) -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 408 -R $TEST_REPO --squash"
+
+sb=$(make_sandbox "" auth_error)
+run_case "glab: JSON auth-error envelope (401) -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 409 -R $TEST_REPO --squash"
+
+sb=$(make_sandbox "" http_error)
+run_case "glab: HTML error page on stdout -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 410 -R $TEST_REPO --squash"
+
+sb=$(make_sandbox "" truncated)
+run_case "glab: truncated/garbage JSON -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 411 -R $TEST_REPO --squash"
+
+sb=$(make_sandbox "" scalar)
+run_case "glab: bare JSON scalar response -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 412 -R $TEST_REPO --squash"
+
+sb=$(make_sandbox "" array)
+run_case "glab: JSON array response -> blocks (fail closed)" 2 "unresolvable" "$sb" \
+  "glab mr merge 413 -R $TEST_REPO --squash"
 
 sb=$(make_sandbox "" pending)
 run_case "glab: variable-substituted merge -> blocks" 2 "variable-substituted" "$sb" \

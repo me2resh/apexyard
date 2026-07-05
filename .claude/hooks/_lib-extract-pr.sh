@@ -387,11 +387,14 @@ resolve_pr_head_branch() {
 #   failure  — the pipeline failed, was cancelled, or was skipped
 #   none     — the MR has no pipeline configured (legitimate no-CI state,
 #              the glab analog of gh's "no checks reported")
-#   ""       — the status could not be determined (glab missing, network/auth
-#              failure, or an unparseable response). The caller MUST fail
-#              CLOSED on empty — an unresolvable status is never treated as
-#              green, exactly like red-or-unfetchable CI must never silently
-#              pass on the gh path.
+#   ""       — the status could not be determined: glab missing, a non-zero
+#              glab exit code, empty stdout, or a non-empty response that
+#              isn't a valid MR object (auth-error envelope, HTML error
+#              page, truncated/garbage JSON, a bare scalar or array — none
+#              of these carry an `.iid`). The caller MUST fail CLOSED on
+#              empty — an unresolvable status is never treated as green,
+#              exactly like red-or-unfetchable CI must never silently pass
+#              on the gh path.
 #
 # GitLab's MR API exposes the pipeline attached to the MR's HEAD SHA as
 # `head_pipeline` (current API); `pipeline` is the older/deprecated
@@ -402,7 +405,7 @@ resolve_pr_head_branch() {
 resolve_ci_status_glab() {
   local pr_number="$1"
   local cmd_repo="$2"
-  local json status
+  local json status rc has_iid
 
   if [ -z "$pr_number" ]; then
     echo ""
@@ -414,17 +417,42 @@ resolve_ci_status_glab() {
   else
     json=$(glab mr view "$pr_number" --output json 2>/dev/null)
   fi
+  rc=$?
 
-  if [ -z "$json" ]; then
+  # Fail closed on a non-zero glab exit code, mirroring the gh path's
+  # CHECKS_RC discipline — the exit code is the authoritative signal
+  # when glab supplies one, so don't rely on stdout emptiness alone (a
+  # non-zero exit can still print something to stdout).
+  if [ "$rc" -ne 0 ] || [ -z "$json" ]; then
     echo ""
     return
   fi
 
+  # Require the response to actually be a valid MR object (i.e. it has an
+  # `.iid`) before treating an absent pipeline as the legitimate no-CI
+  # `none` state. `jq -e` exits non-zero on a parse failure AND when the
+  # queried value is null/absent, so this single check rejects every
+  # non-MR shape in one place: garbage/non-JSON, truncated JSON, a bare
+  # scalar or array, and JSON error envelopes like
+  # `{"message":"401 Unauthorized"}` or an HTML error page glab passed
+  # through unparsed (none of these carry an `.iid`). A genuine MR
+  # response — with or without a pipeline — always has one.
+  if ! has_iid=$(echo "$json" | jq -e -r '.iid' 2>/dev/null) || [ -z "$has_iid" ]; then
+    echo ""
+    return
+  fi
+
+  # json is now confirmed to be a real MR object, so a missing/null
+  # pipeline field below is the legitimate "no CI configured" case, not
+  # an unparseable response — deliberately NOT using `jq -e` here: it
+  # would exit non-zero for the `empty`/`null` result this case is
+  # supposed to reach.
   status=$(echo "$json" | jq -r '.head_pipeline.status // .pipeline.status // empty' 2>/dev/null)
 
   case "$status" in
     "" | null)
-      # No pipeline object at all — MR genuinely has no CI configured.
+      # Valid MR object (iid confirmed above) with no pipeline object —
+      # MR genuinely has no CI configured.
       echo "none"
       ;;
     success)
