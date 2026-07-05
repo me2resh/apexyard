@@ -263,31 +263,115 @@ MSG
   exit 2
 fi
 
-# --------- Gate 2: issue is open + has migration label ---------
-ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$TICKET_REPO" --json state,labels,body 2>/dev/null)
-if [ -z "$ISSUE_JSON" ]; then
+# --------- Shape-guard marker-derived values before the tracker call ---------
+# TICKET_NUM / TICKET_REPO come from the session-local active-ticket marker via
+# `cut -d= -f2-`, which keeps everything after the first `=` — so a marker line
+# like `number=42; touch X` yields TICKET_NUM='42; touch X'. Gate 2 below feeds
+# both values into `tracker_view`, which builds its command by string-substituting
+# {id}/{owner_repo} into a template and running `eval` (_lib-tracker.sh). Without a
+# shape check that is a command-injection sink: the base (pre-#755) hook used direct
+# argv (`gh issue view "$TICKET_NUM" --repo "$TICKET_REPO"`), which was
+# injection-immune; routing through the tracker abstraction reintroduces the eval.
+# The sibling caller `validate-pr-create.sh` reaches the same eval only AFTER its
+# ticket number passed a shape check — this hook must not skip the equivalent guard.
+# Whitelist a conservative charset (no shell metacharacters): ticket IDs like 42,
+# #42, GH-42, ABC-123; owner/repo slugs (incl. GitLab nested groups) of letters,
+# digits, `.`, `_`, `-`, `/`. Anything else fails closed. (#755 security review;
+# defence-in-depth alongside the printf %q quoting _tracker_substitute now applies.)
+if ! printf '%s' "$TICKET_NUM" | grep -qE '^#?[A-Za-z0-9_-]+$'; then
   cat >&2 <<MSG
-BLOCKED: Could not fetch ${TICKET_REPO}#${TICKET_NUM} from GitHub.
-Network / auth problem? Or the issue doesn't exist?
-
-Migration files can't be edited without a verifiable migration ticket.
-Check your gh auth status, or run /migration to create a new ticket.
+BLOCKED: Active ticket marker at $MARKER has a malformed \`number=\` value.
+Only ticket IDs like 42, #42, GH-42, or ABC-123 are allowed (no shell
+metacharacters). Re-run /start-ticket to rewrite the marker cleanly.
+MSG
+  exit 2
+fi
+if ! printf '%s' "$TICKET_REPO" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+  cat >&2 <<MSG
+BLOCKED: Active ticket marker at $MARKER has a malformed \`repo=\` value.
+Only owner/repo slugs (letters, digits, \`.\`, \`_\`, \`-\`, \`/\`) are
+allowed (no shell metacharacters). Re-run /start-ticket to rewrite the
+marker cleanly.
 MSG
   exit 2
 fi
 
-STATE=$(echo "$ISSUE_JSON" | jq -r .state)
-HAS_LABEL=$(echo "$ISSUE_JSON" | jq -r --arg L "$MIGRATION_LABEL" '.labels | map(.name) | index($L) != null')
-BODY=$(echo "$ISSUE_JSON" | jq -r .body)
+# --------- Gate 2: issue is open + has migration label ---------
+# Resolve the ticket through the tracker abstraction (_lib-tracker.sh) so this
+# gate works for every configured tracker — GitHub (gh), GitLab (glab), Linear,
+# Jira, Asana, custom — not just GitHub. Before #755 this hardcoded
+# `gh issue view`, which returned empty for GitLab-tracked projects and
+# false-blocked every migration edit even when the GitLab ticket was valid.
+# tracker_view emits the normalised {state,title,url,labels,body} shape
+# regardless of tracker; labels come back as a flat string array and body is
+# populated for gh/glab (the kinds the migration gate reads).
+if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-tracker.sh"
+fi
 
-if [ "$STATE" != "OPEN" ]; then
+# Resolve the tracker kind for the TICKET's repo (per-project registry override
+# wins over the global config; see #670). tracker.kind=none has no queryable
+# tracker, so existence / label / AgDR can't be verified online — per the #755
+# Expected behaviour, skip the online gates (Gate 1 already proved an active
+# ticket marker exists) and allow the edit, operator-trusted. The skip is
+# printed to stderr so it is auditable, never silent.
+TICKET_KIND="gh"
+if command -v tracker_kind >/dev/null 2>&1; then
+  TICKET_KIND=$(tracker_kind "$TICKET_REPO" 2>/dev/null)
+  [ -n "$TICKET_KIND" ] || TICKET_KIND="gh"
+fi
+if [ "$TICKET_KIND" = "none" ]; then
+  echo "note: tracker.kind=none for ${TICKET_REPO} — skipping migration label/AgDR verification (operator-trusted; #755)." >&2
+  exit 0
+fi
+
+if command -v tracker_view >/dev/null 2>&1; then
+  ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$TICKET_REPO" 2>/dev/null)
+else
+  # Library missing (should not happen in a real fork) — fall back to gh so the
+  # gate still functions on a GitHub tracker rather than bricking, normalising
+  # to the same shape tracker_view emits (labels as a flat string array).
+  ISSUE_JSON=$(gh issue view "$TICKET_NUM" --repo "$TICKET_REPO" --json state,title,url,labels,body 2>/dev/null \
+    | jq -c '{state,title,url,labels:((.labels // []) | map(.name)),body}' 2>/dev/null)
+fi
+
+if [ -z "$ISSUE_JSON" ]; then
   cat >&2 <<MSG
-BLOCKED: Active ticket ${TICKET_REPO}#${TICKET_NUM} is $STATE, not OPEN.
+BLOCKED: Could not fetch ${TICKET_REPO}#${TICKET_NUM} from the configured
+tracker (kind: ${TICKET_KIND}). Network / auth problem? Or the issue
+doesn't exist?
+
+The migration gate is fail-closed by design — a high-blast-radius change is
+not allowed against a ticket the framework cannot verify. (This is stricter
+than the PR-create / commit-ref existence checks, which fall back to
+shape-only when a non-gh CLI is unreachable, per #501 — a migration edit
+warrants a hard stop.) If your tracker is untracked, set tracker.kind=none.
+
+Check your tracker auth (e.g. gh auth status / glab auth status), or run
+/migration to create a new ticket.
+MSG
+  exit 2
+fi
+
+STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty')
+# Normalised labels are a flat string array, so a direct membership test.
+HAS_LABEL=$(echo "$ISSUE_JSON" | jq -r --arg L "$MIGRATION_LABEL" '.labels | index($L) != null')
+BODY=$(echo "$ISSUE_JSON" | jq -r '.body // empty')
+
+# Closed-state recognition is tracker-agnostic — same vocabulary as
+# validate-pr-create.sh / verify-commit-refs.sh: gh/glab "CLOSED", Linear
+# "Done", Jira "Resolved", Asana "Closed", etc.
+STATE_LC=$(echo "$STATE" | tr '[:upper:]' '[:lower:]')
+case "$STATE_LC" in
+  closed|done|cancelled|canceled|resolved|completed)
+    cat >&2 <<MSG
+BLOCKED: Active ticket ${TICKET_REPO}#${TICKET_NUM} is "$STATE", not open.
 Migration files require an OPEN labelled ticket. Run /migration to create
 a fresh one, or /start-ticket on a different OPEN migration ticket.
 MSG
-  exit 2
-fi
+    exit 2 ;;
+esac
 
 if [ "$HAS_LABEL" != "true" ]; then
   cat >&2 <<MSG
@@ -311,7 +395,23 @@ MSG
 fi
 
 # --------- Gate 3: body references a migration AgDR ---------
+# The issue body is populated by tracker_view only for the gh and glab adapters
+# (see _lib-tracker.sh). For any other tracker kind the body comes back empty,
+# so this gate cannot see an AgDR link even when one exists — surface that in the
+# failure message rather than blaming the ticket. Adopters on those trackers can
+# set tracker.kind=none to skip online migration verification. (Widening body to
+# jira/linear/asana is tracked separately from #755.)
 if ! echo "$BODY" | grep -qE 'docs/agdr/AgDR-[0-9]+-[^[:space:]]*migration[^[:space:]]*\.md'; then
+  KIND_NOTE=""
+  case "$TICKET_KIND" in
+    gh|glab) ;;
+    *) KIND_NOTE="
+
+NOTE: tracker.kind=${TICKET_KIND} — this gate reads the issue body only for the
+gh and glab trackers, so for ${TICKET_KIND} the body is not fetched and this
+check cannot see an AgDR link even if the ticket has one. Track migrations on a
+gh/glab ticket, or set tracker.kind=none to skip online migration verification." ;;
+  esac
   cat >&2 <<MSG
 BLOCKED: Active ticket ${TICKET_REPO}#${TICKET_NUM} has the
 \`$MIGRATION_LABEL\` label but its body does not reference a migration
@@ -326,7 +426,7 @@ ticket body to include a reference to it:
   gh issue edit $TICKET_NUM --repo $TICKET_REPO --body-file <path>
 
 The regex the hook checks is permissive — any occurrence of the AgDR
-relative path in the body satisfies gate 3.
+relative path in the body satisfies gate 3.${KIND_NOTE}
 MSG
   exit 2
 fi

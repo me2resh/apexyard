@@ -601,6 +601,63 @@ else
 fi
 rm -rf "$SB"
 
+# Glab lib smoke (#755): global kind=glab with NO view_command exercises the
+# kind-aware built-in default (glab is first-class alongside gh — a glab adopter
+# only sets `kind`). GitLab-shaped JSON (state "opened", web_url, description)
+# normalises to {state:OPEN, url, body, labels[]}. body must survive because the
+# migration gate reads it for the linked AgDR.
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "glab" } }
+JSON
+install_mock "$SB" glab '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf "{\"state\":\"opened\",\"title\":\"GL1\",\"web_url\":\"https://gitlab/g/p/-/issues/1\",\"description\":\"see docs/agdr/AgDR-0001-schema-migration.md\",\"labels\":[\"migration\",\"backend\"]}\n"
+  exit 0
+fi
+exit 0
+'
+out=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view 1 g/p
+)
+got_state=$(echo "$out" | jq -r '.state')
+got_url=$(echo "$out" | jq -r '.url')
+got_body=$(echo "$out" | jq -r '.body')
+got_labels=$(echo "$out" | jq -r '.labels | join(",")')
+if [ "$got_state" = "OPEN" ] && [ "$got_url" = "https://gitlab/g/p/-/issues/1" ] && [ "$got_labels" = "migration,backend" ] && echo "$got_body" | grep -q "AgDR-0001-schema-migration.md"; then
+  record_pass "lib: tracker_view (glab) normalises opened→OPEN, web_url→url, description→body"
+else
+  record_fail "lib: tracker_view (glab) normalises opened→OPEN, web_url→url, description→body" "got state='$got_state' url='$got_url' body='$got_body' labels='$got_labels'"
+fi
+
+# Glab closed-state → CLOSED.
+install_mock "$SB" glab '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf "{\"state\":\"closed\",\"title\":\"done\",\"web_url\":\"https://gitlab/g/p/-/issues/2\",\"description\":\"\",\"labels\":[]}\n"
+  exit 0
+fi
+exit 0
+'
+got_state=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view 2 g/p | jq -r '.state'
+)
+if [ "$got_state" = "CLOSED" ]; then
+  record_pass "lib: tracker_view (glab) normalises closed→CLOSED"
+else
+  record_fail "lib: tracker_view (glab) normalises closed→CLOSED" "got state='$got_state'"
+fi
+rm -rf "$SB"
+
 # None: tracker_view returns non-zero.
 SB=$(make_fork)
 cat > "$SB/.claude/project-config.json" <<'JSON'
@@ -618,6 +675,37 @@ if [ "$rc" -ne 0 ]; then
   record_pass "lib: tracker_view (none) exits non-zero (existence-check disabled)"
 else
   record_fail "lib: tracker_view (none) exits non-zero (existence-check disabled)" "got rc=$rc"
+fi
+rm -rf "$SB"
+
+# Injection defence-in-depth (#755 security review): tracker_view builds its
+# command via string substitution and runs it through `eval`, so a caller that
+# forwards an unvalidated id must not be able to inject command syntax.
+# _tracker_substitute now printf %q-quotes the {id}/{owner_repo} tokens — verify a
+# metacharacter-laden id neither executes nor produces output, and that a
+# legitimate id still substitutes cleanly (no behaviour change for real values).
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 0'   # any output irrelevant; we assert no execution
+rc=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view "1; touch $SB/LIB_PWNED ;" owner/repo >/dev/null 2>&1
+  echo $?
+)
+sub=$(
+  cd "$SB" || exit 99
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  _tracker_substitute 'gh issue view {id} --repo {owner_repo}' 42 owner/repo
+)
+if [ ! -e "$SB/LIB_PWNED" ] && [ "$sub" = "gh issue view 42 --repo owner/repo" ]; then
+  record_pass "lib: tracker_view neutralises injection via printf %q (metachar id not executed; legit id unchanged)"
+else
+  record_fail "lib: tracker_view neutralises injection via printf %q" "pwned=$([ -e "$SB/LIB_PWNED" ] && echo yes || echo no) legit-sub='$sub'"
 fi
 rm -rf "$SB"
 
