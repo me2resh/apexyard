@@ -104,6 +104,19 @@ _git_remote_to_slug() {
 # callers already treat an unresolvable `git -C` target as "can't check from
 # here" and degrade non-misleadingly (skip/warn), so returning the original
 # text preserves that existing, safe behaviour rather than fabricating a path.
+#
+# Security note (Hakim / PR #792 review): the username allowlist check below
+# uses bash's `[[ =~ ]]` against the WHOLE string, anchored at both ends —
+# deliberately NOT `grep -qE '^…$'`, which matches per LINE. A multi-line
+# `$user` whose first line happens to look like a valid username would pass
+# a per-line grep check and reach `eval` with the remaining lines still
+# attached (a latent command-injection surface in a trust-chain hook). Not
+# reachable through today's sole caller (`pr_cmd_cd_target`'s `sed` output is
+# always single-line, further guaranteed by `head -1`), but this is a shared
+# lib function — a future caller that skips that sanitization would open the
+# hole `[[ =~ ]]` closes here for free (the whole-string anchor treats a
+# newline as just another character the charset must match, so ANY embedded
+# newline fails the check).
 _pr_repo_expand_tilde() {
   local p="$1"
   # shellcheck disable=SC2088  # intentional: matching a literal leading '~'
@@ -123,7 +136,7 @@ _pr_repo_expand_tilde() {
       case "$rest" in
         */*) tail_part="/${rest#*/}" ;;
       esac
-      if printf '%s' "$user" | grep -qE '^[A-Za-z0-9._-]+$'; then
+      if [[ "$user" =~ ^[A-Za-z0-9._-]+$ ]]; then
         home=$(eval echo "~${user}" 2>/dev/null)
         case "$home" in
           '~'*|'')

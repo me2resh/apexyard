@@ -91,22 +91,73 @@ fi
 # the verb actually being invoked (immediately at the start of the command,
 # or immediately after a leading `cd <path> &&` / `cd <path>;` prefix), not
 # merely present as a substring anywhere in a flag's value.
+#
+# Hakim's security review of the anchor fix (PR #792) flagged a MEDIUM
+# completeness regression: anchoring to the head after stripping only ONE
+# leading `cd … &&` prefix means a genuine `gh pr create` behind any OTHER
+# prefix now SKIPS validation where the old (unanchored) gate caught it —
+# `FOO=bar gh pr create`, `time gh pr create`, `cd a && cd b && gh pr create`
+# (double cd), `X && gh pr create` (any non-cd prefix). That's a real
+# completeness regression, not just a hardening nice-to-have.
+#
+# Fix: loop the prefix-strip over four bounded, mutually-exclusive prefix
+# shapes until a fixed point (or a small iteration ceiling), THEN anchor:
+#   1. `cd <path> (&&|;|\|)`               — quoted or bare path (as before)
+#   2. `VAR=value ` (one or more)          — leading env-var assignment(s)
+#   3. `time|command|nice|env `            — common command wrappers
+#   4. `<quote-free segment> (&&|;|\|)`    — a generic chained prefix
+#
+# Shape 4 is the one that needs care: naively scanning for "gh pr create" at
+# the head of ANY `&&`-delimited segment (rather than stripping bounded
+# prefixes) is exactly what reintroduces the original over-match — a
+# `--title '... && ...'` value containing a literal `&&` would get its
+# quoted content misread as a chain of commands. Shape 4 avoids that by
+# requiring the stripped segment to contain NO quote characters
+# (`[^"'&;|]+`) — a quoted flag value always contains a quote character
+# before the first genuine separator, so a segment carrying one is never
+# eligible for this strip; it also naturally stops at the first real `&&`,
+# `;`, or `|` because those characters are excluded from the segment's own
+# character class. A bounded iteration ceiling (10) guards against any
+# pathological input looping unboundedly; in practice at most a couple of
+# prefixes ever precede a real invocation.
 _cmd_for_gate=$(printf '%s' "$COMMAND" \
   | sed -E 's/[[:space:]]--body-file[[:space:]].*//' \
   | sed -E 's/[[:space:]]--body[[:space:]].*//' \
   | sed -E 's/[[:space:]]-F[[:space:]].*//')
-# Strip one optional leading `cd <path> &&` / `cd <path>;` / `cd <path>|`
-# prefix (quoted or bare path) so the head-anchor below checks the actual gh
-# invocation, not whatever directory the command cd's into first.
-_cmd_head=$(printf '%s' "$_cmd_for_gate" | sed -E \
-  "s/^[[:space:]]*cd[[:space:]]+\"[^\"]+\"[[:space:]]*(&&|;|\|)[[:space:]]*//;
-   s/^[[:space:]]*cd[[:space:]]+'[^']+'[[:space:]]*(&&|;|\|)[[:space:]]*//;
-   s/^[[:space:]]*cd[[:space:]]+[^&;|[:space:]]+[[:space:]]*(&&|;|\|)[[:space:]]*//")
+_cmd_head="$_cmd_for_gate"
+_gate_iter=0
+while [ "$_gate_iter" -lt 10 ]; do
+  _cmd_head_prev="$_cmd_head"
+
+  # 1. cd <path> && / ; / | -- quoted or bare path.
+  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+    "s/^[[:space:]]*cd[[:space:]]+\"[^\"]+\"[[:space:]]*(&&|;|\|)[[:space:]]*//;
+     s/^[[:space:]]*cd[[:space:]]+'[^']+'[[:space:]]*(&&|;|\|)[[:space:]]*//;
+     s/^[[:space:]]*cd[[:space:]]+[^&;|[:space:]]+[[:space:]]*(&&|;|\|)[[:space:]]*//")
+
+  # 2. Leading env-var assignment(s): FOO=bar BAZ=qux <rest>.
+  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+    "s/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//")
+
+  # 3. Common command wrappers.
+  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+    "s/^[[:space:]]*(time|command|nice|env)[[:space:]]+//")
+
+  # 4. A quote-free arbitrary segment followed by a top-level separator.
+  #    Excluding quote characters from the segment means a quoted flag
+  #    value (which always contains a quote before any genuine separator)
+  #    can never be mistaken for a chained prefix here.
+  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+    "s/^[[:space:]]*[^\"'&;|]+(&&|;|\|)[[:space:]]*//")
+
+  [ "$_cmd_head" = "$_cmd_head_prev" ] && break
+  _gate_iter=$((_gate_iter + 1))
+done
 if ! printf '%s' "$_cmd_head" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+create\b'; then
-  unset _cmd_for_gate _cmd_head
+  unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter
   exit 0
 fi
-unset _cmd_for_gate _cmd_head
+unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter
 
 ERRORS=""
 

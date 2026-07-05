@@ -160,6 +160,55 @@ run_case 'a leading cd prefix before a genuine gh pr create still validates' \
   "cd /tmp && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
   0 ""
 
+# ---------------------------------------------------------------------------
+# Hakim's security review of the anchor fix (PR #792) flagged a MEDIUM
+# completeness regression: the single-leading-`cd`-strip anchor missed
+# genuine `gh pr create` invocations behind OTHER prefix shapes that the old
+# (unanchored) gate used to catch. Each of Hakim's four named shapes gets a
+# true-positive case (still validates) below, plus one true-negative (still
+# BLOCKS a malformed title through the same prefix) so the fix isn't merely
+# "widen the no-op path".
+# ---------------------------------------------------------------------------
+
+run_case 'a leading env-var assignment before a genuine gh pr create still validates' \
+  "FOO=bar gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  0 ""
+
+run_case 'a leading env-var assignment with a malformed title still BLOCKS' \
+  "FOO=bar gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  2 "doesn't match format"
+
+run_case 'a leading "time" wrapper before a genuine gh pr create still validates' \
+  "time gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  0 ""
+
+run_case 'a leading "time" wrapper with a malformed title still BLOCKS' \
+  "time gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  2 "doesn't match format"
+
+run_case 'a double leading cd (cd a && cd b && …) before a genuine gh pr create still validates' \
+  "cd /tmp && cd /tmp && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  0 ""
+
+run_case 'a double leading cd with a malformed title still BLOCKS' \
+  "cd /tmp && cd /tmp && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  2 "doesn't match format"
+
+run_case 'a generic non-cd prefix (X && gh pr create) still validates' \
+  "echo hi && gh pr create --repo me2resh/apexyard --title 'fix(#900): gate anchor' --head fix/GH-900-test --body-file $BF_OK" \
+  0 ""
+
+run_case 'a generic non-cd prefix (X && gh pr create) with a malformed title still BLOCKS' \
+  "echo hi && gh pr create --repo me2resh/apexyard --title 'no ticket id here' --head fix/GH-900-test --body-file $BF_OK" \
+  2 "doesn't match format"
+
+# The gate widening must not defeat the anchor itself — a --title value that
+# contains a literal "&&" stays inside its quotes and must NOT be misread as
+# a chained prefix ahead of a fabricated "gh pr create" segment.
+run_case 'a --title value containing a literal && does NOT get misread as a chained prefix (exit 0, no-op)' \
+  "gh issue create --repo me2resh/apexyard --title 'build && deploy pipeline' --body 'desc'" \
+  0 ""
+
 rm -f "$BF_OK"
 
 echo ""
