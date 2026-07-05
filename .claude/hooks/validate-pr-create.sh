@@ -100,17 +100,41 @@ fi
 # (double cd), `X && gh pr create` (any non-cd prefix). That's a real
 # completeness regression, not just a hardening nice-to-have.
 #
-# Fix: loop the prefix-strip over four bounded, mutually-exclusive prefix
-# shapes until a fixed point (or a small iteration ceiling), THEN anchor:
+# Fix (round 1, since superseded — see below): loop the prefix-strip over
+# four bounded, mutually-exclusive prefix shapes until a fixed point (or a
+# small iteration ceiling), THEN anchor:
 #   1. `cd <path> (&&|;|\|)`               — quoted or bare path (as before)
 #   2. `VAR=value ` (one or more)          — leading env-var assignment(s)
 #   3. `time|command|nice|env `            — common command wrappers
 #   4. `<quote-free segment> (&&|;|\|)`    — a generic chained prefix
 #
-# Shape 4 is the one that needs care: naively scanning for "gh pr create" at
-# the head of ANY `&&`-delimited segment (rather than stripping bounded
-# prefixes) is exactly what reintroduces the original over-match — a
-# `--title '... && ...'` value containing a literal `&&` would get its
+# Hakim's SECOND security re-review of that fix (still PR #792) found a NEW
+# blocking regression in shape 4: applying all four shapes unconditionally
+# in every iteration, THEN checking the head only once the loop finished,
+# let shape 4 consume a genuine verb the moment it sat at the head followed
+# by a trailing separator — `gh pr create --fill --head br && echo done`,
+# `gh pr create --title fixbug --head br; echo x`, `gh pr create --head br
+# | cat` all got their own verb stripped as a "chained prefix" and the gate
+# silently skipped validation (exit 0). Confirmed live against the real
+# hook.
+#
+# Fix (round 2 — CHECK-THEN-STRIP): move the verb check to the TOP of every
+# loop iteration and evaluate it BEFORE any of the four strip shapes run
+# that iteration. The moment the current head already IS "gh pr create …",
+# the loop stops and the gate fires immediately — it never reaches shape 4
+# (or any shape) with the verb still sitting at the head, so the verb can
+# never be stripped as if it were a prefix. Only when the head is NOT yet
+# the verb do we attempt exactly ONE strip shape (in priority order 1-4)
+# and loop back to the top to re-check. This costs a few more iterations
+# for multi-prefix inputs (e.g. double `cd` now takes two passes instead of
+# one) but the 10-iteration ceiling comfortably covers realistic prefix
+# depths, and correctness — never eating the verb — matters more than
+# iteration-count elegance here.
+#
+# Shape 4 is still the one that needs care: naively scanning for "gh pr
+# create" at the head of ANY `&&`-delimited segment (rather than stripping
+# bounded prefixes) is exactly what reintroduces the original over-match —
+# a `--title '... && ...'` value containing a literal `&&` would get its
 # quoted content misread as a chain of commands. Shape 4 avoids that by
 # requiring the stripped segment to contain NO quote characters
 # (`[^"'&;|]+`) — a quoted flag value always contains a quote character
@@ -118,46 +142,75 @@ fi
 # eligible for this strip; it also naturally stops at the first real `&&`,
 # `;`, or `|` because those characters are excluded from the segment's own
 # character class. A bounded iteration ceiling (10) guards against any
-# pathological input looping unboundedly; in practice at most a couple of
-# prefixes ever precede a real invocation.
+# pathological input looping unboundedly; beyond the ceiling the gate fails
+# OPEN (skips validation) rather than hanging or false-blocking, which is
+# the safe direction for a completeness backstop like this one.
 _cmd_for_gate=$(printf '%s' "$COMMAND" \
   | sed -E 's/[[:space:]]--body-file[[:space:]].*//' \
   | sed -E 's/[[:space:]]--body[[:space:]].*//' \
   | sed -E 's/[[:space:]]-F[[:space:]].*//')
 _cmd_head="$_cmd_for_gate"
 _gate_iter=0
+_gate_fired=0
 while [ "$_gate_iter" -lt 10 ]; do
+  # CHECK before STRIP: if the current head already IS the pr-create verb,
+  # stop right here and fire — this must happen before ANY of the four
+  # strip shapes run this iteration. Checking only after a full pass of
+  # stripping (the round-1 structure) is what let shape 4 consume a verb
+  # that had just become the head as a side effect of an earlier shape in
+  # the SAME iteration (or was the head from the very start, for a
+  # prefix-free genuine invocation like `gh pr create ... && echo done`).
+  if printf '%s' "$_cmd_head" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+create\b'; then
+    _gate_fired=1
+    break
+  fi
+
   _cmd_head_prev="$_cmd_head"
 
+  # Try exactly ONE strip shape this iteration, in priority order, then
+  # loop back to the top so the verb-check above runs again before any
+  # later shape gets a chance at the newly-shortened head. This is the
+  # structural change from round 1 (which ran all four shapes every
+  # iteration, unconditionally) to round 2 (check-then-strip).
+
   # 1. cd <path> && / ; / | -- quoted or bare path.
-  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+  _stripped=$(printf '%s' "$_cmd_head" | sed -E \
     "s/^[[:space:]]*cd[[:space:]]+\"[^\"]+\"[[:space:]]*(&&|;|\|)[[:space:]]*//;
      s/^[[:space:]]*cd[[:space:]]+'[^']+'[[:space:]]*(&&|;|\|)[[:space:]]*//;
      s/^[[:space:]]*cd[[:space:]]+[^&;|[:space:]]+[[:space:]]*(&&|;|\|)[[:space:]]*//")
-
-  # 2. Leading env-var assignment(s): FOO=bar BAZ=qux <rest>.
-  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
-    "s/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//")
-
-  # 3. Common command wrappers.
-  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
-    "s/^[[:space:]]*(time|command|nice|env)[[:space:]]+//")
-
-  # 4. A quote-free arbitrary segment followed by a top-level separator.
-  #    Excluding quote characters from the segment means a quoted flag
-  #    value (which always contains a quote before any genuine separator)
-  #    can never be mistaken for a chained prefix here.
-  _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
-    "s/^[[:space:]]*[^\"'&;|]+(&&|;|\|)[[:space:]]*//")
+  if [ "$_stripped" != "$_cmd_head" ]; then
+    _cmd_head="$_stripped"
+  else
+    # 2. Leading env-var assignment(s): FOO=bar BAZ=qux <rest>.
+    _stripped=$(printf '%s' "$_cmd_head" | sed -E \
+      "s/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//")
+    if [ "$_stripped" != "$_cmd_head" ]; then
+      _cmd_head="$_stripped"
+    else
+      # 3. Common command wrappers.
+      _stripped=$(printf '%s' "$_cmd_head" | sed -E \
+        "s/^[[:space:]]*(time|command|nice|env)[[:space:]]+//")
+      if [ "$_stripped" != "$_cmd_head" ]; then
+        _cmd_head="$_stripped"
+      else
+        # 4. A quote-free arbitrary segment followed by a top-level
+        #    separator — last resort, only tried once shapes 1-3 (and the
+        #    verb-check above) have already failed to match this
+        #    iteration's head.
+        _cmd_head=$(printf '%s' "$_cmd_head" | sed -E \
+          "s/^[[:space:]]*[^\"'&;|]+(&&|;|\|)[[:space:]]*//")
+      fi
+    fi
+  fi
 
   [ "$_cmd_head" = "$_cmd_head_prev" ] && break
   _gate_iter=$((_gate_iter + 1))
 done
-if ! printf '%s' "$_cmd_head" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+create\b'; then
-  unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter
+if [ "$_gate_fired" -ne 1 ]; then
+  unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter _gate_fired _stripped
   exit 0
 fi
-unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter
+unset _cmd_for_gate _cmd_head _cmd_head_prev _gate_iter _gate_fired _stripped
 
 ERRORS=""
 

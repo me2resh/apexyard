@@ -209,6 +209,67 @@ run_case 'a --title value containing a literal && does NOT get misread as a chai
   "gh issue create --repo me2resh/apexyard --title 'build && deploy pipeline' --body 'desc'" \
   0 ""
 
+# ---------------------------------------------------------------------------
+# Hakim's SECOND security re-review of PR #792 found a new BLOCKING
+# regression: the round-1 loop applied shape 4 (a generic quote-free-segment
+# strip) unconditionally every iteration, so a genuine `gh pr create` with
+# quote-free trailing args followed by a top-level `&&` / `;` / `|`
+# separator got its OWN verb consumed as if it were a "chained prefix" —
+# the gate then silently skipped validation (exit 0) on a real invocation.
+# The fix (check-then-strip: verify the head before stripping, every
+# iteration) must make each of these fire and block a malformed title,
+# exactly like the true-positive/true-negative pairs above.
+#
+# NOTE 1: these cases deliberately use UNQUOTED --title values (or omit
+# --title entirely). Shape 4's whole point is stripping a QUOTE-FREE
+# segment — a quoted title (as used in every case above) contains a `'`
+# before any separator, which already keeps shape 4 from matching and would
+# make these cases pass trivially under the OLD buggy code too, defeating
+# the regression test. Hakim's literal reported bypass commands
+# (`--fill --head br && echo done`, `--title fixbug --head br; echo x`,
+# `--head br | cat`) are unquoted/title-free for exactly this reason —
+# faithfully reproducing them (rather than "equivalent" quoted variants) is
+# what makes these cases actually fail against the pre-fix code.
+#
+# NOTE 2: these cases also omit --body/--body-file. The gate-decision
+# preprocessing (near the top of the hook) strips everything from
+# --body-file/--body to end-of-string BEFORE the gate loop ever runs, which
+# would silently remove the trailing " && echo done" / "; echo x" / "| cat"
+# and — like quoting the title — would make the case pass regardless of
+# whether the gate fix works. Omitting --body/--body-file also means the
+# required-##-sections check no-ops (it only runs when the command carries
+# a body flag), so title-format + branch-ticket-ID are what prove the gate
+# fired for these cases specifically.
+#
+# Verified (see PR #792 discussion): each malformed-title case below FAILS
+# (wrongly returns rc=0) against the pre-fix commit and PASSES (rc=2)
+# against the check-then-strip fix.
+# ---------------------------------------------------------------------------
+
+run_case 'Hakim repro: gh pr create --fill --head br && echo done (no title) still validates' \
+  "gh pr create --repo me2resh/apexyard --fill --head fix/GH-900-test && echo done" \
+  0 ""
+
+run_case 'same shape with an unquoted malformed title still BLOCKS (proves the gate fired)' \
+  "gh pr create --repo me2resh/apexyard --fill --title fixbug --head fix/GH-900-test && echo done" \
+  2 "doesn't match format"
+
+run_case 'Hakim repro: gh pr create --title fixbug --head br; echo x — a well-formed unquoted title still validates' \
+  "gh pr create --repo me2resh/apexyard --title fix(#900):x --head fix/GH-900-test; echo x" \
+  0 ""
+
+run_case 'same shape (;) with the literal malformed "fixbug" title still BLOCKS' \
+  "gh pr create --repo me2resh/apexyard --title fixbug --head fix/GH-900-test; echo x" \
+  2 "doesn't match format"
+
+run_case 'Hakim repro: gh pr create --head br | cat (no title) still validates' \
+  "gh pr create --repo me2resh/apexyard --head fix/GH-900-test | cat" \
+  0 ""
+
+run_case 'same shape (|) with an unquoted malformed title still BLOCKS' \
+  "gh pr create --repo me2resh/apexyard --title fixbug --head fix/GH-900-test | cat" \
+  2 "doesn't match format"
+
 rm -f "$BF_OK"
 
 echo ""
