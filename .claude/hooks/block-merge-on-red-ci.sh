@@ -1,9 +1,12 @@
 #!/bin/bash
-# PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: blocks the
-# merge if any required CI check is failing, pending, or cancelled.
+# PreToolUse hook on `gh pr merge` / `gh api .../pulls/<N>/merge` AND their
+# GitLab counterparts `glab mr merge` / `glab api .../merge_requests/<N>/merge`:
+# blocks the merge if CI is failing, pending, or unresolvable.
 #
-# Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
-# #47 for why the API-shape bypass was a gap worth closing.
+# All four merge shapes are covered — see _lib-extract-pr.sh for the parser.
+# #47 is why the gh-api-shape bypass was worth closing; #764/#767 added the
+# glab shapes to the OTHER three merge gates; this hook was the one sibling
+# still hardcoded to `gh pr checks` (#790 — the last non-forge-aware gate).
 #
 # Enforces .claude/rules/pr-quality.md § "No Red CI Before Merge" —
 # "Never merge with red CI - even if the failure is pre-existing or
@@ -11,6 +14,8 @@
 # the PR so all checks are green, and only then merge." Was prose-only
 # until this hook shipped.
 #
+# GH PATH (unchanged, byte-identical to pre-#790 behaviour)
+# -----------------------------------------------------------
 # Uses `gh pr checks <pr>` which returns one line per check with status.
 # Exit codes:
 #   0 = all checks passed (and none required are missing)
@@ -26,6 +31,18 @@
 #
 # Pending checks (IN_PROGRESS | QUEUED): BLOCKED. The rule says all checks
 # must be green; pending is not green. Wait for CI to finish, then retry.
+#
+# GLAB PATH (new, #790)
+# ----------------------
+# `resolve_ci_status_glab` (see _lib-extract-pr.sh) resolves the GitLab MR's
+# head-pipeline status via `glab mr view <iid> --output json`, normalised to
+# one of: success | pending | failure | none | "" (unresolvable).
+#   Allows: "success"; "none" (MR has no pipeline configured — the glab
+#   analog of gh's "no checks reported").
+#   Blocks: "pending"; "failure"; "" — an EMPTY status means the pipeline
+#   state could not be determined (glab missing, network/auth failure,
+#   unparseable response). Fail CLOSED: an unresolvable status is never
+#   treated as green, exactly like a red-or-unfetchable gh CI check.
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
@@ -35,7 +52,8 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
-# Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+# Handles `gh pr merge <N>`, `gh api repos/<owner>/<repo>/pulls/<N>/merge`,
+# `glab mr merge <N>`, and `glab api .../merge_requests/<N>/merge` (#764/#767).
 . "$(dirname "$0")/_lib-extract-pr.sh"
 
 if ! is_merge_command "$COMMAND"; then
@@ -52,19 +70,22 @@ if merge_command_uses_variable "$COMMAND"; then
 BLOCKED: cannot verify CI on a variable-substituted merge command.
 
 This gate reads the literal command text and can't resolve shell variables
-(e.g. `gh pr merge $PR --repo $REPO`) to the real PR / repo, so it cannot
-check the correct PR's CI status. Re-run with literal values:
+(e.g. `gh pr merge $PR --repo $REPO` or `glab mr merge $MR -R $REPO`) to the
+real PR/MR or repo, so it cannot check the correct one's CI status. Re-run
+with literal values:
 
   gh pr merge <number> --repo <owner>/<repo> --squash
+  glab mr merge <iid> -R <owner>/<repo>
 
-(Use the actual PR number and owner/repo — not shell variables.)
+(Use the actual PR/MR number and owner/repo — not shell variables.)
 EOF
   exit 2
 fi
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). Uses the shared extractor,
-# which also recovers the repo from a `gh api .../pulls/<N>/merge` URL path so
-# `gh pr checks` below is still scoped correctly.
+# Parse --repo / -R (for `gh pr merge --repo owner/repo` or `glab mr merge -R
+# owner/repo`). Uses the shared extractor, which also recovers the repo from a
+# `gh api .../pulls/<N>/merge` or `glab api .../merge_requests/<N>/merge` URL
+# path so the CI-status check below is still scoped correctly.
 CMD_REPO=$(extract_repo_from_command "$COMMAND")
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
@@ -78,6 +99,59 @@ if [ -z "$PR_NUMBER" ]; then
   exit 0
 fi
 
+# Forge dispatch (#790): the command text says which CLI it drives — the same
+# detector _lib-extract-pr.sh's own resolvers use internally.
+if [ "$(_forge_from_command "$COMMAND")" = "glab" ]; then
+  # --- GitLab path ---
+  PIPELINE_STATUS=$(resolve_ci_status_glab "$PR_NUMBER" "$CMD_REPO")
+
+  case "$PIPELINE_STATUS" in
+    success)
+      exit 0
+      ;;
+    none)
+      echo "NOTE: MR !${PR_NUMBER} has no pipeline configured. Merge-on-red-CI gate is a no-op for this MR." >&2
+      exit 0
+      ;;
+    *)
+      # pending | failure | "" (unresolvable) — all three BLOCK. An empty
+      # status must never be treated as green: if glab is missing, the
+      # network/auth failed, or the response was unparseable, that is a
+      # reason to block, not a reason to guess "probably fine".
+      STATUS_DESC="${PIPELINE_STATUS:-unresolvable (glab CLI missing, network/auth failure, or unparseable response)}"
+      cat >&2 <<MSG
+BLOCKED: MR !${PR_NUMBER} has red or unresolvable CI. Cannot merge.
+
+\`glab mr view ${PR_NUMBER}\` reports pipeline status: ${STATUS_DESC}
+
+ApexYard rule (.claude/rules/pr-quality.md § "No Red CI Before Merge"):
+
+  "Never merge with red CI — even if the failure is pre-existing or
+  unrelated. Fix the pre-existing issue first (separate commit), rebase
+  the PR so all checks are green, and only then merge."
+
+To unblock:
+
+  1. Look at the pipeline: \`glab mr view ${PR_NUMBER} --web\` or
+     \`glab ci status\` on the MR's source branch
+  2. If the failure is in YOUR change, fix it and push
+  3. If the failure is PRE-EXISTING (pipeline was already red on the target
+     branch), fix the pre-existing issue in a separate commit, then retry
+  4. If the pipeline is PENDING, wait for it to finish, then retry
+  5. If the status could not be fetched at all, check glab auth/network and
+     retry — this gate fails CLOSED on an unresolvable status
+  6. Re-invoke Rex after any new commit (re-review required)
+  7. Retry \`glab mr merge ${PR_NUMBER}\`
+
+No exceptions. Not even for "unrelated" failures. Red or unresolvable CI
+stays blocking until someone fixes it — that's the whole point of the rule.
+MSG
+      exit 2
+      ;;
+  esac
+fi
+
+# --- GitHub path (unchanged, byte-identical to pre-#790 behaviour) ---
 # Query checks. gh pr checks returns text output; we check both the exit code
 # and a "no checks reported" substring — the latter is how gh reports the
 # genuinely-unchecked case regardless of exit code version.

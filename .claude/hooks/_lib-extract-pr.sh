@@ -49,6 +49,16 @@
 # the CLI-calling resolvers goes through `tracker_kind` from `_lib-tracker.sh`
 # (gh + glab coincide with github + gitlab per #762); the shape detectors read
 # the command text directly.
+#
+# CI-STATUS RESOLUTION (#790)
+# ----------------------------
+# #767 made block-unreviewed-merge.sh forge-aware but left its sibling
+# block-merge-on-red-ci.sh hardcoded to `gh pr checks` — the last
+# non-forge-aware merge gate. `resolve_ci_status_glab` closes that gap: it
+# resolves a GitLab MR's head-pipeline status via `glab mr view --output
+# json`, normalised to success | pending | failure | none | "" (unresolvable).
+# block-merge-on-red-ci.sh calls it only on the glab path; the gh path keeps
+# calling `gh pr checks` directly and is untouched.
 
 # Lazily source the tracker lib so `tracker_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -361,6 +371,77 @@ resolve_pr_head_branch() {
   fi
 
   echo "$branch"
+}
+
+# Echoes a normalized CI/pipeline status for a PR/MR — the glab counterpart of
+# `gh pr checks`, used by block-merge-on-red-ci.sh (#790, the last merge gate
+# to gain forge-awareness after #767 covered block-unreviewed-merge.sh).
+#
+# GitHub's `gh pr checks` returns per-check text + an exit code the caller
+# parses directly — there is no equivalent normalization needed there, so this
+# function is glab-only; the gh path in block-merge-on-red-ci.sh is untouched.
+#
+# Returns one of:
+#   success  — the MR's head pipeline passed
+#   pending  — the pipeline is still running/queued/gated on a manual job
+#   failure  — the pipeline failed, was cancelled, or was skipped
+#   none     — the MR has no pipeline configured (legitimate no-CI state,
+#              the glab analog of gh's "no checks reported")
+#   ""       — the status could not be determined (glab missing, network/auth
+#              failure, or an unparseable response). The caller MUST fail
+#              CLOSED on empty — an unresolvable status is never treated as
+#              green, exactly like red-or-unfetchable CI must never silently
+#              pass on the gh path.
+#
+# GitLab's MR API exposes the pipeline attached to the MR's HEAD SHA as
+# `head_pipeline` (current API); `pipeline` is the older/deprecated
+# single-pipeline field some GitLab/glab versions still populate, kept as a
+# fallback. Status values per GitLab's Pipeline API: created,
+# waiting_for_resource, preparing, pending, running, success, failed,
+# canceled, skipped, manual, scheduled.
+resolve_ci_status_glab() {
+  local pr_number="$1"
+  local cmd_repo="$2"
+  local json status
+
+  if [ -z "$pr_number" ]; then
+    echo ""
+    return
+  fi
+
+  if [ -n "$cmd_repo" ]; then
+    json=$(glab mr view "$pr_number" -R "$cmd_repo" --output json 2>/dev/null)
+  else
+    json=$(glab mr view "$pr_number" --output json 2>/dev/null)
+  fi
+
+  if [ -z "$json" ]; then
+    echo ""
+    return
+  fi
+
+  status=$(echo "$json" | jq -r '.head_pipeline.status // .pipeline.status // empty' 2>/dev/null)
+
+  case "$status" in
+    "" | null)
+      # No pipeline object at all — MR genuinely has no CI configured.
+      echo "none"
+      ;;
+    success)
+      echo "success"
+      ;;
+    failed | canceled | cancelled | skipped)
+      echo "failure"
+      ;;
+    running | pending | created | waiting_for_resource | preparing | scheduled | manual)
+      echo "pending"
+      ;;
+    *)
+      # Unrecognised/future GitLab status value — fail closed (treat as
+      # blocking) rather than silently allow an unknown state through.
+      echo "pending"
+      ;;
+  esac
 }
 
 # Echoes the owner/repo extracted from the merge command, or empty if not found.
