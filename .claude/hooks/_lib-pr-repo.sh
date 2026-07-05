@@ -74,6 +74,76 @@ _git_remote_to_slug() {
     's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1
 }
 
+# Internal: expand a leading `~` or `~user` in a path to an absolute path.
+#
+# WHY THIS EXISTS (me2resh/apexyard bug report, 2026-07)
+# -------------------------------------------------------
+# `pr_cmd_cd_target` extracts the literal path text from a `cd <path> && …`
+# prefix. When the operator's command reads `cd ~/Projects/foo && gh pr
+# create …`, the extracted path is the literal string `~/Projects/foo` — the
+# shell would expand that tilde when it actually runs the `cd`, but this hook
+# never runs a shell over the extracted string, it hands it straight to
+# `git -C`. `git -C` does NOT perform tilde-expansion (it treats `~` as a
+# literal directory-name character), so `git -C "~/Projects/foo"` fails
+# silently, every caller's cd-target resolution comes back empty, and each
+# hook falls back to its own cwd (typically the ops-fork root on `dev`) —
+# producing misleading errors like "Branch 'dev' missing ticket ID" for a
+# perfectly valid PR from a tilde-path worktree.
+#
+# This helper mirrors the shell's own tilde-expansion rules for the two forms
+# that matter:
+#   `~` / `~/...`       → the current user's $HOME
+#   `~user` / `~user/…` → that user's home directory, resolved via `eval echo`
+#                          ONLY after validating the extracted token looks
+#                          like a real username (alnum/dot/dash/underscore) —
+#                          refuses to eval anything that could smuggle shell
+#                          metacharacters through the path text.
+#
+# Graceful fallback: if expansion cannot be resolved (unknown user, `eval`
+# failure), the original string is returned unchanged rather than throwing —
+# callers already treat an unresolvable `git -C` target as "can't check from
+# here" and degrade non-misleadingly (skip/warn), so returning the original
+# text preserves that existing, safe behaviour rather than fabricating a path.
+_pr_repo_expand_tilde() {
+  local p="$1"
+  # shellcheck disable=SC2088  # intentional: matching a literal leading '~'
+  # in a case pattern, not asking the shell to expand it here.
+  case "$p" in
+    '~')
+      printf '%s' "$HOME"
+      ;;
+    '~/'*)
+      printf '%s' "$HOME/${p#\~/}"
+      ;;
+    '~'*)
+      local rest user tail_part home
+      rest="${p#\~}"
+      user="${rest%%/*}"
+      tail_part=""
+      case "$rest" in
+        */*) tail_part="/${rest#*/}" ;;
+      esac
+      if printf '%s' "$user" | grep -qE '^[A-Za-z0-9._-]+$'; then
+        home=$(eval echo "~${user}" 2>/dev/null)
+        case "$home" in
+          '~'*|'')
+            printf '%s' "$p"  # unresolved (no such user) — return unchanged
+            ;;
+          *)
+            printf '%s%s' "$home" "$tail_part"
+            ;;
+        esac
+      else
+        # Token doesn't look like a safe username — don't eval it.
+        printf '%s' "$p"
+      fi
+      ;;
+    *)
+      printf '%s' "$p"
+      ;;
+  esac
+}
+
 # Public: pr_cmd_target_repo <command>
 #   Echoes the owner/repo slug from the --repo / -R flag in the command.
 #   Handles all four CLI forms:
@@ -135,13 +205,18 @@ git_origin_repo() {
 #   `cd '../my repo' && …` resolves correctly.
 pr_cmd_cd_target() {
   local cmd="$1"
+  local raw
   # Strip leading whitespace, then match `cd ` followed by a quoted or bare
   # path up to the first `&&`, `;`, or `|` separator.
-  printf '%s' "$cmd" | sed -nE \
+  raw=$(printf '%s' "$cmd" | sed -nE \
     "s/^[[:space:]]*cd[[:space:]]+\"([^\"]+)\"[[:space:]]*(&&|;|\|).*/\1/p;
      s/^[[:space:]]*cd[[:space:]]+'([^']+)'[[:space:]]*(&&|;|\|).*/\1/p;
      s/^[[:space:]]*cd[[:space:]]+([^&;|[:space:]]+)[[:space:]]*(&&|;|\|).*/\1/p" \
-    | head -1
+    | head -1)
+  [ -z "$raw" ] && return 0
+  # Expand a leading ~ / ~user before handing the path to any caller — git -C
+  # does not shell-expand tilde itself (see _pr_repo_expand_tilde above).
+  _pr_repo_expand_tilde "$raw"
 }
 
 # Public: pr_repo_matches_cwd <command> [<git-dir>]

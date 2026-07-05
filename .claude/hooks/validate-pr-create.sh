@@ -74,15 +74,39 @@ fi
 # Stripping the body payload (--body / --body-file / -F and everything after)
 # before the gate check means only the actual command verb is tested.
 # Fixes apexyard#743 Bug 3.
+#
+# apexyard bug report (2026-07): stripping --body/--body-file/-F is NOT
+# enough — the gate's match was an UNANCHORED substring grep
+# ('\bgh pr create\b' with no position anchor), so any text ANYWHERE else in
+# the command that happens to contain the words "gh pr create" also matched.
+# The most common trigger: a `gh issue create --title '... gh pr create ...'`
+# whose TITLE mentions the phrase (e.g. a bug report about this very hook) —
+# --title is never stripped by the body-only cleanup above, so its content
+# was fully exposed to the gate grep. Reproduced live: a `gh issue create`
+# whose --title read "...gh pr create over-matches gh issue create..." was
+# blocked with PR-only errors (title-format, missing ## Testing/## Glossary)
+# even though the invoked command was `gh issue create`, not `gh pr create`.
+#
+# Fix: anchor the match to the actual command HEAD — "gh pr create" must be
+# the verb actually being invoked (immediately at the start of the command,
+# or immediately after a leading `cd <path> &&` / `cd <path>;` prefix), not
+# merely present as a substring anywhere in a flag's value.
 _cmd_for_gate=$(printf '%s' "$COMMAND" \
   | sed -E 's/[[:space:]]--body-file[[:space:]].*//' \
   | sed -E 's/[[:space:]]--body[[:space:]].*//' \
   | sed -E 's/[[:space:]]-F[[:space:]].*//')
-if ! printf '%s' "$_cmd_for_gate" | grep -qE '\bgh[[:space:]]+pr[[:space:]]+create\b'; then
-  unset _cmd_for_gate
+# Strip one optional leading `cd <path> &&` / `cd <path>;` / `cd <path>|`
+# prefix (quoted or bare path) so the head-anchor below checks the actual gh
+# invocation, not whatever directory the command cd's into first.
+_cmd_head=$(printf '%s' "$_cmd_for_gate" | sed -E \
+  "s/^[[:space:]]*cd[[:space:]]+\"[^\"]+\"[[:space:]]*(&&|;|\|)[[:space:]]*//;
+   s/^[[:space:]]*cd[[:space:]]+'[^']+'[[:space:]]*(&&|;|\|)[[:space:]]*//;
+   s/^[[:space:]]*cd[[:space:]]+[^&;|[:space:]]+[[:space:]]*(&&|;|\|)[[:space:]]*//")
+if ! printf '%s' "$_cmd_head" | grep -qE '^[[:space:]]*gh[[:space:]]+pr[[:space:]]+create\b'; then
+  unset _cmd_for_gate _cmd_head
   exit 0
 fi
-unset _cmd_for_gate
+unset _cmd_for_gate _cmd_head
 
 ERRORS=""
 
