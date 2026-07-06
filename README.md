@@ -209,6 +209,8 @@ Thanks to everyone who has helped forge ApexYard:
 
 <sub>External contributors' PRs are squash-merged, so GitHub's commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
 
+**Community input** — thanks also to the people who've shaped ApexYard through issues and ideas rather than merged code, including [@nickyreinert](https://github.com/nickyreinert) ([#809](https://github.com/me2resh/apexyard/issues/809), repo-targeting safeguard).
+
 ## Star History
 
 <a href="https://star-history.com/#me2resh/apexyard&Date">
