@@ -194,12 +194,26 @@ Unless `--no-merge` was passed, run the merge in the same turn via the tracker-a
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-tracker.sh"
 
-MERGE_RESULT=$(tracker_pr_merge "<owner/repo>" "<pr>" "${MERGE_STRATEGY}" true)
+# tracker_pr_merge MUST be invoked as its own bare, top-level statement —
+# NEVER wrapped in `$(...)` / backticks. The merge-gate hooks fire off a
+# `Bash(tracker_pr_merge *)` matcher (#759) on the Bash tool's raw command
+# text; whether that matcher recognises a command-substitution-wrapped
+# invocation (`X=$(tracker_pr_merge ...)`) is unverified, and a merge gate
+# is not something to leave to an unverified assumption — a `$(...)`
+# substitution runs its content in a subshell, a materially different
+# construct from a plain sequential statement, so treat the two as NOT
+# equivalent for matcher purposes. Redirect the JSON result to a temp file
+# instead, and read it back in a separate step — `cat` isn't a merge
+# command, so wrapping THAT in `$(...)` is fine.
+MERGE_RESULT_FILE=$(mktemp)
+tracker_pr_merge "<owner/repo>" "<pr>" "${MERGE_STRATEGY}" true > "$MERGE_RESULT_FILE"
 MERGE_RC=$?
+MERGE_RESULT="$(cat "$MERGE_RESULT_FILE")"
 MERGE_SHA=$(printf '%s' "$MERGE_RESULT" | jq -r '.sha // empty' 2>/dev/null)
+rm -f "$MERGE_RESULT_FILE"
 ```
 
-`tracker_pr_merge` dispatches on the project's `tracker_kind <owner/repo>` (the same per-project resolution `tracker_review_submit` and `tracker_create` use): a `gh`-kind project runs `gh pr merge <pr> --repo <owner/repo> --squash|--merge|--rebase --delete-branch`; a `glab`-kind project runs the `glab mr merge` equivalent (`--squash`/`--rebase`/no-flag-for-a-plain-merge, `--remove-source-branch`). **Note what actually gates this call:** the `gh`/`glab` command above runs *inside* `_lib-tracker.sh`, a sourced shell function — the merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`) match the OUTER Bash command text this step actually submits (the `. "..." ; MERGE_RESULT=$(tracker_pr_merge ...)` snippet above), and that text never literally contains `gh pr merge` or `glab mr merge` — those strings live inside already-sourced library code, not in this step's command. So the wrapper call itself is a dedicated, gate-recognised merge shape in its own right: `is_merge_command` and the PR/repo extractors in `_lib-extract-pr.sh` have a `tracker_pr_merge <owner/repo> <pr> ...` branch (#759), and `settings.json` carries a matching `Bash(tracker_pr_merge *)` matcher for all four hooks, alongside the existing `gh`/`glab` matchers (#764/#767/#793). The gates fire on the wrapper form directly — not by recognising the inner CLI command it happens to run.
+`tracker_pr_merge` dispatches on the project's `tracker_kind <owner/repo>` (the same per-project resolution `tracker_review_submit` and `tracker_create` use): a `gh`-kind project runs `gh pr merge <pr> --repo <owner/repo> --squash|--merge|--rebase --delete-branch`; a `glab`-kind project runs the `glab mr merge` equivalent (`--squash`/`--rebase`/no-flag-for-a-plain-merge, `--remove-source-branch`). **Note what actually gates this call:** the `gh`/`glab` command above runs *inside* `_lib-tracker.sh`, a sourced shell function — the merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`) match the OUTER Bash command text this step actually submits (the `tracker_pr_merge "<owner/repo>" "<pr>" "${MERGE_STRATEGY}" true > "$MERGE_RESULT_FILE"` line above), and that text never literally contains `gh pr merge` or `glab mr merge` — those strings live inside already-sourced library code, not in this step's command. So the wrapper call itself is a dedicated, gate-recognised merge shape in its own right: `is_merge_command` and the PR/repo extractors in `_lib-extract-pr.sh` have a `tracker_pr_merge <owner/repo> <pr> ...` branch (#759), and `settings.json` carries a matching `Bash(tracker_pr_merge *)` matcher for all four hooks, alongside the existing `gh`/`glab` matchers (#764/#767/#793). The gates fire on the wrapper form directly — not by recognising the inner CLI command it happens to run, and ONLY when that form is issued as the bare top-level statement shown above — never inside a `$(...)`.
 
 The `block-unreviewed-merge.sh` hook also includes a guard that refuses `--squash` on `sync/`-prefixed PRs — so even a direct `gh pr merge <sync-pr> --squash` (or the glab equivalent) will be blocked, protecting against both accidental and deliberate strategy errors. If anything else is wrong, `MERGE_RC` is non-zero and the failure message is the same one the user would see running the underlying CLI directly. The CEO marker stays on disk so the user can retry the merge after fixing the cause without re-approving.
 
