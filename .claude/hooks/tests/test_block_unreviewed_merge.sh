@@ -572,6 +572,72 @@ else
 fi
 rm -rf "$sb"
 
+# --- tracker_pr_merge wrapper shape tests (#759 gate-coverage regression) ---
+#
+# Hakim's review of #759 found that the gate hooks match the OUTER Bash
+# command text, not a call made by a sourced shell function — so
+# `/approve-merge`'s new `tracker_pr_merge <repo> <pr> <strategy> <del>`
+# wrapper sailed through completely ungated (is_merge_command never matched
+# it). These cases prove BOTH halves of the fix: the wrapper form is now
+# gate-recognised (is_merge_command/extractors), AND the sanctioned
+# /approve-merge flow — which writes both markers BEFORE calling the wrapper
+# — is unaffected by that new recognition.
+
+run_case_wrapper() {
+  local label="$1" want_rc="$2" want_stderr_regex="$3" sb="$4" pr="$5" repo="${6:-me2resh/apexyard}"
+  # The exact shape /approve-merge's SKILL.md step 7 emits: source the lib,
+  # then call tracker_pr_merge inside a command substitution.
+  local cmd
+  cmd=$(printf '. "%s/.claude/hooks/_lib-tracker.sh"\nMERGE_RESULT=$(tracker_pr_merge "%s" "%s" "squash" true)' "$sb" "$repo" "$pr")
+  local input
+  input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+  local got_stderr got_rc
+  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_rc=$?
+  rm -rf "$sb"
+
+  if [ "$got_rc" != "$want_rc" ]; then
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc (stderr: ${got_stderr:0:300})" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ -n "$want_stderr_regex" ] && ! echo "$got_stderr" | grep -qE "$want_stderr_regex"; then
+    echo "FAIL [$label]: stderr did not match /$want_stderr_regex/" >&2
+    echo "    stderr: $got_stderr" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
+# W-a/b: the wrapper form MATCHES is_merge_command and the extractors pull the
+# right pr/repo — proven indirectly: a wrapper call with NO markers at all
+# must be BLOCKED with the same "no recorded code-reviewer" message the gh
+# shape produces (if is_merge_command didn't match, or the extractor pulled
+# the wrong pr/repo, this would silently exit 0 instead).
+sb=$(make_sandbox)
+run_case_wrapper "wrapper: no markers → blocked (proves is_merge_command matches + pr/repo extracted)" 2 "no recorded code-reviewer" "$sb" 300
+
+# W-c: the sanctioned /approve-merge flow — CEO marker written in step 5,
+# BEFORE the step-7 wrapper call — still passes once both markers exist.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 301
+write_ceo_marker_structured "$sb" 301
+run_case_wrapper "wrapper: valid rex + valid v2 ceo → allows (legit /approve-merge flow unaffected)" 0 "" "$sb" 301
+
+# W-d: wrapper call with Rex approved but NO CEO marker → blocked. This is
+# the "out-of-skill tracker_pr_merge call" Hakim's fix asked to verify stays
+# blocked — a bare wrapper invocation with no CEO sign-off must not merge.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 302
+run_case_wrapper "wrapper: rex only, no ceo marker → blocked (out-of-skill call stays gated)" 2 "no CEO approval marker" "$sb" 302
+
+# W-e: cross-repo scoping still holds for the wrapper form — markers for a
+# DIFFERENT repo's same-numbered PR must not satisfy this repo's gate.
+sb=$(make_sandbox_for_repo "org-b/project-b")
+write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
+run_case_wrapper "wrapper: cross-repo markers do not satisfy the gate (#485 parity)" 2 "no recorded code-reviewer|no CEO approval marker" "$sb" 100 "org-b/project-b"
+
 # --- warn-review-marker-write.sh tests (#494) -------------------------
 #
 # The advisory hook fires when a Write or Bash command targets a

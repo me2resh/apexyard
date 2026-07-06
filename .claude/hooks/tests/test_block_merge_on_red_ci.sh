@@ -243,6 +243,84 @@ run_case "glab: raw-API merge shape, pipeline failed -> blocks" 2 "red or unreso
   "glab api projects/me6resh%2Fapexyard/merge_requests/407/merge -X PUT"
 
 # ======================================================================
+# tracker_pr_merge WRAPPER SHAPE (#759 gate-coverage regression) — the
+# wrapper's own text never says "gh" or "glab" (that's the whole point of
+# the abstraction), so this hook's forge dispatch cannot rely on
+# `_forge_from_command` (text-based) for the wrapper the way it does for an
+# explicit `gh pr merge` / `glab mr merge` command — it must consult the
+# REGISTRY (`tracker_kind` / `_forge_kind_for`) instead. This needs its own
+# sandbox because it's the one case that requires `_lib-tracker.sh` +
+# a real `apexyard.projects.yaml` registry entry, which the other cases
+# above don't need (they dispatch on command text alone).
+# ======================================================================
+
+TRACKER_LIB="$SRC_ROOT/.claude/hooks/_lib-tracker.sh"
+CONFIG_LIB="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
+PORTFOLIO_LIB="$SRC_ROOT/.claude/hooks/_lib-portfolio-paths.sh"
+OPSROOT_LIB="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
+
+# make_sandbox_wrapper <glab_mode> — a registered glab-kind project so
+# `tracker_kind "g/p"` (and therefore `_forge_kind_for`) resolves to glab from
+# the REGISTRY, not the command text.
+make_sandbox_wrapper() {
+  local glab_mode="$1"
+  local sb
+  sb=$(mktemp -d)
+  mkdir -p "$sb/.claude/hooks" "$sb/bin"
+  cp "$HOOK_SRC"      "$sb/.claude/hooks/block-merge-on-red-ci.sh"
+  cp "$LIB_PR"        "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
+  cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
+  cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"
+  [ -f "$OPSROOT_LIB" ] && cp "$OPSROOT_LIB" "$sb/.claude/hooks/_lib-ops-root.sh"
+  chmod +x "$sb/.claude/hooks/block-merge-on-red-ci.sh"
+  touch "$sb/onboarding.yaml"
+  cat > "$sb/.claude/project-config.defaults.json" <<'JSON'
+{ "tracker": { "kind": "gh" } }
+JSON
+  cat > "$sb/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: gl
+    repo: g/p
+    tracker:
+      kind: glab
+YAML
+  cat > "$sb/bin/glab" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"mr view"*)
+    case "$glab_mode" in
+      success) echo '{"iid":1,"head_pipeline":{"status":"success"}}' ;;
+      failure) echo '{"iid":1,"head_pipeline":{"status":"failed"}}' ;;
+      *)       exit 1 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$sb/bin/glab"
+  # gh must NOT be consulted for a glab-registered project's wrapper call —
+  # make it fail loudly (nonzero + wrong-looking text) if it ever is.
+  cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+echo "WRONG: gh should not be called for a glab-registered project" >&2
+exit 1
+EOF
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+WRAPPER_CMD_TMPL='. "%s/.claude/hooks/_lib-tracker.sh"
+MERGE_RESULT=$(tracker_pr_merge "g/p" "500" "squash" true)'
+
+sb=$(make_sandbox_wrapper success)
+run_case "wrapper: glab-registered project, pipeline success -> allows (forge dispatched via registry, not command text)" 0 "" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
+sb=$(make_sandbox_wrapper failure)
+run_case "wrapper: glab-registered project, pipeline failed -> blocks (forge dispatched via registry, not command text)" 2 "red or unresolvable" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
 
 echo ""
 echo "=== test_block_merge_on_red_ci: $PASS passed, $FAIL failed ==="

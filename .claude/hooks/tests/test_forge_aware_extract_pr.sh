@@ -193,6 +193,64 @@ assert_eq "extract_pr_number gh api URL (regression)" "7" "$(extract_pr_number '
 assert_eq "extract_repo gh api URL (regression)" "o/r" "$(extract_repo_from_command 'gh api repos/o/r/pulls/7/merge -X PUT')"
 
 # ---------------------------------------------------------------------------
+# tracker_pr_merge wrapper shape (#759 gate-coverage regression, Hakim's HIGH
+# finding on the #759 PR): the gate hooks match the OUTER Bash command text,
+# not a call made by a SOURCED SHELL FUNCTION — so `/approve-merge`'s new
+# `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` wrapper
+# needs its own is_merge_command branch + positional-arg extraction, the same
+# way the glab shapes needed their own branches in #764/#767.
+
+# is_merge_command: the wrapper form matches, embedded in the real call shape
+# (sourcing line + a command-substitution wrapping the call).
+WRAPPER_CMD_REAL='. "/x/.claude/hooks/_lib-tracker.sh"
+MERGE_RESULT=$(tracker_pr_merge "me2resh/apexyard" "42" "squash" true)'
+assert_true  is_merge_command "$WRAPPER_CMD_REAL"
+# A bare mention of "tracker_pr_merge" with no call shape still counts — the
+# detector is intentionally a simple presence check, matching the same
+# "detect broadly, extract precisely" split the gh/glab branches already use.
+assert_true  is_merge_command 'tracker_pr_merge "o/r" "9" "merge" false'
+# Something that just LOOKS similar but isn't a merge call at all is still a
+# no-op — is_merge_command must not fire on every random string.
+assert_false is_merge_command 'echo "not a merge command at all"'
+
+# extract_pr_number: the PR is positional arg 2, quoted-or-bare, extracted
+# without eval even when embedded in the real $(...) call shape.
+assert_eq "extract_pr_number wrapper (real call shape)" "42" \
+  "$(extract_pr_number "$WRAPPER_CMD_REAL")"
+assert_eq "extract_pr_number wrapper (bare, unquoted args)" "9" \
+  "$(extract_pr_number 'tracker_pr_merge o/r 9 squash true')"
+
+# extract_repo_from_command: the repo is positional arg 1.
+assert_eq "extract_repo wrapper (real call shape)" "me2resh/apexyard" \
+  "$(extract_repo_from_command "$WRAPPER_CMD_REAL")"
+assert_eq "extract_repo wrapper (bare, unquoted args)" "o/r" \
+  "$(extract_repo_from_command 'tracker_pr_merge o/r 9 squash true')"
+
+# merge_command_uses_variable: an unexpanded $REPO/$PR in the wrapper's
+# positional args is detected exactly like the gh/glab positional-arg and
+# --repo/-R checks — a gate that can't resolve its real target must block,
+# not silently fall back to an unrelated PR/repo.
+assert_true  merge_command_uses_variable 'MERGE_RESULT=$(tracker_pr_merge "$REPO" "$PR" "squash" true)'
+assert_true  merge_command_uses_variable 'MERGE_RESULT=$(tracker_pr_merge "me2resh/apexyard" "$PR" "squash" true)'
+assert_false merge_command_uses_variable "$WRAPPER_CMD_REAL"
+
+# The wrapper form correctly resolves the FORGE via the registry (tracker_kind),
+# not the command text — this is the whole point of the wrapper: its own text
+# never says "gh" or "glab". resolve_pr_head / resolve_pr_head_branch already
+# take the repo as a separate argument and dispatch via `_forge_kind_for`
+# (registry-based), so once extract_repo_from_command correctly pulls the repo
+# out of the wrapper form (proven above), those resolvers work unmodified —
+# confirmed here directly against a glab-kind sandbox.
+SB_WRAP_GLAB=$(make_sandbox glab)
+install_glab_mock "$SB_WRAP_GLAB"
+cd "$SB_WRAP_GLAB" || { echo "FAIL: cd wrapper glab sandbox"; exit 1; }
+tracker_clear_cache 2>/dev/null || true
+WRAP_REPO=$(extract_repo_from_command "$WRAPPER_CMD_REAL")
+assert_eq "wrapper → extracted repo feeds resolve_pr_head onto the glab path" \
+  "glabsha0000000000000000000000000000000042" \
+  "$(PATH="$SB_WRAP_GLAB/bin:$PATH" resolve_pr_head 42 "$WRAP_REPO")"
+
+# ---------------------------------------------------------------------------
 echo
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

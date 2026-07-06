@@ -20,8 +20,12 @@
 #   5. gh hostile/unknown strategy → normalised to squash BEFORE dispatch (no injection)
 #   6. gh failure → the CLI's non-zero exit propagates
 #   7. non-numeric PR id → rejected before any dispatch/eval
+#   7b/7c. hostile repo charset → rejected before dispatch; legitimate
+#      nested-subgroup repo (group/subgroup/repo) still accepted
 #   8. kind=none → returns 3, no CLI invoked
-#   9. gh success → emits {"sha":...} resolved via a second `gh pr view` call
+#   9. gh success → emits {"sha":...} resolved via a second `gh pr view` call,
+#      and that JSON is proven UNCONTAMINATED by the merge CLI's own stdout
+#      confirmation text (discarded, not captured)
 #  10. per-project glab override → strategy/delete-branch flag mapping [needs YAML]
 #  11. per-project custom merge_command → {owner_repo}/{pr}/{strategy}/{delete_branch}
 #      substituted safely; a hostile strategy string is normalised away before
@@ -84,6 +88,12 @@ if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
   exit 0
 fi
 [ -n "${GH_CAPTURE:-}" ] && printf '%s\n' "$@" > "$GH_CAPTURE"
+# Real `gh pr merge` prints a human-readable confirmation to STDOUT on
+# success (e.g. "✓ Squashed and merged pull request #42 …") — reproduce
+# that here so the tests prove _tracker_merge_gh's own stdout does NOT leak
+# into tracker_pr_merge's returned {"sha":...} JSON (it must be discarded,
+# not captured — see the >/dev/null on the merge call itself).
+echo "✓ Squashed and merged pull request #42 (some title)"
 exit 0
 EOF
   chmod +x "$sb/bin/gh"
@@ -107,6 +117,12 @@ assert_eq "gh squash → --squash present"           "1"      "$(grep -c -- '--s
 assert_eq "gh squash → --delete-branch present"    "1"      "$(grep -c -- '--delete-branch' "$SB/c1")"
 assert_eq "gh squash → no --merge flag"             "0"      "$(grep -c -- '^--merge$' "$SB/c1")"
 assert_eq "gh squash → emits sha JSON"             "deadbeef00000000000000000000000000000000" "$(printf '%s' "$OUT1" | jq -r '.sha')"
+# The gh mock also prints a confirmation line to stdout on the merge call
+# itself (real `gh pr merge` does the same) — OUT1 must be CLEAN, valid JSON
+# with nothing before it. If _tracker_merge_gh's stdout ever leaked through
+# instead of being discarded, this would fail (`jq -e` rejects leading junk).
+assert_eq "gh squash → OUT1 is valid, uncontaminated JSON (no leaked CLI stdout)" \
+  "valid" "$(printf '%s' "$OUT1" | jq -e . >/dev/null 2>&1 && echo valid || echo invalid)"
 
 # Case 2 — strategy=merge (the sync-PR case): --merge, no --squash.
 tracker_clear_cache
@@ -153,6 +169,23 @@ tracker_clear_cache
 PATH="$SB/bin:$PATH" GH_CAPTURE="$SB/c7" tracker_pr_merge "o/r" '9; rm -rf /' squash true; rc=$?
 assert_eq "non-numeric PR id → rejected (non-zero)" "1" "$rc"
 assert_eq "non-numeric PR id → no CLI invoked" "" "$(cat "$SB/c7" 2>/dev/null)"
+
+# Case 7b — a repo outside the safe owner/repo charset is rejected before any
+# dispatch/eval too (the {pr} guard's sibling — Hakim's LOW finding: repo had
+# no charset guard even though it's substituted into the SAME eval'd custom
+# template). This check runs BEFORE the kind dispatch, so it protects gh/glab
+# as well, not just custom.
+tracker_clear_cache
+: > "$SB/c7b"
+PATH="$SB/bin:$PATH" GH_CAPTURE="$SB/c7b" tracker_pr_merge 'o/r; touch PWNED' 42 squash true; rc=$?
+assert_eq "hostile repo charset → rejected (non-zero)" "1" "$rc"
+assert_eq "hostile repo charset → no CLI invoked" "" "$(cat "$SB/c7b" 2>/dev/null)"
+assert_eq "hostile repo charset → no PWNED file" "no" "$([ -e "$SB/PWNED" ] && echo yes || echo no)"
+# A legitimate nested-subgroup-shaped repo (GitLab group/subgroup/repo) must
+# still be accepted — the guard must not be so strict it rejects real values.
+: > "$SB/c7c"
+PATH="$SB/bin:$PATH" GH_CAPTURE="$SB/c7c" tracker_pr_merge 'grp/sub/repo' 42 squash true >/dev/null; rc=$?
+assert_eq "legitimate nested-subgroup repo → accepted" "0" "$rc"
 rm -rf "$SB"
 
 # Case 8 — kind=none: no CLI call; returns 3. Shape-only, not a failure path.

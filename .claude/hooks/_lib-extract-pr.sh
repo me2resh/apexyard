@@ -59,6 +59,39 @@
 # json`, normalised to success | pending | failure | none | "" (unresolvable).
 # block-merge-on-red-ci.sh calls it only on the glab path; the gh path keeps
 # calling `gh pr checks` directly and is untouched.
+#
+# THE tracker_pr_merge WRAPPER SHAPE (#759, HIGH finding from Hakim's review
+# of the #759 PR)
+# ------------------------------------------------------------------------
+# #759 gave `/approve-merge` a tracker-agnostic merge function —
+# `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` in
+# _lib-tracker.sh — so the skill calls ONE function instead of shelling out to
+# a literal `gh pr merge` / `glab mr merge`. But these gate hooks match the
+# OUTER Bash command text (`.tool_input.command`, the exact string the Bash
+# tool receives), not the subprocess a SOURCED SHELL FUNCTION happens to
+# invoke internally. `/approve-merge`'s actual Bash call looks like:
+#
+#   . ".../_lib-tracker.sh"
+#   MERGE_RESULT=$(tracker_pr_merge "owner/repo" "42" "squash" true)
+#
+# — and the literal substrings "gh pr merge" / "gh api" / "glab mr merge" /
+# "glab api" never appear in that text (they're inside `_lib-tracker.sh`,
+# already-sourced source code, not this command's text). Without a dedicated
+# branch, `is_merge_command` returns false, the four merge-gate hooks never
+# fire, and the wrapper form sails through completely ungated — the exact #47
+# / #767 bypass shape, one level up the call stack (the settings.json `"if":
+# "Bash(tracker_pr_merge *)"` matcher entries added alongside this fix are
+# what make Claude Code's harness invoke the hook scripts at all for this
+# shape; is_merge_command is the SECOND layer that decides whether the hook,
+# once invoked, treats the command as a merge).
+#
+#   5. `tracker_pr_merge "owner/repo" "42" "squash" true`         → PR is 42
+#
+# The wrapper's positional args are `<owner/repo>` (arg 1) and `<pr>` (arg 2)
+# — not a `--repo`/`-R` flag and not a URL path — so `extract_pr_number` and
+# `extract_repo_from_command` each gained a dedicated wrapper-arg extraction
+# step using `_extract_wrapper_arg` (quoted-or-bare positional-token parsing,
+# regex/parameter-expansion only — no `eval` of the command text, ever).
 
 # Lazily source the tracker lib so `tracker_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -91,12 +124,61 @@ _forge_from_command() {
   if echo "${1:-}" | grep -qE '\bglab\s+(mr|api)\b'; then echo glab; else echo gh; fi
 }
 
+# Echoes the Nth (1-indexed) whitespace-separated positional argument from
+# $1, treating a double-quoted or single-quoted span as ONE argument (so
+# `"owner/repo"` extracts as `owner/repo`, not split on the slash). Bare
+# (unquoted) tokens are split on whitespace as usual.
+#
+# Pure bash parameter expansion — NO eval, NO external process, NO regex
+# backtracking on attacker-controlled text. This is the tokenizer for the
+# `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` wrapper
+# shape (#759): a best-effort, regex-adjacent positional extractor, not a
+# full shell parser — it doesn't handle nested/escaped quotes, matching the
+# existing extract_pr_number/extract_repo_from_command discipline of "regex-
+# only extraction, sufficient for the shapes these skills actually emit."
+_extract_wrapper_arg() {
+  local text="$1" n="${2:-1}" i=0 tok
+  while [ -n "$text" ]; do
+    # Trim leading whitespace.
+    while [ -n "$text" ]; do
+      case "$text" in
+        [[:space:]]*) text="${text#?}" ;;
+        *) break ;;
+      esac
+    done
+    [ -z "$text" ] && break
+    case "$text" in
+      \"*)
+        tok="${text#\"}"
+        tok="${tok%%\"*}"
+        text="${text#\"$tok\"}"
+        ;;
+      \'*)
+        tok="${text#\'}"
+        tok="${tok%%\'*}"
+        text="${text#\'$tok\'}"
+        ;;
+      *)
+        tok="${text%%[[:space:]]*}"
+        text="${text#"$tok"}"
+        ;;
+    esac
+    i=$((i + 1))
+    if [ "$i" -eq "$n" ]; then
+      echo "$tok"
+      return 0
+    fi
+  done
+  echo ""
+}
+
 # Returns 0 if $1 looks like a merge command this gate should fire on.
 # Matches ANY of:
 #   - `gh pr merge ...`
 #   - `gh api ... repos/<owner>/<repo>/pulls/<N>/merge ...`
 #   - `glab mr merge ...`                                     (#764, GitLab)
 #   - `glab api ... merge_requests/<N>/merge ...`             (#767, GitLab raw-API)
+#   - `tracker_pr_merge <owner/repo> <pr> ...`                (#759, wrapper)
 is_merge_command() {
   local cmd="$1"
   if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
@@ -119,6 +201,14 @@ is_merge_command() {
   # false-matching — a false match here would be fail-CLOSED (block), but a
   # false NEGATIVE is fail-open, so the anchor is verified by negative tests.
   if echo "$cmd" | grep -qE '\bglab\s+api\b.*merge_requests/[0-9]+/merge\b'; then
+    return 0
+  fi
+  # `tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]` — the
+  # #759 tracker-agnostic merge wrapper /approve-merge calls instead of
+  # shelling out to `gh pr merge`/`glab mr merge` directly. Without this
+  # branch the gates never fire on the wrapper form at all — see the HIGH
+  # finding writeup in the file header (#759).
+  if echo "$cmd" | grep -qE '\btracker_pr_merge\b'; then
     return 0
   fi
   return 1
@@ -224,6 +314,24 @@ extract_pr_number() {
     fi
   fi
 
+  # 2c. tracker_pr_merge wrapper positional arg (#759): `<pr>` is the SECOND
+  #     argument — `tracker_pr_merge <owner/repo> <pr> <strategy> [<del>]`.
+  #     Fenced at `)` too (not just `|;&`) since the real call site is
+  #     `MERGE_RESULT=$(tracker_pr_merge "..." "..." ... true)` — a command
+  #     substitution, so a trailing `)` closes the span. Quoted-or-bare
+  #     positional extraction via _extract_wrapper_arg — no eval.
+  if [ -z "$pr" ]; then
+    local wspan wargs wtoken
+    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    if [ -n "$wspan" ]; then
+      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+      wtoken=$(_extract_wrapper_arg "$wargs" 2)
+      if echo "$wtoken" | grep -qE '^[0-9]+$'; then
+        pr="$wtoken"
+      fi
+    fi
+  fi
+
   # 3. Last resort: ask the forge which PR/MR the current branch points at.
   #    Forge-aware (#764): a glab command falls back to `glab mr view`.
   if [ -z "$pr" ]; then
@@ -285,6 +393,25 @@ merge_command_uses_variable() {
   repo_token=$(echo "$clean_span" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
   if echo "$repo_token" | grep -qE '^["'"'"']?\$\{?[A-Za-z_]'; then
     return 0
+  fi
+
+  # tracker_pr_merge wrapper positional args (#759): repo is arg 1, pr is
+  # arg 2 — check both for an unexpanded `$VAR`/`${VAR}`, same as the
+  # gh/glab positional-arg and --repo/-R checks above. _extract_wrapper_arg
+  # returns the literal text between quotes verbatim (no expansion), so a
+  # quoted `"$REPO"` still surfaces its leading `$` for this check.
+  local wspan wargs wpr wrepo
+  wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+  if [ -n "$wspan" ]; then
+    wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+    wrepo=$(_extract_wrapper_arg "$wargs" 1)
+    wpr=$(_extract_wrapper_arg "$wargs" 2)
+    if echo "$wrepo" | grep -qE '^\$\{?[A-Za-z_]'; then
+      return 0
+    fi
+    if echo "$wpr" | grep -qE '^\$\{?[A-Za-z_]'; then
+      return 0
+    fi
   fi
 
   return 1
@@ -518,6 +645,19 @@ extract_repo_from_command() {
     local mspan
     mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
     repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+  fi
+
+  # 2b. tracker_pr_merge wrapper positional arg (#759): `<owner/repo>` is the
+  #     FIRST argument — `tracker_pr_merge <owner/repo> <pr> <strategy> [<del>]`.
+  #     Same fencing-at-`)` discipline as extract_pr_number's wrapper step
+  #     (the real call site is a `$(...)` command substitution).
+  if [ -z "$repo" ]; then
+    local wspan wargs
+    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    if [ -n "$wspan" ]; then
+      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+      repo=$(_extract_wrapper_arg "$wargs" 1)
+    fi
   fi
 
   # 3. Last resort: ask the forge which repo the current branch's PR/MR belongs

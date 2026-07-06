@@ -947,6 +947,18 @@ _tracker_merge_normalise_delete_branch() {
 # Internal adapter: gh → `gh pr merge`. Flags built as an array (never an
 # eval'd string), so the PR/repo/strategy values can't be mistaken for shell
 # syntax even though they're already-validated enums/numerics.
+#
+# Stdout is discarded (`>/dev/null`), stderr is NOT: `gh pr merge` prints a
+# human-readable confirmation line to stdout on success ("✓ Squashed and
+# merged pull request #42 …") — if that reached tracker_pr_merge's own
+# stdout uncaught, it would land BEFORE the `{"sha":...}` JSON the public
+# function returns, breaking every caller's `jq -r '.sha'` parse. We don't
+# need that confirmation text (the SHA is independently resolved via a
+# follow-up `gh pr view` in _tracker_merge_resolve_sha), so it's discarded;
+# gh's error output on FAILURE goes to stderr, which is left to propagate so
+# the operator actually sees why a merge failed (matching the documented
+# contract in `/approve-merge`'s SKILL.md — the failure message the operator
+# sees is meant to be the CLI's own, not silently swallowed).
 _tracker_merge_gh() {
   local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
   local -a args
@@ -957,7 +969,7 @@ _tracker_merge_gh() {
     rebase) args+=(--rebase) ;;
   esac
   [ "$delete_branch" = "true" ] && args+=(--delete-branch)
-  gh "${args[@]}" 2>/dev/null
+  gh "${args[@]}" >/dev/null
 }
 
 # Internal adapter: glab (GitLab) → `glab mr merge`. glab's default merge (no
@@ -966,6 +978,10 @@ _tracker_merge_gh() {
 # branch is glab's --delete-branch analog. --yes skips the interactive prompt
 # (matches the --yes convention already used by _tracker_create_glab /
 # _tracker_label_ensure_glab).
+#
+# Same stdout/stderr split as _tracker_merge_gh above: stdout discarded
+# (glab also prints a confirmation line on success), stderr left to
+# propagate so a failure reason is visible.
 _tracker_merge_glab() {
   local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
   local -a args
@@ -977,7 +993,7 @@ _tracker_merge_glab() {
   esac
   [ "$delete_branch" = "true" ] && args+=(--remove-source-branch)
   args+=(--yes)
-  glab "${args[@]}" 2>/dev/null
+  glab "${args[@]}" >/dev/null
 }
 
 # Internal: resolve the merge_command template for the `custom` kind — the
@@ -1004,12 +1020,20 @@ _tracker_merge_template() {
 #
 # Injection model: unlike _tracker_review_custom / _tracker_create_custom,
 # there is no arbitrary/untrusted free-text value in a merge call at all — pr
-# is numeric-guarded by the public function below, and strategy/delete_branch
-# are both normalised to a closed enum BEFORE this function ever sees them. So
-# all four placeholders — {owner_repo} (registry slug), {pr} (numeric),
-# {strategy} (squash|merge|rebase), {delete_branch} (true|false) — are safe to
-# substitute directly into the eval'd template; none of them can carry shell
-# metacharacters by the time they arrive here.
+# is numeric-guarded and repo is charset-guarded by the public function below
+# (both checked BEFORE any adapter, not just this one), and strategy/
+# delete_branch are both normalised to a closed enum before this function
+# ever sees them. So all four placeholders — {owner_repo} (registry slug,
+# charset-guarded), {pr} (numeric-guarded), {strategy} (squash|merge|rebase),
+# {delete_branch} (true|false) — are safe to substitute directly into the
+# eval'd template; none of them can carry shell metacharacters by the time
+# they arrive here.
+#
+# Stdout discarded, stderr left to propagate — same rationale as
+# _tracker_merge_gh/_tracker_merge_glab above: the operator-supplied CLI's
+# own confirmation text on stdout must not contaminate the `{"sha":...}`
+# JSON the public function returns, but its failure output on stderr should
+# still be visible.
 _tracker_merge_custom() {
   local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
   local tpl
@@ -1024,7 +1048,7 @@ _tracker_merge_custom() {
   cmd="${cmd//\{delete_branch\}/$delete_branch}"
   TRACKER_REPO="$repo" TRACKER_PR="$pr" TRACKER_STRATEGY="$strategy" \
     TRACKER_DELETE_BRANCH="$delete_branch" \
-    eval "$cmd" 2>/dev/null
+    eval "$cmd" >/dev/null
 }
 
 # Internal: best-effort merge-commit SHA lookup after a successful merge.
@@ -1062,6 +1086,16 @@ tracker_pr_merge() {
   if [ -z "$repo" ] || [ -z "$pr" ]; then
     return 1
   fi
+  # {owner_repo} is substituted into the custom adapter's eval'd template too
+  # (same trust model as tracker_create/tracker_review_submit — a registry-
+  # sourced slug, not free-text). Reject anything outside the safe owner/repo
+  # (or nested-subgroup, e.g. GitLab `group/subgroup/repo`) charset as
+  # defense-in-depth, BEFORE dispatching to any adapter — not just `custom`.
+  # A real owner/repo slug never contains `;`, `|`, `&`, `$`, backticks,
+  # parens, quotes, or whitespace, so this cannot reject a legitimate value.
+  case "$repo" in
+    *[!A-Za-z0-9._/-]*) return 1 ;;
+  esac
   # {pr} is documented numeric and is substituted into the custom adapter's
   # eval'd template — reject a non-numeric value as defense-in-depth (gh/glab
   # require numeric PR/MR ids anyway; matches tracker_review_submit's guard).

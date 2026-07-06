@@ -99,9 +99,24 @@ if [ -z "$PR_NUMBER" ]; then
   exit 0
 fi
 
-# Forge dispatch (#790): the command text says which CLI it drives — the same
-# detector _lib-extract-pr.sh's own resolvers use internally.
-if [ "$(_forge_from_command "$COMMAND")" = "glab" ]; then
+# Forge dispatch (#790): the command text normally says which CLI it drives —
+# the same detector _lib-extract-pr.sh's own resolvers use internally. The
+# `tracker_pr_merge` wrapper (#759) is the one shape where that's NOT true by
+# design — the wrapper's whole point is that its OWN text never says "gh" or
+# "glab" (that choice lives in the registry, resolved at call time via
+# `tracker_kind`). Text-based `_forge_from_command` would silently default to
+# "gh" for a glab-kind project calling the wrapper, so for that shape ONLY,
+# dispatch via the registry (`_forge_kind_for`, the same resolver
+# resolve_pr_head/resolve_pr_head_branch already use) instead. Every other
+# shape (explicit `gh pr merge` / `gh api` / `glab mr merge` / `glab api`)
+# keeps the original text-based dispatch unchanged — this preserves the
+# existing #790 test behaviour exactly.
+if echo "$COMMAND" | grep -qE '\btracker_pr_merge\b'; then
+  FORGE=$(_forge_kind_for "$CMD_REPO")
+else
+  FORGE=$(_forge_from_command "$COMMAND")
+fi
+if [ "$FORGE" = "glab" ]; then
   # --- GitLab path ---
   PIPELINE_STATUS=$(resolve_ci_status_glab "$PR_NUMBER" "$CMD_REPO")
 
