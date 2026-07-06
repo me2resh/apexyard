@@ -42,7 +42,7 @@ ApexYard is a set of plain-text primitives Claude Code reads automatically — n
 
 > **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [yard.apexscript.com](https://yard.apexscript.com).
 >
-> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline.
+> **For AI coding agents:** the repo root carries `AGENTS.md` — universal entry doc for Cursor / Claude Code / Aider / Cline / **pi**. For harnesses that don't auto-load `CLAUDE.md` (pi chief among them), `AGENTS.md`'s "Operator governance bridge" section carries the same advisory SDLC governance `CLAUDE.md` gives Claude Code — see [`docs/harnesses/pi.md`](docs/harnesses/pi.md) for what's bridged today vs. not yet.
 
 ## Quick Start — fork and go
 
