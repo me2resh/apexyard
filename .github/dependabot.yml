@@ -13,6 +13,14 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    # Group the codeql-action family so init/analyze/upload-sarif version
+    # bumps land as ONE PR instead of splitting. codeql.yml pins init and
+    # analyze to the same version — CodeQL fails CI if they mismatch, which
+    # is exactly what split PRs (#800 init, #801 analyze) produced. #807.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
     commit-message:
       prefix: "chore"
     labels:
