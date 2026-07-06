@@ -123,6 +123,42 @@ When you're working in a fork (e.g. `your-org/apexyard`) with `origin` = the for
 
 Earlier versions of these hooks were origin-only, which forced the cross-repo workaround for fork → upstream PRs and silently broke GitHub's auto-close — leaving every cross-fork PR's issue OPEN forever. After #207, bare `#N` is the supported pattern and the cross-repo workaround is no longer needed (it still passes the hook for backwards compat, but you lose auto-close).
 
+## Repo targeting — always pass an explicit `--repo` (me2resh/apexyard#809)
+
+The reserved-vocabulary rule above assumes you already know **which repo** a `#N` lives in. Across a portfolio that assumption is dangerous: numeric issue IDs collide freely across repos — `me2resh/apexyard#92`, a managed project's `#92`, and any other repo's `#92` are three unrelated issues. If you run a tracker command that omits the target repo, `gh` (and the equivalent Linear / Jira / Asana CLIs) resolves it against the **ambient (cwd) repo** — whichever repo the current directory happens to belong to. When the working directory isn't the one you meant, that silently reads or writes the *wrong* `#92`.
+
+**The rule: always pass an explicit `--repo <owner/repo>` on `gh issue` / `gh pr` (and equivalent tracker) commands. Never rely on ambient cwd resolution across a portfolio.** This matters most on bare **reads** — `gh issue view <N>`, `gh issue view <N> --json state` — where nothing downstream flags the mistake: the command succeeds, returns a real issue's state, and quietly feeds the wrong data into your reasoning. A wrong read is worse than a wrong write, because the write path has a human approval step in front of it and the read path does not.
+
+```bash
+# WRONG — resolves against whatever repo the cwd belongs to
+gh issue view 92 --json state,title
+
+# RIGHT — the target repo is stated, not inferred
+gh issue view 92 --repo me2resh/apexyard --json state,title
+```
+
+The same discipline is what `/start-ticket` already bakes in: it records the ticket's fully-qualified `owner/repo` in the session marker (see `.claude/skills/start-ticket/SKILL.md` § "Cross-repo note"), so pass the qualified form (`me2resh/flat-mate#128`) whenever you're in one repo but the ticket lives in another.
+
+### The write side is already mechanically guarded
+
+Two shipped hooks already close the *write* half of this gap — you don't need to remember them, but knowing they're there tells you where the residual risk actually is (reads):
+
+| Hook | Guards | How it helps repo-targeting |
+|------|--------|-----------------------------|
+| `require-skill-for-issue-create.sh` (#268) | Issue **creation** | Blocks a bare `gh issue create` / `gh api repos/.../issues` POST unless a structured skill (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) is in flight. Those skills resolve the target from the registry and pass an explicit `--repo` — so ambient-repo creation is already off the table. See [`leak-protection.md`](leak-protection.md) for the sibling concern. |
+| `block-private-refs-in-public-repos.sh` | Public-repo **writes** (issue / PR / comment) | Scrubs registered private-project names, repo slugs, and workspace paths out of anything written to a public framework repo — the privacy-boundary half of "wrong repo". Full rule: [`leak-protection.md`](leak-protection.md). |
+
+So the genuine residual gap is narrow: a bare `gh issue view <N>` with no `--repo`, when IDs collide **and** the working directory isn't the intended repo **and** `--repo` was omitted. Real, but read-only — and closed by the discipline above, not by a gate.
+
+### Why a convention, not a hook
+
+A `PreToolUse` hook sees a **number, not intent**. When the command is `gh issue view 92`, the hook cannot tell a *wrong-repo* access from a *legitimate cross-repo* one — and the framework reads and writes `me2resh/apexyard` **by design** (`/report-apexyard-bug`, `/request-apexyard-feature`, upstream framework PRs, reading issues like #809 itself). So:
+
+- A **blocking** hook that allowed only registered private projects would break every one of those legitimate upstream paths.
+- An **advisory** hook that fired on every bare read would be almost all noise — the bare-read pattern is overwhelmingly correct in a single-repo cwd.
+
+That's why this is self-discipline plus the two write-side backstops above, not a new gate. Same shape as the "why not lint Claude's prose output?" reasoning below: the shell can't infer the intended repo any more than it can lint prose. This section encodes the maintainer resolution posted on me2resh/apexyard#809.
+
 ## Why not lint Claude's prose output?
 
 Considered and rejected. Hooks run on tool calls, not on assistant text output. The only way to catch a fabricated `#N` in prose would be a self-discipline check Claude runs at the end of every response — which is exactly the failure mode this rule is trying to prevent. If Claude could reliably remember to check itself, the vocabulary collision wouldn't happen in the first place.
