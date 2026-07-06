@@ -668,10 +668,11 @@ Present this as a numbered checklist. The "default" column marks what `--all` (a
 | 6 | Architecture Vision draft (`architecture/vision.md`) | template-backed | `architecture/vision.md` | — | hand off to `/tech-vision <name>` |
 | 7 | Sequence diagram (`architecture/sequence-<flow>.md`) | template-backed | `architecture/sequence.md` | — | step 6.1 (sequence pass) |
 | 8 | In-repo `AGENTS.md` (written into the **target repo** via a PR) | computed (from the live assessment) | — | **— (default-OFF)** | step 8.5 (PR into the target repo) |
+| 9 | "Governed by ApexYard" README badge (written into the **target repo** via a PR) | computed (badge markdown, two variants) | — | **— (default-OFF)** | step 8.6 (PR into the target repo) |
 
 > The handover assessment + harnessability score are NOT in this catalogue — they are always written (step 5 / 4.5). The catalogue is only the *optional* surface.
 >
-> **Row 8 (`AGENTS.md`) is special**: it is the only catalogue row that writes into the **target repo** (everything else lands in the ops fork). It is **default-OFF** so the "read-only against the target repo" rule (Rule 1) stays true unless the operator consciously opts in. When selected, it is delivered via a branch + PR in step 8.5 — never a direct commit, never via the ops-fork bootstrap-exempt path. See AgDR-0073.
+> **Rows 8 and 9 are special**: they are the only catalogue rows that write into the **target repo** (everything else lands in the ops fork). Both are **default-OFF** so the "read-only against the target repo" rule (Rule 1) stays true unless the operator consciously opts in. When selected, each is delivered via a branch + PR — never a direct commit, never via the ops-fork bootstrap-exempt path. See AgDR-0073 (row 8) and AgDR-0082 (row 9).
 
 Render the prompt like this (pre-tick the default rows; the operator toggles):
 
@@ -687,10 +688,12 @@ always written. Pick which additional docs to generate (default-ticked shown wit
   [ ] 6. Architecture Vision draft     (template-backed → vision)
   [ ] 7. Sequence diagram              (template-backed → sequence)
   [ ] 8. In-repo AGENTS.md             (computed → PR into the TARGET repo)
+  [ ] 9. "Governed by ApexYard" badge  (computed → PR into the TARGET repo)
 
-Note: item 8 writes into the adopted repo itself (via a branch + PR) — the only
-item that does. It is default-OFF; tick it only if you want the repo to be
-self-describing to agents that work in it.
+Note: items 8 and 9 write into the adopted repo itself (via a branch + PR) — the
+only two that do. Both are default-OFF; tick 8 if you want the repo to be
+self-describing to agents, tick 9 if you want a visible badge crediting apexyard
+governance on the README.
 
 Reply with: 'default' (keep ticks as-is), 'all', 'none',
 a comma-list of numbers to GENERATE (e.g. '1,3,4'),
@@ -1360,6 +1363,132 @@ Notes:
 AGENTS_MD_STATUS="PR opened: <url>"   # or "preserved" | "declined" | "not selected" | "skipped (no clone)" | "failed: <reason>"
 ```
 
+### 8.6. Offer the "Governed by ApexYard" badge (only if row 9 was selected — default-OFF)
+
+Every repo apexyard governs is a potential backlink + a visible signal that the repo follows a real SDLC — but nothing in `/handover`'s output today surfaces that fact on the adopted repo itself. This step closes that gap the same way step 8.5 closes the "agent operating manual" gap: an opt-in, PR-delivered write into the **target repo**, never a direct commit. See AgDR-0082.
+
+#### Selection + preconditions
+
+- **Selection condition**: run this step only when row 9 (`"Governed by ApexYard" badge`) was selected in step 5.6. It is **default-OFF** — the operator must consciously tick it (or name it in the comma-list). If not selected, skip silently and note `Badge: not selected` in the summary.
+- **Clone precondition**: a local clone is required to branch + PR. If `$CLONE_STATUS` is `declined` or `failed`, skip with a one-line note: `Badge: skipped (no local clone — re-run with the repo cloned into workspace/<name>/)`. The repo root is `$WORKSPACE_DIR/<name>/` (resolve via `portfolio_workspace_dir`).
+- **Confirm before any target-repo write.** Editing a third-party repo's README is externally visible and easy to regret — ask explicitly, every run, default No:
+
+  ```
+  Add a "Governed by ApexYard" badge to <name>'s README?
+
+  This inserts one badge line near the top of the README, on a new branch,
+  and opens a PR for the repo owner to review. No direct commit.
+
+    [![Governed by ApexYard](https://img.shields.io/badge/governed_by-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
+
+  Add this badge to <name>'s README? [y/N — default N]
+  ```
+
+  Default **N**. On anything other than an explicit yes, skip and note `Badge: declined` in the summary.
+
+#### Pick the variant (governed_by vs built_with)
+
+On a yes, offer the second badge variant for repos that were built with apexyard from the start rather than adopted into its governance after the fact:
+
+```
+Which wording fits <name>?
+
+  [1] Governed by ApexYard   (adopted into apexyard's SDLC — the /handover case)
+  [2] Built with ApexYard    (built with apexyard from the start)
+
+[1/2 — default 1]
+```
+
+Record the pick as `$BADGE_VARIANT` (`governed_by` or `built_with`). The two canonical badge snippets — use these verbatim, never re-derive the URL by hand:
+
+```markdown
+[![Governed by ApexYard](https://img.shields.io/badge/governed_by-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
+```
+
+```markdown
+[![Built with ApexYard](https://img.shields.io/badge/built_with-ApexYard-2F6DF6?style=flat-square)](https://github.com/me2resh/apexyard)
+```
+
+Brand blue `#2F6DF6`, `flat-square` style — keep both fixed; don't invent a third variant or a different color/style on your own initiative.
+
+#### Idempotency check (never double-add)
+
+Before writing anything, scan the target repo's README for either badge already present:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+REPO="$WORKSPACE_DIR/<name>"
+
+README_FILE=$(ls "$REPO"/README.md "$REPO"/README.MD "$REPO"/Readme.md "$REPO"/README 2>/dev/null | head -1)
+
+if [ -z "$README_FILE" ]; then
+  BADGE_STATUS="skipped (no README found in target repo)"
+elif grep -qiE 'img\.shields\.io/badge/(governed_by|built_with)-apexyard' "$README_FILE"; then
+  BADGE_STATUS="skipped (badge already present in README)"
+fi
+```
+
+- **No README found** → skip; note `Badge: skipped (no README found)`. Don't create one just to hold a badge.
+- **Badge already present (either variant)** → skip; note `Badge: skipped (already present)`. Never add a second badge or swap the existing variant — a human who wants to change variants edits the README directly.
+- Otherwise, proceed to insertion.
+
+#### Insert near the top of the README (idempotent, one line)
+
+Insert the chosen badge markdown directly below the first top-level heading (`# Title`) in the README — the conventional badge position. If the README has no top-level heading, insert as the first line of the file.
+
+```bash
+cd "$REPO" || exit 1
+awk -v badge="$BADGE_MARKDOWN" '
+  NR==1 && /^# / { print; print ""; print badge; inserted=1; next }
+  { print }
+  END { if (!inserted) print badge }
+' "$README_FILE" > "$README_FILE.tmp" && mv "$README_FILE.tmp" "$README_FILE"
+```
+
+(`$BADGE_MARKDOWN` is the exact snippet for `$BADGE_VARIANT` chosen above, passed in verbatim — do not reconstruct it inline in the `awk` script.)
+
+#### Write, branch, and open the PR
+
+Mirrors step 8.5's delivery mechanics. If step 8.5 already opened (or is about to open) a PR on `docs/agents-md` in this same run, prefer adding the badge commit onto that same branch/PR instead of opening a second trivial PR — ask once: `Add the badge to the same AGENTS.md PR (branch docs/agents-md), or open a separate PR? [same/separate — default same]`. Otherwise (no AGENTS.md PR this run), open a dedicated branch:
+
+```bash
+cd "$REPO" || exit 1
+DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+git checkout -b docs/apexyard-badge "origin/$DEFAULT_BRANCH" 2>/dev/null || git checkout -b docs/apexyard-badge
+
+git add "$README_FILE"   # specific file, never -A / -.
+git commit -m "docs: add Governed-by-ApexYard badge to README"
+git push -u origin docs/apexyard-badge
+gh pr create --base "$DEFAULT_BRANCH" --head docs/apexyard-badge \
+  --title "docs: add Governed-by-ApexYard badge" \
+  --body-file <(cat <<'BODY'
+## Summary
+- Adds a "Governed by ApexYard" badge near the top of the README, linking back to `https://github.com/me2resh/apexyard` — a visible signal that this repo follows apexyard's SDLC (offered opt-in during `/handover`, not auto-applied).
+
+## Testing
+- Confirm the badge renders correctly and the wording (`Governed by` vs `Built with`) matches how this repo actually uses apexyard.
+
+_Generated by apexyard `/handover` — review & refine or close if you'd rather not carry the badge._
+BODY
+)
+```
+
+Notes:
+
+- **Specific-file staging only** — `git add "$README_FILE"`. Never `git add -A` / `git add .`.
+- **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
+- This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply.
+- On `gh pr create` failure (issues disabled, no push rights, etc.): report the error and the branch name, leave the local branch in place, and continue to step 9. Do not retry.
+
+#### Record for the summary
+
+```bash
+BADGE_STATUS="PR opened: <url> (<variant>)"   # or "preserved (already present)" | "declined" | "not selected" | "skipped (no clone)" | "skipped (no README)" | "failed: <reason>"
+```
+
 ### 9. Offer validation (conditional, default-no)
 
 If the project looks **dormant** by the heuristic — last commit > 90 days ago AND zero open PRs AND no recent issue activity (rough thresholds, the skill can probe `gh repo view` + `gh pr list` + `gh issue list` to compute) — ask:
@@ -1380,6 +1509,7 @@ Handover assessment written: projects/{name}/handover-assessment.md
 Document selection:          {"checklist — generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
 Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped | skipped (deselected)})
 In-repo AGENTS.md:           {PR opened: <url> | preserved (already present) | declined | not selected | skipped (no clone) | failed: <reason>}
+Governed-by-ApexYard badge:  {PR opened: <url> (<variant>) | skipped (already present) | declined | not selected | skipped (no clone) | skipped (no README) | failed: <reason>}
 Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}
 Registry updated:            apexyard.projects.yaml ({added | skipped})
 Next-step tickets filed:     {N filed of M offered | none offered (zero risks) | declined (skipped all) | skipped (registry not appended)}
@@ -1406,7 +1536,7 @@ Filed follow-up tickets:
 
 1. **Read-only against the target repo** — never modify the target repo without explicit permission. (The ops repo IS modified — you append to the registry and create the assessment file — but that's the point.)
 
-   **Exception (explicit, opt-in, PR-delivered): in-repo `AGENTS.md` generation.** Step 8.5 is the single sanctioned write into the target repo. It is **opt-in and default-OFF** (row 8 of the step 5.6 checklist), requires an explicit per-run confirmation, and is delivered via a **branch + PR** the repo owner reviews — never a direct commit to the default branch, and never via the ops-fork bootstrap-exempt write path. With the row left unticked (the default), this rule holds unchanged: `/handover` writes nothing into the target repo. See step 8.5, Rules 21–22, and AgDR-0073.
+   **Exceptions (explicit, opt-in, PR-delivered): in-repo `AGENTS.md` generation and the "Governed by ApexYard" README badge.** Steps 8.5 and 8.6 are the only two sanctioned writes into the target repo. Both are **opt-in and default-OFF** (rows 8 and 9 of the step 5.6 checklist), each requires an explicit per-run confirmation, and each is delivered via a **branch + PR** the repo owner reviews — never a direct commit to the default branch, and never via the ops-fork bootstrap-exempt write path. With both rows left unticked (the default), this rule holds unchanged: `/handover` writes nothing into the target repo. See step 8.5, step 8.6, Rules 21–23, AgDR-0073, and AgDR-0082.
 2. **Honest assessment** — if a build fails, say so. Don't paper over problems.
 3. **Always seed `projects/<name>/`** — even if minimal.
 4. **Auto-append to the registry** (with confirmation) — don't leave the user to copy-paste a snippet. Propose the append, validate the resulting YAML, roll back on failure.
@@ -1428,6 +1558,7 @@ Filed follow-up tickets:
 20. **Per-doc template pick defaults to the conventional template** — for each selected template-backed doc, list the resolved candidates (framework `templates/**` + adopter `custom-templates/**` via `portfolio_resolve_template`) and default to the conventional one (candidate `[1]`, i.e. the path `portfolio_resolve_template` would pick unprompted). Empty input takes the default, keeping `--all` and "default" runs byte-stable. Only list the adopter override candidate when it actually exists. Never reimplement a dedicated skill's artefact — DFD / Feature Inventory / journey / vision hand off to `/dfd` / `/extract-features` / `/journey` / `/tech-vision`.
 21. **`AGENTS.md` is opt-in, PR-delivered, and never overwrites** — the in-repo `AGENTS.md` (step 8.5) is the only artefact written into the target repo, and it is **default-OFF** so Rule 1 holds unless the operator opts in. It is delivered via a branch + PR (never a direct commit to the default branch; never via the ops-fork bootstrap-exempt path). An existing `AGENTS.md` or `CLAUDE.md` is **preserved, never overwritten** — exactly like the architecture stubs (Rule 11). `AGENTS.md` is canonical; a one-line `CLAUDE.md` importing it (`@AGENTS.md`) is offered only when no `CLAUDE.md` exists. The file carries a "generated by `/handover` on `<date>` — review & refine" note and stays focused on stable info (commands, layout, conventions). Refresh is manual (delete + re-run). See AgDR-0073.
 22. **`AGENTS.md` and `handover-assessment.md` don't duplicate — they split by reader** — `handover-assessment.md` (ops fork) is the **operator's** full analysis: risks, harnessability verdict, integration plan, next-step tickets. `AGENTS.md` (in the target repo) is the **agent's** concise operating manual: stable commands, layout, conventions, and the up-front gotchas an agent needs to start working. The volatile risk/integration analysis stays in the assessment; it is not copied into `AGENTS.md`. For low-harnessability repos, `AGENTS.md`'s Gotchas section surfaces what's fragile/missing (no strict types, no lint baseline, no coverage signal) — the in-repo echo of the assessment's LOW warning.
+23. **The "Governed by ApexYard" badge (step 8.6) is opt-in, PR-delivered, idempotent, and never a default** — row 9 of the step 5.6 checklist is **default-OFF** in every mode (checklist default, `--all`, and interactive `all`); it is only generated when explicitly ticked or comma-listed. Every run confirms with the operator by name (`Add a "Governed by ApexYard" badge to <name>'s README?`) before touching the target repo — there is no silent or bulk-implied consent for an externally-visible README edit. The badge is delivered via a branch + PR exactly like `AGENTS.md` (never a direct commit). It is **idempotent**: if either badge variant (`governed_by` or `built_with`) is already present in the README, the step skips and reports `already present` rather than adding a duplicate or swapping variants. The badge markdown itself (URL, color `#2F6DF6`, `flat-square` style) is fixed and quoted verbatim in step 8.6 — don't re-derive it. See AgDR-0082.
 
 ## When to use this
 
