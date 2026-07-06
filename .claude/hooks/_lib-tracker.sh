@@ -31,6 +31,15 @@
 #                                      adapters built in, `custom` review_command template, `none`
 #                                      no-op (returns 3, echoes body). Exit 0 = submitted; non-zero
 #                                      = CLI errored; 3 = shape-only (kind=none, nothing to call).
+#   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]  (#759)
+#                                      merges a PR/MR via the git host. strategy is one of
+#                                      squash|merge|rebase (default squash, normalised — never
+#                                      eval'd raw); delete_branch is true|false (default true). gh +
+#                                      glab adapters built in, `custom` merge_command template,
+#                                      `none` no-op (returns 3). Exit 0 = merged, emits normalised
+#                                      JSON {"sha":...} (the merge commit, best-effort — empty for
+#                                      `custom`); non-zero = CLI errored / blocked; 3 = shape-only
+#                                      (kind=none, nothing to call).
 #
 # Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
 # tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
@@ -889,6 +898,203 @@ tracker_review_submit() {
     custom) _tracker_review_custom "$repo" "$pr" "$verdict" "$body_file" ;;
     *)      _tracker_review_gh     "$repo" "$pr" "$verdict" "$body_file" ;;  # see NOTE above
   esac
+}
+
+# ==============================================================================
+# Merge (tracker_pr_merge) — the #711/#759 merge-command abstraction.
+#
+# `/approve-merge`'s final step used to shell out to a literal `gh pr merge <pr>
+# --squash --delete-branch`. On a GitLab-hosted project there is no `gh`, so the
+# CEO-approval marker could be written but the merge itself had to happen
+# outside the skill (and outside the mechanical gates it's meant to run
+# through). tracker_pr_merge closes that gap the same way #758's
+# tracker_review_submit closed it for review *submission* — a kind-dispatched
+# function (gh/glab/custom/none), never a re-derived inline command.
+#
+# ORTHOGONAL to the merge-*gate* hooks (block-unreviewed-merge.sh,
+# block-merge-on-red-ci.sh, require-design-review-for-ui.sh,
+# require-architecture-review.sh). Those already fire on both the `gh pr merge`
+# and `glab mr merge`/`glab api .../merge` shapes (#764/#767/#793) — this
+# function is what /approve-merge calls AFTER the gates have already had their
+# chance to block the command. Nothing here weakens or bypasses them; the
+# actual `gh`/`glab` command this function shells out to is the exact same
+# command text the gates already recognise.
+#
+# strategy is one of squash|merge|rebase — normalised BEFORE it ever reaches an
+# eval'd string (unlike the review body, there is no free-text value here at
+# all: strategy and delete_branch are both closed enums, so a hostile input is
+# neutralised by the normalisation step itself, not by env-indirection).
+# ------------------------------------------------------------------------------
+
+# Internal: normalise an arbitrary strategy string to squash|merge|rebase,
+# defaulting to squash (today's /approve-merge default) for anything else.
+_tracker_merge_normalise_strategy() {
+  case "${1:-}" in
+    squash|merge|rebase) echo "$1" ;;
+    *) echo "squash" ;;
+  esac
+}
+
+# Internal: normalise an arbitrary delete-branch flag to true|false, defaulting
+# to true (today's /approve-merge default — it always passes --delete-branch).
+_tracker_merge_normalise_delete_branch() {
+  case "${1:-true}" in
+    false|False|FALSE|0|no|No) echo "false" ;;
+    *) echo "true" ;;
+  esac
+}
+
+# Internal adapter: gh → `gh pr merge`. Flags built as an array (never an
+# eval'd string), so the PR/repo/strategy values can't be mistaken for shell
+# syntax even though they're already-validated enums/numerics.
+_tracker_merge_gh() {
+  local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
+  local -a args
+  args=(pr merge "$pr" --repo "$repo")
+  case "$strategy" in
+    squash) args+=(--squash) ;;
+    merge)  args+=(--merge)  ;;
+    rebase) args+=(--rebase) ;;
+  esac
+  [ "$delete_branch" = "true" ] && args+=(--delete-branch)
+  gh "${args[@]}" 2>/dev/null
+}
+
+# Internal adapter: glab (GitLab) → `glab mr merge`. glab's default merge (no
+# --squash/--rebase flag) IS a plain merge commit, so strategy=merge passes no
+# extra flag — the nearest glab equivalent of gh's --merge. --remove-source-
+# branch is glab's --delete-branch analog. --yes skips the interactive prompt
+# (matches the --yes convention already used by _tracker_create_glab /
+# _tracker_label_ensure_glab).
+_tracker_merge_glab() {
+  local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
+  local -a args
+  args=(mr merge "$pr" -R "$repo")
+  case "$strategy" in
+    squash) args+=(--squash) ;;
+    rebase) args+=(--rebase) ;;
+    merge)  : ;;  # glab's default merge action — no flag needed
+  esac
+  [ "$delete_branch" = "true" ] && args+=(--remove-source-branch)
+  args+=(--yes)
+  glab "${args[@]}" 2>/dev/null
+}
+
+# Internal: resolve the merge_command template for the `custom` kind — the
+# per-project override (registry) wins over a global .tracker.merge_command.
+# Empty when neither is set (custom kind without a template can't merge).
+_tracker_merge_template() {
+  local repo="${1:-}"
+  if [ -n "$repo" ]; then
+    local pv
+    if pv=$(_tracker_project_value "$repo" merge_command) && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+  fi
+  _tracker_load_config_lib
+  local tpl
+  tpl=$(config_get_or '.tracker.merge_command' '' 2>/dev/null)
+  if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
+    echo "$tpl"
+  fi
+}
+
+# Internal adapter: custom → operator-supplied merge_command template.
+#
+# Injection model: unlike _tracker_review_custom / _tracker_create_custom,
+# there is no arbitrary/untrusted free-text value in a merge call at all — pr
+# is numeric-guarded by the public function below, and strategy/delete_branch
+# are both normalised to a closed enum BEFORE this function ever sees them. So
+# all four placeholders — {owner_repo} (registry slug), {pr} (numeric),
+# {strategy} (squash|merge|rebase), {delete_branch} (true|false) — are safe to
+# substitute directly into the eval'd template; none of them can carry shell
+# metacharacters by the time they arrive here.
+_tracker_merge_custom() {
+  local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
+  local tpl
+  tpl=$(_tracker_merge_template "$repo")
+  if [ -z "$tpl" ]; then
+    return 1
+  fi
+  local cmd="$tpl"
+  cmd="${cmd//\{owner_repo\}/$repo}"
+  cmd="${cmd//\{pr\}/$pr}"
+  cmd="${cmd//\{strategy\}/$strategy}"
+  cmd="${cmd//\{delete_branch\}/$delete_branch}"
+  TRACKER_REPO="$repo" TRACKER_PR="$pr" TRACKER_STRATEGY="$strategy" \
+    TRACKER_DELETE_BRANCH="$delete_branch" \
+    eval "$cmd" 2>/dev/null
+}
+
+# Internal: best-effort merge-commit SHA lookup after a successful merge.
+# gh:   `gh pr view --json mergeCommit` → .mergeCommit.oid
+# glab: `glab mr view --output json`    → .merge_commit_sha (fallback
+#       .squash_commit_sha for a squash merge on older glab)
+# custom: no generic way to know the custom CLI's output shape — emits empty.
+# Any failure (CLI missing, network, unparseable) degrades to an empty sha;
+# the merge itself already succeeded by the time this runs, so a SHA-lookup
+# failure must never be reported as a merge failure.
+_tracker_merge_resolve_sha() {
+  local kind="$1" repo="$2" pr="$3" sha=""
+  case "$kind" in
+    gh)
+      sha=$(gh pr view "$pr" --repo "$repo" --json mergeCommit --jq '.mergeCommit.oid // empty' 2>/dev/null)
+      ;;
+    glab)
+      sha=$(glab mr view "$pr" -R "$repo" --output json 2>/dev/null | jq -r '.merge_commit_sha // .squash_commit_sha // empty' 2>/dev/null)
+      ;;
+    *)
+      sha=""
+      ;;
+  esac
+  jq -nc --arg sha "${sha:-}" '{sha:$sha}' 2>/dev/null
+}
+
+# Public: tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]
+#
+# NOTE on the tracker.kind axis: same caveat as tracker_review_submit — kind
+# describes the ISSUE tracker, but a merge targets the PR/MR HOST. For gh+github
+# and glab+gitlab they coincide (this ticket's covered pair). A jira-issues+
+# gitlab-code adopter needs `tracker.kind=custom` with a merge_command.
+tracker_pr_merge() {
+  local repo="$1" pr="$2" strategy delete_branch
+  if [ -z "$repo" ] || [ -z "$pr" ]; then
+    return 1
+  fi
+  # {pr} is documented numeric and is substituted into the custom adapter's
+  # eval'd template — reject a non-numeric value as defense-in-depth (gh/glab
+  # require numeric PR/MR ids anyway; matches tracker_review_submit's guard).
+  case "$pr" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  strategy=$(_tracker_merge_normalise_strategy "${3:-}")
+  delete_branch=$(_tracker_merge_normalise_delete_branch "${4:-}")
+
+  local kind
+  kind=$(tracker_kind "$repo")
+  case "$kind" in
+    none)
+      # Shape-only mode: no git-host CLI to call. Nothing to echo (unlike
+      # tracker_create/tracker_review_submit there's no body/artifact to hand
+      # back) — just the documented shape-only exit code.
+      return 3
+      ;;
+  esac
+
+  local rc
+  case "$kind" in
+    gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
+    glab)   _tracker_merge_glab   "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
+    custom) _tracker_merge_custom "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
+    *)      _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;  # see NOTE above
+  esac
+  if [ $rc -ne 0 ]; then
+    return $rc
+  fi
+
+  _tracker_merge_resolve_sha "$kind" "$repo" "$pr"
+  return 0
 }
 
 # ------------------------------------------------------------------------------
