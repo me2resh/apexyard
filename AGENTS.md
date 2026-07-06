@@ -76,7 +76,7 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 
 ### Skills, without the slash-command runner
 
-`.claude/skills/<name>/SKILL.md` are markdown prompts — 62 of them, covering everything from filing a ticket (`/feature`, `/bug`, `/task`) to running an audit (`/launch-check`, `/threat-model`) to cutting a release. Claude Code turns these into typed slash commands; pi has no slash-command mechanism, so invoke one by `Read`-ing its `SKILL.md` and following the process it describes step by step (e.g. read `.claude/skills/feature/SKILL.md`, then do what it says). The skill's content is the same either way — only the invocation mechanism differs.
+`.claude/skills/<name>/SKILL.md` are markdown prompts — 64 of them, covering everything from filing a ticket (`/feature`, `/bug`, `/task`) to running an audit (`/launch-check`, `/threat-model`) to cutting a release. Claude Code turns these into typed slash commands; pi has no slash-command mechanism, so invoke one by `Read`-ing its `SKILL.md` and following the process it describes step by step (e.g. read `.claude/skills/feature/SKILL.md`, then do what it says). The skill's content is the same either way — only the invocation mechanism differs.
 
 ### What's NOT bridged yet
 
@@ -99,9 +99,9 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 ### Project structure
 
 - `.claude/` — framework hooks, agents, rules, skills, settings.json
-  - `.claude/hooks/` — 31 shell scripts (PreToolUse / PostToolUse / SessionStart)
-  - `.claude/skills/` — 53 slash commands (one dir per skill, each with `SKILL.md`)
-  - `.claude/agents/` — 23 sub-agents: 5 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Tariq PR-manager, Idris ticket-manager) + 18 dept-aligned agents across engineering / product / design / security / data
+  - `.claude/hooks/` — 42 shell scripts (PreToolUse / PostToolUse / SessionStart)
+  - `.claude/skills/` — 64 slash commands (one dir per skill, each with `SKILL.md`)
+  - `.claude/agents/` — 25 sub-agents: 5 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor, Tariq PR-manager, Idris ticket-manager) + 20 dept-aligned agents across engineering / product / design / security / data
   - `.claude/rules/` — 11 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
   - `.claude/settings.json` — hook wiring
 - `roles/` — 19 role definitions across Engineering, Product, Design, Security, Data
@@ -167,7 +167,7 @@ If you're an AI agent landing in this repo for the first time:
 
 1. If you're operating an ops fork on an adopter's behalf (not Claude Code), read "Operator governance bridge" above first. Otherwise, read `CLAUDE.md` (framework spec — even if you're not Claude Code, the rules transfer)
 2. Skim `docs/multi-project.md` (full setup guide, directory layout, daily workflow)
-3. Browse `.claude/skills/` for the 53 slash commands (each `SKILL.md` is one capability)
+3. Browse `.claude/skills/` for the 64 slash commands (each `SKILL.md` is one capability)
 4. Browse `roles/` to understand the role-activation model
 5. Browse `templates/` for the standard document shapes
 6. Check `.claude/rules/` for the mechanical rules (ticket vocabulary, PR workflow, plan mode, parallel work, leak protection, etc.)
