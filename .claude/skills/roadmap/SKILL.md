@@ -144,6 +144,24 @@ extended by the #709 creator sweep) so the issues land in **this project's**
 tracker — GitHub, GitLab, or a `custom` CLI. For a GitHub adopter this runs
 `gh issue create` exactly as before.
 
+### Resolve the target repo
+
+`tracker_create`'s first argument is a concrete `owner/repo` slug — it is **not**
+resolved for you. Determine it **once**, before the loop, the same way the other
+creator skills (`/feature`, `/bug`, `/task`) do:
+
+Read `.claude/session/current-ticket` to determine which repo we're working in.
+If no active ticket, check `apexyard.projects.yaml` for managed projects. If only
+one project, use it. If multiple, ask:
+
+```
+Which project should the roadmap issues be filed in?
+```
+
+If no projects are registered, ask for the repo in `owner/repo` format. Pass the
+resolved value (e.g. `me2resh/apexyard`) as the first `tracker_create` argument —
+**never** the literal `{owner/repo}` placeholder.
+
 ```bash
 # Resolve + source the tracker lib once (before the loop) by walking up from cwd.
 tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
@@ -152,21 +170,31 @@ tracker_lib="$(r="$PWD"; while [ -n "$r" ] && [ "$r" != / ]; do \
 # shellcheck source=/dev/null
 . "$tracker_lib"
 
+# owner_repo is the value resolved above (e.g. me2resh/apexyard), NOT a literal.
+owner_repo="{resolved owner/repo}"
+
 # For each item in Now and Next without a GH link in Notes:
 body_file="$(mktemp)"
 printf 'Tracking issue for roadmap item %s\n' "{RM-NNN}" > "$body_file"
-result="$(tracker_create "{owner/repo}" "[Roadmap] {item}" "$body_file" "roadmap,{priority}")"
+result="$(tracker_create "$owner_repo" "[Roadmap] {item}" "$body_file" "roadmap,{priority}")"
 rc=$?
 rm -f "$body_file"
-if [ "$rc" -eq 0 ] && [ -n "$result" ]; then
+if [ "$rc" -eq 3 ]; then
+  # tracker.kind=none (shape-only): no tracker to create in. tracker_create
+  # printed the rendered ticket body to stdout — surface it for manual /
+  # external filing and skip the Notes back-write.
+  echo "Tracker is 'none' (shape-only) — nothing was created in a tracker." >&2
+  printf '%s\n' "$result"
+elif [ "$rc" -eq 0 ] && [ -n "$result" ]; then
   ref="$(printf '%s' "$result" | jq -r '.ref')"
   # write ${ref} back into the item's Notes column
+else
+  echo "Issue creation failed for '{item}' — check the tracker CLI / auth." >&2
 fi
 ```
 
-Then write the issue reference (`${ref}`) back into the Notes column. (When
-`tracker.kind=none`, `tracker_create` exits 3 and prints the body for external
-filing — skip the Notes back-write in that case.)
+Then write the issue reference (`${ref}`) back into the Notes column (only on the
+`rc -eq 0` path above — the `kind=none` and failure paths leave Notes untouched).
 
 ## Output format (show)
 
