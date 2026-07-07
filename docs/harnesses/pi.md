@@ -2,7 +2,7 @@
 
 apexyard's governance was built for Claude Code first: `CLAUDE.md` is auto-loaded at session start, `.claude/hooks/*.sh` mechanically enforce the merge gate / ticket-first / secrets-scan rules, and `.claude/skills/*.md` become typed slash commands. **pi** (pi.dev — Earendil's minimal, unopinionated agent CLI) is a deliberately different shape: no `CLAUDE.md`-style auto-load, no hook plumbing, no MCP, no slash-command runner, no plan mode, no background bash, no permission popups. Pi pushes that governance layer to user-installed packages instead of building it in. **apexyard is exactly that layer for a pi user.**
 
-This doc is the honest today-vs-not-yet breakdown for running apexyard-governed work under pi. It's the first slice of multi-harness support — see me2resh/apexyard#805 (this bridge) and the sibling me2resh/apexyard#804 (a spike on whether mechanical enforcement can be ported).
+This doc is the honest today-vs-not-yet breakdown for running apexyard-governed work under pi — updated as of me2resh/apexyard#815, which closes the mechanical-enforcement gap this doc used to list under "not yet". See me2resh/apexyard#805 (the `AGENTS.md` advisory bridge), me2resh/apexyard#804 (the spike that proved the enforcement pattern viable), and me2resh/apexyard#815 (the shipped adapter).
 
 ## What works today
 
@@ -14,28 +14,31 @@ This doc is the honest today-vs-not-yet breakdown for running apexyard-governed 
 | Skills (ticket filing, audits, releases, …) | `.claude/skills/<name>/SKILL.md` are plain markdown processes — invoke by reading the file and following it step by step; there's no slash-command mechanism to trigger them automatically |
 | Operating-posture priming | `SYSTEM.md` — a short custom system prompt pi reads alongside `AGENTS.md`, pointing back at it rather than duplicating it |
 | AgDR / templates / workflows docs | All plain markdown under `docs/agdr/`, `templates/`, `workflows/` — readable exactly as they are for any harness |
+| **Mechanical gate enforcement** — the two-marker merge gate, red-CI merge blocking, design/architecture review gates, secrets scanning, ticket-first / migration-ticket-first edit blocking | `harness-adapters/pi/` — a single dispatcher extension registers on pi's `tool_call` event and shells out to the **same, unmodified** `.claude/hooks/*.sh` scripts Claude Code uses, mapping each hook's exit code to pi's `{block, reason}` contract. Zero logic duplication — bash stays the one source of truth. See `harness-adapters/pi/README.md` and `docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md`. |
 
 ## What does NOT work yet
 
 | Gap | Why | Tracked as |
 |-----|-----|-----------|
-| **Mechanical gate enforcement** — the two-marker merge gate, ticket-first edit blocking, secrets scanning, AgDR-required checks, red-CI merge blocking | These are shell hooks wired to Claude Code's `PreToolUse`/`PostToolUse` events via `.claude/settings.json`. Pi has no equivalent hook-registration surface documented yet, so nothing shells out to `.claude/hooks/*.sh` on pi's behalf | me2resh/apexyard#804 (spike: can a thin pi extension shell out to the existing bash hooks?) |
+| **A live, model-driven pi agent turn actually triggering the gate adapter's `tool_call` handler** | The gate adapter's transport (stdin reconstruction, hook exec, exit-code mapping) is proven live against the real bash hooks and real GitHub state; whether pi's *internal* event dispatch calls handlers with matching event shapes during a real model turn needs pi model credentials, which weren't available when #815 was built | me2resh/apexyard#815 § "Known gaps" — run the documented live-verification step once credentials are available |
 | **MCP-backed code/docs search** (`apexyard-search`) | Pi's design omits MCP entirely | No dedicated ticket — falls back to plain `grep`/`Read`, which is slower but functionally equivalent |
 | **Role-trigger advisory banners** | Claude Code's `detect-role-trigger.sh` posts a `PreToolUse` reminder banner when a diff matches a role trigger (e.g. touching `**/auth/**`). Pi has no hook to run that check | Self-check `.claude/rules/role-triggers.md` manually |
 | **Slash-command UX** for skills | Pi has no command-registration mechanism; skills are invoked by reading their `SKILL.md` and following the process by hand | Not tracked — an ergonomics gap, not a governance one |
 | **Plan mode, background bash, permission popups** | Deliberately absent from pi's design, not apexyard-specific gaps | N/A — approximate with an explicit "here's my plan, confirming before I execute" pause where `.claude/rules/plan-mode.md` would otherwise apply |
+| **Claude Code's session-pin protection against wrong-ops-root resolution** (apexyard#381) | pi has no `CLAUDE_CODE_SESSION_ID` / SessionStart-hook equivalent to write the pin | Use the `APEXYARD_OPS_ROOT` env var override documented in `harness-adapters/pi/README.md` when running pi outside the ops fork's own working tree |
 
 ## The honest summary
 
-Today, a pi user gets apexyard's rules **as instructions to follow**, not **as gates that stop them**. That's a real step — it's the difference between a pi session that has no idea apexyard's conventions exist and one that opens with the same Chief-of-Staff framing, SDLC, and ticket discipline a Claude Code session gets from `CLAUDE.md`. It is not parity with Claude Code's mechanical enforcement, and this doc — and `AGENTS.md`'s own "What's NOT bridged yet" section — say so explicitly rather than imply otherwise.
+A pi user now gets both halves of apexyard's governance: the **instructions** (via `AGENTS.md`/`SYSTEM.md`, unchanged since #805) and, as of #815, the same **mechanical gates** Claude Code enforces — an ungated merge attempt is refused by the real `block-unreviewed-merge.sh` hook running underneath pi, not just discouraged in prose. The one remaining asterisk is that the final "does pi's live internal dispatch really call the handler this way" hop is proven by construction (a faithful mock matching pi's real, typechecked `.d.ts`) rather than observed inside a live, credentialed pi session — see `harness-adapters/pi/README.md` for exactly what would close that gap.
 
 ## Install shape
 
 1. Fork [`me2resh/apexyard`](https://github.com/me2resh/apexyard) (or your existing ops fork) as usual — no pi-specific setup step.
 2. `cd` into the fork.
 3. Run `pi`. It auto-loads `AGENTS.md` (governance + orientation) and `SYSTEM.md` (operating posture) from the current directory.
-4. Work as normal — start tickets, open PRs, run skills by reading their `SKILL.md` — with the understanding from "What does NOT work yet" above that nothing here blocks you the way Claude Code's hooks would.
+4. Install the gate adapter (`cd harness-adapters/pi && npm install`) and load it — `pi --extension harness-adapters/pi/src/gate-dispatcher.ts` — for mechanical enforcement; see `harness-adapters/pi/README.md` for project-local auto-discovery instead.
+5. Work as normal — start tickets, open PRs, run skills by reading their `SKILL.md`.
 
 ## Roadmap
 
-The natural next step is the spike already filed at me2resh/apexyard#804: prove whether a thin pi extension can fire on pi's tool-call event and shell out to the existing bash gate hooks (e.g. `block-unreviewed-merge.sh`), giving apexyard real mechanical enforcement under pi with a single bash source of truth and a thin per-harness adapter — rather than a from-scratch TypeScript reimplementation of every gate. If that pattern holds, this doc's "not yet" column becomes the next feature ticket; if it doesn't, the spike's disposition memo will say why and name the alternative.
+me2resh/apexyard#804 (spike) proved the adapter-over-bash pattern viable; me2resh/apexyard#815 shipped the dispatcher covering the merge gate, red-CI block, design/architecture review, secrets scanning, and ticket-first gates. The next steps, not yet scoped as tickets: a live-credentialed end-to-end verification of the one remaining gap above, and porting role-trigger advisory banners and/or a slash-command-equivalent skill runner if pi's extension API grows the right hooks for either.

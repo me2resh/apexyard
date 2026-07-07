@@ -14,7 +14,7 @@ Why two audiences in one file: `CLAUDE.md` is the framework-level instruction se
 
 ## Operator governance bridge (pi and other non-Claude-Code harnesses)
 
-> **Advisory only — read this before anything else.** Everything below is delivered as *instructions*, not mechanical enforcement. Claude Code's governance additionally runs as shell hooks (`.claude/hooks/*.sh`, wired via `.claude/settings.json`) that mechanically block bad commands — the two-marker merge gate, the ticket-first edit block, the secrets scanner, the AgDR-required check. Those hooks fire on Claude Code's `PreToolUse` / `PostToolUse` events, which pi (and most other harnesses) doesn't expose. **Nothing in this file will stop a tool call for you.** Follow these rules because they're the governance model apexyard is built on, not because a hook will catch you if you don't. See `docs/harnesses/pi.md` for exactly what's mechanically enforced vs. advisory-only, and the sibling spike (me2resh/apexyard#804) exploring whether a thin pi extension could close that gap later.
+> **Advisory by default — mechanical enforcement is opt-in for pi.** Everything below is delivered as *instructions*; Claude Code's governance additionally runs as shell hooks (`.claude/hooks/*.sh`, wired via `.claude/settings.json`) that mechanically block bad commands — the two-marker merge gate, the ticket-first edit block, the secrets scanner, the AgDR-required check. Those hooks fire on Claude Code's `PreToolUse` / `PostToolUse` events. pi doesn't expose that event surface directly, but as of me2resh/apexyard#815 a dispatcher extension (`harness-adapters/pi/`) shells out to the SAME unmodified hooks via pi's own `tool_call` event — install it (`harness-adapters/pi/README.md`) and pi gets real mechanical enforcement, not just prose. **Without that extension installed, nothing in this file will stop a tool call for you** — follow these rules because they're the governance model apexyard is built on, not because a hook will catch you if you don't. See `docs/harnesses/pi.md` for the current mechanically-enforced-vs-advisory-only breakdown.
 
 ### You are the Chief of Staff
 
@@ -80,9 +80,9 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 
 ### What's NOT bridged yet
 
-Being upfront about the gap: this section gives you the rules as *instructions*. It does **not** give you:
+Being upfront about the gap: this section gives you the rules as *instructions* by default. As of me2resh/apexyard#815, mechanical enforcement is available too — but only if you install it (it isn't auto-loaded the way `AGENTS.md` itself is):
 
-- **Mechanical gate enforcement** — the two-marker merge gate, ticket-first edit blocking, secrets scanning, AgDR-required checks, red-CI merge blocking. These are Claude-Code-specific shell hooks; nothing currently shells out to them for pi. Tracked as a separate spike: me2resh/apexyard#804.
+- **Mechanical gate enforcement** — the two-marker merge gate, ticket-first edit blocking, secrets scanning, AgDR-required checks, red-CI merge blocking. `harness-adapters/pi/` shells out to the SAME Claude-Code-specific bash hooks via a pi `tool_call` extension — install it (see `harness-adapters/pi/README.md`) to get real blocking under pi. Until installed, none of it fires. See me2resh/apexyard#804 (the spike that proved this viable) and #815 (the shipped adapter).
 - **MCP-backed code/docs search** (`apexyard-search`) — pi's design omits MCP entirely; fall back to plain `grep`/`Read`.
 - **Role-trigger advisory banners** — Claude Code gets a `PreToolUse` banner nudging "this diff touches `**/auth/**`, consider the Security Auditor"; pi gets no such nudge. Self-check the role-triggers table manually.
 
