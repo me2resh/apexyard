@@ -119,11 +119,40 @@ function editOrWritePathInput(event: ToolCallEvent): Record<string, unknown> | u
 }
 
 /**
- * The gate table. Each row corresponds 1:1 to a `PreToolUse` hook already
- * wired in `.claude/settings.json` for Claude Code — this is the
- * "one config, two harnesses" shape the spike report recommended, not a
- * hand-copied re-derivation. Extend this array to cover additional gates;
- * do not write a new dispatcher-shaped file per hook.
+ * The gate table. Every row here corresponds 1:1 to a `PreToolUse` hook
+ * that is ALSO wired in `.claude/settings.json` for Claude Code — this is
+ * the "one config, two harnesses" shape the spike report recommended, not
+ * a hand-copied re-derivation. Extend this array to cover additional
+ * gates; do not write a new dispatcher-shaped file per hook.
+ *
+ * THIS IS A CURATED SUBSET, NOT THE FULL LIST. `.claude/settings.json`
+ * wires more Bash-matcher PreToolUse hooks than are bridged here. Every
+ * hook below was checked against its own `jq -r '.tool_input.command'`
+ * parsing (all of them read the identical stdin shape as
+ * `block-unreviewed-merge.sh`, so no new adapter logic was needed) and
+ * included because it's a real, blocking (exit-2) governance gate. Known
+ * NOT-yet-bridged blocking Bash gates, and why:
+ *
+ *   - `validate-branch-name.sh`, `validate-commit-format.sh`,
+ *     `verify-commit-refs.sh` — fire on `git branch` / `git commit`
+ *     commands. Same bash-command shape as everything below and would be
+ *     trivial to add; left out of this pass to keep the initial bridge
+ *     scoped to the gates #815's acceptance criteria named explicitly
+ *     (merge gate, red-CI, design/architecture review, ticket-first,
+ *     secrets). Follow-up work, not a technical blocker.
+ *   - `validate-pr-create.sh`, `require-agdr-for-arch-pr.sh`,
+ *     `require-skill-for-issue-create.sh` — fire on `gh pr create` /
+ *     `gh issue create` commands. Same reasoning: trivially the same
+ *     shape, deferred rather than out of scope.
+ *   - `block-onboarding-in-git.sh` — fires on `git add` of
+ *     `onboarding.yaml`; same shape, deferred for the same reason.
+ *
+ * `block-private-refs-in-public-repos.sh` (leak protection) IS bridged
+ * below, ahead of the others in this deferred list, because it's
+ * security-relevant in exactly the way this dispatcher exists to close:
+ * without it, a pi session could leak a registered private project's
+ * name/repo/workspace path into a public framework issue with nothing
+ * underneath to stop it.
  */
 export const DEFAULT_GATES: GateDefinition[] = [
   {
@@ -169,6 +198,12 @@ export const DEFAULT_GATES: GateDefinition[] = [
     buildToolInput: bashCommandInput,
   },
   {
+    name: "block-private-refs-in-public-repos",
+    hookRelativePath: ".claude/hooks/block-private-refs-in-public-repos.sh",
+    toolNames: ["bash"],
+    buildToolInput: bashCommandInput,
+  },
+  {
     name: "require-active-ticket",
     hookRelativePath: ".claude/hooks/require-active-ticket.sh",
     // This hook also fires on Bash when the command writes a file via
@@ -194,38 +229,94 @@ export interface DispatcherOptions {
 }
 
 /**
+ * Ceiling for the hook subprocess's stdout+stderr buffers. Normal gate
+ * hook output (a block reason, a jq error) is a few KB at most; 10 MB is
+ * generous headroom so no legitimate hook run ever trips this, while
+ * still bounding memory if something goes very wrong.
+ */
+const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
+
+/**
  * Runs a single gate hook with the reconstructed Claude-Code-shaped stdin
  * payload, mapping its exit code to a pi ToolCallEventResult per the
  * proven-in-spike contract: exit 2 = block, everything else = allow.
+ *
+ * FAIL CLOSED, NOT OPEN (security — Rex finding on #817).
+ * ---------------------------------------------------------
+ * `execFileSync` throwing does not always mean "the hook exited nonzero".
+ * It can also mean the hook never produced a numeric exit status at all —
+ * `ENOBUFS` when a hook emits more than `maxBuffer`, a spawn failure
+ * (missing `bash`, permission denied), a signal kill, or any other
+ * execution-layer error. The earlier version of this function treated
+ * every one of those cases the same as "exit 0" (allow), which is a
+ * fail-OPEN on a security gate: a hook that couldn't even run its check
+ * silently permitted the tool call it was supposed to be gating.
+ *
+ * The corrected semantics:
+ *   - exit code 2                  → BLOCK (the hook's own verdict)
+ *   - exit code 0 (or any other
+ *     *numeric* non-2 exit code)   → ALLOW (matches Claude Code's own
+ *                                     PreToolUse semantics: only exit 2
+ *                                     is a hard stop)
+ *   - NO numeric exit status at
+ *     all (spawn failure, ENOBUFS,
+ *     signal kill, etc.)           → BLOCK, fail closed, with a reason
+ *                                     naming the hook and the underlying
+ *                                     error, so the operator can see
+ *                                     WHY a gate refused to evaluate
+ *                                     rather than silently letting the
+ *                                     tool call through.
  */
-function runGateHook(opsRoot: string, gate: GateDefinition, toolInput: Record<string, unknown>, claudeToolName: string): ToolCallEventResult | undefined {
+export function runGateHook(
+  opsRoot: string,
+  gate: GateDefinition,
+  toolInput: Record<string, unknown>,
+  claudeToolName: string,
+  maxBufferBytes: number = MAX_HOOK_OUTPUT_BYTES,
+): ToolCallEventResult | undefined {
   const hookPath = path.join(opsRoot, gate.hookRelativePath);
   if (!existsSync(hookPath)) return undefined; // gate not present in this fork — no-op, not a failure
 
   const stdinPayload = JSON.stringify({ tool_name: claudeToolName, tool_input: toolInput });
 
-  let stderr = "";
-  let exitCode = 0;
   try {
     execFileSync("bash", [hookPath], {
       input: stdinPayload,
       cwd: opsRoot,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: maxBufferBytes,
     });
+    // No throw => exit code 0 => allow.
+    return undefined;
   } catch (err) {
-    const execErr = err as { status?: number; stderr?: Buffer | string; message?: string };
-    exitCode = typeof execErr.status === "number" ? execErr.status : 1;
-    stderr = execErr.stderr ? execErr.stderr.toString() : String(execErr.message ?? err);
-  }
+    const execErr = err as { status?: number | null; stderr?: Buffer | string; message?: string };
+    const stderr = execErr.stderr ? execErr.stderr.toString() : String(execErr.message ?? err);
 
-  if (exitCode === 2) {
+    if (execErr.status === 2) {
+      return {
+        block: true,
+        reason: stderr.trim() || `Blocked by apexyard governance gate (${gate.name})`,
+      };
+    }
+    if (typeof execErr.status === "number") {
+      // A numeric, non-2 exit code (e.g. 1 from an unrelated bash-level
+      // error inside the hook script itself). Claude Code's own
+      // PreToolUse contract only treats exit 2 as blocking; mirror that
+      // here rather than fail closed on every nonzero exit, which would
+      // make an unrelated warning inside a hook block unrelated tool
+      // calls.
+      return undefined;
+    }
+    // No numeric exit status at all — execution-layer failure (spawn
+    // error, ENOBUFS from output exceeding maxBuffer, killed by signal,
+    // etc.). Fail CLOSED: a gate that could not run its check must deny,
+    // not permit.
     return {
       block: true,
-      reason: stderr.trim() || `Blocked by apexyard governance gate (${gate.name})`,
+      reason: `apexyard governance gate "${gate.name}" could not be evaluated (${hookPath}) — failing closed. Underlying error: ${stderr.trim() || "unknown execution failure"}`,
     };
   }
-  return undefined;
 }
 
 /**

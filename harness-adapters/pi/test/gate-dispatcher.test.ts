@@ -34,7 +34,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { registerGateDispatcher, DEFAULT_GATES, type GateDefinition } from "../src/gate-dispatcher.ts";
+import { registerGateDispatcher, runGateHook, DEFAULT_GATES, type GateDefinition } from "../src/gate-dispatcher.ts";
 
 // ---------------------------------------------------------------------
 // Minimal structural mock of pi's ExtensionAPI. Typed loosely (no import
@@ -145,6 +145,51 @@ test("a custom gate hook that exits 0 allows the call", async () => {
 
   const result = await toolCall({ type: "tool_call", toolCallId: "5", toolName: "bash", input: { command: "anything" } }, { cwd: opsRoot });
   assert.equal(result, undefined);
+});
+
+test("FAILS CLOSED: a hook whose output exceeds maxBuffer (execution-layer error, no numeric exit status) is BLOCKED, not silently allowed", () => {
+  const opsRoot = makeIsolatedOpsRoot();
+  // A hook that emits well more output than a deliberately tiny maxBuffer,
+  // simulating the ENOBUFS class of failure Rex flagged: execFileSync
+  // throws with no `status` field at all (not exit code 0, not exit code
+  // 2 — an execution-layer failure). Fixed semantics must BLOCK this,
+  // not treat the "no status" case as an implicit allow.
+  writeFileSync(join(opsRoot, ".claude", "hooks", "noisy.sh"), "#!/bin/bash\nyes | head -c 100000\nexit 0\n", { mode: 0o755 });
+  const gate: GateDefinition = {
+    name: "noisy",
+    hookRelativePath: ".claude/hooks/noisy.sh",
+    toolNames: ["bash"],
+    buildToolInput: (event) => ({ command: (event.input as any).command }),
+  };
+
+  const result = runGateHook(opsRoot, gate, { command: "anything" }, "Bash", /* maxBufferBytes */ 1024);
+  assert.equal(result?.block, true, "an execution-layer failure (ENOBUFS) must fail CLOSED, not open");
+  assert.match(result?.reason ?? "", /could not be evaluated/);
+  assert.match(result?.reason ?? "", /noisy/);
+});
+
+test("a hook exiting 1 (an unrelated, non-blocking bash-level error) is allowed, not blocked — only exit 2 blocks", async () => {
+  const opsRoot = makeIsolatedOpsRoot();
+  writeFileSync(join(opsRoot, ".claude", "hooks", "exit-one.sh"), "#!/bin/bash\nexit 1\n", { mode: 0o755 });
+  const customGates: GateDefinition[] = [
+    {
+      name: "exit-one",
+      hookRelativePath: ".claude/hooks/exit-one.sh",
+      toolNames: ["bash"],
+      buildToolInput: (event) => ({ command: (event.input as any).command }),
+    },
+  ];
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as any, { gates: customGates, resolveOpsRoot: () => opsRoot });
+  const toolCall = handlers.get("tool_call")!;
+
+  const result = await toolCall({ type: "tool_call", toolCallId: "9", toolName: "bash", input: { command: "anything" } }, { cwd: opsRoot });
+  assert.equal(result, undefined, "exit code 1 is not exit code 2 — must not block, matching Claude Code's own PreToolUse semantics");
+});
+
+test("DEFAULT_GATES includes the leak-protection gate (block-private-refs-in-public-repos)", () => {
+  const names = DEFAULT_GATES.map((g) => g.name);
+  assert.ok(names.includes("block-private-refs-in-public-repos"), "leak protection must be bridged by default — it's security-relevant");
 });
 
 test("no ops root resolved => dispatcher is a silent no-op (fails toward not-enforcing, never toward false-blocking)", async () => {

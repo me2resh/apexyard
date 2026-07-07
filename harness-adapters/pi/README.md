@@ -6,7 +6,7 @@ Promoted from spike [me2resh/apexyard#804](https://github.com/me2resh/apexyard/i
 
 ## What this enforces
 
-The dispatcher (`src/gate-dispatcher.ts`) wires the following gates by default — the same list `.claude/settings.json` wires for Claude Code's `PreToolUse` hooks:
+The dispatcher (`src/gate-dispatcher.ts`) wires the following gates by default. **This is a curated subset, not the full list** `.claude/settings.json` wires for Claude Code's `PreToolUse` hooks — every gate below was checked against its own `jq` stdin parsing (all use the identical `.tool_input.command` shape `block-unreviewed-merge.sh` uses) and included because it's a blocking (exit-2) governance gate covering #815's named acceptance criteria (merge gate, red-CI, design/architecture review, ticket-first, secrets) plus leak protection:
 
 | Gate | Hook | pi tool(s) checked |
 |------|------|---------------------|
@@ -17,10 +17,27 @@ The dispatcher (`src/gate-dispatcher.ts`) wires the following gates by default �
 | Secrets scanning | `check-secrets.sh` | `bash` |
 | `git add -A` / `git add .` block | `block-git-add-all.sh` | `bash` |
 | Direct push to `main` block | `block-main-push.sh` | `bash` |
+| Leak protection (private project refs on public repos) | `block-private-refs-in-public-repos.sh` | `bash` |
 | Ticket-first (an active ticket required before edits) | `require-active-ticket.sh` | `edit`, `write`, `bash` |
 | Migration-ticket-first | `require-migration-ticket.sh` | `edit`, `write` |
 
-Extend or trim this list by passing a custom `gates` array to `registerGateDispatcher()` — see "Customizing the gate table" below.
+### Known NOT-yet-bridged gates
+
+`.claude/settings.json` also wires these blocking Bash-matcher `PreToolUse` hooks, which are **not** in `DEFAULT_GATES` yet. Each one uses the exact same `.tool_input.command` stdin shape as everything above, so bridging them is a table-row addition, not new adapter logic — they were deferred to keep this first pass scoped to #815's named acceptance criteria, not left out because of a technical blocker:
+
+| Hook | Fires on | Why deferred |
+|------|----------|--------------|
+| `validate-branch-name.sh` | `git branch` / `git checkout -b` | Same shape as everything bridged; out of #815's named scope |
+| `validate-commit-format.sh` | `git commit` | Same shape; out of #815's named scope |
+| `verify-commit-refs.sh` | `git commit` | Same shape; out of #815's named scope |
+| `validate-pr-create.sh` | `gh pr create` | Same shape; out of #815's named scope |
+| `require-agdr-for-arch-pr.sh` | `gh pr create` | Same shape; out of #815's named scope |
+| `require-skill-for-issue-create.sh` | `gh issue create` / equivalent | Same shape; out of #815's named scope |
+| `block-onboarding-in-git.sh` | `git add` of `onboarding.yaml` | Same shape; out of #815's named scope |
+
+If you rely on any of these under pi today, add them to your own `gates` array (see "Customizing the gate table" below) — they'll work with `bashCommandInput` unchanged.
+
+Extend or trim `DEFAULT_GATES` by passing a custom `gates` array to `registerGateDispatcher()` — see "Customizing the gate table" below.
 
 ## Install
 
@@ -96,6 +113,8 @@ This build (me2resh/apexyard#815) closed most of the gaps the spike flagged, but
 - **Verified live, against the real bash hook + real GitHub state**: the full stdin-reconstruction → hook-exec → exit-code-mapping path, using a synthetic `tool_call` event that mocks only pi's `ExtensionAPI.on()` registration call (see `test/gate-dispatcher.test.ts`'s "LIVE" cases, run against real PR #767's real Rex+CEO markers and a real nonexistent-PR block).
 - **NOT verified** (and could not be verified in the environment this was built in — no pi model credentials available): that a real, model-driven pi agent turn actually invokes `tool_call` handlers with events matching this contract when the model itself calls the `bash`/`edit`/`write` tools. This is a transport-fidelity assumption inherited from spike #804's own "proven by construction, not proven live" finding for the same reason — it needs a live model API key this environment doesn't have. Once available, the correct test is: run a real pi session with this extension loaded, prompt a model turn that attempts an ungated `gh pr merge`, and confirm the tool call is refused with the hook's block reason surfaced to the model.
 - **The pi-flavored ops-root override (`APEXYARD_OPS_ROOT`) has no equivalent to Claude Code's session-pin protection** against resolving to an unrelated ops-fork-shaped directory tree (see "How ops-root resolution works" above and AgDR-0082).
+- **`check-secrets.sh` scans `git diff --cached` relative to `cwd: opsRoot`, with no additional cd-resolution.** If a pi session is launched from inside a nested or otherwise different git repo than the intended one, the secrets scan runs against the *ops fork's* staged diff, not the repo the operator actually meant to scan. This mirrors an equivalent limitation Claude Code already has (the hook resolves the same way there), so it's not a regression introduced by this adapter — noted here for completeness, no code change made.
+- **Gate execution failures fail CLOSED, not open** (fixed in this build after a Rex finding on PR #817): if a hook can't produce a numeric exit status at all — a spawn failure, output exceeding the 10 MB `maxBuffer` ceiling, a signal kill — the dispatcher now BLOCKS with a reason naming the hook and the underlying error, rather than silently allowing the tool call through. Only a genuine hook exit code of 0 (or a numeric non-2 exit code) allows the call; exit code 2 blocks with the hook's own reason. See `src/gate-dispatcher.ts`'s `runGateHook` doc comment for the full semantics and `test/gate-dispatcher.test.ts`'s "FAILS CLOSED" test.
 
 ## Glossary
 
