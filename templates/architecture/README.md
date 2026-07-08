@@ -2,7 +2,7 @@
 
 # Architecture Templates
 
-ApexYard ships five architecture-document templates plus one escape hatch. All five are [Mermaid](https://mermaid.js.org/) — GitHub renders them inline, no build step. Decision rationale: [AgDR-0003](../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md). The escape hatch (`c4-structurizr.dsl`) trades the zero-install property for L3+ precision when a project genuinely needs it — see [AgDR-0082](../../docs/agdr/AgDR-0082-structurizr-dsl-escape-hatch.md).
+ApexYard ships five architecture-document templates plus one escape hatch. All five are [Mermaid](https://mermaid.js.org/) — GitHub renders them inline, no build step. Decision rationale: [AgDR-0003](../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md). The escape hatch (`c4-structurizr.dsl`) trades the zero-install property for L3+ precision when a project genuinely needs it — see [AgDR-0085](../../docs/agdr/AgDR-0085-structurizr-dsl-escape-hatch.md).
 
 ## When to use which
 

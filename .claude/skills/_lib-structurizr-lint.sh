@@ -4,7 +4,7 @@
 # Validate a Structurizr DSL workspace file (the /c4 --dsl escape hatch
 # output). Unlike _lib-mermaid-lint.sh, this lib does NOT shell out to a
 # new runtime dependency by default — the design goal of the Structurizr
-# escape hatch (AgDR-0082) is a dependency-free text artifact, so the
+# escape hatch (AgDR-0085) is a dependency-free text artifact, so the
 # default check is a STRUCTURAL lint: no Java, no Docker, no npx.
 #
 # Structural checks (always run):

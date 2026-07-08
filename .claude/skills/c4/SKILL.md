@@ -307,7 +307,7 @@ Re-run /c4 <project> --dsl --force when the architecture changes.
 
 ## Escape hatch: Structurizr DSL (L3+)
 
-Mermaid stays the **default** — nothing above changes for a plain `/c4` invocation. `--dsl` is a side-channel for projects that hit a real wall, not a migration. Decision rationale: [`AgDR-0082`](../../../docs/agdr/AgDR-0082-structurizr-dsl-escape-hatch.md) (a follow-up to the original tool choice in [`AgDR-0003`](../../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md), which explicitly deferred this).
+Mermaid stays the **default** — nothing above changes for a plain `/c4` invocation. `--dsl` is a side-channel for projects that hit a real wall, not a migration. Decision rationale: [`AgDR-0085`](../../../docs/agdr/AgDR-0085-structurizr-dsl-escape-hatch.md) (a follow-up to the original tool choice in [`AgDR-0003`](../../../docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md), which explicitly deferred this).
 
 ### When to reach for `--dsl`
 
@@ -332,7 +332,7 @@ One `workspace.dsl` file (Structurizr's canonical extension) capturing:
 
 ### Rendering the DSL
 
-No render step is required to get value from the file — `workspace.dsl` is readable as text, and the escape hatch's whole design point (AgDR-0082) is that it introduces **no new runtime dependency** to the framework. When you do want to see the diagram:
+No render step is required to get value from the file — `workspace.dsl` is readable as text, and the escape hatch's whole design point (AgDR-0085) is that it introduces **no new runtime dependency** to the framework. When you do want to see the diagram:
 
 | Option | Install | Notes |
 |---|---|---|

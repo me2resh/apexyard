@@ -11,7 +11,7 @@
 //
 // Mermaid stays the DEFAULT for L1 + L2 (see c4-context.md / c4-container.md).
 // This is a side-channel for projects that hit a wall, not a replacement.
-// Decision rationale: docs/agdr/AgDR-0082-structurizr-dsl-escape-hatch.md
+// Decision rationale: docs/agdr/AgDR-0085-structurizr-dsl-escape-hatch.md
 // (builds on the original tool choice in AgDR-0003).
 
 workspace "{Project Name}" "One-sentence description of what the system does" {
