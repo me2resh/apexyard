@@ -87,14 +87,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Install Semgrep OSS
-        run: pip install semgrep
-
+      # Run Semgrep via its official pinned Docker image rather than
+      # `pip install semgrep` (#819 / Scorecard Pinned-Dependencies #32:
+      # a bare `pip install <pkg>` is always reported unpinned by Scorecard —
+      # its check only accepts `--require-hashes`, which for a package with
+      # semgrep's transitive dependency tree means maintaining a hash-locked
+      # requirements file. Pinning the Docker image by digest gets the same
+      # supply-chain guarantee — reproducible, verifiable artefact — with a
+      # one-line bump on upgrade, matching how every `uses:` action in this
+      # repo is already SHA-pinned.
       - name: Run Semgrep — bash security rules
         id: semgrep
         run: |
           set +e
-          semgrep scan \
+          docker run --rm -v "$PWD:/src" -w /src \
+            semgrep/semgrep@sha256:59fbed6127ea7c5dde3ba6a85142733bb20ea9aaa36120c953904f1539aaf66e `# 1.168.0` \
+            semgrep scan \
             --config=r/bash \
             --metrics=off \
             --no-autofix \

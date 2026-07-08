@@ -11,13 +11,19 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
-permissions:
-  pull-requests: write
+# Least-privilege sweep (#819): top-level stays empty — this workflow never
+# checks out code, so it needs no `contents` scope either. pull-requests:write
+# (label + comment on failure) is granted at job level only, since a
+# top-level write scope is flagged by Scorecard's Token-Permissions check
+# regardless of job-level scoping.
+permissions: {}
 
 jobs:
   check-title:
     name: Verify Ticket ID
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write   # add ticket label + post comment on failure
 
     steps:
       - name: Check PR title for ticket ID

@@ -17,7 +17,11 @@ name: auto-tag-on-release-pr-merge
 #   - Manual dispatch (operator can re-run if something fails post-merge)
 #
 # Permissions:
-#   - contents: write (create tag + GitHub Release)
+#   - contents: write (create tag + GitHub Release) — granted at job level
+#     only (#819 / Scorecard Token-Permissions #58): the top-level block
+#     stays read-only because Scorecard's topLevelPermissions probe flags
+#     any write scope declared at workflow level, even when only one job
+#     exists and even when a job also scopes down.
 #
 # No new secrets required — uses the default GITHUB_TOKEN.
 
@@ -35,12 +39,14 @@ on:
         required: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   auto-tag:
     name: tag release + create GitHub Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create tag (git push --tags) + gh release create
     # Only run on merged release PRs (not just any closed PR, and not on forks)
     if: |
       (

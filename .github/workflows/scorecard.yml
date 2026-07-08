@@ -12,9 +12,13 @@ on:
   push:
     branches: [main]
 
+# Least-privilege (#819 / Scorecard Token-Permissions #61): the top-level
+# block must stay read-only — Scorecard's topLevelPermissions probe flags
+# ANY write scope declared at workflow level, even when a job scopes back
+# down. Elevated scopes belong at job level only (below). id-token isn't
+# granted here or at job level because publish_results is false (#679) —
+# the OSSF-API publish step that needed it is disabled, so the scope is dead.
 permissions:
-  security-events: write
-  id-token: write
   contents: read
 
 jobs:
@@ -23,7 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       security-events: write   # upload results to code-scanning
-      id-token: write          # publish results to the OSSF API (badge)
       contents: read
 
     steps:
