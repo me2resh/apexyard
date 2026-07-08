@@ -4,7 +4,7 @@ ApexYard's canonical runtime still lives in `.claude/`: skills, agents, hooks,
 rules, and hook wiring are authored there first. Codex support is generated from
 that source of truth so the two agent surfaces do not drift by hand.
 
-Decision record: [`AgDR-0080`](agdr/AgDR-0080-codex-adapter-generation.md).
+Decision record: [`AgDR-0085`](agdr/AgDR-0085-codex-adapter-generation.md).
 
 ## Generate The Adapter
 
@@ -30,6 +30,11 @@ block by exiting `2` ([Codex hooks docs](https://developers.openai.com/codex/hoo
 The adapter test therefore proves the generated command path preserves the hook
 stdin and exit-code contract. Live Codex coverage still depends on Codex's hook
 runtime and trust settings.
+
+Claude Code's handler-level `if` predicates are not part of Codex's documented
+hook handler shape. During generation, those predicates are compiled into the
+generated shell command as a preflight filter, and the unsupported `if` field is
+omitted from `.codex/hooks.json`.
 
 Agent model labels are translated to Codex-native equivalents:
 

@@ -89,8 +89,36 @@ copy_tree() {
   cp -R "$src" "$dst"
 }
 
+generate_hooks_json() {
+  jq '
+    def wrap_if_handler:
+      if has("if") then
+        (.if | capture("^(?<tool>[^()]+)\\((?<glob>.*)\\)$")) as $predicate
+        | .command = (
+            "APEXYARD_CODEX_HOOK_TOOL=" + ($predicate.tool | @sh) +
+            " APEXYARD_CODEX_HOOK_GLOB=" + ($predicate.glob | @sh) +
+            " APEXYARD_CODEX_ORIGINAL_HOOK=" + (.command | @sh) +
+            " bash -c " +
+            ("input=$(cat); tool=$(printf \"%s\" \"$input\" | jq -r \".tool_name // \\\"\\\"\"); cmd=$(printf \"%s\" \"$input\" | jq -r \".tool_input.command // \\\"\\\"\"); [ \"$tool\" = \"$APEXYARD_CODEX_HOOK_TOOL\" ] || exit 0; [[ \"$cmd\" == $APEXYARD_CODEX_HOOK_GLOB ]] || exit 0; printf \"%s\" \"$input\" | bash -c \"$APEXYARD_CODEX_ORIGINAL_HOOK\"" | @sh)
+          )
+        | del(.if)
+      else
+        del(.if)
+      end;
+
+    { hooks:
+      (.hooks
+       | with_entries(
+           .value |= map(
+             .hooks |= map(wrap_if_handler)
+           )
+         ))
+    }
+  ' "$CLAUDE_DIR/settings.json"
+}
+
 copy_tree "$CLAUDE_DIR/skills" "$OUT_AGENTS/skills"
-cp "$CLAUDE_DIR/settings.json" "$OUT_CODEX/hooks.json"
+generate_hooks_json > "$OUT_CODEX/hooks.json"
 
 while IFS= read -r -d '' generated_file; do
   rewrite_skill_paths "$generated_file"

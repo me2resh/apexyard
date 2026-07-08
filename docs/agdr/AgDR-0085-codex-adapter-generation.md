@@ -1,4 +1,4 @@
-# Codex adapter delegates gates to the Claude runtime
+# AgDR-0085 — Codex adapter delegates gates to the Claude runtime
 
 > In the context of adding Codex support to a framework whose canonical runtime
 > currently lives under `.claude/`, facing first-pass generated `.agents/` and
@@ -48,6 +48,9 @@ The generator emits:
   `sonnet` to `gpt-5.4`, and `haiku` to `gpt-5.4-mini`
 - `.claude/settings.json` as `.codex/hooks.json`, preserving commands that exec
   `$r/.claude/hooks/*.sh`
+- Claude Code's handler-level `if` predicates as shell-side preflight filters in
+  the generated command, because Codex only documents matcher groups plus command
+  handlers, not handler-local `if` metadata
 
 The generator intentionally does not copy hooks, rules, migrations, registries,
 or project defaults into `.codex/`.
@@ -60,9 +63,10 @@ or project defaults into `.codex/`.
 - The adapter no longer rewrites `.claude/session` review markers, the
   `~/.claude/apexyard` session pin path, or trust-chain literals such as
   `.claude/hooks/*`.
-- The smoke test exercises the generated hook command with synthetic stdin and
+- The smoke test exercises the generated hook command with synthetic stdin,
   verifies both block (`exit 2`) and allow (`exit 0`) behavior across the adapter
-  boundary.
+  boundary, and verifies a nonmatching command predicate is skipped before the
+  canonical hook runs.
 - Generated output can stay local/untracked while the format settles; an adopter
   who relies on Codex governance should review/trust the generated
   `.codex/hooks.json` and consider tracking generated output plus enforcing

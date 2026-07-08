@@ -63,7 +63,7 @@ cat > "$TMPROOT/.claude/hooks/block-test.sh" <<'SH'
 #!/usr/bin/env bash
 input=$(cat)
 case "$input" in
-  *blocked*) exit 2 ;;
+  *deny*) exit 2 ;;
   *) exit 0 ;;
 esac
 SH
@@ -78,7 +78,7 @@ cat > "$TMPROOT/.claude/settings.json" <<'JSON'
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(blocked *)",
+            "if": "Bash(policy *)",
             "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-test.sh\"'"
           }
         ]
@@ -118,6 +118,7 @@ assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".agents/skills/status
 assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".claude/hooks/_lib-portfolio-paths.sh" "skill preserves canonical hook paths"
 assert_contains "$TMPROOT/.codex/hooks.json" '$r/.claude/hooks/block-test.sh' "hooks.json delegates to canonical hook path"
 assert_contains "$TMPROOT/.codex/hooks.json" '$HOME/.claude/apexyard' "hooks.json preserves Claude session pin path"
+assert_contains "$TMPROOT/.codex/hooks.json" 'APEXYARD_CODEX_HOOK_GLOB=' "hooks.json wraps command predicates"
 assert_not_contains "$TMPROOT/.codex/hooks.json" "$TMPROOT" "hooks.json has no absolute fixture path"
 assert_not_contains "$TMPROOT/.codex/hooks.json" '$r/.codex/hooks' "hooks.json does not point at copied hooks"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'name = "backend-engineer"' "agent TOML includes name"
@@ -125,8 +126,14 @@ assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'model = "gpt-5.4
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" ".claude/rules/workflow-gates.md" "agent instructions preserve rule paths"
 assert_not_contains "$TMPROOT/.codex/agents/backend-engineer.toml" "---" "agent TOML excludes YAML frontmatter"
 
+if jq -e '.. | objects | select(has("if"))' "$TMPROOT/.codex/hooks.json" >/dev/null; then
+  mark_fail "hooks.json omits unsupported if fields" "found handler-level if metadata"
+else
+  mark_pass "hooks.json omits unsupported if fields"
+fi
+
 hook_command=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$TMPROOT/.codex/hooks.json")
-printf '{"tool_name":"Bash","tool_input":{"command":"blocked command"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
+printf '{"tool_name":"Bash","tool_input":{"command":"policy deny"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
 block_rc=$?
 if [ "$block_rc" -eq 2 ]; then
   mark_pass "generated hook command preserves blocking exit"
@@ -134,12 +141,20 @@ else
   mark_fail "generated hook command preserves blocking exit" "expected exit 2, got $block_rc: $(cat /tmp/_codex_adapter_block.out)"
 fi
 
-printf '{"tool_name":"Bash","tool_input":{"command":"allowed command"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_allow.out 2>&1
+printf '{"tool_name":"Bash","tool_input":{"command":"policy allow"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_allow.out 2>&1
 allow_rc=$?
 if [ "$allow_rc" -eq 0 ]; then
   mark_pass "generated hook command preserves allowing exit"
 else
   mark_fail "generated hook command preserves allowing exit" "expected exit 0, got $allow_rc: $(cat /tmp/_codex_adapter_allow.out)"
+fi
+
+printf '{"tool_name":"Bash","tool_input":{"command":"other deny"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_skip.out 2>&1
+skip_rc=$?
+if [ "$skip_rc" -eq 0 ]; then
+  mark_pass "generated hook command skips nonmatching predicates"
+else
+  mark_fail "generated hook command skips nonmatching predicates" "expected exit 0, got $skip_rc: $(cat /tmp/_codex_adapter_skip.out)"
 fi
 
 if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_check.out 2>&1; then
