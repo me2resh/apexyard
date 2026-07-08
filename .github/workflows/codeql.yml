@@ -21,8 +21,11 @@ on:
   schedule:
     - cron: '27 3 * * 1'   # weekly, Monday 03:27 UTC
 
+# Least-privilege (#819 / Scorecard Token-Permissions #59): keep the
+# top-level block read-only. security-events:write is only granted at job
+# level below — Scorecard's topLevelPermissions probe flags any write scope
+# declared at workflow level, regardless of job-level scoping.
 permissions:
-  security-events: write
   actions: read
   contents: read
 

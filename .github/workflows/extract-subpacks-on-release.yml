@@ -50,8 +50,13 @@ on:
       - 'templates/audits/**'
   workflow_dispatch:
 
+# Least-privilege (#819 / Scorecard Token-Permissions #60): this job only
+# checks out the repo, runs a local script, and uploads a build artefact —
+# none of that needs contents:write (upload-artifact authenticates via its
+# own internal API, not the contents scope). `contents: write` was over-
+# granted; the job never pushes a commit, tag, or PR.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   extract-subpacks:
