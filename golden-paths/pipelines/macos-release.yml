@@ -51,7 +51,7 @@ jobs:
     permissions:
       contents: write       # create the GitHub Release + upload assets
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
@@ -187,7 +187,7 @@ jobs:
       # ── Publish the GitHub Release (tag pushes, or dispatch with publish=true) ─
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           files: ${{ env.DMG_PATH }}
           generate_release_notes: true

@@ -35,13 +35,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v42
+        uses: tj-actions/changed-files@ac21d93904fb48e7f76ce4bd2a4d197f67e34abe  # v42
         with:
           files: |
             content/**
@@ -52,7 +52,7 @@ jobs:
             **/*.md
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '20'
 
@@ -212,7 +212,7 @@ jobs:
 
       - name: Post SEO Review Comment
         if: github.event_name == 'pull_request' && steps.seo-analysis.outputs.file_count > 0
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         with:
           script: |
             const avgScore = '${{ steps.seo-analysis.outputs.avg_score }}';
