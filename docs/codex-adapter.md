@@ -12,20 +12,24 @@ Decision record: [`AgDR-0080`](agdr/AgDR-0080-codex-adapter-generation.md).
 bin/sync-codex-adapter.sh
 ```
 
-The command mirrors:
+The command emits:
 
 - `.claude/skills/` to `.agents/skills/`
 - `.claude/agents/*.md` to `.codex/agents/*.toml`
-- `.claude/hooks/` to `.codex/hooks/`
-- `.claude/rules/` to `.codex/rules/`
-- `.claude/migrations/` to `.codex/migrations/`
-- `.claude/registries/` to `.codex/registries/`
-- `.claude/project-config.defaults.json` to `.codex/project-config.defaults.json`
 - `.claude/settings.json` to `.codex/hooks.json`
 
-During generation, repo-local references are rewritten from `.claude/...` to the
-Codex-facing paths. The generated hook wiring remains relocatable: commands find
-the ops root at runtime instead of embedding the local clone path.
+It does **not** copy `.claude/hooks/` into `.codex/hooks/`. The generated
+`hooks.json` keeps the existing commands that exec the unmodified
+`.claude/hooks/*.sh` scripts. That keeps gate decisions, session markers,
+review markers, and trust-chain path checks in the same audited bash files that
+Claude Code uses today.
+
+Codex documents repo-local hook loading from `.codex/hooks.json`; trusted
+project hooks run from the session working directory, and `PreToolUse` hooks can
+block by exiting `2` ([Codex hooks docs](https://developers.openai.com/codex/hooks)).
+The adapter test therefore proves the generated command path preserves the hook
+stdin and exit-code contract. Live Codex coverage still depends on Codex's hook
+runtime and trust settings.
 
 Agent model labels are translated to Codex-native equivalents:
 
@@ -53,8 +57,9 @@ bin/sync-codex-adapter.sh --clean
 
 Use `--clean` when you want to remove any existing generated `.agents/` and
 `.codex/` trees before regenerating them. This is useful after generator changes
-or when a source file was renamed or deleted, because a plain generation updates
-known output paths but may leave unrelated stale files behind.
+or when a source file was renamed or deleted. It also removes stale generated
+`.codex/hooks/`, `.codex/rules/`, `.codex/migrations/`, and `.codex/registries/`
+directories from earlier adapter versions that copied too much of `.claude/`.
 
 ## Tracking Policy
 
@@ -68,15 +73,17 @@ machine-local details. For local exploration, add those generated directories to
 .codex/
 ```
 
-The durable upstream contribution is the generator and its tests. A future PR can
-decide to track generated adapter output once the generated format is considered
-stable; if that happens, `--check` should be part of CI.
+The durable upstream contribution is the generator and its tests. If an adopter
+wants to treat Codex as an enforced governance surface, review and trust the
+generated `.codex/hooks.json` explicitly and consider tracking the generated
+adapter plus enforcing `--check` in CI.
 
 ## Design Notes
 
 - `.claude/` remains the source of truth.
 - Generated files must not contain absolute paths to the local clone.
-- Generated paths use lowercase `.codex` and `.agents` consistently so the
-  adapter works on case-sensitive filesystems.
+- Skill references to `.claude/skills/...` are rewritten to `.agents/skills/...`.
+- Hook, rule, session, and review-marker references stay pointed at `.claude/...`
+  because those files remain canonical and audited.
 - The generator is intentionally plain Bash plus `jq`, matching the rest of the
   framework's hook/test toolchain.

@@ -25,6 +25,11 @@ assert_file() {
   [ -f "$path" ] && mark_pass "$label" || mark_fail "$label" "missing $path"
 }
 
+assert_no_dir() {
+  local path="$1" label="$2"
+  [ ! -d "$path" ] && mark_pass "$label" || mark_fail "$label" "unexpected directory $path"
+}
+
 assert_contains() {
   local path="$1" pattern="$2" label="$3"
   grep -F "$pattern" "$path" >/dev/null 2>&1 && mark_pass "$label" || mark_fail "$label" "missing pattern [$pattern] in $path"
@@ -42,7 +47,8 @@ assert_not_contains() {
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/codex-adapter-test.XXXXXX")
 trap 'rm -rf "$TMPROOT"' EXIT
 
-mkdir -p "$TMPROOT/.claude/skills/status" "$TMPROOT/.claude/hooks" "$TMPROOT/.claude/agents" "$TMPROOT/.claude/registries"
+mkdir -p "$TMPROOT/.claude/skills/status" "$TMPROOT/.claude/hooks" "$TMPROOT/.claude/agents"
+touch "$TMPROOT/.apexyard-fork"
 
 cat > "$TMPROOT/.claude/skills/status/SKILL.md" <<'MD'
 ---
@@ -53,20 +59,27 @@ description: Current status.
 Source `.claude/hooks/_lib-portfolio-paths.sh` and read `.claude/skills/status/briefing.sh`.
 MD
 
-cat > "$TMPROOT/.claude/hooks/detect-role-trigger.sh" <<'SH'
+cat > "$TMPROOT/.claude/hooks/block-test.sh" <<'SH'
 #!/usr/bin/env bash
-echo "from .claude/hooks"
+input=$(cat)
+case "$input" in
+  *blocked*) exit 2 ;;
+  *) exit 0 ;;
+esac
 SH
+chmod +x "$TMPROOT/.claude/hooks/block-test.sh"
 
 cat > "$TMPROOT/.claude/settings.json" <<'JSON'
 {
   "hooks": {
-    "SessionStart": [
+    "PreToolUse": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/detect-role-trigger.sh\"'"
+            "if": "Bash(blocked *)",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/block-test.sh\"'"
           }
         ]
       }
@@ -88,10 +101,6 @@ allowed-tools: Bash, Read
 Read `.claude/rules/workflow-gates.md` before acting in Claude Code.
 MD
 
-cat > "$TMPROOT/.claude/registries/ai-crawlers.json" <<'JSON'
-[]
-JSON
-
 echo "== Codex adapter sync smoke"
 
 if bash "$SCRIPT" --root "$TMPROOT" >/tmp/_codex_adapter_sync.out 2>&1; then
@@ -101,21 +110,37 @@ else
 fi
 
 assert_file "$TMPROOT/.agents/skills/status/SKILL.md" "skill mirror exists"
-assert_file "$TMPROOT/.codex/hooks/detect-role-trigger.sh" "hook mirror exists"
 assert_file "$TMPROOT/.codex/hooks.json" "hooks.json mirror exists"
 assert_file "$TMPROOT/.codex/agents/backend-engineer.toml" "agent TOML exists"
-assert_file "$TMPROOT/.codex/registries/ai-crawlers.json" "registry mirror exists"
+assert_no_dir "$TMPROOT/.codex/hooks" "adapter does not copy hook scripts"
 
-assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".codex/hooks/_lib-portfolio-paths.sh" "skill rewrites hook paths"
 assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".agents/skills/status/briefing.sh" "skill rewrites skill paths"
-assert_contains "$TMPROOT/.codex/hooks.json" '$r/.codex/hooks/detect-role-trigger.sh' "hooks.json rewrites hook exec path"
-assert_contains "$TMPROOT/.codex/hooks.json" '$HOME/.codex/apexyard' "hooks.json rewrites pin cache path"
+assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".claude/hooks/_lib-portfolio-paths.sh" "skill preserves canonical hook paths"
+assert_contains "$TMPROOT/.codex/hooks.json" '$r/.claude/hooks/block-test.sh' "hooks.json delegates to canonical hook path"
+assert_contains "$TMPROOT/.codex/hooks.json" '$HOME/.claude/apexyard' "hooks.json preserves Claude session pin path"
 assert_not_contains "$TMPROOT/.codex/hooks.json" "$TMPROOT" "hooks.json has no absolute fixture path"
-assert_not_contains "$TMPROOT/.codex/hooks.json" ".claude" "hooks.json has no .claude paths"
+assert_not_contains "$TMPROOT/.codex/hooks.json" '$r/.codex/hooks' "hooks.json does not point at copied hooks"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'name = "backend-engineer"' "agent TOML includes name"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'model = "gpt-5.4"' "agent TOML maps Claude model to Codex model"
-assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" ".codex/rules/workflow-gates.md" "agent instructions rewrite rule paths"
+assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" ".claude/rules/workflow-gates.md" "agent instructions preserve rule paths"
 assert_not_contains "$TMPROOT/.codex/agents/backend-engineer.toml" "---" "agent TOML excludes YAML frontmatter"
+
+hook_command=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$TMPROOT/.codex/hooks.json")
+printf '{"tool_name":"Bash","tool_input":{"command":"blocked command"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
+block_rc=$?
+if [ "$block_rc" -eq 2 ]; then
+  mark_pass "generated hook command preserves blocking exit"
+else
+  mark_fail "generated hook command preserves blocking exit" "expected exit 2, got $block_rc: $(cat /tmp/_codex_adapter_block.out)"
+fi
+
+printf '{"tool_name":"Bash","tool_input":{"command":"allowed command"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_allow.out 2>&1
+allow_rc=$?
+if [ "$allow_rc" -eq 0 ]; then
+  mark_pass "generated hook command preserves allowing exit"
+else
+  mark_fail "generated hook command preserves allowing exit" "expected exit 0, got $allow_rc: $(cat /tmp/_codex_adapter_allow.out)"
+fi
 
 if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_check.out 2>&1; then
   mark_pass "--check passes when generated output is current"

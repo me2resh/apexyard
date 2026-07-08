@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Generate Codex-facing adapter files from the canonical .claude runtime.
 #
-# .claude remains the source of truth. This script mirrors the portable pieces
-# into .agents/ and .codex/ so Codex can consume the same skills, agents, and
-# hooks without hand-maintained drift.
+# .claude remains the source of truth. This script emits Codex-facing skills,
+# agents, and hook wiring while delegating every gate to the unmodified
+# .claude/hooks/*.sh scripts.
 
 set -euo pipefail
 
@@ -18,10 +18,7 @@ Usage: bin/sync-codex-adapter.sh [--check] [--clean] [--root <path>]
 Generate Codex adapter files from .claude:
   .claude/skills   -> .agents/skills
   .claude/agents   -> .codex/agents/*.toml
-  .claude/hooks    -> .codex/hooks
-  .claude/rules    -> .codex/rules
-  .claude/migrations, registries, config defaults -> .codex/
-  .claude/settings.json -> .codex/hooks.json
+  .claude/settings.json -> .codex/hooks.json (commands still exec .claude/hooks)
 
 Options:
   --check       Do not write files; fail if generated output would differ.
@@ -70,13 +67,9 @@ OUT_AGENTS="$TMPDIR/.agents"
 OUT_CODEX="$TMPDIR/.codex"
 mkdir -p "$OUT_AGENTS" "$OUT_CODEX/agents"
 
-rewrite_codex_paths() {
+rewrite_skill_paths() {
   perl -0pi -e '
     s/\.claude\/skills/.agents\/skills/g;
-    s/\.claude\/settings\.json/.codex\/hooks.json/g;
-    s/\.claude/.codex/g;
-    s/Claude Code/Codex/g;
-    s/Claude/Codex/g;
   ' "$@"
 }
 
@@ -97,17 +90,11 @@ copy_tree() {
 }
 
 copy_tree "$CLAUDE_DIR/skills" "$OUT_AGENTS/skills"
-copy_tree "$CLAUDE_DIR/hooks" "$OUT_CODEX/hooks"
-copy_tree "$CLAUDE_DIR/rules" "$OUT_CODEX/rules"
-copy_tree "$CLAUDE_DIR/migrations" "$OUT_CODEX/migrations"
-copy_tree "$CLAUDE_DIR/registries" "$OUT_CODEX/registries"
 cp "$CLAUDE_DIR/settings.json" "$OUT_CODEX/hooks.json"
-[ -f "$CLAUDE_DIR/project-config.defaults.json" ] && cp "$CLAUDE_DIR/project-config.defaults.json" "$OUT_CODEX/project-config.defaults.json"
-[ -f "$CLAUDE_DIR/framework-version" ] && cp "$CLAUDE_DIR/framework-version" "$OUT_CODEX/framework-version"
 
 while IFS= read -r -d '' generated_file; do
-  rewrite_codex_paths "$generated_file"
-done < <(find "$OUT_AGENTS" "$OUT_CODEX" -type f -print0)
+  rewrite_skill_paths "$generated_file"
+done < <(find "$OUT_AGENTS" -type f -print0)
 
 generate_agent_toml() {
   local src="$1"
@@ -121,9 +108,6 @@ generate_agent_toml() {
   body=$(awk 'BEGIN { front=0; body=0 } /^---$/ { front++; if (front == 2) { body=1; next } } body { print }' "$src")
   body=$(printf '%s\n' "$body" | perl -0pe '
     s/\.claude\/skills/.agents\/skills/g;
-    s/\.claude/.codex/g;
-    s/Claude Code/Codex/g;
-    s/Claude/Codex/g;
   ')
 
   {
@@ -142,12 +126,6 @@ fi
 
 if grep -R "$(printf '%s' "$ROOT" | sed 's/[.[\*^$()+?{}|]/\\&/g')" "$OUT_AGENTS" "$OUT_CODEX" >/dev/null 2>&1; then
   echo "ERROR: generated adapter contains an absolute path to $ROOT" >&2
-  exit 1
-fi
-
-if grep -R '\.claude' "$OUT_AGENTS" "$OUT_CODEX" >/dev/null 2>&1; then
-  echo "ERROR: generated adapter still contains .claude references" >&2
-  grep -R '\.claude' "$OUT_AGENTS" "$OUT_CODEX" >&2 || true
   exit 1
 fi
 
@@ -181,19 +159,9 @@ rm -rf "$ROOT/.agents/skills" "$ROOT/.codex/agents" "$ROOT/.codex/hooks" "$ROOT/
   "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version"
 cp -R "$OUT_AGENTS/skills" "$ROOT/.agents/skills"
 cp -R "$OUT_CODEX/agents" "$ROOT/.codex/agents"
-cp -R "$OUT_CODEX/hooks" "$ROOT/.codex/hooks"
-[ -d "$OUT_CODEX/rules" ] && cp -R "$OUT_CODEX/rules" "$ROOT/.codex/rules"
-[ -d "$OUT_CODEX/migrations" ] && cp -R "$OUT_CODEX/migrations" "$ROOT/.codex/migrations"
-[ -d "$OUT_CODEX/registries" ] && cp -R "$OUT_CODEX/registries" "$ROOT/.codex/registries"
 cp "$OUT_CODEX/hooks.json" "$ROOT/.codex/hooks.json"
-[ -f "$OUT_CODEX/project-config.defaults.json" ] && cp "$OUT_CODEX/project-config.defaults.json" "$ROOT/.codex/project-config.defaults.json"
-[ -f "$OUT_CODEX/framework-version" ] && cp "$OUT_CODEX/framework-version" "$ROOT/.codex/framework-version"
 
 echo "Generated Codex adapter from .claude:"
 echo "  .agents/skills"
 echo "  .codex/agents"
-echo "  .codex/hooks"
-[ -d "$ROOT/.codex/rules" ] && echo "  .codex/rules"
-[ -d "$ROOT/.codex/migrations" ] && echo "  .codex/migrations"
-[ -d "$ROOT/.codex/registries" ] && echo "  .codex/registries"
 echo "  .codex/hooks.json"

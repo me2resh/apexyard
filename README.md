@@ -36,7 +36,7 @@ ApexYard can generate a Codex-facing adapter from the canonical `.claude/` runti
 bin/sync-codex-adapter.sh
 ```
 
-The generator mirrors skills, agents, hooks, rules, and hook wiring into `.agents/` and `.codex/` without embedding local clone paths. See [`docs/codex-adapter.md`](docs/codex-adapter.md) for the tracking policy, AgDR, and drift-check workflow.
+The generator emits Codex-facing skills, agents, and hook wiring into `.agents/` and `.codex/` without embedding local clone paths. Gate decisions still run through the unmodified `.claude/hooks/*.sh` scripts. See [`docs/codex-adapter.md`](docs/codex-adapter.md) for the tracking policy, AgDR, and drift-check workflow.
 
 ## What's inside
 

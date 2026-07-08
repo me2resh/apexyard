@@ -1,11 +1,13 @@
-# Codex adapter is generated from the Claude runtime
+# Codex adapter delegates gates to the Claude runtime
 
 > In the context of adding Codex support to a framework whose canonical runtime
 > currently lives under `.claude/`, facing first-pass generated `.agents/` and
-> `.codex/` output that can contain local paths and drift from source, I decided
-> to generate the Codex adapter from `.claude/` instead of hand-maintaining or
-> directly tracking the generated mirror, to achieve portable multi-agent
-> support, accepting that Codex parity depends on the generator's rewrite rules.
+> `.codex/` output that could fork the gate logic by copying and rewriting bash
+> hooks, I decided to generate only the Codex-facing skill, agent, and hook
+> wiring while delegating gate execution to the existing unmodified
+> `.claude/hooks/*.sh` scripts, to achieve portable multi-agent support without
+> creating a second governance implementation, accepting that live enforcement
+> still depends on Codex's hook runtime and trust settings.
 
 ## Context
 
@@ -13,10 +15,12 @@
   are authored under `.claude/` today.
 - A first-pass Codex migration produced useful `.agents/` and `.codex/` output,
   but it also embedded local clone paths and inconsistent casing in places.
-- Hand-maintaining two runtime trees would create drift every time the Claude
-  runtime changes.
-- The framework already prefers plain shell and markdown for portable tooling,
-  so a generator fits the existing maintenance model.
+- The central adapter risk is not merely file drift; it is enforcement
+  faithfulness. A governance adapter is dangerous if it looks wired but silently
+  stops enforcing ticket, review, merge, secret, or trust-chain gates.
+- The pi adapter decision, [`AgDR-0082`](AgDR-0082-pi-gate-dispatcher-adapter.md),
+  established the preferred harness pattern: a thin transport layer shells out
+  to the existing, unmodified bash hooks so hook logic remains single-source.
 - Claude agent model labels (`opus`, `sonnet`, `haiku`) are not valid Codex
   model identifiers, so the adapter must translate them during generation.
 
@@ -24,28 +28,49 @@
 
 | Option | Pros | Cons |
 |--------|------|------|
-| Track the first-pass generated `.agents/` and `.codex/` output | Fastest path to visible Codex files | Commits machine-local paths and stale casing risk; no source-of-truth story |
-| Hand-maintain separate Claude and Codex runtime trees | Each runtime can be tailored precisely | High drift risk; doubles review surface for every skill/hook/agent change |
-| Generate the Codex adapter from `.claude/` | Single source of truth; portable rewrites; supports drift checks | Generator must keep up with Codex runtime format changes |
+| Track the first-pass generated `.agents/` and `.codex/` output | Fastest path to visible Codex files | Commits machine-local paths and stale casing risk; no source-of-truth story; can falsely imply enforced governance |
+| Copy and rewrite `.claude/hooks/` into `.codex/hooks/` | Gives Codex-labeled hook files | Forks executable gate logic; mutates marker/session/trust-chain paths; duplicates the review surface |
+| Generate skills/agents only, with no Codex hook wiring | Avoids false enforcement claims | Leaves Codex users without even the documented hook entrypoint for ApexYard gates |
+| Generate Codex hook wiring that execs unmodified `.claude/hooks/*.sh` | Preserves audited gate logic and marker paths; matches the pi adapter principle; supports drift checks | Relies on Codex's hook loader/trust behavior and still needs runtime conformance testing outside this repo's shell harness |
 
 ## Decision
 
-Chosen: **generate the Codex adapter from `.claude/`**, because `.claude/` is the
-existing canonical runtime and the main risk is drift, not lack of files. The
-generator mirrors skills, hooks, agents, rules, migrations, registries, and
-config defaults into `.agents/` and `.codex/`, rewrites repo-local references to
-Codex-facing paths, maps Claude model labels to Codex model labels, and exposes
-`--check` for drift detection.
+Chosen: **generate Codex-facing skills, agents, and hook wiring while delegating
+hooks to `.claude/`**, because `.claude/` is the existing canonical runtime and
+the safe adapter shape is a transport over that runtime, not a rewritten copy of
+it.
+
+The generator emits:
+
+- `.claude/skills/` as `.agents/skills/`, rewriting only
+  `.claude/skills/...` references to `.agents/skills/...`
+- `.claude/agents/*.md` as `.codex/agents/*.toml`, mapping `opus` to `gpt-5.5`,
+  `sonnet` to `gpt-5.4`, and `haiku` to `gpt-5.4-mini`
+- `.claude/settings.json` as `.codex/hooks.json`, preserving commands that exec
+  `$r/.claude/hooks/*.sh`
+
+The generator intentionally does not copy hooks, rules, migrations, registries,
+or project defaults into `.codex/`.
 
 ## Consequences
 
 - `.claude/` remains the source of truth for framework behavior.
 - Codex support can be regenerated in a fresh clone without embedding local
   filesystem paths.
-- Generated output can stay local/untracked while the format settles; a future
-  PR can choose to track it and enforce `--check` in CI.
-- The code reviewer maps from `opus` to `gpt-5.5`, preserving the original
-  "strongest reviewer" intent in a Codex-native runtime.
+- The adapter no longer rewrites `.claude/session` review markers, the
+  `~/.claude/apexyard` session pin path, or trust-chain literals such as
+  `.claude/hooks/*`.
+- The smoke test exercises the generated hook command with synthetic stdin and
+  verifies both block (`exit 2`) and allow (`exit 0`) behavior across the adapter
+  boundary.
+- Generated output can stay local/untracked while the format settles; an adopter
+  who relies on Codex governance should review/trust the generated
+  `.codex/hooks.json` and consider tracking generated output plus enforcing
+  `--check` in CI.
+- The remaining enforcement risk is Codex-runtime conformance: this repository's
+  bash test proves command delegation and exit-code preservation, but live
+  model-turn coverage depends on Codex loading trusted project hooks and invoking
+  matching hook events as documented.
 - The generator becomes the compatibility boundary. If Codex changes its agent,
   hook, or skill formats, this script is where the adapter evolves.
 
