@@ -836,6 +836,8 @@ Templates:
 - `templates/architecture/c4-context.md` — L1, system + external actors
 - `templates/architecture/c4-container.md` — L2, deployable units inside the system boundary
 
+**Escape hatch for L3+ (Structurizr DSL).** If a project needs component-level (L3) precision, auto-zoom across all levels from one model, or Structurizr Workspace features (tags, filtered views), `/c4 <project> --dsl` generates a `workspace.dsl` file instead — see `templates/architecture/c4-structurizr.dsl` and the `/c4` skill's "Escape hatch" section. Mermaid stays the default for L1/L2; this is additive, not a replacement, and introduces no new runtime dependency (rendering the `.dsl` is the adopter's own choice at [structurizr.com/dsl](https://structurizr.com/dsl), Structurizr Lite, or `structurizr-cli`). Decision rationale: [`docs/agdr/AgDR-0082-structurizr-dsl-escape-hatch.md`](agdr/AgDR-0082-structurizr-dsl-escape-hatch.md).
+
 Where to put the diagrams (same split as every other kind of doc — "would this follow the code if the project spun out?"):
 
 | Scope | Location |
@@ -846,7 +848,7 @@ Where to put the diagrams (same split as every other kind of doc — "would this
 
 ApexYard dogfoods its own convention — see `docs/architecture/apexyard-context.md` and `apexyard-container.md` for a worked example.
 
-Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML / D2): [`docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`](agdr/AgDR-0003-mermaid-c4-for-diagrams.md).
+Decision rationale (tool choice — Mermaid C4 over Structurizr DSL / PlantUML / D2 for the L1/L2 default): [`docs/agdr/AgDR-0003-mermaid-c4-for-diagrams.md`](agdr/AgDR-0003-mermaid-c4-for-diagrams.md). Decision rationale for the Structurizr DSL escape hatch (emit-text-only, no new runtime dependency): [`docs/agdr/AgDR-0082-structurizr-dsl-escape-hatch.md`](agdr/AgDR-0082-structurizr-dsl-escape-hatch.md).
 
 ### PDF exports follow the same rule
 
