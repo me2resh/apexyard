@@ -28,6 +28,7 @@ A future open-weights release that closes the review-depth gap at a size that ru
 
 ## Artefacts
 
+- Decision record: [AgDR-0087](../agdr/AgDR-0087-reasoning-agents-require-frontier-model.md) — the "reasoning layer needs a frontier model; local LLMs are a harness concern" decision this memo records
 - Original spike ticket: me2resh/apexyard#660
 - Spike branch: `spike/GH-660-local-open-llms` (delete after merge of this memo)
 - Full findings: `docs/spike-reports/GH-660-local-open-llms.md` on the spike branch

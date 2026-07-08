@@ -24,6 +24,7 @@ If native, Git-Bash/WSL-free Windows support ever becomes an explicit business r
 
 ## Artefacts
 
+- Decision record: [AgDR-0086](../agdr/AgDR-0086-hooks-stay-bash-not-ported.md) — the "keep hooks in bash; adapter-over-bash + Git Bash" decision this memo records
 - Original spike ticket: me2resh/apexyard#466
 - Spike branch: `spike/GH-466-cross-platform-hooks` (delete after merge of this memo)
 - Full findings: `docs/spike-reports/GH-466-cross-platform-hooks.md` on the spike branch
