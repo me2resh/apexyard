@@ -100,8 +100,6 @@ else:
                 for field in ("id", "description", "severity", "location"):
                     if not d.get(field):
                         errors.append(f"{dwhere}: missing '{field}'")
-                if d.get("severity") not in VALID_SEVERITY | {None}:
-                    pass
                 if "severity" in d and d["severity"] not in VALID_SEVERITY:
                     errors.append(f"{dwhere}: severity {d['severity']!r} not in {sorted(VALID_SEVERITY)}")
 
