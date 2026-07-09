@@ -4,7 +4,7 @@
   "description": "opencode (opencode.ai) plugin enforcing apexyard's mechanical governance gates by shelling out to the existing bash hooks — zero logic duplication. See README.md.",
   "type": "module",
   "private": true,
-  "main": "src/gate-dispatcher.ts",
+  "main": "src/index.ts",
   "scripts": {
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit"

@@ -25,13 +25,19 @@ Then load the extension in a pi session pointed at your apexyard ops fork:
 pi --extension harness-adapters/pi/src/gate-dispatcher.ts
 ```
 
-Or install it as a project-local extension pi auto-discovers (`.pi/extensions/*.ts` in the project pi is running in):
+Or install it as a project-local extension pi auto-discovers, via the install script rather than a hand-copy dance:
 
 ```bash
-mkdir -p .pi/extensions
-cp harness-adapters/pi/src/gate-dispatcher.ts .pi/extensions/apexyard-gate-dispatcher.ts
-cp harness-adapters/pi/src/resolve-ops-root.ts .pi/extensions/resolve-ops-root.ts
+bash <ops-fork>/bin/install-pi-adapter.sh
 ```
+
+```
+Usage: bin/install-pi-adapter.sh [--target-dir <path>] [--name <subdir>] [--root <path>]
+```
+
+`--target-dir` defaults to `<cwd>/.pi/extensions` — run the script from the project you want pi to enforce gates in, or pass an explicit path. `--root` defaults to the script's own ops-fork root (where `harness-adapters/` lives).
+
+**Do not hand-copy `gate-dispatcher.ts` and `resolve-ops-root.ts` flat into `.pi/extensions/`** — that was the documented install before [me2resh/apexyard#844](https://github.com/me2resh/apexyard/issues/844), and it crashes a real pi session: pi's discovery scans every top-level `.ts` file under `.pi/extensions/` and requires each one to export a valid default factory function. `resolve-ops-root.ts` (and, since #840 C5, `derive-gates.ts`) have no default export at all — pi fails the whole session with `Error: Failed to load extension ".../resolve-ops-root.ts": Extension does not export a valid factory function`, confirmed live against pi 0.80.3. The install script avoids this by construction: every file the adapter needs lives inside ONE subdirectory (`.pi/extensions/apexyard/` by default), with `index.ts` as pi's only discovered entry per subdirectory — the helper files sit there as ordinary relative imports pi's discovery scan never independently visits. See `src/index.ts`'s header comment for the full mechanism.
 
 (pi loads extensions via `jiti` with no compile step — plain `.ts`, no build pipeline, matching the bash hooks' own "just a script" simplicity.)
 
@@ -75,6 +81,13 @@ node --test test/*.test.ts
 
 # + LIVE cases against this repo's real block-unreviewed-merge.sh and real gh state
 APEXYARD_TEST_REPO_ROOT="$(pwd)/.." ALLOW_TEST_PR=<pr-with-real-rex+ceo-markers> node --test test/gate-dispatcher.test.ts
+
+# + a smoke script proving the REAL, SHIPPED install layout
+# (bin/install-pi-adapter.sh's output) loads cleanly in a fixture project:
+# no top-level helper .ts files sit in the discovery dir, and
+# apexyard/index.ts's module namespace is exactly ["default"], a working
+# extension factory (me2resh/apexyard#844):
+bash test/smoke-install-layout.sh
 ```
 
 `test/derive-gates.test.ts` covers the settings.json-parsing/translation layer in isolation (mirrors `harness-adapters/opencode/test/derive-gates.test.ts`); `test/gate-dispatcher.test.ts` covers dispatch + exec + the LIVE cases above.
@@ -85,6 +98,7 @@ APEXYARD_TEST_REPO_ROOT="$(pwd)/.." ALLOW_TEST_PR=<pr-with-real-rex+ceo-markers>
 
 This build (me2resh/apexyard#815) closed most of the gaps the spike flagged, but one remains — and it's the one that matters most for a production merge gate:
 
+- **(FIXED, #844) The documented install layout crashed a real pi 0.80.3 session at startup.** `resolve-ops-root.ts` (and, since #840 C5, `derive-gates.ts`) have no default export; copied flat alongside `gate-dispatcher.ts` into `.pi/extensions/`, pi's discovery tried to load them as independent extensions and aborted the whole session before any gate could enforce anything. Fixed by shipping `src/index.ts` (the sole default-exporting entry point `bin/install-pi-adapter.sh` installs into a dedicated, non-flat subdirectory alongside its non-discovered helper siblings). See `src/index.ts`'s header comment and `test/smoke-install-layout.sh`.
 - **Verified against pi's real, installed `.d.ts`**: the exact shape of `ToolCallEvent`, `ToolCallEventResult`, `ExtensionAPI`, and the edit/write tools' `path` field name (not `file_path`) — this is now typechecked (`npm run typecheck`), not guessed.
 - **Verified live, against the real bash hook + real GitHub state**: the full stdin-reconstruction → hook-exec → exit-code-mapping path, using a synthetic `tool_call` event that mocks only pi's `ExtensionAPI.on()` registration call (see `test/gate-dispatcher.test.ts`'s "LIVE" cases, run against real PR #767's real Rex+CEO markers and a real nonexistent-PR block).
 - **NOT verified** (and could not be verified in the environment this was built in — no pi model credentials available): that a real, model-driven pi agent turn actually invokes `tool_call` handlers with events matching this contract when the model itself calls the `bash`/`edit`/`write` tools. This is a transport-fidelity assumption inherited from spike #804's own "proven by construction, not proven live" finding for the same reason — it needs a live model API key this environment doesn't have. Once available, the correct test is: run a real pi session with this extension loaded, prompt a model turn that attempts an ungated `gh pr merge`, and confirm the tool call is refused with the hook's block reason surfaced to the model.

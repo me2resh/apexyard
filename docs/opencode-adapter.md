@@ -15,11 +15,13 @@ Concretely, this means the opencode adapter enforces (non-exhaustively — the l
 ```bash
 cd harness-adapters/opencode
 npm install
-mkdir -p .opencode/plugin
-cp src/*.ts ../../.opencode/plugin/
+cd ../..
+bash bin/install-opencode-adapter.sh   # writes .opencode/plugins/apexyard/ in your CWD
 ```
 
-opencode auto-loads `.ts`/`.js` files from a project-local `.opencode/plugin/` (or `.opencode/plugins/` — opencode's discovery glob accepts either) directory, or `~/.config/opencode/plugin/` for a global install; no build step. See `harness-adapters/opencode/README.md` for the full install options, including referencing the plugin via `opencode.json`'s `plugin` config array instead of copying files.
+**The discovery directory is PLURAL — `.opencode/plugins/` — not `.opencode/plugin/`.** An earlier version of this doc claimed opencode's discovery glob accepted either form; that was wrong, confirmed live against opencode 1.17.16 in [me2resh/apexyard#844](https://github.com/me2resh/apexyard/issues/844) — the singular form silently loads nothing.
+
+**Every adapter file must live inside one subdirectory, never flat in the discovery dir.** opencode's loader invokes EVERY exported function of a discovered file as a candidate plugin factory, not only its default export. `gate-dispatcher.ts` (the adapter's real implementation) exports several named helpers alongside its default plugin — placed directly in `.opencode/plugins/`, opencode calls each of those as if it might be a plugin and crashes the whole server at startup (`Error: {"name":"UnknownError","message":"Unexpected server error"}`; also #844, live). `bin/install-opencode-adapter.sh` avoids this by construction: it writes `.opencode/plugins/apexyard/index.ts` — a re-export shim whose ONLY export is the default plugin — plus its helper modules as siblings inside that same subdirectory. opencode's subdirectory discovery only loads `index.ts` per subdir (verified live), so the helpers are never independently visited. See `harness-adapters/opencode/src/index.ts`'s header comment for the full mechanism, and `harness-adapters/opencode/README.md` for the script's `--target-dir`/`--root` options and the alternative `opencode.json` `plugin` config array install path.
 
 ## How it works
 

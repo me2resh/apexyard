@@ -22,7 +22,7 @@ opencode support is a **live TypeScript plugin** (opencode exposes an imperative
 
 ## How to install
 
-See [`docs/opencode-adapter.md`](../opencode-adapter.md) — opencode auto-discovers local plugins under `.opencode/plugin/`.
+See [`docs/opencode-adapter.md`](../opencode-adapter.md) — opencode auto-discovers local plugins under `.opencode/plugins/` (plural — see #844). Install via `bash bin/install-opencode-adapter.sh`, which writes the adapter into a subdirectory shape (`.opencode/plugins/apexyard/`) rather than a flat file copy; a flat copy crashes opencode at startup (#844).
 
 ## Gaps + tracking
 

@@ -17,22 +17,25 @@ cd harness-adapters/opencode
 npm install       # pulls in @opencode-ai/plugin (real opencode types)
 ```
 
-Then either drop the plugin file where opencode auto-discovers local plugins:
+Then run the install script from your apexyard ops fork, from inside the project you want opencode to enforce gates in (or pass `--target-dir`):
 
 ```bash
-mkdir -p .opencode/plugin
-cp harness-adapters/opencode/src/gate-dispatcher.ts .opencode/plugin/apexyard-gate-dispatcher.ts
-cp harness-adapters/opencode/src/derive-gates.ts .opencode/plugin/derive-gates.ts
-cp harness-adapters/opencode/src/resolve-ops-root.ts .opencode/plugin/resolve-ops-root.ts
+bash <ops-fork>/bin/install-opencode-adapter.sh
 ```
 
-(opencode auto-loads `.ts`/`.js` files from `.opencode/plugin/` — or the plural `.opencode/plugins/`, opencode's local-plugin glob accepts both — and from `~/.config/opencode/plugin/` for a global install. No compile step: opencode, like pi, loads plugins as plain TypeScript.)
+This writes `.opencode/plugins/apexyard/` — **the discovery directory is PLURAL** (`.opencode/plugins/`, not `.opencode/plugin/`; an earlier version of this doc claimed opencode accepted either singular or plural, which was wrong — confirmed live against opencode 1.17.16 in [me2resh/apexyard#844](https://github.com/me2resh/apexyard/issues/844), the singular form silently loads nothing) — with `apexyard/index.ts` as the ONLY discovered file. Do not hand-copy `src/*.ts` flat into the discovery dir: opencode's loader invokes EVERY exported function of a discovered file as a candidate plugin factory, not only the default export, so `gate-dispatcher.ts`'s named helper exports (`execGateHookReal`, `buildToolExecuteBeforeHook`, `registerGateDispatcher`, …) get called directly and crash the whole server at startup if they sit in a scanned directory (also #844, live). `src/index.ts` is a re-export shim whose only export is the default plugin, and the install script places it — plus its helper modules as non-discovered siblings — inside one subdirectory. See `src/index.ts`'s header comment for the full mechanism.
 
-or reference it explicitly via opencode's `plugin` config array in `opencode.json`:
+```
+Usage: bin/install-opencode-adapter.sh [--target-dir <path>] [--name <subdir>] [--root <path>]
+```
+
+`--target-dir` defaults to `<cwd>/.opencode/plugins` — run the script from the project being gated, or pass an explicit path. `--root` defaults to the script's own ops-fork root (where `harness-adapters/` lives) — pass it explicitly if you're invoking the script from outside that fork.
+
+Or reference the real source file explicitly via opencode's `plugin` config array in `opencode.json`. This path is presumed unaffected by the directory-discovery bug above — the config array names one specific file rather than scanning a directory — but that presumption is NOT independently re-verified live for #844; if in doubt, prefer the install script's subdirectory-shim layout, which is:
 
 ```json
 {
-  "plugin": ["./harness-adapters/opencode/src/gate-dispatcher.ts"]
+  "plugin": ["./harness-adapters/opencode/src/index.ts"]
 }
 ```
 
@@ -86,12 +89,20 @@ npm run typecheck  # tsc --noEmit against the real, installed @opencode-ai/plugi
 # fabricated `gh pr merge` command through the real dispatcher pipeline in a
 # fixture ops root, with a negative control proving the block is hook-driven:
 bash test/smoke-block-unreviewed-merge.sh
+
+# + a smoke script proving the REAL, SHIPPED install layout
+# (bin/install-opencode-adapter.sh's output) loads cleanly in a fixture
+# project: no top-level helper .ts files sit in the discovery dir, and
+# apexyard/index.ts's module namespace is exactly ["default"], a working
+# plugin factory (me2resh/apexyard#844):
+bash test/smoke-install-layout.sh
 ```
 
 `npm run typecheck` is what verifies this adapter's field-name assumptions (`input.tool === "bash"`, `output.args.command`, `output.args.filePath` for edit/write) against opencode's actual, installed `.d.ts` and its real tool source (`packages/opencode/src/tool/shell.ts`, `edit.ts`, `write.ts` in the `sst/opencode` repo) rather than documentation alone — the same discipline the pi adapter's own `npm run typecheck` note describes.
 
 ## Known gaps / what's unverified
 
+- **(FIXED, #844) The documented install layout crashed a real opencode 1.17.16 session at startup.** The discovery dir was documented as singular (`.opencode/plugin/`) when the real, live-verified dir is plural (`.opencode/plugins/`); and a flat `cp src/*.ts` copy put `gate-dispatcher.ts`'s named helper exports and its sibling helper modules directly in the scanned directory, which opencode's loader tries to invoke as independent plugin factories — crashing the server before any gate could enforce anything. Fixed by shipping `src/index.ts` (a re-export shim exposing ONLY the default plugin) and `bin/install-opencode-adapter.sh` (which installs the shim plus its helper modules inside one non-discovered subdirectory, `.opencode/plugins/apexyard/`). See `src/index.ts`'s header comment and `test/smoke-install-layout.sh`.
 - **A live, model-driven opencode agent turn triggering this exact shipped dispatcher.** Spike #816 proved the pattern viable with a real opencode session and a real model turn — but that proof was against the spike's throwaway prototype plugin, not this shipped, settings.json-derived dispatcher. This build's environment had no opencode model credentials available to re-run that live verification against the shipped code. `test/smoke-block-unreviewed-merge.sh` re-proves everything downstream of opencode's own event dispatch (stdin reconstruction, real hook exec, exit-code mapping) against the real, unmodified hook — the one hop it cannot re-prove is whether opencode's *internal* `tool.execute.before` dispatch calls this handler with a matching event shape during a live, model-driven turn. See `docs/opencode-adapter.md` for the exact steps to close this once credentials are available.
 - **The upstream `batch` tool bypass** ([anomalyco/opencode#5894](https://github.com/anomalyco/opencode/issues/5894)): opencode's `batch` tool bypasses `Plugin.trigger()` entirely, so a batched tool call skips every plugin hook, including this dispatcher. This is an opencode-side gap, not something this adapter can close — tracked here for visibility, not owned by apexyard.
 - **The `APEXYARD_OPS_ROOT` override has no equivalent to Claude Code's session-pin protection** against resolving to an unrelated ops-fork-shaped directory tree (apexyard#381) — identical limitation to the pi adapter, for the identical reason (no `CLAUDE_CODE_SESSION_ID` / SessionStart-hook equivalent in opencode).
