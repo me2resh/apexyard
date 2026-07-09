@@ -6,12 +6,22 @@
  * between opencode's `tool.execute.before` event and each hook's
  * stdin/exit-code contract.
  *
- * PROMOTED FROM SPIKE #816 (VIABLE — proven fully live: a real,
- * model-driven opencode turn attempting `gh pr merge` was blocked by the
- * unmodified `block-unreviewed-merge.sh`, with a negative control —
- * corrupting the plugin — proving the block came from the plugin, not
- * opencode itself). See docs/agdr/AgDR-0092-opencode-gate-adapter.md for
- * the design decision and docs/opencode-adapter.md for install + usage.
+ * PROMOTED FROM SPIKE #816 (VIABLE). The spike proved the PATTERN fully
+ * live: a real, model-driven opencode turn attempting `gh pr merge` was
+ * blocked by the unmodified `block-unreviewed-merge.sh`, with a negative
+ * control — corrupting the plugin — proving the block came from the
+ * plugin, not opencode itself. IMPORTANT HEDGE (#840 C4, matching
+ * AgDR-0092's own "Consequences" section): that live run was against the
+ * spike's throwaway single-gate prototype plugin, NOT this shipped,
+ * settings.json-derived dispatcher. This file is proven-by-construction
+ * against opencode's documented/typed contract (real types, a real
+ * subprocess exec, a real hook, and `test/smoke-block-unreviewed-merge.sh`'s
+ * fixture-ops-root proof) — the one hop still resting on the spike's
+ * earlier live run, not a fresh one against this code, is "does opencode's
+ * own internal event dispatch call this handler the documented way during
+ * a live, model-driven agent turn." See
+ * docs/agdr/AgDR-0092-opencode-gate-adapter.md for the full decision and
+ * its honest breakdown, and docs/opencode-adapter.md for install + usage.
  *
  * SAME PATTERN AS THE PI ADAPTER, ONE UPGRADE
  * ----------------------------------------------
