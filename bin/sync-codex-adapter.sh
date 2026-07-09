@@ -121,6 +121,30 @@ generate_hooks_json() {
 copy_tree "$CLAUDE_DIR/skills" "$OUT_AGENTS/skills"
 generate_hooks_json > "$OUT_CODEX/hooks.json"
 
+# Fail loud on a silent gate-hole (Rex, #838/#840): generate_hooks_json's jq
+# filter is written to be matcher-agnostic (it walks every event/matcher
+# group generically rather than selecting by name), so nothing in this
+# generator drops a hook today. This assertion is the regression backstop —
+# if a future edit to the jq filter above narrows it to a recognized-matcher
+# allowlist (the way the Cursor generator's event-mapping table already
+# does), a silently dropped hook becomes a build error here instead of a
+# quietly-inert gate in .codex/hooks.json.
+assert_hook_counts_match() {
+  local source_count generated_count matchers
+  source_count=$(jq '[.hooks[][].hooks[]] | length' "$CLAUDE_DIR/settings.json")
+  generated_count=$(jq '[.hooks[][].hooks[]] | length' "$OUT_CODEX/hooks.json")
+  if [ "$source_count" != "$generated_count" ]; then
+    matchers=$(jq -r '
+      [.hooks | to_entries[] | .key as $event | .value[] | "\($event):\(.matcher // "(none)"):\(.hooks | length)"]
+      | join(", ")
+    ' "$CLAUDE_DIR/settings.json")
+    echo "ERROR: generated .codex/hooks.json carries $generated_count hook(s) but .claude/settings.json wires $source_count — a matcher group was silently dropped during generation." >&2
+    echo "ERROR: source matcher groups (event:matcher:hookCount) were: $matchers" >&2
+    exit 1
+  fi
+}
+assert_hook_counts_match
+
 while IFS= read -r -d '' generated_file; do
   rewrite_skill_paths "$generated_file"
 done < <(find "$OUT_AGENTS" -type f -print0)
