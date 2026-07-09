@@ -1,0 +1,154 @@
+{
+  "agent": "rex",
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "rex-792-2ce6708",
+      "pr": 792,
+      "repo": "me2resh/apexyard",
+      "commit": "2ce6708",
+      "diff_range": "2ce6708~1..2ce6708",
+      "oracle": {
+        "source": "independent_review",
+        "established_by": "Hakim's review of the identical commit (PR #792) caught this defect; the fix landed in the next review round.",
+        "reference": "me2resh/apexyard#792"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The prefix-strip loop in the pr-create gate consumes the real create verb, so a genuine `gh pr create` invocation can silently skip validation (a shape-4 gate-bypass, the same class of miss #47 closed for merge commands).",
+          "severity": "BLOCKING",
+          "location": ".claude/hooks/validate-pr-create.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": false
+      },
+      "notes": "Canonical false-confidence case from spike #825 (row R1): a fluent, verification-heavy APPROVED review of a commit that carried a real BLOCKING defect Hakim caught on the identical commit. This is the case the prose-rubric method scored 15/16 — higher than 7 of the 10 genuinely-correct approvals in the spike's sample."
+    },
+    {
+      "id": "rex-770-d8ad5325",
+      "pr": 770,
+      "repo": "me2resh/apexyard",
+      "commit": "d8ad5325b",
+      "diff_range": "d8ad5325b~1..d8ad5325b",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Both defects were fixed in the commit that followed this CHANGES REQUESTED review (6b19e2b5a); the fixes match exactly what was flagged.",
+        "reference": "me2resh/apexyard#765"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "pr_base_repo scoped its primary gh query to the fork (head) repo as --repo, but a base-repo PR number can never resolve against the fork, so the query errors and falls back to the fork — the exact cross-fork divergence #765 set out to fix does not get fixed. All five marker writers still diverge from the base repo on a cross-fork PR.",
+          "severity": "BLOCKING",
+          "location": ".claude/hooks/_lib-review-markers.sh"
+        },
+        {
+          "id": "D2",
+          "description": "test_pr_base_repo.sh's gh mock ignores --repo entirely, so the cross-fork test case passes even though the real gh call fails in that scenario — a false-positive test that certified a broken fix as working (9/9 green, 0/9 meaningful).",
+          "severity": "MEDIUM",
+          "location": ".claude/hooks/tests/test_pr_base_repo.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Rex correctly caught both the fork-scope regression and the vacuous test at this commit (spike #825 row R6, GOOD_CATCH). An earlier round on this same PR (commit f11415c41) had APPROVED — that miss is the human/Rex review the spike's row R2 refers to, but it isn't included as its own corpus entry here because the spike's own reviewer tag for that round is ambiguous."
+    },
+    {
+      "id": "rex-767-a99f1009",
+      "pr": 767,
+      "repo": "me2resh/apexyard",
+      "commit": "a99f1009d",
+      "diff_range": "a99f1009d~1..a99f1009d",
+      "oracle": {
+        "source": "independent_review",
+        "established_by": "Hakim's security review of the IDENTICAL commit (a99f1009d) flagged a HIGH finding the same day; Rex's code review of that same commit APPROVED. The forge-aware fix landed in the next commit (be732ce4c).",
+        "reference": "me2resh/apexyard#764"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "The merge-gate hardening closed 'gh pr merge' and 'gh api .../pulls/<N>/merge' on GitHub, and 'glab mr merge' on GitLab, but left 'glab api .../merge_requests/<N>/merge' (the raw REST passthrough) ungated — the same #47 silent-bypass class, re-opened on the GitLab side.",
+          "severity": "HIGH",
+          "location": ".claude/hooks/_lib-extract-pr.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": false
+      },
+      "notes": "Rex's code review of a99f1009d said APPROVED ('Merge-gate-critical...'); Hakim's security review of the SAME commit, same day, caught the HIGH finding Rex missed. A same-diff, cross-agent MISS — the cleanest possible pairing with hakim-767 below, since both entries score the identical commit through two different agents."
+    },
+    {
+      "id": "rex-748-007f527c",
+      "pr": 748,
+      "repo": "me2resh/apexyard",
+      "commit": "007f527c3",
+      "diff_range": "007f527c3~1..007f527c3",
+      "oracle": {
+        "source": "confirmed_fix",
+        "established_by": "Both bugs were fixed in the commit that followed this CHANGES REQUESTED review (00f70aab2).",
+        "reference": "me2resh/apexyard#743"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "A fix intended to close a structural-parse gap in the pr-create validator relied on a newline-collapse approach that is a no-op under bash 3.2 (macOS's shipped bash), so the gap it was meant to close stayed open on the platform most likely to hit it.",
+          "severity": "HIGH",
+          "location": ".claude/hooks/validate-pr-create.sh"
+        },
+        {
+          "id": "D2",
+          "description": "The regression test accompanying the fix didn't exercise the bash-3.2 code path, so it passed green while the fix it was meant to cover did nothing on that platform.",
+          "severity": "MEDIUM",
+          "location": ".claude/hooks/tests/test_validate_pr_create_structural_parse.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "CHANGES REQUESTED",
+        "was_justified": true
+      },
+      "notes": "Spike #825 row R8 (GOOD_CATCH)."
+    },
+    {
+      "id": "rex-686-07dc21c",
+      "pr": 686,
+      "repo": "me2resh/apexyard",
+      "commit": "07dc21c",
+      "diff_range": "07dc21c~1..07dc21c",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "No later review or fix on this file ever contradicted the approval. The change was a one-line jq reserved-keyword rename (`def` binding) to fix jq-1.6 compatibility.",
+        "reference": "me2resh/apexyard#668"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Spike #825 row R10 (GOOD_CLEAN) — a genuinely low-defect diff; a correct approval should score cleanly against an empty defect set."
+    },
+    {
+      "id": "rex-677-c96238b",
+      "pr": 677,
+      "repo": "me2resh/apexyard",
+      "commit": "c96238b",
+      "diff_range": "c96238b~1..c96238b",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "No later review or fix on this file ever contradicted the approval. Docs-only change clarifying that the local marker, not GitHub's review state, is the merge-gate signal.",
+        "reference": "me2resh/apexyard#587"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Spike #825 row R15 (GOOD_CLEAN) — the lowest-scoring correct approval under the disproven prose-rubric method, precisely because a docs-only diff gives a reviewer little to 'catch'. Included here deliberately: a good eval must not penalise a correct approval of a low-defect diff."
+    }
+  ]
+}

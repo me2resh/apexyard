@@ -210,6 +210,18 @@
     "timeout_minutes": 90
   },
 
+  "eval_agents": {
+    "_comment": "Config for the /eval-agents skill. corpus_dir is where docs/eval-agents/corpus/<agent>.json files live. thresholds gate the PASS/WARN verdict (non-blocking — this skill is manual/periodic measurement, not a merge gate). approve_precision_min is the headline metric per AgDR-0089 (never the blended concordance spike #825 showed hides real failures). blocking_catch_rate_min=1.0 means ANY missed BLOCKING/HIGH ground-truth defect forces WARN regardless of the aggregate score. See AgDR-0089.",
+    "corpus_dir": "docs/eval-agents/corpus",
+    "reports_dir": "docs/eval-agents/reports",
+    "thresholds": {
+      "approve_precision_min": 0.85,
+      "blocking_catch_rate_min": 1.0,
+      "overall_catch_rate_min": 0.7,
+      "false_positive_rate_max": 0.3
+    }
+  },
+
   "github_projects": {
     "_comment": "GitHub Projects (v2) board integration. Set enable_auto_moves=true to auto-move cards on SDLC lifecycle events (start-ticket → In progress, PR created → In review, merge → Measurement). board_number and owner must identify your project board. status_map keys map to the option labels on your board's Status single-select field — adjust them to match your board's column names. Override this whole block in .claude/project-config.json. See .claude/hooks/_lib-project-board.sh and me2resh/apexyard#725.",
     "owner": "",
