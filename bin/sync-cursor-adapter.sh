@@ -12,10 +12,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK=0
 CLEAN=0
+USER_MODE=0
+USER_DIR="${HOME:-}/.cursor"
 
 usage() {
   cat <<'USAGE'
 Usage: bin/sync-cursor-adapter.sh [--check] [--clean] [--root <path>]
+                                   [--user [--user-dir <path>]]
 
 Generate the Cursor adapter from .claude:
   .claude/settings.json -> .cursor/hooks.json  (commands still exec .claude/hooks)
@@ -23,8 +26,22 @@ Generate the Cursor adapter from .claude:
 
 Options:
   --check       Do not write files; fail if generated output would differ.
-  --clean       Remove generated .cursor before writing.
+  --clean       Remove generated .cursor before writing (project-level only).
   --root PATH   Repository root to use instead of this script's parent.
+  --user        MERGE the generated hooks.json into Cursor's USER-level config
+                (<--user-dir>/hooks.json, default ~/.cursor/hooks.json) instead
+                of writing a project .cursor/hooks.json. Cursor 3.x only loads
+                hooks from the user config (me2resh/apexyard#840 finding #3) —
+                prefer `bin/install-cursor-adapter.sh` over this flag directly
+                unless you need the raw merge without its uninstall/backup
+                ergonomics. The project .cursor/rules/apexyard.mdc advisory
+                bridge is still written either way. Existing non-apexyard
+                entries in the user file (any event, any hook not sourced from
+                a .claude/hooks/*.sh path) are preserved; only apexyard's own
+                entries are replaced, so this is safe to re-run.
+  --user-dir PATH  Override the user Cursor config directory (default
+                    $HOME/.cursor). Only meaningful with --user; primarily for
+                    tests, which must never write into a real $HOME.
 USAGE
 }
 
@@ -32,9 +49,15 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --check) CHECK=1 ;;
     --clean) CLEAN=1 ;;
+    --user) USER_MODE=1 ;;
     --root)
       [ "$#" -ge 2 ] || { echo "ERROR: --root requires a path" >&2; exit 2; }
       ROOT="$2"
+      shift
+      ;;
+    --user-dir)
+      [ "$#" -ge 2 ] || { echo "ERROR: --user-dir requires a path" >&2; exit 2; }
+      USER_DIR="$2"
       shift
       ;;
     -h|--help)
@@ -49,6 +72,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$USER_MODE" = "1" ] && [ -z "$USER_DIR" ]; then
+  echo "ERROR: --user requires \$HOME to be set, or pass --user-dir explicitly" >&2
+  exit 2
+fi
 
 ROOT="$(cd "$ROOT" && pwd)"
 CLAUDE_DIR="$ROOT/.claude"
@@ -298,9 +326,87 @@ check_drift() {
   fi
 }
 
+# Apexyard-owned hook entries are identified structurally, not by a custom
+# JSON field (Cursor's hook-entry schema is not documented to tolerate extra
+# keys, so we don't risk adding one) — every entry this generator emits execs
+# a `.claude/hooks/*.sh` script somewhere in its `command` string, whether via
+# the beforeShellExecution remap shim's $APEXYARD_CURSOR_ORIGINAL_HOOK or a
+# plain passthrough `exec $r/.claude/hooks/<name>.sh`. Filtering on that
+# substring is what lets --user merge (and install-cursor-adapter.sh
+# --uninstall) tell "ours, safe to replace/remove" from "the user's own
+# unrelated hook, must not touch" without any out-of-band bookkeeping file.
+owned_hooks_only() {
+  jq -S '(.hooks // {})
+    | with_entries(.value |= map(select((.command // "") | test("\\.claude/hooks/"))))
+    | with_entries(select(.value | length > 0))'
+}
+
+check_user_drift() {
+  local target="$USER_DIR/hooks.json"
+  if [ ! -f "$target" ]; then
+    echo "DRIFT: $target is missing; run bin/install-cursor-adapter.sh" >&2
+    return 1
+  fi
+  local actual_owned expected_owned
+  actual_owned=$(owned_hooks_only <"$target" 2>/dev/null) || actual_owned="{}"
+  expected_owned=$(owned_hooks_only <"$OUT_CURSOR/hooks.json")
+  if [ "$actual_owned" != "$expected_owned" ]; then
+    echo "DRIFT: apexyard-managed entries in $target differ from generated output; run bin/install-cursor-adapter.sh" >&2
+    return 1
+  fi
+}
+
+# Merge $OUT_CURSOR/hooks.json into $USER_DIR/hooks.json: every existing
+# entry whose command is NOT apexyard-owned (see owned_hooks_only above) is
+# kept untouched, in whatever event array it already lives in — a user's own
+# hooks, or another tool's, survive re-running this script. Apexyard's own
+# entries are dropped and replaced wholesale with the freshly generated ones,
+# so a re-run (or an upgrade to a newer .claude/hooks/*.sh) is idempotent
+# rather than accumulating duplicates. A timestamped backup is written before
+# every overwrite of a pre-existing, valid target file.
+install_user_hooks() {
+  mkdir -p "$USER_DIR"
+  local target="$USER_DIR/hooks.json"
+  local existing_json='{"version":1,"hooks":{}}'
+  if [ -f "$target" ]; then
+    if jq empty "$target" >/dev/null 2>&1; then
+      existing_json=$(cat "$target")
+      cp "$target" "$target.bak-$(date +%Y%m%d%H%M%S)"
+    else
+      local ts; ts=$(date +%Y%m%d%H%M%S)
+      cp "$target" "$target.bak-$ts.invalid"
+      echo "WARNING: $target was not valid JSON; backed up to $target.bak-$ts.invalid and starting fresh" >&2
+    fi
+  fi
+
+  jq -s '
+    .[0] as $existing
+    | .[1] as $generated
+    | ($existing.hooks // {}) as $ehooks
+    | ($generated.hooks // {}) as $ghooks
+    | (($ehooks | keys) + ($ghooks | keys) | unique) as $allKeys
+    | {
+        version: ($generated.version // $existing.version // 1),
+        hooks: (
+          reduce $allKeys[] as $k ({};
+            . + { ($k): (
+              (($ehooks[$k] // []) | map(select(((.command // "") | test("\\.claude/hooks/")) | not)))
+              + ($ghooks[$k] // [])
+            ) }
+          )
+        )
+      }
+  ' <(printf '%s' "$existing_json") "$OUT_CURSOR/hooks.json" > "$TMPDIR/merged-user-hooks.json"
+  mv "$TMPDIR/merged-user-hooks.json" "$target"
+}
+
 if [ "$CHECK" = "1" ]; then
   rc=0
-  check_drift "$ROOT/.cursor" "$OUT_CURSOR" ".cursor" || rc=1
+  if [ "$USER_MODE" = "1" ]; then
+    check_user_drift || rc=1
+  else
+    check_drift "$ROOT/.cursor" "$OUT_CURSOR" ".cursor" || rc=1
+  fi
   exit "$rc"
 fi
 
@@ -309,10 +415,19 @@ if [ "$CLEAN" = "1" ]; then
 fi
 
 mkdir -p "$ROOT/.cursor/rules"
-rm -f "$ROOT/.cursor/hooks.json" "$ROOT/.cursor/rules/apexyard.mdc"
-cp "$OUT_CURSOR/hooks.json" "$ROOT/.cursor/hooks.json"
+rm -f "$ROOT/.cursor/rules/apexyard.mdc"
 cp "$OUT_CURSOR/rules/apexyard.mdc" "$ROOT/.cursor/rules/apexyard.mdc"
 
-echo "Generated Cursor adapter from .claude:"
-echo "  .cursor/hooks.json"
-echo "  .cursor/rules/apexyard.mdc"
+if [ "$USER_MODE" = "1" ]; then
+  install_user_hooks
+  echo "Merged the apexyard Cursor hook adapter into the USER config (the"
+  echo "location Cursor 3.x actually loads — me2resh/apexyard#840 finding #3):"
+  echo "  $USER_DIR/hooks.json"
+  echo "  $ROOT/.cursor/rules/apexyard.mdc  (project-level advisory bridge, unaffected by the location finding)"
+else
+  rm -f "$ROOT/.cursor/hooks.json"
+  cp "$OUT_CURSOR/hooks.json" "$ROOT/.cursor/hooks.json"
+  echo "Generated Cursor adapter from .claude:"
+  echo "  .cursor/hooks.json"
+  echo "  .cursor/rules/apexyard.mdc"
+fi

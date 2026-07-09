@@ -146,7 +146,10 @@ enterprise/team-level hooks distribution; a `cursor` column on
 `.claude/harness-models.json` (no agent-config surface analogous to
 Codex's `.codex/agents/*.toml` exists for this adapter to populate — see
 docs/cursor-adapter.md § Known Limitations); a live-Cursor conformance test
-(tracked as a follow-up, same class of gap the Codex adapter carries today).
+(tracked as a follow-up — at the time this AgDR was written, Codex carried
+the same "live conformance unverified" gap Cursor did; per the GH-840 update
+below, Codex's gap has since been closed via live testing, making Cursor the
+sole remaining outlier among the four third-party adapters).
 
 ## Consequences
 
@@ -196,3 +199,34 @@ Rex's review on #838 named two follow-ups beyond the "generator hardening" fail-
 - `.claude/hooks/tests/test_sync_cursor_adapter.sh` — the fixture now wires `require-migration-ticket.sh` under the `Edit|Write|MultiEdit` matcher, with an assertion that it carries `failClosed: true` and a paired assertion that `require-active-ticket.sh` still does not (guards the boundary from drifting either direction).
 
 **Consequence.** The `FAIL_CLOSED_HOOKS` list remains a manually maintained boundary (unchanged from this AgDR's original "Consequences" section) — this update adds one more entry to it, not a new maintenance mechanism. A future security- or blast-radius-relevant hook still needs the same three-part update: the bash array, `docs/cursor-adapter.md`'s table, and a fixture assertion.
+
+## Update (GH-840) — live conformance: install location, CLI scope, and a `failClosed`-vs-delegated-execution correction
+
+The original "Update (GH-840)" section above (the `require-migration-ticket.sh` `failClosed` addition) landed before live conformance testing against a real Cursor.app session and the `cursor-agent` CLI. That testing (2026-07-09) produced three findings this section records, two of which change what adopters should actually run.
+
+**Finding 1 — the adapter must install at the USER level, not project level.** Cursor 3.x's own "Open config" points at `~/.cursor/hooks.json`. A project `.cursor/hooks.json` — what `bin/sync-cursor-adapter.sh` generates without `--user`, and what this AgDR originally specified as the sole output — showed `Configured Hooks (0)` in a real Cursor.app 3.10.20 session: never loaded, no trust prompt. The *identical* generated file, installed at `~/.cursor/hooks.json` instead, showed `Configured Hooks (1)` and was loaded and enforced. This was a **location bug, not a schema bug** — `version: 1`, the `beforeShellExecution` event, and `failClosed` were already correct; only the write target was wrong.
+
+**Finding 2 — `cursor-agent` (the CLI) does not read `hooks.json` at all.** Instrumented every generated `beforeShellExecution` entry to log on fire, then ran a benign command through `cursor-agent -p -f`: the command executed and the log stayed empty. `cursor-agent` enforces via its own `~/.cursor/cli-config.json` `permissions.allow`/`deny` model — a different, undocumented-by-this-adapter surface. This AgDR's Scope section already excluded CLI agent-config surfaces by omission (it only ever discussed the Cursor IDE); this finding makes that exclusion explicit and confirmed rather than merely unaddressed.
+
+**Finding 3 — observed IDE enforcement is `failClosed`, not confirmed clean delegated execution.** With the adapter correctly installed at the user level, a real Cursor.app 3.10.20 agent turn's `git add .` was blocked and nothing staged. But the delegated hook's own instrumentation (a log write on fire) never wrote, and the agent explained the block by grepping `block-git-add-all.sh`'s source rather than citing execution output — and separately reported `MainThreadShellExec not initialized` when the shell-exec path was probed directly. The defensible read: Cursor's hook-runner could not cleanly exec the delegated bash command in this version, and `failClosed: true` (Axis 3's hardening, chosen for a different reason — hardening against hook *crashes*) denied the action because the hook-runner itself errored, not because `block-git-add-all.sh` ran and returned exit 2. This is materially weaker than what Axis 2's "proven end-to-end against a real gate hook" language in this AgDR's original Consequences section claimed — that proof was against a synthetic fixture (`test_sync_cursor_adapter.sh`), not a live Cursor session, and the live session does not confirm the same execution path holds.
+
+**Decision — corrections to ship, not just observations to record.**
+
+1. **`bin/install-cursor-adapter.sh` is added** as the primary entrypoint (mirroring the pi/opencode adapters' install-script pattern from #844/#845): it merges the same generated hooks.json content into `~/.cursor/hooks.json`, preserving any pre-existing non-apexyard entries there, with a timestamped backup before every write and a symmetric `--uninstall`.
+2. **`bin/sync-cursor-adapter.sh` gains `--user [--user-dir <path>]`**, reusing its existing jq generation pipeline unchanged and adding only the merge-into-user-config write path — no gate logic forked. Default (no `--user`) behaviour, and the tests exercising it, are unchanged; project-level generation is kept available (useful for inspection, for a possible future Cursor version that reads project config, or for adopters who want to track the generated file), documented as no longer the load-bearing install path.
+3. **Docs corrected to state the install-location finding as fact, not a caveat** — `docs/cursor-adapter.md` and `docs/harnesses/cursor.md` lead with "install at the user level" rather than mentioning it as a footnote.
+4. **The `failClosed`-vs-delegated-execution gap is documented as an open, unresolved limitation**, not glossed over as "delegation confirmed." Both docs pages now say plainly: enforcement observed so far blocks *known-bad* commands, but does not yet prove the gate's actual decision logic (as opposed to a hook-runner error) is what's running. Whether Cursor's `beforeShellExecution` can cleanly exec an external script in agent mode at all remains an open investigation.
+5. **`cursor-agent` non-coverage is stated plainly**, not implied by omission — both docs pages and `bin/install-cursor-adapter.sh`'s own output now say the CLI is not addressed and enforces via a separate `cli-config.json` permissions model.
+
+**What did NOT change:** the event-mapping table (Axis 1), the `beforeShellExecution` stdin remap (Axis 2), and the `failClosed` hook list (Axis 3, plus the `require-migration-ticket.sh` addition above) are all unaffected — the schema this AgDR chose was correct throughout; only the install target and the honesty of the delegated-execution claim needed fixing.
+
+**Consequence.** `.claude/` remains the sole source of truth for gate logic; nothing here forks it. The `FAIL_CLOSED_HOOKS` list is now doing double duty on Cursor specifically: its originally-intended role (hardening against a genuinely crashed or timed-out hook) and, per Finding 3, most of the *actually observed* enforcement on the current Cursor release — a fact worth remembering if a future Cursor update makes delegated execution reliable and this posture ought to be revisited. A live-Cursor conformance test suite (beyond the manual testing this update records) remains a tracked gap; `MainThreadShellExec not initialized` is not yet filed as its own tracked issue as of this writing.
+
+## Artifacts (GH-840 update)
+
+- Refs me2resh/apexyard#840
+- `bin/install-cursor-adapter.sh` (new)
+- `bin/sync-cursor-adapter.sh` (`--user`/`--user-dir` added)
+- `docs/cursor-adapter.md`, `docs/harnesses/cursor.md` (corrected)
+- `.claude/hooks/tests/test_sync_cursor_adapter.sh` (`--user` merge/idempotency/drift assertions added)
+- `.claude/hooks/tests/test_install_cursor_adapter.sh` (new)

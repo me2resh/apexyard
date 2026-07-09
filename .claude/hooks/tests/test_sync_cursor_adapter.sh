@@ -338,6 +338,117 @@ else
 fi
 assert_file "$TMPROOT/.cursor/hooks.json" "hooks.json exists after --clean"
 
+# --- --user mode: merge into a USER-level hooks.json (me2resh/apexyard#840
+# finding #3 — Cursor 3.x only loads the user config, not project
+# .cursor/hooks.json). Uses --user-dir to point at a throwaway fixture
+# directory — MUST NEVER touch a real $HOME. ---------------------------
+echo "== Cursor adapter --user merge"
+
+USERDIR="$TMPROOT/fake-home/.cursor"
+mkdir -p "$USERDIR"
+
+# Seed the "existing user config" with one entry that is NOT apexyard's
+# (must survive every merge) and one stale apexyard-owned entry (must be
+# replaced, not duplicated, on every run).
+cat > "$USERDIR/hooks.json" <<'JSON'
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      { "command": "some-other-tool --check" },
+      { "command": "bash -c 'exec /some/old/path/.claude/hooks/stale-hook.sh'" }
+    ],
+    "beforeMCPExecution": [
+      { "command": "unrelated-mcp-guard" }
+    ]
+  }
+}
+JSON
+
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >/tmp/_cursor_adapter_user.out 2>&1; then
+  mark_pass "--user merges into the user-level hooks.json"
+else
+  mark_fail "--user merges into the user-level hooks.json" "$(cat /tmp/_cursor_adapter_user.out)"
+fi
+
+assert_file "$USERDIR/hooks.json" "user hooks.json exists after --user"
+
+if jq -e '[.hooks.beforeShellExecution[] | select(.command == "some-other-tool --check")] | length == 1' "$USERDIR/hooks.json" >/dev/null 2>&1; then
+  mark_pass "--user preserves a pre-existing non-apexyard hook entry"
+else
+  mark_fail "--user preserves a pre-existing non-apexyard hook entry" "$(jq '.hooks.beforeShellExecution' "$USERDIR/hooks.json")"
+fi
+
+if jq -e '[.hooks.beforeShellExecution[] | select(.command | contains("stale-hook.sh"))] | length == 0' "$USERDIR/hooks.json" >/dev/null 2>&1; then
+  mark_pass "--user drops the stale apexyard-owned entry it replaces"
+else
+  mark_fail "--user drops the stale apexyard-owned entry it replaces" "stale-hook.sh entry still present"
+fi
+
+if jq -e '[.hooks.beforeShellExecution[] | select(.command | contains(".claude/hooks/check-secrets.sh"))] | length == 1' "$USERDIR/hooks.json" >/dev/null 2>&1; then
+  mark_pass "--user installs the freshly generated apexyard entries"
+else
+  mark_fail "--user installs the freshly generated apexyard entries" "$(jq '.hooks.beforeShellExecution' "$USERDIR/hooks.json")"
+fi
+
+if jq -e '.hooks.beforeMCPExecution[0].command == "unrelated-mcp-guard"' "$USERDIR/hooks.json" >/dev/null 2>&1; then
+  mark_pass "--user leaves an untouched, unrelated event array alone"
+else
+  mark_fail "--user leaves an untouched, unrelated event array alone" "$(jq '.hooks.beforeMCPExecution' "$USERDIR/hooks.json")"
+fi
+
+if compgen -G "$USERDIR/hooks.json.bak-*" >/dev/null 2>&1; then
+  mark_pass "--user backs up the pre-existing user hooks.json before overwriting"
+else
+  mark_fail "--user backs up the pre-existing user hooks.json before overwriting" "no hooks.json.bak-* found"
+fi
+
+assert_file "$TMPROOT/.cursor/rules/apexyard.mdc" "--user still refreshes the project-level rules bridge"
+
+before_count=$(jq '[.hooks.beforeShellExecution[]] | length' "$USERDIR/hooks.json")
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >/tmp/_cursor_adapter_user2.out 2>&1; then
+  mark_pass "--user re-run succeeds"
+else
+  mark_fail "--user re-run succeeds" "$(cat /tmp/_cursor_adapter_user2.out)"
+fi
+after_count=$(jq '[.hooks.beforeShellExecution[]] | length' "$USERDIR/hooks.json")
+if [ "$before_count" = "$after_count" ]; then
+  mark_pass "--user re-run is idempotent (no duplicate entries)"
+else
+  mark_fail "--user re-run is idempotent (no duplicate entries)" "count went from $before_count to $after_count"
+fi
+
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check.out 2>&1; then
+  mark_pass "--user --check passes when the user config is current"
+else
+  mark_fail "--user --check passes when the user config is current" "$(cat /tmp/_cursor_adapter_user_check.out)"
+fi
+
+jq '.hooks.beforeShellExecution += [{"command": "manual-tamper"}]' "$USERDIR/hooks.json" > "$USERDIR/hooks.json.tmp"
+mv "$USERDIR/hooks.json.tmp" "$USERDIR/hooks.json"
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check2.out 2>&1; then
+  mark_pass "--user --check still passes when only a non-apexyard entry was added"
+else
+  mark_fail "--user --check still passes when only a non-apexyard entry was added" "$(cat /tmp/_cursor_adapter_user_check2.out)"
+fi
+
+jq '.hooks.beforeShellExecution |= map(select((.command | contains(".claude/hooks/check-secrets.sh")) | not))' "$USERDIR/hooks.json" > "$USERDIR/hooks.json.tmp"
+mv "$USERDIR/hooks.json.tmp" "$USERDIR/hooks.json"
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check3.out 2>&1; then
+  mark_fail "--user --check detects drift when an apexyard entry is removed" "expected non-zero exit"
+else
+  mark_pass "--user --check detects drift when an apexyard entry is removed"
+fi
+
+# --- --user mode against a directory with no pre-existing hooks.json ----
+FRESH_USERDIR="$TMPROOT/fake-home-fresh/.cursor"
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$FRESH_USERDIR" >/tmp/_cursor_adapter_user_fresh.out 2>&1; then
+  mark_pass "--user creates the user config from scratch when absent"
+else
+  mark_fail "--user creates the user config from scratch when absent" "$(cat /tmp/_cursor_adapter_user_fresh.out)"
+fi
+assert_file "$FRESH_USERDIR/hooks.json" "fresh user hooks.json exists"
+
 echo
 echo "===== test_sync_cursor_adapter.sh ====="
 echo "Passed: $PASS"

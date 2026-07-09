@@ -9,7 +9,70 @@ Decision record: [`AgDR-0091`](agdr/AgDR-0091-cursor-adapter-generation.md).
 Precedent: [`AgDR-0088`](agdr/AgDR-0088-codex-adapter-generation.md) (Codex),
 [`AgDR-0082`](agdr/AgDR-0082-pi-gate-dispatcher-adapter.md) (pi).
 
-## Generate The Adapter
+> **Install at the USER level, not the project level (me2resh/apexyard#840).**
+> Live testing against Cursor.app 3.10.20 found that Cursor 3.x's real hook
+> loader reads `~/.cursor/hooks.json` (the USER config) — a project
+> `.cursor/hooks.json` shows `Configured Hooks (0)` and is never loaded, no
+> trust prompt. Use **`bin/install-cursor-adapter.sh`** (below) to install for
+> real. The project-scoped generation this page describes further down
+> (`bin/sync-cursor-adapter.sh` with no `--user` flag) still works and is kept
+> available — for inspection, for a future Cursor version that may read
+> project-level config, or for adopters who want to track the generated file
+> in git — but it will not be loaded by a current Cursor.app session on its
+> own.
+
+**Where Cursor stands among the four third-party adapters.** opencode and pi
+are both live-proven — their CLIs genuinely execute the delegated extension
+code. Codex carried the same "live conformance unverified" caveat as Cursor
+when its own AgDR (AgDR-0088) was written, but live testing has since closed
+that gap (it turned out to be a trust-prompt issue, resolved via
+`--dangerously-bypass-hook-trust` / a user-level trust grant) — Codex is now
+live-proven too. **Cursor is the sole remaining outlier**: see "Known
+Limitations" below for exactly what "enforced" means on Cursor today.
+
+## Install (the path that actually loads in Cursor 3.x)
+
+```bash
+bin/install-cursor-adapter.sh
+```
+
+This merges the generated hooks into `~/.cursor/hooks.json` (override with
+`--user-dir <path>`) and refreshes the project-level
+`.cursor/rules/apexyard.mdc` advisory bridge in `--root` (defaults to this
+script's own repo). The merge is additive and safe to re-run: any hook
+already in `~/.cursor/hooks.json` that this framework did not generate — the
+user's own, or a different tool's — is left alone. Only apexyard's own
+entries (identified structurally: every one execs a `.claude/hooks/*.sh`
+script) are replaced, so re-running after a `.claude/hooks/*.sh` upgrade
+doesn't accumulate duplicates. A timestamped backup of the pre-merge file is
+written before every overwrite.
+
+```bash
+bin/install-cursor-adapter.sh --uninstall
+```
+
+Removes only apexyard's own entries from `~/.cursor/hooks.json`, leaving
+everything else in that file untouched. Also backed up first.
+
+**Scope note.** Unlike the pi/opencode adapters (installed per-project into
+that project's `.pi/extensions/` or `.opencode/plugins/`), this is a
+per-machine (per-OS-user) install — Cursor's hook loader reads one
+`~/.cursor/hooks.json` and applies it across every project you open in
+Cursor. That's safe here because every generated hook command still
+self-scopes: it resolves ops-root by walking up from Cursor's cwd for an
+`.apexyard-fork` marker and exits 0 immediately if the current project isn't
+apexyard-governed — installing once does not force apexyard's gates onto
+unrelated Cursor projects.
+
+**`cursor-agent` (the CLI) is NOT covered by this adapter.** Live testing
+confirmed `cursor-agent` ignores `hooks.json` entirely — it enforces via its
+own `~/.cursor/cli-config.json` `permissions.allow`/`deny` model instead. A
+CLI-targeting adapter (translating apexyard's gates into
+`cli-config.json` permissions) is out of scope here and would be separate
+future work. Only the Cursor IDE agent (Cursor.app / Composer) is addressed
+by `hooks.json`.
+
+## Generate The Project-Level Adapter (kept available, not the load-bearing path)
 
 ```bash
 bin/sync-cursor-adapter.sh
@@ -27,6 +90,12 @@ adapter (see AgDR-0091 § Scope). The generated `hooks.json` keeps commands
 that exec the unmodified `.claude/hooks/*.sh` scripts, so gate decisions,
 session markers, review markers, and trust-chain path checks stay in the same
 audited bash files every harness delegates to.
+
+Both scripts share the exact same jq generation pipeline — `--user` (and
+`install-cursor-adapter.sh`, which drives it) doesn't fork the gate logic,
+it changes only where the result is written: merged into
+`<--user-dir>/hooks.json` instead of copied to `<--root>/.cursor/hooks.json`.
+See `bin/sync-cursor-adapter.sh --help` for the full flag set.
 
 ## Event Mapping
 
@@ -154,23 +223,55 @@ tracking the generated adapter plus enforcing `--check` in CI.
 
 ## Known Limitations
 
-- **Live-Cursor conformance is unverified.** This repository's bash smoke
-  test (`.claude/hooks/tests/test_sync_cursor_adapter.sh`) proves command
-  delegation, the stdin remap, and exit-code preservation entirely inside a
-  synthetic fixture — it does not prove a real Cursor session actually loads
-  `.cursor/hooks.json`, fires `beforeShellExecution` on every shell command,
-  or blocks a real `gh pr merge` attempt end-to-end. A live-Cursor
-  conformance test (a real Cursor session driving `gh pr merge` against
-  `block-unreviewed-merge.sh` and observing the deny) is a tracked follow-up,
-  same gap the Codex adapter carries today.
-- **`preToolUse`/`postToolUse` field-name conformance is unverified.** The
-  live docs confirm `tool_input.command` for the `Shell` matcher (which this
-  adapter avoids by using `beforeShellExecution` instead) but do not document
-  the exact `tool_input` field names Cursor's own `Write`/`Read` tools use.
-  Hooks delegated through `preToolUse`/`postToolUse` (the ticket-first gate,
+Live testing against a real Cursor.app 3.10.20 session and the `cursor-agent`
+CLI (me2resh/apexyard#840) resolved some of what earlier revisions of this
+page marked "unverified" and surfaced two new, more specific limitations.
+Read this section before relying on the adapter for anything beyond "known
+commands get blocked."
+
+- **`cursor-agent` (the CLI) is not covered — confirmed, not just untested.**
+  Live testing instrumented every generated hook to log on fire, then ran a
+  benign command through `cursor-agent -p -f`: the command executed and
+  **zero hooks fired**. `cursor-agent` does not read `hooks.json` at all; it
+  enforces via its own `~/.cursor/cli-config.json` `permissions.allow`/`deny`
+  model. Anything that looked like enforcement from the CLI in earlier,
+  informal testing was that allowlist, not this adapter. Only the Cursor IDE
+  agent (Cursor.app / Composer) is addressed here.
+- **The IDE only loads the USER-level hooks.json, not project-level —
+  confirmed.** A project `.cursor/hooks.json` (what `sync-cursor-adapter.sh`
+  writes without `--user`) showed `Configured Hooks (0)` in Cursor.app
+  3.10.20 — never loaded, no trust prompt. The identical file installed at
+  `~/.cursor/hooks.json` showed `Configured Hooks (1)` and was enforced.
+  `bin/install-cursor-adapter.sh` targets the correct location by default;
+  see "Install" above. This was a location bug, not a schema bug — `version:
+  1`, `beforeShellExecution`, and `failClosed` were already correct.
+- **Enforcement observed so far is `failClosed`, not confirmed clean
+  delegated execution.** With the adapter loaded at the user level, a real
+  agent turn's `git add .` was blocked and nothing staged — the gate held.
+  But the delegated bash hook's own instrumentation (a log write on fire)
+  never fired, and the agent reported `MainThreadShellExec not initialized`
+  when asked to explain the block — it sourced its explanation by grepping
+  `block-git-add-all.sh`, not from execution output. The most defensible
+  read: Cursor's hook-runner could not cleanly exec the delegated bash
+  command in this version, and `failClosed: true` denied the action because
+  the hook errored — not because the gate logic evaluated and returned exit
+  2. This is **weaker than the opencode/pi adapters**, where the delegated
+  bash genuinely runs: (a) a command a gate would *allow* may also fail
+  closed and get blocked incorrectly, and (b) the block doesn't prove the
+  gate's actual decision logic ran. Whether `beforeShellExecution` can
+  cleanly exec an external script in Cursor's agent mode at all, or whether
+  this is a hard limitation of the current release, is an open investigation
+  — not yet filed as a separate tracked follow-up as of this writing. Treat
+  this adapter as "known-bad commands get blocked" until that's resolved,
+  not as "the gate logic runs and you can trust an allow."
+- **`preToolUse`/`postToolUse` field-name conformance is still unverified.**
+  The live docs confirm `tool_input.command` for the `Shell` matcher (which
+  this adapter avoids by using `beforeShellExecution` instead) but do not
+  document the exact `tool_input` field names Cursor's own `Write`/`Read`
+  tools use, and the live IDE test above did not exercise this path. Hooks
+  delegated through `preToolUse`/`postToolUse` (the ticket-first gate,
   `maintain-docs-index.sh`, etc.) may receive a differently-shaped
-  `tool_input` than the `.claude/hooks/*.sh` scripts expect until this is
-  verified against a real session.
+  `tool_input` than the `.claude/hooks/*.sh` scripts expect.
 - **Model pinning is out of scope.** Cursor hook generation does not need
   agent model-tier pinning the way the Codex adapter does (Codex agents run
   under `.codex/agents/*.toml` with a translated model label). This adapter
