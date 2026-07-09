@@ -1,12 +1,20 @@
 # Harness support — Codex
 
-**Status:** Adapter **merged** (#730, [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md)); live Codex-runtime conformance test pending.
+**Status:** ⏳ **Not enforcing in headless (2026-07-09).** The adapter generates a schema-correct `.codex/hooks.json` and the model mapping is right, but a definitive probe showed `codex exec -m gpt-5.5` runs a benign shell command *without* firing the project `.codex/hooks.json` hook (empty instrumentation log) — so headless `codex exec` does **not** honor project hooks. Not live-proven. Adapter merged (#730, [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md)).
 
 Codex support is **generated** from the canonical `.claude/` runtime rather than hand-maintained, so the two agent surfaces can't drift by hand. This page is the short orientation; the full generate / drift-check / tracking-policy workflow lives in **[`docs/codex-adapter.md`](../codex-adapter.md)** (kept at its existing path — linked here, not duplicated or moved).
 
+## What's verified vs not
+
+- **Verified correct:** the generated `.codex/hooks.json` schema (validated against the Codex hooks docs, AgDR-0088) and the model mapping — `opus`→`gpt-5.5` is the real ChatGPT-account default, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`. The in-repo test (`.claude/hooks/tests/test_sync_codex_adapter.sh`) proves the generated command path preserves the hook stdin and exit-code contract (block on `exit 2`, allow on `exit 0`, skip on a non-matching predicate).
+- **NOT achieved:** live enforcement on the headless `codex exec` surface. A `codex exec -m gpt-5.5` run had a shell command reach execution with the project hook not firing — so on that surface the gate is bypassed, not enforced.
+- **Untested (and likely required):** the interactive `codex` TUI and/or a **user-level** `~/.codex/hooks.json`. Codex may only load hooks in interactive mode or from a user-level config — mirroring the Cursor user-level finding. Verifying that path is the open item.
+
+**Codex is a declarative-hooks adapter.** Unlike opencode and pi — imperative-plugin adapters whose gate runs inside the harness's own tool-call event, and which are therefore live-proven in headless/CLI — Codex delegates through a static `hooks.json` the harness must *load*. Its headless CLI (`codex exec`) doesn't load a project-level one, the same shape as the `cursor-agent` CLI. That single design difference is why Codex hasn't cleared the live bar. See the architectural split in the [harness index](README.md#support-matrix) for the full framing.
+
 ## What's enforced vs advisory today
 
-**Delegated (blocking, by construction):** the generated `.codex/hooks.json` keeps the commands that exec the *unmodified* `.claude/hooks/*.sh`. A `PreToolUse` gate that exits `2` blocks the action under Codex the same way it does under Claude Code — the merge gate, red-CI block, ticket-first, secrets/leak-protection, and the review gates all run the same audited bash. The adapter's in-repo test (`.claude/hooks/tests/test_sync_codex_adapter.sh`) proves the generated command path preserves the hook stdin and exit-code contract across the adapter boundary (block on `exit 2`, allow on `exit 0`, skip on a non-matching predicate).
+**Delegated (by construction, but not firing in `codex exec`):** the generated `.codex/hooks.json` keeps the commands that exec the *unmodified* `.claude/hooks/*.sh`. By design a `PreToolUse` gate that exits `2` blocks the action the same way it does under Claude Code — the merge gate, red-CI block, ticket-first, secrets/leak-protection, and the review gates all run the same audited bash. The gap is the *loading*: the headless `codex exec` surface does not invoke these project hooks, so this delegation is currently unexercised there.
 
 **Advisory:** the generated skills/agents carry the same guidance content as Claude Code's, but Claude-Code-specific advisory banners (role triggers, drift notices) are not part of Codex's documented hook shape.
 
@@ -30,9 +38,14 @@ bin/sync-codex-adapter.sh --clean    # remove generated .agents/ and .codex/ tre
 
 Tracking policy, gitignore guidance, and CI `--check` enforcement: [`docs/codex-adapter.md`](../codex-adapter.md).
 
+## Preconditions
+
+- **Do not rely on `codex exec` (headless) for enforcement today** — it runs shell commands without firing the project `.codex/hooks.json` hook, so gates are bypassed on that surface. Treat it as advisory-only until the interactive/user-level path is verified.
+- The generated hooks assume Codex loads a trusted **project** `.codex/hooks.json`; the open work is establishing whether the interactive `codex` TUI or a **user-level** `~/.codex/hooks.json` is what actually loads them (mirroring the Cursor user-level finding).
+
 ## Gaps + tracking
 
-The one honest gap is **live Codex-runtime conformance**: the in-repo bash test proves command delegation and exit-code preservation, but a credentialed, model-driven Codex turn *actually* being blocked by a gate has not been recorded yet — that depends on Codex loading trusted project hooks and invoking matching hook events as documented. This is the same last-mile asterisk every non-Claude adapter carries, and it is exactly the bar the [rebrand trigger](README.md#rebrand-trigger) requires ≥2 adapters to clear.
+The honest gap is **the hook doesn't fire on `codex exec`**: the in-repo bash test proves command delegation and exit-code preservation *by construction*, but a definitive 2026-07-09 probe showed the headless CLI runs a command with the project hook not firing. So a credentialed, model-driven Codex turn actually blocked by a gate has **not** been recorded — and on the surface tested, isn't achievable. The next step is verifying the interactive TUI and/or user-level `~/.codex/hooks.json` path. This keeps Codex below the [rebrand trigger](README.md#rebrand-trigger) bar (which opencode + pi have cleared). Tracked in #840.
 
 ## Related AgDRs
 

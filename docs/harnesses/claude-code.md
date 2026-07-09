@@ -26,6 +26,14 @@ There is no transport layer — Claude Code *is* the runtime the other adapters 
 
 Fork `me2resh/apexyard`, clone it, run `/setup`, and register projects with `/handover`. The `.claude/` directory is picked up automatically. Full walkthrough: [`docs/getting-started.md`](../getting-started.md); portfolio model: [`docs/multi-project.md`](../multi-project.md).
 
+## Preconditions
+
+None beyond a working Claude Code install. The hooks are wired natively via `.claude/settings.json` and fire on every tool call — no adapter, no install flag, and (unlike the imperative-plugin and declarative-hooks adapters) no interactive-vs-headless caveat. The single OS-level prerequisite: on Windows the bash hooks need Git Bash / WSL.
+
+## What's verified
+
+Enforcement is native and exercised continuously — every gate in this framework runs against Claude Code itself on every session. This is the reference surface the other adapters are measured against.
+
 ## Gaps + tracking
 
 None specific to Claude Code — it is the feature-complete baseline. The one cross-cutting limitation is OS-level: on Windows the hooks require Git Bash / WSL (a documented prerequisite, not a silent failure — see [AgDR-0086](../agdr/AgDR-0086-hooks-stay-bash-not-ported.md)).

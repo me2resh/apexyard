@@ -1,8 +1,12 @@
 # Harness support — opencode
 
-**Status:** Adapter **merged** (#821 → PR #839, [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md)); live opencode model-turn conformance pending (#821 remains open for exactly that AC).
+**Status:** ✅ **Live-proven (2026-07-09)** — a real `opencode run --auto` model turn's `git add -A` was blocked by the delegated `block-git-add-all.sh` (verbatim hook output, nothing staged). Adapter merged (#821 → PR #839, [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md)); install shape hardened in #845.
 
-opencode support is a **live TypeScript plugin** (opencode exposes an imperative plugin API rather than declarative hook config), but the governance stays single-source: the plugin is a thin transport that shells out to the **unmodified `.claude/hooks/*.sh`** and blocks the tool call when a hook exits `2`. Full install/usage in **[`docs/opencode-adapter.md`](../opencode-adapter.md)** (linked here, not duplicated).
+## What's verified
+
+A credentialed opencode session, run with `--auto`, issued `git add -A` during a real model turn and the delegated bash gate refused it — the same `.claude/hooks/block-git-add-all.sh` Claude Code runs, exit 2, nothing staged. This is the live end-to-end conformance proof the [rebrand trigger](README.md#rebrand-trigger) requires: not a mock, not a by-construction test. opencode is one of the two adapters (with pi) that cleared that bar.
+
+**Why opencode enforces in headless/CLI:** it exposes an **imperative plugin API**, so the gate runs inside opencode's own `tool.execute.before` event during the real turn — no dependency on the harness loading a static hook-config file. That's the architectural reason the CLI path enforces here where the declarative-hooks adapters (Codex, Cursor) need the interactive/IDE path. The governance still stays single-source: the plugin is a thin transport that shells out to the **unmodified `.claude/hooks/*.sh`** and blocks the tool call when a hook exits `2`. Full install/usage in **[`docs/opencode-adapter.md`](../opencode-adapter.md)** (linked here, not duplicated).
 
 ## What's enforced vs advisory today
 
@@ -22,11 +26,24 @@ opencode support is a **live TypeScript plugin** (opencode exposes an imperative
 
 ## How to install
 
-See [`docs/opencode-adapter.md`](../opencode-adapter.md) — opencode auto-discovers local plugins under `.opencode/plugins/` (plural — see #844). Install via `bash bin/install-opencode-adapter.sh`, which writes the adapter into a subdirectory shape (`.opencode/plugins/apexyard/`) rather than a flat file copy; a flat copy crashes opencode at startup (#844).
+```bash
+bash bin/install-opencode-adapter.sh
+```
+
+That writes the adapter into `.opencode/plugins/apexyard/` — a **subdirectory** shape, not a flat file copy. Both details are load-bearing and were confirmed live against opencode 1.17.16 (#844/#845):
+
+- The discovery directory is **plural** — `.opencode/plugins/` — the singular `.opencode/plugin/` silently loads nothing.
+- Every file must sit inside the one subdirectory behind a re-export `index.ts` shim; a flat `cp` of the adapter + its helper modules crashes opencode at startup, because opencode treats every exported function of a discovered file as a candidate plugin factory.
+
+Full reference: [`docs/opencode-adapter.md`](../opencode-adapter.md).
+
+## Preconditions
+
+- **Run with `--auto`** (e.g. `opencode run --auto`). Without it, opencode resolves the shell action through its own approval flow and the tool call may never reach `tool.execute.before` — so the gate never fires. `--auto` is what let the live proof exercise the real hook.
+- Loaded from inside an apexyard ops fork (the plugin's ops-root anchor-walk no-ops cleanly outside one).
 
 ## Gaps + tracking
 
-- **Live model-turn conformance** — the transport is proven against the real hooks in-repo; a credentialed opencode session invoking `tool.execute.before` against this shipped dispatcher has not been recorded (spike #816 proved the pattern live against a throwaway prototype, not this code). That closing AC is why **#821 stays open**.
 - Family hardening (bounded exec timeout, stdin for read-class tools, loud parse-failure warning): **#840**.
 
 ## Related AgDRs
