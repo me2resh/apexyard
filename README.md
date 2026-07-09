@@ -28,6 +28,20 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 **Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
 
+## Harness support
+
+ApexYard is **built for Claude Code** — that's where the whole experience is native. But its mechanical enforcement layer is **portable bash**, not Claude-Code-specific, so other agent harnesses reach the *same* gates through thin adapters that shell out to the unmodified `.claude/hooks/*.sh` scripts. This is the honest, per-harness "what works where, today" view — no over-claiming an enforcement path that hasn't been live-proven.
+
+| Harness | Advisory governance | Mechanical gates | Status |
+|---------|---------------------|------------------|--------|
+| **Claude Code** | Native — `CLAUDE.md` auto-loads; all rules, skills, agents are first-class | **Enforced live** — bash hooks fire on every tool call | **Native, full experience** |
+| **Codex** | Generated from `.claude/` into `.agents/` + `.codex/` | **Delegated** — generated `.codex/hooks.json` execs the unmodified bash hooks | Adapter **merged** (#730, [AgDR-0088](docs/agdr/AgDR-0088-codex-adapter-generation.md)); live conformance test pending |
+| **pi** (pi.dev) | `AGENTS.md` + `SYSTEM.md` advisory bridge | **Delegated** — one dispatcher extension over the unmodified bash hooks | Adapter **shipped**; live model-turn conformance pending (#815, [AgDR-0082](docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md)) |
+| **opencode** | Planned | **Delegated** plugin over the bash hooks (planned) | **Planned** (#821) |
+| **Cursor** | Planned | Generated `.cursor/hooks.json` delegating to the bash hooks (planned) | **Planned** (#831) |
+
+The shared-core reason this works: gates stay portable bash ([AgDR-0086](docs/agdr/AgDR-0086-hooks-stay-bash-not-ported.md)), `.claude/` is the one canonical authoring surface, harnesses are transports (never a second copy of the gate logic), and model tiers resolve through one matrix ([`.claude/harness-models.json`](.claude/harness-models.json), [AgDR-0088](docs/agdr/AgDR-0088-codex-adapter-generation.md)). Full per-harness breakdown, the adapter-authoring pattern for new harnesses, and the rebrand trigger → **[`docs/harnesses/`](docs/harnesses/README.md)**.
+
 ## Codex Adapter
 
 ApexYard can generate a Codex-facing adapter from the canonical `.claude/` runtime:
