@@ -71,11 +71,16 @@ mkdir -p "$OUT_CURSOR/rules"
 # instead of failing open) — Cursor hardening Codex doesn't offer. The list
 # is derived from hook class, not hand-picked per-PR: merge gates (the four
 # hooks that guard `gh pr merge` / `gh api .../merge`), the secrets scanner,
-# and the trust/leak-protection class (no-direct-main, no-git-add-all, the
-# leak-protection scrubber, and the onboarding-config leak guard). Every
-# other hook (ticket-vocabulary format checks, ticket-first gates, advisory
-# banners) stays fail-open — same default Cursor ships and the same posture
-# those hooks already have under Claude Code (they exit 0 on error today).
+# the trust/leak-protection class (no-direct-main, no-git-add-all, the
+# leak-protection scrubber, and the onboarding-config leak guard), and the
+# migration blast-radius gate (require-migration-ticket.sh — schema/data
+# migrations are high blast-radius the same way a merge is; a crashed or
+# timed-out hook here should block the edit, not silently wave it through —
+# decided on #840 B3, see docs/agdr/AgDR-0091's "Update (GH-840)" section).
+# Every other hook (ticket-vocabulary format checks, the general ticket-first
+# gate, advisory banners) stays fail-open — same default Cursor ships and the
+# same posture those hooks already have under Claude Code (they exit 0 on
+# error today).
 FAIL_CLOSED_HOOKS=(
   block-unreviewed-merge.sh
   block-merge-on-red-ci.sh
@@ -86,6 +91,7 @@ FAIL_CLOSED_HOOKS=(
   block-main-push.sh
   block-private-refs-in-public-repos.sh
   block-onboarding-in-git.sh
+  require-migration-ticket.sh
 )
 fail_closed_json=$(printf '%s\n' "${FAIL_CLOSED_HOOKS[@]}" | jq -R . | jq -s .)
 

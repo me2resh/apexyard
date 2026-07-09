@@ -180,3 +180,19 @@ docs/cursor-adapter.md § Known Limitations); a live-Cursor conformance test
 - `docs/cursor-adapter.md`
 - `.claude/hooks/tests/test_sync_cursor_adapter.sh`
 - Precedent: AgDR-0088 (Codex adapter), AgDR-0082 (pi gate dispatcher adapter), AgDR-0086 (hooks stay bash), AgDR-0087 (frontier-model floor — not applicable here, no model pinning added)
+
+## Update (GH-840)
+
+Rex's review on #838 named two follow-ups beyond the "generator hardening" fail-loud guard (tracked separately as B1/B2): whether `require-migration-ticket.sh` belongs on `FAIL_CLOSED_HOOKS` alongside the four merge gates, the secrets scanner, and the trust-chain/leak-protection class. This section records that call.
+
+**Decision: yes — added.** `require-migration-ticket.sh` is now in `FAIL_CLOSED_HOOKS` in `bin/sync-cursor-adapter.sh`, wired under Cursor's `preToolUse` event (the same `Edit|Write|MultiEdit` path `require-active-ticket.sh` already uses).
+
+**Rationale.** The `failClosed` boundary this AgDR's Axis 3 established was never "every hook that can block" — it's specifically the hooks whose *silent fail-open* is itself a high-blast-radius outcome: an unreviewed merge slipping through, a secret landing in a public diff, a leaked private-project reference, a direct push to `main`. `require-migration-ticket.sh` belongs in that company for the same reason: it exists precisely because schema/data migrations carry outsized blast radius (data loss, downtime, cross-service coordination — see `.claude/rules/workflow-gates.md` § "Migration Gate (3a)"), and gates the *start* of that work, not just its merge. A crashed or timed-out hook here that fails open would let a migration file get edited with no ticket, no AgDR, and no rollback plan on record — the exact failure the gate exists to prevent, just arriving via hook-crash instead of via a missing ticket. `require-active-ticket.sh` (the general ticket-first gate) deliberately stays fail-open, by contrast: its blast radius on a crash is "an edit proceeds without a ticket reference," a process gap Rex and the merge gate can still catch downstream, not a data-loss-class event.
+
+**What changed:**
+
+- `bin/sync-cursor-adapter.sh` — `require-migration-ticket.sh` added to `FAIL_CLOSED_HOOKS`; the header comment above the array now names the migration blast-radius class explicitly.
+- `docs/cursor-adapter.md` — the `failClosed` table's class breakdown gained a "Migration blast-radius" row.
+- `.claude/hooks/tests/test_sync_cursor_adapter.sh` — the fixture now wires `require-migration-ticket.sh` under the `Edit|Write|MultiEdit` matcher, with an assertion that it carries `failClosed: true` and a paired assertion that `require-active-ticket.sh` still does not (guards the boundary from drifting either direction).
+
+**Consequence.** The `FAIL_CLOSED_HOOKS` list remains a manually maintained boundary (unchanged from this AgDR's original "Consequences" section) — this update adds one more entry to it, not a new maintenance mechanism. A future security- or blast-radius-relevant hook still needs the same three-part update: the bash array, `docs/cursor-adapter.md`'s table, and a fixture assertion.

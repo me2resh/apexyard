@@ -98,6 +98,7 @@ crash blocks instead of silently passing:
 | Merge gates | `block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh` |
 | Secrets scan | `check-secrets.sh` |
 | Trust-chain / leak protection | `block-git-add-all.sh`, `block-main-push.sh`, `block-private-refs-in-public-repos.sh`, `block-onboarding-in-git.sh` |
+| Migration blast-radius | `require-migration-ticket.sh` (added #840 B3 — schema/data migrations carry the same blast radius as a merge; see AgDR-0091's "Update (GH-840)" section) |
 
 Every other hook (ticket-vocabulary format validators, ticket-first gates,
 advisory banners) stays fail-open — same default Cursor ships and the same
