@@ -682,14 +682,14 @@ tracker_create() {
 }
 
 # ==============================================================================
-# Listing (tracker_list) — the #710 / AgDR-0082 read/triage abstraction.
+# Listing (tracker_list) — the #710 / AgDR-0093 read/triage abstraction.
 #
 # tracker_list is the listing analog of tracker_view: it lists a SET of issues
 # from a project's tracker via that tracker's CLI adapter. The read-side skills
 # (/inbox, /tasks, /stakeholder-update) call it instead of hardcoding
 # `gh issue list`, so they work on GitLab-tracked projects too.
 #
-# Design (AgDR-0082): callers express intent in a small GENERIC filter
+# Design (AgDR-0093): callers express intent in a small GENERIC filter
 # vocabulary; each per-kind adapter renders those generic filters into its own
 # native CLI flags. We do NOT parse GitHub's search string and translate it —
 # that would couple the model to GitHub's DSL. Filters with no cross-tracker
@@ -720,7 +720,8 @@ tracker_create() {
 # Filter args are parsed via a `case` statement into plain locals — bash 3.2-safe
 # (no `declare -A`), matching the POSIX-parameter-expansion constraint elsewhere
 # in this file. linear/jira/asana list adapters are a documented follow-up (the
-# #710 parent stack targets GitHub↔GitLab); they fall through to `[]`.
+# #710 parent stack targets GitHub↔GitLab); until then they fall through to the
+# gh best-effort default (consistent with `tracker_view` / `tracker_create`).
 # ------------------------------------------------------------------------------
 
 # Internal: resolve the list_command template for the `custom` kind — the
@@ -792,7 +793,7 @@ _tracker_list_glab() {
   esac
   if [ -n "$assignee" ]; then
     case "$assignee" in
-      none) : ;;  # no clean glab flag — documented degradation (AgDR-0082)
+      none) : ;;  # no clean glab flag — documented degradation (AgDR-0093)
       *)    args+=(--assignee "$assignee") ;;
     esac
   fi

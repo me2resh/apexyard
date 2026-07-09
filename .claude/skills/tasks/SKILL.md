@@ -21,7 +21,7 @@ registry=$(portfolio_registry)
 
 Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projects`, `./projects/ideas-backlog.md`). Adopters in split-portfolio mode override the `portfolio.{registry, projects_dir, ideas_backlog}` keys in `.claude/project-config.json`. Don't hardcode literal `apexyard.projects.yaml` or `projects/` paths in bash blocks — the helper resolves whichever mode the adopter is in. See `docs/multi-project.md`.
 
-## Tracker-agnostic issue listing (#710 / AgDR-0082)
+## Tracker-agnostic issue listing (#710 / AgDR-0093)
 
 The **issue** sources below call `tracker_list` from `_lib-tracker.sh` (per `repo:` from the registry) instead of hardcoding `gh issue list`, so `/tasks` works on GitLab-tracked projects too:
 

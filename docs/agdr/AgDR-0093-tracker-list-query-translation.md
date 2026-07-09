@@ -1,5 +1,5 @@
 ---
-id: AgDR-0082
+id: AgDR-0093
 timestamp: 2026-07-03T09:00:00Z
 agent: claude
 model: claude-opus-4-8[1m]
@@ -69,7 +69,7 @@ Concrete shape:
 
    `ref` is the tracker reference **as a string** (callers must not do arithmetic — a future tracker may key `LIN-42`); `number` is the numeric convenience for gh/glab. PR-only fields (`mergeable`, `statusCheckRollup`, `reviewDecision`) are **explicitly excluded** — forge axis, #711. On failure (CLI missing/errored, `kind=none`) `tracker_list` emits `[]` and exits non-zero, so callers treat empty output as "nothing / unavailable" without special-casing.
 
-5. **Built-in adapters `gh` + `glab`; `custom` reserved for the trusted template.** Same trust model as `tracker_create`: built-in adapters build `--flag "$val"` argv arrays (never string-eval untrusted filter values); the `list_command` template is reserved for the operator-authored `custom` kind. `linear`/`jira`/`asana` list adapters are **out of scope** for #710 (parent stack targets GitHub↔GitLab); they fall through to a documented empty result until a follow-up adds them — the same phasing `tracker_create` used.
+5. **Built-in adapters `gh` + `glab`; `custom` reserved for the trusted template.** Same trust model as `tracker_create`: built-in adapters build `--flag "$val"` argv arrays (never string-eval untrusted filter values); the `list_command` template is reserved for the operator-authored `custom` kind. `linear`/`jira`/`asana` list adapters are **out of scope** for #710 (parent stack targets GitHub↔GitLab); until a follow-up adds them, unknown kinds fall through to the **gh best-effort default** — the same phasing `tracker_create` / `tracker_view` use for unrecognised kinds (a project on one of those trackers gets gh-shaped results, not silently `[]`).
 
 6. **Tier B is deferred, not done here.** The four `gh issue view` single-reads (`/status`, `/plan-initiative`, `/spike-close`, `/prototype-close`) need fields `tracker_view` doesn't return (`assignees` / `body`), so converting them requires a `tracker_view` **schema extension** — a separate design call filed as a follow-up `/task`. #710 ships the `tracker_list` primitive + Tier A only.
 
