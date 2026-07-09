@@ -1,5 +1,7 @@
 # Harness support — pi (pi.dev)
 
+**Status:** Adapter **shipped** (`harness-adapters/pi/`, #815, [AgDR-0082](../agdr/AgDR-0082-pi-gate-dispatcher-adapter.md)); the one open item is a live, credentialed model-turn actually triggering the gate adapter (#815 § "Known gaps").
+
 apexyard's governance was built for Claude Code first: `CLAUDE.md` is auto-loaded at session start, `.claude/hooks/*.sh` mechanically enforce the merge gate / ticket-first / secrets-scan rules, and `.claude/skills/*.md` become typed slash commands. **pi** (pi.dev — Earendil's minimal, unopinionated agent CLI) is a deliberately different shape: no `CLAUDE.md`-style auto-load, no hook plumbing, no MCP, no slash-command runner, no plan mode, no background bash, no permission popups. Pi pushes that governance layer to user-installed packages instead of building it in. **apexyard is exactly that layer for a pi user.**
 
 This doc is the honest today-vs-not-yet breakdown for running apexyard-governed work under pi — updated as of me2resh/apexyard#815, which closes the mechanical-enforcement gap this doc used to list under "not yet". See me2resh/apexyard#805 (the `AGENTS.md` advisory bridge), me2resh/apexyard#804 (the spike that proved the enforcement pattern viable), and me2resh/apexyard#815 (the shipped adapter).

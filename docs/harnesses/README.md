@@ -35,25 +35,13 @@ The upshot: mechanical governance is model- and harness-agnostic and self-hostab
 
 ## Per-harness pages
 
-### Claude Code
+Each harness has a dedicated page with a consistent skeleton — status, what's enforced vs advisory today, how the transport works, how to install/generate, gaps + tracking, and related AgDRs.
 
-The default and reference harness. No adapter page — the whole repo is its documentation. `CLAUDE.md` is the entry point; the [`.claude/` integration model](../getting-started.md) explains how hooks, agents, and skills wire together.
-
-### Codex
-
-Adapter **merged**. The generator (`bin/sync-codex-adapter.sh`) emits Codex-facing skills, agents, and hook wiring from `.claude/`, with the generated `hooks.json` delegating gate execution to the unmodified bash hooks. Full generate / drift-check / tracking-policy workflow: **[`docs/codex-adapter.md`](../codex-adapter.md)** (kept at its existing path; linked, not moved). Decision record: [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md).
-
-### pi (pi.dev)
-
-Adapter **shipped**; live model-turn conformance is the open item. pi is a deliberately minimal harness — no `CLAUDE.md` auto-load, no hook plumbing, no slash-command runner — so ApexYard supplies both halves of governance: the *instructions* via the `AGENTS.md` / `SYSTEM.md` advisory bridge, and the *mechanical gates* via a single dispatcher extension (`harness-adapters/pi/`) that shells out to the same bash hooks. Full today-vs-not-yet breakdown, install shape, and the one remaining verification gap: **[`pi.md`](pi.md)**. Decision record: [AgDR-0082](../agdr/AgDR-0082-pi-gate-dispatcher-adapter.md).
-
-### opencode
-
-**Planned** — tracked by **#821**. A spike proved the adapter-over-bash pattern viable for opencode; the shipped adapter will be a plugin that maps opencode's tool-call events to the bash hooks' stdin/exit-code contract, same shape as the pi dispatcher. No adapter code in-repo yet.
-
-### Cursor
-
-**Planned** — tracked by **#831**. Cursor supports repo-local hooks with native `exit 2` blocking, so the adapter will *generate* a `.cursor/hooks.json` (the declarative shape, like Codex) that delegates to the bash hooks with failClosed semantics. No adapter code in-repo yet.
+- **[Claude Code](claude-code.md)** — Native, full experience. The reference harness: `CLAUDE.md` auto-load, hooks firing live, slash-command skills, sub-agents, session markers. Install pointer: [`docs/getting-started.md`](../getting-started.md).
+- **[Codex](codex.md)** — Adapter **merged** (#730). Generated from `.claude/`; gates delegate to the unmodified bash hooks, exit-2 fidelity proven in-repo; live Codex-runtime conformance pending. Full workflow in [`docs/codex-adapter.md`](../codex-adapter.md) (linked, not moved).
+- **[pi (pi.dev)](pi.md)** — Adapter **shipped** (`harness-adapters/pi/`, #815). A single dispatcher extension shells out to the bash hooks; the `AGENTS.md`/`SYSTEM.md` advisory bridge works today; live model-turn conformance is the open item.
+- **[opencode](opencode.md)** — **In progress** (#821). Intended shape: a TypeScript plugin over the unmodified bash hooks with `settings.json`-derived gates. Not shipped yet.
+- **[Cursor](cursor.md)** — **In progress** (#831). Intended shape: a generated `.cursor/hooks.json` delegating to the bash hooks, native `exit 2`, failClosed on security-critical gates. Not shipped yet.
 
 ## Adapter-authoring pattern for future harnesses
 
