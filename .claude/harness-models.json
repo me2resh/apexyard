@@ -1,0 +1,6 @@
+{
+  "_comment": "Single source of truth mapping a framework model-tier label (the Claude Code model aliases used in agent frontmatter) to the concrete model each harness runs. Every harness adapter reads this one file: the Codex adapter uses the 'codex' column; pi/opencode adapters add their own column (e.g. 'pi', 'opencode') here rather than hardcoding a second mapping. Per AgDR-0087 (reasoning agents require a frontier-tier model), keep each harness's 'opus' row on that harness's strongest available model — never downgrade the reasoning tier when adding a harness. Absent tier or column falls back to the label unchanged.",
+  "opus":   { "codex": "gpt-5.5" },
+  "sonnet": { "codex": "gpt-5.4" },
+  "haiku":  { "codex": "gpt-5.4-mini" }
+}
