@@ -58,6 +58,7 @@ import {
   buildToolInput,
   claudeToolNameFor,
   deriveGatesFromSettings,
+  findUnsupportedGateWires,
   gateMatchesToolCall,
   type GateDefinition,
   type RawSettings,
@@ -257,6 +258,20 @@ export function registerGateDispatcher(pluginInput: { directory: string; worktre
 
   const gates =
     options.gates ?? (opsRoot ? deriveGatesFromOpsRoot(opsRoot, options.settingsRelativePath ?? ".claude/settings.json") : []);
+
+  // #840 C2: warn loudly, once at init, about any gate wired to a tool this
+  // adapter has no stdin builder for (today: read/glob/grep — see
+  // findUnsupportedGateWires's header comment for why this doesn't attempt
+  // to guess field names instead). A future blocking gate on those tools
+  // would otherwise be silently skipped on every matching call with no
+  // signal anywhere that it never actually ran.
+  for (const unsupported of findUnsupportedGateWires(gates)) {
+    process.stderr.write(
+      `apexyard-gate-dispatcher: WARNING — gate "${unsupported.gateName}" is wired to opencode tool "${unsupported.tool}", ` +
+        `which this adapter has no stdin builder for (buildToolInput only supports bash/edit/write). This gate is SILENTLY SKIPPED ` +
+        `for "${unsupported.tool}" tool calls — it never runs, so it can never block one. See derive-gates.ts's findUnsupportedGateWires for details.\n`,
+    );
+  }
 
   return {
     "tool.execute.before": buildToolExecuteBeforeHook(opsRoot, gates, options.execGateHook),

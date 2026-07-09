@@ -231,3 +231,63 @@ test("registerGateDispatcher: when resolveOpsRoot returns undefined, the hook is
   await assert.doesNotReject(() => hooks["tool.execute.before"]!({ tool: "bash", sessionID: "s1", callID: "c1" }, { args: { command: "gh pr merge 1" } }));
   assert.equal(calls.length, 0);
 });
+
+// ---------------------------------------------------------------------
+// findUnsupportedGateWires wiring into registerGateDispatcher (#840 C2) —
+// a gate matched to read/glob/grep must warn loudly at init, not vanish.
+// ---------------------------------------------------------------------
+
+test("registerGateDispatcher warns to stderr when a gate is wired to a tool with no stdin builder (read/glob/grep)", () => {
+  const { exec } = mockExec({});
+  const unsupportedGate: GateDefinition = {
+    name: "suggest-mcp-search",
+    hookRelativePath: THIS_FILE_AS_HOOK,
+    wires: [{ tool: "read", commandGlob: null }],
+  };
+
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    registerGateDispatcher(
+      { directory: "/wherever", worktree: "/wherever" },
+      { resolveOpsRoot: () => process.cwd(), gates: [unsupportedGate], execGateHook: exec },
+    );
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+
+  const combined = written.join("");
+  assert.match(combined, /WARNING/);
+  assert.match(combined, /suggest-mcp-search/);
+  assert.match(combined, /"read"/);
+});
+
+test("registerGateDispatcher does NOT warn when every gate is wired only to bash/edit/write", () => {
+  const { exec } = mockExec({});
+  const supportedGate: GateDefinition = {
+    name: "require-active-ticket",
+    hookRelativePath: THIS_FILE_AS_HOOK,
+    wires: [{ tool: "bash", commandGlob: null }, { tool: "edit", commandGlob: null }],
+  };
+
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    registerGateDispatcher(
+      { directory: "/wherever", worktree: "/wherever" },
+      { resolveOpsRoot: () => process.cwd(), gates: [supportedGate], execGateHook: exec },
+    );
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+
+  assert.equal(written.join(""), "");
+});

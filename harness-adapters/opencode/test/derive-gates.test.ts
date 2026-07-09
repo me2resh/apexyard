@@ -21,8 +21,10 @@ import {
   deriveGatesFromSettings,
   extractCommandGlob,
   extractHookRelativePath,
+  findUnsupportedGateWires,
   gateMatchesToolCall,
   globToRegExp,
+  type GateDefinition,
   type RawSettings,
 } from "../src/derive-gates.ts";
 
@@ -175,6 +177,52 @@ test("buildToolInput reconstructs {command} for the bash tool from output.args.c
 test("buildToolInput reconstructs {file_path} for edit/write from output.args.filePath", () => {
   assert.deepEqual(buildToolInput("edit", { args: { filePath: "/repo/src/foo.ts" } }), { file_path: "/repo/src/foo.ts" });
   assert.deepEqual(buildToolInput("write", { args: { filePath: "/repo/src/bar.ts" } }), { file_path: "/repo/src/bar.ts" });
+});
+
+// ---------------------------------------------------------------------
+// findUnsupportedGateWires (#840 C2) — the "fail loud, don't guess" guard
+// for gates wired to read/glob/grep, which buildToolInput has no stdin
+// builder for.
+// ---------------------------------------------------------------------
+
+test("findUnsupportedGateWires: a gate wired only to bash/edit/write reports nothing", () => {
+  const gates: GateDefinition[] = [
+    { name: "require-active-ticket", hookRelativePath: ".claude/hooks/require-active-ticket.sh", wires: [{ tool: "bash", commandGlob: null }, { tool: "edit", commandGlob: null }] },
+  ];
+  assert.deepEqual(findUnsupportedGateWires(gates), []);
+});
+
+test("findUnsupportedGateWires: a gate wired to read/glob/grep is reported, once per tool", () => {
+  const gates: GateDefinition[] = [
+    {
+      name: "suggest-mcp-search",
+      hookRelativePath: ".claude/hooks/suggest-mcp-search.sh",
+      wires: [
+        { tool: "bash", commandGlob: "grep *" },
+        { tool: "read", commandGlob: null },
+        { tool: "glob", commandGlob: null },
+        { tool: "grep", commandGlob: null },
+      ],
+    },
+  ];
+  const found = findUnsupportedGateWires(gates);
+  assert.deepEqual(
+    found.map((f) => f.tool).sort(),
+    ["glob", "grep", "read"],
+  );
+  assert.ok(found.every((f) => f.gateName === "suggest-mcp-search"));
+});
+
+test("findUnsupportedGateWires, run against this repo's real .claude/settings.json, flags suggest-mcp-search.sh's Read/Glob/Grep wiring", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const settingsPath = join(here, "..", "..", "..", ".claude", "settings.json");
+  const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
+  const gates = deriveGatesFromSettings(raw);
+  const found = findUnsupportedGateWires(gates);
+  assert.ok(
+    found.some((f) => f.gateName === "suggest-mcp-search" && f.tool === "read"),
+    "the real settings.json wires suggest-mcp-search.sh to Read|Glob|Grep — this must surface as an unsupported wire, not silently vanish",
+  );
 });
 
 test("buildToolInput returns undefined when the expected field is missing or the wrong type", () => {

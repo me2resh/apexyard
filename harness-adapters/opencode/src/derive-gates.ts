@@ -284,3 +284,59 @@ export function buildToolInput(toolId: string, output: ToolCallOutput | undefine
       return undefined;
   }
 }
+
+/**
+ * The opencode tool ids `buildToolInput` above knows how to reconstruct
+ * stdin for. Kept as a single source of truth so `findUnsupportedGateWires`
+ * below can never drift from `buildToolInput`'s own `switch` cases.
+ */
+const SUPPORTED_TOOL_INPUT_TOOLS = new Set(["bash", "edit", "write"]);
+
+/**
+ * One `(gate name, tool)` pair this dispatcher cannot build stdin for —
+ * see `findUnsupportedGateWires`'s header comment for why this exists.
+ */
+export interface UnsupportedGateWire {
+  gateName: string;
+  tool: string;
+}
+
+/**
+ * Finds every derived gate wire whose tool this adapter has NO
+ * `buildToolInput` support for (#840 C2).
+ *
+ * WHY THIS EXISTS
+ * -----------------
+ * `deriveGatesFromSettings` derives gates for every `PreToolUse` matcher
+ * `.claude/settings.json` wires, including `Read|Glob|Grep` (today, exactly
+ * one hook: `suggest-mcp-search.sh`, an advisory-only hook that never exits
+ * 2 for those tool types — see its own header comment). `buildToolInput`,
+ * by contrast, only reconstructs stdin for `bash`/`edit`/`write` — Hakim's
+ * #839 finding (ported to this adapter as #840 C2) is that a FUTURE
+ * blocking gate wired to `Read`/`Glob`/`Grep` would be silently skipped at
+ * every matching tool call, with nothing surfaced anywhere.
+ *
+ * This adapter deliberately does NOT guess opencode's real `read`/`glob`/
+ * `grep` tool argument field names to construct stdin for them — every
+ * other field-name mapping in this adapter family (`command` for bash,
+ * `filePath` for edit/write) was verified against opencode's real,
+ * installed `.d.ts` / source per AgDR-0092's explicit "real types, not
+ * guesses" discipline; guessing field names for three more tools here
+ * would silently violate that same discipline and could hand a hook a
+ * garbage payload it would misparse. The safer, honest alternative: fail
+ * LOUD instead of silently skipping. Call this once at gate-table
+ * construction time (dispatcher init, not per tool call — avoids per-call
+ * log noise for advisory hooks that were never going to block anything)
+ * and surface every finding to stderr so "a gate exists for this tool but
+ * this adapter can't evaluate it" is visible, not silently swallowed.
+ */
+export function findUnsupportedGateWires(gates: GateDefinition[]): UnsupportedGateWire[] {
+  const found: UnsupportedGateWire[] = [];
+  for (const gate of gates) {
+    const unsupportedTools = new Set(gate.wires.map((w) => w.tool).filter((t) => !SUPPORTED_TOOL_INPUT_TOOLS.has(t)));
+    for (const tool of unsupportedTools) {
+      found.push({ gateName: gate.name, tool });
+    }
+  }
+  return found;
+}
