@@ -1,0 +1,22 @@
+{
+  "name": "@apexyard/opencode-gate-adapter",
+  "version": "0.1.0",
+  "description": "opencode (opencode.ai) plugin enforcing apexyard's mechanical governance gates by shelling out to the existing bash hooks — zero logic duplication. See README.md.",
+  "type": "module",
+  "private": true,
+  "main": "src/gate-dispatcher.ts",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.17.15"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
