@@ -455,6 +455,45 @@ The "plugin-install commands printed" wording is accurate even after the empiric
 
 Pick the line that matches the actual outcome. Don't claim "enabled" if any of (b)–(d) failed.
 
+### Step 2d: Harness selection (skippable)
+
+Background. As of 2026-07-09 the framework's mechanical gates (merge gate, ticket-first, secrets scanning, red-CI block) reach beyond Claude Code through thin per-harness adapters — see `docs/harnesses/README.md`, the single source of truth for the support matrix. This step surfaces that matrix at onboarding time so a non-Claude-Code adopter doesn't have to discover `docs/harnesses/` on their own. It is deliberately light: Claude Code adopters (the default) answer one question and move on.
+
+Ask:
+
+```
+Which harness(es) do you run ApexYard with?
+  [1] Claude Code (default — the native, full experience)
+  [2] opencode
+  [3] pi (pi.dev)
+  [4] Codex
+  [5] Cursor
+  [6] Other / not sure
+
+[1-6, comma-separated for more than one — default 1]
+```
+
+**Branch on the answer:**
+
+- **1 / default / empty** → print nothing further, continue straight to Step 3. This is the zero-friction path — most adopters are on Claude Code and shouldn't see any more text.
+- **6** → print one line — *"No adapter for that harness yet. The mechanical gates (`.claude/hooks/*.sh`) are portable bash; see `docs/harnesses/README.md` § 'Adapter-authoring pattern for future harnesses' if you want to write one."* — then continue to Step 3.
+- **2 / 3 / 4 / 5 (one or more)** → for each selected harness, print its install command + its one precondition, sourced from `docs/harnesses/README.md` (read it fresh rather than hardcoding — the matrix is the single source of truth and does change). As of the 2026-07-09 matrix:
+
+  | Harness | Install | Precondition | Tier |
+  |---------|---------|---------------|------|
+  | opencode | `bash bin/install-opencode-adapter.sh` | run opencode headless with `--auto` | ✅ live-proven |
+  | pi | `bash bin/install-pi-adapter.sh` | run pi headless with `-a` / `--approve` | ✅ live-proven |
+  | Codex | `bash bin/sync-codex-adapter.sh` | grant hook-trust — `/hooks` interactively, `--dangerously-bypass-hook-trust` for a one-off headless run, or a user-level `~/.codex/hooks.json` | ✅ live-proven |
+  | Cursor | `bin/install-cursor-adapter.sh` | installs to **user-level** `~/.cursor/hooks.json` | 🟡 **failClosed-only** — not live-proven; the `cursor-agent` CLI ignores hooks entirely |
+
+  **Honesty is load-bearing here — never round Cursor up.** Say it exactly the way `docs/harnesses/README.md` says it: opencode, pi, and Codex are live-proven (a real credentialed model turn was actually blocked by the delegated gate); Cursor blocks only by *failing closed* on a hook-runner error, which is a materially weaker guarantee than verified delegated execution. Reuse the tier wording verbatim rather than paraphrasing it into something that sounds stronger.
+
+  For each selected harness, link the per-harness page for the full workflow: `docs/harnesses/<harness>.md` (e.g. `docs/harnesses/opencode.md`).
+
+**Don't run the install command yourself.** This step is informational — print the command and the precondition, don't execute `bin/install-*-adapter.sh` on the operator's behalf. They run it when they're ready; onboarding shouldn't silently mutate a harness config the operator hasn't confirmed they want touched.
+
+Record the pick (comma-separated list, or `claude-code` if 1/default) as `$SELECTED_HARNESSES` for the Step 4 summary line.
+
 ### Step 3: Parse and map to defaults
 
 From the user's description, extract:
@@ -499,9 +538,12 @@ Design review gate: ON (React = UI work)
 AgDR gate: ON (default architecture paths)
 Commit types: framework defaults (feat, fix, refactor, test, docs, chore, style, perf, build, ci, revert)
 LSP: enabled (typescript via typescript-language-server, env var in ~/.zshrc, plugin: manual)
+Harness: Claude Code (native — no adapter needed)
 
 Use these defaults, or customize?
 ```
+
+The Harness line reflects `$SELECTED_HARNESSES` from Step 2d — for a non-Claude-Code pick it reads e.g. `Harness: opencode (adapter install command printed above — see docs/harnesses/opencode.md)`.
 
 Include the Step 2c.7 status line verbatim if Step 2c ran. If `/setup --enable-lsp` was invoked (retrofit mode), the summary is just the single LSP status line — no other proposed-config fields, since those are already configured.
 
@@ -660,6 +702,7 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 6. **No project-config.json.** `/setup` configures the FRAMEWORK (onboarding.yaml). Per-project config is handled by `/handover` and `/idea` when projects enter the portfolio.
 7. **Never auto-install language runtimes.** Step 2c installs LSP servers (e.g. `typescript-language-server`, `pyright`, `gopls`, `rust-analyzer`) but never the underlying runtime (`node`, `python`, `go`, `rustup`). If a runtime is missing, refuse the LSP install gracefully and tell the operator what to install.
 8. **Print plugin-install commands; never invoke them.** The Claude Code plugin marketplace command shape (`/plugin marketplace add`, `/plugin install`, `/reload-plugins`) is empirically stable — Step 2c.5(d) prints a copy-paste block for the operator. But `/plugin` is a Claude Code UI built-in, not a shell command, so the skill never runs the commands itself — it prints them. Always emit the `marketplace add` line; it's idempotent and recovers the case where the docs' auto-load claim doesn't fire on a fresh install.
+9. **`docs/harnesses/README.md` is the single source of truth for harness support.** Step 2d summarises and links it — it never copies the capability matrix inline as a maintained duplicate. When printing a harness's install command / precondition / tier, read the doc fresh rather than trusting a stale table baked into this skill; the matrix changes as adapters move through live-verification. Never round a harness's tier up (Cursor is failClosed-only, not live-proven — say so).
 
 ---
 
