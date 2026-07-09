@@ -21,9 +21,9 @@
 #   9. SKILL.md's Rule 1 exception note names both AGENTS.md and the badge
 #  10. SKILL.md has a Rule 23 documenting the badge's opt-in contract
 #  11. SKILL.md's step 10 summary template has a badge status line
-#  12. AgDR-0082 exists, starts with the canonical H1 header, has no YAML
+#  12. AgDR-0090 exists, starts with the canonical H1 header, has no YAML
 #      frontmatter, and contains the "In the context of..." one-liner
-#  13. AgDR-0082 references the ticket (#796)
+#  13. AgDR-0090 references the ticket (#796)
 #  14. docs/multi-project.md's /handover row mentions step 8.6 / the badge
 #
 # Exit 0 if all cases pass; 1 on first failure.
@@ -32,7 +32,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SKILL_MD="$SRC_ROOT/.claude/skills/handover/SKILL.md"
-AGDR="$SRC_ROOT/docs/agdr/AgDR-0082-handover-badge-offer.md"
+AGDR="$SRC_ROOT/docs/agdr/AgDR-0090-handover-badge-offer.md"
 MULTI_DOC="$SRC_ROOT/docs/multi-project.md"
 
 for f in "$SKILL_MD" "$AGDR" "$MULTI_DOC"; do
@@ -135,28 +135,28 @@ else
   fail "step 10 summary is missing the badge status line"
 fi
 
-# 12. AgDR-0082 shape
-if head -1 "$AGDR" | grep -qE '^# AgDR-0082 '; then
-  pass "AgDR-0082 has the canonical H1 header"
+# 12. AgDR-0090 shape
+if head -1 "$AGDR" | grep -qE '^# AgDR-0090 '; then
+  pass "AgDR-0090 has the canonical H1 header"
 else
-  fail "AgDR-0082 missing/malformed H1 header"
+  fail "AgDR-0090 missing/malformed H1 header"
 fi
 if head -5 "$AGDR" | grep -q '^---$'; then
-  fail "AgDR-0082 appears to have YAML frontmatter (should be body-H1 only)"
+  fail "AgDR-0090 appears to have YAML frontmatter (should be body-H1 only)"
 else
-  pass "AgDR-0082 has no YAML frontmatter"
+  pass "AgDR-0090 has no YAML frontmatter"
 fi
 if grep -q 'In the context of' "$AGDR"; then
-  pass "AgDR-0082 has the canonical one-liner"
+  pass "AgDR-0090 has the canonical one-liner"
 else
-  fail "AgDR-0082 missing the 'In the context of...' one-liner"
+  fail "AgDR-0090 missing the 'In the context of...' one-liner"
 fi
 
-# 13. AgDR-0082 references the ticket
+# 13. AgDR-0090 references the ticket
 if grep -q '#796' "$AGDR"; then
-  pass "AgDR-0082 references ticket #796"
+  pass "AgDR-0090 references ticket #796"
 else
-  fail "AgDR-0082 does not reference ticket #796"
+  fail "AgDR-0090 does not reference ticket #796"
 fi
 
 # 14. docs/multi-project.md mentions step 8.6 / the badge

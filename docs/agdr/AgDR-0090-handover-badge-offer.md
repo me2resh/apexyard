@@ -1,4 +1,4 @@
-# AgDR-0082 — `/handover` offers a "Governed by ApexYard" README badge (opt-in, idempotent, PR-delivered)
+# AgDR-0090 — `/handover` offers a "Governed by ApexYard" README badge (opt-in, idempotent, PR-delivered)
 
 > In the context of `/handover` already having one sanctioned exception to its read-only-against-the-target-repo rule (the in-repo `AGENTS.md` from AgDR-0073) but nothing that makes an onboarded repo visibly credit the framework governing it, facing the choice of whether and how to surface "this repo is governed by apexyard" on the adopted repo itself, I decided to add a second opt-in, default-OFF, PR-delivered step that offers a shields.io "Governed by ApexYard" (or "Built with ApexYard") badge near the top of the target repo's README, idempotent against re-runs, accepting that this is explicitly a growth-loop mechanism for the framework and must therefore be even more conservative about consent than `AGENTS.md` — every run asks by name, defaults to No, and never appears in a bulk `--all` / `all` selection.
 
