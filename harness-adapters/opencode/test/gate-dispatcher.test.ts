@@ -25,6 +25,7 @@ import {
   registerGateDispatcher,
   runGateHook,
   execGateHookReal,
+  deriveGatesFromOpsRoot,
   type ExecGateHook,
 } from "../src/gate-dispatcher.ts";
 import type { GateDefinition } from "../src/derive-gates.ts";
@@ -237,6 +238,22 @@ test("registerGateDispatcher: when resolveOpsRoot returns undefined, the hook is
 // a gate matched to read/glob/grep must warn loudly at init, not vanish.
 // ---------------------------------------------------------------------
 
+/** Captures everything written to process.stderr while `fn` runs, restoring the real stream afterward even if `fn` throws. */
+function captureStderr(fn: () => void): string {
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  const written: string[] = [];
+  process.stderr.write = ((chunk: string) => {
+    written.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    fn();
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+  return written.join("");
+}
+
 test("registerGateDispatcher warns to stderr when a gate is wired to a tool with no stdin builder (read/glob/grep)", () => {
   const { exec } = mockExec({});
   const unsupportedGate: GateDefinition = {
@@ -245,22 +262,13 @@ test("registerGateDispatcher warns to stderr when a gate is wired to a tool with
     wires: [{ tool: "read", commandGlob: null }],
   };
 
-  const originalWrite = process.stderr.write.bind(process.stderr);
-  const written: string[] = [];
-  process.stderr.write = ((chunk: string) => {
-    written.push(String(chunk));
-    return true;
-  }) as typeof process.stderr.write;
-  try {
+  const combined = captureStderr(() => {
     registerGateDispatcher(
       { directory: "/wherever", worktree: "/wherever" },
       { resolveOpsRoot: () => process.cwd(), gates: [unsupportedGate], execGateHook: exec },
     );
-  } finally {
-    process.stderr.write = originalWrite;
-  }
+  });
 
-  const combined = written.join("");
   assert.match(combined, /WARNING/);
   assert.match(combined, /suggest-mcp-search/);
   assert.match(combined, /"read"/);
@@ -274,20 +282,44 @@ test("registerGateDispatcher does NOT warn when every gate is wired only to bash
     wires: [{ tool: "bash", commandGlob: null }, { tool: "edit", commandGlob: null }],
   };
 
-  const originalWrite = process.stderr.write.bind(process.stderr);
-  const written: string[] = [];
-  process.stderr.write = ((chunk: string) => {
-    written.push(String(chunk));
-    return true;
-  }) as typeof process.stderr.write;
-  try {
+  const combined = captureStderr(() => {
     registerGateDispatcher(
       { directory: "/wherever", worktree: "/wherever" },
       { resolveOpsRoot: () => process.cwd(), gates: [supportedGate], execGateHook: exec },
     );
-  } finally {
-    process.stderr.write = originalWrite;
-  }
+  });
 
-  assert.equal(written.join(""), "");
+  assert.equal(combined, "");
+});
+
+// ---------------------------------------------------------------------
+// deriveGatesFromOpsRoot's parse-failure warning (#840 C3) — the catch
+// block's fail-open ("no gates enforced") must be loudly visible, not
+// silent, matching the function's own header-comment claim.
+// ---------------------------------------------------------------------
+
+test("deriveGatesFromOpsRoot: a malformed settings.json warns to stderr and returns an empty gate table", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-gate-test-"));
+  writeFileSync(join(opsRoot, "settings.json"), "{ not valid json", "utf-8");
+
+  let gates: GateDefinition[] = [];
+  const combined = captureStderr(() => {
+    gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  });
+
+  assert.deepEqual(gates, [], "a broken settings.json must fail toward not-enforcing, not throw");
+  assert.match(combined, /WARNING/);
+  assert.match(combined, /settings\.json/);
+});
+
+test("deriveGatesFromOpsRoot: a missing settings.json is silent (the expected \"nothing to enforce\" case, not a broken-config case)", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-gate-test-"));
+
+  let gates: GateDefinition[] = [];
+  const combined = captureStderr(() => {
+    gates = deriveGatesFromOpsRoot(opsRoot, "settings.json");
+  });
+
+  assert.deepEqual(gates, []);
+  assert.equal(combined, "", "a missing file is not a parse failure — warning here would be noise for every non-apexyard session");
 });

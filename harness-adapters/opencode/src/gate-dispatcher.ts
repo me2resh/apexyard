@@ -231,14 +231,33 @@ export function buildToolExecuteBeforeHook(
  * rather than throwing — a broken settings.json should not brick every
  * tool call in the session; it should just mean no gates are enforced,
  * loudly visible as "governance isn't wired" rather than a plugin crash.
+ *
+ * #840 C3: that "loudly visible" claim used to be aspirational — the catch
+ * block was a bare `catch { return []; }` with no output at all, so a
+ * malformed `.claude/settings.json` produced total, silent, fail-open
+ * governance with nothing anywhere hinting why (Rex + Hakim both flagged
+ * this on #839). The warning below is what makes the comment's claim true:
+ * a parse failure is now a visible stderr line naming the settings path
+ * and the underlying error, not a quiet `[]`.
+ *
+ * A missing settings.json (no file at all — the far more common case, e.g.
+ * an ops root that predates this framework version, or a session launched
+ * outside any apexyard fork) stays silent-`[]` on purpose: that's the
+ * expected "nothing to enforce here" case, not a broken-config case, and
+ * warning on it would just be noise for every non-apexyard opencode
+ * session using this plugin.
  */
-function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: string): GateDefinition[] {
+export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: string): GateDefinition[] {
   const settingsPath = path.join(opsRoot, settingsRelativePath);
   if (!existsSync(settingsPath)) return [];
   try {
     const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
     return deriveGatesFromSettings(raw);
-  } catch {
+  } catch (err) {
+    process.stderr.write(
+      `apexyard-gate-dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
+        `Underlying error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     return [];
   }
 }
