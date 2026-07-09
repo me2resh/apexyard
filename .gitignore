@@ -2,6 +2,13 @@
 # onboarding flag. Per-machine, per-clone. Never committed.
 .claude/session/
 
+# Transient per-agent git worktrees created by the Agent tool's
+# isolation:"worktree" mode. Each is a full linked working copy; leaving them
+# un-ignored makes the editor's language server re-index every copy (e.g. the
+# TS server flooding on adapter sources without their node_modules). Never
+# committed; auto-cleaned when the agent finishes unchanged.
+.claude/worktrees/
+
 # Real onboarding config (#517). The tracked template is onboarding.example.yaml;
 # /setup copies it to onboarding.yaml (this file) and fills in real values that
 # must stay LOCAL — company name, internal URLs, tracker instance, named people.
