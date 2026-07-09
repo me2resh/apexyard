@@ -17,10 +17,10 @@ Three maturity tiers, so a column says exactly what it means:
 | **Claude Code** | Native — `CLAUDE.md` auto-loads at session start; all rules, 65 skills, and 25 agents are first-class | **Enforced live** — the bash hooks fire on `PreToolUse` / `PostToolUse` / `SessionStart` | **Native, full experience** |
 | **Codex** | Generated — `.claude/skills/` → `.agents/skills/`, `.claude/agents/*.md` → `.codex/agents/*.toml` | **Delegated** — generated `.codex/hooks.json` execs the *unmodified* `.claude/hooks/*.sh`; block-on-`exit 2` preserved | **Adapter merged** (#730, [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md)); live Codex-runtime conformance test pending |
 | **pi** (pi.dev) | `AGENTS.md` + `SYSTEM.md` advisory bridge, auto-loaded from cwd (#805) | **Delegated** — one dispatcher extension registers on pi's `tool_call` event and shells out to the *unmodified* bash hooks (#815, [AgDR-0082](../agdr/AgDR-0082-pi-gate-dispatcher-adapter.md)) | **Adapter shipped; live model-turn conformance pending** ([`pi.md`](pi.md)) |
-| **opencode** | Planned — `AGENTS.md` bridge | **Delegated** — plugin over the bash hooks (planned) | **Planned** (#821) |
-| **Cursor** | Planned — `AGENTS.md` / rules bridge | **Delegated** — generated `.cursor/hooks.json` delegating to the bash hooks, native `exit 2` / failClosed (planned) | **Planned** (#831) |
+| **opencode** | `AGENTS.md` bridge | **Delegated** — `harness-adapters/opencode/` plugin derives its gate table from `.claude/settings.json` at load and execs the *unmodified* bash hooks; throw = deny, fail-closed on execution failure (PR #839, [AgDR-0092](../agdr/AgDR-0092-opencode-gate-adapter.md)) | **Adapter merged; live model-turn conformance pending** (#821, [`opencode.md`](opencode.md)) |
+| **Cursor** | Generated `.cursor/rules/apexyard.mdc` bridge | **Delegated** — generated `.cursor/hooks.json` execs the *unmodified* bash hooks; native `exit 2` deny, `failClosed:true` on the 9 security-critical gates (PR #838, [AgDR-0091](../agdr/AgDR-0091-cursor-adapter-generation.md)) | **Adapter merged; live conformance pending** (#840, [`cursor.md`](cursor.md)) |
 
-The honest asterisk that applies to **every** non-Claude row: the adapters keep bash as the single source of truth for gate *decisions*, but whether a given harness's live internal event dispatch invokes the hook at the right moment during a real model turn is the last hop each adapter still has to prove with credentials. Codex and pi have the transport proven and tested; the credentialed live run is the open item for both.
+The honest asterisk that applies to **every** non-Claude row: the adapters keep bash as the single source of truth for gate *decisions*, but whether a given harness's live internal event dispatch invokes the hook at the right moment during a real model turn is the last hop each adapter still has to prove with credentials. All four adapters (Codex, pi, opencode, Cursor) have the transport proven and tested in-repo; the credentialed live run is the open item for each — consolidated in #840 (plus #815/#821 for pi/opencode).
 
 ## Shared-core architecture
 
@@ -40,8 +40,8 @@ Each harness has a dedicated page with a consistent skeleton — status, what's 
 - **[Claude Code](claude-code.md)** — Native, full experience. The reference harness: `CLAUDE.md` auto-load, hooks firing live, slash-command skills, sub-agents, session markers. Install pointer: [`docs/getting-started.md`](../getting-started.md).
 - **[Codex](codex.md)** — Adapter **merged** (#730). Generated from `.claude/`; gates delegate to the unmodified bash hooks, exit-2 fidelity proven in-repo; live Codex-runtime conformance pending. Full workflow in [`docs/codex-adapter.md`](../codex-adapter.md) (linked, not moved).
 - **[pi (pi.dev)](pi.md)** — Adapter **shipped** (`harness-adapters/pi/`, #815). A single dispatcher extension shells out to the bash hooks; the `AGENTS.md`/`SYSTEM.md` advisory bridge works today; live model-turn conformance is the open item.
-- **[opencode](opencode.md)** — **In progress** (#821). Intended shape: a TypeScript plugin over the unmodified bash hooks with `settings.json`-derived gates. Not shipped yet.
-- **[Cursor](cursor.md)** — **In progress** (#831). Intended shape: a generated `.cursor/hooks.json` delegating to the bash hooks, native `exit 2`, failClosed on security-critical gates. Not shipped yet.
+- **[opencode](opencode.md)** — Adapter **merged** (PR #839, AgDR-0092). A TypeScript plugin over the unmodified bash hooks with `settings.json`-derived gates (drift-proof by construction); live model-turn conformance is the open item (#821).
+- **[Cursor](cursor.md)** — Adapter **merged** (PR #838, AgDR-0091). Generated `.cursor/hooks.json` delegating to the bash hooks — native `exit 2`, `failClosed` on the security-critical gates; live conformance pending (#840). Full workflow in [`docs/cursor-adapter.md`](../cursor-adapter.md).
 
 ## Adapter-authoring pattern for future harnesses
 

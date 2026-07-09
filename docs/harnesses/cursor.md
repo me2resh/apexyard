@@ -1,33 +1,44 @@
 # Harness support — Cursor
 
-**Status:** In progress — tracked by **#831**. Adapter being built now. Not shipped yet.
+**Status:** Adapter **merged** (#831 → PR #838, [AgDR-0091](../agdr/AgDR-0091-cursor-adapter-generation.md)); live Cursor-runtime conformance test pending ([#840](https://github.com/me2resh/apexyard/issues/840)).
 
-Cursor is an IDE-based agent harness that supports repo-local hooks with native `exit 2` blocking. That makes it a natural fit for the **declarative-generate** adapter shape (the same family as the Codex adapter): ApexYard generates a Cursor-native hook config that delegates every gate decision to the unmodified `.claude/hooks/*.sh`. This page describes the *intended* shape; nothing here is claimed as done.
+Cursor support follows the same declarative-generate pattern as Codex: `.cursor/hooks.json` is **generated** from the canonical `.claude/` runtime and every generated hook **delegates to the unmodified `.claude/hooks/*.sh`** — gate logic never forks. The full generate / drift-check workflow lives in **[`docs/cursor-adapter.md`](../cursor-adapter.md)** (linked here, not duplicated).
 
 ## What's enforced vs advisory today
 
-**Today:** nothing mechanical under Cursor yet — the generator isn't shipped. A Cursor user gets ApexYard's **advisory** governance now via the repo's `AGENTS.md` (which Cursor auto-loads) plus the rules and skills as plain markdown.
+**Delegated (blocking, by construction):** Cursor's hook contract natively treats **exit code 2 as deny**, so the bash hooks' block semantics pass through without translation. The generated `beforeShellExecution` entries carry every shell-command gate — the two-marker merge gate (both `gh pr merge` and `gh api …/merge` shapes), red-CI block, ticket-first, secrets/leak-protection — each deciding via the canonical bash hook. The in-repo smoke test (`.claude/hooks/tests/test_sync_cursor_adapter.sh`, 25 assertions) proves the stdin remap and exit-code preservation across the adapter boundary.
 
-**Intended (once #831 lands):** the delegated gate set the Codex and pi adapters already enforce — the two-marker merge gate, red-CI block, design/architecture review gates, secrets/leak-protection, and ticket-first / migration-ticket-first edit blocking — each decided by the canonical bash hook. Security-critical gates are intended to **failClosed** (block if the hook can't run), not fail open.
+**failClosed hardening:** the 9 security-critical gates (merge gates, red-CI, design/architecture review, secrets scan, trust-chain/leak hooks) are generated with Cursor's `"failClosed": true` — a crashed or timed-out gate hook **blocks** instead of failing open. This is a net hardening over Claude Code's own posture. Advisory/process hooks stay fail-open, matching their native behaviour.
+
+**Advisory:** a generated `.cursor/rules/apexyard.mdc` carries the advisory governance bridge (git conventions, ticket vocabulary, reporting rules) as Cursor rules content.
 
 ## How it works (transport)
 
-Intended shape: a generator emits a **`.cursor/hooks.json`** from `.claude/settings.json`, with each hook `command` exec'ing the unmodified `.claude/hooks/*.sh`. Cursor's native `exit 2` blocking maps directly to the hooks' existing block contract, so no exit-code translation layer is needed — the fidelity Codex's adapter proves in-repo carries over. This is the **declarative-generate** pattern from the [harness index](README.md#adapter-authoring-pattern-for-future-harnesses): the durable contribution is the generator + its tests, and the generated `.cursor/` tree is regenerable output.
+`bin/sync-cursor-adapter.sh` emits `.cursor/hooks.json` from `.claude/settings.json`:
 
-## How to install / generate
+- **Event mapping:** `Bash` → `beforeShellExecution` · `Edit|Write|MultiEdit` → `preToolUse` (matcher) · `SessionStart` → `sessionStart` · `UserPromptSubmit` → `beforeSubmitPrompt`, with post-tool events split the same way.
+- **Stdin remap:** Cursor delivers the shell command top-level (`{"command": …}`); the generated command re-wraps it into the Claude-Code shape (`{"tool_name":"Bash","tool_input":{"command":…}}`) before piping to the hook — so the hooks run byte-identical logic on both harnesses.
+- Claude Code's handler-level `if` predicates are compiled into the same `Bash(glob)` preflight filter the Codex adapter uses; unconditional hooks get glob `*` (remapped, never skipped).
+- No hook bodies are copied; every entry execs `$r/.claude/hooks/*.sh`.
 
-Not applicable yet. Generate instructions will ship with the adapter under **#831** (which will add `docs/cursor-adapter.md` and a dedicated AgDR). This page will link to those once merged.
+## How to generate
+
+```bash
+bin/sync-cursor-adapter.sh            # generate .cursor/hooks.json + rules
+bin/sync-cursor-adapter.sh --check    # verify generated files still match .claude/ (non-zero on drift)
+bin/sync-cursor-adapter.sh --clean    # remove generated .cursor tree before regenerating
+```
 
 ## Gaps + tracking
 
-- **The generator itself** — emitting `.cursor/hooks.json` and its drift-check — is unbuilt on `main`/`dev` today. Tracked as **#831**.
-- **Live model-turn conformance** — proving a real, credentialed Cursor turn is actually blocked by a gate (not just a generated-config test) will be an explicit AC on #831.
+- **Live Cursor-runtime conformance** — the in-repo smoke proves delegation by construction; a credentialed Cursor turn actually being blocked has not been recorded. The conformance test must explicitly assert the top-level-`.command` stdin contract (if Cursor's schema drifts from it, shell gates would fail open silently). Tracked in **#840**.
+- The `preToolUse`/`postToolUse` passthrough path (non-shell tools) carries only process/advisory hooks; its `tool_input` field names are unverified against a real Cursor session — every enforcement-critical gate rides the verified shell path. Also #840.
 
 ## Related AgDRs
 
-- [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md) — the Codex generator, the declarative-generate precedent this adapter follows
-- [AgDR-0086](../agdr/AgDR-0086-hooks-stay-bash-not-ported.md) — hooks stay bash; harnesses reach them via adapters
-- A dedicated Cursor-adapter AgDR will be added by **#831**.
+- [AgDR-0091](../agdr/AgDR-0091-cursor-adapter-generation.md) — Cursor adapter generation; delegate gates to the `.claude/` runtime
+- [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md) — the Codex precedent this adapter mirrors
+- [AgDR-0086](../agdr/AgDR-0086-hooks-stay-bash-not-ported.md) — hooks stay bash (the source of truth the adapter execs)
 
 ---
 

@@ -37,8 +37,8 @@ ApexYard is **built for Claude Code** — that's where the whole experience is n
 | **Claude Code** | Native — `CLAUDE.md` auto-loads; all rules, skills, agents are first-class | **Enforced live** — bash hooks fire on every tool call | **Native, full experience** |
 | **Codex** | Generated from `.claude/` into `.agents/` + `.codex/` | **Delegated** — generated `.codex/hooks.json` execs the unmodified bash hooks | Adapter **merged** (#730, [AgDR-0088](docs/agdr/AgDR-0088-codex-adapter-generation.md)); live conformance test pending |
 | **pi** (pi.dev) | `AGENTS.md` + `SYSTEM.md` advisory bridge | **Delegated** — one dispatcher extension over the unmodified bash hooks | Adapter **shipped**; live model-turn conformance pending (#815, [AgDR-0082](docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md)) |
-| **opencode** | Planned | **Delegated** plugin over the bash hooks (planned) | **Planned** (#821) |
-| **Cursor** | Planned | Generated `.cursor/hooks.json` delegating to the bash hooks (planned) | **Planned** (#831) |
+| **opencode** | `AGENTS.md` bridge | **Delegated** — plugin derives its gate table from `settings.json` and execs the unmodified bash hooks | Adapter **merged** (PR #839, [AgDR-0092](docs/agdr/AgDR-0092-opencode-gate-adapter.md)); live conformance pending (#821) |
+| **Cursor** | Generated `.cursor/rules/` bridge | **Delegated** — generated `.cursor/hooks.json` execs the unmodified bash hooks; native `exit 2`, `failClosed` on security-critical gates | Adapter **merged** (PR #838, [AgDR-0091](docs/agdr/AgDR-0091-cursor-adapter-generation.md)); live conformance pending (#840) |
 
 The shared-core reason this works: gates stay portable bash ([AgDR-0086](docs/agdr/AgDR-0086-hooks-stay-bash-not-ported.md)), `.claude/` is the one canonical authoring surface, harnesses are transports (never a second copy of the gate logic), and model tiers resolve through one matrix ([`.claude/harness-models.json`](.claude/harness-models.json), [AgDR-0088](docs/agdr/AgDR-0088-codex-adapter-generation.md)). Full per-harness breakdown, the adapter-authoring pattern for new harnesses, and the rebrand trigger → **[`docs/harnesses/`](docs/harnesses/README.md)**.
 
