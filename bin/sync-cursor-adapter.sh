@@ -89,6 +89,13 @@ FAIL_CLOSED_HOOKS=(
 )
 fail_closed_json=$(printf '%s\n' "${FAIL_CLOSED_HOOKS[@]}" | jq -R . | jq -s .)
 
+# Recognized PreToolUse/PostToolUse matcher values this generator maps to a
+# Cursor event (see generate_hooks_json below). Kept as a single source of
+# truth so assert_hook_counts_match's "which matcher got dropped" diagnostic
+# can never drift from the actual mapping logic.
+RECOGNIZED_PRE_MATCHERS_JSON='["Bash","Edit|Write|MultiEdit","Write","Read|Glob|Grep"]'
+RECOGNIZED_POST_MATCHERS_JSON='["Bash","Write|Edit|MultiEdit"]'
+
 # Cursor's beforeShellExecution event puts the command at the TOP LEVEL
 # ({"command": "...", "cwd": "...", "sandbox": ...}), while every .claude
 # hook parses Claude Code's stdin shape (.tool_name / .tool_input.command).
@@ -230,6 +237,42 @@ MDC
 
 generate_hooks_json > "$OUT_CURSOR/hooks.json"
 write_rules_mdc > "$OUT_CURSOR/rules/apexyard.mdc"
+
+# Fail loud on a silent gate-hole (Rex, #838; hardening tracked as #840 B2).
+# generate_hooks_json's jq filter hardcodes a recognized-matcher allowlist
+# (Axis 1 of AgDR-0091 — an explicit per-matcher mapping table, chosen over
+# a generic passthrough) — a future new matcher shape wired into
+# .claude/settings.json (e.g. a Claude Code release adding a new tool
+# matcher) would silently fall through every `select(.matcher == …)` clause
+# and be dropped from .cursor/hooks.json with no error. This assertion turns
+# that silent drop into a build error, naming the exact matcher group that
+# didn't make it across.
+assert_hook_counts_match() {
+  local source_count generated_count unmapped
+  source_count=$(jq '[.hooks[][].hooks[]] | length' "$CLAUDE_DIR/settings.json")
+  generated_count=$(jq '[.hooks[][]] | length' "$OUT_CURSOR/hooks.json")
+  if [ "$source_count" != "$generated_count" ]; then
+    # NOTE: each comma-separated branch below is wrapped in its own parens.
+    # jq's `as` binding scopes across a bare top-level comma inside `[...]`,
+    # so without the parens the $g/$m bound while iterating PreToolUse would
+    # leak into the PostToolUse branch and misindex there — a real footgun,
+    # not stylistic parens.
+    unmapped=$(jq -r --argjson pre "$RECOGNIZED_PRE_MATCHERS_JSON" --argjson post "$RECOGNIZED_POST_MATCHERS_JSON" '
+      [
+        ((.hooks.PreToolUse // [])[] | . as $g | ($g.matcher) as $m
+          | select(($pre | index($m)) == null) | "PreToolUse:\($m // "(none)"):\($g.hooks | length)"),
+        ((.hooks.PostToolUse // [])[] | . as $g | ($g.matcher) as $m
+          | select(($post | index($m)) == null) | "PostToolUse:\($m // "(none)"):\($g.hooks | length)")
+      ] | join(", ")
+    ' "$CLAUDE_DIR/settings.json")
+    echo "ERROR: generated .cursor/hooks.json carries $generated_count hook(s) but .claude/settings.json wires $source_count — a matcher group was silently dropped during generation." >&2
+    if [ -n "$unmapped" ]; then
+      echo "ERROR: unrecognized matcher group(s) not mapped by this generator (event:matcher:hookCount): $unmapped" >&2
+    fi
+    exit 1
+  fi
+}
+assert_hook_counts_match
 
 if grep -R "$(printf '%s' "$ROOT" | sed 's/[.[\*^$()+?{}|]/\\&/g')" "$OUT_CURSOR" >/dev/null 2>&1; then
   echo "ERROR: generated adapter contains an absolute path to $ROOT" >&2

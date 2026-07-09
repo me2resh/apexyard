@@ -278,6 +278,32 @@ else
 fi
 mv "$TMPROOT/.claude/settings.json.bak" "$TMPROOT/.claude/settings.json"
 
+# --- fail-loud hook-count guard on an unrecognized matcher (#840 B2) ----
+# generate_hooks_json hardcodes a recognized-matcher allowlist (Bash,
+# Edit|Write|MultiEdit, Write, Read|Glob|Grep for PreToolUse; Bash,
+# Write|Edit|MultiEdit for PostToolUse). Wire a hook to a matcher shape
+# outside that allowlist and confirm the generator now hard-fails instead
+# of silently omitting it from .cursor/hooks.json — the exact "silent
+# gate-hole" scenario Rex flagged on #838.
+cp "$TMPROOT/.claude/settings.json" "$TMPROOT/.claude/settings.json.bak"
+jq '.hooks.PreToolUse += [{"matcher": "NotebookEdit", "hooks": [{"type": "command", "command": "bash -c \"exec .claude/hooks/require-active-ticket.sh\""}]}]' \
+  "$TMPROOT/.claude/settings.json" > "$TMPROOT/.claude/settings.json.new"
+mv "$TMPROOT/.claude/settings.json.new" "$TMPROOT/.claude/settings.json"
+if bash "$SCRIPT" --root "$TMPROOT" >/tmp/_cursor_adapter_unmapped.out 2>&1; then
+  mark_fail "generator hard-fails on an unrecognized matcher" "expected non-zero exit; generator silently succeeded"
+else
+  mark_pass "generator hard-fails on an unrecognized matcher"
+fi
+if grep -F "NotebookEdit" /tmp/_cursor_adapter_unmapped.out >/dev/null 2>&1; then
+  mark_pass "hard-fail error names the dropped matcher (NotebookEdit)"
+else
+  mark_fail "hard-fail error names the dropped matcher (NotebookEdit)" "$(cat /tmp/_cursor_adapter_unmapped.out)"
+fi
+mv "$TMPROOT/.claude/settings.json.bak" "$TMPROOT/.claude/settings.json"
+# Regenerate from the restored (valid) fixture so the subsequent --clean
+# test below observes a clean, non-error state.
+bash "$SCRIPT" --root "$TMPROOT" >/dev/null 2>&1
+
 # --- --clean removes then regenerates .cursor --------------------------
 if bash "$SCRIPT" --root "$TMPROOT" --clean >/tmp/_cursor_adapter_clean.out 2>&1; then
   mark_pass "--clean regenerates .cursor"
