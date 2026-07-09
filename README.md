@@ -42,6 +42,8 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 *Under the hood:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones — never a separate copy that can drift out of sync. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/`](docs/harnesses/README.md)**.
 
+> **Not on Claude Code?** opencode, pi, and Codex run the same gates today (Cursor partially). Install your tool's adapter — the one command in the table above — and the identical rules enforce. One honest caveat before the Quick Start below: the `/setup`, `/handover`, and other `/…` commands are Claude Code **skills**, a convenience layer. The enforcement that actually matters — the gates — is what your tool's adapter delivers; on another tool you set up the same plain-text config files by hand (the steps note how).
+
 ## Codex Adapter
 
 ApexYard can generate a Codex-facing adapter from the canonical `.claude/` runtime:
@@ -71,6 +73,8 @@ ApexYard is a set of plain-text primitives Claude Code reads automatically — n
 ## Quick Start — fork and go
 
 ApexYard governs a **portfolio of repos** as one organisation. You fork apexyard, clone the fork, treat it as your "ops repo", and register every project you want under management. No `.apexyard/` symlinks, no nested installs — the fork IS the ops repo.
+
+> **On opencode, pi, or Codex?** Steps 1–3 are the same (they're just `git` / `gh`). Then install your tool's adapter — one command, see the [Harness support](#harness-support) table above — and the gates enforce on your tool. The `/setup` and `/handover` steps below are Claude Code **skills**; on another tool you set up the same plain-text config files by hand, which each step shows. The rules that get enforced are identical either way.
 
 ### 1. Star + Fork on GitHub
 
@@ -108,6 +112,8 @@ Run **`/setup`** in Claude Code. In three exchanges (describe your stack → rev
 
 Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
 
+*Not on Claude Code?* There's no `/setup` skill to run — do the same thing by hand: `cp onboarding.example.yaml onboarding.yaml` and fill in your company, stack, and quality bar. The gates don't depend on the skill; they read the file.
+
 ### 5. Register your projects — run `/handover`
 
 Projects join the portfolio through a skill, not hand-edited YAML. For each repo you want under management:
@@ -129,7 +135,7 @@ projects:
     status: active
 ```
 
-Register even a single repo — the portfolio skills (`/projects`, `/inbox`, `/status`) work off the registry. (Prefer to bootstrap it manually? `cp apexyard.projects.yaml.example apexyard.projects.yaml` still works.)
+Register even a single repo — the portfolio skills (`/projects`, `/inbox`, `/status`) work off the registry. (Not on Claude Code, or prefer to bootstrap it by hand? `cp apexyard.projects.yaml.example apexyard.projects.yaml` and add your repos — same registry, no skill required.)
 
 ### 6. Start working
 
