@@ -2,6 +2,67 @@
 
 All notable changes to ApexYard are documented here.
 
+## [v4.4.0] — 2026-07-09
+
+Minor release — 17 features,7 fixes,20 improvements.
+
+### Added (feat)
+
+- (#850) harness-selection step in /setup and /handover — 67ec274
+- (#821) opencode gate adapter — enforce apexyard gates via a plugin over the bash hooks — 526c6e3
+- (#831) Cursor gate adapter — generate .cursor/hooks.json delegating to the bash hooks — 8c2b384
+- (#824) /eval-agents — score review agents against frozen ground-truth defect sets — 8ea78c3
+- (#729) add Codex adapter generator — deb4342
+- (#68) Structurizr DSL as escape hatch for L3+ C4 diagrams — 1afb1d8
+- (#815) multi-harness gate adapter for pi.dev — 25211b3
+- (#805) pi.dev AGENTS.md bridge (advisory rules for pi) — df35bd3
+- (#759) route /approve-merge's merge command through tracker_pr_merge (gh/glab) — be0dbd9
+- (#798) /handover offers a Governed-by-ApexYard badge to onboarded repos — b4dc069
+- (#763) route /security-review + /design-review through tracker_review_submit — 557c3be
+- (#758) route /code-review through tracker-agnostic review submission — abf0d79
+- (#764) make merge-gate HEAD/merge-detection forge-aware (gh/glab) — f9f4541
+- (#753) docs-index hook — auto-maintain per-project docs/INDEX.md + nudge — 1b960a2
+- (#789) guard the agent-spawn boundary with a role-selection rule — d91652b
+- (#787) safe-by-default isolated builds via git worktrees (rule + advisory guard) — 3fc95fb
+- (#782) reporting-style rule + human-report output style — 9641cf4
+
+### Fixed (fix)
+
+- (#840) Cursor adapter must install at user-level hooks.json, not project — 63361f4
+- (#844) subdir install layout for pi + opencode adapters — 341825d
+- (#765) key all approval markers on the PR base repo (cross-fork) — c06f8c5
+- (#810) resolve {owner/repo} placeholder in /roadmap tracker_create flow — 8c2bf53
+- (#791) pr-create validator — expand tilde before git -C + stop over-matching gh issue create — 9df643b
+- (#790) make red-CI merge gate forge-aware (gh/glab), fail-closed — d6e6630
+- (#755) route migration gate through tracker abstraction (GitLab support) — 35146fc
+
+### Changed (refactor / chore / docs)
+
+- (#853) add a non-Claude-Code on-ramp to the README — 8424b4e
+- (#851) make harness-support tables user-readable — fd45d44
+- (#840) harness capability tables reflect live conformance results — c1cb807
+- (#840) adapter-family hardening — generator fail-loud, timeout, warn-loud, pi derive-gates convergence — bac2792
+- (#840) refresh harness matrices + cursor/opencode pages to merged reality — 8b014d3
+- (#834) harness support matrix + docs/harnesses/ index — 0aea22d
+- (#833) eval-agents hardening follow-ups from the #828 reviews — 3f8ff0f
+- (#832) reconcile duplicate AgDR-0082 — renumber handover-badge to AgDR-0090 — e0080d0
+- (#829) add hossam-96 to the Contributors list — 70121bf
+- (#825) calibrate LLM-judge against real ship/reject outcomes — 460bef1
+- (#819) least-privilege permissions + SHA-pin actions in CI — 333a831
+- (#466) discard spikes #466/#660 (memos) + state Git Bash as Windows prereq — 63d9a14
+- (#819) least-privilege workflow permissions + SHA-pin actions — e1b14a0
+- (#804) prove pi extension can gate merges by shelling out to bash hook — eb98997
+- (#811) repo-targeting convention — always explicit --repo — c0a0b6c
+- (#808) combine codeql-action init+analyze bump + group github-actions — 04df622
+- (#799) bump DavidAnson/markdownlint-cli2-action from 23.2.0 to 24.0.0 — 731d16c
+- (#802) bump github/codeql-action/upload-sarif from 4.36.2 to 4.36.3 — 1c7fdbc
+- (#795) README pain-story hook + technical detail to sub-doc + adopter badge — 8968764
+- (#775) correct /plan-initiative active-issue-skill marker wording — 3a80bca
+
+### Closes
+
+- Closes #68, #466, #729, #753, #755, #758, #759, #763, #764, #765, #775, #782, #787, #789, #790, #791, #795, #798, #799, #802, #804, #805, #808, #810, #811, #815, #819, #821, #824, #825, #829, #831, #832, #833, #834, #840, #844, #850, #851, #853
+
 ## [v4.3.0] — 2026-07-04
 
 Minor release — 2 features, 1 fix, 1 docs improvement. Headlined by the
