@@ -18,7 +18,7 @@ docs/eval-agents/
 
 ## What's seeded, and what isn't
 
-- **Rex (`corpus/rex.json`)** — 6 entries mined from this repo's own review history: two confirmed MISSes (wrong approvals — one caught by Hakim reviewing the identical commit, the other by a subsequent fix), two GOOD_CATCH (correctly required changes), and two GOOD_CLEAN (correctly approved a genuinely clean diff).
+- **Rex (`corpus/rex.json`)** — 6 entries mined from this repo's own review history: two confirmed MISSes (wrong approvals — both caught by Hakim's independent review of the identical commit; both entries carry `oracle.source: independent_review`, not `confirmed_fix` — the fix that landed afterward corroborates the defect but isn't the oracle basis), two GOOD_CATCH (correctly required changes), and two GOOD_CLEAN (correctly approved a genuinely clean diff).
 - **Hakim (`corpus/hakim.json`)** — 4 entries: three GOOD_CATCH, one GOOD_CLEAN. **No confirmed Hakim MISS is seeded yet** — the spike's sample didn't surface a clean Hakim-authored wrong approval. This is a real, documented gap. Approve-precision on the Hakim starter run will trivially read 1.0 until a genuine miss is harvested and added; treat that number as "no counter-evidence yet," not "Hakim is perfect."
 - **Two entries are same-diff cross-agent pairs** (`rex-792-2ce6708` / `hakim-792-2ce6708`, and `rex-767-a99f1009` / `hakim-767-a99f1009`) — the identical commit, reviewed by both agents the same day, with different outcomes (Rex approved, Hakim caught a real defect). These are the cleanest possible corpus entries: the diff is held constant, only the reviewing agent varies.
 - **Tariq — no starter corpus.** No Tariq-reviewed PRs were in the spike's sample. `/eval-agents tariq` requires an operator-supplied `--corpus <path>` until one exists.
@@ -33,6 +33,10 @@ Every entry traces back to a real, merged `me2resh/apexyard` PR. Ground truth wa
 - `no_contradiction` — a clean approval that no later review or fix ever contradicted.
 
 This is the same mining method spike #825 used for its own labeled set (`docs/spike-825/judge_calibration.py`), reshaped from rubric-scores into defect-sets.
+
+## Non-determinism caveat
+
+Every score `/eval-agents` reports is downstream of two LLM steps, not a fixed measurement: the candidate spawn re-reviewing the diff, and the defect-overlap match against the frozen `ground_truth_defects` key. The key itself is frozen — that's the whole point of AgDR-0089 — but *comparing a fresh run's findings to that key* is a semantic judgment call, not a byte-for-byte diff, and can land differently on a borderline entry from one run to the next. A score delta between two runs of the same corpus against the same agent is **not automatically a real regression**; it can be run-to-run noise in the matching step. Read a delta by checking which specific entries flipped and re-reading the agent's actual output for those entries — never by trend-lining the raw percentage alone.
 
 ## Growing the corpus
 
