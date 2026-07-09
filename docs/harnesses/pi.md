@@ -4,9 +4,9 @@
 
 ## What's verified
 
-A credentialed pi session in headless mode (`pi -p -a`) issued a gated command during a real model turn and the delegated `.claude/hooks/*.sh` gate refused it — the same hook Claude Code runs. That is the live end-to-end conformance proof the [rebrand trigger](README.md#rebrand-trigger) requires, and pi is one of the two adapters (with opencode) that cleared it.
+A credentialed pi session in headless mode (`pi -p -a`) issued a gated command during a real model turn and the delegated `.claude/hooks/*.sh` gate refused it — the same hook Claude Code runs. That is the live end-to-end conformance proof the [rebrand trigger](README.md#rebrand-trigger) requires, and pi is one of three adapters (with opencode and Codex) that cleared it.
 
-**Why pi enforces in headless/CLI:** like opencode, pi exposes an **imperative extension API** — the dispatcher registers on pi's `tool_call` event, so the gate runs inside the real turn without depending on the harness loading a static hook-config file. That's the architectural reason pi's CLI path enforces where the declarative-hooks adapters (Codex, Cursor) need the interactive/IDE path.
+**How pi reaches the gate:** like opencode, pi exposes an **imperative extension API** — the dispatcher registers on pi's `tool_call` event, so the gate runs inside the real turn. Its precondition for enforcement is headless `-a`/`--approve` (project trust, so the tool call reaches the handler) — the pi analog of opencode's `--auto` and Codex's hook-trust. Every apexyard adapter enforces in headless once its precondition is met; Cursor is the one exception (see the [harness index](README.md#support-matrix)).
 
 apexyard's governance was built for Claude Code first: `CLAUDE.md` is auto-loaded at session start, `.claude/hooks/*.sh` mechanically enforce the merge gate / ticket-first / secrets-scan rules, and `.claude/skills/*.md` become typed slash commands. **pi** (pi.dev — Earendil's minimal, unopinionated agent CLI) is a deliberately different shape: no `CLAUDE.md`-style auto-load, no hook plumbing, no MCP, no slash-command runner, no plan mode, no background bash, no permission popups. Pi pushes that governance layer to user-installed packages instead of building it in. **apexyard is exactly that layer for a pi user.**
 

@@ -28,7 +28,7 @@ Fork `me2resh/apexyard`, clone it, run `/setup`, and register projects with `/ha
 
 ## Preconditions
 
-None beyond a working Claude Code install. The hooks are wired natively via `.claude/settings.json` and fire on every tool call — no adapter, no install flag, and (unlike the imperative-plugin and declarative-hooks adapters) no interactive-vs-headless caveat. The single OS-level prerequisite: on Windows the bash hooks need Git Bash / WSL.
+None beyond a working Claude Code install. The hooks are wired natively via `.claude/settings.json` and fire on every tool call — no adapter, no install flag, and (unlike the delegating adapters) no trust/approval precondition to satisfy first. The single OS-level prerequisite: on Windows the bash hooks need Git Bash / WSL.
 
 ## What's verified
 

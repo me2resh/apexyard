@@ -1,20 +1,19 @@
 # Harness support — Codex
 
-**Status:** ⏳ **Not enforcing in headless (2026-07-09).** The adapter generates a schema-correct `.codex/hooks.json` and the model mapping is right, but a definitive probe showed `codex exec -m gpt-5.5` runs a benign shell command *without* firing the project `.codex/hooks.json` hook (empty instrumentation log) — so headless `codex exec` does **not** honor project hooks. Not live-proven. Adapter merged (#730, [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md)).
+**Status:** ✅ **Live-proven (2026-07-09)** — a real `codex exec --dangerously-bypass-hook-trust -m gpt-5.5` model turn's `git add -A` fired the delegated `block-git-add-all.sh` (hook logged, verbatim block message, clean exit 2, nothing staged). Equivalent to the opencode/pi delegated-execution proofs. Adapter merged (#730, [AgDR-0088](../agdr/AgDR-0088-codex-adapter-generation.md)).
 
 Codex support is **generated** from the canonical `.claude/` runtime rather than hand-maintained, so the two agent surfaces can't drift by hand. This page is the short orientation; the full generate / drift-check / tracking-policy workflow lives in **[`docs/codex-adapter.md`](../codex-adapter.md)** (kept at its existing path — linked here, not duplicated or moved).
 
-## What's verified vs not
+## What's verified
 
-- **Verified correct:** the generated `.codex/hooks.json` schema (validated against the Codex hooks docs, AgDR-0088) and the model mapping — `opus`→`gpt-5.5` is the real ChatGPT-account default, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`. The in-repo test (`.claude/hooks/tests/test_sync_codex_adapter.sh`) proves the generated command path preserves the hook stdin and exit-code contract (block on `exit 2`, allow on `exit 0`, skip on a non-matching predicate).
-- **NOT achieved:** live enforcement on the headless `codex exec` surface. A `codex exec -m gpt-5.5` run had a shell command reach execution with the project hook not firing — so on that surface the gate is bypassed, not enforced.
-- **Untested (and likely required):** the interactive `codex` TUI and/or a **user-level** `~/.codex/hooks.json`. Codex may only load hooks in interactive mode or from a user-level config — mirroring the Cursor user-level finding. Verifying that path is the open item.
+- **Live delegated enforcement:** with hook-trust granted, a credentialed `codex exec -m gpt-5.5` turn issued `git add -A` and the unmodified `.claude/hooks/block-git-add-all.sh` fired and blocked it — clean exit 2, verbatim hook output, nothing staged. This is the live end-to-end conformance proof the [rebrand trigger](README.md#rebrand-trigger) requires; Codex is one of three adapters (with opencode and pi) that have cleared it.
+- **Schema + model mapping correct:** the generated `.codex/hooks.json` schema is validated against the Codex hooks docs (AgDR-0088), and the model mapping is right — `opus`→`gpt-5.5` is the real ChatGPT-account default, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`. The in-repo test (`.claude/hooks/tests/test_sync_codex_adapter.sh`) proves the generated command path preserves the hook stdin and exit-code contract (block on `exit 2`, allow on `exit 0`, skip on a non-matching predicate).
 
-**Codex is a declarative-hooks adapter.** Unlike opencode and pi — imperative-plugin adapters whose gate runs inside the harness's own tool-call event, and which are therefore live-proven in headless/CLI — Codex delegates through a static `hooks.json` the harness must *load*. Its headless CLI (`codex exec`) doesn't load a project-level one, the same shape as the `cursor-agent` CLI. That single design difference is why Codex hasn't cleared the live bar. See the architectural split in the [harness index](README.md#support-matrix) for the full framing.
+**It was a trust gap, not a capability gap.** An earlier probe saw `git add` reach execution with the hook not firing — but that was because Codex loads project-local hooks only when the `.codex/` layer is **trusted** (per the Codex docs: project-local hooks load only when the `.codex/` layer is trusted). Grant trust and the delegated bash runs exactly as under Claude Code. This puts Codex alongside opencode (`--auto`) and pi (`-a`) — every adapter enforces in headless once its precondition (a trust/approval flag or config location) is satisfied. See the precondition pattern in the [harness index](README.md#support-matrix).
 
 ## What's enforced vs advisory today
 
-**Delegated (by construction, but not firing in `codex exec`):** the generated `.codex/hooks.json` keeps the commands that exec the *unmodified* `.claude/hooks/*.sh`. By design a `PreToolUse` gate that exits `2` blocks the action the same way it does under Claude Code — the merge gate, red-CI block, ticket-first, secrets/leak-protection, and the review gates all run the same audited bash. The gap is the *loading*: the headless `codex exec` surface does not invoke these project hooks, so this delegation is currently unexercised there.
+**Delegated (blocking, live-proven with trust):** the generated `.codex/hooks.json` keeps the commands that exec the *unmodified* `.claude/hooks/*.sh`. A `PreToolUse` gate that exits `2` blocks the action under Codex the same way it does under Claude Code — the merge gate, red-CI block, ticket-first, secrets/leak-protection, and the review gates all run the same audited bash. The `git add -A` block above exercised this path live.
 
 **Advisory:** the generated skills/agents carry the same guidance content as Claude Code's, but Claude-Code-specific advisory banners (role triggers, drift notices) are not part of Codex's documented hook shape.
 
@@ -40,12 +39,12 @@ Tracking policy, gitignore guidance, and CI `--check` enforcement: [`docs/codex-
 
 ## Preconditions
 
-- **Do not rely on `codex exec` (headless) for enforcement today** — it runs shell commands without firing the project `.codex/hooks.json` hook, so gates are bypassed on that surface. Treat it as advisory-only until the interactive/user-level path is verified.
-- The generated hooks assume Codex loads a trusted **project** `.codex/hooks.json`; the open work is establishing whether the interactive `codex` TUI or a **user-level** `~/.codex/hooks.json` is what actually loads them (mirroring the Cursor user-level finding).
+- **Project `.codex/hooks.json` requires hook-trust to load.** Grant it one of three ways: `/hooks` (the interactive trust command), `--dangerously-bypass-hook-trust` (a headless one-off — how the live proof was run), or install the hooks to **user-level** `~/.codex/hooks.json` (trusted by default). Without trust, Codex runs the command without firing the project hook — the "trust gap" the earlier probe hit. This is the Codex analog of opencode's `--auto` and pi's `-a`.
+- Run from inside an apexyard ops fork so the delegated hooks resolve the ops root.
 
 ## Gaps + tracking
 
-The honest gap is **the hook doesn't fire on `codex exec`**: the in-repo bash test proves command delegation and exit-code preservation *by construction*, but a definitive 2026-07-09 probe showed the headless CLI runs a command with the project hook not firing. So a credentialed, model-driven Codex turn actually blocked by a gate has **not** been recorded — and on the surface tested, isn't achievable. The next step is verifying the interactive TUI and/or user-level `~/.codex/hooks.json` path. This keeps Codex below the [rebrand trigger](README.md#rebrand-trigger) bar (which opencode + pi have cleared). Tracked in #840.
+No enforcement gap remains: with hook-trust granted the delegated gate fires cleanly during a real `codex exec` turn, and Codex is now one of the three live-proven adapters that cleared the [rebrand trigger](README.md#rebrand-trigger) bar. The residual ergonomics item is making the trust step frictionless — e.g. an install path that seeds user-level `~/.codex/hooks.json` so adopters don't need the `--dangerously-bypass-hook-trust` flag per run. Tracked in #840.
 
 ## Related AgDRs
 
