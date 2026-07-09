@@ -101,6 +101,18 @@ allowed-tools: Bash, Read
 Read `.claude/rules/workflow-gates.md` before acting in Claude Code.
 MD
 
+# Shared model matrix the generator reads to translate tier labels -> Codex
+# models (source of truth for every harness adapter). Its presence is what
+# makes the `model = "gpt-5.4"` assertion below config-driven rather than
+# hardcoded — omit it and the mapping correctly falls back to the label.
+cat > "$TMPROOT/.claude/harness-models.json" <<'JSON'
+{
+  "opus":   { "codex": "gpt-5.5" },
+  "sonnet": { "codex": "gpt-5.4" },
+  "haiku":  { "codex": "gpt-5.4-mini" }
+}
+JSON
+
 echo "== Codex adapter sync smoke"
 
 if bash "$SCRIPT" --root "$TMPROOT" >/tmp/_codex_adapter_sync.out 2>&1; then

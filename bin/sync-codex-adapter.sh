@@ -73,13 +73,14 @@ rewrite_skill_paths() {
   ' "$@"
 }
 
+# Map a Claude model-tier label to a harness-native model via the shared
+# .claude/harness-models.json matrix — the single source of truth every harness
+# adapter reads (pi/opencode add their own column instead of a second mapping).
+# Falls back to the label unchanged when the file, tier, or 'codex' column is
+# absent (jq treats a missing key as null, so `// $l` yields the label).
 map_codex_model() {
-  case "$1" in
-    opus) echo "gpt-5.5" ;;
-    sonnet) echo "gpt-5.4" ;;
-    haiku) echo "gpt-5.4-mini" ;;
-    *) echo "$1" ;;
-  esac
+  jq -r --arg l "$1" '.[$l].codex // $l' "$CLAUDE_DIR/harness-models.json" 2>/dev/null \
+    || printf '%s\n' "$1"
 }
 
 copy_tree() {

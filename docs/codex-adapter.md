@@ -4,7 +4,7 @@ ApexYard's canonical runtime still lives in `.claude/`: skills, agents, hooks,
 rules, and hook wiring are authored there first. Codex support is generated from
 that source of truth so the two agent surfaces do not drift by hand.
 
-Decision record: [`AgDR-0085`](agdr/AgDR-0085-codex-adapter-generation.md).
+Decision record: [`AgDR-0088`](agdr/AgDR-0088-codex-adapter-generation.md).
 
 ## Generate The Adapter
 

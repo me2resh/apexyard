@@ -1,4 +1,4 @@
-# AgDR-0085 — Codex adapter delegates gates to the Claude runtime
+# AgDR-0088 — Codex adapter delegates gates to the Claude runtime
 
 > In the context of adding Codex support to a framework whose canonical runtime
 > currently lives under `.claude/`, facing first-pass generated `.agents/` and
@@ -44,8 +44,13 @@ The generator emits:
 
 - `.claude/skills/` as `.agents/skills/`, rewriting only
   `.claude/skills/...` references to `.agents/skills/...`
-- `.claude/agents/*.md` as `.codex/agents/*.toml`, mapping `opus` to `gpt-5.5`,
-  `sonnet` to `gpt-5.4`, and `haiku` to `gpt-5.4-mini`
+- `.claude/agents/*.md` as `.codex/agents/*.toml`, mapping the Claude model-tier
+  labels to Codex models (`opus`→`gpt-5.5`, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`)
+  via the shared `.claude/harness-models.json` matrix — the single source of truth
+  every harness adapter reads, so the pi/opencode adapters add a column instead of
+  hardcoding a second mapping. Per
+  [`AgDR-0087`](AgDR-0087-reasoning-agents-require-frontier-model.md), each
+  harness's `opus` row stays on that harness's strongest available model
 - `.claude/settings.json` as `.codex/hooks.json`, preserving commands that exec
   `$r/.claude/hooks/*.sh`
 - Claude Code's handler-level `if` predicates as shell-side preflight filters in
