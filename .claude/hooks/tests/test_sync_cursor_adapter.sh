@@ -94,9 +94,18 @@ exit 0
 SH
 chmod +x "$TMPROOT/.claude/hooks/pin-ops-root.sh"
 
+cat > "$TMPROOT/.claude/hooks/require-migration-ticket.sh" <<'SH'
+#!/usr/bin/env bash
+cat >/dev/null
+exit 0
+SH
+chmod +x "$TMPROOT/.claude/hooks/require-migration-ticket.sh"
+
 # Fixture settings.json exercises: a Bash(glob) predicate hook, an
 # unconditional Bash hook (no `if`), a fail-closed-eligible hook
-# (check-secrets.sh), an Edit|Write|MultiEdit hook, and a SessionStart hook —
+# (check-secrets.sh), an Edit|Write|MultiEdit hook, a second
+# Edit|Write|MultiEdit hook that is ALSO fail-closed-eligible
+# (require-migration-ticket.sh — #840 B3), and a SessionStart hook —
 # covering every branch the generator's event-mapping table has to handle.
 cat > "$TMPROOT/.claude/settings.json" <<'JSON'
 {
@@ -134,6 +143,10 @@ cat > "$TMPROOT/.claude/settings.json" <<'JSON'
           {
             "type": "command",
             "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-active-ticket.sh\"'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'r=\"\";if [ -n \"${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}\";[ -f \"$p\" ] && IFS= read -r r < \"$p\" && [ -d \"$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"$r\" ];then r=$PWD;while [ -n \"$r\" ] && [ \"$r\" != / ];do { [ -f \"$r/.apexyard-fork\" ] || [ -f \"$r/onboarding.yaml\" ]; } && [ -d \"$r/.claude/hooks\" ] && break;r=${r%/*};done;fi;[ -d \"$r/.claude/hooks\" ] || exit 0;exec \"$r/.claude/hooks/require-migration-ticket.sh\"'"
           }
         ]
       }
@@ -198,6 +211,19 @@ if jq -e '[.hooks.beforeShellExecution[] | select(.command | contains("block-tes
   mark_pass "failClosed is absent on a non-security-critical gate (block-test.sh)"
 else
   mark_fail "failClosed is absent on a non-security-critical gate (block-test.sh)" "unexpected failClosed"
+fi
+
+# --- failClosed on the migration blast-radius gate (#840 B3) -----------
+if jq -e '[.hooks.preToolUse[] | select(.command | contains("require-migration-ticket.sh")) | .failClosed] == [true]' "$TMPROOT/.cursor/hooks.json" >/dev/null 2>&1; then
+  mark_pass "failClosed is set on the migration blast-radius gate (require-migration-ticket.sh)"
+else
+  mark_fail "failClosed is set on the migration blast-radius gate (require-migration-ticket.sh)" "missing failClosed:true"
+fi
+
+if jq -e '[.hooks.preToolUse[] | select(.command | contains("require-active-ticket.sh")) | .failClosed] == [null]' "$TMPROOT/.cursor/hooks.json" >/dev/null 2>&1; then
+  mark_pass "failClosed is absent on the general ticket-first gate (require-active-ticket.sh)"
+else
+  mark_fail "failClosed is absent on the general ticket-first gate (require-active-ticket.sh)" "unexpected failClosed"
 fi
 
 # --- delegation exec: block / allow / skip across the remap boundary --
@@ -277,6 +303,32 @@ else
   mark_pass "--check detects drift"
 fi
 mv "$TMPROOT/.claude/settings.json.bak" "$TMPROOT/.claude/settings.json"
+
+# --- fail-loud hook-count guard on an unrecognized matcher (#840 B2) ----
+# generate_hooks_json hardcodes a recognized-matcher allowlist (Bash,
+# Edit|Write|MultiEdit, Write, Read|Glob|Grep for PreToolUse; Bash,
+# Write|Edit|MultiEdit for PostToolUse). Wire a hook to a matcher shape
+# outside that allowlist and confirm the generator now hard-fails instead
+# of silently omitting it from .cursor/hooks.json — the exact "silent
+# gate-hole" scenario Rex flagged on #838.
+cp "$TMPROOT/.claude/settings.json" "$TMPROOT/.claude/settings.json.bak"
+jq '.hooks.PreToolUse += [{"matcher": "NotebookEdit", "hooks": [{"type": "command", "command": "bash -c \"exec .claude/hooks/require-active-ticket.sh\""}]}]' \
+  "$TMPROOT/.claude/settings.json" > "$TMPROOT/.claude/settings.json.new"
+mv "$TMPROOT/.claude/settings.json.new" "$TMPROOT/.claude/settings.json"
+if bash "$SCRIPT" --root "$TMPROOT" >/tmp/_cursor_adapter_unmapped.out 2>&1; then
+  mark_fail "generator hard-fails on an unrecognized matcher" "expected non-zero exit; generator silently succeeded"
+else
+  mark_pass "generator hard-fails on an unrecognized matcher"
+fi
+if grep -F "NotebookEdit" /tmp/_cursor_adapter_unmapped.out >/dev/null 2>&1; then
+  mark_pass "hard-fail error names the dropped matcher (NotebookEdit)"
+else
+  mark_fail "hard-fail error names the dropped matcher (NotebookEdit)" "$(cat /tmp/_cursor_adapter_unmapped.out)"
+fi
+mv "$TMPROOT/.claude/settings.json.bak" "$TMPROOT/.claude/settings.json"
+# Regenerate from the restored (valid) fixture so the subsequent --clean
+# test below observes a clean, non-error state.
+bash "$SCRIPT" --root "$TMPROOT" >/dev/null 2>&1
 
 # --- --clean removes then regenerates .cursor --------------------------
 if bash "$SCRIPT" --root "$TMPROOT" --clean >/tmp/_cursor_adapter_clean.out 2>&1; then

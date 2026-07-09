@@ -169,6 +169,35 @@ else
   mark_fail "generated hook command skips nonmatching predicates" "expected exit 0, got $skip_rc: $(cat /tmp/_codex_adapter_skip.out)"
 fi
 
+# --- fail-loud hook-count guard (#840 B1) -------------------------------
+# generate_hooks_json's jq filter is matcher-agnostic today (it walks every
+# event/matcher group generically, never filtering by recognized matcher
+# name), so the real generator never drops a hook and this positive check
+# is the only live-path assertion possible against it. The synthetic check
+# below exercises the SAME count-comparison formula the generator's
+# assert_hook_counts_match() uses, against a hand-built "generated output
+# lost a hook" fixture pair — proving the detection formula itself
+# correctly flags a mismatch, which is what would fire if a future edit to
+# the generator's jq filter narrowed it to an allowlist (the Cursor
+# generator's own failure mode, see #838).
+source_hook_count=$(jq '[.hooks[][].hooks[]] | length' "$TMPROOT/.claude/settings.json")
+generated_hook_count=$(jq '[.hooks[][].hooks[]] | length' "$TMPROOT/.codex/hooks.json")
+if [ "$source_hook_count" = "$generated_hook_count" ] && [ "$source_hook_count" -gt 0 ]; then
+  mark_pass "generated hook count matches source settings.json hook count"
+else
+  mark_fail "generated hook count matches source settings.json hook count" "source=$source_hook_count generated=$generated_hook_count"
+fi
+
+DROPPED_FIXTURE=$(mktemp "${TMPDIR:-/tmp}/codex-adapter-dropped.XXXXXX")
+jq '{hooks: {PreToolUse: []}}' "$TMPROOT/.codex/hooks.json" > "$DROPPED_FIXTURE"
+dropped_generated_count=$(jq '[.hooks[][].hooks[]] | length' "$DROPPED_FIXTURE")
+rm -f "$DROPPED_FIXTURE"
+if [ "$source_hook_count" != "$dropped_generated_count" ]; then
+  mark_pass "count-equality formula detects a synthetically dropped matcher group"
+else
+  mark_fail "count-equality formula detects a synthetically dropped matcher group" "expected mismatch, got source=$source_hook_count dropped=$dropped_generated_count"
+fi
+
 if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_check.out 2>&1; then
   mark_pass "--check passes when generated output is current"
 else
