@@ -168,6 +168,30 @@ test("FAILS CLOSED: a hook whose output exceeds maxBuffer (execution-layer error
   assert.match(result?.reason ?? "", /noisy/);
 });
 
+test("FAILS CLOSED: a hook that exceeds the bounded timeout is BLOCKED, not left hanging or silently allowed (#840 C1)", () => {
+  const opsRoot = makeIsolatedOpsRoot();
+  // Sleeps far longer than the tiny timeout override below — simulates a
+  // hung hook (network call that never returns, an accidental infinite
+  // loop). execFileSync's own `timeout` option must kill it before it can
+  // produce a numeric exit status, landing this on the fail-closed path.
+  writeFileSync(join(opsRoot, ".claude", "hooks", "hangs.sh"), "#!/bin/bash\nsleep 5\nexit 0\n", { mode: 0o755 });
+  const gate: GateDefinition = {
+    name: "hangs",
+    hookRelativePath: ".claude/hooks/hangs.sh",
+    toolNames: ["bash"],
+    buildToolInput: (event) => ({ command: (event.input as any).command }),
+  };
+
+  const started = Date.now();
+  const result = runGateHook(opsRoot, gate, { command: "anything" }, "Bash", /* maxBufferBytes */ undefined, /* timeoutMs */ 100);
+  const elapsedMs = Date.now() - started;
+
+  assert.equal(result?.block, true, "a hung hook must fail CLOSED, not open");
+  assert.match(result?.reason ?? "", /timed out/);
+  assert.match(result?.reason ?? "", /hangs/);
+  assert.ok(elapsedMs < 4000, `expected the dispatcher to return well before the hook's own 5s sleep completes, took ${elapsedMs}ms`);
+});
+
 test("a hook exiting 1 (an unrelated, non-blocking bash-level error) is allowed, not blocked — only exit 2 blocks", async () => {
   const opsRoot = makeIsolatedOpsRoot();
   writeFileSync(join(opsRoot, ".claude", "hooks", "exit-one.sh"), "#!/bin/bash\nexit 1\n", { mode: 0o755 });

@@ -15,6 +15,8 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -22,6 +24,7 @@ import {
   buildToolExecuteBeforeHook,
   registerGateDispatcher,
   runGateHook,
+  execGateHookReal,
   type ExecGateHook,
 } from "../src/gate-dispatcher.ts";
 import type { GateDefinition } from "../src/derive-gates.ts";
@@ -83,6 +86,39 @@ test("runGateHook: NO numeric exit status (spawn failure / ENOBUFS / signal kill
   const result = runGateHook(process.cwd(), gate("execution-layer-failure"), { command: "anything" }, "Bash", exec);
   assert.equal(result?.block, true, "an execution-layer failure must fail CLOSED, not silently allow");
   assert.match(result?.reason ?? "", /could not be evaluated/);
+});
+
+// ---------------------------------------------------------------------
+// Bounded timeout (#840 C1) — exercised against the REAL execGateHookReal
+// (not the mock above), since the timeout is a property of the real
+// subprocess spawn, not something a mocked exec function can represent.
+// ---------------------------------------------------------------------
+
+test("execGateHookReal: a hook that exceeds the bounded timeout is killed and reports timedOut", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-gate-test-"));
+  // Sleeps far longer than the tiny timeout below — simulates a hung hook.
+  writeFileSync(join(opsRoot, "hangs.sh"), "#!/bin/bash\nsleep 5\nexit 0\n", { mode: 0o755 });
+  const hookPath = join(opsRoot, "hangs.sh");
+
+  const started = Date.now();
+  const result = execGateHookReal(hookPath, JSON.stringify({ tool_name: "Bash", tool_input: {} }), opsRoot, 1024 * 1024, 100);
+  const elapsedMs = Date.now() - started;
+
+  assert.equal(result.status, null, "a killed subprocess never produces a numeric exit status");
+  assert.equal(result.timedOut, true);
+  assert.ok(elapsedMs < 4000, `expected the kill to happen well before the hook's own 5s sleep completes, took ${elapsedMs}ms`);
+});
+
+test("FAILS CLOSED: runGateHook maps a real timeout to a block, naming the hook and the timeout (#840 C1)", () => {
+  const opsRoot = mkdtempSync(join(tmpdir(), "apexyard-opencode-gate-test-"));
+  writeFileSync(join(opsRoot, "hangs.sh"), "#!/bin/bash\nsleep 5\nexit 0\n", { mode: 0o755 });
+  const hangGate: GateDefinition = { name: "hangs", hookRelativePath: "hangs.sh", wires: [{ tool: "bash", commandGlob: null }] };
+
+  const result = runGateHook(opsRoot, hangGate, { command: "anything" }, "Bash", execGateHookReal, 1024 * 1024, 100);
+
+  assert.equal(result?.block, true, "a hung hook must fail CLOSED, not open");
+  assert.match(result?.reason ?? "", /timed out/);
+  assert.match(result?.reason ?? "", /hangs/);
 });
 
 test("runGateHook: a hook whose file doesn't exist in this ops root is a silent no-op (never calls exec)", () => {

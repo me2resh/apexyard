@@ -75,7 +75,8 @@ export type ExecGateHook = (
   stdinPayload: string,
   cwd: string,
   maxBufferBytes: number,
-) => { status: number | null; stderr: string };
+  timeoutMs: number,
+) => { status: number | null; stderr: string; timedOut?: boolean };
 
 /**
  * Ceiling for the hook subprocess's stdout+stderr buffers — identical
@@ -84,8 +85,17 @@ export type ExecGateHook = (
  */
 export const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Ceiling for a single gate hook's wall-clock execution (#840 C1) — same
+ * value and rationale as the pi adapter's `HOOK_EXEC_TIMEOUT_MS`: every
+ * gate hook today is a fast local check, so 30s is generous headroom for a
+ * legitimate run while still bounding a hung subprocess from blocking every
+ * subsequent tool call in the session indefinitely.
+ */
+export const HOOK_EXEC_TIMEOUT_MS = 30_000;
+
 /** Real subprocess exec — the production `ExecGateHook` implementation. */
-export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxBufferBytes) => {
+export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxBufferBytes, timeoutMs) => {
   try {
     execFileSync("bash", [hookPath], {
       input: stdinPayload,
@@ -93,13 +103,20 @@ export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxB
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: maxBufferBytes,
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
     });
     return { status: 0, stderr: "" };
   } catch (err) {
-    const execErr = err as { status?: number | null; stderr?: Buffer | string; message?: string };
+    const execErr = err as { status?: number | null; stderr?: Buffer | string; message?: string; code?: string };
     return {
       status: typeof execErr.status === "number" ? execErr.status : null,
       stderr: execErr.stderr ? execErr.stderr.toString() : String(execErr.message ?? err),
+      // Node's `code` distinguishes a timeout kill ("ETIMEDOUT") from a
+      // maxBuffer overflow ("ENOBUFS") even though both share the same
+      // killSignal — `.signal` alone can't tell them apart, since both
+      // paths kill the child the same way.
+      timedOut: execErr.code === "ETIMEDOUT",
     };
   }
 };
@@ -122,6 +139,13 @@ export const execGateHookReal: ExecGateHook = (hookPath, stdinPayload, cwd, maxB
  *                                          is a hard stop)
  *   - NO numeric exit status at all     → BLOCK, fail closed, naming the
  *                                          hook and the underlying error
+ *
+ * BOUNDED TIMEOUT, SAME FAIL-CLOSED PATH (#840 C1). `execGateHook` is given
+ * `timeoutMs` (default `HOOK_EXEC_TIMEOUT_MS`, 30s). A hook that exceeds it
+ * is killed before it produces a numeric exit status, so it lands in the
+ * same "NO numeric exit status" branch below as a spawn failure or ENOBUFS
+ * — a hung hook fails closed, not open, and never blocks the dispatcher
+ * indefinitely.
  */
 export function runGateHook(
   opsRoot: string,
@@ -130,12 +154,13 @@ export function runGateHook(
   claudeToolName: string,
   execGateHook: ExecGateHook = execGateHookReal,
   maxBufferBytes: number = MAX_HOOK_OUTPUT_BYTES,
+  timeoutMs: number = HOOK_EXEC_TIMEOUT_MS,
 ): GateHookResult | undefined {
   const hookPath = path.join(opsRoot, gate.hookRelativePath);
   if (!existsSync(hookPath)) return undefined; // gate not present in this fork — no-op, not a failure
 
   const stdinPayload = JSON.stringify({ tool_name: claudeToolName, tool_input: toolInput });
-  const { status, stderr } = execGateHook(hookPath, stdinPayload, opsRoot, maxBufferBytes);
+  const { status, stderr, timedOut } = execGateHook(hookPath, stdinPayload, opsRoot, maxBufferBytes, timeoutMs);
 
   if (status === 2) {
     return { block: true, reason: stderr.trim() || `Blocked by apexyard governance gate (${gate.name})` };
@@ -143,9 +168,12 @@ export function runGateHook(
   if (typeof status === "number") {
     return undefined; // exit 0, or an unrelated non-2 numeric exit — allow, matching Claude Code's own contract
   }
+  const reasonPrefix = timedOut
+    ? `apexyard governance gate "${gate.name}" timed out after ${timeoutMs}ms (${hookPath}) — failing closed.`
+    : `apexyard governance gate "${gate.name}" could not be evaluated (${hookPath}) — failing closed.`;
   return {
     block: true,
-    reason: `apexyard governance gate "${gate.name}" could not be evaluated (${hookPath}) — failing closed. Underlying error: ${stderr.trim() || "unknown execution failure"}`,
+    reason: `${reasonPrefix} Underlying error: ${stderr.trim() || "unknown execution failure"}`,
   };
 }
 

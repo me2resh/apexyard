@@ -237,6 +237,22 @@ export interface DispatcherOptions {
 const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 /**
+ * Ceiling for a single gate hook's wall-clock execution (#840 C1). Every
+ * gate hook so far is a fast, local check (jq parse, a `gh` API call with
+ * its own short timeout, a file stat) — 30s is generous headroom for a
+ * legitimate hook while still bounding a hung subprocess (a network call
+ * that never returns, an infinite loop introduced by a bad edit to a hook
+ * script) from blocking every subsequent tool call in the session
+ * indefinitely. `execFileSync`'s own `timeout` option kills the child with
+ * `killSignal` on expiry, which surfaces here as "no numeric exit status"
+ * (see the FAIL CLOSED branch below) — a timed-out hook is therefore
+ * already, by construction, on the same fail-closed path as a spawn
+ * failure or an ENOBUFS overflow; no separate branch was needed, only the
+ * option itself.
+ */
+const HOOK_EXEC_TIMEOUT_MS = 30_000;
+
+/**
  * Runs a single gate hook with the reconstructed Claude-Code-shaped stdin
  * payload, mapping its exit code to a pi ToolCallEventResult per the
  * proven-in-spike contract: exit 2 = block, everything else = allow.
@@ -260,12 +276,20 @@ const MAX_HOOK_OUTPUT_BYTES = 10 * 1024 * 1024;
  *                                     is a hard stop)
  *   - NO numeric exit status at
  *     all (spawn failure, ENOBUFS,
- *     signal kill, etc.)           → BLOCK, fail closed, with a reason
+ *     signal kill, TIMEOUT, etc.)  → BLOCK, fail closed, with a reason
  *                                     naming the hook and the underlying
  *                                     error, so the operator can see
  *                                     WHY a gate refused to evaluate
  *                                     rather than silently letting the
  *                                     tool call through.
+ *
+ * BOUNDED TIMEOUT, SAME FAIL-CLOSED PATH (#840 C1).
+ * ---------------------------------------------------------
+ * `execFileSync` is given a `timeout` (default `HOOK_EXEC_TIMEOUT_MS`,
+ * 30s). A hook that exceeds it is killed by Node before it ever produces a
+ * numeric exit status, so it lands in the same "NO numeric exit status"
+ * branch above as a spawn failure or ENOBUFS — a hung hook fails closed,
+ * not open, and never blocks the dispatcher indefinitely.
  */
 export function runGateHook(
   opsRoot: string,
@@ -273,6 +297,7 @@ export function runGateHook(
   toolInput: Record<string, unknown>,
   claudeToolName: string,
   maxBufferBytes: number = MAX_HOOK_OUTPUT_BYTES,
+  timeoutMs: number = HOOK_EXEC_TIMEOUT_MS,
 ): ToolCallEventResult | undefined {
   const hookPath = path.join(opsRoot, gate.hookRelativePath);
   if (!existsSync(hookPath)) return undefined; // gate not present in this fork — no-op, not a failure
@@ -286,11 +311,13 @@ export function runGateHook(
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: maxBufferBytes,
+      timeout: timeoutMs,
+      killSignal: "SIGKILL",
     });
     // No throw => exit code 0 => allow.
     return undefined;
   } catch (err) {
-    const execErr = err as { status?: number | null; stderr?: Buffer | string; message?: string };
+    const execErr = err as { status?: number | null; stderr?: Buffer | string; message?: string; signal?: string | null; code?: string };
     const stderr = execErr.stderr ? execErr.stderr.toString() : String(execErr.message ?? err);
 
     if (execErr.status === 2) {
@@ -310,11 +337,18 @@ export function runGateHook(
     }
     // No numeric exit status at all — execution-layer failure (spawn
     // error, ENOBUFS from output exceeding maxBuffer, killed by signal,
-    // etc.). Fail CLOSED: a gate that could not run its check must deny,
-    // not permit.
+    // or a timeout kill). Fail CLOSED: a gate that could not run its check
+    // must deny, not permit. Node's own `code` distinguishes a timeout
+    // kill ("ETIMEDOUT") from a maxBuffer overflow ("ENOBUFS") even though
+    // both share the same `killSignal` — `.signal` alone can't tell them
+    // apart since both paths kill the child the same way.
+    const timedOut = execErr.code === "ETIMEDOUT";
+    const reasonPrefix = timedOut
+      ? `apexyard governance gate "${gate.name}" timed out after ${timeoutMs}ms (${hookPath}) — failing closed.`
+      : `apexyard governance gate "${gate.name}" could not be evaluated (${hookPath}) — failing closed.`;
     return {
       block: true,
-      reason: `apexyard governance gate "${gate.name}" could not be evaluated (${hookPath}) — failing closed. Underlying error: ${stderr.trim() || "unknown execution failure"}`,
+      reason: `${reasonPrefix} Underlying error: ${stderr.trim() || "unknown execution failure"}`,
     };
   }
 }
