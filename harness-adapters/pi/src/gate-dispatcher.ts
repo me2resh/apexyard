@@ -12,8 +12,36 @@
  * gates from one config table, per the spike's own "named gaps" section
  * (item 4: "multiple gates = multiple registrations (or one dispatcher)").
  *
- * See docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md for the dispatcher
- * design decision and docs/harnesses/pi.md for install + usage docs.
+ * See docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md for the original
+ * dispatcher design decision (and its "Update (GH-840)" section for what
+ * changed below) and docs/harnesses/pi.md for install + usage docs.
+ *
+ * #840 C5 — SETTINGS.JSON-DERIVED GATE TABLE, NOT HAND-MAINTAINED
+ * ---------------------------------------------------------------------
+ * This dispatcher originally shipped with a hand-written `DEFAULT_GATES`
+ * table (a curated subset of `.claude/settings.json`'s hooks). It now
+ * derives the FULL gate table from `.claude/settings.json` via
+ * `./derive-gates.ts`, converging to the same pattern the opencode adapter
+ * established (AgDR-0092) — see `derive-gates.ts`'s header comment for the
+ * shared-core design and the pi-specific tool-vocabulary translation
+ * (`Glob` → pi's `find`; no stdin builder for `read`/`grep`/`find`/`ls`,
+ * mirroring opencode's #840 C2 "fail loud, don't guess" decision).
+ *
+ * One structural difference from the opencode adapter, kept unchanged from
+ * before this refactor: pi resolves the ops root — and, as of this
+ * refactor, derives the gate table — PER `tool_call` EVENT, not once at
+ * registration. Pi hands the dispatcher a fresh `ctx.cwd` on every event
+ * (AgDR-0082's original design rationale); opencode's plugin function is
+ * called once per session with no fresher cwd offered afterward
+ * (AgDR-0092). Re-deriving per call means a live edit to
+ * `.claude/settings.json` mid-session is picked up on the very next tool
+ * call — genuinely more correct than a cache would be — at the cost of one
+ * extra JSON parse per call, negligible next to the subprocess spawn(s)
+ * that follow. The "unsupported gate wire" warning (mirroring opencode's
+ * #840 C2) is deliberately DEDUPED per (opsRoot, gate, tool) rather than
+ * re-emitted every call, so a `suggest-mcp-search.sh`-shaped read/find/grep
+ * gate doesn't print a warning before every single read in a session — see
+ * `warnUnsupportedGateWiresOnce` below.
  *
  * REAL PI TYPES, NOT SPIKE GUESSES
  * ---------------------------------
@@ -41,191 +69,62 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 
 import type { ExtensionAPI, ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 
+import {
+  claudeToolNameFor,
+  deriveGatesFromSettings,
+  findUnsupportedGateWires,
+  gateMatchesToolCall,
+  type GateDefinition,
+  type RawSettings,
+} from "./derive-gates.ts";
 import { resolveOpsRootForPi } from "./resolve-ops-root.ts";
 
-/**
- * One row = one apexyard PreToolUse gate hook this dispatcher enforces.
- *
- * `toolNames` lists the real pi tool names (per
- * `@earendil-works/pi-coding-agent`'s `ToolCallEvent` union: "bash",
- * "read", "edit", "write", "grep", "find", "ls", or a custom string)
- * whose `tool_call` events this gate should be checked against.
- *
- * `buildToolInput` reconstructs the exact `tool_input` shape each hook's
- * `jq` parsing expects (see `.claude/hooks/_lib-extract-pr.sh` and each
- * hook's own `INPUT | jq -r '.tool_input....'` line) from pi's event
- * fields. Returning `undefined` means "this event doesn't carry the field
- * this hook needs" — the dispatcher then skips invoking that hook for that
- * event rather than invoking it with a garbage payload.
- */
-export interface GateDefinition {
-  /** Human-readable name, used in block reasons and logs. */
-  name: string;
-  /** Relative path to the hook script under the ops root. */
-  hookRelativePath: string;
-  /** Real pi tool names this gate should be checked against. */
-  toolNames: string[];
-  /**
-   * Claude-Code tool_name string the hook's own `jq -r '.tool_name'`
-   * lookup expects (only a few hooks read this field; most only read
-   * `.tool_input.*` and ignore `.tool_name`). Defaults per toolName are
-   * applied by `defaultClaudeToolName` below when omitted.
-   */
-  claudeToolName?: (piToolName: string) => string;
-  /** Build the `tool_input` object from a pi ToolCallEvent. */
-  buildToolInput: (event: ToolCallEvent) => Record<string, unknown> | undefined;
-}
+export type { GateDefinition, GateWire, RawSettings } from "./derive-gates.ts";
 
-function defaultClaudeToolName(piToolName: string): string {
-  switch (piToolName) {
-    case "bash":
-      return "Bash";
+/**
+ * Reconstructs the Claude-Code-shaped `tool_input` object each hook's own
+ * `jq` parsing expects, from a real pi `ToolCallEvent`. Generic across
+ * every gate (replacing the old per-gate `buildToolInput` field the
+ * hand-maintained `DEFAULT_GATES` table used) — mirrors the opencode
+ * adapter's own `buildToolInput` shape (`derive-gates.ts` there).
+ *
+ * Only `bash`/`edit`/`write` are supported; `read`/`grep`/`find`/`ls`
+ * return `undefined` deliberately — see `derive-gates.ts`'s header comment
+ * ("NOT GUESSING READ/GREP/FIND/LS STDIN SHAPES") for why this doesn't
+ * attempt to guess those event shapes' field names.
+ */
+export function buildPiToolInput(event: ToolCallEvent): Record<string, unknown> | undefined {
+  switch (event.toolName) {
+    case "bash": {
+      const command = event.input.command;
+      if (typeof command !== "string" || command.length === 0) return undefined;
+      return { command };
+    }
     case "edit":
-      return "Edit";
-    case "write":
-      return "Write";
+    case "write": {
+      const targetPath = event.input.path;
+      if (typeof targetPath !== "string" || targetPath.length === 0) return undefined;
+      return { path: targetPath };
+    }
     default:
-      return piToolName;
+      return undefined;
   }
 }
 
-/** Reconstructs `{command: <string>}` for pi's "bash" tool. */
-function bashCommandInput(event: ToolCallEvent): Record<string, unknown> | undefined {
-  if (event.toolName !== "bash") return undefined;
-  const command = event.input.command;
-  if (typeof command !== "string" || command.length === 0) return undefined;
-  return { command };
-}
-
-/**
- * Reconstructs `{path: <string>}` for pi's "edit" / "write" tools — pi
- * names the target field `path` on both `EditToolInput` and
- * `WriteToolInput` (confirmed against the real `.d.ts`, not guessed).
- * `require-active-ticket.sh` and `require-migration-ticket.sh` already
- * fall back to `.tool_input.path` when `.tool_input.file_path` is absent
- * (see `_lib-extract-pr.sh` / the hooks' own jq lines), so this maps onto
- * the EXISTING fallback rather than requiring a hook change.
- */
-function editOrWritePathInput(event: ToolCallEvent): Record<string, unknown> | undefined {
-  if (event.toolName !== "edit" && event.toolName !== "write") return undefined;
-  const targetPath = event.input.path;
-  if (typeof targetPath !== "string" || targetPath.length === 0) return undefined;
-  return { path: targetPath };
-}
-
-/**
- * The gate table. Every row here corresponds 1:1 to a `PreToolUse` hook
- * that is ALSO wired in `.claude/settings.json` for Claude Code — this is
- * the "one config, two harnesses" shape the spike report recommended, not
- * a hand-copied re-derivation. Extend this array to cover additional
- * gates; do not write a new dispatcher-shaped file per hook.
- *
- * THIS IS A CURATED SUBSET, NOT THE FULL LIST. `.claude/settings.json`
- * wires more Bash-matcher PreToolUse hooks than are bridged here. Every
- * hook below was checked against its own `jq -r '.tool_input.command'`
- * parsing (all of them read the identical stdin shape as
- * `block-unreviewed-merge.sh`, so no new adapter logic was needed) and
- * included because it's a real, blocking (exit-2) governance gate. Known
- * NOT-yet-bridged blocking Bash gates, and why:
- *
- *   - `validate-branch-name.sh`, `validate-commit-format.sh`,
- *     `verify-commit-refs.sh` — fire on `git branch` / `git commit`
- *     commands. Same bash-command shape as everything below and would be
- *     trivial to add; left out of this pass to keep the initial bridge
- *     scoped to the gates #815's acceptance criteria named explicitly
- *     (merge gate, red-CI, design/architecture review, ticket-first,
- *     secrets). Follow-up work, not a technical blocker.
- *   - `validate-pr-create.sh`, `require-agdr-for-arch-pr.sh`,
- *     `require-skill-for-issue-create.sh` — fire on `gh pr create` /
- *     `gh issue create` commands. Same reasoning: trivially the same
- *     shape, deferred rather than out of scope.
- *   - `block-onboarding-in-git.sh` — fires on `git add` of
- *     `onboarding.yaml`; same shape, deferred for the same reason.
- *
- * `block-private-refs-in-public-repos.sh` (leak protection) IS bridged
- * below, ahead of the others in this deferred list, because it's
- * security-relevant in exactly the way this dispatcher exists to close:
- * without it, a pi session could leak a registered private project's
- * name/repo/workspace path into a public framework issue with nothing
- * underneath to stop it.
- */
-export const DEFAULT_GATES: GateDefinition[] = [
-  {
-    name: "block-unreviewed-merge",
-    hookRelativePath: ".claude/hooks/block-unreviewed-merge.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "block-merge-on-red-ci",
-    hookRelativePath: ".claude/hooks/block-merge-on-red-ci.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "require-design-review-for-ui",
-    hookRelativePath: ".claude/hooks/require-design-review-for-ui.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "require-architecture-review",
-    hookRelativePath: ".claude/hooks/require-architecture-review.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "check-secrets",
-    hookRelativePath: ".claude/hooks/check-secrets.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "block-git-add-all",
-    hookRelativePath: ".claude/hooks/block-git-add-all.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "block-main-push",
-    hookRelativePath: ".claude/hooks/block-main-push.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "block-private-refs-in-public-repos",
-    hookRelativePath: ".claude/hooks/block-private-refs-in-public-repos.sh",
-    toolNames: ["bash"],
-    buildToolInput: bashCommandInput,
-  },
-  {
-    name: "require-active-ticket",
-    hookRelativePath: ".claude/hooks/require-active-ticket.sh",
-    // This hook also fires on Bash when the command writes a file via
-    // redirection/tee/sed -i, which `_lib-detect-bash-write.sh` detects
-    // bash-side; that detection works unchanged once the command string
-    // is forwarded, so "bash" is included alongside "edit"/"write".
-    toolNames: ["edit", "write", "bash"],
-    buildToolInput: (event) => bashCommandInput(event) ?? editOrWritePathInput(event),
-  },
-  {
-    name: "require-migration-ticket",
-    hookRelativePath: ".claude/hooks/require-migration-ticket.sh",
-    toolNames: ["edit", "write"],
-    buildToolInput: editOrWritePathInput,
-  },
-];
-
 export interface DispatcherOptions {
-  /** Override the gate table (defaults to DEFAULT_GATES). */
+  /** Override the derived gate table (mainly for tests — production always derives from settings.json, per call). */
   gates?: GateDefinition[];
   /** Override ops-root resolution (defaults to resolveOpsRootForPi). */
   resolveOpsRoot?: (startCwd: string) => string | undefined;
+  /** Path to settings.json relative to the ops root. Defaults to ".claude/settings.json". */
+  settingsRelativePath?: string;
+  /** Override tool_input reconstruction (mainly for tests). Defaults to buildPiToolInput. */
+  buildToolInput?: (event: ToolCallEvent) => Record<string, unknown> | undefined;
 }
 
 /**
@@ -354,14 +253,75 @@ export function runGateHook(
 }
 
 /**
+ * Reads and parses `.claude/settings.json` from a resolved ops root. On
+ * any failure (missing file, unparsable JSON) returns an empty gate table
+ * rather than throwing — a broken settings.json should not brick every
+ * tool call in the session; it should just mean no gates are enforced.
+ * Matches the opencode adapter's identical `deriveGatesFromOpsRoot`
+ * contract, including its #840 C3 fix: a PARSE failure warns to stderr
+ * (deduped — see `warnOnce` below); a MISSING file stays silent (the
+ * expected "nothing to enforce here" case, not a broken-config case).
+ */
+export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: string): GateDefinition[] {
+  const settingsPath = path.join(opsRoot, settingsRelativePath);
+  if (!existsSync(settingsPath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
+    return deriveGatesFromSettings(raw);
+  } catch (err) {
+    warnOnce(
+      `parse-failure:${settingsPath}`,
+      `apexyard-gate-dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +
+        `Underlying error: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    return [];
+  }
+}
+
+/**
+ * Process-lifetime dedup set for warnings this dispatcher emits more than
+ * once given pi's per-call resolution (see this file's header comment).
+ * Keyed by an arbitrary caller-chosen string, not by message content, so
+ * callers control the granularity (e.g. one entry per settings path, one
+ * per (gate, tool) pair) independent of exact wording.
+ */
+const warnedKeys = new Set<string>();
+
+function warnOnce(key: string, message: string): void {
+  if (warnedKeys.has(key)) return;
+  warnedKeys.add(key);
+  process.stderr.write(message);
+}
+
+/**
+ * Warns once per (opsRoot, gate, tool) about any derived gate wired to a
+ * pi tool this dispatcher has no stdin builder for (#840 C2, ported here
+ * as part of C5 — deriving the FULL table surfaces `suggest-mcp-search.sh`'s
+ * `Read|Glob|Grep` wiring, which pi's `read`/`find`/`grep` tools have no
+ * verified stdin shape for). Deduped so a hot Read/Glob/Grep-heavy session
+ * doesn't print the same warning before every matching tool call.
+ */
+function warnUnsupportedGateWiresOnce(opsRoot: string, gates: GateDefinition[]): void {
+  for (const unsupported of findUnsupportedGateWires(gates)) {
+    warnOnce(
+      `unsupported:${opsRoot}:${unsupported.gateName}:${unsupported.tool}`,
+      `apexyard-gate-dispatcher: WARNING — gate "${unsupported.gateName}" is wired to pi tool "${unsupported.tool}", ` +
+        `which this adapter has no stdin builder for (buildPiToolInput only supports bash/edit/write). This gate is SILENTLY SKIPPED ` +
+        `for "${unsupported.tool}" tool calls — it never runs, so it can never block one. See derive-gates.ts for details.\n`,
+    );
+  }
+}
+
+/**
  * Registers the dispatcher's `tool_call` handler on a pi ExtensionAPI
  * instance. This is the function pi loads (default export, below) — kept
  * separate from the default export so tests can call it directly with a
  * mock `pi` object without going through pi's own module loader.
  */
 export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOptions = {}): void {
-  const gates = options.gates ?? DEFAULT_GATES;
   const resolve = options.resolveOpsRoot ?? ((startCwd: string) => resolveOpsRootForPi({ startCwd }));
+  const buildToolInput = options.buildToolInput ?? buildPiToolInput;
+  const settingsRelativePath = options.settingsRelativePath ?? ".claude/settings.json";
 
   pi.on("tool_call", async (event, ctx) => {
     const toolName = event.toolName;
@@ -369,16 +329,19 @@ export function registerGateDispatcher(pi: ExtensionAPI, options: DispatcherOpti
     const opsRoot = resolve(startCwd);
     if (!opsRoot) return undefined; // no apexyard fork found on this machine/session — nothing to enforce
 
-    // Run every gate whose toolNames list includes this event's tool.
-    // First hook to return a block wins — mirrors Claude Code's own
-    // PreToolUse semantics, where any matching hook exiting 2 halts the
-    // tool call regardless of what the other matched hooks would have
-    // said.
+    const gates = options.gates ?? deriveGatesFromOpsRoot(opsRoot, settingsRelativePath);
+    if (!options.gates) warnUnsupportedGateWiresOnce(opsRoot, gates);
+
+    // Run every gate wired to this tool. First hook to return a block wins
+    // — mirrors Claude Code's own PreToolUse semantics, where any matching
+    // hook exiting 2 halts the tool call regardless of what the other
+    // matched hooks would have said.
     for (const gate of gates) {
-      if (!gate.toolNames.includes(toolName)) continue;
-      const toolInput = gate.buildToolInput(event);
+      const command = event.toolName === "bash" ? event.input.command : undefined;
+      if (!gateMatchesToolCall(gate, toolName, typeof command === "string" ? command : undefined)) continue;
+      const toolInput = buildToolInput(event);
       if (!toolInput) continue;
-      const claudeToolName = (gate.claudeToolName ?? defaultClaudeToolName)(toolName);
+      const claudeToolName = claudeToolNameFor(toolName);
       const result = runGateHook(opsRoot, gate, toolInput, claudeToolName);
       if (result?.block) return result;
     }
