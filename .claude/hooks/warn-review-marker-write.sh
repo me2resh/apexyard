@@ -74,11 +74,22 @@
 # to do the impossible), not to defend against a deliberately adversarial
 # agent.
 #
+# #873 trimmed the BLOCKED banner's orchestrator branch: since the sanctioned
+# reviewer writes the marker via the variable form (untouched by this gate,
+# see KNOWN LIMITATION above), the only caller who ever lands on this banner
+# is doing a literal-path write — the induced-forgery case. Printing a
+# copy-pasteable `printf > active-reviewer` recipe there handed a working
+# marker-set command to the agent we least want holding one. The banner now
+# points the orchestrator at the matching skill (/code-review,
+# /security-review, /design-review) instead — same skills that already own
+# the marker's set/clear lifecycle (see auto-code-review.sh's #843 banner for
+# the sibling fix this mirrors).
+#
 # Wired in .claude/settings.json PreToolUse for:
 #   matcher: Write    (catches direct file writes)
 #   matcher: Bash     (catches shell redirections, echo >, printf, tee, etc.)
 #
-# References: #728, #843, AgDR-0062, .claude/rules/pr-workflow.md
+# References: #728, #843, #873, AgDR-0062, .claude/rules/pr-workflow.md
 #             § "Build agents cannot self-review"
 
 set -u
@@ -216,6 +227,16 @@ if _active_reviewer_allows; then
   exit 0
 fi
 
+# Map the marker role to the skill that manages its active-reviewer marker
+# lifecycle (set at skill entry, cleared after the review is posted — see
+# .claude/skills/{code-review,security-review,design-review}/SKILL.md § 0).
+case "$MARKER_TYPE" in
+  rex) REVIEW_SKILL="code-review" ;;
+  security) REVIEW_SKILL="security-review" ;;
+  architecture) REVIEW_SKILL="design-review" ;;
+  *) REVIEW_SKILL="code-review" ;;
+esac
+
 cat >&2 <<MSG
 ======================================================================
 [apexyard] BLOCKED: Unauthorized review-marker write
@@ -240,16 +261,15 @@ author reviewing their own work — the exact failure this gate exists to
 stop (see .claude/rules/pr-workflow.md § "Build agents cannot self-review").
 Report your build results plainly and hand back to the orchestrator.
 
-IF YOU ARE THE ORCHESTRATOR: set the active-reviewer marker before spawning
-the reviewer, then retry:
+IF YOU ARE THE ORCHESTRATOR: run the review through the /${REVIEW_SKILL}
+skill on this PR:
 
-  mkdir -p "\$(dirname "${ACTIVE_REVIEWER_MARKER}")"
-  printf '%s\n' "<owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE}" > "${ACTIVE_REVIEWER_MARKER}"
+     /${REVIEW_SKILL} ${TARGET_PR:-<pr>}
 
-Then invoke the real reviewer via the Agent tool (subagent_type:
-code-reviewer / security-reviewer / solution-architect). Clear the marker
-once the review is posted — a SessionStart sweep also clears stale markers
-left by an interrupted session.
+The skill sets the active-reviewer session marker, spawns the sanctioned
+reviewer, and clears the marker for you — you should NOT set that marker
+by hand. A SessionStart sweep also clears stale markers left by an
+interrupted session.
 ======================================================================
 MSG
 exit 2
