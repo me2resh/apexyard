@@ -304,7 +304,8 @@ fi
 # false-blocked every migration edit even when the GitLab ticket was valid.
 # tracker_view emits the normalised {state,title,url,labels,body} shape
 # regardless of tracker; labels come back as a flat string array and body is
-# populated for gh/glab (the kinds the migration gate reads).
+# populated for gh/glab/jira/linear/asana — every built-in kind the migration
+# gate reads (#761 widened body beyond the original gh/glab of #755).
 if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-tracker.sh"
@@ -395,22 +396,25 @@ MSG
 fi
 
 # --------- Gate 3: body references a migration AgDR ---------
-# The issue body is populated by tracker_view only for the gh and glab adapters
-# (see _lib-tracker.sh). For any other tracker kind the body comes back empty,
-# so this gate cannot see an AgDR link even when one exists — surface that in the
-# failure message rather than blaming the ticket. Adopters on those trackers can
-# set tracker.kind=none to skip online migration verification. (Widening body to
-# jira/linear/asana is tracked separately from #755.)
+# The issue body is populated by tracker_view for the gh, glab, jira, linear, and
+# asana adapters (see _lib-tracker.sh — #761 widened it beyond the original
+# gh/glab of #755). Only the `custom` adapter can leave body empty (unless the
+# operator's normalise_jq emits one), so this gate cannot see an AgDR link there
+# even when one exists — surface that in the failure message rather than blaming
+# the ticket. Adopters on custom can set tracker.kind=none to skip online
+# migration verification.
 if ! echo "$BODY" | grep -qE 'docs/agdr/AgDR-[0-9]+-[^[:space:]]*migration[^[:space:]]*\.md'; then
   KIND_NOTE=""
   case "$TICKET_KIND" in
-    gh|glab) ;;
+    gh|glab|jira|linear|asana) ;;
     *) KIND_NOTE="
 
-NOTE: tracker.kind=${TICKET_KIND} — this gate reads the issue body only for the
-gh and glab trackers, so for ${TICKET_KIND} the body is not fetched and this
-check cannot see an AgDR link even if the ticket has one. Track migrations on a
-gh/glab ticket, or set tracker.kind=none to skip online migration verification." ;;
+NOTE: tracker.kind=${TICKET_KIND} — this gate reads the issue body via
+tracker_view, which only populates body for the gh, glab, jira, linear, and
+asana adapters. For ${TICKET_KIND} the body may not be fetched, so this check
+cannot see an AgDR link even if the ticket has one. Emit body from your
+custom normalise_jq, track migrations on a built-in tracker, or set
+tracker.kind=none to skip online migration verification." ;;
   esac
   cat >&2 <<MSG
 BLOCKED: Active ticket ${TICKET_REPO}#${TICKET_NUM} has the

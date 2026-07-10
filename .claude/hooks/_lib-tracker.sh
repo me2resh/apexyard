@@ -17,12 +17,15 @@
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
 #                                      Exit 0 = ticket exists; non-zero = doesn't, or CLI errored.
 #                                      JSON shape: {"state":..., "title":..., "url":..., "labels":[...], "body":...}
-#                                      `body` is populated for the gh and glab adapters (the kinds
-#                                      that have a consumer needing it — the migration gate reads it
-#                                      to find the linked AgDR, #755). Other adapters omit the body
-#                                      key entirely (consumers read it as `.body // empty`) until one
-#                                      needs it (jira `.description` is ADF, not a grep-able string;
-#                                      linear/asana bodies have no consumer yet).
+#                                      `body` is populated for the gh, glab, jira, linear, and asana
+#                                      adapters — every built-in kind the migration gate (which reads
+#                                      the body to find the linked AgDR, #755/#761) can query. jira's
+#                                      `.fields.description` may be ADF (a JSON object, not a string)
+#                                      on Jira Cloud; the adapter flattens ADF text nodes to plain
+#                                      text so the body stays grep-able (Jira Server/DC returns a
+#                                      plain string, passed through). The `custom` adapter still omits
+#                                      body unless the operator's `normalise_jq` emits one (consumers
+#                                      read it as `.body // empty`).
 #   tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
 #                                      creates a ticket via the per-project CLI; emits {ref,url}.
 #   tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]  (#758)
@@ -358,8 +361,10 @@ _tracker_normalise_glab() {
 #
 # Documented assumption: `linear issue view <ID> --json` emits a JSON object
 # with .state (or .state.name), .title, .url, .labels (array of strings or
-# array of {name} objects). Both shapes are handled — older linear CLI
-# versions returned strings; newer return objects.
+# array of {name} objects), and .description (a markdown string). Both label
+# shapes are handled — older linear CLI versions returned strings; newer return
+# objects. body maps to .description so the migration gate can read the linked
+# AgDR (#761).
 # ------------------------------------------------------------------------------
 _tracker_normalise_linear() {
   local raw="$1"
@@ -369,7 +374,8 @@ _tracker_normalise_linear() {
     state:  ((.state | if type == "object" then .name else . end) // ""),
     title:  (.title // ""),
     url:    (.url // ""),
-    labels: ((.labels // []) | map(if type == "object" then .name else . end))
+    labels: ((.labels // []) | map(if type == "object" then .name else . end)),
+    body:   (.description // "")
   }' 2>/dev/null
 }
 
@@ -377,8 +383,18 @@ _tracker_normalise_linear() {
 # Internal adapter: jira → normalised JSON.
 #
 # Documented assumption: `jira issue view <ID> --raw` emits Jira's REST JSON
-# with .fields.{summary,status.name,labels} and .self for the URL. The
-# `jira` CLI (ankitpokhrel/jira-cli) is the de-facto standard.
+# with .fields.{summary,status.name,labels,description} and .self for the URL.
+# The `jira` CLI (ankitpokhrel/jira-cli) is the de-facto standard.
+#
+# body maps to .fields.description (#761). Jira Cloud returns the description as
+# ADF — Atlassian Document Format, a JSON object ({type:"doc",content:[…]}), not
+# a string — so a naive pass-through would emit an unusable object and the
+# migration gate could never grep an AgDR link out of it. The `if type` branch
+# below flattens ADF: it recursively collects every `text` leaf from the content
+# tree (`[.. | .text? // empty]`) and joins them with newlines, yielding
+# grep-able plain text. Jira Server / Data Center returns description as a plain
+# string, which the string branch passes through verbatim. A missing/null
+# description degrades to "".
 # ------------------------------------------------------------------------------
 _tracker_normalise_jira() {
   local raw="$1"
@@ -388,7 +404,13 @@ _tracker_normalise_jira() {
     state:  ((.fields.status.name // .status // "") | tostring),
     title:  ((.fields.summary // .summary // .title // "") | tostring),
     url:    ((.self // .url // "") | tostring),
-    labels: ((.fields.labels // .labels // []) | map(if type == "object" then .name else . end))
+    labels: ((.fields.labels // .labels // []) | map(if type == "object" then .name else . end)),
+    body:   (
+      (.fields.description // .description // "") as $d |
+      if ($d | type) == "string" then $d
+      elif ($d | type) == "object" then ([$d | .. | .text? // empty] | join("\n"))
+      else "" end
+    )
   }' 2>/dev/null
 }
 
@@ -396,8 +418,10 @@ _tracker_normalise_jira() {
 # Internal adapter: asana → normalised JSON.
 #
 # Documented assumption: `asana task get <gid> --json` emits {data: {name,
-# completed, permalink_url, tags}}. State is derived from .completed
-# (true → "Closed", false → "Open").
+# completed, permalink_url, tags, notes}}. State is derived from .completed
+# (true → "Closed", false → "Open"). body maps to .notes (Asana's plain-text
+# task description), falling back to .html_notes when only the rich-text form is
+# present, so the migration gate can read the linked AgDR (#761).
 # ------------------------------------------------------------------------------
 _tracker_normalise_asana() {
   local raw="$1"
@@ -409,7 +433,8 @@ _tracker_normalise_asana() {
       state:  (if ($t.completed == true) then "Closed" else "Open" end),
       title:  ($t.name // ""),
       url:    ($t.permalink_url // ""),
-      labels: (($t.tags // []) | map(if type == "object" then .name else . end))
+      labels: (($t.tags // []) | map(if type == "object" then .name else . end)),
+      body:   ($t.notes // $t.html_notes // "")
     }
   ' 2>/dev/null
 }

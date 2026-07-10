@@ -15,7 +15,11 @@
 #   9. glab unfetchable → block (2) — migration gate is fail-closed by design
 #  10. non-migration path → pass-through allow (0)
 #  11. no active-ticket marker → block (2)
-#  12. non-gh/glab (jira) reaches Gate 3, blocks with body-scoping note (2)
+#  12. jira happy path — ADF (Cloud) body links AgDR → allow (0) (#761)
+#  12b. jira happy path — plain-string (Server/DC) body links AgDR → allow (0)
+#  12c. linear happy path — description body links AgDR → allow (0) (#761)
+#  12d. asana happy path — notes body links AgDR → allow (0) (#761)
+#  12e. custom (body unmapped) reaches Gate 3, blocks with scoping note (2)
 #  13. injection: metachar marker `number=` → block (2) and NOT executed
 #  14. injection: metachar marker `repo=` → block (2) and NOT executed
 #  15. guard: `#`-prefixed number passes and is shell-safe (printf %q escapes #)
@@ -321,9 +325,10 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
-# Case 12: non-gh/glab tracker (jira) reaches Gate 3 but body is unmapped, so it
-# blocks with the scoping note (documents the known limitation; the migration
-# gate's body read is gh/glab-only until body support is widened).
+# Case 12: jira happy path (#761). Body is now mapped for jira, so an OPEN,
+# migration-labelled ticket whose ADF description (Jira Cloud) links a migration
+# AgDR passes Gate 3 → allow (0). This replaces the pre-#761 case that asserted
+# jira blocked with a body-scoping note (that limitation is now closed).
 # =============================================================================
 SB=$(make_fork)
 cat > "$SB/.claude/project-config.json" <<'JSON'
@@ -332,22 +337,113 @@ JSON
 set_marker "$SB" test-org/test-repo JIRA-42
 install_mock "$SB" jira '
 if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
-  printf "{\"self\":\"https://jira/JIRA-42\",\"fields\":{\"status\":{\"name\":\"In Progress\"},\"summary\":\"S\",\"labels\":[\"migration\"]}}\n"
+  printf "{\"self\":\"https://jira/JIRA-42\",\"fields\":{\"status\":{\"name\":\"In Progress\"},\"summary\":\"S\",\"labels\":[\"migration\"],\"description\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"refs docs/agdr/AgDR-0011-schema-migration.md\"}]}]}}}\n"
   exit 0
 fi
 exit 0
 '
-# Capture stderr to assert the scoping note is present.
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "jira: OPEN + migration label + AgDR in ADF body → allow (#761)"
+else
+  record_fail "jira: OPEN + migration label + AgDR in ADF body → allow (#761)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 12b: jira Server/DC plain-string description → allow (#761). Same as 12
+# but the description comes back as a plain string (not ADF), exercising the
+# adapter's string pass-through branch.
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "jira", "view_command": "jira issue view {id} --raw" } }
+JSON
+set_marker "$SB" test-org/test-repo JIRA-43
+install_mock "$SB" jira '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf "{\"self\":\"https://jira/JIRA-43\",\"fields\":{\"status\":{\"name\":\"In Progress\"},\"summary\":\"S\",\"labels\":[\"migration\"],\"description\":\"refs docs/agdr/AgDR-0012-data-migration.md\"}}\n"
+  exit 0
+fi
+exit 0
+'
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "jira: OPEN + label + AgDR in plain-string (Server/DC) body → allow (#761)"
+else
+  record_fail "jira: OPEN + label + AgDR in plain-string (Server/DC) body → allow (#761)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 12c: linear happy path (#761). Body maps to .description (markdown).
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "linear", "view_command": "linear issue view {id} --json" } }
+JSON
+set_marker "$SB" test-org/test-repo LIN-42
+install_mock "$SB" linear '
+if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
+  printf "{\"state\":{\"name\":\"In Progress\"},\"title\":\"L\",\"url\":\"https://linear/LIN-42\",\"labels\":[{\"name\":\"migration\"}],\"description\":\"refs docs/agdr/AgDR-0013-schema-migration.md\"}\n"
+  exit 0
+fi
+exit 0
+'
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "linear: OPEN + migration label + AgDR in description body → allow (#761)"
+else
+  record_fail "linear: OPEN + migration label + AgDR in description body → allow (#761)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 12d: asana happy path (#761). Body maps to .notes; state derives from
+# .completed (false → Open). Asana uses a numeric task gid.
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "asana", "view_command": "asana task get {id} --json" } }
+JSON
+set_marker "$SB" test-org/test-repo 1122334455
+install_mock "$SB" asana '
+if [ "$1" = "task" ] && [ "$2" = "get" ]; then
+  printf "{\"data\":{\"name\":\"A\",\"completed\":false,\"permalink_url\":\"https://asana/1\",\"tags\":[{\"name\":\"migration\"}],\"notes\":\"refs docs/agdr/AgDR-0014-schema-migration.md\"}}\n"
+  exit 0
+fi
+exit 0
+'
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "asana: Open + migration tag + AgDR in notes body → allow (#761)"
+else
+  record_fail "asana: Open + migration tag + AgDR in notes body → allow (#761)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 12e: custom tracker WITHOUT body still reaches Gate 3 with an empty body
+# and blocks WITH the scoping note. Custom is deliberately out of #761 scope —
+# its body depends on the operator's normalise_jq — so the KIND_NOTE path must
+# still fire for it (and must NOT name jira/linear/asana as unsupported).
+# =============================================================================
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{ "tracker": { "kind": "custom", "view_command": "customcli view {id}" } }
+JSON
+set_marker "$SB" test-org/test-repo CUST-42
+# Identity normalise (default): raw already shaped as {state,labels}; no body key.
+install_mock "$SB" customcli '
+printf "{\"state\":\"OPEN\",\"labels\":[\"migration\"]}\n"
+exit 0
+'
 OUT=$(
   cd "$SB" || exit 99
   PATH="$SB/bin:$PATH" .claude/hooks/require-migration-ticket.sh \
     <<<"$(jq -nc --arg fp "$SB/$MIG" '{tool_name:"Write", tool_input:{file_path:$fp}}')" 2>&1
 )
 RC=$?
-if [ "$RC" = "2" ] && echo "$OUT" | grep -q "tracker.kind=jira"; then
-  record_pass "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)"
+if [ "$RC" = "2" ] && echo "$OUT" | grep -q "tracker.kind=custom"; then
+  record_pass "custom: Gate 3 blocks with body-scoping note (custom out of #761 scope)"
 else
-  record_fail "jira: Gate 3 blocks with body-scoping note (known gh/glab-only limitation)" "rc=$RC note-present=$(echo "$OUT" | grep -c 'tracker.kind=jira')"
+  record_fail "custom: Gate 3 blocks with body-scoping note (custom out of #761 scope)" "rc=$RC note-present=$(echo "$OUT" | grep -c 'tracker.kind=custom')"
 fi
 rm -rf "$SB"
 
