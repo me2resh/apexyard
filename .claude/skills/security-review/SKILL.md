@@ -45,6 +45,32 @@ Invoke for PRs that touch:
 - Third-party integrations
 - Cryptography or secrets
 
+## Process
+
+### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
+
+Before spawning the Security Reviewer agent, write the active-reviewer session marker so `warn-review-marker-write.sh` lets a `*-security.approved` write through the blocking marker gate (same mechanism as `/code-review`'s rex marker). At skill entry:
+
+```bash
+ops_root=$(git rev-parse --show-toplevel)
+r="$ops_root"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
+  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
+  r=$(dirname "$r")
+done
+mkdir -p "$ops_root/.claude/session"
+printf '%s\n' "<owner/repo>#<pr>:security" > "$ops_root/.claude/session/active-reviewer"
+```
+
+On skill exit (after the review is posted), clear the marker:
+
+```bash
+rm -f "$ops_root/.claude/session/active-reviewer"
+```
+
+Without this marker, a build-class sub-agent attempting the same write is correctly blocked — see `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+
 ## Security Checklist
 
 ### Secrets & Credentials
