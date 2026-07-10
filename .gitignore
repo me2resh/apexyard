@@ -32,6 +32,14 @@ workspace/*/
 # agent routing" and docs/agdr/AgDR-0050-agent-runtime-overhaul.md.
 /agent-routing.yaml
 
+# Per-machine model-routing overrides — the local variant of the file above
+# (machine-specific model assignments). Adopter-local; never committed.
+/agent-routing.local.yaml
+
+# MCP server config — contains hardcoded local absolute paths; created per
+# adopter machine, must not be committed.
+/.mcp.json
+
 # Framework-defaults snapshot written by apply-agent-routing.sh on
 # SessionStart. The drift guard (block-agent-routing-drift.sh) reads it
 # to know what each agent's framework-default model: line was BEFORE the
