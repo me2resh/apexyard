@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /release — Cut an apexyard release
 
-Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. Design rationale: AgDR-0076.
+Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA, and the changelog step warns loudly on a large main↔dev commit-count mismatch — both close the #872 changelog-truncation gap. Design rationale: AgDR-0076, AgDR-0094.
 
 This skill is **framework-only** — it's for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and don't have a release-cut flow.
 
@@ -61,14 +61,15 @@ Override? [Enter to accept, or type a version like v1.3.0]
 
 ### 3. Generate the CHANGELOG draft
 
-Call the helper script `bin/release-changelog.sh`, which encapsulates the `git log` + conventional-commit grouping + PR-number extraction logic and is independently tested:
+Call the helper script `bin/release-changelog.sh`, which encapsulates the `git log` + conventional-commit grouping + PR-number extraction logic and is independently tested. Capture its output — the count-mismatch guard below needs it:
 
 ```bash
-PREV_TAG="vX.Y.Z" \
-HEAD_REF="upstream/dev" \
-VERSION="vA.B.C" \
-DATE="$(date +%F)" \
-  bash bin/release-changelog.sh
+CHANGELOG_DRAFT=$(PREV_TAG="vX.Y.Z" \
+  HEAD_REF="upstream/dev" \
+  VERSION="vA.B.C" \
+  DATE="$(date +%F)" \
+  bash bin/release-changelog.sh)
+echo "$CHANGELOG_DRAFT"
 ```
 
 The helper emits markdown to stdout in the format:
@@ -95,7 +96,28 @@ Minor release — N features, M fixes.
 - Closes #N, #M, ...
 ```
 
-**Show the draft** and let the user edit interactively before proceeding. On `--dry-run`, print the draft and stop here with:
+#### Count-mismatch guard (AgDR-0094, option D)
+
+Immediately after generating the draft, sanity-check its entry count against the raw commit count between `main` and `dev`. This is the cheap, always-on backstop behind the `Released-From` trailer (step 4) — it's what caught the v5.0.0 under-count by hand, and it stays even after the trailer exists as defence in depth against a mangled trailer or a trailer-less pre-AgDR-0094 tag:
+
+```bash
+RAW_COUNT=$(git rev-list --count upstream/main..upstream/dev)
+# Count changelog entry bullets (every "- " line except the trailing "Closes" summary).
+ENTRY_COUNT=$(printf '%s\n' "$CHANGELOG_DRAFT" | grep -cE '^- ' || true)
+[ -n "$ENTRY_COUNT" ] || ENTRY_COUNT=0
+GAP=$(( RAW_COUNT - ENTRY_COUNT ))
+# Tolerance: release/sync/"Merge branch" marker commits are excluded from the
+# changelog BY DESIGN (bin/release-changelog.sh's classify step) — a handful
+# of those is normal, not a bug. A gap much larger than that is the #872
+# signature (a silently truncated range).
+TOLERANCE=5
+if [ "$GAP" -gt "$TOLERANCE" ]; then
+  echo "⚠️  WARNING: main..dev has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries (gap: $GAP, tolerance: $TOLERANCE)."
+  echo "    This is the #872 signature — a truncated changelog range. Verify PREV_TAG/HEAD_REF and the generated LOG_RANGE before proceeding."
+fi
+```
+
+**Show the draft** (and the warning, if any) and let the user edit interactively before proceeding. On `--dry-run`, print the draft and stop here with:
 
 ```
 Dry run — no changes made. Remove --dry-run to execute.
@@ -108,6 +130,14 @@ Skip all of steps 4–5 on `--dry-run`.
 ```bash
 # Check out the release branch from dev
 git fetch upstream
+
+# AgDR-0094: record the exact cut point NOW, while it's still knowable. This is
+# the sha bin/release-changelog.sh will read back out of the NEXT release's
+# PREV_TAG trailer — capture it here, not after checkout (the ref is what
+# matters, not the local branch's HEAD, but capturing immediately after fetch
+# keeps this unambiguous).
+DEV_SHA=$(git rev-parse upstream/dev)
+
 git checkout -b "release/vA.B.C" upstream/dev
 
 # Write the CHANGELOG entry at the top of CHANGELOG.md
@@ -135,7 +165,7 @@ gh pr create \
   --body-file /tmp/release-pr-body.md
 ```
 
-**PR body template** (write to `/tmp/release-pr-body.md` before the `gh pr create` call):
+**PR body template** (write to `/tmp/release-pr-body.md` before the `gh pr create` call). Interpolate `$DEV_SHA` (captured above) into the final line — it MUST be the very last line of the file, with nothing after it, so it lands as the final paragraph of the squash commit message and `git interpret-trailers` parses it (AgDR-0094):
 
 ```markdown
 <!-- multi-close: approved -->
@@ -145,6 +175,7 @@ gh pr create \
 - **Releases vA.B.C** — see CHANGELOG section below for the full list of changes included in this release
 - **CHANGELOG.md updated** — new section prepended at the top with grouped feat/fix/chore entries and PR refs
 - **Auto-tag on merge** — `.github/workflows/auto-tag-on-release-pr-merge.yml` will tag the squash commit on main and create a GitHub Release entry automatically when this PR merges (AgDR-0076)
+- **Release provenance recorded** — a `Released-From` trailer captures the exact `dev` SHA this release was cut from, so the next release's changelog range is deterministic instead of inferred (AgDR-0094, #872)
 
 ## CHANGELOG
 
@@ -155,6 +186,7 @@ gh pr create \
 1. After merge, confirm CI creates tag `vA.B.C` on `main` (check the `auto-tag-on-release-pr-merge` workflow run)
 2. Verify `git describe --tags --abbrev=0 upstream/main` returns `vA.B.C`
 3. Run `/release-sync vA.B.C` to sync main→dev and prevent squash divergence
+4. Verify the squash commit's message carries the trailer: `git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' vA.B.C`
 
 Refs #<release-ticket>
 
@@ -168,7 +200,12 @@ Refs #<release-ticket>
 | Auto-tag | The `auto-tag-on-release-pr-merge.yml` workflow fires on `pull_request` → `closed` + `merged` for `release/v*` branches, tags `github.sha` (the squash commit), and creates a GitHub Release |
 | Ancestry guard | `git merge-base --is-ancestor <sha> main` — fails if the tag would not be reachable from main, preventing a mis-placed tag like v2.3.0 |
 | `/release-sync` | The mandatory follow-up skill that merges main→dev after a squash-merge release, preventing SHA divergence accumulation |
+| `Released-From` trailer | A git trailer (`Key: value` in the commit message's final paragraph) recording the exact `dev` SHA this release was cut from — `bin/release-changelog.sh` reads it back for the next release's changelog range (AgDR-0094) |
+
+Released-From: $DEV_SHA
 ```
+
+**Why the trailer sits after the Glossary, as its own final paragraph:** `git interpret-trailers` (and the `%(trailers:...)` pretty-format used by `bin/release-changelog.sh`) only recognises a trailer block when it is the LAST paragraph of the message — a blank line before it, nothing but `Key: value` lines after it. Putting `Released-From:` anywhere earlier (e.g. inside the Summary or Testing sections) would make it invisible to the reader on the next release cut. Do not add anything below the trailer line.
 
 **PR title format** (`release` is whitelisted in `pr.title_type_whitelist` since #168):
 
@@ -262,11 +299,14 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 6. **Never tag before merge, and never tag the release-branch HEAD.** The auto-tag workflow handles tagging after merge, always using `github.sha` (the squash commit). The manual fallback similarly tags `upstream/main`. See step 7 for the full guard.
 7. **`<!-- multi-close: approved -->`** in the release PR body is required — release PRs legitimately close many tickets at once.
 8. **`--dry-run` stops before writing any files.** The draft CHANGELOG section and PR body are shown; nothing is committed, branched, pushed, or filed.
+9. **The `Released-From` trailer must be the PR body's final line, alone in its own paragraph** (AgDR-0094). It is what makes the next release's changelog range deterministic — a trailer that lands mid-body (or gets pushed off the end by later edits) silently degrades back to the pre-AgDR-0094 sync-boundary heuristic, with all its known failure modes (#737, #872).
+10. **Show the count-mismatch warning if it fires** — a loud gap between `main..dev`'s raw commit count and the changelog's entry count is the #872 signature. Don't proceed past it without the operator explicitly confirming the range is correct.
 
 ## Related
 
 - `AgDR-0007` — the release-cut branch model this skill enacts
 - `AgDR-0076` — the automation design record (this enhancement)
+- `AgDR-0094` — release provenance via the `Released-From` trailer + count-mismatch guard (#872)
 - `bin/release-changelog.sh` — the changelog generation helper script, independently tested
 - `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
 - `.github/workflows/auto-tag-on-release-pr-merge.yml` — the CI workflow that tags the squash commit after merge
