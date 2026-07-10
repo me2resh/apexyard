@@ -549,7 +549,7 @@ cat > "$SB/.claude/project-config.json" <<'JSON'
 }
 JSON
 install_mock "$SB" linear '
-printf "{\"state\":{\"name\":\"In Progress\"},\"title\":\"L1\",\"url\":\"https://l/1\",\"labels\":[{\"name\":\"a\"},{\"name\":\"b\"}]}\n"
+printf "{\"state\":{\"name\":\"In Progress\"},\"title\":\"L1\",\"url\":\"https://l/1\",\"labels\":[{\"name\":\"a\"},{\"name\":\"b\"}],\"description\":\"see docs/agdr/AgDR-0001-schema-migration.md\"}\n"
 exit 0
 '
 out=$(
@@ -562,10 +562,12 @@ out=$(
 )
 got_state=$(echo "$out" | jq -r '.state')
 got_labels=$(echo "$out" | jq -r '.labels | join(",")')
-if [ "$got_state" = "In Progress" ] && [ "$got_labels" = "a,b" ]; then
-  record_pass "lib: tracker_view (linear) flattens state.name + label objects"
+got_body=$(echo "$out" | jq -r '.body')
+# body must survive (#761) — the migration gate reads .description for the AgDR link.
+if [ "$got_state" = "In Progress" ] && [ "$got_labels" = "a,b" ] && echo "$got_body" | grep -q "AgDR-0001-schema-migration.md"; then
+  record_pass "lib: tracker_view (linear) flattens state.name + label objects, maps description→body"
 else
-  record_fail "lib: tracker_view (linear) flattens state.name + label objects" "got state='$got_state' labels='$got_labels'"
+  record_fail "lib: tracker_view (linear) flattens state.name + label objects, maps description→body" "got state='$got_state' labels='$got_labels' body='$got_body'"
 fi
 rm -rf "$SB"
 
@@ -579,8 +581,11 @@ cat > "$SB/.claude/project-config.json" <<'JSON'
   }
 }
 JSON
+# Jira Cloud returns .fields.description as ADF (a JSON object, not a string).
+# The adapter must flatten ADF text leaves so body stays grep-able (#761) —
+# otherwise the migration gate could never see the AgDR link.
 install_mock "$SB" jira '
-printf "{\"self\":\"https://j/1\",\"fields\":{\"status\":{\"name\":\"To Do\"},\"summary\":\"S1\",\"labels\":[\"x\",\"y\"]}}\n"
+printf "{\"self\":\"https://j/1\",\"fields\":{\"status\":{\"name\":\"To Do\"},\"summary\":\"S1\",\"labels\":[\"x\",\"y\"],\"description\":{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"see docs/agdr/AgDR-0002-schema-migration.md\"}]}]}}}\n"
 exit 0
 '
 out=$(
@@ -594,10 +599,65 @@ out=$(
 got_state=$(echo "$out" | jq -r '.state')
 got_title=$(echo "$out" | jq -r '.title')
 got_labels=$(echo "$out" | jq -r '.labels | join(",")')
-if [ "$got_state" = "To Do" ] && [ "$got_title" = "S1" ] && [ "$got_labels" = "x,y" ]; then
-  record_pass "lib: tracker_view (jira) reads .fields.status.name + summary + labels"
+got_body=$(echo "$out" | jq -r '.body')
+if [ "$got_state" = "To Do" ] && [ "$got_title" = "S1" ] && [ "$got_labels" = "x,y" ] && echo "$got_body" | grep -q "AgDR-0002-schema-migration.md"; then
+  record_pass "lib: tracker_view (jira) reads status/summary/labels + flattens ADF description→body"
 else
-  record_fail "lib: tracker_view (jira) reads .fields.status.name + summary + labels" "got state='$got_state' title='$got_title' labels='$got_labels'"
+  record_fail "lib: tracker_view (jira) reads status/summary/labels + flattens ADF description→body" "got state='$got_state' title='$got_title' labels='$got_labels' body='$got_body'"
+fi
+
+# Jira Server / Data Center returns .fields.description as a plain string — the
+# string branch must pass it through verbatim (not swallow it via ADF flatten).
+install_mock "$SB" jira '
+printf "{\"self\":\"https://j/2\",\"fields\":{\"status\":{\"name\":\"Open\"},\"summary\":\"S2\",\"labels\":[],\"description\":\"link docs/agdr/AgDR-0003-data-migration.md here\"}}\n"
+exit 0
+'
+got_body=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view JIRA-2 | jq -r '.body'
+)
+if echo "$got_body" | grep -q "AgDR-0003-data-migration.md"; then
+  record_pass "lib: tracker_view (jira) passes through a plain-string (Server/DC) description→body"
+else
+  record_fail "lib: tracker_view (jira) passes through a plain-string (Server/DC) description→body" "got body='$got_body'"
+fi
+rm -rf "$SB"
+
+# Asana lib smoke (#761): body maps to .notes (plain-text task description). No
+# lib-level asana test existed before body was mapped — add one alongside the
+# linear/jira siblings so the migration gate's read of .notes is covered.
+SB=$(make_fork)
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "tracker": {
+    "kind": "asana",
+    "view_command": "asana task get {id} --json"
+  }
+}
+JSON
+install_mock "$SB" asana '
+printf "{\"data\":{\"name\":\"A1\",\"completed\":false,\"permalink_url\":\"https://asana/1\",\"tags\":[{\"name\":\"backend\"}],\"notes\":\"rollback in docs/agdr/AgDR-0004-schema-migration.md\"}}\n"
+exit 0
+'
+out=$(
+  cd "$SB" || exit 99
+  PATH="$SB/bin:$PATH"
+  . .claude/hooks/_lib-read-config.sh
+  . .claude/hooks/_lib-tracker.sh
+  tracker_clear_cache
+  tracker_view 12345
+)
+got_state=$(echo "$out" | jq -r '.state')
+got_labels=$(echo "$out" | jq -r '.labels | join(",")')
+got_body=$(echo "$out" | jq -r '.body')
+if [ "$got_state" = "Open" ] && [ "$got_labels" = "backend" ] && echo "$got_body" | grep -q "AgDR-0004-schema-migration.md"; then
+  record_pass "lib: tracker_view (asana) derives Open from completed + maps notes→body"
+else
+  record_fail "lib: tracker_view (asana) derives Open from completed + maps notes→body" "got state='$got_state' labels='$got_labels' body='$got_body'"
 fi
 rm -rf "$SB"
 
