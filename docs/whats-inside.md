@@ -152,7 +152,7 @@ This is what turns the markdown above into an enforced workflow. Claude Code pic
 
 | Layer | Path | What it is |
 |-------|------|------------|
-| **Hooks** | `.claude/hooks/` | 42 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
+| **Hooks** | `.claude/hooks/` | 43 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
 | **Rules** | `.claude/rules/` | 15 modular rule files imported via `@.claude/rules/*` from `CLAUDE.md` |
 | **Agents** | `.claude/agents/` | 25 sub-agents — the department personas plus utility agents |
 | **Skills** | `.claude/skills/` | 64 slash commands |

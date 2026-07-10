@@ -32,12 +32,36 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
-1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to — #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker. This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
+### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843, when reviewing a PR)
+
+Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker so `warn-review-marker-write.sh` lets a `*-architecture.approved` write through the blocking marker gate (same mechanism as `/code-review`'s rex marker). Use the SAME resolved `owner/repo` from step 1 (below) — the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
+
+```bash
+ops_root=$(git rev-parse --show-toplevel)
+r="$ops_root"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
+  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
+  r=$(dirname "$r")
+done
+mkdir -p "$ops_root/.claude/session"
+printf '%s\n' "<owner/repo>#<pr>:architecture" > "$ops_root/.claude/session/active-reviewer"
+```
+
+On skill exit (after the review is posted, whether or not the marker gets written), clear it:
+
+```bash
+rm -f "$ops_root/.claude/session/active-reviewer"
+```
+
+Doc-only reviews (no PR yet) never write a marker, so this step is a no-op for them. Without this marker, a build-class sub-agent attempting the same write is correctly blocked — see `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+
+1. Resolve the target — a PR number (preferred: gives a diff + a place to post the verdict + a marker key) or a path to a design artifact. **Also resolve the repo**: the optional second arg (`/design-review 42 owner/repo`), or the `owner/repo#N` form. In split-portfolio v2 the PR lives in a sibling repo, so a bare `gh pr view 42` resolved against the ops-fork cwd hits the WRONG repo — pass the resolved repo as `--repo` to **every** `gh pr view` / `gh pr diff` call, and thread it into Tariq's spawn so it becomes BOTH his `$PR_HOST_REPO` (the base repo `tracker_review_submit` posts the review to — #763) AND the key for his `<owner>__<repo>__<pr>-architecture.approved` marker (and the active-reviewer marker from step 0). This is the slug the `require-architecture-review.sh` gate derives from the merge command's cd-target (me2resh/apexyard#687). If only a bare number is given and `gh pr view <N>` can't resolve the PR from the current cwd, STOP and ask for the `owner/repo#N` form — never write the marker under a guessed qualifier.
 2. Fetch PR details and the latest commit SHA (when reviewing a PR).
 3. Read the design artifact(s).
 4. Review against the architecture review lens (below) plus discovered handbooks.
 5. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #763), not a hardcoded `gh pr review` (when reviewing a PR).
-6. On APPROVED only: write the sign-off marker so the Design→Build gate passes (see `/approve-architecture` — Tariq writes the marker himself on an APPROVED verdict; `/approve-architecture` is the human/operator path to record the same marker).
+6. On APPROVED only: write the sign-off marker so the Design→Build gate passes (see `/approve-architecture` — Tariq writes the marker himself on an APPROVED verdict; `/approve-architecture` is the human/operator path to record the same marker). Clear the active-reviewer marker from step 0 after the review is posted.
 
 ## Review Lens
 

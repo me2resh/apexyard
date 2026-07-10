@@ -638,25 +638,33 @@ write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 run_case_wrapper "wrapper: cross-repo markers do not satisfy the gate (#485 parity)" 2 "no recorded code-reviewer|no CEO approval marker" "$sb" 100 "org-b/project-b"
 
-# --- warn-review-marker-write.sh tests (#494) -------------------------
+# --- warn-review-marker-write.sh tests (#494, upgraded to BLOCKING for
+# --- rex/security/architecture in #843) --------------------------------
 #
-# The advisory hook fires when a Write or Bash command targets a
-# *-rex.approved or *-ceo.approved file. It must always exit 0.
+# The hook fires when a Write or Bash command targets a *-rex.approved,
+# *-ceo.approved, *-security.approved, or *-architecture.approved file.
+# *-ceo.approved stays advisory-only (always exit 0, unchanged from #728).
+# The other three now BLOCK (exit 2) unless a matching
+# .claude/session/active-reviewer marker is present. Full case coverage
+# (matching marker, kind/pr/repo mismatch, legacy bare filenames, security +
+# architecture roles) lives in the dedicated test_warn_review_marker_write.sh;
+# this file only keeps the original #494 smoke assertions in sync with the
+# new default behaviour.
 
 WARN_HOOK_SRC="$SRC_ROOT/.claude/hooks/warn-review-marker-write.sh"
 if [ ! -f "$WARN_HOOK_SRC" ]; then
   echo "FAIL: warn-review-marker-write.sh not found at $WARN_HOOK_SRC" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-missing "
 else
-  # W1: Write to a rex.approved path → advisory fires, exit 0
+  # W1: Write to a rex.approved path, no active-reviewer marker → BLOCKED, exit 2 (#843)
   input=$(jq -nc --arg fp ".claude/session/reviews/me2resh__apexyard__42-rex.approved" \
     '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')
   got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
   got_rc=$?
-  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "VIOLATION"; then
-    echo "PASS [warn-hook: Write to rex.approved → advisory + exit 0 (#494)]"; PASS=$((PASS+1))
+  if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "BLOCKED"; then
+    echo "PASS [warn-hook: Write to rex.approved with no active-reviewer marker → BLOCKED, exit 2 (#843)]"; PASS=$((PASS+1))
   else
-    echo "FAIL [warn-hook: Write to rex.approved → advisory + exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    echo "FAIL [warn-hook: Write to rex.approved → BLOCKED, exit 2]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-write-rex "
   fi
 

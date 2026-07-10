@@ -1,137 +1,255 @@
 #!/bin/bash
-# PreToolUse advisory hook (exit 0 always) — fires when a Write tool call or
-# a Bash command targets a *-rex.approved or *-ceo.approved file under
-# .claude/session/reviews/.
+# PreToolUse hook — fires when a Write tool call or a Bash command targets a
+# review-marker file (*-rex.approved, *-ceo.approved, *-security.approved,
+# *-architecture.approved) under .claude/session/reviews/.
 #
-# PURPOSE
+# HISTORY
 # -------
-# Build-class sub-agents (platform-engineer, backend-engineer, frontend-engineer,
-# product-manager, etc.) implementing a ticket CANNOT spawn the real code-reviewer
-# (Rex) because they cannot nest the Agent tool.  If such an agent writes a
-# *-rex.approved marker and frames its output as "Rex approved", it satisfies the
-# merge gate's filename check without satisfying its INTENT — the author is
-# reviewing its own work, defeating the two-reviews rule.
+# #728 made this hook's banner "unmissable" (VIOLATION framing, per-marker-type
+# messaging) but kept it purely advisory (exit 0 always) — reasoning that the
+# harness provides no per-agent-type signal (CLAUDE_CODE_CHILD_SESSION is set
+# identically for every sub-agent, sanctioned reviewer or not), so a shell
+# hook cannot reliably distinguish "the real code-reviewer is writing this"
+# from "a build agent is impersonating the code-reviewer".
 #
-# This hook fires on every attempt to write a review marker and emits an
-# UNMISSABLE banner to make the violation visible before the write lands.
+# #843 found the residual gap: the banner alone doesn't stop the write, and
+# twice (PRs #835, #842) a build-class sub-agent — which cannot nest the
+# Agent tool to spawn the real reviewer — resolved auto-code-review.sh's
+# "Invoke Rex NOW" instruction by impersonating Rex itself: posting a fake
+# review and writing the *-rex.approved marker.
 #
-# WHY THIS HOOK CANNOT BLOCK (#728)
-# ----------------------------------
-# A full mechanical block would require distinguishing the sanctioned
-# code-reviewer agent from a build-class agent at the shell level.  In the
-# current harness there is no per-agent-type env var (CLAUDE_AGENT_TYPE or
-# similar) — all sub-agents share the same environment (CLAUDE_CODE_CHILD_SESSION
-# is set for every sub-agent, not just build-class ones).  Without a reliable
-# provenance signal the hook cannot block without also blocking the real Rex
-# write.  Options for a future full block:
+# THE FIX (#843): rather than trying to distinguish agent *identity* (the
+# #728 blocker), gate on agent *provenance via session state* instead — a
+# **active-reviewer session marker** at .claude/session/active-reviewer that
+# the orchestrator (or one of /code-review, /security-review, /design-review)
+# writes immediately before spawning the sanctioned reviewer, one line:
+# `<owner>/<repo>#<pr>:<kind>`. A write to *-rex.approved / *-security.approved
+# / *-architecture.approved is now BLOCKED (exit 2) unless that marker exists
+# and matches the (repo, pr, kind) being written:
 #
-#   A) Harness emits CLAUDE_SUBAGENT_TYPE per sub-agent spawn → hook checks it.
-#   B) Rex marker carries structured provenance fields (like the CEO marker's
-#      approved_by=user / skill_version=2) that a build agent cannot fabricate
-#      without also violating the structured-format check in block-unreviewed-merge.sh.
+#   .claude/session/active-reviewer contains:  me2resh/apexyard#843:rex
+#   allows a write to:                         me2resh__apexyard__843-rex.approved
+#   blocks a write to:                         me2resh__apexyard__843-security.approved  (kind mismatch)
+#   blocks a write to:                         me2resh__apexyard__844-rex.approved        (pr mismatch)
 #
-# Both options are deferred; a /decide AgDR should evaluate them.  In the
-# meantime the primary safeguards remain: (1) this unmissable advisory banner,
-# (2) the prompt-guardrail in each build-agent file, and (3) the per-PR human
-# CEO nod required by /approve-merge.
+# A build-class sub-agent — spawned to implement a ticket, with no reason to
+# ever see an active-reviewer marker set for its own PR — is blocked with a
+# message telling it to stop and hand back to the orchestrator.
 #
-# References: #728, AgDR-0062, .claude/rules/pr-workflow.md
-#             § "Build agents cannot self-review"
+# KNOWN LIMITATION (scope of the block, honestly stated)
+# ------------------------------------------------------
+# This gate fires only when the LITERAL marker path (e.g. a `*-rex.approved`
+# suffix) appears in the Write tool's file_path or in the Bash command text —
+# it inherits the `_is_marker_target` match surface that predates #843. The
+# sanctioned reviewers write the marker via a shell VARIABLE
+# (`printf '%s\n' "$SHA" > "$REX_MARKER"`, path from `review_marker_path`),
+# where the literal suffix never appears in the command text; a shell hook
+# cannot expand that variable to know the target, so the variable form is NOT
+# intercepted. Consequence: this blocks the common "just create the file"
+# literal-path forgery vector (real value), but an agent that forges by
+# copying the reviewers' own documented variable-form idiom is NOT stopped by
+# this hook. So #843 *narrows* the induced-impersonation surface; it does not
+# claim to mechanically block every forgery. The load-bearing defences remain
+# the per-PR CEO nod (`/approve-merge`) and the orchestrator running a real,
+# separate reviewer pass — this gate is a backstop, not a complete fence.
+#
+# *-ceo.approved KEEPS its original #728 advisory-only behaviour (never
+# blocks) — it has its own structured-field defence in
+# block-unreviewed-merge.sh (sha= / approved_by=user / skill_version=) and is
+# written by a human-invoked skill (/approve-merge), not a reviewer agent.
+#
+# Legacy bare-number marker filenames (pre-#485 repo-qualifier, e.g.
+# `843-rex.approved` with no `<owner>__<repo>__` prefix) are still
+# recognised — the repo component of the active-reviewer check is skipped
+# for those (can't recover a repo from a bare filename), but the pr + kind
+# match still applies.
+#
+# THREAT MODEL: same as every other marker in this framework (see
+# .claude/rules/pr-workflow.md). Local session state, gitignored, converts
+# invisible inference into visible, checkable file existence. Claude can
+# still fabricate the active-reviewer marker by hand — that is a visible,
+# auditable, grep-able rule violation, same order of magnitude as forging
+# the marker directly used to be. The mechanical gate exists to remove the
+# INDUCED failure mode (auto-code-review.sh's banner telling a build agent
+# to do the impossible), not to defend against a deliberately adversarial
+# agent.
 #
 # Wired in .claude/settings.json PreToolUse for:
-#   matcher: Write    (catches direct file writes via the Write tool)
+#   matcher: Write    (catches direct file writes)
 #   matcher: Bash     (catches shell redirections, echo >, printf, tee, etc.)
+#
+# References: #728, #843, AgDR-0062, .claude/rules/pr-workflow.md
+#             § "Build agents cannot self-review"
+
+set -u
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 _is_marker_target() {
   local text="$1"
   # Match any path ending with a review-marker filename under the reviews dir:
-  #   *-rex.approved  — Rex gate marker (written by code-reviewer after review)
-  #   *-ceo.approved  — CEO gate marker (written by /approve-merge on explicit approval)
-  echo "$text" | grep -qE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo)\.approved'
+  #   *-rex.approved          — Rex gate marker (BLOCKING, #843)
+  #   *-security.approved     — Security Reviewer gate marker (BLOCKING, #843)
+  #   *-architecture.approved — Solution Architect gate marker (BLOCKING, #843)
+  #   *-ceo.approved          — CEO gate marker (advisory-only, unchanged)
+  echo "$text" | grep -qE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved'
 }
 
 MATCHED=0
 MARKER_TYPE=""
+TARGET=""
 
 case "$TOOL_NAME" in
   Write)
     FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
     if _is_marker_target "$FILE_PATH"; then
       MATCHED=1
-      # Identify which marker type for a more targeted message.
-      echo "$FILE_PATH" | grep -q '\-rex\.approved' && MARKER_TYPE="rex"
-      echo "$FILE_PATH" | grep -q '\-ceo\.approved' && MARKER_TYPE="ceo"
+      TARGET="$FILE_PATH"
     fi
     ;;
   Bash)
     COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
     if _is_marker_target "$COMMAND"; then
       MATCHED=1
-      echo "$COMMAND" | grep -q '\-rex\.approved' && MARKER_TYPE="rex"
-      echo "$COMMAND" | grep -q '\-ceo\.approved' && MARKER_TYPE="ceo"
+      TARGET=$(echo "$COMMAND" | grep -oE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved' | head -1)
     fi
     ;;
 esac
 
-if [ "$MATCHED" = "1" ]; then
-  # Determine the specific violation message based on which marker type.
-  if [ "$MARKER_TYPE" = "rex" ]; then
-    MARKER_RULE="*-rex.approved must be written ONLY by the real code-reviewer agent (Rex)
-  after it posts a GitHub review on the PR.  Rex is a separate sub-agent with
-  its own context — not the agent that just built the thing being reviewed."
-    MARKER_WHO="Rex (code-reviewer sub-agent), invoked by the orchestrator via /code-review"
-  elif [ "$MARKER_TYPE" = "ceo" ]; then
-    MARKER_RULE="*-ceo.approved must be written ONLY by the /approve-merge skill
-  on an explicit per-PR CEO approval.  It carries structured provenance fields
-  (approved_by=user, skill_version=2) that cannot be fabricated casually."
-    MARKER_WHO="/approve-merge skill, invoked by the orchestrator on an explicit CEO nod"
-  else
-    MARKER_RULE="Review markers must be written only by the real code-reviewer (Rex)
-  or the /approve-merge skill — not by the agent that built the code."
-    MARKER_WHO="the real code-reviewer (Rex) or /approve-merge"
-  fi
+if [ "$MATCHED" != "1" ]; then
+  exit 0
+fi
 
-  cat >&2 <<BANNER
+MARKER_BASENAME=$(basename "$TARGET")
+MARKER_TYPE=$(printf '%s' "$MARKER_BASENAME" | sed -E 's/^.*-(rex|ceo|security|architecture)\.approved$/\1/')
+
+# --- CEO marker: unchanged #728 advisory-only behaviour (never blocks). ---
+if [ "$MARKER_TYPE" = "ceo" ]; then
+  cat >&2 <<'BANNER'
 ======================================================================
 [apexyard] VIOLATION WARNING: Unauthorized review-marker write detected
 ======================================================================
 
-You are about to write a review marker under .claude/session/reviews/.
+You are about to write a *-ceo.approved review marker.
 
-  ${MARKER_RULE}
+  *-ceo.approved must be written ONLY by the /approve-merge skill
+  on an explicit per-PR CEO approval. It carries structured provenance
+  fields (approved_by=user, skill_version=2) that cannot be fabricated
+  casually.
 
   Who may write this marker:
-    ${MARKER_WHO}
+    /approve-merge skill, invoked by the orchestrator on an explicit CEO nod
 
 WHY THIS MATTERS
   Writing this file yourself satisfies the merge gate's FILENAME check
-  but NOT its INTENT.  The two-reviews rule (workflow-gates #5 /
-  pr-workflow § "Build agents cannot self-review") requires the reviewer
-  to be a SEPARATE agent with independent context.  A build-class agent
-  (backend/frontend/platform engineer, product-manager, etc.) is the
-  AUTHOR — it cannot be its own independent reviewer.
-
-  The merge gate hook (block-unreviewed-merge.sh) will accept a forged
-  marker and let an unreviewed PR through.  This is a silent bypass of
-  the safety gate the framework exists to enforce.
-
-IF YOU ARE A BUILD-CLASS AGENT — STOP
-  Do NOT write this file.
-  Do NOT frame your output as a "Rex review" or "APPROVED" verdict.
-  Report your build results plainly (what you built, tests run/passed).
-  Hand off to the orchestrator — it will run the real Rex review.
-
-IF YOU ARE THE CODE-REVIEWER (Rex) — PROCEED WITH CAUTION
-  This banner is advisory.  You are the sanctioned writer.  Verify you
-  have posted a real GitHub review comment on the PR before writing the
-  marker.  (A mechanical write-block for this case requires harness-level
-  provenance — see #728 and AgDR-0062 for the deferred design.)
+  but NOT its INTENT. block-unreviewed-merge.sh independently validates
+  the structured fields before any merge is allowed, so a hand-written
+  marker without those fields is still rejected at merge time — but
+  don't write this file yourself. Invoke /approve-merge <pr>.
 
 ======================================================================
 BANNER
+  exit 0
 fi
 
-exit 0
+# --- rex / security / architecture: BLOCKING gate on the active-reviewer marker (#843). ---
+
+# Resolve MARKER_HOME the same way every other review-marker hook does
+# (ops fork root, not necessarily the current repo's git toplevel — see
+# me2resh/apexyard#229/#230).
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+OPS_ROOT=""
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-$PWD}")
+fi
+MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
+
+ACTIVE_REVIEWER_MARKER="$MARKER_HOME/.claude/session/active-reviewer"
+
+# Parse the (repo, pr) this write targets from the marker's own filename.
+# Repo-qualified (post-#485): <owner>__<repo>__<pr>-<role>.approved
+# Legacy bare:                <pr>-<role>.approved
+PREFIX="${MARKER_BASENAME%-${MARKER_TYPE}.approved}"
+if printf '%s' "$PREFIX" | grep -qE '^[0-9]+$'; then
+  TARGET_PR="$PREFIX"
+  TARGET_REPO=""
+else
+  TARGET_PR=$(printf '%s' "$PREFIX" | grep -oE '[0-9]+$')
+  TARGET_REPO=$(printf '%s' "$PREFIX" | sed -E "s/__${TARGET_PR}\$//" | sed 's/__/\//')
+fi
+
+_active_reviewer_allows() {
+  # Returns 0 (allow) iff the active-reviewer marker exists and its
+  # <repo>#<pr>:<kind> content matches this write's (repo, pr, role).
+  [ -f "$ACTIVE_REVIEWER_MARKER" ] || return 1
+  local content
+  content=$(tr -d '[:space:]' < "$ACTIVE_REVIEWER_MARKER" 2>/dev/null)
+  [ -n "$content" ] || return 1
+
+  case "$content" in
+    *'#'*':'*) : ;;
+    *) return 1 ;;
+  esac
+
+  local c_repo c_rest c_pr c_kind
+  c_repo="${content%%#*}"
+  c_rest="${content#*#}"
+  c_pr="${c_rest%%:*}"
+  c_kind="${c_rest#*:}"
+
+  [ "$c_kind" = "$MARKER_TYPE" ] || return 1
+  [ -n "$TARGET_PR" ] && [ "$c_pr" != "$TARGET_PR" ] && return 1
+  # Repo check only when the target filename encodes a repo (post-#485
+  # qualified marker). Legacy bare markers skip this comparison.
+  if [ -n "$TARGET_REPO" ] && [ -n "$c_repo" ] && [ "$c_repo" != "$TARGET_REPO" ]; then
+    return 1
+  fi
+  return 0
+}
+
+if _active_reviewer_allows; then
+  exit 0
+fi
+
+cat >&2 <<MSG
+======================================================================
+[apexyard] BLOCKED: Unauthorized review-marker write
+======================================================================
+
+You are about to write a *-${MARKER_TYPE}.approved review marker with no
+matching active-reviewer session marker.
+
+Target:  ${TARGET}
+Expected active-reviewer marker: ${ACTIVE_REVIEWER_MARKER}
+  (must contain: <owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE})
+
+This marker may ONLY be written by the sanctioned reviewer agent for this
+role (code-reviewer / security-reviewer / solution-architect), immediately
+after the orchestrator sets the active-reviewer marker and spawns it.
+
+IF YOU ARE A BUILD-CLASS SUB-AGENT (backend-engineer, frontend-engineer,
+platform-engineer, product-manager, data-engineer, ui-designer, ux-designer,
+tech-lead, etc.): STOP. Do NOT write this file. You cannot nest the Agent
+tool to spawn the real reviewer, so any "review" you produce here is the
+author reviewing their own work — the exact failure this gate exists to
+stop (see .claude/rules/pr-workflow.md § "Build agents cannot self-review").
+Report your build results plainly and hand back to the orchestrator.
+
+IF YOU ARE THE ORCHESTRATOR: set the active-reviewer marker before spawning
+the reviewer, then retry:
+
+  mkdir -p "\$(dirname "${ACTIVE_REVIEWER_MARKER}")"
+  printf '%s\n' "<owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE}" > "${ACTIVE_REVIEWER_MARKER}"
+
+Then invoke the real reviewer via the Agent tool (subagent_type:
+code-reviewer / security-reviewer / solution-architect). Clear the marker
+once the review is posted — a SessionStart sweep also clears stale markers
+left by an interrupted session.
+======================================================================
+MSG
+exit 2

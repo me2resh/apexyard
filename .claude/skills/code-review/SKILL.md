@@ -36,13 +36,37 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
+### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
+
+Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker so `warn-review-marker-write.sh` lets Rex's `*-rex.approved` write through the blocking marker gate. At skill entry:
+
+```bash
+ops_root=$(git rev-parse --show-toplevel)
+r="$ops_root"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
+  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
+  r=$(dirname "$r")
+done
+mkdir -p "$ops_root/.claude/session"
+printf '%s\n' "<owner/repo>#<pr>:rex" > "$ops_root/.claude/session/active-reviewer"
+```
+
+On skill exit (after Rex posts its verdict, whether APPROVED or CHANGES REQUESTED), clear the marker:
+
+```bash
+rm -f "$ops_root/.claude/session/active-reviewer"
+```
+
+Without this marker, a build-class sub-agent attempting the same write is correctly blocked — see `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+
 1. Fetch PR details and the latest commit SHA
 2. Get the diff
 3. Review against the checklist (architecture, code quality, testing, security, performance)
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
-7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`
+7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
 ## Review Checklist
 
