@@ -7,9 +7,11 @@ All notable changes to ApexYard are documented here.
 Major release — 122 features, 75 fixes, 1 breaking change. Consolidates the multi-harness governance quarter (opencode / pi.dev / Codex / Cursor gate adapters, `/eval-agents`, tracker-agnostic review + merge routing) on top of v4.4.0.
 
 ### Breaking
+
 - feat(#347)!: Hatim→Hakim consolidation + security + data sub-agents (Wave 2 PR 3) (#360)
 
 ### Added (feat)
+
 - harness-selection step in /setup and /handover (#850)
 - opencode gate adapter — enforce apexyard gates via a plugin over the bash hooks (#839)
 - Cursor gate adapter — generate .cursor/hooks.json delegating to the bash hooks (#838)
@@ -134,6 +136,7 @@ Major release — 122 features, 75 fixes, 1 breaking change. Consolidates the mu
 - add /tickets-batch skill for bulk-file flow (#127)
 
 ### Fixed (fix)
+
 - gitignore agent-routing.local.yaml and .mcp.json (#867)
 - subagent-aware auto-code-review + blocking rex-marker guard (#865)
 - repoint rex-770, add defect-in-diff validator guard, grow corpus (#864)
@@ -211,6 +214,7 @@ Major release — 122 features, 75 fixes, 1 breaking change. Consolidates the mu
 - CHANGELOG fallback in drift hook for squash-merged forks (#129)
 
 ### Changed (refactor / chore / docs / ci / perf / test)
+
 - remove broken Star History chart (#860)
 - bump the codeql-action group with 3 updates (#857)
 - Merge pull request #858 from me2resh/sync/main-to-dev-after-v4.4.0
