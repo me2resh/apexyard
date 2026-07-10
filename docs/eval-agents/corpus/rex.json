@@ -28,14 +28,14 @@
       "notes": "Canonical false-confidence case from spike #825 (row R1): a fluent, verification-heavy APPROVED review of a commit that carried a real BLOCKING defect Hakim caught on the identical commit. This is the case the prose-rubric method scored 15/16 — higher than 7 of the 10 genuinely-correct approvals in the spike's sample."
     },
     {
-      "id": "rex-770-d8ad5325",
+      "id": "rex-770-6b19e2b5a",
       "pr": 770,
       "repo": "me2resh/apexyard",
-      "commit": "d8ad5325b",
-      "diff_range": "d8ad5325b~1..d8ad5325b",
+      "commit": "6b19e2b5a",
+      "diff_range": "6b19e2b5a~1..6b19e2b5a",
       "oracle": {
         "source": "confirmed_fix",
-        "established_by": "Both defects were fixed in the commit that followed this CHANGES REQUESTED review (6b19e2b5a); the fixes match exactly what was flagged.",
+        "established_by": "Re-pointed from the original rex-770-d8ad5325 entry (me2resh/apexyard#861), which mis-cited d8ad5325b (the PR's 3rd commit, touching only .claude/skills/approve-architecture/SKILL.md) as carrying the ground-truth defect. This commit (the PR's 1st commit) is where pr_base_repo() and its gh test mock were actually introduced, self-contained: it adds pr_base_repo() scoping its primary gh query with `--repo \"$hint\"` (the fork) in _lib-review-markers.sh, plus a gh mock in test_pr_base_repo.sh that ignores --repo entirely so the cross-fork case passes vacuously. Both defects persisted through the PR's cumulative state and were caught by a CHANGES REQUESTED review at the PR's later head (d8ad5325b/ce2416ba, 2026-07-03T23:35:56Z per `gh api repos/me2resh/apexyard/pulls/770/reviews`). Both were fixed 3 commits later, in the same PR, by 7a8292fe ('fix(#765): query pr_base_repo unscoped so cross-fork resolves the base') — that commit's message states the defect explicitly and makes the test --repo-aware.",
         "reference": "me2resh/apexyard#765"
       },
       "ground_truth_defects": [
@@ -56,7 +56,7 @@
         "verdict": "CHANGES REQUESTED",
         "was_justified": true
       },
-      "notes": "Rex correctly caught both the fork-scope regression and the vacuous test at this commit (spike #825 row R6, GOOD_CATCH). An earlier round on this same PR (commit f11415c41) had APPROVED — that miss is the human/Rex review the spike's row R2 refers to, but it isn't included as its own corpus entry here because the spike's own reviewer tag for that round is ambiguous."
+      "notes": "Rex correctly caught both the fork-scope regression and the vacuous test on this PR (spike #825 row R6, GOOD_CATCH). The original corpus entry (rex-770-d8ad5325) pointed at the wrong commit in the same PR — its diff_range covered only the 3rd commit (the SKILL.md-only 5th-writer migration), which never touches either defect's location, making the entry unscoreable (found during the first /eval-agents rex run, me2resh/apexyard#861). This entry re-points to the commit that actually introduces both defects. An earlier round on this same PR (commit f11415c41) had APPROVED — that miss is the human/Rex review the spike's row R2 refers to, but it isn't included as its own corpus entry here because the spike's own reviewer tag for that round is ambiguous."
     },
     {
       "id": "rex-767-a99f1009",
@@ -149,6 +149,60 @@
         "was_justified": true
       },
       "notes": "Spike #825 row R15 (GOOD_CLEAN) — the lowest-scoring correct approval under the disproven prose-rubric method, precisely because a docs-only diff gives a reviewer little to 'catch'. Included here deliberately: a good eval must not penalise a correct approval of a low-defect diff."
+    },
+    {
+      "id": "rex-773-ca3a9400",
+      "pr": 773,
+      "repo": "me2resh/apexyard",
+      "commit": "ca3a94003",
+      "diff_range": "ca3a94003~1..ca3a94003",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "Same-diff cross-agent pair with hakim-773-ca3a9400 (identical commit, reviewed by both agents the same day). Rex's APPROVED review independently verified the fix by cloning PR HEAD, running the suite (20/1), then reverting both hunks and re-running (17/4, all 3 new regression cases flip to FAIL) — proving the tests genuinely exercise the fix rather than passing vacuously. No later review or fix on this file ever contradicted the approval.",
+        "reference": "me2resh/apexyard#769"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Found while growing the corpus for me2resh/apexyard#861 (Spike #825 row R17 is hakim-773's counterpart; this Rex-side pairing wasn't in the spike's own DATA table but is the same PR/commit, discovered independently via the GitHub reviews API). Two non-blocking nits noted (an edge-case trade-off and a cosmetic doc-vs-code glob note), consistent with the empty ground_truth_defects set."
+    },
+    {
+      "id": "rex-778-64c3ff5",
+      "pr": 778,
+      "repo": "me2resh/apexyard",
+      "commit": "64c3ff5",
+      "diff_range": "64c3ff5~1..64c3ff5",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "No later review or fix on this file ever contradicted the approval. Rex independently probed the new trigger glob at PR HEAD (confirmed it fires on the trust-chain paths and stays silent on non-trust-chain `.claude/` paths) and confirmed the existing auth/crypto/secrets trigger and other role triggers were byte-for-byte unchanged (no regression).",
+        "reference": "me2resh/apexyard#777"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Found while growing the corpus for me2resh/apexyard#861; matches Spike #825 row R18 (GOOD_CLEAN, 'security-auditor trust-chain trigger; regression-free; correct'), not previously promoted into the JSON corpus. Two non-blocking nits noted (settings.local.json scope, doc-glob-vs-code-glob cosmetics), consistent with the empty ground_truth_defects set."
+    },
+    {
+      "id": "rex-787-512d253",
+      "pr": 787,
+      "repo": "me2resh/apexyard",
+      "commit": "512d253",
+      "diff_range": "512d253~1..512d253",
+      "oracle": {
+        "source": "no_contradiction",
+        "established_by": "No later review or fix on this file ever contradicted the approval. Rex independently fetched the PR from upstream, ran the full test suite locally, confirmed the branch was based exactly on dev tip with no diff-scope contamination, and confirmed a pre-existing unrelated test failure was genuinely pre-existing (fails identically on dev, untouched by this diff).",
+        "reference": "me2resh/apexyard#784"
+      },
+      "ground_truth_defects": [],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": true
+      },
+      "notes": "Found while growing the corpus for me2resh/apexyard#861; matches Spike #825 row R19 (GOOD_CLEAN, 'isolated-builds rule; wiring guard passes; correct'), not previously promoted into the JSON corpus. One non-blocking nit noted (narrower destructive-git regex coverage, explicitly out of scope), consistent with the empty ground_truth_defects set."
     }
   ]
 }

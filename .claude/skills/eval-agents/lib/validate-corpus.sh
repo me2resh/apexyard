@@ -3,7 +3,16 @@
 #
 # Usage: validate-corpus.sh <agent> <corpus-path>
 #
-# Checks structure and required fields only — NOT ground-truth accuracy.
+# Checks structure and required fields, PLUS one ground-truth-adjacent check:
+# every ground_truth_defects[].location must appear in the entry's diff_range
+# changed-file set (git-resolved). This is NOT re-deriving ground truth (still
+# forbidden — see SKILL.md rule 1) — it's a structural guard against the
+# rex-770 class of mislabel (me2resh/apexyard#861), where the corpus pointed
+# at a diff that never contained the defect it claimed to carry, making the
+# entry unscoreable. A location the validator can't resolve locally (commit
+# not fetched) is a best-effort SKIP with a warning, not a hard failure — CI
+# checkouts don't always have every historical commit's full ancestry.
+#
 # Exit 0 + prints entry count on success. Exit 1 on any schema violation,
 # with every violation listed (not just the first) so a corpus author fixes
 # everything in one pass.
@@ -26,11 +35,41 @@ if [ ! -f "$CORPUS_PATH" ]; then
   exit 1
 fi
 
-python3 - "$AGENT" "$CORPUS_PATH" <<'PYEOF'
-import json, sys
+# Repo root for git diff resolution — derive from the corpus file's own
+# location so this works regardless of the caller's cwd.
+REPO_ROOT="$(git -C "$(dirname "$CORPUS_PATH")" rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-agent, path = sys.argv[1], sys.argv[2]
+python3 - "$AGENT" "$CORPUS_PATH" "$REPO_ROOT" <<'PYEOF'
+import json, subprocess, sys
+
+agent, path, repo_root = sys.argv[1], sys.argv[2], sys.argv[3]
 errors = []
+unresolvable = 0
+
+
+def changed_files(diff_range):
+    """git diff --name-only over diff_range, resolved against repo_root.
+    Returns a set of changed paths, or None if the range can't be resolved
+    locally (unfetched commit, malformed range, etc.) — caller treats None
+    as best-effort SKIP, not a failure."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", repo_root, "diff", "--name-only", diff_range],
+            capture_output=True, text=True, timeout=15,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+
+
+def location_file(location):
+    """Extract the leading file path from a location string that may carry
+    a trailing ':line' or ' (note)' annotation (per SCHEMA.md: 'File path
+    (± line)')."""
+    token = location.split()[0] if location else ""
+    return token.split(":")[0]
 
 try:
     with open(path) as f:
@@ -103,6 +142,37 @@ else:
                 if "severity" in d and d["severity"] not in VALID_SEVERITY:
                     errors.append(f"{dwhere}: severity {d['severity']!r} not in {sorted(VALID_SEVERITY)}")
 
+            # Defect-in-diff guard (me2resh/apexyard#861): every defect's
+            # location must actually appear in the reviewed diff — otherwise
+            # the agent-under-test could never have caught it, and scoring
+            # the entry is meaningless (the rex-770 corpus mislabel).
+            diff_range = e.get("diff_range")
+            valid_locations = [
+                (j, d.get("location")) for j, d in enumerate(defects)
+                if isinstance(d, dict) and d.get("location")
+            ]
+            if valid_locations and isinstance(diff_range, str) and diff_range:
+                files = changed_files(diff_range)
+                if files is None:
+                    unresolvable += 1
+                    print(
+                        f"⚠ {where}: diff_range {diff_range!r} not resolvable locally "
+                        f"(commit not fetched, or malformed range) — skipping "
+                        f"defect-in-diff check for this entry",
+                        file=sys.stderr,
+                    )
+                else:
+                    for j, loc in valid_locations:
+                        lf = location_file(loc)
+                        if lf not in files and not any(lf in f or f in lf for f in files):
+                            errors.append(
+                                f"{where} defect[{j}]: location {loc!r} does not appear in "
+                                f"diff_range {diff_range!r}'s changed files "
+                                f"({sorted(files) or '[]'}) — the ground-truth defect must "
+                                f"live inside the reviewed diff, or the entry is unscoreable "
+                                f"(the rex-770 class of mislabel, me2resh/apexyard#861)"
+                            )
+
         rv = e.get("recorded_verdict")
         if not isinstance(rv, dict):
             errors.append(f"{where}: missing/invalid 'recorded_verdict' object")
@@ -124,5 +194,6 @@ blocking_defects = sum(
     if d.get("severity") in ("BLOCKING", "HIGH")
 )
 misses = sum(1 for e in data.get("entries", []) if e.get("recorded_verdict", {}).get("was_justified") is False)
-print(f"✓ {path}: schema valid — {n} entries, {blocking_defects} BLOCKING/HIGH ground-truth defects, {misses} recorded MISS(es)")
+skip_note = f", {unresolvable} defect-in-diff check(s) skipped (unresolvable locally)" if unresolvable else ""
+print(f"✓ {path}: schema valid — {n} entries, {blocking_defects} BLOCKING/HIGH ground-truth defects, {misses} recorded MISS(es){skip_note}")
 PYEOF
