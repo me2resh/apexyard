@@ -238,7 +238,7 @@ Thanks to everyone who has helped forge ApexYard:
   </tr>
 </table>
 
-<sub>External contributors' PRs are squash-merged, so GitHub's commit-author graph under-counts them — this list credits the humans directly. New contributor? Open a PR and you'll be added.</sub>
+<sub>This list credits every human directly, since squash-merges hide them from GitHub's contributor graph. New contributor? Open a PR and you'll be added.</sub>
 
 ## License
 
