@@ -36,6 +36,23 @@
 # ever see an active-reviewer marker set for its own PR — is blocked with a
 # message telling it to stop and hand back to the orchestrator.
 #
+# KNOWN LIMITATION (scope of the block, honestly stated)
+# ------------------------------------------------------
+# This gate fires only when the LITERAL marker path (e.g. a `*-rex.approved`
+# suffix) appears in the Write tool's file_path or in the Bash command text —
+# it inherits the `_is_marker_target` match surface that predates #843. The
+# sanctioned reviewers write the marker via a shell VARIABLE
+# (`printf '%s\n' "$SHA" > "$REX_MARKER"`, path from `review_marker_path`),
+# where the literal suffix never appears in the command text; a shell hook
+# cannot expand that variable to know the target, so the variable form is NOT
+# intercepted. Consequence: this blocks the common "just create the file"
+# literal-path forgery vector (real value), but an agent that forges by
+# copying the reviewers' own documented variable-form idiom is NOT stopped by
+# this hook. So #843 *narrows* the induced-impersonation surface; it does not
+# claim to mechanically block every forgery. The load-bearing defences remain
+# the per-PR CEO nod (`/approve-merge`) and the orchestrator running a real,
+# separate reviewer pass — this gate is a backstop, not a complete fence.
+#
 # *-ceo.approved KEEPS its original #728 advisory-only behaviour (never
 # blocks) — it has its own structured-field defence in
 # block-unreviewed-merge.sh (sha= / approved_by=user / skill_version=) and is

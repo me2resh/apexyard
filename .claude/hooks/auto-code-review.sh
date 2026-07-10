@@ -54,8 +54,6 @@ fi
 # Extract the PR URL from the tool output (gh prints the URL on success)
 PR_URL=$(echo "$OUTPUT" | grep -oE 'https://github\.com/[^[:space:]]+/pull/[0-9]+' | head -1)
 PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-# Recover owner/repo from the PR URL for the active-reviewer marker example.
-PR_REPO=$(echo "$PR_URL" | sed -nE 's#https://github\.com/([^/]+/[^/]+)/pull/[0-9]+#\1#p')
 
 if [ -z "$PR_NUMBER" ]; then
   PR_REF="the PR you just created"
@@ -65,20 +63,10 @@ fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
-OPS_ROOT=""
-if [ -f "$HOOKS_DIR/_lib-ops-root.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$HOOKS_DIR/_lib-ops-root.sh"
-  OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-$PWD}")
-fi
-MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 mkdir -p "${REPO_ROOT:-.}/.claude/session/pending-reviews"
 if [ -n "$PR_NUMBER" ]; then
   echo "${PR_URL}" > "${REPO_ROOT:-.}/.claude/session/pending-reviews/${PR_NUMBER}"
 fi
-ACTIVE_REVIEWER_MARKER="${MARKER_HOME}/.claude/session/active-reviewer"
-ACTIVE_REVIEWER_VALUE="${PR_REPO:-<owner>/<repo>}#${PR_NUMBER:-<pr>}:rex"
-
 # Auto-move board card to "In review" (opt-in via github_projects.enable_auto_moves).
 # Board owner/number come from github_projects config, resolved via the ops root.
 # Degrades gracefully — never blocks on failure.
@@ -115,23 +103,16 @@ isolated context:
 IF YOU ARE THE ORCHESTRATOR (this is your own \`gh pr create\`, or a
 build sub-agent just handed this PR back to you):
 
-  1. Set the active-reviewer session marker so Rex's *-rex.approved write
-     will be allowed through the blocking marker gate:
+  Run the code review through the /code-review skill on ${PR_REF}:
 
-       mkdir -p "\$(dirname "${ACTIVE_REVIEWER_MARKER}")"
-       printf '%s\n' "${ACTIVE_REVIEWER_VALUE}" > "${ACTIVE_REVIEWER_MARKER}"
+       /code-review ${PR_NUMBER:-<pr>}
 
-  2. Invoke Rex NOW using the Agent tool:
-
-       subagent_type: code-reviewer
-       prompt: "Review ${PR_REF} at ${PR_URL}. Check the diff, tests,
-                coverage, AgDR linkage, glossary, and commit SHA
-                consistency. Report verdict."
-
-  3. Once Rex posts its verdict, clear the marker (a SessionStart sweep
-     also clears stale markers left by an interrupted session):
-
-       rm -f "${ACTIVE_REVIEWER_MARKER}"
+  The skill sets the active-reviewer session marker, spawns Rex, and
+  clears the marker for you — you should NOT set that marker by hand.
+  The skill's marker management is what authorises Rex's *-rex.approved
+  write through the blocking gate (#843); spawning the code-reviewer
+  agent directly without it leaves the write blocked by
+  warn-review-marker-write.sh — by design.
 --------------------------------------------------------------------------
 
 The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
