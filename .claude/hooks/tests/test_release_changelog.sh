@@ -281,6 +281,70 @@ out=$(run_test '
 ')
 contains "feat mentioning the unversioned string still included" "document the sync/main-to-dev-after convention" "$out"
 
+# ── Test: AgDR-0094 (#872) — Released-From trailer wins over the sync heuristic ──
+# The v5.0.0 regression case: the prior release-sync PR merged LATE, landing near
+# HEAD after real unreleased work. With no trailer, the #737 heuristic anchors on
+# that late sync marker and silently drops everything before it. With the trailer
+# present on PREV_TAG's own commit, the range anchors on the RECORDED cut sha
+# instead — deterministic, and immune to where the sync marker happens to land.
+echo "--- AgDR-0094 trailer wins over late sync (v5.0.0 regression) ---"
+out=$(run_test '
+  mc "chore: initial"
+  CUT=$(git rev-parse HEAD)
+  git commit -q --allow-empty -m "chore: release v10.0.0" -m "Released-From: $CUT"
+  git tag v10.0.0
+  mc "feat(#1001): pre-sync unreleased feature one"
+  mc "feat(#1002): pre-sync unreleased feature two"
+  mc "sync: merge main into dev after v10.0.0 release"
+  mc "feat(#1003): post-sync unreleased feature"
+  PREV_TAG="v10.0.0" HEAD_REF="HEAD" VERSION="v10.1.0" DATE="2026-07-10" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "pre-sync feature one included (the under-count fix)" "pre-sync unreleased feature one" "$out"
+contains "pre-sync feature two included (the under-count fix)" "pre-sync unreleased feature two" "$out"
+contains "post-sync feature still included" "post-sync unreleased feature" "$out"
+not_contains "release commit itself excluded" "chore: release v10.0.0" "$out"
+not_contains "sync commit itself excluded" "merge main into dev after v10.0.0" "$out"
+
+# ── Test: AgDR-0094 — trailer-absent releases keep the old #737 fallback ────────
+# PREV_TAG carries no trailer (a pre-AgDR-0094 release, or any plain tag) — the
+# range must fall back to the existing sync-boundary heuristic unchanged. This
+# is the explicit trailer-absent counterpart to the trailer-present test above;
+# every pre-existing #737 case elsewhere in this file is a trailer-absent case
+# too, so this one exists mainly to name the fallback path directly.
+echo "--- AgDR-0094 trailer-absent falls back to #737 heuristic ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v11.0.0
+  mc "feat(#1101): already-released work"
+  mc "sync: merge main into dev after v11.0.0 release"
+  mc "feat(#1102): the real unreleased delta"
+  PREV_TAG="v11.0.0" HEAD_REF="HEAD" VERSION="v11.1.0" DATE="2026-07-10" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "post-sync delta included (unchanged #737 behaviour)" "the real unreleased delta" "$out"
+not_contains "pre-sync work still excluded (unchanged #737 behaviour)" "already-released work" "$out"
+
+# ── Test: AgDR-0094 — a bogus/unknown trailer sha falls back safely, never errors ──
+# A mangled or stale Released-From trailer (sha doesn't resolve to a commit in
+# this repo) must not crash the script — it should fall back to the #737
+# heuristic exactly as if no trailer existed, and exit 0.
+echo "--- AgDR-0094 bogus trailer sha falls back safely ---"
+out=$(run_test '
+  mc "chore: initial"
+  git commit -q --allow-empty -m "chore: release v12.0.0" -m "Released-From: not-a-real-sha"
+  git tag v12.0.0
+  mc "feat(#1201): unreleased work before late sync"
+  mc "sync: merge main into dev after v12.0.0 release"
+  mc "feat(#1202): unreleased work after late sync"
+  PREV_TAG="v12.0.0" HEAD_REF="HEAD" VERSION="v12.1.0" DATE="2026-07-10" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+  echo "EXIT_CODE=$?"
+')
+contains "script exits cleanly despite the bogus sha" "EXIT_CODE=0" "$out"
+contains "falls back to sync heuristic (post-sync work included)" "unreleased work after late sync" "$out"
+not_contains "falls back to sync heuristic (pre-sync work excluded, same as #737 fallback)" "unreleased work before late sync" "$out"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""
