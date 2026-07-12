@@ -86,29 +86,26 @@ Per apexyard#41, the marker path depends on whether the ticket's tracker repo ma
 
 #### 4a. Locate the ops root
 
-The ops root is the apexyard fork root — the directory containing BOTH `onboarding.yaml` and `apexyard.projects.yaml`. Walk up from CWD / the nearest git toplevel until you find it:
+The ops root is the apexyard fork root, anchored by EITHER the `.apexyard-fork` marker (split-portfolio v2, framework ≥ #242 — `onboarding.yaml` and `apexyard.projects.yaml` live in the sibling portfolio repo, not the fork) OR the legacy v1 pair (`onboarding.yaml` AND `apexyard.projects.yaml` both present in the same directory). Resolve it via the shared lib instead of re-deriving the walk inline — `_lib-ops-root.sh` ships in every managed project's `.claude/hooks/` tree the same way `_lib-tracker.sh` does (that's why sourcing it via `git rev-parse --show-toplevel` below is safe regardless of whether cwd is the ops fork or a `workspace/<project>/` clone), and it resolves pin-first (apexyard#381) so a session pin set at launch beats a fresh walk when Claude Code is running from an ops-fork-shaped clone elsewhere on disk (e.g. a `/tmp` build checkout):
 
 ```bash
-ops_root=""
-r=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-while [ -n "$r" ] && [ "$r" != "/" ]; do
-  if [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ]; then
-    ops_root="$r"
-    break
-  fi
-  r=$(dirname "$r")
-done
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-ops-root.sh"
+ops_root=$(resolve_ops_root)
 ```
 
-If not found (user is outside an apexyard fork), tell the user and stop. Starting a ticket without the fork doesn't make sense.
+If `$ops_root` is empty (user is outside an apexyard fork — neither anchor found walking up), tell the user and stop. Starting a ticket without the fork doesn't make sense.
 
 #### 4b. Look the tracker repo up in the registry
 
-Given the ticket's `owner/repo` (from step 1), grep `apexyard.projects.yaml` for a project whose `repo:` field matches. One registry-safe way (uses `yq` when available, falls back to a greppy read):
+Given the ticket's `owner/repo` (from step 1), resolve the registry path via `portfolio_registry` (see "Path resolution" above — do NOT hardcode `$ops_root/apexyard.projects.yaml`; in split-portfolio v2 the registry lives in the sibling repo, not the ops fork) and grep it for a project whose `repo:` field matches. One registry-safe way (uses `yq` when available, falls back to a greppy read):
 
 ```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+registry=$(portfolio_registry)
+
 if command -v yq >/dev/null 2>&1; then
-  project=$(yq eval ".projects[] | select(.repo == \"${OWNER_REPO}\") | .name" "$ops_root/apexyard.projects.yaml")
+  project=$(yq eval ".projects[] | select(.repo == \"${OWNER_REPO}\") | .name" "$registry")
 else
   # Greppy fallback: find the `name:` whose sibling `repo:` matches.
   # Strips surrounding quotes from both `name:` and `repo:` values so the
@@ -118,7 +115,7 @@ else
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
     /^[[:space:]]*- name:/ { name = unquote($3) }
     /^[[:space:]]*repo:/   { if (unquote($2) == r) { print name; exit } }
-  ' "$ops_root/apexyard.projects.yaml")
+  ' "$registry")
 fi
 ```
 
