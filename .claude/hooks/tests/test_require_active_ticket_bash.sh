@@ -463,6 +463,101 @@ else
   PASS=$((PASS+1))
 fi
 
+# --- Out-of-governance exemption (#883): the ~/.zshrc-style bug repro --
+#
+# Prior to #883, the "outside the repo" exemption (#569) only fired for
+# the Bash-write path — an Edit-tool write to a home dotfile like
+# ~/.zshrc was gated with no legitimate way to satisfy the gate on a fork
+# with GitHub Issues disabled (no tracker to file a chore ticket in).
+# These cases prove the fix (Edit/MultiEdit AND Bash, symlinks resolved,
+# governed-tree boundaries unchanged).
+
+# 31. Edit tool absolute write to a home-dotfile-style path OUTSIDE any
+#     git repo and OUTSIDE the ops fork, no ticket → EXEMPT. The core
+#     #883 repro.
+sb=$(make_sandbox)
+home_sim=$(mktemp -d)
+in=$(jq -nc --arg p "$home_sim/.zshrc" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#883 Edit-tool write to out-of-repo dotfile exempt (no ticket)" 0 "" "$in" "$sb"
+rm -rf "$home_sim"
+
+# 32. Same but MultiEdit tool shape (file_path key) → EXEMPT.
+sb=$(make_sandbox)
+home_sim=$(mktemp -d)
+in=$(jq -nc --arg p "$home_sim/.bashrc" '{tool_name:"MultiEdit", tool_input:{file_path:$p}}')
+run_case "#883 MultiEdit-tool write to out-of-repo dotfile exempt" 0 "" "$in" "$sb"
+rm -rf "$home_sim"
+
+# 33. Bash relative write from a CWD entirely outside any git repo /
+#     governed tree (simulates `cd ~ && echo 'export X=1' >> .zshrc`)
+#     → EXEMPT. Uses run_case_cwd so the hook actually executes with
+#     CWD=home_sim (not the sandbox) and has no session pin to fall back
+#     on — proving the exemption doesn't depend on the ops root being
+#     resolvable.
+sb=$(make_sandbox)
+home_sim=$(mktemp -d)
+in=$(jq -nc --arg c "echo 'export X=1' >> .zshrc" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case_cwd "#883 bash relative write from out-of-repo CWD exempt" 0 "" "$in" "$sb" "$home_sim"
+rm -rf "$home_sim"
+
+# 34. In-repo source Edit write is UNCHANGED — still blocked without a
+#     ticket (regression guard: the new exemption must not widen scope
+#     for governed content).
+sb=$(make_sandbox)
+mkdir -p "$sb/src"
+rsb=$(cd "$sb" && pwd -P)
+in=$(jq -nc --arg p "$rsb/src/app.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#883 regression: in-repo Edit write still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 35. Symlink from OUTSIDE the repo INTO the governed sandbox tree must
+#     NOT bypass the gate: resolving the write target's real path (not
+#     its literal path) is what fail-closed requires.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/src"
+home_sim=$(mktemp -d)
+ln -s "$rsb" "$home_sim/link-into-repo"
+in=$(jq -nc --arg p "$home_sim/link-into-repo/src/app.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#883 symlink into governed repo does NOT bypass gate" 2 "BLOCKED" "$in" "$sb"
+rm -rf "$home_sim"
+
+# 36. Symlink case WITH an active ticket → allowed (proves the symlink IS
+#     correctly resolved to governed content, and the normal ticket-gate
+#     logic — not the out-of-governance exemption — is what applies).
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/src"
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=883
+title=symlink test
+EOF
+home_sim=$(mktemp -d)
+ln -s "$rsb" "$home_sim/link-into-repo"
+in=$(jq -nc --arg p "$home_sim/link-into-repo/src/app.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#883 symlink into governed repo allowed WITH active ticket" 0 "" "$in" "$sb"
+rm -rf "$home_sim"
+
+# 37. Workspace-project write (governed, even without its own .git) still
+#     blocks without a ticket — proves the explicit WORKSPACE_DIR check
+#     (not merely "is this a git repo") governs the boundary. Mirrors the
+#     #745 split-portfolio layout, where a workspace project clone may
+#     have no .git of its own.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/workspace/myproj/src"
+in=$(jq -nc --arg p "$rsb/workspace/myproj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#883 workspace-project write (no .git) still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 38. Unresolvable Bash write target (embedded interpreter, no
+#     extractable path) remains categorically gated — fail-closed,
+#     unchanged. The out-of-governance check must never fire on an empty
+#     FILE_PATH.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "python3 -c \"import pathlib,os; pathlib.Path(os.environ.get('HOME','/tmp')+'/.railsrc').write_text('x')\"" \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#883 unresolvable bash target stays gated (fail-closed)" 2 "BLOCKED" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

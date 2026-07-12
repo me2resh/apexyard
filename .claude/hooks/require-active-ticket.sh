@@ -34,6 +34,64 @@
 #   - anything under projects/*/docs/ (per-project apexyard docs)
 #
 # Everything else (source code, config, infra) requires a ticket marker.
+#
+# Out-of-governance exemption (apexyard#883): a write TARGET entirely
+# outside every governed tree (the ops fork AND every registered
+# workspace/<project> clone) AND not inside ANY git repository at all is
+# outside this gate's jurisdiction — home dotfiles (~/.zshrc), /etc-style
+# machine config, /tmp scratch files. See the "Out-of-governance
+# exemption" block below for the fail-closed resolution rules (symlinks
+# resolved before judging; unresolvable/ambiguous targets stay gated).
+
+# Resolve PATH to its canonical, symlink-free absolute form. Walks up to
+# the nearest EXISTING ancestor, physically resolves it (`pwd -P`, which
+# follows symlinks), then re-appends any not-yet-created tail literally —
+# a tail that doesn't exist yet cannot itself be a symlink. This mirrors
+# `realpath -m` without depending on GNU coreutils (not guaranteed present
+# on macOS/BSD). Echoes the resolved path, or nothing if even "/" can't be
+# stat'd (should not happen for a well-formed absolute path).
+#
+# Why this matters (#883): without resolving symlinks first, a symlink
+# living under $HOME that POINTS INTO a governed tree (e.g.
+# ~/link-into-repo → the ops fork) would compare as "outside" the repo
+# under a naive string-prefix check, silently bypassing the gate.
+_resolve_real_path() {
+  local p="$1" dir tail=""
+  [ -n "$p" ] || return 0
+  dir="$p"
+  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -e "$dir" ]; do
+    if [ -z "$tail" ]; then
+      tail="$(basename "$dir")"
+    else
+      tail="$(basename "$dir")/$tail"
+    fi
+    dir="$(dirname "$dir")"
+  done
+  if [ ! -e "$dir" ]; then
+    # Nothing on the path exists at all — cannot resolve. Should not
+    # happen for an absolute path since "/" always exists.
+    return 0
+  fi
+  if [ -d "$dir" ]; then
+    dir="$(cd "$dir" 2>/dev/null && pwd -P)"
+  else
+    # $dir resolved to an existing FILE (not a directory) partway through
+    # the walk — canonicalize its parent and re-append its own basename.
+    local parent
+    parent="$(cd "$(dirname "$dir")" 2>/dev/null && pwd -P)"
+    if [ -n "$parent" ]; then
+      dir="$parent/$(basename "$dir")"
+    else
+      dir=""
+    fi
+  fi
+  [ -n "$dir" ] || return 0
+  if [ -n "$tail" ]; then
+    printf '%s/%s' "$dir" "$tail"
+  else
+    printf '%s' "$dir"
+  fi
+}
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -170,25 +228,12 @@ if [ -n "$REPO_ROOT" ] && [ -n "$FILE_PATH" ]; then
   esac
 fi
 
-# Bash-write: absolute paths outside the repo root are outside the tracked
-# source tree (e.g. /tmp/, /var/, /usr/, system-temp paths). A write there
-# cannot mutate apexyard-governed content, so no ticket is required (#569).
-# This check runs only for the Bash path (FILE_PATH set via extractor) and
-# only when FILE_PATH is absolute and does NOT strip to a REL_PATH (meaning
-# it's outside REPO_ROOT). We conservatively skip this for non-Bash tools —
-# they supply an explicit file_path from the tool call that we trust fully.
-if [ "$TOOL_NAME" = "Bash" ] && [ -n "$FILE_PATH" ] && [ -n "$REPO_ROOT" ]; then
-  case "$FILE_PATH" in
-    /*)
-      # Absolute path — was it stripped to a repo-relative form?
-      if [ "$REL_PATH" = "$FILE_PATH" ]; then
-        # REL_PATH is still absolute: FILE_PATH is NOT under REPO_ROOT.
-        # It's a system path or temp path — exempt.
-        exit 0
-      fi
-      ;;
-  esac
-fi
+# NOTE: the narrow "Bash absolute path outside REPO_ROOT" exemption that
+# used to live here (#569) has been superseded by the out-of-governance
+# exemption below (apexyard#883), which covers BOTH Bash and Edit/Write/
+# MultiEdit, resolves symlinks before judging, and checks the actual
+# governance boundaries (ops root + registered workspaces) rather than
+# just "outside the nearest git repo". See that block for the full design.
 
 # Exempt paths.
 #
@@ -271,6 +316,81 @@ if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HO
   resolved_ws=$(portfolio_workspace_dir 2>/dev/null)
   if [ -n "$resolved_ws" ]; then
     WORKSPACE_DIR="$resolved_ws"
+  fi
+fi
+
+# --- Out-of-governance exemption (apexyard#883) -------------------------
+#
+# A write TARGET that is outside every governed tree — the ops fork
+# itself AND every registered workspace/<project> clone — AND not inside
+# ANY git repository at all is outside this gate's jurisdiction. Applies
+# to BOTH Bash-detected writes and Edit/Write/MultiEdit tool calls (the
+# earlier #569 exemption was Bash-only, which left Edit-tool writes to
+# e.g. ~/.zshrc gated with no legitimate way to satisfy the gate on forks
+# with GitHub Issues disabled — the exact bug reported in #883).
+#
+# Fail-closed directions (deliberate):
+#   - An unresolvable FILE_PATH (empty — a Bash target the extractor
+#     couldn't identify) is NEVER exempted here; it falls through to the
+#     ticket gate below, unchanged from before this change.
+#   - Relative paths (a Bash write-target like `src/app.ts`) resolve
+#     against the hook's CWD before judging.
+#   - Symlinks are resolved to their real path before judging (via
+#     _resolve_real_path above), so a symlink living under $HOME that
+#     POINTS INTO a governed tree does not slip through as "outside" it.
+#   - Being inside SOME git repository that is neither the ops fork nor a
+#     registered workspace project does NOT exempt the write on its own —
+#     but see the three-way check below: ops-root and workspace
+#     boundaries are checked EXPLICITLY (not merely inferred from "is
+#     this a git repo"), because a split-portfolio workspace project is
+#     governed even when its clone isn't itself a git repository (e.g. a
+#     docs-only project, or a test fixture that never ran `git init`).
+#     Exemption requires ALL THREE checks below to say "outside".
+if [ -n "$FILE_PATH" ]; then
+  case "$FILE_PATH" in
+    /*) _og_abs_target="$FILE_PATH" ;;
+    *)  _og_abs_target="$PWD/$FILE_PATH" ;;
+  esac
+  _og_real_target="$(_resolve_real_path "$_og_abs_target")"
+  if [ -n "$_og_real_target" ]; then
+    _og_in_ops=0
+    _og_in_ws=0
+    _og_in_git=0
+
+    if [ -n "$OPS_ROOT" ]; then
+      _og_real_ops="$(cd "$OPS_ROOT" 2>/dev/null && pwd -P)"
+      if [ -n "$_og_real_ops" ]; then
+        case "$_og_real_target" in
+          "$_og_real_ops") _og_in_ops=1 ;;
+          "$_og_real_ops"/*) _og_in_ops=1 ;;
+        esac
+      fi
+    fi
+
+    if [ -n "$WORKSPACE_DIR" ] && [ -d "$WORKSPACE_DIR" ]; then
+      _og_real_ws="$(cd "$WORKSPACE_DIR" 2>/dev/null && pwd -P)"
+      if [ -n "$_og_real_ws" ]; then
+        case "$_og_real_target" in
+          "$_og_real_ws") _og_in_ws=1 ;;
+          "$_og_real_ws"/*) _og_in_ws=1 ;;
+        esac
+      fi
+    fi
+
+    # Nearest-existing-ancestor git-repo probe on the REAL (symlink-
+    # resolved) target — catches any git repo, governed or not.
+    _og_probe="$_og_real_target"
+    while [ -n "$_og_probe" ] && [ "$_og_probe" != "/" ] && [ ! -d "$_og_probe" ]; do
+      _og_probe="$(dirname "$_og_probe")"
+    done
+    if [ -n "$_og_probe" ] && [ -d "$_og_probe" ] \
+       && git -C "$_og_probe" rev-parse --show-toplevel >/dev/null 2>&1; then
+      _og_in_git=1
+    fi
+
+    if [ "$_og_in_ops" = 0 ] && [ "$_og_in_ws" = 0 ] && [ "$_og_in_git" = 0 ]; then
+      exit 0
+    fi
   fi
 fi
 
