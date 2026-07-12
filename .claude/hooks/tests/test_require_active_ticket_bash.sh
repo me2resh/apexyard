@@ -558,6 +558,50 @@ in=$(jq -nc --arg c "python3 -c \"import pathlib,os; pathlib.Path(os.environ.get
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#883 unresolvable bash target stays gated (fail-closed)" 2 "BLOCKED" "$in" "$sb"
 
+# --- Security review finding on PR #885 (Hakim): symlinked-out non-git --
+# --- workspace project must NOT be exempted -----------------------------
+#
+# A registered workspace/<proj> that is ITSELF a symlink whose real
+# target lives OUTSIDE workspace/ in a directory that is not itself a git
+# repo used to be wrongly exempted: resolving the symlink made the
+# containment checks read "outside ops, outside workspace, not a git
+# repo" even though the RAW path plainly names a governed
+# workspace/<project> location. The fix evaluates ops/workspace
+# containment against BOTH the raw and the resolved target.
+
+# 39. workspace/proj -> <external non-git dir>; write through the raw
+#     workspace/proj path, no ticket → BLOCKED (was wrongly EXEMPT
+#     before the raw-AND-resolved fix).
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/workspace"
+external=$(mktemp -d)
+mkdir -p "$external/src"
+ln -s "$external" "$sb/workspace/proj"
+in=$(jq -nc --arg p "$rsb/workspace/proj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#885 symlinked-out non-git workspace project still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+rm -rf "$external"
+
+# 40. Same symlinked-out workspace project, WITH an active ticket marker
+#     → ALLOWED. Keeps the existing "symlink governed content works with
+#     a ticket" behaviour coherent: the raw-containment check correctly
+#     routes this through the normal ticket-gate logic (not the
+#     out-of-governance exemption), and the ticket marker satisfies it.
+sb=$(make_sandbox)
+rsb=$(cd "$sb" && pwd -P)
+mkdir -p "$sb/workspace"
+external=$(mktemp -d)
+mkdir -p "$external/src"
+ln -s "$external" "$sb/workspace/proj"
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=885
+title=symlinked-out workspace project test
+EOF
+in=$(jq -nc --arg p "$rsb/workspace/proj/src/x.ts" '{tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "#885 symlinked-out non-git workspace project allowed WITH active ticket" 0 "" "$in" "$sb"
+rm -rf "$external"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

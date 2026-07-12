@@ -340,12 +340,33 @@ fi
 #     POINTS INTO a governed tree does not slip through as "outside" it.
 #   - Being inside SOME git repository that is neither the ops fork nor a
 #     registered workspace project does NOT exempt the write on its own —
-#     but see the three-way check below: ops-root and workspace
-#     boundaries are checked EXPLICITLY (not merely inferred from "is
-#     this a git repo"), because a split-portfolio workspace project is
-#     governed even when its clone isn't itself a git repository (e.g. a
-#     docs-only project, or a test fixture that never ran `git init`).
-#     Exemption requires ALL THREE checks below to say "outside".
+#     the ops-root/workspace boundaries are checked EXPLICITLY (not
+#     merely inferred from "is this a git repo"), because a
+#     split-portfolio workspace project is governed even when its clone
+#     isn't itself a git repository (e.g. a docs-only project, or a test
+#     fixture that never ran `git init`).
+#   - RAW-AND-RESOLVED containment (security review finding on #885,
+#     apexyard PR #885 — Hakim/security-reviewer): checking ops-root and
+#     workspace containment ONLY on the symlink-resolved target has a
+#     mirror-image hole to the one `_resolve_real_path` fixes. If a
+#     REGISTERED workspace/<project> entry is ITSELF a symlink whose real
+#     target lives OUTSIDE workspace/ in a non-git directory
+#     (`workspace/proj -> /some/nongit/dir`), resolving the target
+#     "escapes" the workspace boundary the same way the fix escapes a
+#     symlink-into-repo attack — the RESOLVED path no longer sits under
+#     WORKSPACE_DIR, so the naive single-check reads it as ungoverned and
+#     wrongly exempts it. The fix: evaluate ops-root/workspace
+#     containment against BOTH the RAW (pre-resolution) absolute target
+#     AND the fully resolved target, using the SAME canonicalized
+#     boundary anchors for both comparisons (only the anchors are
+#     canonicalized once; the raw target itself is deliberately left
+#     symlink-unresolved so a governed raw path can't be laundered away
+#     by a symlink further down it). A path counts as governed — and
+#     therefore NOT exempt — if EITHER the raw or the resolved check
+#     lands inside ops-root or workspace. Exemption requires ALL FOUR
+#     containment checks below (raw-ops, raw-ws, resolved-ops,
+#     resolved-ws) to say "outside", plus the git-repo probe to say "not
+#     in a repo".
 if [ -n "$FILE_PATH" ]; then
   case "$FILE_PATH" in
     /*) _og_abs_target="$FILE_PATH" ;;
@@ -353,32 +374,67 @@ if [ -n "$FILE_PATH" ]; then
   esac
   _og_real_target="$(_resolve_real_path "$_og_abs_target")"
   if [ -n "$_og_real_target" ]; then
-    _og_in_ops=0
-    _og_in_ws=0
+    _og_in_ops_raw=0
+    _og_in_ws_raw=0
+    _og_in_ops_res=0
+    _og_in_ws_res=0
     _og_in_git=0
 
+    # Canonicalize the boundary anchors ONCE — used as the comparison
+    # basis for both the raw-target check and the resolved-target check.
+    # This keeps the two checks internally consistent even when OPS_ROOT
+    # was resolved via a non-canonical path (e.g. a CWD-based walk-up
+    # that never ran through `pwd -P`).
+    _og_real_ops=""
     if [ -n "$OPS_ROOT" ]; then
       _og_real_ops="$(cd "$OPS_ROOT" 2>/dev/null && pwd -P)"
-      if [ -n "$_og_real_ops" ]; then
-        case "$_og_real_target" in
-          "$_og_real_ops") _og_in_ops=1 ;;
-          "$_og_real_ops"/*) _og_in_ops=1 ;;
-        esac
-      fi
     fi
-
+    _og_real_ws=""
     if [ -n "$WORKSPACE_DIR" ] && [ -d "$WORKSPACE_DIR" ]; then
       _og_real_ws="$(cd "$WORKSPACE_DIR" 2>/dev/null && pwd -P)"
-      if [ -n "$_og_real_ws" ]; then
-        case "$_og_real_target" in
-          "$_og_real_ws") _og_in_ws=1 ;;
-          "$_og_real_ws"/*) _og_in_ws=1 ;;
-        esac
-      fi
+    fi
+
+    # RAW check — the pre-resolution absolute target against the
+    # canonical boundary. Catches a registered workspace/<project> that
+    # is itself a symlink pointing OUTSIDE workspace/: the raw path
+    # still literally names the governed workspace/<project> location,
+    # even though resolving it lands elsewhere.
+    if [ -n "$_og_real_ops" ]; then
+      case "$_og_abs_target" in
+        "$_og_real_ops") _og_in_ops_raw=1 ;;
+        "$_og_real_ops"/*) _og_in_ops_raw=1 ;;
+      esac
+    fi
+    if [ -n "$_og_real_ws" ]; then
+      case "$_og_abs_target" in
+        "$_og_real_ws") _og_in_ws_raw=1 ;;
+        "$_og_real_ws"/*) _og_in_ws_raw=1 ;;
+      esac
+    fi
+
+    # RESOLVED check — the symlink-resolved target against the same
+    # canonical boundary. Catches a symlink OUTSIDE any governed tree
+    # that POINTS INTO one (the original #883 defense).
+    if [ -n "$_og_real_ops" ]; then
+      case "$_og_real_target" in
+        "$_og_real_ops") _og_in_ops_res=1 ;;
+        "$_og_real_ops"/*) _og_in_ops_res=1 ;;
+      esac
+    fi
+    if [ -n "$_og_real_ws" ]; then
+      case "$_og_real_target" in
+        "$_og_real_ws") _og_in_ws_res=1 ;;
+        "$_og_real_ws"/*) _og_in_ws_res=1 ;;
+      esac
     fi
 
     # Nearest-existing-ancestor git-repo probe on the REAL (symlink-
-    # resolved) target — catches any git repo, governed or not.
+    # resolved) target — catches any git repo, governed or not. A single
+    # probe suffices for both raw and resolved forms: directory
+    # traversal (`-d`, `git -C`) transparently follows symlinks at the
+    # OS level regardless of which path string reaches the location, so
+    # raw-path traversal and resolved-path traversal of the SAME logical
+    # target always land on the same physical directory.
     _og_probe="$_og_real_target"
     while [ -n "$_og_probe" ] && [ "$_og_probe" != "/" ] && [ ! -d "$_og_probe" ]; do
       _og_probe="$(dirname "$_og_probe")"
@@ -388,7 +444,9 @@ if [ -n "$FILE_PATH" ]; then
       _og_in_git=1
     fi
 
-    if [ "$_og_in_ops" = 0 ] && [ "$_og_in_ws" = 0 ] && [ "$_og_in_git" = 0 ]; then
+    if [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
+       && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
+       && [ "$_og_in_git" = 0 ]; then
       exit 0
     fi
   fi
