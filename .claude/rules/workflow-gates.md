@@ -52,6 +52,18 @@ The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_s
 
 **Mechanism:** each bootstrap skill writes its name to `.claude/session/active-bootstrap` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook sweeps stale markers from interrupted sessions so a crashed / killed skill can't leave the exemption open forever.
 
+### Out-of-repo exemption (apexyard#883)
+
+The pre-build gate exists to protect **governed content** — the ops fork itself and every registered `workspace/<project>` clone. A write target entirely outside those trees, and not inside any git repository at all (a home dotfile like `~/.zshrc`, `/etc`-style machine config, `/tmp` scratch files), is outside the gate's jurisdiction: there is nothing here for a ticket to track, and on a fork with GitHub Issues disabled there would otherwise be no legitimate way to satisfy the gate for routine machine setup.
+
+`require-active-ticket.sh` resolves the write target's real (symlink-free) path and exempts it only when **all three** of the following hold:
+
+- outside the ops fork
+- outside every registered `workspace/<project>`
+- not inside any git repository at all
+
+This is deliberately narrower than "not inside a *registered* repo" — being inside some unrelated, unregistered git repository does **not** exempt a write; only a target with no git repository anywhere in its ancestry qualifies. Symlinks are resolved before judging, so a symlink under `$HOME` that points into a governed tree cannot be used to slip a write past the gate. An unresolvable or ambiguous target (an unextractable Bash write-target, in particular) is never exempted here — it falls straight through to the ticket gate, unchanged. See `require-active-ticket.sh`'s "Out-of-governance exemption" comment block for the full fail-closed reasoning, and `.claude/hooks/tests/test_require_active_ticket_bash.sh` cases 31–38 for the test coverage.
+
 See AgDR-0011 + me2resh/apexyard#150 for the full design rationale.
 
 ## Migration Gate (3a) — dedicated ticket + AgDR
