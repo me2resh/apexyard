@@ -188,16 +188,23 @@ THREADED_REPO="{repo}"
 
 # 2a. Resolve the PR's BASE (host) repo ONCE — the canonical key for BOTH the
 # review posting AND the sign-off marker (#765). $THREADED_REPO (when
-# /design-review passed it, #687) is the hint; otherwise headRepository. Then
-# pr_base_repo (in _lib-review-markers.sh) resolves the base from the PR URL
-# (gh pr view has no baseRepository field) and falls back to the hint when
-# base == head — so same-repo PRs are unchanged.
+# /design-review passed it, #687) is the repo you already know hosts the PR;
+# otherwise fall back to the CURRENT checkout's own remote — a deterministic,
+# non-ambient source of truth. Do NOT fall back to an unscoped
+# `gh pr view {number} --json headRepository`: that call reads the WRONG field
+# (the PR's head/fork) AND is itself an ambient-resolved gh query that prefers
+# the parent/upstream — the exact class of bug that misresolved same-repo fork
+# PRs (#887). `pr_base_repo` (in _lib-review-markers.sh) now REQUIRES this
+# explicit repo and scopes its own gh query to it — never gh's ambient
+# default — so same-repo PRs still resolve unchanged.
 if [ -n "$THREADED_REPO" ]; then
-  HINT_REPO="$THREADED_REPO"
+  REPO_FOR_BASE="$THREADED_REPO"
 else
-  HINT_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+  origin_url=$(git remote get-url origin 2>/dev/null)
+  origin_url="${origin_url%.git}"
+  REPO_FOR_BASE=$(printf '%s' "$origin_url" | sed -E 's#^(https?://[^/]+/|git@[^:]+:)##')
 fi
-PR_HOST_REPO=$(pr_base_repo {number} "$HINT_REPO")
+PR_HOST_REPO=$(pr_base_repo {number} "$REPO_FOR_BASE")
 REPO="$PR_HOST_REPO"      # the --repo flag for gh pr view when writing the marker SHA
 PR_REPO="$PR_HOST_REPO"   # marker key = the base repo (matches the gate's lookup)
 

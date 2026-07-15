@@ -57,8 +57,8 @@ Invoked when a PR is ready for review.
 
 ## Input
 
-- PR number or URL
-- Repository (any repository the user authorises)
+- PR number or URL — `{number}` below
+- Repository (any repository the user authorises) — `{repo}` below, threaded in by the invoking skill (`/code-review <pr> [repo]`). Never re-derive this from an unscoped `gh pr view {number} --json headRepository` call — see the marker section's `#887` note.
 
 ## Codebase grounding — prefer semantic search when available
 
@@ -661,18 +661,33 @@ MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-tracker.sh"
 mkdir -p "$MARKER_HOME/.claude/session/reviews"
-# Resolve the head (fork) repo — used ONLY as the hint/fallback for the base
-# resolver below. It is NO LONGER the marker key (that was the cross-fork bug —
-# see #765).
-PR_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+# Resolve the repo YOU already know hosts this PR — that is how you got
+# {number} in the first place (the `{repo}` input above, when the invoking
+# skill threaded it through). NEVER re-derive this via an unscoped
+# `gh pr view {number} --json headRepository` call: that call (a) reads the
+# WRONG field for this purpose (the PR's head/fork, not its base) and (b) is
+# itself an unscoped, ambient-resolved gh query — the exact class of bug #887
+# fixed (gh's ambient default prefers the parent/upstream, which is wrong for
+# a same-repo fork PR opened against the fork's own main). When {repo} wasn't
+# threaded through, fall back to the CURRENT checkout's own remote — a
+# deterministic, non-ambient source of truth — never to a second gh guess.
+REPO="{repo}"
+if [ -z "$REPO" ] || [ "$REPO" = "{repo}" ]; then
+  origin_url=$(git remote get-url origin 2>/dev/null)
+  origin_url="${origin_url%.git}"
+  REPO=$(printf '%s' "$origin_url" | sed -E 's#^(https?://[^/]+/|git@[^:]+:)##')
+fi
 
 # Resolve the PR/MR HOST (base) repo — the repo the PR lives on. It is BOTH where
 # the review must be POSTED (posting to the fork fails on a cross-fork PR: the PR
 # lives on the base) AND the canonical key for the approval marker. `pr_base_repo`
-# (in _lib-review-markers.sh) parses the PR URL — gh pr view has no baseRepository
-# field — and falls back to PR_REPO when base == head, so same-repo PRs are
-# unchanged.
-PR_HOST_REPO=$(pr_base_repo {number} "$PR_REPO")
+# (in _lib-review-markers.sh) now REQUIRES this explicit $REPO and scopes its gh
+# query to it — NEVER gh's ambient/parent-preferring default (#887). Scoping to
+# the repo you already know hosts the PR is authoritative, not a guess: a PR
+# object only resolves through its own base repo's API path, so passing the
+# wrong repo here fails closed instead of silently keying the marker on an
+# unrelated repo.
+PR_HOST_REPO=$(pr_base_repo {number} "$REPO")
 
 # Marker keyed on the BASE repo (#765) — this MATCHES what block-unreviewed-merge.sh
 # looks up: the gate keys on the merge command's --repo / API-path, which for a

@@ -72,11 +72,21 @@ MARKER_HOME="${OPS_ROOT:-$REPO_ROOT}"
 # Base (host) repo — the canonical marker key: it matches solution-architect.md's
 # architecture marker AND the require-architecture-review.sh gate's lookup (which
 # keys on the merge command's base repo, #765). Prefer the repo resolved in step 1
-# (already the base, #687) as the hint; else headRepository. pr_base_repo confirms
-# the base from the PR URL and falls back to the hint when base == head, so
-# same-repo PRs are unchanged.
-HINT_REPO="${REPO:-$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)}"
-PR_HOST_REPO=$(pr_base_repo <pr> "$HINT_REPO")
+# (already the base, #687); if it wasn't given, fall back to the CURRENT
+# checkout's own remote — a deterministic, non-ambient source of truth. Do NOT
+# fall back to an unscoped `gh pr view <pr> --json headRepository`: that call
+# reads the wrong field (the PR's head/fork) and is itself an ambient-resolved
+# gh query that can silently prefer the wrong repo in a fork checkout (#887).
+# pr_base_repo now REQUIRES this repo and scopes its own gh query to it — never
+# gh's ambient default — so same-repo PRs still resolve unchanged.
+if [ -n "$REPO" ]; then
+  REPO_FOR_BASE="$REPO"
+else
+  origin_url=$(git remote get-url origin 2>/dev/null)
+  origin_url="${origin_url%.git}"
+  REPO_FOR_BASE=$(printf '%s' "$origin_url" | sed -E 's#^(https?://[^/]+/|git@[^:]+:)##')
+fi
+PR_HOST_REPO=$(pr_base_repo <pr> "$REPO_FOR_BASE")
 PR_REPO="$PR_HOST_REPO"
 REX=$(review_marker_path "$PR_HOST_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]

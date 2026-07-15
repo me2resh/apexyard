@@ -89,7 +89,7 @@ review_marker_path() {
   printf '%s/%s__%s-%s.approved' "$reviews_dir" "$safe_repo" "$pr" "$role"
 }
 
-# pr_base_repo <pr> [hint_repo]
+# pr_base_repo <pr> <repo>
 #
 # Echoes the PR/MR's BASE (host) repo as "owner/repo" — the repo the PR *lives
 # on* and is numbered against. This is the canonical key for approval markers
@@ -108,38 +108,68 @@ review_marker_path() {
 # a valid approval never satisfied the gate. Keying every writer on the base via
 # this helper makes writer/reader agreement STRUCTURAL, not coincidental.
 #
+# WHY A REQUIRED <repo>, NOT GH'S AMBIENT DEFAULT (me2resh/apexyard#887)
+# -----------------------------------------------------------------------
+# An earlier version queried `gh pr view "$pr" --json url` with NO --repo,
+# trusting gh's ambient base-repo resolution (from the working copy's remotes)
+# to prefer the parent/upstream. That assumption holds for a PR filed FROM a
+# fork branch TO upstream (ambient parent happens to equal the true base) but
+# NOT for a SAME-REPO fork PR (opened against the fork's own main) — there
+# gh's ambient default STILL prefers the parent even though the true base is
+# the fork itself. The unscoped call then SUCCEEDS with the WRONG repo: it
+# resolves to an unrelated PR of the same number on the parent, and the old
+# hint/fallback path only fired on a gh ERROR, never on this wrong-but-
+# successful resolution. Reviews got posted to, and merge markers got keyed
+# on, a public repo the PR never lived on. See #887.
+#
+# The fix: never let gh guess. `<repo>` is now REQUIRED — the repo the CALLER
+# already knows hosts this PR (that is how it found the PR number in the
+# first place: an explicit `[repo]` skill argument, an `owner/repo#N` the user
+# named, or the current checkout's own remote). Scoping to it is authoritative,
+# not a "hint": a PR object only resolves through its own base repo's API
+# namespace, so `gh pr view <pr> --repo <repo>` can only succeed when <repo>
+# IS that PR's base — querying through the wrong repo (e.g. the head/fork of a
+# genuine cross-fork PR) fails closed (gh 404s) instead of silently returning
+# an unrelated repo's data. Do NOT pass the head/fork repo here on the
+# assumption it's "close enough" — pass the repo you are confident hosts the
+# PR (almost always the project's own base repo you're reviewing/merging
+# against).
+#
 # `gh pr view` exposes no baseRepository field, but the PR URL is ALWAYS rooted
 # on the base repo — parse owner/repo from it (handles GitHub /pull/ and GitLab
-# /-/merge_requests/, including nested GitLab groups). Falls back to <hint_repo>
-# (typically the headRepository value) when the URL can't be parsed or gh is
-# unavailable — so SAME-REPO PRs (base == head) resolve exactly as before and
-# this change is a provable no-op for them.
+# /-/merge_requests/, including nested GitLab groups). Falls back to the passed
+# <repo> when the URL can't be parsed or the scoped gh call fails — so SAME-REPO
+# PRs (base == head) resolve exactly as before and this change is a provable
+# no-op for them.
 #
 # Args:
-#   pr        — the PR/MR number.
-#   hint_repo — optional "owner/repo": the VALUE fallback when the URL can't be
-#               parsed or gh is unavailable. It is NEVER used to scope the gh
-#               query — see the WHY-UNSCOPED note in the body below.
+#   pr    — the PR/MR number.
+#   repo  — REQUIRED "owner/repo": the repo the caller already knows hosts
+#           this PR. Used to SCOPE the gh query (`--repo`), never omitted in
+#           favour of gh's ambient default.
 #
-# Output (stdout): "owner/repo", or the hint (or empty) when unresolved.
+# Output (stdout): "owner/repo" derived from the resolved PR URL, or the
+# passed-in <repo> when the scoped query fails/is unparseable (fail-soft — the
+# caller's own repo is still the best available answer).
+# Exit code: 0 normally; 1 (with a stderr message, no stdout) when <pr> is
+# given but <repo> is missing — there is nothing safe to scope the query to.
 pr_base_repo() {
-  local pr="${1:-}" hint="${2:-}" url base
+  local pr="${1:-}" repo="${2:-}" url base
   if [ -z "$pr" ]; then
-    [ -n "$hint" ] && printf '%s' "$hint"
+    [ -n "$repo" ] && printf '%s' "$repo"
     return 0
   fi
-  # WHY UNSCOPED (me2resh/apexyard#770 review): query with NO --repo. gh's ambient
-  # base-repo resolution (from the working copy's remotes) prefers the parent /
-  # upstream — i.e. the BASE repo — which is exactly the key we want. Scoping with
-  # `--repo "$hint"` (the head/fork) would look up the base-numbered PR on the fork,
-  # where it does not exist → gh errors → empty url → the hint (fork) fallback fires
-  # → the #765 divergence is re-created on the very cross-fork path this helper
-  # exists to fix. So the hint is a VALUE fallback only, never a query scope.
-  url=$(gh pr view "$pr" --json url --jq '.url' 2>/dev/null)
+  if [ -z "$repo" ]; then
+    echo "_lib-review-markers.sh: pr_base_repo requires an explicit <repo> (never gh's ambient default — see me2resh/apexyard#887)" >&2
+    return 1
+  fi
+  # ALWAYS scoped to the caller-supplied repo — never an unscoped/ambient gh
+  # call. See the WHY-A-REQUIRED-REPO note above.
+  url=$(gh pr view "$pr" --repo "$repo" --json url,baseRefName --jq '.url' 2>/dev/null)
   base=$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
   if [ -n "$base" ] && [ "$base" != "$url" ]; then
     printf '%s' "$base"
   else
-    [ -n "$hint" ] && printf '%s' "$hint"
+    printf '%s' "$repo"
   fi
 }
