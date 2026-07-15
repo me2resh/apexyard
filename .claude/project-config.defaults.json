@@ -68,6 +68,14 @@
       "build",
       "perf",
       "sync"
+    ],
+    "_trunk_whitelist_comment": "Trunk/shared-integration branch names validate-branch-name.sh exempts from the {type}/{TICKET}-{description} shape entirely. Includes `development` — the gitflow long form some Bitbucket/gitflow remotes use as the integration branch, missed by the original hardcoded main/master/develop/dev list. Extend in .claude/project-config.json (REPLACES this array) to add client-mandated trunk names (e.g. `trunk`, `staging`). See me2resh/apexyard#888.",
+    "trunk_whitelist": [
+      "main",
+      "master",
+      "develop",
+      "dev",
+      "development"
     ]
   },
 

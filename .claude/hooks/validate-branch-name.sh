@@ -85,7 +85,28 @@ fi
 
 # Allow trunk and shared integration branches.
 # Match the dev/main release model (apexyard#116) — dev is a valid trunk.
-if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "develop" ] || [ "$CURRENT_BRANCH" = "dev" ]; then
+#
+# The trunk list is project-configurable via .claude/project-config.json
+# (.branch.trunk_whitelist), mirroring how .branch.type_whitelist is read
+# below. This covers client-mandated trunk names apexyard doesn't ship by
+# default (e.g. `trunk`, `staging`) without another upstream PR per name.
+# Defaults ship at .claude/project-config.defaults.json and include
+# `development` — the gitflow long form used as the integration branch by
+# many Bitbucket/gitflow remotes, missed by the original hardcoded exact-name
+# list. See me2resh/apexyard#888.
+REPO_ROOT_FOR_TRUNK=$(git rev-parse --show-toplevel 2>/dev/null)
+TRUNK_BRANCHES=""
+if [ -n "$REPO_ROOT_FOR_TRUNK" ] && [ -f "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$REPO_ROOT_FOR_TRUNK/.claude/hooks/_lib-read-config.sh"
+  TRUNK_BRANCHES=$(config_get '.branch.trunk_whitelist[]')
+fi
+# Fallback if config unavailable (jq missing, standalone install, no config
+# entry, etc.) — preserves today's behaviour plus the `development` fix.
+if [ -z "$TRUNK_BRANCHES" ]; then
+  TRUNK_BRANCHES=$'main\nmaster\ndevelop\ndev\ndevelopment'
+fi
+if echo "$TRUNK_BRANCHES" | grep -qxF "$CURRENT_BRANCH"; then
   exit 0
 fi
 
