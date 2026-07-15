@@ -34,7 +34,7 @@ The fact that this skill now runs the merge as part of its default flow does **n
 
 ## Process
 
-### 1. Parse the PR number and flags
+### 1. Parse the PR number, the repo, and flags
 
 Extract the PR number from `$ARGUMENTS`. If no number is given, try to infer from:
 
@@ -42,6 +42,8 @@ Extract the PR number from `$ARGUMENTS`. If no number is given, try to infer fro
 - The user's most recent message, if it named a PR explicitly
 
 If the PR number is ambiguous (multiple PRs on the branch, unclear which was approved), STOP and ask the user which PR.
+
+**Also resolve the repo (`REPO`).** Accept a fully-qualified `owner/repo#N` form, or an explicit `owner/repo` token in `$ARGUMENTS`. When neither was given, fall back to the CURRENT checkout's own remote (`git remote get-url origin`, parsed to `owner/repo`) — a deterministic, non-ambient source of truth. Do **NOT** resolve this via an unscoped `gh pr view <pr> --json headRepository`: that call reads the wrong field (the PR's head/fork, not something to key markers on) and is itself an ambient-resolved gh query that can silently prefer the wrong repo in a fork checkout (me2resh/apexyard#887). Every `gh pr view` call below must pass `--repo "$REPO"`.
 
 Recognise the optional `--no-merge` flag. When present, the skill writes the marker but does NOT run the merge. Useful for the rare cases below — see § "Notes" for when to use it.
 
@@ -59,7 +61,7 @@ Only proceed past this step if the user has given an unambiguous per-PR approval
 ### 3. Verify the PR state
 
 ```bash
-gh pr view <pr> --repo <owner/repo> --json state,isDraft,mergeable,headRefOid
+gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid
 ```
 
 Sanity checks:
@@ -106,15 +108,15 @@ MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 # Source the marker path helper — repo-qualified naming (#485, AgDR-0060).
 # shellcheck source=/dev/null
 . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
-# The PR's HEAD (fork) repo — used ONLY as the hint/fallback for the base resolver.
-PR_REPO=$(gh pr view <pr> --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
 # The PR's BASE (host) repo — the canonical marker key AND the repo you merge
 # against. Rex wrote its marker under the BASE (that is what code-reviewer.md and
-# the merge gate use, #765), so read + write markers here. `pr_base_repo` parses
-# the PR URL and falls back to PR_REPO when base == head, so same-repo PRs are
-# unchanged. Use $PR_HOST_REPO as `--repo` for EVERY gh call in this skill
-# (`<owner/repo>` throughout = $PR_HOST_REPO) — you cannot merge a fork's copy.
-PR_HOST_REPO=$(pr_base_repo <pr> "$PR_REPO")
+# the merge gate use, #765), so read + write markers here. `pr_base_repo` REQUIRES
+# the $REPO resolved in step 1 (the repo you already know hosts this PR) and
+# scopes its own gh query to it — never gh's ambient/parent-preferring default
+# (#887) — so same-repo PRs still resolve unchanged. Use $PR_HOST_REPO as
+# `--repo` for EVERY gh call in this skill (`<owner/repo>` throughout =
+# $PR_HOST_REPO) — you cannot merge a fork's copy.
+PR_HOST_REPO=$(pr_base_repo <pr> "$REPO")
 REX=$(review_marker_path "$PR_HOST_REPO" <pr> rex "$MARKER_HOME")
 [ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
