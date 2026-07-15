@@ -173,7 +173,13 @@ export function deriveGatesFromSettings(settings: RawSettings): GateDefinition[]
 /** Converts a Claude Code `if: "Bash(<glob>)"` glob (shell-style `*` wildcard) into an anchored RegExp. */
 export function globToRegExp(glob: string): RegExp {
   const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
-  return new RegExp(`^${escaped}$`);
+  // `s` (dotall) flag: without it, `.` never matches `\n`, so `.*` cannot
+  // cross the newlines in a multi-line command string (e.g. a conventional
+  // commit's `-m $'subject\n\nbody'`, or a `gh issue create --body` with a
+  // multi-line body). A gate whose glob fails to match a real multi-line
+  // command is a silent fail-open (see gateMatchesClaudeMatcher below) —
+  // #899.
+  return new RegExp(`^${escaped}$`, "s");
 }
 
 /**

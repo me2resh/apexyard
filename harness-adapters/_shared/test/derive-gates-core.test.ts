@@ -59,6 +59,43 @@ test("globToRegExp anchors — a glob must match the whole command, not a substr
   assert.ok(!re.test("echo 'not git commit at all but contains git commit inside'"));
 });
 
+// Regression test for #899: globToRegExp must carry the `s` (dotall) flag so
+// `.*` crosses embedded newlines. Without it, a multi-line command string
+// (the conventional-commit norm — a subject line plus a body) fails to
+// match its own `Bash(<prefix> *)` glob, and the consuming gate is silently
+// skipped (fail-open) instead of firing. Both assertions below FAIL if the
+// `s` flag is removed from globToRegExp's `new RegExp(...)` call.
+test("globToRegExp — the derived RegExp carries the dotall (s) flag, so it matches across embedded newlines (#899)", () => {
+  const re = globToRegExp("git commit *");
+  assert.ok(re.flags.includes("s"), "globToRegExp's RegExp must carry the `s` (dotall) flag");
+});
+
+test("globToRegExp matches a multi-line `git commit -m` command (conventional-commit subject + body) — #899", () => {
+  const re = globToRegExp("git commit *");
+  // Real embedded newlines (template literal), not escaped "\n" text — this
+  // is what a shell actually hands the hook for `git commit -m $'subject\n\nbody'`.
+  const multiLineCommit = `git commit -m $'feat: add widget
+
+- detail one
+- detail two
+
+Closes #1'`;
+  assert.ok(re.test(multiLineCommit), "a multi-line git commit command must match its own Bash(git commit *) glob");
+});
+
+test("globToRegExp matches a multi-line `gh issue create --body` command — #899", () => {
+  const re = globToRegExp("gh issue create *");
+  const multiLineIssueCreate = `gh issue create --title "Bug: X" --body "Given a user
+When they do Y
+Then Z happens
+
+Repro steps here."`;
+  assert.ok(
+    re.test(multiLineIssueCreate),
+    "a multi-line gh issue create --body command must match its own Bash(gh issue create *) glob",
+  );
+});
+
 // ---------------------------------------------------------------------
 // deriveGatesFromSettings — keyed by raw Claude matcher token, not by any
 // runtime's tool id.
