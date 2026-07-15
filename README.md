@@ -42,6 +42,15 @@ Claude Code is the default driver, but the rules, hooks, and templates are plain
 
 *Under the hood:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones — never a separate copy that can drift out of sync. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/`](docs/harnesses/README.md)**.
 
+**Live conformance, not just a one-off proof.** The 2026-07-09 dates above are single manual runs. A daily, credentialed [Conformance CI](docs/conformance-ci.md) job keeps proving it — one real gated turn per harness, asserted against the gate's own live output:
+
+![opencode conformance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/me2resh/apexyard/conformance-badge/opencode.json)
+![pi conformance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/me2resh/apexyard/conformance-badge/pi.json)
+![codex conformance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/me2resh/apexyard/conformance-badge/codex.json)
+![cursor conformance](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/me2resh/apexyard/conformance-badge/cursor.json)
+
+A badge only reads **"(proven)"** after 3 consecutive scheduled green runs — any red run resets that harness's streak. Cursor's badge is a static "documented-manual" entry; no scheduled run can flip it. See [`docs/conformance-ci.md`](docs/conformance-ci.md) for the secrets an operator provisions and the full rationale ([AgDR-0095](docs/agdr/AgDR-0095-conformance-ci-badge.md)).
+
 > **Not on Claude Code?** opencode, pi, and Codex run the same gates today (Cursor partially). Install your tool's adapter — the one command in the table above — and the identical rules enforce. One honest caveat before the Quick Start below: the `/setup`, `/handover`, and other `/…` commands are Claude Code **skills**, a convenience layer. The enforcement that actually matters — the gates — is what your tool's adapter delivers; on another tool you set up the same plain-text config files by hand (the steps note how).
 
 ## Codex Adapter
