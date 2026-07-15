@@ -128,6 +128,15 @@ run_case "main is exempt as trunk" \
 run_case "dev is exempt as trunk (release-cut model)" \
   "git push origin dev" 0
 
+# ---- #888: 'development' (gitflow long form) trunk exemption -----------
+#
+# Bug: the original hardcoded exact-name list (main|master|develop|dev)
+# missed `development`, the long form used as the integration branch by
+# many Bitbucket/gitflow remotes — a legitimate mirror push to that branch
+# was wrongly blocked as a malformed feature branch.
+run_case "#888: development is exempt as trunk (gitflow long form)" \
+  "git push origin development" 0
+
 # Non-conforming push refs → block (the push-ref is now the source of truth).
 run_case "explicit ref: bogus-branch blocks" \
   "git push origin bogus-branch" 2
@@ -284,6 +293,66 @@ run_case "#693: no-cd explicit non-conforming ref still blocks" \
   "git push origin bogus-branch" 2
 run_case "#693: no-cd no-ref falls back to host HEAD (bogus) → blocks" \
   "git push origin" 2
+
+# ---- #888: config-driven trunk whitelist --------------------------------
+#
+# .branch.trunk_whitelist in .claude/project-config.json is config-driven,
+# mirroring .branch.type_whitelist. A project can add a client-mandated
+# trunk name (e.g. `trunk`) without another upstream PR per name. A real
+# malformed feature branch must still block even with the override present.
+
+# Like make_sandbox_with_wrong_local_branch, but also drops a
+# .claude/project-config.json overriding .branch.trunk_whitelist so the
+# custom name is exempt. Since config_get shallow-merges at the top-level
+# key, this override's "branch" object replaces the defaults' "branch"
+# object wholesale — type_whitelist then falls back to the hook's hardcoded
+# TYPES default, which still contains "feature"/"fix" so the ticket-shape
+# assertions below are unaffected.
+make_sandbox_with_custom_trunk() {
+  local sb
+  sb=$(make_sandbox_with_wrong_local_branch)
+  cat > "$sb/.claude/project-config.json" <<'JSON'
+{
+  "branch": {
+    "trunk_whitelist": ["main", "master", "develop", "dev", "development", "trunk"]
+  }
+}
+JSON
+  echo "$sb"
+}
+
+run_custom_trunk_case() {
+  local label="$1" cmd="$2" want_rc="$3"
+  local sb; sb=$(make_sandbox_with_custom_trunk)
+  local input
+  input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
+  local got_rc got_stderr
+  got_stderr=$(cd "$sb" && echo "$input" | bash .claude/hooks/validate-branch-name.sh 2>&1 >/dev/null)
+  got_rc=$?
+  rm -rf "$sb"
+
+  if [ "$got_rc" != "$want_rc" ]; then
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc" >&2
+    echo "    cmd: $cmd" >&2
+    echo "    stderr: ${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    return
+  fi
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
+run_custom_trunk_case "#888: config-added custom trunk 'trunk' is exempt" \
+  "git push origin trunk" 0
+
+run_custom_trunk_case "#888: 'development' still exempt via config override (explicitly listed)" \
+  "git push origin development" 0
+
+run_custom_trunk_case "#888: real malformed feature branch still blocks with trunk override present" \
+  "git push origin feature/no-ticket-id" 2
+
+run_custom_trunk_case "#888: bogus branch still blocks with trunk override present" \
+  "git push origin bogus-branch" 2
 
 # ---- Summary ------------------------------------------------------------
 
