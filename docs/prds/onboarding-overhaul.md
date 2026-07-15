@@ -5,7 +5,7 @@
 **Status**: Draft
 **Author**: Mariam (Product Manager)
 **Created**: 2026-07-15
-**Last Updated**: 2026-07-15
+**Last Updated**: 2026-07-15 (CEO refinement: standalone re-entry point added)
 **Ticket**: [me2resh/apexyard#902](https://github.com/me2resh/apexyard/issues/902)
 
 ---
@@ -41,6 +41,7 @@ A single onboarding surface has to solve both without making the technical adopt
 3. A non-technical adopter can look up any of the six core SDLC terms (issue, ticket, PR, merge, branch, CI) in plain language *at the point they first encounter it in framework output* — without leaving the conversation or reading a separate doc end-to-end.
 4. Onboarding depth visibly adapts to the adopter's declared/inferred technical level — terse and capability-dense for an engineer, narrated and vocabulary-taught for a non-technical user — without forking into two entirely separate skills to maintain.
 5. The overhaul ships incrementally: a thin, end-to-end first slice lands before the full vision, so the gap starts closing in weeks, not quarters.
+6. The teach-in-context layer is not a one-time, first-run-only event. Every adopter can deliberately re-open the capability tour and the plain-language glossary at any later point — via a standalone entry point, independent of re-running `/setup` — so a lesson missed (or forgotten) on day one isn't gone for good.
 
 ### Non-Goals (Out of Scope)
 
@@ -48,7 +49,7 @@ A single onboarding surface has to solve both without making the technical adopt
 - A GUI, web dashboard, or any interface outside the Claude Code conversational surface. This is a conversational (skill + rule + hook) design, matching every other ApexYard surface.
 - Any change to who is allowed to do what (permissions, approval gates, CEO merge gate). The teach-in-context layer explains the existing gates in plain language; it does not loosen or change them.
 - Translating the framework into non-English languages. Plain-language English is in scope; localization is a separate initiative.
-- An in-depth interactive tutorial / course product. The guided first-win is one concrete action with one visible success moment, not a multi-lesson curriculum.
+- An in-depth interactive tutorial / course product. The guided first-win is one concrete action with one visible success moment, not a multi-lesson curriculum — and the standalone re-entry point (US-6) re-opens that same tour/glossary content on demand, it does not grow into a separate lesson sequence.
 - Long-term retention/engagement mechanics (streaks, badges, progress bars). Scope here is *first-run clarity*, not gamification.
 
 ### Success Metrics
@@ -130,6 +131,22 @@ A single onboarding surface has to solve both without making the technical adopt
 
 ---
 
+### US-6: Re-open the tutorial anytime (standalone entry point)
+
+> As any adopter — technical or non-technical — I want to re-open the guided capability tour and teach-in-context glossary at any point after my first session, so that I can review the vocabulary or the framework's capabilities again without re-running `/setup` or pretending my fork is fresh.
+
+This is a **first-class requirement**, not a sub-step buried inside `/setup`. The teach-in-context layer must be invokable in two independent ways: (1) automatically, as part of the guided first-run path (US-1 through US-4), and (2) standalone, on demand, at any later point in the fork's life.
+
+**Acceptance Criteria**:
+
+- [ ] A standalone entry point exists (e.g. a `/tutorial` or `/learn` skill) that is entirely independent of `/setup` — invoking it does not read or write `onboarding.yaml`, does not re-trigger fresh-fork detection, and does not require answering the handover-vs-new-project branch again.
+- [ ] The standalone entry point re-opens the same capability tour and teach-in-context glossary content the first-run flow uses, rendered in the adopter's current depth mode (inferring or asking for a mode if none is set for this session, per US-5).
+- [ ] The standalone entry point is discoverable without already knowing its name: the first-run flow's closing message mentions it explicitly (e.g. "come back anytime with `/tutorial`"), and it is listed in the framework's skill index alongside every other skill.
+- [ ] Running the standalone entry point is read/teach-only — it never re-runs `/setup`'s or `/handover`'s side effects (no `onboarding.yaml` rewrite, no duplicate registry entry, no repeated guided-first-win ticket creation unless the adopter explicitly asks to redo that part).
+- [ ] The standalone entry point works identically whether the adopter went through the guided first-run flow originally, skipped it, or is on a fork configured before this PRD's flow existed — it does not depend on first-run session state to function.
+
+---
+
 ### Edge Cases
 
 | Scenario | Expected Behavior |
@@ -140,6 +157,8 @@ A single onboarding surface has to solve both without making the technical adopt
 | Guided first win (US-3) fails partway (e.g. `/feature` hits a hook block for an unrelated reason) | Surface the real error plainly, do not fabricate a fake success message, offer to retry or skip — same honesty standard as the rest of the framework (see ticket-vocabulary rule: never claim a ticket exists that doesn't). |
 | Adopter explicitly states a technical level up front ("I'm a non-technical founder", "I'm a senior engineer") | Skip the inference/ask step in US-5 entirely and honor the stated level immediately. |
 | Terse-mode adopter later brings on a non-technical teammate to the same fork | Depth mode is a per-session/per-conversation setting, not a permanent fork-wide config flip — the teammate's own session can independently run in guided mode. |
+| Adopter invokes the standalone entry point (US-6) on a fork that never ran the new first-run flow at all (e.g. configured before this PRD shipped, or via `--all`-style scripted `/setup`) | The standalone entry point must still work — it does not depend on any state the first-run flow would have written. Treat it as a cold invocation: infer/ask depth mode fresh, show the tour and glossary from scratch. |
+| Adopter invokes the standalone entry point mid-way through an unrelated active ticket/session | Treat it as a self-contained side conversation — it doesn't touch the active-ticket marker or any in-progress build state; the adopter picks back up where they left off once done. |
 
 ---
 
@@ -156,8 +175,9 @@ A single onboarding surface has to solve both without making the technical adopt
 | FR-5 | Teach-in-context asides trigger just-in-time on first encounter of each of the five terms, only in guided mode | Must | Terse-mode adopters see zero asides by default |
 | FR-6 | A technical-level signal (inferred from stack description, or asked directly) sets terse vs. guided mode for the session | Must | Adopter can override in plain language at any time |
 | FR-7 | The thin first slice (see Design → walking-skeleton scope below) ships as a single, mergeable, end-to-end unit before the full vision's remaining pieces | Must | Matches the framework's own walking-skeleton discipline — kept, not throwaway |
-| FR-8 | The on-demand glossary lookup ("what's a merge?") works in any session regardless of which skill is active | Should | Nice-to-have breadth; the first-run-flow-scoped version (FR-5) is the Must |
+| FR-8 | The on-demand glossary lookup ("what's a merge?") works in any session regardless of which skill is active | Should | Distinct from FR-10: this is a single-term lookup mid-conversation, not the full standalone re-entry point |
 | FR-9 | Depth-mode preference is visible to the adopter on request ("what mode am I in?") | Could | Small transparency affordance, not core to the loop |
+| FR-10 | A standalone entry point (e.g. `/tutorial` or `/learn`) re-opens the full capability tour + teach-in-context glossary independent of `/setup`, at any point after the first session | Must | First-class requirement, not a `/setup` sub-step (see US-6) — CEO-directed refinement on this PRD |
 
 **Priority Key**: Must (required for launch) | Should (important) | Could (nice to have)
 
@@ -202,9 +222,30 @@ A single onboarding surface has to solve both without making the technical adopt
     +---> accept --> [/feature runs] --> [🎉 first feature filed — #N]
     |
     +---> decline --> [note: "run /feature anytime" — exit flow]
+    |
+    v
+[Closing message mentions: "come back anytime with /tutorial"]
 ```
 
 Teach-in-context asides (US-4) attach to this flow wherever a core term first appears — e.g. the first time "ticket" appears in the capability tour (guided mode only), the first time a PR would be opened, the first time a merge gate is mentioned.
+
+**Standalone re-entry (US-6) — independent of the flow above:**
+
+```
+[Adopter runs /tutorial (or /learn) — any time, any session]
+    |
+    v
+[Depth mode: use current session's mode, or infer/ask fresh]
+    |
+    v
+[Same capability tour + teach-in-context glossary content]
+    |
+    v
+[Exit — no onboarding.yaml touched, no registry entry touched,
+ no re-run of /setup or /handover side effects]
+```
+
+This second diagram is deliberately disconnected from the first — the standalone entry point does not require having gone through the first-run flow, does not depend on any state it would have set, and does not feed back into it.
 
 ### Wireframes / Mockups
 
@@ -223,6 +264,7 @@ Not applicable — conversational surface only, no visual UI. See User Flow abov
 | `/feature` skill (ticket creation) | Internal | Ready — used for the guided first win | Platform / skill author |
 | `onboarding-check.sh` SessionStart hook (detects unconfigured fork) | Internal | Ready — likely extension point for triggering the new flow | Platform Engineer |
 | Ticket-vocabulary rule (`.claude/rules/ticket-vocabulary.md`) | Internal | Ready — guided first win must not fabricate tracker state | N/A (governs implementation) |
+| New standalone entry-point skill (e.g. `/tutorial` or `/learn`, FR-10 / US-6) | Internal | New — to be authored, name TBD in tech design | Product Manager + skill author |
 
 ### Technical Constraints
 
@@ -237,8 +279,8 @@ Not applicable — conversational surface only, no visual UI. See User Flow abov
 
 ### Rollout Strategy
 
-- [ ] Phased rollout — the thin first slice ships first as a walking-skeleton-class ticket (kept, not throwaway): capability tour + handover-vs-new branch + guided first win, terse mode only, no teach-in-context layer yet. This alone closes the technical adopter's signal.
-- [ ] The teach-in-context education layer (US-4) and depth adaptivity (US-5) ship as a second increment once the first slice is validated with a real adopter session.
+- [ ] Phased rollout — the thin first slice ships first as a walking-skeleton-class ticket (kept, not throwaway): capability tour + handover-vs-new branch + guided first win, terse mode only, no teach-in-context glossary content yet — but the standalone entry point skill (US-6) ships in this slice too, re-opening the capability tour on demand. This alone closes the technical adopter's signal, plus makes "not one-time-only" true from day one.
+- [ ] The teach-in-context glossary (US-4) and depth adaptivity (US-5) ship as a second increment once the first slice is validated with a real adopter session — the same standalone entry point from increment 1 grows to serve the fuller glossary + guided-mode content, rather than a new entry point being introduced later.
 - [ ] Both increments go through the normal SDLC (PRD → tech design → Solution Architect review → build → Rex review → QA) — no exemption; this is user-facing product surface, not a spike/prototype.
 
 ### Thin First Slice vs. Full Vision
@@ -248,11 +290,12 @@ Not applicable — conversational surface only, no visual UI. See User Flow abov
 | Capability tour | Yes — condensed, terse-mode only | Yes — same, plus a guided-mode fuller version |
 | Handover-vs-new branch | Yes | Yes (unchanged) |
 | Guided first win | Yes — `/feature` only | Yes — potentially other suggested first actions |
+| Standalone re-entry point (US-6 / FR-10) | Yes — re-opens the capability tour only | Yes — re-opens capability tour + full teach-in-context glossary, respecting depth mode |
 | Teach-in-context glossary | No | Yes — all five core terms, just-in-time |
 | Technical-level adaptivity | No — single terse mode for everyone | Yes — full terse/guided split with override |
 | On-demand glossary lookup (any session) | No | Yes (FR-8) |
 
-The first slice alone directly answers the technical adopter's signal (US-1, US-2, US-3 in terse form). It deliberately defers the non-technical adopter's vocabulary signal (US-4, US-5) to the second increment — shipping *something* end-to-end quickly, per the framework's own walking-skeleton discipline, rather than holding the whole PRD for the harder education-layer design.
+The first slice alone directly answers the technical adopter's signal (US-1, US-2, US-3 in terse form) — and, per the CEO's refinement, ships the standalone re-entry point (US-6) from the start, so "re-open the tour" is never a first-run-only affordance even before the fuller education layer exists. It deliberately defers the non-technical adopter's vocabulary signal (US-4, US-5) to the second increment — shipping *something* end-to-end quickly, per the framework's own walking-skeleton discipline, rather than holding the whole PRD for the harder education-layer design.
 
 ---
 
@@ -264,6 +307,7 @@ The first slice alone directly answers the technical adopter's signal (US-1, US-
 | Does the guided first win need a project already registered (post-branch), or can it run before the branch resolves, using placeholder project context? | Tech Lead | Open | To be resolved during tech design — likely: after, so the filed ticket lands somewhere real |
 | Should the on-demand glossary (FR-8, "Should" priority) ship in increment 1 or 2? | Product Manager | Open | Currently scoped to increment 2 with US-4; revisit if increment 1 build cost leaves headroom |
 | Where does the plain-language glossary content live — a new `docs/` reference file, inline in the skill, or a shared data file multiple skills read? | Tech Lead | Open | To be resolved during tech design; must support FR-8's "any session" reuse |
+| What's the standalone entry point named — `/tutorial`, `/learn`, or an admin "Learn" action — and does it live as its own skill or as a mode of an existing one? | Product Manager + Tech Lead | Open | To be resolved during tech design (US-6 / FR-10); either name works functionally, this is a naming/discoverability call |
 
 ---
 
