@@ -259,7 +259,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/idea` | Capture a new product idea to the shared backlog |
 | `/handover` | Onboard an external repo — harnessability scoring across 5 dimensions, checklist-pick which docs to generate, and offer to file Next Steps as tracker tickets |
 | `/onboard` | Guided first-run onboarding — capability tour, handover-vs-new-project branch, guided first win (front door for a brand-new fork) |
-| `/tutorial` | Standalone, side-effect-free re-entry to the capability tour + full teach-in-context glossary — replays the roles/skills/gates walkthrough and all five glossary terms any time, on any fork state, respecting depth mode, independent of `/setup`/`/handover` |
+| `/tutorial` | Standalone re-entry to the capability tour + full glossary — replays the roles/skills/gates walkthrough and all five terms any time, respecting depth mode |
 | `/extract-features` | Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) for rewrites |
 | `/feature-diagram` | Per-feature Mermaid flowchart of routes / models / jobs / screens involved |
 | `/process` | Extract a business process from registered repos and emit lint-clean BPMN 2.0 |

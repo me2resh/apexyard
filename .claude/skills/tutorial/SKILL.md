@@ -1,6 +1,6 @@
 ---
 name: tutorial
-description: "Standalone, side-effect-free re-entry to the capability tour + full teach-in-context glossary — replays the roles/skills/gates walkthrough and all five glossary terms any time, on any fork state, respecting depth mode. No /setup or /handover coupling."
+description: "Standalone re-entry to the capability tour + full glossary — replays the roles/skills/gates walkthrough and all five terms any time, respecting depth mode. No /setup or /handover coupling."
 disable-model-invocation: false
 argument-hint: ""
 effort: low
