@@ -59,7 +59,13 @@
 #
 #   Redirection / pipes-to-disk
 #     - cmd > file, cmd >> file, cmd 2> file
+#     - cmd &> file, cmd >| file (force-clobber), cmd <> file (read-write
+#       open, #931)
 #     - tee
+#
+#   NOT matched as a write (deliberate exclusion, #931):
+#     - cmd >(subshell), cmd <(subshell) — process substitution. Looks
+#       adjacent to a redirect but is a command, not a file target.
 #
 #   In-place text editors
 #     - sed -i (in-place edit, GNU + BSD `''` form)
@@ -163,8 +169,46 @@ _bdw_starts_with_git_subcommand() {
 # forms), the target can't start there regardless of how much whitespace
 # came before it. The whitespace requirement was never what excluded
 # fd-dup; the target character class was and still is.
+#
+# `<>` READ-WRITE OPEN (apexyard#886/#931 round 6, closing one of the two
+# residuals #926 documented-and-deferred): `[n]<>word` opens `word` for
+# BOTH reading and writing on descriptor `n` (or fd 0 if `n` is omitted) —
+# `exec 3<> some/file`, `cmd <>file` are real, non-truncating writes that
+# every prior round's operator alternation missed entirely (the `<`
+# leading character was always excluded by the OTHER operators' own
+# leading-context class, `[^|<&]`, so `<>` was structurally invisible to
+# this pattern, not just an uncovered edge case). The new `[0-9]*<>`
+# alternative is unambiguous against every existing operator: `<>` is two
+# literal characters (`<` immediately followed by `>`), which never
+# occurs inside `<<` (heredoc), `<<<` (herestring), or any of the
+# fd-dup/`>`-based forms above (those all have `>` preceding `&`, never
+# `<` immediately preceding `>`). Chosen to DETECT rather than
+# document-as-accepted (per #931's own framing: "a write is a write") —
+# the non-truncating risk profile differs from `>`/`>>`, but the ticket
+# gate cares about "was tracked content touched", not "was it truncated".
+#
+# `>(…)` / `<(…)` PROCESS SUBSTITUTION now EXCLUDED from the target class
+# (apexyard#886/#931 round 6, closing the second #926-deferred residual):
+# `diff a >(sort)` is not a file write — `>(sort)` is process substitution,
+# a subshell whose stdin bash wires to a fifo/fd path, syntactically
+# adjacent to `>` but semantically a command, not a redirect target. The
+# prior target class `[^[:space:]&|;]+` allowed a leading `(` and so
+# happily consumed `(sort)` as if it were a filename — a fail-closed
+# (over-blocking) false positive, not a bypass, but still worth tightening
+# per #931. Splitting the target class into a first-char exclusion,
+# `[^[:space:]&|;(]`, plus the unchanged `[^[:space:]&|;]*` for the rest,
+# means the match FAILS whenever the character immediately after the
+# operator (past any optional whitespace) is `(` — process substitution
+# always starts there with zero space (`> (foo)` is not valid bash
+# redirect-to-subshell syntax; a space there is a syntax error, so
+# excluding the immediately-adjacent case costs nothing on real commands).
+# A legitimate filename that merely CONTAINS a paren not in the leading
+# position (`file(1).txt`) is untouched — only a LEADING `(` is excluded.
+# `<(…)` (process substitution on the read side) was never matched here
+# to begin with (`<` alone isn't a write operator in this file), so no
+# change was needed for that half.
 _bdw_match_redirection() {
-  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+'
+  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*'
 }
 
 # ------------------------------------------------------------------------------
@@ -522,6 +566,7 @@ bash_command_is_deletion_only() {
 #   - mv src /path/to/dst        → /path/to/dst (#153)
 #   - curl -o /path URL          → /path        (#153)
 #   - wget -O /path URL          → /path        (#153)
+#   - cmd <> /path/to/file       → /path/to/file (read-write open, #931)
 #
 # Does NOT handle (returns empty):
 #   - python/node/ruby/perl/php with embedded path
@@ -529,21 +574,17 @@ bash_command_is_deletion_only() {
 #   - cmd with multiple redirects
 #   - paths constructed from variables
 #   - tar -x (target is a directory, often implicit)
-#   - `cmd <> file` (read-write open, apexyard#886/#926 round 5): known,
-#     accepted, OUT-OF-SCOPE gap — exotic, non-truncating (unlike every
-#     operator this file DOES model, `<>` opens for read+write WITHOUT
-#     truncating existing content, so it's a materially different risk
-#     shape), and not adjacent to any of the &&/||/;/| separators this
-#     library segments on, so the round-5 structural fix doesn't reach
-#     it either. Tracked as a separate follow-up rather than folded into
-#     this operator-class close.
+#   - `cmd >(subshell)` / `cmd <(subshell)` process substitution: NOT a
+#     target at all (correctly excluded, #931 — see the leading-`(`
+#     exclusion note on _bdw_match_redirection above), so this returns
+#     empty for `diff a >(sort)` rather than fabricating `(sort)`.
 # ------------------------------------------------------------------------------
 bash_extract_write_target() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
 
   # Output redirection: capture the first target after >, >>, &>, &>>, >|,
-  # or >>|. Strip leading number/ampersand for cases like `2> file` /
+  # >>|, or <>. Strip leading number/ampersand for cases like `2> file` /
   # `&> file`.
   #
   # (^|[^|<&]) — see the identical note on _bdw_match_redirection above
@@ -566,8 +607,17 @@ bash_extract_write_target() {
   # `2>file`, `>>file`, `>|file`, `&>file` are all valid writes) — see the
   # matching note on _bdw_match_redirection for why this doesn't loosen
   # the fd-dup exclusion (the target class still rejects a leading `&`).
+  #
+  # `[0-9]*<>` (apexyard#886/#931 round 6): the new read-write-open
+  # alternative. The strip sed below (`^[^>]*>>?\|?[[:space:]]*`) already
+  # handles it correctly with NO changes — `[^>]*` greedily consumes the
+  # leading `<` (and any fd digit) up to the FIRST `>`, exactly the same
+  # way it already consumes a leading `&` or digit for `&>`/`2>`, so
+  # `<>file` strips down to `file` for free. The leading-`(` exclusion on
+  # the target class (apexyard#931, same round) also applies here,
+  # unchanged, for `diff a >(sort)` → no target.
   local target
-  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+' \
+  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*' \
                 | head -n 1 \
                 | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
   if [ -n "$target" ]; then
@@ -706,11 +756,20 @@ _bdw_targets_from_segment() {
   # are all real writes). Relaxed to optional; the target class
   # `[^[:space:]&|;]+` still rejects a leading `&`, so `2>&1`/`>&2`
   # (fd-dup) stay correctly unmatched regardless of spacing.
+  #
+  # `[0-9]*<>` and the leading-`(` target exclusion (apexyard#886/#931
+  # round 6): same two additions as _bdw_match_redirection and
+  # bash_extract_write_target above — `<>` (read-write open) is now a
+  # recognised operator (the unchanged strip-sed already handles it, since
+  # `[^>]*` swallows the leading `<`/digit the same way it swallows a
+  # leading `&`), and a leading `(` after the operator is excluded so
+  # `diff a >(sort)` (process substitution) no longer contributes the
+  # bogus target `(sort)`.
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+')
+  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*')
 
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".
