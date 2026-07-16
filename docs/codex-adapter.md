@@ -17,6 +17,7 @@ The command emits:
 - `.claude/skills/` to `.agents/skills/`
 - `.claude/agents/*.md` to `.codex/agents/*.toml`
 - `.claude/settings.json` to `.codex/hooks.json`
+- adapter ownership metadata to `.codex/apexyard-adapter.json`
 
 It does **not** copy `.claude/hooks/` into `.codex/hooks/`. The generated
 `hooks.json` keeps the existing commands that exec the unmodified
@@ -53,6 +54,26 @@ bin/sync-codex-adapter.sh --check
 Use `--check` when generated adapter files are present and you want to verify
 they still match `.claude/`. It exits non-zero on drift and prints the files that
 need regeneration.
+
+## Update Reconciliation
+
+```bash
+bin/sync-codex-adapter.sh --reconcile-installed
+```
+
+This mode refreshes and verifies an existing ApexYard Codex adapter, but is a
+silent no-op on forks where Codex support was never installed. New
+installations are identified by `.codex/apexyard-adapter.json`; adapters from
+before that manifest are recognised only when all three generated surfaces
+exist: `.agents/skills/`, `.codex/agents/`, and `.codex/hooks.json`.
+
+`/update` runs this reconciliation automatically before every successful exit,
+including the already-current path. Use `--skip-adapter-sync` only as a
+troubleshooting escape hatch. For pre-manifest installs whose old generated
+`$update` skill cannot yet contain that instruction, the already-delegated
+`check-upstream-drift.sh` SessionStart hook performs a one-time non-blocking
+refresh after framework files land. That bootstrap requires trusted project
+hooks; without hook trust, run the command above once manually.
 
 ## Clean Regeneration
 

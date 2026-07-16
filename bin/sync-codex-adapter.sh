@@ -10,10 +10,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK=0
 CLEAN=0
+RECONCILE_INSTALLED=0
 
 usage() {
   cat <<'USAGE'
-Usage: bin/sync-codex-adapter.sh [--check] [--clean] [--root <path>]
+Usage: bin/sync-codex-adapter.sh [--check] [--clean] [--reconcile-installed] [--root <path>]
 
 Generate Codex adapter files from .claude:
   .claude/skills   -> .agents/skills
@@ -23,6 +24,9 @@ Generate Codex adapter files from .claude:
 Options:
   --check       Do not write files; fail if generated output would differ.
   --clean       Remove generated .agents/.codex before writing.
+  --reconcile-installed
+                Refresh and verify an existing ApexYard Codex adapter. Silently
+                do nothing when no manifest or complete legacy adapter exists.
   --root PATH   Repository root to use instead of this script's parent.
 USAGE
 }
@@ -31,6 +35,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --check) CHECK=1 ;;
     --clean) CLEAN=1 ;;
+    --reconcile-installed) RECONCILE_INSTALLED=1 ;;
     --root)
       [ "$#" -ge 2 ] || { echo "ERROR: --root requires a path" >&2; exit 2; }
       ROOT="$2"
@@ -54,6 +59,22 @@ CLAUDE_DIR="$ROOT/.claude"
 
 [ -d "$CLAUDE_DIR" ] || { echo "ERROR: .claude not found under $ROOT" >&2; exit 1; }
 [ -f "$CLAUDE_DIR/settings.json" ] || { echo "ERROR: .claude/settings.json not found" >&2; exit 1; }
+
+codex_adapter_installed() {
+  local manifest="$ROOT/.codex/apexyard-adapter.json"
+  if [ -f "$manifest" ] \
+    && grep -qE '"adapter"[[:space:]]*:[[:space:]]*"apexyard-codex"' "$manifest"; then
+    return 0
+  fi
+
+  [ -d "$ROOT/.agents/skills" ] \
+    && [ -d "$ROOT/.codex/agents" ] \
+    && [ -f "$ROOT/.codex/hooks.json" ]
+}
+
+if [ "$RECONCILE_INSTALLED" = "1" ] && ! codex_adapter_installed; then
+  exit 0
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required to generate TOML strings safely" >&2
@@ -120,6 +141,11 @@ generate_hooks_json() {
 
 copy_tree "$CLAUDE_DIR/skills" "$OUT_AGENTS/skills"
 generate_hooks_json > "$OUT_CODEX/hooks.json"
+jq -n '{
+  adapter: "apexyard-codex",
+  schema: 1,
+  generated_from: ".claude"
+}' > "$OUT_CODEX/apexyard-adapter.json"
 
 # Fail loud on a silent gate-hole (Rex, #838/#840): generate_hooks_json's jq
 # filter is written to be matcher-agnostic (it walks every event/matcher
@@ -202,6 +228,14 @@ if [ "$CHECK" = "1" ]; then
   exit "$rc"
 fi
 
+if [ "$RECONCILE_INSTALLED" = "1" ] \
+  && [ -e "$ROOT/.agents" ] \
+  && [ -e "$ROOT/.codex" ] \
+  && diff -qr "$OUT_AGENTS" "$ROOT/.agents" >/dev/null \
+  && diff -qr "$OUT_CODEX" "$ROOT/.codex" >/dev/null; then
+  exit 0
+fi
+
 if [ "$CLEAN" = "1" ]; then
   rm -rf "$ROOT/.agents" "$ROOT/.codex"
 fi
@@ -209,12 +243,24 @@ fi
 mkdir -p "$ROOT/.agents" "$ROOT/.codex"
 rm -rf "$ROOT/.agents/skills" "$ROOT/.codex/agents" "$ROOT/.codex/hooks" "$ROOT/.codex/rules" \
   "$ROOT/.codex/migrations" "$ROOT/.codex/registries" "$ROOT/.codex/hooks.json" \
-  "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version"
+  "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version" \
+  "$ROOT/.codex/apexyard-adapter.json"
 cp -R "$OUT_AGENTS/skills" "$ROOT/.agents/skills"
 cp -R "$OUT_CODEX/agents" "$ROOT/.codex/agents"
 cp "$OUT_CODEX/hooks.json" "$ROOT/.codex/hooks.json"
+cp "$OUT_CODEX/apexyard-adapter.json" "$ROOT/.codex/apexyard-adapter.json"
+
+if [ "$RECONCILE_INSTALLED" = "1" ]; then
+  rc=0
+  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  [ "$rc" = "0" ] || exit "$rc"
+  echo "Reconciled installed Codex adapter from .claude."
+  exit 0
+fi
 
 echo "Generated Codex adapter from .claude:"
 echo "  .agents/skills"
 echo "  .codex/agents"
 echo "  .codex/hooks.json"
+echo "  .codex/apexyard-adapter.json"

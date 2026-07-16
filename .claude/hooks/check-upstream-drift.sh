@@ -36,6 +36,23 @@ fi
 
 cd "$REPO_ROOT" || exit 0
 
+# Bootstrap generated Codex adapters after a framework update. The /update
+# skill is itself generated under .agents/, so an adopter invoking a pre-fix
+# copy cannot execute reconciliation instructions that only arrived in the
+# newly merged canonical skill. Existing Codex hook wiring already delegates
+# this SessionStart hook to .claude/hooks/, giving the first restart a stable
+# path to install the refreshed skill. The generator owns detection and is a
+# silent no-op for uninstalled/partial adapters. Startup stays advisory: warn
+# on failure, but never block the session.
+CODEX_RECONCILER="$REPO_ROOT/bin/sync-codex-adapter.sh"
+if [ -f "$CODEX_RECONCILER" ]; then
+  ADAPTER_ERROR=""
+  if ! ADAPTER_ERROR=$(bash "$CODEX_RECONCILER" --reconcile-installed 2>&1 >/dev/null); then
+    echo "ApexYard: installed Codex adapter could not be refreshed; run bash bin/sync-codex-adapter.sh --reconcile-installed." >&2
+    [ -n "$ADAPTER_ERROR" ] && printf '%s\n' "$ADAPTER_ERROR" >&2
+  fi
+fi
+
 # Bail if no upstream remote — either this IS the upstream repo, or the fork
 # owner hasn't run `git remote add upstream …` yet. Either case: silent.
 if ! git remote | grep -qx upstream; then
