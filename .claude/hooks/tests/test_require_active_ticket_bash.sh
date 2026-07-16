@@ -695,6 +695,81 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c "echo a > /tmp/ok||> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#886 no-space '||' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
 
+# --- #886/#926 round 3: &>, &>>, >|, >>| (Hakim adversarial re-hunt) ----
+#
+# The operator alternation only modelled `>`/`>>`/`n>` — it missed
+# `&>`/`&>>` (redirect BOTH streams to a file) and `>|`/`>>|`
+# (force-clobber, noclobber override). Both are real, destructive
+# truncating writes that were passing (exit 0) with no active ticket.
+
+# 52. `&>` (redirect-both-streams) into an in-repo file, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi &> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>' redirect-both-streams blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 53. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=redirect-both-streams operator test
+EOF
+in=$(jq -nc --arg c "echo hi &> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>' redirect-both-streams allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 54. `&>>` (append-both-streams) into an in-repo file, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi &>> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>>' append-both-streams blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 55. `>|` (force-clobber) after a no-space `;`, out-of-repo THEN in-repo,
+#     no ticket → BLOCKED on the in-repo (migration-shaped) target. This is
+#     Hakim's exact second repro.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>|' force-clobber blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 56. Same command, WITH an active ticket → ALLOWED (both targets clear).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=force-clobber operator test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/ok;>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>|' force-clobber allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 57. `>>|` (force-clobber-append) variant, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;>>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>>|' force-clobber-append blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: fd-dup / read forms must NOT be newly gated ---------------
+#
+# `>&2` / `2>&1` / `1>&2` are fd-duplication (redirecting one fd to
+# ANOTHER fd), never a file write — the broadened operator set must not
+# start treating them as write targets. `< file` is a plain read.
+
+# 58. `echo err >&2` (fd-dup only, no in-repo write) — no ticket, still
+#     ALLOWED (nothing here is a write target at all).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo err >&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '>&2' fd-dup alone is not gated" 0 "" "$in" "$sb"
+
+# 59. `make build 2>&1` — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "make build 2>&1" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '2>&1' fd-dup alone is not gated" 0 "" "$in" "$sb"
+
+# 60. `cat < src/app.ts` — a plain READ of a tracked file, no ticket →
+#     still ALLOWED (reading is not gated; only writes are).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "cat < src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: plain '<' read is not gated" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

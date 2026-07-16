@@ -567,6 +567,36 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 19: #886/#926 round 3 (Hakim adversarial re-hunt) — `&>` (redirect
+# BOTH stdout and stderr to a file) directly into a migration path. The
+# pre-round-3 operator alternation only modelled `>`/`>>`/`n>`; it missed
+# `&>` entirely. No ticket → block (2).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "echo x &> ./$MIG" 2; then
+  record_pass "#886 bash: '&>' directly into migration target, no ticket → block"
+else
+  record_fail "#886 bash: '&>' directly into migration target, no ticket → block"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 20: #886/#926 round 3 — `>|` (force-clobber) after a no-space `;`,
+# non-migration target FIRST, migration target SECOND. Same shape as case
+# 18 but with the force-clobber operator instead of a plain redirect. No
+# ticket → block (2).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "echo x > src/app.ts;>| ./$MIG" 2; then
+  record_pass "#886 bash: '>|' force-clobber into migration target, no ticket → block"
+else
+  record_fail "#886 bash: '>|' force-clobber into migration target, no ticket → block"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

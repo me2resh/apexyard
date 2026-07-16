@@ -132,8 +132,24 @@ _bdw_starts_with_git_subcommand() {
 # `(^|[^|<&])` adds "start of string/segment" as an equally-valid leading
 # context, closing that hole while leaving the `2>&1` / `<<EOF` exclusions
 # intact (neither of those ever begins a segment with a bare `>`).
+#
+# COMPLETE operator alternation (apexyard#886/#926 round 3 — Hakim's
+# adversarial re-hunt): the pattern above only modelled `>` / `>>` (and,
+# via the leading-context class, `n>` / `n>>` for an fd number). It missed
+# two more real, destructive write operators:
+#   - `&>` / `&>>`  — redirect BOTH stdout and stderr to a file (a write).
+#     Matched by a dedicated `&>>?` alternative: `&` immediately followed
+#     by `>` is unambiguous — it never appears in `2>&1` or `>&2` (there
+#     the `&` comes AFTER the `>`, not before), so this can't collide with
+#     the fd-dup exclusion the leading-context class protects.
+#   - `>|` / `>>|`  — force-clobber (override `set -o noclobber`), also a
+#     write. Modelled by an optional trailing `\|?` on the existing `>>?`.
+# Both are added as alternatives / suffixes to the SAME anchored pattern,
+# not new logic — `2>&1`, `>&2`, `<`, `<<EOF`, `<<<` are all still excluded
+# by the same mechanisms as before (mandatory whitespace immediately after
+# the operator; `&` only recognised when it precedes `>`, never follows).
 _bdw_match_redirection() {
-  echo "$1" | grep -qE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+'
+  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+'
 }
 
 # 2. tee.
@@ -412,8 +428,9 @@ bash_extract_write_target() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
 
-  # Output redirection: capture the first target after > or >>.
-  # Strip leading number for cases like `2> file`.
+  # Output redirection: capture the first target after >, >>, &>, &>>, >|,
+  # or >>|. Strip leading number/ampersand for cases like `2> file` /
+  # `&> file`.
   #
   # (^|[^|<&]) — see the identical note on _bdw_match_redirection above
   # (apexyard#886/#926): a command that BEGINS with `>` (e.g. the second
@@ -421,10 +438,18 @@ bash_extract_write_target() {
   # character before the `>`, so the un-anchored `[^|<&]>...` silently
   # failed to match at position 0. Anchoring on start-of-string closes
   # that hole without loosening the `2>&1` / heredoc exclusions.
+  #
+  # `&>>?` and the trailing `\|?` (apexyard#886/#926 round 3) extend the
+  # same anchored pattern to the full write-redirect operator set — see
+  # the comment on _bdw_match_redirection for why `&>` can't collide with
+  # `2>&1`/`>&2` fd-dup exclusion. The strip sed's `[^>]*` prefix already
+  # swallows a leading `&` the same way it swallows a leading digit or
+  # space, so no separate strip pattern is needed for `&>`/`&>>`; the
+  # trailing `\|?` addition handles `>|`/`>>|`.
   local target
-  target=$(echo "$cmd" | grep -oE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+' \
+  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+' \
                 | head -n 1 \
-                | sed -E 's/^[^>]*>>?[[:space:]]+//')
+                | sed -E 's/^[^>]*>>?\|?[[:space:]]+//')
   if [ -n "$target" ]; then
     target="${target%\"}"; target="${target#\"}"
     target="${target%\'}"; target="${target#\'}"
@@ -532,7 +557,9 @@ _bdw_targets_from_segment() {
   local seg="$1"
   local line target tee_tail
 
-  # ALL redirection targets in this segment (not just the first).
+  # ALL redirection targets in this segment (not just the first) — covers
+  # every write-redirect operator: >, >>, >|, >>|, &>, &>>, and n>/n>> (an
+  # fd-numbered redirect, e.g. `2> err.log`, IS a write to err.log).
   #
   # (^|[^|<&]) — apexyard#886/#926 (Hakim security review, PR #926): a
   # segment produced by bash_extract_write_targets' top-level split can
@@ -543,11 +570,20 @@ _bdw_targets_from_segment() {
   # `||>`). Anchoring on start-of-segment closes that hole while leaving
   # the `2>&1` / heredoc exclusions untouched (neither begins a segment
   # with a bare `>`).
+  #
+  # `&>>?` and the trailing `\|?` (apexyard#886/#926 round 3): Hakim's
+  # adversarial re-hunt found this pattern still missed `&>`/`&>>`
+  # (redirect-both-streams) and `>|`/`>>|` (force-clobber) — both real
+  # destructive writes. `&>` is unambiguous against `2>&1`/`>&2` fd-dup
+  # because the `&` precedes the `>` here, never follows it. `>|`/`>>|`
+  # need the SEGMENT to still contain the literal `|` — see
+  # bash_extract_write_targets' clobber-protection step, which shields
+  # these operators from the later bare-`|` (pipe) split.
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?[[:space:]]+//')
+    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?\|?[[:space:]]+//')
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+')
+  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+')
 
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".
@@ -596,6 +632,19 @@ bash_extract_write_targets() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
 
+  # Protect the force-clobber redirect operators (`>|`, `>>|`) BEFORE the
+  # pipe split below (apexyard#886/#926 round 3, Hakim security review). A
+  # real bash tokenizer lexes `>|`/`>>|` as ONE operator — never as `>`
+  # followed by a separate pipe — so `cmd >| file` / `cmd >>| file` must
+  # not be torn apart at the `|` embedded in the operator itself. Replace
+  # them with placeholders first, run the normal &&/||/;/| split, then
+  # restore the placeholders inside whichever segment(s) still hold them.
+  # Longest-match-first: protect `>>|` before `>|` so `>>|` isn't half-eaten
+  # by the `>|` substitution (`>>|` contains `>|` as a substring).
+  local split="$cmd"
+  split="${split//>>|/@@APEXYARD_CLOBBER_APPEND@@}"
+  split="${split//>|/@@APEXYARD_CLOBBER@@}"
+
   # Split into segments on top-level separators (&&, ||, ;, |) using bash
   # parameter-expansion substitution, NOT sed: BSD sed (macOS's default,
   # non-GNU) does not treat `\n` in the replacement text as a literal
@@ -604,11 +653,15 @@ bash_extract_write_targets() {
   # shipped broken had this been caught only on Linux CI). Order matters:
   # replace the two-character separators BEFORE the single-character ones
   # so `&&` / `||` aren't first flattened into two lone `&` / `|` splits.
-  local split="$cmd"
   split="${split//&&/$'\n'}"
   split="${split//||/$'\n'}"
   split="${split//;/$'\n'}"
   split="${split//|/$'\n'}"
+
+  # Restore the protected clobber operators inside whichever segment(s)
+  # now contain the placeholder.
+  split="${split//@@APEXYARD_CLOBBER_APPEND@@/>>|}"
+  split="${split//@@APEXYARD_CLOBBER@@/>|}"
 
   local seg
   {

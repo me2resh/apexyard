@@ -286,6 +286,54 @@ fi
 assert_targets "heredoc still extracts correctly (no regression)" \
   "$(printf 'cat > /tmp/x <<EOF\nhi\nEOF')"                                           "/tmp/x"
 
+# #886/#926 round 3 (Hakim adversarial re-hunt): the operator alternation
+# only modelled >, >>, and n> — it missed &>/&>> (redirect BOTH streams to
+# a file) and >|/>>| (force-clobber, noclobber override). Both are real,
+# destructive truncating writes. Hakim's exact repros:
+assert_targets "&> redirects both streams to a file (Hakim repro)" \
+  "echo hi &> .gitignore"                                                            ".gitignore"
+# NOTE: unlike the other rows in this block, `&>>` happens to extract
+# correctly even under the PRE-round-3 regex — not via the dedicated `&>>?`
+# alternative this fix adds, but by coincidence: the pattern's leading-context
+# class `[^|<&]` doesn't exclude `>` itself, so the SECOND `>` in `&>>` reads
+# the FIRST `>` as valid (non-excluded) leading context and matches anyway.
+# Kept here as a correctness/coverage check (it must still pass post-fix),
+# not a fail-pre/pass-post discriminator like the bare `&>` row above it.
+assert_targets "&>> append-both-streams to a file" \
+  "echo hi &>> .gitignore"                                                           ".gitignore"
+assert_targets ">| force-clobber after no-space semicolon (Hakim repro)" \
+  "echo a > /tmp/ok;>| db/migrations/006.sql"                                         "/tmp/ok,db/migrations/006.sql"
+assert_targets ">>| force-clobber-append variant" \
+  "echo a > /tmp/ok;>>| db/migrations/006.sql"                                        "/tmp/ok,db/migrations/006.sql"
+assert_targets ">| with a space after the separator (not just no-space)" \
+  "echo a > /tmp/ok; >| db/migrations/006.sql"                                        "/tmp/ok,db/migrations/006.sql"
+
+# Sanity: the broadened operator set must NOT false-positive on fd-duplication
+# forms, which look superficially similar (`&` and `>` both present) but mean
+# something entirely different — redirecting one fd to ANOTHER fd, not to a
+# file. Order in "&"/">"" matters: &> is `&` THEN `>` (a write); these forms
+# have `>` THEN `&` (a dup) and must stay unmatched.
+assert_targets "2>&1 fd-dup — not a write target" \
+  "make build 2>&1"                                                                   ""
+assert_targets ">&2 fd-dup — not a write target" \
+  "echo err >&2"                                                                      ""
+assert_targets "1>&2 fd-dup — not a write target" \
+  "cmd 1>&2"                                                                          ""
+if bash_command_appears_to_write "echo err >&2"; then
+  echo "FAIL [targets/>&2 must not be detected as appears_to_write]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/fd-dup-appears-to-write "
+else
+  echo "PASS [targets/>&2 correctly not detected as a write]"
+  PASS=$((PASS+1))
+fi
+
+# Sanity: reads / heredocs / herestrings must still be untouched by the
+# broadened operator set.
+assert_targets "< plain read redirection — not a write" \
+  "cat < /tmp/x"                                                                      ""
+assert_targets "<<< herestring — not a write" \
+  "cat <<< 'hello'"                                                                   ""
+
 # Duplicate targets across segments collapse to one entry.
 got_dup=$(bash_extract_write_targets "echo a > /tmp/x; echo b > /tmp/x" | wc -l | tr -d ' ')
 if [ "$got_dup" = "1" ]; then
