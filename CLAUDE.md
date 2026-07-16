@@ -273,7 +273,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/release` | (Framework-only) Cut an apexyard release — diff, bump, CHANGELOG, release PR, tag |
 | `/release-sync` | (Framework-only) Sync `main` back to `dev` after a squash-merge release so the squash commit is an ancestor of `dev`, preventing recurring merge conflicts |
 | `/projects` | List all managed projects from the registry with status |
-| `/inbox` | Items needing your attention — PRs, issues, comments, blockers |
+| `/inbox` | Items needing your attention — PRs, issues, comments, blockers, stale-ticket reconcile flags |
 | `/status` | Current snapshot — git, CI, in-progress work (use `--briefing` for 4-line shape) |
 | `/tasks` | Actionable task list across the portfolio with direct URLs, prioritised |
 | `/roadmap` | Update or create the product roadmap |
