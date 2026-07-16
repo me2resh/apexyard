@@ -2,6 +2,59 @@
 
 All notable changes to ApexYard are documented here.
 
+## [v5.1.0] — 2026-07-16
+
+Minor release — 16 features, 11 fixes, 9 improvements.
+
+### Added (feat)
+
+- (#915) on-demand glossary lookup rule + full /tutorial glossary — 08428dd
+- (#913) onboarding JIT glossary asides — guided-mode teach-in-context (#913) — 2bd7c1b
+- (#933) SessionStart search advisory probes MCP reachability — 77d99de
+- (#934) onboarding depth adaptivity — terse vs guided + override + transparency — fa4bf37
+- (#928) Phase-0 cognitive memory scaffold (.claude/memory/) — 0f04092
+- (#925) /inbox stale-ticket reconcile flag — surface open issues with a merged PR — cb78bed
+- (#920) standalone /tutorial re-entry point (tour-only) — 961257e
+- (#910) increment-1 walking-skeleton first-run onboarding flow — 50814c8
+- (#894) advisory intent → skill routing hook + skill-first rule — 1847f79
+- (#895) wire the session-start reindex hook into settings.json — 33b4915
+- (#904) SessionStart split-portfolio v2 primer banner — 5d0834a
+- (#871) conformance CI — credentialed multi-runtime gate matrix + live badge — 6d86b58
+- (#893) premium-hook safe-fallback harness — _lib-premium-hook.sh — 7809376
+- (#892) SessionStart validation for apexyard-search MCP config — 4352a5f
+- (#710) add tracker_list + cross-tracker query translation — 4a1487d
+- (#761) widen tracker_view body support to jira/linear/asana — 85bd0f1
+
+### Fixed (fix)
+
+- (#932) close <> read-write + >(…) process-sub residuals in bash write-detection — 7e08e47
+- (#886) judge all bash write targets, not just the first — 5c6b1aa
+- (#887) scope the remaining unscoped gh pr view calls in the review-posting path (#887) — 25f6678
+- (#908) gate scorecard.yml to the canonical repo — 4e60d5e
+- (#906) globToRegExp missing dotall flag — multi-line commits fail-open on gate adapters — 0dba073
+- (#898) scope pr_base_repo to an explicit repo (no ambient gh resolution) — 8f1d68a
+- (#897) exempt 'development' + config-driven trunk whitelist in validate-branch-name — 527015c
+- (#883) exempt out-of-repo writes from the ticket-first gate — b6f7f56
+- (#882) resolve /start-ticket's ops root correctly on split-portfolio v2 — fddc9ea
+- (#872) resolve the changelog range from a Released-From trailer — 9150d63
+- (#875) trim marker-set recipe from warn-review-marker-write.sh BLOCKED banner — 602fc25
+
+### Changed (refactor / chore / docs)
+
+- (#912) increment-2 technical design — onboarding education layer — fe738e0
+- (#924) add reconcile-before-build self-discipline rule — a3e57b9
+- (#921) conformance dispatch-streak guard + Codex model pin — 6b48e77
+- (#909) increment-1 technical design — guided first-run onboarding — 626dcad
+- (#902) PRD — guided onboarding + teach-in-context — e61a20e
+- (#901) managed-project release versioning convention — e402955
+- (#889) fold no-attribution advisory into commit-message-quality handbook — 0b13047
+- (#877) AgDR-0094 — record release provenance via Released-From trailer — 12c9fb9
+- (#874) trim verbose squash-merge note in README contributors section — 9b2b814
+
+### Closes
+
+- Closes #710, #761, #871, #872, #874, #875, #877, #882, #883, #886, #887, #889, #892, #893, #894, #895, #897, #898, #901, #902, #904, #906, #908, #909, #910, #912, #913, #915, #920, #921, #924, #925, #928, #932, #933, #934
+
 ## [v5.0.0] — 2026-07-10
 
 Major release — 122 features, 75 fixes, 1 breaking change. Consolidates the multi-harness governance quarter (opencode / pi.dev / Codex / Cursor gate adapters, `/eval-agents`, tracker-agnostic review + merge routing) on top of v4.4.0.
