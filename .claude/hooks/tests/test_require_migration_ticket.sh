@@ -549,6 +549,24 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 18: #886/#926 (Hakim security-review finding) — NO-SPACE `;` then
+# redirect into a migration path: `echo x > src/app.ts;> ./migrations/...`.
+# After splitting on `;`, the second segment BEGINS with `>` (no space
+# between the separator and the redirection) — the pre-fix regex required
+# a character before `>` to exist, so this migration-shaped target was
+# silently dropped and the command passed through ungated. No ticket →
+# block (2).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "echo x > src/app.ts;> ./$MIG" 2; then
+  record_pass "#886 bash: no-space ';' into migration target, no ticket → block"
+else
+  record_fail "#886 bash: no-space ';' into migration target, no ticket → block"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

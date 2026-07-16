@@ -649,6 +649,52 @@ in=$(jq -nc --arg c "echo x | tee /tmp/a src/b.ts" \
       '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#886 tee with out-of-repo + in-repo operands blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
 
+# --- #886/#926: NO-SPACE separator+redirection (Hakim security-review) --
+#
+# `echo a > /tmp/ok;> .gitignore` — after splitting on `;`, the second
+# segment is `> .gitignore`, which BEGINS with `>`. The pre-fix regex
+# `[^|<&]>...` required a character before `>` to exist, so this second,
+# in-repo target was silently dropped and the whole command exempted on
+# the first (out-of-repo) target alone. These are Hakim's exact repro
+# strings, now expected to BLOCK.
+
+# 46. No-space `;` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 47. Same command, WITH an active ticket → ALLOWED (both targets clear).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=no-space redirection bypass test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' then redirect allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 48. No-space `;` + redirect with a trailing command appended, no ticket
+#     → BLOCKED (the trailing `cat /etc/hostname` must not swallow the
+#     dropped target or change the verdict).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore cat /etc/hostname" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' + redirect with trailing command blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 49. No-space `&&` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok&&> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '&&' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 50. No-space `|` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok|> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '|' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 51. No-space `||` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok||> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '||' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

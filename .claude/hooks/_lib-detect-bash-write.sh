@@ -119,8 +119,21 @@ _bdw_starts_with_git_subcommand() {
 # ------------------------------------------------------------------------------
 
 # 1. Redirection.
+#
+# The leading-context class `[^|<&]` excludes a `>` that's part of `2>&1`
+# fd-dup or immediately follows a pipe/heredoc marker. But `[^|<&]` REQUIRES
+# a character before `>` to exist at all — a command (or, after #886's
+# segment split, a SEGMENT) that BEGINS with `>` has no preceding character,
+# so the original pattern silently failed to match at position 0. That's
+# the exact shape a no-space chained write produces: splitting
+# `echo a > /tmp/ok;> .gitignore` on `;` yields a second segment of
+# `> .gitignore` — starting with `>` — and the un-anchored pattern dropped
+# it entirely (apexyard#886 Hakim security-review finding, PR #926).
+# `(^|[^|<&])` adds "start of string/segment" as an equally-valid leading
+# context, closing that hole while leaving the `2>&1` / `<<EOF` exclusions
+# intact (neither of those ever begins a segment with a bare `>`).
 _bdw_match_redirection() {
-  echo "$1" | grep -qE '[^|<&]>>?[[:space:]]+[^[:space:]&|;]+'
+  echo "$1" | grep -qE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+'
 }
 
 # 2. tee.
@@ -401,8 +414,15 @@ bash_extract_write_target() {
 
   # Output redirection: capture the first target after > or >>.
   # Strip leading number for cases like `2> file`.
+  #
+  # (^|[^|<&]) — see the identical note on _bdw_match_redirection above
+  # (apexyard#886/#926): a command that BEGINS with `>` (e.g. the second
+  # half of `echo a > /tmp/ok;> .gitignore` once split on `;`) has no
+  # character before the `>`, so the un-anchored `[^|<&]>...` silently
+  # failed to match at position 0. Anchoring on start-of-string closes
+  # that hole without loosening the `2>&1` / heredoc exclusions.
   local target
-  target=$(echo "$cmd" | grep -oE '[^|<&]>>?[[:space:]]+[^[:space:]&|;]+' \
+  target=$(echo "$cmd" | grep -oE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+' \
                 | head -n 1 \
                 | sed -E 's/^[^>]*>>?[[:space:]]+//')
   if [ -n "$target" ]; then
@@ -513,11 +533,21 @@ _bdw_targets_from_segment() {
   local line target tee_tail
 
   # ALL redirection targets in this segment (not just the first).
+  #
+  # (^|[^|<&]) — apexyard#886/#926 (Hakim security review, PR #926): a
+  # segment produced by bash_extract_write_targets' top-level split can
+  # itself BEGIN with `>` — e.g. splitting `echo a > /tmp/ok;> .gitignore`
+  # on `;` yields a second segment of `> .gitignore`. The un-anchored
+  # `[^|<&]>...` requires a character before `>` to exist, so it silently
+  # dropped every no-space-after-separator redirection (`;>`, `&&>`, `|>`,
+  # `||>`). Anchoring on start-of-segment closes that hole while leaving
+  # the `2>&1` / heredoc exclusions untouched (neither begins a segment
+  # with a bare `>`).
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?[[:space:]]+//')
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE '[^|<&]>>?[[:space:]]+[^[:space:]&|;]+')
+  done < <(printf '%s\n' "$seg" | grep -oE '(^|[^|<&])>>?[[:space:]]+[^[:space:]&|;]+')
 
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".

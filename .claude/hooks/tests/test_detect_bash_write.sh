@@ -257,6 +257,35 @@ assert_targets "tee -a with multiple file operands" \
 assert_targets "three semicolon-chained redirects" \
   "echo a > /tmp/x; echo b > /tmp/y; echo c > src/app.ts"                             "/tmp/x,/tmp/y,src/app.ts"
 
+# #886/#926 (Hakim security-review finding): NO-SPACE separator+redirection.
+# Splitting on the separator can leave a segment that BEGINS with `>` —
+# e.g. `;> .gitignore` splits into a second segment of `> .gitignore`. The
+# original leading-context regex `[^|<&]>...` required a character before
+# `>` to exist at all, so it silently dropped the target at position 0.
+# These are Hakim's exact repro strings from the PR #926 review.
+assert_targets "no-space semicolon then redirect" \
+  "echo a > /tmp/ok;> .gitignore"                                                     "/tmp/ok,.gitignore"
+assert_targets "no-space semicolon+redirect with trailing command" \
+  "echo a > /tmp/ok;> .gitignore cat /etc/hostname"                                   "/tmp/ok,.gitignore"
+assert_targets "no-space && then redirect" \
+  "echo a > /tmp/ok&&> .gitignore"                                                    "/tmp/ok,.gitignore"
+assert_targets "no-space | then redirect" \
+  "echo a > /tmp/ok|> .gitignore"                                                     "/tmp/ok,.gitignore"
+assert_targets "no-space || then redirect" \
+  "echo a > /tmp/ok||> .gitignore"                                                    "/tmp/ok,.gitignore"
+
+# Sanity: the anchored fix must not turn 2>&1 (fd-dup) or a heredoc into a
+# false-positive redirection target.
+if bash_command_appears_to_write "make build 2>&1"; then
+  echo "FAIL [targets/2>&1 must not be treated as a write]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/fd-dup-false-positive "
+else
+  echo "PASS [targets/2>&1 correctly not a write]"
+  PASS=$((PASS+1))
+fi
+assert_targets "heredoc still extracts correctly (no regression)" \
+  "$(printf 'cat > /tmp/x <<EOF\nhi\nEOF')"                                           "/tmp/x"
+
 # Duplicate targets across segments collapse to one entry.
 got_dup=$(bash_extract_write_targets "echo a > /tmp/x; echo b > /tmp/x" | wc -l | tr -d ' ')
 if [ "$got_dup" = "1" ]; then
