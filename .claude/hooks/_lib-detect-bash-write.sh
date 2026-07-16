@@ -18,8 +18,11 @@
 # Usage:
 #   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-detect-bash-write.sh"
 #   if bash_command_appears_to_write "$COMMAND"; then
-#     target=$(bash_extract_write_target "$COMMAND")
-#     # ... apply gate, optionally with target-aware path exemptions
+#     targets=$(bash_extract_write_targets "$COMMAND")
+#     # ... apply gate to EVERY line of $targets — see #886. Judging only
+#     # the first target lets a command that ALSO writes an out-of-repo
+#     # path first (`echo x > /tmp/a; echo y > src/app.ts`) slip its
+#     # second, in-repo target past a gate that only looked at target #1.
 #   fi
 #
 # Exposed functions:
@@ -27,11 +30,27 @@
 #       returns 0 if the command appears to write to a file, 1 otherwise
 #
 #   bash_extract_write_target COMMAND
-#       echoes the target path if extractable, empty string otherwise.
-#       Best-effort — only handles the simple cases (echo > file,
-#       tee file, sed -i ... file, cp src dst, curl -o file). Embedded
-#       interpreters (python -c, node -e, ruby -e, perl -e, php -r,
-#       go run, deno, bun) return empty.
+#       echoes the FIRST target path if extractable, empty string
+#       otherwise. Best-effort — only handles the simple cases (echo >
+#       file, tee file, sed -i ... file, cp src dst, curl -o file).
+#       Embedded interpreters (python -c, node -e, ruby -e, perl -e,
+#       php -r, go run, deno, bun) return empty.
+#
+#       Kept for backward compatibility with existing single-target
+#       call sites and tests. New gate consumers should prefer
+#       bash_extract_write_targets (plural, below) — a command can name
+#       more than one write target, and judging only the first is a
+#       gate-bypass surface (#886).
+#
+#   bash_extract_write_targets COMMAND
+#       echoes EVERY extractable write target, one per line, deduplicated.
+#       Splits the command on top-level separators (&&, ||, ;, |) so each
+#       chained command is considered independently, and within a segment
+#       captures every redirection (`cmd > a; cmd2 > b` inside one
+#       segment, e.g. from a heredoc) and every tee operand (`tee a b c`
+#       names three targets). Same misses as bash_extract_write_target —
+#       an unparseable segment contributes nothing, never a fabricated
+#       target.
 
 # ------------------------------------------------------------------------------
 # Public: bash_command_appears_to_write COMMAND
@@ -462,4 +481,110 @@ bash_extract_write_target() {
 
   # No target extractable.
   return 0
+}
+
+# ------------------------------------------------------------------------------
+# Internal: _bdw_strip_quotes ARG — trim one layer of matching quotes.
+# ------------------------------------------------------------------------------
+_bdw_strip_quotes() {
+  local t="$1"
+  t="${t%\"}"; t="${t#\"}"
+  t="${t%\'}"; t="${t#\'}"
+  printf '%s\n' "$t"
+}
+
+# ------------------------------------------------------------------------------
+# Internal: _bdw_targets_from_segment SEGMENT
+#
+# Extracts ALL write targets from a single command segment (a segment is
+# one command with no top-level &&, ||, ;, | separators — see
+# bash_extract_write_targets below for how segments are produced).
+#
+# Unlike bash_extract_write_target's single-shot "first match wins" walk,
+# this captures EVERY redirection and EVERY tee operand in the segment
+# (both families support naming more than one target: `cmd > a 2> b`,
+# `tee a b c`), then falls back to bash_extract_write_target for the
+# remaining single-target families (sed -i, cp/mv, curl -o, wget -O) —
+# correct here because a segment is one command invocation, so "first
+# match" and "only match" coincide for those families.
+# ------------------------------------------------------------------------------
+_bdw_targets_from_segment() {
+  local seg="$1"
+  local line target tee_tail
+
+  # ALL redirection targets in this segment (not just the first).
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?[[:space:]]+//')
+    [ -n "$target" ] && _bdw_strip_quotes "$target"
+  done < <(printf '%s\n' "$seg" | grep -oE '[^|<&]>>?[[:space:]]+[^[:space:]&|;]+')
+
+  # ALL tee operands in this segment — `tee a b c` names three targets, not
+  # one; the original single-target extractor only ever returned "a".
+  #
+  # NOTE: extraction deliberately uses grep (not sed) for the `\btee\b`
+  # word-boundary match. BSD sed (macOS's default, non-GNU) silently does
+  # NOT support `\b` in its regex engine — a `sed -E 's/^.*\btee\b.../'`
+  # here would no-op on a stock Mac and this bug would ship invisible on
+  # this exact platform. grep's `\b` support is fine (BSD grep is
+  # GNU-compatible on this point); the strip-the-"tee"-token step below
+  # uses plain anchored parameter expansion instead of sed, sidestepping
+  # the incompatibility entirely.
+  if printf '%s\n' "$seg" | grep -qE '\btee\b'; then
+    tee_tail=$(printf '%s\n' "$seg" | grep -oE '\btee\b[[:space:]].*' | head -n 1)
+    tee_tail="${tee_tail#tee}"
+    local skip_flags=1
+    for target in $tee_tail; do
+      if [ "$skip_flags" = "1" ] && printf '%s' "$target" | grep -qE '^-'; then
+        continue
+      fi
+      skip_flags=0
+      [ -n "$target" ] && _bdw_strip_quotes "$target"
+    done
+  fi
+
+  # sed -i / cp / mv / curl -o / wget -O: single-target families. Reusing
+  # the existing single-shot extractor on just THIS segment is correct —
+  # a segment is one command, so "first match in the segment" IS "the
+  # match". (This may re-emit a redirection/tee target already captured
+  # above; bash_extract_write_targets dedupes the combined output.)
+  target=$(bash_extract_write_target "$seg")
+  [ -n "$target" ] && printf '%s\n' "$target"
+}
+
+# ------------------------------------------------------------------------------
+# Public: bash_extract_write_targets COMMAND
+#
+# See the header comment block at the top of this file for the contract.
+# Returns via stdout (one target per line); no meaningful exit-code
+# contract beyond "ran".  An empty COMMAND or a command with zero
+# extractable targets produces no output at all — callers must treat
+# "nothing on stdout" as the same fail-closed/categorical case that empty
+# bash_extract_write_target output signals today.
+# ------------------------------------------------------------------------------
+bash_extract_write_targets() {
+  local cmd="$1"
+  [ -z "$cmd" ] && return 0
+
+  # Split into segments on top-level separators (&&, ||, ;, |) using bash
+  # parameter-expansion substitution, NOT sed: BSD sed (macOS's default,
+  # non-GNU) does not treat `\n` in the replacement text as a literal
+  # newline, so a `sed 's/;/\n/g'`-style split silently no-ops on a stock
+  # macOS box (the #886 bug this was first written to fix would have
+  # shipped broken had this been caught only on Linux CI). Order matters:
+  # replace the two-character separators BEFORE the single-character ones
+  # so `&&` / `||` aren't first flattened into two lone `&` / `|` splits.
+  local split="$cmd"
+  split="${split//&&/$'\n'}"
+  split="${split//||/$'\n'}"
+  split="${split//;/$'\n'}"
+  split="${split//|/$'\n'}"
+
+  local seg
+  {
+    while IFS= read -r seg; do
+      [ -z "$seg" ] && continue
+      _bdw_targets_from_segment "$seg"
+    done <<< "$split"
+  } | awk '!seen[$0]++'
 }

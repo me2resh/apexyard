@@ -117,6 +117,22 @@ run_hook() {
   [ "$rc" = "$expected_rc" ]
 }
 
+# Run the hook (Bash tool) against a synthetic shell command; check exit code.
+# #886: used to prove the hook judges EVERY extracted write target, not
+# just the first — a command naming a non-migration path FIRST and a
+# migration path SECOND must still hit the migration gate on the second.
+run_hook_bash() {
+  local sb="$1" command="$2" expected_rc="$3"
+  local input rc
+  input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  (
+    cd "$sb" || exit 99
+    PATH="$sb/bin:$PATH" .claude/hooks/require-migration-ticket.sh <<<"$input" >/dev/null 2>&1
+  )
+  rc=$?
+  [ "$rc" = "$expected_rc" ]
+}
+
 MIG="migrations/001_add_table.sql"   # matches */migrations/*.sql
 GH_OPEN_OK='
 if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
@@ -497,6 +513,38 @@ if run_hook "$SB" "$SB/$MIG" 0; then
   record_pass "guard: #-prefixed number passes and is shell-safe (printf %q escapes #)"
 else
   record_fail "guard: #-prefixed number passes and is shell-safe (printf %q escapes #)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 16: #886 — Bash command names a NON-migration target FIRST and a
+# migration-path target SECOND. With an OPEN, labelled, AgDR-linked ticket
+# → allow (0). Before #886, the hook judged only the first extracted
+# target (src/app.ts, not migration-shaped) and exited 0 without ever
+# consulting the tracker for the second target — this proves the second
+# target is now the one that drives the gate.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" test-org/test-repo 42
+install_mock "$SB" gh "$GH_OPEN_OK"
+if run_hook_bash "$SB" "echo x > src/app.ts; echo y > ./$MIG" 0; then
+  record_pass "#886 bash: non-migration target then migration target, valid ticket → allow"
+else
+  record_fail "#886 bash: non-migration target then migration target, valid ticket → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 17: #886 — same shape, but NO active-ticket marker at all → block (2).
+# Confirms Gate 1 fires for the migration-shaped SECOND target even though
+# the FIRST target in the command is an ordinary source file.
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "echo x > src/app.ts; echo y > ./$MIG" 2; then
+  record_pass "#886 bash: non-migration target then migration target, no ticket → block"
+else
+  record_fail "#886 bash: non-migration target then migration target, no ticket → block"
 fi
 rm -rf "$SB"
 

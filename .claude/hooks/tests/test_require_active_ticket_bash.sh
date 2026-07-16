@@ -602,6 +602,53 @@ in=$(jq -nc --arg p "$rsb/workspace/proj/src/x.ts" '{tool_name:"Edit", tool_inpu
 run_case "#885 symlinked-out non-git workspace project allowed WITH active ticket" 0 "" "$in" "$sb"
 rm -rf "$external"
 
+# --- #886: judge ALL bash write targets, not just the first ------------
+#
+# The bypass shape: a command names an out-of-repo (or otherwise exempt)
+# target FIRST and an in-repo target SECOND. Before #886, the hook judged
+# only the first extracted target — an exempt first target let the whole
+# command through even though it also wrote somewhere gated.
+
+# 41. Multi-target: /tmp (exempt) THEN src/app.ts (gated), no ticket →
+#     BLOCKED. This is the exact bypass the #885 review surfaced.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/x; echo b > src/app.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 multi-target (out-of-repo then in-repo) blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 42. Same multi-target command, WITH an active ticket → ALLOWED (every
+#     target independently clears the gate).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=multi-target bash write test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/x; echo b > src/app.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 multi-target (out-of-repo then in-repo) allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 43. Regression: a SINGLE out-of-repo target (no second target) remains
+#     exempt — the per-target loop must not become stricter than before
+#     for the plain single-target case.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/x" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 regression: single out-of-repo target still exempt" 0 "" "$in" "$sb"
+
+# 44. Regression: a SINGLE in-repo target (no other target) remains gated
+#     w/o a ticket — same as before #886.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 regression: single in-repo target still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 45. tee naming BOTH an out-of-repo and an in-repo file in one invocation
+#     (`tee /tmp/a src/b.ts`) — both are targets of the SAME command, no
+#     ticket → BLOCKED on the in-repo one.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x | tee /tmp/a src/b.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 tee with out-of-repo + in-repo operands blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

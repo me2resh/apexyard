@@ -219,6 +219,58 @@ assert_not_deletion_only "rm + tee"                 "rm a | tee b"
 assert_not_deletion_only "redirect only (no rm)"    "echo x > file.ts"
 assert_not_deletion_only "cp only"                  "cp a b"
 
+# --- bash_extract_write_targets (#886) — ALL targets, not just the first ---
+
+assert_targets() {
+  local label="$1" cmd="$2" want="$3"
+  local got
+  got=$(bash_extract_write_targets "$cmd" | sort | tr '\n' ',' )
+  local want_sorted
+  want_sorted=$(printf '%s' "$want" | tr ',' '\n' | sort | tr '\n' ',')
+  if [ "$got" = "$want_sorted" ]; then
+    echo "PASS [targets/$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [targets/$label]: cmd=$cmd  want=[$want_sorted]  got=[$got]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/${label} "
+  fi
+}
+
+# Single-target commands still return exactly one target (no regression
+# vs. the singular bash_extract_write_target).
+assert_targets "single redirect"          "echo hi > /tmp/x"                          "/tmp/x"
+assert_targets "single in-repo redirect"  "echo hi > src/app.ts"                      "src/app.ts"
+assert_targets "single tee"               "echo x | tee /tmp/x"                       "/tmp/x"
+assert_targets "single cp"                "cp src.txt /tmp/dst.txt"                   "/tmp/dst.txt"
+
+# THE #886 bypass shape: an out-of-repo (or otherwise exempt) target FIRST,
+# an in-repo target SECOND — both must be present in the extracted set so a
+# consumer can gate on the second even though the first would exempt alone.
+assert_targets "semicolon-chained: out-of-repo then in-repo" \
+  "echo a > /tmp/x; echo b > src/app.ts"                                              "/tmp/x,src/app.ts"
+assert_targets "&&-chained: out-of-repo then in-repo" \
+  "cp a.txt /tmp/b.txt && echo y > src/app.ts"                                        "/tmp/b.txt,src/app.ts"
+assert_targets "tee with multiple file operands" \
+  "echo x | tee /tmp/a src/b.ts"                                                      "/tmp/a,src/b.ts"
+assert_targets "tee -a with multiple file operands" \
+  "echo x | tee -a /tmp/a src/b.ts"                                                   "/tmp/a,src/b.ts"
+assert_targets "three semicolon-chained redirects" \
+  "echo a > /tmp/x; echo b > /tmp/y; echo c > src/app.ts"                             "/tmp/x,/tmp/y,src/app.ts"
+
+# Duplicate targets across segments collapse to one entry.
+got_dup=$(bash_extract_write_targets "echo a > /tmp/x; echo b > /tmp/x" | wc -l | tr -d ' ')
+if [ "$got_dup" = "1" ]; then
+  echo "PASS [targets/duplicate targets deduped]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [targets/duplicate targets deduped]: got $got_dup lines, want 1" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/dedupe "
+fi
+
+# Documented misses still contribute nothing (no fabricated targets).
+assert_targets "python -c (miss) contributes nothing" \
+  'python3 -c "open(\"/tmp/x\",\"w\").write(\"hi\")"'                                 ""
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
