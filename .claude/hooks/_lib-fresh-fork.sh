@@ -11,6 +11,14 @@
 # Functions (sourced; do not exec this file directly):
 #   fresh_fork_state()
 #       Echoes one of: fresh | configured | not-a-fork ; always exits 0.
+#   fresh_fork_config_path()
+#       Echoes the resolved onboarding.yaml path this lib actually checked
+#       (in-fork default, or the split-portfolio v2 sibling-repo override).
+#       Empty string if there's no git toplevel at all. Callers that need
+#       to distinguish "config file missing" from "config file present but
+#       placeholder" (e.g. to pick a message) should check THIS path, not
+#       a hardcoded in-fork default — otherwise split-portfolio v2 forks
+#       (whose real onboarding.yaml lives in the sibling repo) mis-render.
 #
 # Detection rules (identical to the pre-extraction onboarding-check.sh —
 # see docs/technical-designs/onboarding-increment-1.md § D2):
@@ -50,6 +58,26 @@ if [ -f "$_FRESH_FORK_LIB_DIR/_lib-portfolio-paths.sh" ]; then
   . "$_FRESH_FORK_LIB_DIR/_lib-portfolio-paths.sh"
 fi
 
+# Internal: resolve the onboarding.yaml path this lib checks, given a repo
+# root. Shared by fresh_fork_state() and the public fresh_fork_config_path()
+# so there is exactly one resolution — not one inline in each.
+_fresh_fork_resolve_config() {
+  local repo_root="$1"
+  local config=""
+
+  # Resolve onboarding.yaml through the portfolio helper so split-portfolio
+  # v2 adopters get the sibling repo's copy. Falls back to the in-fork
+  # default (single-fork mode, or the helper unavailable) — same fallback
+  # onboarding-check.sh used pre-extraction.
+  if command -v portfolio_onboarding_path >/dev/null 2>&1; then
+    config=$(portfolio_onboarding_path 2>/dev/null)
+  fi
+  if [ -z "$config" ]; then
+    config="$repo_root/onboarding.yaml"
+  fi
+  echo "$config"
+}
+
 fresh_fork_state() {
   local repo_root config
 
@@ -59,17 +87,7 @@ fresh_fork_state() {
     return 0
   fi
 
-  # Resolve onboarding.yaml through the portfolio helper so split-portfolio
-  # v2 adopters get the sibling repo's copy. Falls back to the in-fork
-  # default (single-fork mode, or the helper unavailable) — same fallback
-  # onboarding-check.sh used pre-extraction.
-  config=""
-  if command -v portfolio_onboarding_path >/dev/null 2>&1; then
-    config=$(portfolio_onboarding_path 2>/dev/null)
-  fi
-  if [ -z "$config" ]; then
-    config="$repo_root/onboarding.yaml"
-  fi
+  config=$(_fresh_fork_resolve_config "$repo_root")
 
   if [ ! -f "$config" ]; then
     if [ -f "$repo_root/onboarding.example.yaml" ]; then
@@ -85,5 +103,18 @@ fresh_fork_state() {
   else
     echo "configured"
   fi
+  return 0
+}
+
+fresh_fork_config_path() {
+  local repo_root
+
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [ -z "$repo_root" ]; then
+    echo ""
+    return 0
+  fi
+
+  _fresh_fork_resolve_config "$repo_root"
   return 0
 }

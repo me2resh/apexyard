@@ -16,8 +16,9 @@ LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-fresh-fork.sh"
 PORTFOLIO_LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-portfolio-paths.sh"
 CONFIG_LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-read-config.sh"
 DEFAULTS_SRC="$(cd "$(dirname "$0")/../.." && pwd)/project-config.defaults.json"
+HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/onboarding-check.sh"
 
-for f in "$LIB_SRC" "$PORTFOLIO_LIB_SRC" "$CONFIG_LIB_SRC" "$DEFAULTS_SRC"; do
+for f in "$LIB_SRC" "$PORTFOLIO_LIB_SRC" "$CONFIG_LIB_SRC" "$DEFAULTS_SRC" "$HOOK_SRC"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required file not found at $f" >&2
     exit 1
@@ -50,6 +51,8 @@ make_fork() {
     cp "$PORTFOLIO_LIB_SRC" .claude/hooks/_lib-portfolio-paths.sh
     cp "$CONFIG_LIB_SRC" .claude/hooks/_lib-read-config.sh
     cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+    cp "$HOOK_SRC" .claude/hooks/onboarding-check.sh
+    chmod +x .claude/hooks/onboarding-check.sh
 
     git add -A
     git commit -q -m "test fixture" >/dev/null
@@ -189,6 +192,104 @@ r=$(fresh_fork_state)
 if [ "$r" = "fresh" ]; then exit 0; else echo "got=$r expected=fresh"; exit 1; fi
 '
 rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 6b: fresh_fork_config_path() defaults to the in-fork onboarding.yaml
+# path (no override configured).
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "config-path: defaults to in-fork onboarding.yaml" "$SB" '
+r=$(fresh_fork_config_path)
+expected="'"$SB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 6c: fresh_fork_config_path() resolves to the sibling repo path when
+# split-portfolio v2 overrides portfolio.onboarding. This is the path the
+# hook's message-selection logic must check (Rex nit) instead of a
+# hardcoded in-fork default.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+cat > "$SIB/onboarding.yaml" <<'YAML'
+company:
+  name: "Your Company Name"
+YAML
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "onboarding": "$SIB/onboarding.yaml"
+  }
+}
+JSON
+run_case "config-path: v2 override resolves to sibling repo path" "$SB" '
+r=$(fresh_fork_config_path)
+expected="'"$SIB"'/onboarding.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 6d (hook-level regression, Rex nit): in split-portfolio v2 with the
+# sibling repo's onboarding.yaml still carrying the placeholder,
+# onboarding-check.sh must print the "placeholder still present" wording —
+# NOT the "no onboarding.yaml" wording. Before the fix, the hook's fresh
+# branch checked the hardcoded in-fork path ($REPO_ROOT/onboarding.yaml),
+# which doesn't exist in v2 mode, so it always fell into the wrong message.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+cat > "$SIB/onboarding.yaml" <<'YAML'
+company:
+  name: "Your Company Name"
+YAML
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "onboarding": "$SIB/onboarding.yaml"
+  }
+}
+JSON
+run_case "hook (v2): sibling placeholder → \"placeholder still present\" wording" "$SB" '
+out=$(bash .claude/hooks/onboarding-check.sh 2>&1)
+case "$out" in
+  *"placeholder still present"*) exit 0 ;;
+esac
+echo "got: $out"
+exit 1
+'
+run_case "hook (v2): sibling placeholder → does NOT say \"no onboarding.yaml\"" "$SB" '
+out=$(bash .claude/hooks/onboarding-check.sh 2>&1)
+case "$out" in
+  *"no onboarding.yaml"*) echo "got: $out"; exit 1 ;;
+esac
+exit 0
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 6e (hook-level regression guard): single-fork mode with no
+# onboarding.yaml at all still prints the "no onboarding.yaml" wording
+# (confirms the fix didn't flip the single-fork case).
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+cat > "$SB/onboarding.example.yaml" <<'YAML'
+company:
+  name: "Your Company Name"
+YAML
+run_case "hook (v1): no onboarding.yaml → \"no onboarding.yaml\" wording" "$SB" '
+out=$(bash .claude/hooks/onboarding-check.sh 2>&1)
+case "$out" in
+  *"no onboarding.yaml"*) exit 0 ;;
+esac
+echo "got: $out"
+exit 1
+'
+rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
 # Case 7: not inside any git repo at all → not-a-fork

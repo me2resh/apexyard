@@ -4,7 +4,7 @@ description: "Guided first-run onboarding — capability tour, handover-vs-new-p
 disable-model-invocation: false
 argument-hint: ""
 effort: medium
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, Skill
 ---
 
 # /onboard — Guided First-Run Onboarding

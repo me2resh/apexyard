@@ -32,8 +32,14 @@ STATE=$(fresh_fork_state)
 
 case "$STATE" in
   fresh)
-    if [ -f "$REPO_ROOT/onboarding.yaml" ]; then
-      # Real onboarding.yaml exists but still carries the placeholder.
+    # Check the SAME resolved config path fresh_fork_state() checked (via
+    # fresh_fork_config_path()) — not a hardcoded $REPO_ROOT/onboarding.yaml.
+    # In split-portfolio v2 the real onboarding.yaml lives in the sibling
+    # repo; hardcoding the in-fork path here would print "no onboarding.yaml"
+    # even when a placeholder sibling file is what actually made this fresh.
+    CONFIG="$(fresh_fork_config_path)"
+    if [ -n "$CONFIG" ] && [ -f "$CONFIG" ]; then
+      # Config file exists but still carries the placeholder.
       echo "ApexYard: onboarding.yaml is unconfigured (placeholder still present). Run /onboard for the guided tour, or /setup to configure directly."
     else
       # No onboarding.yaml yet — fresh clone, example present.
