@@ -611,7 +611,9 @@ resolve_ci_status_glab() {
 #   1b. `glab api projects/<owner>%2F<repo>/merge_requests/<N>/merge ...` — repo
 #       from the URL-encoded project path (#767)
 #   2. `gh pr merge ... --repo <owner>/<repo> ...`        — repo from --repo flag
-#   3. Falls back to `gh pr view --json headRepository`   — current branch's PR
+#   3. Falls back to `gh pr view --json headRepository`, scoped to the
+#      checkout's own `origin` remote when resolvable (#887) — current
+#      branch's PR
 #
 # Returns empty if the repo cannot be determined.
 extract_repo_from_command() {
@@ -662,11 +664,31 @@ extract_repo_from_command() {
 
   # 3. Last resort: ask the forge which repo the current branch's PR/MR belongs
   #    to. Forge-aware (#764): a glab command falls back to `glab repo view`.
+  #
+  #    gh side (#887): an UNSCOPED `gh pr view --json headRepository` trusts
+  #    gh's ambient default-repo resolution, which prefers a remote literally
+  #    named "upstream" over "origin" when both exist — exactly the fork
+  #    layout this framework's own hooks use (origin=fork, upstream=canonical).
+  #    On a same-repo fork PR (opened against the fork's own main) that
+  #    ambient default silently targets the WRONG (parent) repo instead of
+  #    failing, the same class of bug `pr_base_repo` was fixed against in
+  #    #765/#898. Resolve the checkout's OWN repo from its `origin` remote
+  #    FIRST — deterministic, not a guess — and scope the gh query to it;
+  #    only fall through to the unscoped call when origin itself can't be
+  #    resolved at all (e.g. no git remote configured), so single-remote
+  #    checkouts keep working exactly as before.
   if [ -z "$repo" ]; then
     if [ "$(_forge_from_command "$cmd")" = glab ]; then
       repo=$(glab repo view --output json 2>/dev/null | jq -r '.full_name // empty' 2>/dev/null)
     else
-      repo=$(gh pr view --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+      local origin_repo
+      origin_repo=$(git remote get-url origin 2>/dev/null | sed -E 's#\.git$##; s#^(https?://[^/]+/|git@[^:]+:)##')
+      if [ -n "$origin_repo" ]; then
+        repo=$(gh pr view --repo "$origin_repo" --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+      fi
+      if [ -z "$repo" ]; then
+        repo=$(gh pr view --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+      fi
     fi
   fi
 
