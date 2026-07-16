@@ -422,6 +422,83 @@ fi
 assert_targets "python -c (miss) contributes nothing" \
   'python3 -c "open(\"/tmp/x\",\"w\").write(\"hi\")"'                                 ""
 
+# --- #931 residual 1: `<>` read-write open is now DETECTED as a write ---
+#
+# `[n]<>word` opens `word` for both reading AND writing — a real,
+# non-truncating write that every #886/#926 round missed entirely (the
+# leading `<` was always excluded by the OTHER operators' own
+# leading-context class, so `<>` was structurally invisible, not just an
+# uncovered edge case). #931 decided to DETECT rather than
+# document-as-accepted: the ticket gate cares about "was tracked content
+# touched", not "was it truncated".
+
+assert_write  "<> read-write open, fd-numbered (#931)"  "exec 3<> /tmp/x"
+assert_write  "<> read-write open, no fd, no space (#931)" "cmd <>file.txt"
+assert_write  "<> read-write open, fd + space (#931)"   "exec 3<> file.txt"
+
+assert_target "<> extracts the file target (#931)" \
+  "exec 3<> /tmp/x"                                                                   "/tmp/x"
+assert_targets "<> extracts the file target, multi-target form (#931)" \
+  "exec 3<> src/app.ts"                                                               "src/app.ts"
+
+# Sanity: `<>` must not be confused with heredoc (`<<`) or herestring
+# (`<<<`) — both contain repeated `<`, never the exact `<` immediately
+# followed by `>` this operator requires.
+assert_targets "<< heredoc still not a <> false-positive (#931)" \
+  "$(printf 'cat > /tmp/x <<EOF\nhi\nEOF')"                                           "/tmp/x"
+assert_targets "<<< herestring still not a <> false-positive (#931)" \
+  "cat <<< 'hello'"                                                                   ""
+
+# Sanity: a `<>` write hiding behind an `rm` must not be misclassified as
+# deletion-only (same shape as the round-5 `||>` sanity check above).
+assert_not_deletion_only "rm + '<>' hides a real write (#931)" \
+  "rm old.ts; exec 3<> src/app.ts"
+
+# --- #931 residual 2: `>(…)` / `<(…)` process substitution no longer
+#     over-blocked ---
+#
+# `diff a >(sort)` is NOT a file write — `>(sort)` is process substitution
+# (a subshell command wired to a fifo/fd path), syntactically adjacent to
+# `>` but semantically nothing like a redirect target. Pre-#931 the target
+# class allowed a leading `(` and so fabricated `(sort)` as if it were a
+# filename — a fail-closed (over-blocking) false positive, not a bypass,
+# but worth tightening since it needlessly blocked a common construct
+# (`diff a >(sort)`, `tee >(logger)`, etc.) behind the ticket gate.
+
+assert_read "diff with >(...) process substitution is NOT a write (#931)" \
+  "diff a >(sort)"
+assert_read "<(...) process substitution on the read side (#931, already fine)" \
+  "diff <(sort a) <(sort b)"
+
+assert_targets ">(...) process substitution contributes no target (#931)" \
+  "diff a >(sort)"                                                                    ""
+
+# The exact shape from #931's own repro: a REAL write earlier in a
+# no-space-chained command, a process-substitution tail after it — only
+# the real target must surface, and detection must still fire (because of
+# the first, real write).
+assert_appears_to_write "real write + >(...) tail still detected (#931)" \
+  "echo a > /tmp/ok;diff x >(sort)"
+assert_targets "real write + >(...) tail: only the real target surfaces (#931)" \
+  "echo a > /tmp/ok;diff x >(sort)"                                                    "/tmp/ok"
+
+# Sanity: the leading-`(` exclusion must NOT reject a legitimate filename
+# that merely CONTAINS a paren not in the leading position.
+assert_targets "filename with non-leading parens still extracts (#931)" \
+  'echo hi > "file(1).txt"'                                                           "file(1).txt"
+
+# Sanity: the process-substitution exclusion must not resurrect any
+# fd-dup / force-clobber / redirect-both-streams false-negative from
+# earlier rounds.
+assert_write  ">| force-clobber still a write alongside the new exclusion (#931)" \
+  "echo a >| /tmp/x"
+assert_write  "&> both-streams still a write alongside the new exclusion (#931)" \
+  "echo hi &> .gitignore"
+assert_read   "2>&1 fd-dup still excluded alongside the new exclusion (#931)" \
+  "make build 2>&1"
+assert_read   ">&2 fd-dup still excluded alongside the new exclusion (#931)" \
+  "echo err >&2"
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
