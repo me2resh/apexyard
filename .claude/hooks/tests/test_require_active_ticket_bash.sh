@@ -602,6 +602,291 @@ in=$(jq -nc --arg p "$rsb/workspace/proj/src/x.ts" '{tool_name:"Edit", tool_inpu
 run_case "#885 symlinked-out non-git workspace project allowed WITH active ticket" 0 "" "$in" "$sb"
 rm -rf "$external"
 
+# --- #886: judge ALL bash write targets, not just the first ------------
+#
+# The bypass shape: a command names an out-of-repo (or otherwise exempt)
+# target FIRST and an in-repo target SECOND. Before #886, the hook judged
+# only the first extracted target — an exempt first target let the whole
+# command through even though it also wrote somewhere gated.
+
+# 41. Multi-target: /tmp (exempt) THEN src/app.ts (gated), no ticket →
+#     BLOCKED. This is the exact bypass the #885 review surfaced.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/x; echo b > src/app.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 multi-target (out-of-repo then in-repo) blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 42. Same multi-target command, WITH an active ticket → ALLOWED (every
+#     target independently clears the gate).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=multi-target bash write test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/x; echo b > src/app.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 multi-target (out-of-repo then in-repo) allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 43. Regression: a SINGLE out-of-repo target (no second target) remains
+#     exempt — the per-target loop must not become stricter than before
+#     for the plain single-target case.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/x" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 regression: single out-of-repo target still exempt" 0 "" "$in" "$sb"
+
+# 44. Regression: a SINGLE in-repo target (no other target) remains gated
+#     w/o a ticket — same as before #886.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 regression: single in-repo target still blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 45. tee naming BOTH an out-of-repo and an in-repo file in one invocation
+#     (`tee /tmp/a src/b.ts`) — both are targets of the SAME command, no
+#     ticket → BLOCKED on the in-repo one.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x | tee /tmp/a src/b.ts" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 tee with out-of-repo + in-repo operands blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- #886/#926: NO-SPACE separator+redirection (Hakim security-review) --
+#
+# `echo a > /tmp/ok;> .gitignore` — after splitting on `;`, the second
+# segment is `> .gitignore`, which BEGINS with `>`. The pre-fix regex
+# `[^|<&]>...` required a character before `>` to exist, so this second,
+# in-repo target was silently dropped and the whole command exempted on
+# the first (out-of-repo) target alone. These are Hakim's exact repro
+# strings, now expected to BLOCK.
+
+# 46. No-space `;` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 47. Same command, WITH an active ticket → ALLOWED (both targets clear).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=no-space redirection bypass test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' then redirect allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 48. No-space `;` + redirect with a trailing command appended, no ticket
+#     → BLOCKED (the trailing `cat /etc/hostname` must not swallow the
+#     dropped target or change the verdict).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;> .gitignore cat /etc/hostname" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space ';' + redirect with trailing command blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 49. No-space `&&` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok&&> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '&&' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 50. No-space `|` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok|> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '|' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 51. No-space `||` then redirect, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok||> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '||' then redirect blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- #886/#926 round 3: &>, &>>, >|, >>| (Hakim adversarial re-hunt) ----
+#
+# The operator alternation only modelled `>`/`>>`/`n>` — it missed
+# `&>`/`&>>` (redirect BOTH streams to a file) and `>|`/`>>|`
+# (force-clobber, noclobber override). Both are real, destructive
+# truncating writes that were passing (exit 0) with no active ticket.
+
+# 52. `&>` (redirect-both-streams) into an in-repo file, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi &> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>' redirect-both-streams blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 53. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=redirect-both-streams operator test
+EOF
+in=$(jq -nc --arg c "echo hi &> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>' redirect-both-streams allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 54. `&>>` (append-both-streams) into an in-repo file, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi &>> .gitignore" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '&>>' append-both-streams blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 55. `>|` (force-clobber) after a no-space `;`, out-of-repo THEN in-repo,
+#     no ticket → BLOCKED on the in-repo (migration-shaped) target. This is
+#     Hakim's exact second repro.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>|' force-clobber blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 56. Same command, WITH an active ticket → ALLOWED (both targets clear).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=force-clobber operator test
+EOF
+in=$(jq -nc --arg c "echo a > /tmp/ok;>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>|' force-clobber allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 57. `>>|` (force-clobber-append) variant, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok;>>| db/migrations/006.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '>>|' force-clobber-append blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: fd-dup / read forms must NOT be newly gated ---------------
+#
+# `>&2` / `2>&1` / `1>&2` are fd-duplication (redirecting one fd to
+# ANOTHER fd), never a file write — the broadened operator set must not
+# start treating them as write targets. `< file` is a plain read.
+
+# 58. `echo err >&2` (fd-dup only, no in-repo write) — no ticket, still
+#     ALLOWED (nothing here is a write target at all).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo err >&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '>&2' fd-dup alone is not gated" 0 "" "$in" "$sb"
+
+# 59. `make build 2>&1` — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "make build 2>&1" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '2>&1' fd-dup alone is not gated" 0 "" "$in" "$sb"
+
+# 60. `cat < src/app.ts` — a plain READ of a tracked file, no ticket →
+#     still ALLOWED (reading is not gated; only writes are).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "cat < src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: plain '<' read is not gated" 0 "" "$in" "$sb"
+
+# --- #886/#926 round 4: ZERO whitespace between operator and target -----
+#
+# Hakim's fourth adversarial re-hunt: the mandatory `[[:space:]]+` after
+# the operator was itself a bypass — bash accepts ZERO whitespace between
+# a redirect operator and its target. All five of these are real,
+# destructive truncating writes that were passing (exit 0) with no ticket.
+
+# 61. `>` with no space at all, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi>src/migrations/001.sql" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>' (Hakim repro) blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 62. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=no-whitespace redirect operator test
+EOF
+in=$(jq -nc --arg c "echo hi>src/migrations/001.sql" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>' allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 63. `2>` (fd-numbered) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b 2>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space 'n>' fd-numbered blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 64. `>>` with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b>>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>>' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 65. `>|` (force-clobber) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b>|src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>|' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 66. `&>` (redirect-both-streams) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b&>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '&>' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: no-space fd-dup / read forms must NOT be newly gated ------
+
+# 67. `echo err>&2` (fd-dup, NO space either) — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo err>&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: no-space '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
+
+# 68. `make build 2>&1;true` (fd-dup, no space) — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "make build 2>&1;true" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: no-space '2>&1' fd-dup is not gated" 0 "" "$in" "$sb"
+
+# --- #886/#926 round 5: STRUCTURAL fix — |/||-adjacent redirects --------
+#
+# Hakim's fifth adversarial re-hunt found the actual root cause: DETECTION
+# (bash_command_appears_to_write) ran the redirection matcher on the
+# WHOLE, unsplit command, where a `|`-preceded `>` is excluded by the
+# leading-context class (needed for `2>&1`/`>&2`) and isn't at `^` either.
+# EXTRACTION already split first and found the target correctly —
+# detection and extraction disagreed. `;>` and `&&>` survived earlier
+# rounds by coincidence (`;` isn't excluded; `&&>` contains the substring
+# `&>`); `|`/`||` had no such rescue. These are real, truncating writes.
+
+# 69. `false ||> src/app.ts` (Hakim repro), no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>' after false blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 70. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=pipe-adjacent redirect operator test
+EOF
+in=$(jq -nc --arg c "false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>' after false allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 71. `false ||>| src/app.ts` (force-clobber variant, Hakim repro), no
+#     ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false ||>| src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>|' force-clobber after false blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 72. `echo x |> src/app.ts` (single-pipe variant, Hakim repro), no ticket
+#     → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x |> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '|>' after echo blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 73. The deletion-only bypass: `rm old.ts; false ||> src/app.ts` — a real
+#     write hiding behind a pipe-adjacent redirect alongside an rm. Must
+#     NOT be classified as deletion-only; no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "rm old.ts; false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 rm + '||>' hides a real write, blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: pipe-adjacent fd-dup / reads must NOT be newly gated -------
+
+# 74. `echo x | cat 2>&1` — pipe THEN fd-dup, no in-repo write at all →
+#     still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x | cat 2>&1" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: pipe then '2>&1' fd-dup is not gated" 0 "" "$in" "$sb"
+
+# 75. `false || echo err >&2` — or-chain THEN fd-dup, no in-repo write →
+#     still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false || echo err >&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '||' then '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

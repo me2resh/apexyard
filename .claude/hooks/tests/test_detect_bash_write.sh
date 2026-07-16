@@ -219,6 +219,209 @@ assert_not_deletion_only "rm + tee"                 "rm a | tee b"
 assert_not_deletion_only "redirect only (no rm)"    "echo x > file.ts"
 assert_not_deletion_only "cp only"                  "cp a b"
 
+# --- bash_extract_write_targets (#886) — ALL targets, not just the first ---
+
+assert_targets() {
+  local label="$1" cmd="$2" want="$3"
+  local got
+  got=$(bash_extract_write_targets "$cmd" | sort | tr '\n' ',' )
+  local want_sorted
+  want_sorted=$(printf '%s' "$want" | tr ',' '\n' | sort | tr '\n' ',')
+  if [ "$got" = "$want_sorted" ]; then
+    echo "PASS [targets/$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [targets/$label]: cmd=$cmd  want=[$want_sorted]  got=[$got]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/${label} "
+  fi
+}
+
+# Single-target commands still return exactly one target (no regression
+# vs. the singular bash_extract_write_target).
+assert_targets "single redirect"          "echo hi > /tmp/x"                          "/tmp/x"
+assert_targets "single in-repo redirect"  "echo hi > src/app.ts"                      "src/app.ts"
+assert_targets "single tee"               "echo x | tee /tmp/x"                       "/tmp/x"
+assert_targets "single cp"                "cp src.txt /tmp/dst.txt"                   "/tmp/dst.txt"
+
+# THE #886 bypass shape: an out-of-repo (or otherwise exempt) target FIRST,
+# an in-repo target SECOND — both must be present in the extracted set so a
+# consumer can gate on the second even though the first would exempt alone.
+assert_targets "semicolon-chained: out-of-repo then in-repo" \
+  "echo a > /tmp/x; echo b > src/app.ts"                                              "/tmp/x,src/app.ts"
+assert_targets "&&-chained: out-of-repo then in-repo" \
+  "cp a.txt /tmp/b.txt && echo y > src/app.ts"                                        "/tmp/b.txt,src/app.ts"
+assert_targets "tee with multiple file operands" \
+  "echo x | tee /tmp/a src/b.ts"                                                      "/tmp/a,src/b.ts"
+assert_targets "tee -a with multiple file operands" \
+  "echo x | tee -a /tmp/a src/b.ts"                                                   "/tmp/a,src/b.ts"
+assert_targets "three semicolon-chained redirects" \
+  "echo a > /tmp/x; echo b > /tmp/y; echo c > src/app.ts"                             "/tmp/x,/tmp/y,src/app.ts"
+
+# #886/#926 (Hakim security-review finding): NO-SPACE separator+redirection.
+# Splitting on the separator can leave a segment that BEGINS with `>` —
+# e.g. `;> .gitignore` splits into a second segment of `> .gitignore`. The
+# original leading-context regex `[^|<&]>...` required a character before
+# `>` to exist at all, so it silently dropped the target at position 0.
+# These are Hakim's exact repro strings from the PR #926 review.
+assert_targets "no-space semicolon then redirect" \
+  "echo a > /tmp/ok;> .gitignore"                                                     "/tmp/ok,.gitignore"
+assert_targets "no-space semicolon+redirect with trailing command" \
+  "echo a > /tmp/ok;> .gitignore cat /etc/hostname"                                   "/tmp/ok,.gitignore"
+assert_targets "no-space && then redirect" \
+  "echo a > /tmp/ok&&> .gitignore"                                                    "/tmp/ok,.gitignore"
+assert_targets "no-space | then redirect" \
+  "echo a > /tmp/ok|> .gitignore"                                                     "/tmp/ok,.gitignore"
+assert_targets "no-space || then redirect" \
+  "echo a > /tmp/ok||> .gitignore"                                                    "/tmp/ok,.gitignore"
+
+# Sanity: the anchored fix must not turn 2>&1 (fd-dup) or a heredoc into a
+# false-positive redirection target.
+if bash_command_appears_to_write "make build 2>&1"; then
+  echo "FAIL [targets/2>&1 must not be treated as a write]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/fd-dup-false-positive "
+else
+  echo "PASS [targets/2>&1 correctly not a write]"
+  PASS=$((PASS+1))
+fi
+assert_targets "heredoc still extracts correctly (no regression)" \
+  "$(printf 'cat > /tmp/x <<EOF\nhi\nEOF')"                                           "/tmp/x"
+
+# #886/#926 round 3 (Hakim adversarial re-hunt): the operator alternation
+# only modelled >, >>, and n> — it missed &>/&>> (redirect BOTH streams to
+# a file) and >|/>>| (force-clobber, noclobber override). Both are real,
+# destructive truncating writes. Hakim's exact repros:
+assert_targets "&> redirects both streams to a file (Hakim repro)" \
+  "echo hi &> .gitignore"                                                            ".gitignore"
+# NOTE: unlike the other rows in this block, `&>>` happens to extract
+# correctly even under the PRE-round-3 regex — not via the dedicated `&>>?`
+# alternative this fix adds, but by coincidence: the pattern's leading-context
+# class `[^|<&]` doesn't exclude `>` itself, so the SECOND `>` in `&>>` reads
+# the FIRST `>` as valid (non-excluded) leading context and matches anyway.
+# Kept here as a correctness/coverage check (it must still pass post-fix),
+# not a fail-pre/pass-post discriminator like the bare `&>` row above it.
+assert_targets "&>> append-both-streams to a file" \
+  "echo hi &>> .gitignore"                                                           ".gitignore"
+assert_targets ">| force-clobber after no-space semicolon (Hakim repro)" \
+  "echo a > /tmp/ok;>| db/migrations/006.sql"                                         "/tmp/ok,db/migrations/006.sql"
+assert_targets ">>| force-clobber-append variant" \
+  "echo a > /tmp/ok;>>| db/migrations/006.sql"                                        "/tmp/ok,db/migrations/006.sql"
+assert_targets ">| with a space after the separator (not just no-space)" \
+  "echo a > /tmp/ok; >| db/migrations/006.sql"                                        "/tmp/ok,db/migrations/006.sql"
+
+# #886/#926 round 4 (Hakim's fourth adversarial re-hunt): ZERO whitespace
+# between the operator and its target. Bash accepts this for every
+# operator — the mandatory `[[:space:]]+` this pattern used through round 3
+# silently dropped all five of these real, destructive writes. Hakim's
+# exact repros:
+assert_targets "no-space '>' (Hakim repro)" \
+  "echo hi>src/migrations/001.sql"                                                    "src/migrations/001.sql"
+assert_targets "no-space 'n>' fd-numbered (Hakim repro)" \
+  "echo a > /tmp/ok; echo b 2>src/migrations/001.sql"                                 "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '>>' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b>>src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '>|' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b>|src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '&>' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b&>src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+
+# Sanity: relaxing whitespace to optional must NOT open a new false-positive
+# surface on fd-dup forms written with NO space either — the target
+# character class (not the whitespace requirement) is what excludes them.
+assert_targets "no-space '>&2' fd-dup — still not a write target" \
+  "echo err>&2"                                                                       ""
+assert_targets "no-space '2>&1' fd-dup — still not a write target" \
+  "make build 2>&1;true"                                                              ""
+
+# #886/#926 round 5 (Hakim's fifth adversarial re-hunt — the STRUCTURAL
+# root of the whole series): `|`/`||`-adjacent redirects. Detection
+# (bash_command_appears_to_write) used to run the redirection matcher on
+# the WHOLE, unsplit command, where a `|`-preceded `>` is excluded by the
+# leading-context class and isn't at `^` either — so `|>`/`||>`/`||>|`
+# were never even recognised as writes, let alone extracted. Extraction
+# already split first, so it found the target correctly — detection and
+# extraction DISAGREED. This block proves EXTRACTION already returns the
+# right target for these (it did before round 5 too); the real fix is in
+# the DETECTION-level test block further down, which is where the
+# structural bug actually lived.
+assert_targets "'||>' after a false command (Hakim repro)" \
+  "false ||> src/app.ts"                                                             "src/app.ts"
+assert_targets "'||>|' force-clobber after a false command (Hakim repro)" \
+  "false ||>| src/app.ts"                                                            "src/app.ts"
+assert_targets "'|>' after echo (Hakim repro)" \
+  "echo x |> src/app.ts"                                                             "src/app.ts"
+
+# Detection-level proof: bash_command_appears_to_write must ALSO recognise
+# these — this is the assertion that actually discriminates round 5 from
+# rounds 1-4, since it's the DETECTION path (not extraction) that had the
+# structural bug.
+assert_appears_to_write() {
+  local label="$1" cmd="$2"
+  if bash_command_appears_to_write "$cmd"; then
+    echo "PASS [detect/$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [detect/$label]: bash_command_appears_to_write missed: $cmd" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}detect/${label} "
+  fi
+}
+assert_appears_to_write "'||>' detected as a write (Hakim repro)"    "false ||> src/app.ts"
+assert_appears_to_write "'||>|' detected as a write (Hakim repro)"   "false ||>| src/app.ts"
+assert_appears_to_write "'|>' detected as a write (Hakim repro)"     "echo x |> src/app.ts"
+
+# Sanity: the deletion-only classifier had the identical structural bug at
+# its own direct _bdw_match_redirection call site — `rm x; false ||> y`
+# would have been wrongly classified as deletion-only (content-writing
+# hiding behind a |-adjacent redirect), exempting it from the ticket gate.
+assert_not_deletion_only "rm + '||>' hides a real write (round 5)" \
+  "rm old.ts; false ||> src/app.ts"
+
+# Sanity: the round-5 fix must NOT false-positive on fd-dup / read forms
+# that also happen to be pipe-adjacent.
+assert_targets "'| cmd 2>&1' pipe then fd-dup — not a write" \
+  "echo x | cat 2>&1"                                                                 ""
+assert_targets "'|| cmd >&2' or-chain then fd-dup — not a write" \
+  "false || echo err >&2"                                                             ""
+
+# Sanity: the broadened operator set must NOT false-positive on fd-duplication
+# forms, which look superficially similar (`&` and `>` both present) but mean
+# something entirely different — redirecting one fd to ANOTHER fd, not to a
+# file. Order in "&"/">"" matters: &> is `&` THEN `>` (a write); these forms
+# have `>` THEN `&` (a dup) and must stay unmatched.
+assert_targets "2>&1 fd-dup — not a write target" \
+  "make build 2>&1"                                                                   ""
+assert_targets ">&2 fd-dup — not a write target" \
+  "echo err >&2"                                                                      ""
+assert_targets "1>&2 fd-dup — not a write target" \
+  "cmd 1>&2"                                                                          ""
+if bash_command_appears_to_write "echo err >&2"; then
+  echo "FAIL [targets/>&2 must not be detected as appears_to_write]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/fd-dup-appears-to-write "
+else
+  echo "PASS [targets/>&2 correctly not detected as a write]"
+  PASS=$((PASS+1))
+fi
+
+# Sanity: reads / heredocs / herestrings must still be untouched by the
+# broadened operator set.
+assert_targets "< plain read redirection — not a write" \
+  "cat < /tmp/x"                                                                      ""
+assert_targets "<<< herestring — not a write" \
+  "cat <<< 'hello'"                                                                   ""
+
+# Duplicate targets across segments collapse to one entry.
+got_dup=$(bash_extract_write_targets "echo a > /tmp/x; echo b > /tmp/x" | wc -l | tr -d ' ')
+if [ "$got_dup" = "1" ]; then
+  echo "PASS [targets/duplicate targets deduped]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [targets/duplicate targets deduped]: got $got_dup lines, want 1" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}targets/dedupe "
+fi
+
+# Documented misses still contribute nothing (no fabricated targets).
+assert_targets "python -c (miss) contributes nothing" \
+  'python3 -c "open(\"/tmp/x\",\"w\").write(\"hi\")"'                                 ""
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"

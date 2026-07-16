@@ -35,17 +35,40 @@
 #
 # The config is read from `<ops_root>/.claude/project-config.json` if
 # present, otherwise defaults below apply.
+#
+# ALL write targets are judged, not just the first (apexyard#886): a Bash
+# command can name more than one write target (`echo x > /tmp/scratch.sql
+# && echo y > db/migrations/002_add.sql`). Judging only the first target
+# let a command whose first target wasn't migration-shaped slip a later,
+# genuinely migration-shaped target past this gate entirely. See the
+# target-resolution loop below (after is_migration_path is defined) for
+# how every extracted target gets checked.
+
+# Exempt meta / docs / example files — these never need a migration
+# ticket regardless of path. Applied PER TARGET (not just once against
+# the first extracted target) so a meta-exempt target can't shadow a
+# genuinely migration-shaped target named later in the same command.
+_rmt_is_meta_exempt() {
+  case "$1" in
+    */.claude/*|*/.claude|*/docs/*|*/docs) return 0 ;;
+    *.md|*.example) return 0 ;;
+  esac
+  # Note: `*/projects/*/docs/*` is subsumed by `*/docs/*` above (shell case
+  # `*` crosses `/`), so no separate arm is needed.
+  return 1
+}
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
-# Bash-tool path: if the command writes, try to extract the target so we
-# can apply the migration-path matcher to it. If extraction fails (e.g.
-# `python -c '…write_text("file"…)…'`), FILE_PATH stays empty and the
-# hook exits 0 — the migration gate is path-specific, so an
-# unextractable target falls outside the gate's scope.
+# Bash-tool path: if the command writes, collect ALL extractable targets so
+# every one can be checked against the migration-path matcher below — not
+# just the first (#886). If extraction finds nothing at all (e.g.
+# `python -c '…write_text("file"…)…'`), the migration gate is path-specific
+# by design and falls outside its scope, same as before this change.
 # See me2resh/apexyard#151 + _lib-detect-bash-write.sh for the detector.
+BASH_TARGETS=""
 if [ "$TOOL_NAME" = "Bash" ]; then
   COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
   [ -z "$COMMAND" ] && exit 0
@@ -57,26 +80,28 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     if ! bash_command_appears_to_write "$COMMAND"; then
       exit 0
     fi
-    FILE_PATH=$(bash_extract_write_target "$COMMAND")
+    BASH_TARGETS=$(bash_extract_write_targets "$COMMAND")
   else
     # Library missing — fall back to no-op rather than bricking the hook.
     exit 0
   fi
+
+  if [ -z "$BASH_TARGETS" ]; then
+    exit 0
+  fi
+  # Resolved to the gate-worthy target further down, once is_migration_path
+  # is defined — see the resolution loop after that function.
+  FILE_PATH=""
 fi
 
-if [ -z "$FILE_PATH" ]; then
-  exit 0
+if [ "$TOOL_NAME" != "Bash" ]; then
+  if [ -z "$FILE_PATH" ]; then
+    exit 0
+  fi
+  if _rmt_is_meta_exempt "$FILE_PATH"; then
+    exit 0
+  fi
 fi
-
-# --------- Exempt meta / docs / example files ---------
-# These never need a migration ticket regardless of path, so short-circuit
-# before doing any network calls.
-case "$FILE_PATH" in
-  */.claude/*|*/.claude|*/docs/*|*/docs) exit 0 ;;
-  *.md|*.example) exit 0 ;;
-esac
-# Note: `*/projects/*/docs/*` is subsumed by `*/docs/*` above (shell case `*`
-# crosses `/`), so no separate arm is needed.
 
 # --------- Discover ops root ---------
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -175,7 +200,29 @@ is_migration_path() {
   return 1
 }
 
-if ! is_migration_path "$FILE_PATH"; then
+# --------- Resolve which target (if any) is migration-shaped ---------
+# #886: for a Bash command, check EVERY extracted target — not just the
+# first — skipping any that are meta-exempt, and gate on the first one
+# that matches a migration-path pattern. For a non-Bash tool call there is
+# only ever the one FILE_PATH (already meta-exemption-checked above).
+if [ "$TOOL_NAME" = "Bash" ]; then
+  RESOLVED_TARGET=""
+  while IFS= read -r _tgt; do
+    [ -z "$_tgt" ] && continue
+    _rmt_is_meta_exempt "$_tgt" && continue
+    if is_migration_path "$_tgt"; then
+      RESOLVED_TARGET="$_tgt"
+      break
+    fi
+  done <<< "$BASH_TARGETS"
+
+  if [ -z "$RESOLVED_TARGET" ]; then
+    # No target in this command matches a migration path — other hooks
+    # handle the standard ticket check.
+    exit 0
+  fi
+  FILE_PATH="$RESOLVED_TARGET"
+elif ! is_migration_path "$FILE_PATH"; then
   # Not a migration file — other hooks handle the standard ticket check.
   exit 0
 fi
