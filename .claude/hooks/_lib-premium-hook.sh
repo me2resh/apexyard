@@ -100,6 +100,35 @@
 #       (works because presence checks run via `eval` in THIS shell, not a
 #       child process — unlike the payload, they inherit this lib's functions.)
 #
+#   premium_hook_probe <feature_key> <presence_check_cmd> <probe_cmd> [default_enabled]
+#       A cheap, bounded LIVENESS check (me2resh/apexyard#929) — for callers
+#       that need to know whether a premium component can actually RESPOND
+#       right now, not just whether it's installed, before deciding what to
+#       advertise. Same GATE 1 (feature flag) / GATE 2 (presence) semantics
+#       as premium_hook_run, and the same timeout-guarded child-process
+#       execution shape, but instead of always returning 0 it returns a
+#       three-way result the caller branches on:
+#         0  REACHABLE     — gate passed AND probe_cmd exited 0 in time.
+#         1  UNREACHABLE    — gate passed but probe_cmd exited non-zero or
+#                            was killed for hanging past the timeout.
+#         2  NOT_APPLICABLE — feature disabled/unconfigured, presence check
+#                            failed, or required args are missing. Same
+#                            "nothing to report on" case premium_hook_run
+#                            treats as a silent no-op.
+#       probe_cmd should be side-effect-free and fast (a liveness check,
+#       not the real premium work) — see reindex-on-session-start.sh for
+#       the worked example (probes `apexyard-search doctor` before nudging
+#       a reindex).
+#
+# Tunables (env):
+#   PREMIUM_HOOK_PROBE_TIMEOUT_SECS   max seconds a premium_hook_probe call
+#                                     spends before killing the probe and
+#                                     treating it as UNREACHABLE (default 5 —
+#                                     short on purpose; a liveness check
+#                                     should be fast even when the caller's
+#                                     own premium_hook_run payload is allowed
+#                                     a longer PREMIUM_HOOK_TIMEOUT_SECS)
+#
 # Source-guard: safe to source more than once in the same shell (idempotent,
 # matches the pattern in _lib-ops-root.sh).
 
@@ -296,4 +325,49 @@ premium_hook_run() {
 
   # ALWAYS 0 — a premium hook can never block or break its caller.
   return 0
+}
+
+# ------------------------------------------------------------------------------
+# Public: premium_hook_probe <feature_key> <presence_check_cmd> <probe_cmd> [default_enabled]
+#   See header for full semantics. Unlike premium_hook_run, this function's
+#   return code IS the signal — 0 (reachable) / 1 (unreachable) /
+#   2 (not applicable) — so callers can branch on it. It still never lets a
+#   hanging probe run unbounded: same timeout-guarded child-process shape as
+#   premium_hook_run, just with its own (shorter-by-default) timeout knob.
+# ------------------------------------------------------------------------------
+premium_hook_probe() {
+  local feature_key="${1:-}"
+  local presence_cmd="${2:-}"
+  local probe_cmd="${3:-}"
+  local default_enabled="${4:-true}"
+
+  # Nothing to probe -> not applicable, same as premium_hook_run's "nothing
+  # to run" early-out.
+  [ -n "$feature_key" ] || return 2
+  [ -n "$probe_cmd" ] || return 2
+
+  # GATE 1: feature flag. Absent/disabled -> not applicable, zero latency.
+  premium_feature_enabled "$feature_key" "$default_enabled" || return 2
+
+  # GATE 2: component presence, when the caller supplied a check.
+  if [ -n "$presence_cmd" ]; then
+    ( eval "$presence_cmd" ) >/dev/null 2>&1 || return 2
+  fi
+
+  # LIVENESS CHECK: timeout-guarded child process, same fallback order as
+  # premium_hook_run (GNU `timeout`, then macOS `gtimeout`, else unbounded).
+  local timeout_secs to
+  timeout_secs="${PREMIUM_HOOK_PROBE_TIMEOUT_SECS:-5}"
+  to=""
+  if command -v timeout >/dev/null 2>&1; then
+    to="timeout -k 2 ${timeout_secs}"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    to="gtimeout -k 2 ${timeout_secs}"
+  fi
+
+  # shellcheck disable=SC2086
+  if $to bash -c "$probe_cmd"; then
+    return 0
+  fi
+  return 1
 }
