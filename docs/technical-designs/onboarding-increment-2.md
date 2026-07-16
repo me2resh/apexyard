@@ -81,7 +81,7 @@ FR-4 requires the glossary be "reusable across skills, not locked inside the new
 |--------|------|------|
 | **A. Append a `## Glossary` to `capability-tour.md`** | No new file | Couples two assets with different render cadences (tour = whole/in-order; glossary = per-term); muddies `/tutorial`'s clean "render the tour" contract; a per-term aside must slice a sub-section from a mixed-purpose file |
 | **B. Structured data file** (`glossary.yaml`/`.json`) | Trivially per-term addressable | Breaks the framework's markdown-asset convention (`capability-tour.md`, `templates/audits/<dim>.md`); needs `yq`/`jq` on a plain-text lookup path; harder for a non-engineer maintainer to reword |
-| **C. Structured markdown sibling** — one term per stable `### ` heading + a greppable `<!-- term: … -->` key *(chosen)* | Single source of truth in the same markdown idiom; human-editable; per-term addressable via the anchor; `/tutorial` renders whole, asides/lookups slice one anchor; sits in the inc-1 `docs/onboarding/` seam | A light heading/anchor read-contract to document (not a parser) |
+| **C. Structured markdown sibling** — one term per stable `###` heading + a greppable `<!-- term: … -->` key *(chosen)* | Single source of truth in the same markdown idiom; human-editable; per-term addressable via the anchor; `/tutorial` renders whole, asides/lookups slice one anchor; sits in the inc-1 `docs/onboarding/` seam | A light heading/anchor read-contract to document (not a parser) |
 
 **Chosen: C.** Full read-contract in § "Shared glossary asset — read contract". Rationale: the framework's precedent is that shared *content* is markdown, not data — reading one plain-text section needs no tooling on the path, and a non-technical maintainer can reword a definition without a schema. The heading-anchor + `term:` key delivers Option B's addressability without its dependency/readability costs, and a separate file keeps `/tutorial`'s increment-1 "render the tour" contract intact. Recorded as [AgDR-0100](../agdr/AgDR-0100-onboarding-glossary-storage.md).
 
@@ -153,7 +153,7 @@ The NFR is that a plain-language aside must be a *simplification*, never a *miss
 
 ### D7 — Intra-increment build seam: #913 depends on #914's depth-mode contract; the safe default makes either order correct
 
-#913 (asides) and #914 (depth mode) are **sibling tickets** — both blocked only by #912, both blocking #915 — so they may build in parallel. But #913's asides are *gated on guided mode*, which #914 owns. This design defines the contract so they build independently:
+Tickets #913 (asides) and #914 (depth mode) are **sibling tickets** — both blocked only by #912, both blocking #915 — so they may build in parallel. But #913's asides are *gated on guided mode*, which #914 owns. This design defines the contract so they build independently:
 
 - The depth-mode seam (`.claude/session/onboarding-depth-mode`, values `terse`/`guided`, **absent → terse**) is specified **here**. #914 owns *writing* it (derivation + override); #913 owns *reading* it to gate asides.
 - **Safe default:** absent marker → terse → zero asides. So even if #913's asides land before #914's writer, no aside ever leaks to a terse/unset adopter — the parallel build is correctness-safe.
@@ -279,7 +279,7 @@ sequenceDiagram
 
 `docs/onboarding/glossary.md` is framework-static markdown (MIT header, like `capability-tour.md`). The contract all three readers honour (authored under #913):
 
-- **Five entries, one per stable `### ` heading**: `### issue / ticket`, `### PR (pull request)`, `### merge`, `### branch`, `### CI (continuous integration)`.
+- **Five entries, one per stable `###` heading**: `### issue / ticket`, `### PR (pull request)`, `### merge`, `### branch`, `### CI (continuous integration)`.
 - **Each section's first line is a greppable key comment**: `<!-- term: issue,ticket -->` — lets a per-term reader locate an entry by key (comma-separated surface spellings map to one anchor: "issue" and "ticket" → the same entry) without positional assumptions.
 - **Body: 1–3 plain-language sentences, no jargon-on-jargon** — any non-common-English word inside a definition is either inlined or is one of the other five terms (FR-4 AC + D6 Consistency).
 - **`/tutorial` renders the whole file in order; asides + the lookup rule slice one anchored section by its `term:` key.** No consumer embeds the prose (the increment-1 no-duplication discipline, extended).
@@ -304,7 +304,7 @@ Every one of these surfaces changes **only whether/how much explanatory text acc
 
 | PRD Open Question | Resolution | Where |
 |-------------------|------------|-------|
-| Where does the plain-language glossary content live? | **Structured markdown sibling `docs/onboarding/glossary.md`** (one term per `### ` anchor + `term:` key), in the inc-1 seam directory | D1 · AgDR-0100 |
+| Where does the plain-language glossary content live? | **Structured markdown sibling `docs/onboarding/glossary.md`** (one term per `###` anchor + `term:` key), in the inc-1 seam directory | D1 · AgDR-0100 |
 | Should the on-demand glossary lookup (FR-8) ship in inc-1 or inc-2? | **Increment 2**, in #915 (M7) — as an ambient rule, not a skill | D4 · scoping below |
 | Should technical-level inference default to "ask" or "infer silently"? | **Already resolved in increment-1 D5** — infer silently from the stack description, ask only when ambiguous. Increment 2 *activates* that captured signal to derive depth mode; the inference default is settled and carried forward unchanged (no re-litigation) | D2 |
 | What is the standalone entry point named? | **Already resolved in increment-1 D4** — `/tutorial`. Increment 2 grows it (D5); the name is settled | D5 |
@@ -321,7 +321,7 @@ Three build tickets, all increment-2, all kept (full SDLC — no spike exemption
 
 | # | Task | Est. | Depends on |
 |---|------|------|-----------|
-| 1 | Author `docs/onboarding/glossary.md` — 5 entries (issue/ticket, PR, merge, branch, CI), structured per the D1 read-contract (`### ` anchors + `term:` keys), 1–3 sentences each, no jargon-on-jargon; each checked against its real mechanism (D6) | 3h | — |
+| 1 | Author `docs/onboarding/glossary.md` — 5 entries (issue/ticket, PR, merge, branch, CI), structured per the D1 read-contract (`###` anchors + `term:` keys), 1–3 sentences each, no jargon-on-jargon; each checked against its real mechanism (D6) | 3h | — |
 | 2 | Implement the guided-mode aside path in `/onboard` — read depth mode (D2 contract, **safe default terse**), gate on `guided`, seen-set check/append against `.claude/session/onboarding-glossary-seen`, slice one term from `glossary.md` (AgDR-0101) | 3h | 1 |
 | 3 | Extend the SessionStart clear-marker sweep to clear `onboarding-glossary-seen` (mirror `clear-bootstrap-marker.sh`) | 1h | 2 |
 | 4 | `.claude/hooks/tests/test_glossary_asides.sh` — terse → zero asides + seen-set untouched; guided first mention → key appended + aside; guided second mention → no aside | 2.5h | 2 |
