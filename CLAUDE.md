@@ -319,6 +319,7 @@ Copy whichever you need into your project's `.github/workflows/`. Full details i
 | Hook wiring | `.claude/settings.json` |
 | **Per-project docs** | `projects/<name>/` |
 | **Live working copies** (gitignored) | `workspace/<name>/` |
+| **Cognitive memory layer** (optional, docs-only scaffold) | `.claude/memory/` — see [`.claude/memory/README.md`](.claude/memory/README.md) for what it is, what it isn't, and how it differs from AgDRs / Claude Code's native session memory |
 | **Topology bundles** (harness templates per service shape) | `topologies/<name>/` — see [`topologies/README.md`](topologies/README.md) |
 | CI pipelines | `golden-paths/pipelines/` |
 | Getting Started | `docs/getting-started.md` |
