@@ -256,7 +256,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/investigation` | Create an investigation ticket + live-doc for sustained root-cause work |
 | `/idea` | Capture a new product idea to the shared backlog |
 | `/handover` | Onboard an external repo — harnessability scoring across 5 dimensions, checklist-pick which docs to generate, and offer to file Next Steps as tracker tickets |
-| `/onboard` | Deprecated alias — redirects to `/setup` or `/handover` |
+| `/onboard` | Guided first-run onboarding — capability tour, handover-vs-new-project branch, guided first win (front door for a brand-new fork; standalone `/tutorial` re-entry coming in a follow-up) |
 | `/extract-features` | Six-axis Feature Inventory (routes / models / jobs / tests / UI / docs) for rewrites |
 | `/feature-diagram` | Per-feature Mermaid flowchart of routes / models / jobs / screens involved |
 | `/process` | Extract a business process from registered repos and emit lint-clean BPMN 2.0 |
