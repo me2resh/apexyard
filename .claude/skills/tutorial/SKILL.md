@@ -1,6 +1,6 @@
 ---
 name: tutorial
-description: "Standalone, side-effect-free re-entry to the capability tour — replays the roles/skills/gates walkthrough any time, on any fork state. No /setup or /handover coupling."
+description: "Standalone, side-effect-free re-entry to the capability tour + full teach-in-context glossary — replays the roles/skills/gates walkthrough and all five glossary terms any time, on any fork state, respecting depth mode. No /setup or /handover coupling."
 disable-model-invocation: false
 argument-hint: ""
 effort: low
@@ -11,22 +11,26 @@ allowed-tools: Read, Bash
 
 This is ticket #911 (M3) of the guided-onboarding walking skeleton (technical
 design: `docs/technical-designs/onboarding-increment-1.md`, § D3/D4 and the
-"Standalone `/tutorial` Reusability Spec"), now layered with increment 2's
-**depth adaptivity** (technical design:
-`docs/technical-designs/onboarding-increment-2.md` § D2/D5/D7, ticket #914).
+"Standalone `/tutorial` Reusability Spec"), layered with increment 2's
+**depth adaptivity** (ticket #914, § D2/D5/D7) and now grown by **#915 (M7)**
+to also render the **full teach-in-context glossary** — US-6 in full
+(technical design: `docs/technical-designs/onboarding-increment-2.md` § D5).
 `/tutorial` is a **standalone, read-only re-entry point** to the same
-capability tour `/onboard` shows on first run — for the adopter who
-skipped it, missed it, or just wants to see it again without faking a
-fresh fork.
+capability tour `/onboard` shows on first run, plus the plain-language
+glossary for the five core SDLC terms — for the adopter who skipped either,
+missed them, or just wants to see them again without faking a fresh fork.
 
-**This ticket (#914) wires `/tutorial` onto the shared depth-mode marker**
-so it renders the tour in the adopter's current `terse`/`guided` mode
-(one short "why this matters" sentence per section in guided mode; bare,
-byte-for-byte unchanged rendering in terse — NFR Backward-compat). The
-**full teach-in-context glossary render** (US-6 in full — `/tutorial`
-growing to show all five glossary terms) is **#915** and still out of
-scope here; this ticket only makes the mechanism ready so #915 needs no
-rework once it lands (D7).
+**#914 wired `/tutorial` onto the shared depth-mode marker** so it renders
+in the adopter's current `terse`/`guided` mode (one short "why this
+matters" sentence per section in guided mode; bare, byte-for-byte
+unchanged rendering in terse — NFR Backward-compat). **This ticket (#915)
+adds the full glossary render after the tour** — reading the same shared
+`docs/onboarding/glossary.md` asset `/onboard`'s guided-mode asides already
+read one term at a time (#913) — and lifts the "tour-only" scope note from
+Rule #4 below. It does **not** touch the depth-mode marker's derivation,
+override, or transparency logic (that stays #914's, unchanged), and it does
+**not** touch `/onboard`'s asides or the glossary content itself (that
+stays #913's).
 
 ## What this skill does NOT do
 
@@ -140,8 +144,8 @@ in the `$mode` resolved in Step 0:
 - **`guided`** — after the tour content, add ONE short plain-language
   "why this matters" sentence (e.g. tying the roles/skills/gates tour
   back to what the adopter will actually see day to day). Keep it to a
-  single sentence — this is generic framing, not the per-term glossary
-  render (that's #915's job; this ticket only wires the mode mechanism).
+  single sentence — this is generic tour framing, distinct from the
+  per-term glossary render that follows in Step 3 below.
 
 Open with a one-line frame so the adopter knows this is a replay, not a
 first-run flow:
@@ -153,7 +157,49 @@ Replaying the ApexYard capability tour — the same 60-second orientation
 
 Then render the tour content.
 
-### 3. Depth mode override + transparency (design § D2, FR-6/FR-9)
+### 3. Render the full glossary (design § D5, US-6 full — #915)
+
+Immediately after the tour, read the shared glossary asset:
+
+```bash
+glossary_path="$(git rev-parse --show-toplevel)/docs/onboarding/glossary.md"
+```
+
+Read `docs/onboarding/glossary.md` with the `Read` tool — the same single
+source of truth `/onboard`'s guided-mode asides (#913) slice one term from.
+Render **all five entries, top to bottom, in file order** (issue/ticket,
+PR, merge, branch, CI). Never re-type, paraphrase, or hand-copy the
+definitions into this skill file — read the file fresh every invocation,
+exactly like Step 1's tour read (the increment-1 no-duplication discipline,
+extended to the glossary asset per design § "Backward Compatibility &
+Reuse").
+
+A `/tutorial` invocation is **solicited** — the adopter ran the command on
+purpose — so the glossary is **always shown**, regardless of mode; depth
+mode only tunes how it's rendered, it never withholds it (this is the same
+solicited/unsolicited line the design draws for `/onboard`'s asides vs. the
+on-demand lookup rule, `.claude/rules/glossary-lookup.md`):
+
+- **`terse`** — render the five definitions compactly, one after another,
+  no extra framing.
+- **`guided`** — render the same five definitions, each with its
+  "**Example**:" line if the entry has one (most already do — see the
+  glossary's read contract).
+
+Open this section with a one-line frame so it reads as a distinct part of
+the reply, not a continuation of the tour prose:
+
+```
+And here's the glossary — the plain-language meaning of the five terms
+you'll see most often:
+```
+
+If `docs/onboarding/glossary.md` is missing (same corrupted/very-old-fork
+case as the tour asset), say so plainly, same shape as Step 1's fallback,
+and skip straight to Step 4 — a missing glossary should not block the tour
+render that already succeeded.
+
+### 4. Depth mode override + transparency (design § D2, FR-6/FR-9)
 
 Same handling as `/onboard`'s — before rendering, and at any later point
 this session, check the adopter's message for an override phrase or a
@@ -167,24 +213,30 @@ new_mode=$(depth_mode_classify_override "$ADOPTER_MESSAGE")
 
 Confirm a switch in one line (`Switching to guided — …` /
 `Switching to terse — …`), same as `/onboard`. For "what mode am I in?",
-answer with `depth_mode_report` — a read, never a write.
+answer with `depth_mode_report` — a read, never a write. If the switch
+happens after the glossary has already been rendered once this
+invocation, there's no need to re-render it — the switch takes effect on
+the *next* `/tutorial` run or the next `/onboard` aside, per the
+Reversibility NFR; `/tutorial` itself doesn't loop.
 
-### 4. Close
+### 5. Close
 
 End with a short pointer back to normal work — no branch, no follow-up
 questions, no first-win prompt (that's `/onboard`'s job, not this skill's):
 
 ```
-That's the tour. Run /tutorial again any time — it's always safe, always
-free of side effects.
+That's the tour, and the glossary. Run /tutorial again any time — it's
+always safe, always free of side effects.
 ```
 
 ## Rules
 
-1. **Never duplicate tour content.** Read `docs/onboarding/capability-tour.md`
-   fresh every invocation; never inline, cache, or hand-copy its prose into
-   this skill file. If the tour content needs to change, it changes in one
-   place and both `/onboard` and `/tutorial` pick it up automatically.
+1. **Never duplicate tour or glossary content.** Read
+   `docs/onboarding/capability-tour.md` and `docs/onboarding/glossary.md`
+   fresh every invocation; never inline, cache, or hand-copy their prose
+   into this skill file. If either asset's content needs to change, it
+   changes in one place and every consumer (`/onboard`, `/tutorial`, the
+   on-demand lookup rule) picks it up automatically.
 2. **No side effects, except the depth-mode marker.** No writes to
    `onboarding.yaml`, the registry, the active-ticket marker, or the
    bootstrap marker — ever. The ONE exception is
@@ -197,11 +249,15 @@ free of side effects.
    feature entirely — the read-and-render behaviour must be identical in
    all three (aside from depth-mode rendering, which depends on the
    marker/signal, not fork state). Do not branch on `fresh_fork_state()`.
-4. **Tour + depth-mode rendering only, this ticket (#914).** No per-term
-   glossary asides (that's #913) and no full glossary render or ambient
-   on-demand lookup (that's #915) — sibling tickets, not yet built. The
-   depth-mode marker this ticket wires is the shared mechanism both will
-   read/extend without rework (D7).
+4. **Tour + full glossary + depth-mode rendering (#911, #914, #915).**
+   `/tutorial` now renders both shared assets end to end, respecting depth
+   mode. What it still does NOT do: the per-term, first-encounter guided
+   asides inside `/onboard` (that stays #913's — a different firing
+   algorithm gated on a separate seen-set marker, § D3) and the ambient
+   any-session single-term lookup (that's `.claude/rules/glossary-lookup.md`,
+   also #915 — a rule, not this skill, so it fires even when `/tutorial`
+   isn't running). This skill's contract is still "solicited, whole-asset,
+   side-effect-free render" — it never gates content the way the asides do.
 
 ---
 
