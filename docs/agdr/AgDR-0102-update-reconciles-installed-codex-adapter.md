@@ -60,6 +60,12 @@ both `/update` and the bootstrap backstop use one detection and generation
 implementation. It is a silent no-op when no ApexYard Codex installation is
 detected and fails non-zero when generation or verification fails.
 
+Because reconciliation deletes and replaces generated paths, the generator
+must reject symlinked `.agents` / `.codex` roots and symlinked owned child paths
+before reading installation metadata or mutating output. This prevents a
+repository-controlled adapter path from redirecting automatic SessionStart
+writes outside the repository.
+
 `/update` will consider Codex installed when either:
 
 1. `.codex/apexyard-adapter.json` identifies the ApexYard Codex adapter; or
@@ -98,7 +104,9 @@ Verification is split across the existing generator smoke test and a dedicated
   result instead of being downgraded to a warning;
 - the existing SessionStart wiring reaches the canonical bootstrap call, which
   refreshes a legacy installation, leaves an uninstalled fork untouched, and
-  warns without blocking when reconciliation fails.
+  warns without blocking when reconciliation fails;
+- symlinked adapter roots and owned child paths fail before mutation, with
+  external sentinel files proving that reconciliation cannot escape the repo.
 
 ## Consequences
 
@@ -114,6 +122,8 @@ Verification is split across the existing generator smoke test and a dedicated
   require the documented one-time manual generator command.
 - A user-owned partial `.agents/` or `.codex/` tree is not treated as an
   ApexYard installation; all three legacy output surfaces must be present.
+- Symlinked generated roots or critical output children are rejected for every
+  generator mode; automatic reconciliation never follows them.
 - Generated tracked output may become dirty after reconciliation by design;
   that is the visible update an adopter should review and commit. Ignored local
   output refreshes without changing Git state.
