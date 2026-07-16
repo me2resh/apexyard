@@ -828,6 +828,65 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c "make build 2>&1;true" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#886 sanity: no-space '2>&1' fd-dup is not gated" 0 "" "$in" "$sb"
 
+# --- #886/#926 round 5: STRUCTURAL fix — |/||-adjacent redirects --------
+#
+# Hakim's fifth adversarial re-hunt found the actual root cause: DETECTION
+# (bash_command_appears_to_write) ran the redirection matcher on the
+# WHOLE, unsplit command, where a `|`-preceded `>` is excluded by the
+# leading-context class (needed for `2>&1`/`>&2`) and isn't at `^` either.
+# EXTRACTION already split first and found the target correctly —
+# detection and extraction disagreed. `;>` and `&&>` survived earlier
+# rounds by coincidence (`;` isn't excluded; `&&>` contains the substring
+# `&>`); `|`/`||` had no such rescue. These are real, truncating writes.
+
+# 69. `false ||> src/app.ts` (Hakim repro), no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>' after false blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 70. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=pipe-adjacent redirect operator test
+EOF
+in=$(jq -nc --arg c "false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>' after false allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 71. `false ||>| src/app.ts` (force-clobber variant, Hakim repro), no
+#     ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false ||>| src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '||>|' force-clobber after false blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 72. `echo x |> src/app.ts` (single-pipe variant, Hakim repro), no ticket
+#     → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x |> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 '|>' after echo blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 73. The deletion-only bypass: `rm old.ts; false ||> src/app.ts` — a real
+#     write hiding behind a pipe-adjacent redirect alongside an rm. Must
+#     NOT be classified as deletion-only; no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "rm old.ts; false ||> src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 rm + '||>' hides a real write, blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: pipe-adjacent fd-dup / reads must NOT be newly gated -------
+
+# 74. `echo x | cat 2>&1` — pipe THEN fd-dup, no in-repo write at all →
+#     still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo x | cat 2>&1" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: pipe then '2>&1' fd-dup is not gated" 0 "" "$in" "$sb"
+
+# 75. `false || echo err >&2` — or-chain THEN fd-dup, no in-repo write →
+#     still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "false || echo err >&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: '||' then '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

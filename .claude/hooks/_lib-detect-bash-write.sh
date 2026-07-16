@@ -167,6 +167,88 @@ _bdw_match_redirection() {
   echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+'
 }
 
+# ------------------------------------------------------------------------------
+# Internal: _bdw_split_top_level COMMAND
+#
+# Splits COMMAND into top-level segments on &&, ||, ;, | — echoed one per
+# line via stdout. THE canonical segmentation for this whole library:
+# both DETECTION (_bdw_match_redirection_any_segment, below) and
+# EXTRACTION (bash_extract_write_targets) call this SAME function, so
+# they cannot disagree about where one command ends and the next begins
+# (apexyard#886/#926 round 5 — Hakim security review; see that helper's
+# comment for why divergence was the actual structural bug behind rounds
+# 1-5 of this operator class, not "yet another missed operator").
+#
+# Protects the force-clobber operators (`>|`, `>>|`) from being torn
+# apart by the bare-`|` split — a real bash tokenizer lexes them as ONE
+# operator, never as `>` followed by a separate pipe — via a
+# placeholder-and-restore step. Uses bash parameter-expansion
+# substitution, NOT sed, for the split itself: BSD sed (macOS's default,
+# non-GNU) does not honour `\n` in replacement text as a literal newline,
+# so a sed-based split would silently no-op on a stock Mac.
+# ------------------------------------------------------------------------------
+_bdw_split_top_level() {
+  local cmd="$1"
+  [ -z "$cmd" ] && return 0
+
+  local split="$cmd"
+  # Longest-match-first: protect >>| before >| so >>| isn't half-eaten by
+  # the >| substitution (>>| contains >| as a substring).
+  split="${split//>>|/@@APEXYARD_CLOBBER_APPEND@@}"
+  split="${split//>|/@@APEXYARD_CLOBBER@@}"
+
+  # Two-character separators BEFORE single-character ones, so && / ||
+  # aren't first flattened into two lone & / | splits.
+  split="${split//&&/$'\n'}"
+  split="${split//||/$'\n'}"
+  split="${split//;/$'\n'}"
+  split="${split//|/$'\n'}"
+
+  split="${split//@@APEXYARD_CLOBBER_APPEND@@/>>|}"
+  split="${split//@@APEXYARD_CLOBBER@@/>|}"
+
+  printf '%s\n' "$split"
+}
+
+# ------------------------------------------------------------------------------
+# Internal: _bdw_match_redirection_any_segment COMMAND
+#
+# THE STRUCTURAL FIX for apexyard#886/#926 round 5 (Hakim security
+# review). Runs _bdw_match_redirection on EACH top-level segment of
+# COMMAND (via _bdw_split_top_level) instead of on the whole, unsplit
+# command.
+#
+# Why this was the actual bug, not another missed operator: DETECTION
+# (bash_command_appears_to_write, via this helper's predecessor) used to
+# call _bdw_match_redirection on the WHOLE command. EXTRACTION
+# (bash_extract_write_targets) already split into segments FIRST, then
+# anchored `^` per segment. For `false ||> src/app.ts` — a real,
+# truncating write — the `>` is immediately preceded by `|` (from `||`).
+# On the whole, unsplit string, `[^|<&]` (needed to exclude `2>&1`/`>&2`
+# fd-dup) EXCLUDES that `|`-preceded `>` from matching, and it isn't at
+# `^` either (it's preceded by `|`), so detection said "not a write" —
+# false negative, exit 0, no ticket. Extraction, meanwhile, split on `||`
+# first, leaving `> src/app.ts` as its own segment where the `>` sits at
+# `^` — which the anchor DOES match — so extraction correctly found the
+# target. Detection and extraction disagreed; that disagreement, not the
+# `|`/`||` operator itself, was the root cause across rounds 1-5 (`;>`
+# survived only because `;` isn't excluded by the leading-context class;
+# `&&>` survived only by coincidentally containing the substring `&>`;
+# `|>`/`||>`/`||>|` had no such rescue). Splitting BEFORE matching, with
+# the SAME segmentation function extraction already uses, means the two
+# paths can't diverge again — this is the fix, not one more operator
+# added to the alternation.
+# ------------------------------------------------------------------------------
+_bdw_match_redirection_any_segment() {
+  local cmd="$1" seg
+  [ -z "$cmd" ] && return 1
+  while IFS= read -r seg; do
+    [ -z "$seg" ] && continue
+    _bdw_match_redirection "$seg" && return 0
+  done < <(_bdw_split_top_level "$cmd")
+  return 1
+}
+
 # 2. tee.
 _bdw_match_tee() {
   echo "$1" | grep -qE '\btee\b'
@@ -348,7 +430,11 @@ bash_command_appears_to_write() {
   local cmd="$1"
   [ -z "$cmd" ] && return 1
 
-  _bdw_match_redirection     "$cmd" && return 0
+  # Segment-aware (apexyard#886/#926 round 5) — see
+  # _bdw_match_redirection_any_segment for why matching the WHOLE, unsplit
+  # command here (as this used to) missed `|`/`||`-adjacent redirects
+  # (`false ||> file`, `echo x |> file`).
+  _bdw_match_redirection_any_segment "$cmd" && return 0
   _bdw_match_tee             "$cmd" && return 0
   _bdw_match_sed_inplace     "$cmd" && return 0
   _bdw_match_awk_inplace     "$cmd" && return 0
@@ -395,7 +481,12 @@ bash_command_is_deletion_only() {
   fi
 
   # Any other content-writing pattern alongside rm → not deletion-only.
-  _bdw_match_redirection    "$cmd" && return 1
+  # Segment-aware (apexyard#886/#926 round 5) — same reasoning as
+  # bash_command_appears_to_write: matching the whole, unsplit command
+  # here would miss `rm x; false ||> src/app.ts` (a real write hiding
+  # behind a `|`/`||`-adjacent redirect), wrongly classifying it as
+  # deletion-only and exempting it from the ticket gate.
+  _bdw_match_redirection_any_segment "$cmd" && return 1
   _bdw_match_tee            "$cmd" && return 1
   _bdw_match_sed_inplace    "$cmd" && return 1
   _bdw_match_awk_inplace    "$cmd" && return 1
@@ -438,6 +529,14 @@ bash_command_is_deletion_only() {
 #   - cmd with multiple redirects
 #   - paths constructed from variables
 #   - tar -x (target is a directory, often implicit)
+#   - `cmd <> file` (read-write open, apexyard#886/#926 round 5): known,
+#     accepted, OUT-OF-SCOPE gap — exotic, non-truncating (unlike every
+#     operator this file DOES model, `<>` opens for read+write WITHOUT
+#     truncating existing content, so it's a materially different risk
+#     shape), and not adjacent to any of the &&/||/;/| separators this
+#     library segments on, so the round-5 structural fix doesn't reach
+#     it either. Tracked as a separate follow-up rather than folded into
+#     this operator-class close.
 # ------------------------------------------------------------------------------
 bash_extract_write_target() {
   local cmd="$1"
@@ -666,47 +765,22 @@ _bdw_targets_from_segment() {
 # extractable targets produces no output at all — callers must treat
 # "nothing on stdout" as the same fail-closed/categorical case that empty
 # bash_extract_write_target output signals today.
+#
+# Segmentation is delegated to _bdw_split_top_level (apexyard#886/#926
+# round 5) — the SAME function bash_command_appears_to_write's
+# _bdw_match_redirection_any_segment uses, so detection and extraction
+# share one source of truth for "where does one command end and the next
+# begin" and can't drift apart again.
 # ------------------------------------------------------------------------------
 bash_extract_write_targets() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
-
-  # Protect the force-clobber redirect operators (`>|`, `>>|`) BEFORE the
-  # pipe split below (apexyard#886/#926 round 3, Hakim security review). A
-  # real bash tokenizer lexes `>|`/`>>|` as ONE operator — never as `>`
-  # followed by a separate pipe — so `cmd >| file` / `cmd >>| file` must
-  # not be torn apart at the `|` embedded in the operator itself. Replace
-  # them with placeholders first, run the normal &&/||/;/| split, then
-  # restore the placeholders inside whichever segment(s) still hold them.
-  # Longest-match-first: protect `>>|` before `>|` so `>>|` isn't half-eaten
-  # by the `>|` substitution (`>>|` contains `>|` as a substring).
-  local split="$cmd"
-  split="${split//>>|/@@APEXYARD_CLOBBER_APPEND@@}"
-  split="${split//>|/@@APEXYARD_CLOBBER@@}"
-
-  # Split into segments on top-level separators (&&, ||, ;, |) using bash
-  # parameter-expansion substitution, NOT sed: BSD sed (macOS's default,
-  # non-GNU) does not treat `\n` in the replacement text as a literal
-  # newline, so a `sed 's/;/\n/g'`-style split silently no-ops on a stock
-  # macOS box (the #886 bug this was first written to fix would have
-  # shipped broken had this been caught only on Linux CI). Order matters:
-  # replace the two-character separators BEFORE the single-character ones
-  # so `&&` / `||` aren't first flattened into two lone `&` / `|` splits.
-  split="${split//&&/$'\n'}"
-  split="${split//||/$'\n'}"
-  split="${split//;/$'\n'}"
-  split="${split//|/$'\n'}"
-
-  # Restore the protected clobber operators inside whichever segment(s)
-  # now contain the placeholder.
-  split="${split//@@APEXYARD_CLOBBER_APPEND@@/>>|}"
-  split="${split//@@APEXYARD_CLOBBER@@/>|}"
 
   local seg
   {
     while IFS= read -r seg; do
       [ -z "$seg" ] && continue
       _bdw_targets_from_segment "$seg"
-    done <<< "$split"
+    done < <(_bdw_split_top_level "$cmd")
   } | awk '!seen[$0]++'
 }

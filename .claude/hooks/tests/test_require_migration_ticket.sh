@@ -613,6 +613,23 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 22: #886/#926 round 5 (Hakim's fifth adversarial re-hunt — the
+# STRUCTURAL fix). DETECTION (bash_command_appears_to_write) used to run
+# the redirection matcher on the WHOLE, unsplit command; a `|`-preceded
+# `>` (from `||`) is excluded by the leading-context class and isn't at
+# `^` either, so `false ||> ./migrations/...` was never even recognised
+# as a write. No ticket → block (2).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "false ||> ./$MIG" 2; then
+  record_pass "#886 bash: '||>' directly into migration target, no ticket → block"
+else
+  record_fail "#886 bash: '||>' directly into migration target, no ticket → block"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

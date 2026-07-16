@@ -332,6 +332,56 @@ assert_targets "no-space '>&2' fd-dup — still not a write target" \
 assert_targets "no-space '2>&1' fd-dup — still not a write target" \
   "make build 2>&1;true"                                                              ""
 
+# #886/#926 round 5 (Hakim's fifth adversarial re-hunt — the STRUCTURAL
+# root of the whole series): `|`/`||`-adjacent redirects. Detection
+# (bash_command_appears_to_write) used to run the redirection matcher on
+# the WHOLE, unsplit command, where a `|`-preceded `>` is excluded by the
+# leading-context class and isn't at `^` either — so `|>`/`||>`/`||>|`
+# were never even recognised as writes, let alone extracted. Extraction
+# already split first, so it found the target correctly — detection and
+# extraction DISAGREED. This block proves EXTRACTION already returns the
+# right target for these (it did before round 5 too); the real fix is in
+# the DETECTION-level test block further down, which is where the
+# structural bug actually lived.
+assert_targets "'||>' after a false command (Hakim repro)" \
+  "false ||> src/app.ts"                                                             "src/app.ts"
+assert_targets "'||>|' force-clobber after a false command (Hakim repro)" \
+  "false ||>| src/app.ts"                                                            "src/app.ts"
+assert_targets "'|>' after echo (Hakim repro)" \
+  "echo x |> src/app.ts"                                                             "src/app.ts"
+
+# Detection-level proof: bash_command_appears_to_write must ALSO recognise
+# these — this is the assertion that actually discriminates round 5 from
+# rounds 1-4, since it's the DETECTION path (not extraction) that had the
+# structural bug.
+assert_appears_to_write() {
+  local label="$1" cmd="$2"
+  if bash_command_appears_to_write "$cmd"; then
+    echo "PASS [detect/$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [detect/$label]: bash_command_appears_to_write missed: $cmd" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}detect/${label} "
+  fi
+}
+assert_appears_to_write "'||>' detected as a write (Hakim repro)"    "false ||> src/app.ts"
+assert_appears_to_write "'||>|' detected as a write (Hakim repro)"   "false ||>| src/app.ts"
+assert_appears_to_write "'|>' detected as a write (Hakim repro)"     "echo x |> src/app.ts"
+
+# Sanity: the deletion-only classifier had the identical structural bug at
+# its own direct _bdw_match_redirection call site — `rm x; false ||> y`
+# would have been wrongly classified as deletion-only (content-writing
+# hiding behind a |-adjacent redirect), exempting it from the ticket gate.
+assert_not_deletion_only "rm + '||>' hides a real write (round 5)" \
+  "rm old.ts; false ||> src/app.ts"
+
+# Sanity: the round-5 fix must NOT false-positive on fd-dup / read forms
+# that also happen to be pipe-adjacent.
+assert_targets "'| cmd 2>&1' pipe then fd-dup — not a write" \
+  "echo x | cat 2>&1"                                                                 ""
+assert_targets "'|| cmd >&2' or-chain then fd-dup — not a write" \
+  "false || echo err >&2"                                                             ""
+
 # Sanity: the broadened operator set must NOT false-positive on fd-duplication
 # forms, which look superficially similar (`&` and `>` both present) but mean
 # something entirely different — redirecting one fd to ANOTHER fd, not to a
