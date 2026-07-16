@@ -91,30 +91,63 @@ if [ ! -d "$REVIEWS_DIR" ]; then
   exit 0
 fi
 
-# -------- Resolve the PR number and repo for the current branch --------
+# -------- Resolve the checkout's own repo deterministically (#887) --------
+# Never trust gh's ambient default-repo resolution for the two lookups below
+# — it prefers a remote literally named "upstream" over "origin" when both
+# exist (this framework's own fork layout), which silently misresolves to
+# the WRONG (parent) repo for a same-repo fork PR opened against the fork's
+# own main — the same class of bug `pr_base_repo` was fixed against in
+# #765/#898. Resolve from the checkout's own `origin` remote FIRST; an
+# unscoped gh call is only the last resort when origin itself can't be
+# determined (e.g. no git remote configured at all).
+_origin_url=$(git remote get-url origin 2>/dev/null)
+# Strip the `.git` suffix FIRST, then the protocol/host prefix — a single
+# combined regex here is greedy-match-prone (`[^/]+` happily absorbs a
+# literal `.git` as part of the repo-name segment since `.` isn't excluded
+# from the character class), which would silently leave a trailing `.git`
+# on the extracted repo and break every `--repo` scoped gh call below.
+ORIGIN_REPO=$(printf '%s' "$_origin_url" | sed -E 's#\.git$##; s#^(https?://[^/]+/|git@[^:]+:)##')
+
+# -------- Resolve the PR number for the current branch --------
 # `gh pr view` with no args looks up the PR for the checked-out branch.
 # If no PR exists (early push before `gh pr create`), gh exits non-zero and
 # we exit silently — this is the expected path for most first pushes.
-PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
+if [ -n "$ORIGIN_REPO" ]; then
+  PR_NUMBER=$(gh pr view --repo "$ORIGIN_REPO" --json number --jq '.number' 2>/dev/null)
+else
+  PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
+fi
 if [ -z "$PR_NUMBER" ]; then
   exit 0
 fi
 
 # Resolve the repo so we scan only markers that belong to this PR's repo (#485).
-# `gh pr view --json headRepository` returns the repo the PR targets.
-PR_REPO=$(gh pr view "$PR_NUMBER" --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
-# Fallback: derive from git remote origin if gh is offline.
-if [ -z "$PR_REPO" ]; then
-  _origin_url=$(git remote get-url origin 2>/dev/null)
-  PR_REPO=$(echo "$_origin_url" | sed -nE 's|.*[:/]([^/]+/[^/]+)(\.git)?$|\1|p')
+# `gh pr view --json headRepository` returns the repo the PR targets. Scope
+# it to ORIGIN_REPO — never unscoped (#887) — falling back to ORIGIN_REPO
+# itself (a same-repo PR's head == origin anyway) when the scoped query
+# fails or gh is offline. Only fall back to an unscoped call when origin
+# couldn't be resolved at all.
+if [ -n "$ORIGIN_REPO" ]; then
+  PR_REPO=$(gh pr view "$PR_NUMBER" --repo "$ORIGIN_REPO" --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+  [ -z "$PR_REPO" ] && PR_REPO="$ORIGIN_REPO"
+else
+  PR_REPO=$(gh pr view "$PR_NUMBER" --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
 fi
 
 # -------- Resolve the PR's HEAD SHA --------
 # Prefer `gh pr view --json headRefOid` (same source-of-truth as the merge
-# gates, post-#47/#55). Fall back to local HEAD with a visible warning if
-# gh fails (offline / rate-limited / auth expired) — matches the fallback
-# behaviour in block-unreviewed-merge.sh.
-PR_HEAD=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+# gates, post-#47/#55). Scoped to ORIGIN_REPO when resolvable — never
+# unscoped (#887) — for the same reason as the two lookups above: an
+# ambient-resolved gh call can succeed against the WRONG repo on a
+# same-repo fork PR, comparing the marker against an unrelated PR's HEAD.
+# Fall back to local HEAD with a visible warning if gh fails (offline /
+# rate-limited / auth expired) — matches the fallback behaviour in
+# block-unreviewed-merge.sh.
+if [ -n "$ORIGIN_REPO" ]; then
+  PR_HEAD=$(gh pr view "$PR_NUMBER" --repo "$ORIGIN_REPO" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+else
+  PR_HEAD=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>/dev/null)
+fi
 if [ -z "$PR_HEAD" ]; then
   echo "WARN: warn-stale-review-markers.sh could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD." >&2
   PR_HEAD=$(git rev-parse HEAD 2>/dev/null)

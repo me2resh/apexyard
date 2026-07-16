@@ -52,6 +52,11 @@ Invoked when a PR needs security review, especially for:
 - Data storage changes
 - Third-party integrations
 
+## Input
+
+- PR number or URL — `{number}` below
+- Repository (any repository the user authorises) — `{repo}` below, threaded in by the invoking skill (`/security-review <pr> [repo]`). Never re-derive this from an unscoped `gh pr view {number} --json headRepository` call — see the resolution section's `#887` note.
+
 ## Security Review Checklist
 
 ### 1. Secrets and Credentials
@@ -111,7 +116,7 @@ Invoked when a PR needs security review, especially for:
 4. Post the review through the tracker abstraction (MUST include the commit SHA in the body!)
 ```
 
-Resolve the ops fork root **pin-first** (the SAME strategy the merge gate uses — `_lib-ops-root.sh::resolve_ops_root`) so you can source `_lib-tracker.sh`, then resolve the PR/MR **host (base) repo** and submit. `_lib-tracker.sh` lives at `<ops_fork_root>/.claude/hooks/`; inside a `workspace/<project>/` clone, `git rev-parse --show-toplevel` is the project clone, NOT the ops fork — so resolve pin-first. (This agent writes **no** gate marker, so it needs only `_lib-tracker.sh`, not `_lib-review-markers.sh`.)
+Resolve the ops fork root **pin-first** (the SAME strategy the merge gate uses — `_lib-ops-root.sh::resolve_ops_root`) so you can source `_lib-tracker.sh` AND `_lib-review-markers.sh` (needed for `pr_base_repo`, below), then resolve the PR/MR **host (base) repo** and submit. Both libs live at `<ops_fork_root>/.claude/hooks/`; inside a `workspace/<project>/` clone, `git rev-parse --show-toplevel` is the project clone, NOT the ops fork — so resolve pin-first. (This agent writes **no** gate marker, so it does not need `review_marker_path` — only `pr_base_repo` from `_lib-review-markers.sh`.)
 
 ```bash
 # 1. Pin-first ops-root resolution (points at the real ops fork regardless of cwd).
@@ -138,17 +143,38 @@ fi
 LIB_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 # shellcheck source=/dev/null
 . "$LIB_HOME/.claude/hooks/_lib-tracker.sh"
+# shellcheck source=/dev/null
+. "$LIB_HOME/.claude/hooks/_lib-review-markers.sh"
 
-# 2. Resolve the PR/MR HOST (base) repo — where the review must be POSTED and the
-# repo tracker_review_submit selects its adapter from. On a cross-fork PR this
-# differs from the fork (posting to the fork fails: the PR lives on the base).
-# gh pr view has no baseRepository field, but the PR URL is ALWAYS on the base
-# repo — parse owner/repo from it (works for gh /pull/ and glab
-# /-/merge_requests/, incl. nested GitLab groups). Falls back to headRepository.
-PR_HOST_REPO=$(gh pr view {number} --json url --jq '.url' 2>/dev/null | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
-[ -z "$PR_HOST_REPO" ] && PR_HOST_REPO=$(gh pr view {number} --json headRepository --jq '.headRepository.nameWithOwner' 2>/dev/null)
+# 2. Resolve the repo YOU already know hosts this PR — that is how you got
+# {number} in the first place (the `{repo}` input above, when the invoking
+# skill threaded it through). NEVER re-derive this via an unscoped
+# `gh pr view {number} --json headRepository` call: that call (a) reads the
+# WRONG field for this purpose (the PR's head/fork, not its base) and (b) is
+# itself an unscoped, ambient-resolved gh query — the exact class of bug #887
+# fixed (gh's ambient default prefers the parent/upstream, which is wrong for
+# a same-repo fork PR opened against the fork's own main). When {repo} wasn't
+# threaded through, fall back to the CURRENT checkout's own remote — a
+# deterministic, non-ambient source of truth — never to a second gh guess.
+REPO="{repo}"
+if [ -z "$REPO" ] || [ "$REPO" = "{repo}" ]; then
+  origin_url=$(git remote get-url origin 2>/dev/null)
+  origin_url="${origin_url%.git}"
+  REPO=$(printf '%s' "$origin_url" | sed -E 's#^(https?://[^/]+/|git@[^:]+:)##')
+fi
 
-# 3. Write the review to a temp body-file and submit through the abstraction.
+# 3. Resolve the PR/MR HOST (base) repo — where the review must be POSTED and
+# the repo tracker_review_submit selects its adapter from. On a cross-fork PR
+# this differs from the fork (posting to the fork fails: the PR lives on the
+# base). `pr_base_repo` (in _lib-review-markers.sh) REQUIRES the explicit
+# $REPO above and scopes its gh query to it — NEVER gh's ambient/parent-
+# preferring default (#887). Scoping to the repo you already know hosts the
+# PR is authoritative, not a guess: a PR object only resolves through its own
+# base repo's API path, so passing the wrong repo here fails closed instead
+# of silently posting to an unrelated repo's PR of the same number.
+PR_HOST_REPO=$(pr_base_repo {number} "$REPO")
+
+# 4. Write the review to a temp body-file and submit through the abstraction.
 # A file (not inline text) is the uniform path: gh takes --body-file, glab reads
 # the file into an MR note, custom exposes it via $TRACKER_REVIEW_BODY_FILE.
 REVIEW_BODY_FILE=$(mktemp)
