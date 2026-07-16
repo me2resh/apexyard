@@ -40,6 +40,8 @@ A harness's badge only claims **"(proven)"** after **3 consecutive scheduled gre
 
 This is a **display of the metric**, not a rebrand decision by itself. The framework's harness-agnostic tagline decision (see [`docs/harnesses/README.md`](harnesses/README.md#rebrand-trigger)) stays a separate, deliberate, coordinated call — this workflow gives that decision a live, ongoing signal to point to instead of a one-off manual proof, but it doesn't auto-flip anything.
 
+**Only `schedule` runs advance the streak (me2resh/apexyard#880).** A `workflow_dispatch` run — whether it drives all three harnesses or, via the `harness` input, just one — never advances or resets any harness's streak counter; the badge and streak files are left exactly as the last scheduled run committed them. This matters because a single-harness dispatch leaves the *other two* matrix jobs reporting a trivial `success` conclusion (the "Skip non-selected harness" step sets `SELECTED=false` and exits `0` without running a real gated turn) — without this guard, that clean skip would silently count toward "(proven)" even though no gated turn actually ran. `bin/conformance-publish-badge.sh` reads `EVENT_NAME` (populated from `github.event_name`) and only writes streak files / badge JSON when it equals `schedule`; any other trigger is a no-op for the `conformance-badge` branch.
+
 ## Badge URLs
 
 Once the workflow has run at least once, each harness's badge is embeddable via [shields.io's endpoint badge](https://shields.io/badges/endpoint-badge):
@@ -58,15 +60,16 @@ Replace `<owner>/<repo>` with this repo's slug. shields.io fetches the raw JSON 
 - **Schedule**: daily (`cron: "17 6 * * *"`) + `workflow_dispatch` (optionally scoped to a single harness via the `harness` input, so an operator can re-run just the flaky one without re-billing the other two).
 - **Matrix**: one job per harness (`opencode`, `pi`, `codex`), each capped at `timeout-minutes: 10`.
 - **Per job**: resolve credentials (fail-closed) → install the pinned harness CLI + apexyard adapter → create a scratch git repo governed by the delegated hooks → drive one gated turn → assert nothing staged + the hook's verbatim message appears in the transcript → upload the transcript as a build artifact for inspection.
-- **Badge job**: runs after the matrix (`needs: conform`, `if: always()`), queries each matrix job's real conclusion via the GitHub Actions API (`gh api repos/<repo>/actions/runs/<id>/jobs`), updates the per-harness streak counters, and commits updated badge JSON to the orphan `conformance-badge` branch using the workflow's own `GITHUB_TOKEN` (`contents: write`, scoped to that job only — no new PAT).
+- **Badge job**: runs after the matrix (`needs: conform`, `if: always()`), queries each matrix job's real conclusion via the GitHub Actions API (`gh api repos/<repo>/actions/runs/<id>/jobs`), updates the per-harness streak counters **on a `schedule` run only** (see "The green-continuous rule" above — a `workflow_dispatch` run is a streak/badge no-op, me2resh/apexyard#880), and commits updated badge JSON to the orphan `conformance-badge` branch using the workflow's own `GITHUB_TOKEN` (`contents: write`, scoped to that job only — no new PAT).
 
 Full design rationale, options considered, and trade-offs: [AgDR-0095](agdr/AgDR-0095-conformance-ci-badge.md).
 
 ## Known gaps
 
-- **CLI version pins**: opencode and pi are pinned to the exact versions already recorded live-proven in `docs/harnesses/{opencode,pi}.md`. Codex is installed at `@latest` — no version-pinned precedent exists yet in this repo to pin against; a follow-up should pin it once a specific tested version is recorded.
 - **Harness CLI package names are a best-effort inference**, not independently re-verified against a live registry during this feature's build (no network egress in the build environment). The first scheduled/dispatched run will confirm or surface an install failure — which, per the fail-closed design, is the correct, visible outcome rather than a silently wrong assumption.
 - **The first scheduled run is not expected to be green** until both secrets above are provisioned. This is expected, not a defect.
+
+All three harness CLIs are now version-pinned (`opencode-ai@1.17.16`, `@earendil-works/pi-coding-agent@0.80.3`, `@openai/codex@0.144.5`) — the Codex pin closed a gap previously tracked here (me2resh/apexyard#880).
 
 ---
 

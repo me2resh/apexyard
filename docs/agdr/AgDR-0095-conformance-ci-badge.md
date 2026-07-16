@@ -88,3 +88,12 @@ Supporting implementation decisions:
 - Spike: me2resh/apexyard#848 (`docs/spike-848/findings.md`)
 - Feature: me2resh/apexyard#871
 - Precedent: [AgDR-0092](AgDR-0092-opencode-gate-adapter.md), [AgDR-0088](AgDR-0088-codex-adapter-generation.md), [AgDR-0082](AgDR-0082-pi-gate-dispatcher-adapter.md) (the adapters this workflow drives); [AgDR-0086](AgDR-0086-hooks-stay-bash-not-ported.md) (hooks stay bash — why the assertion delegates to the real hook instead of re-implementing its check)
+
+## Addendum — me2resh/apexyard#880 (fast-follow)
+
+Rex's review of the #871 PR approved with two nit-level fixes deferred to a fast-follow rather than blocking the merge (the workflow was inert until secrets were provisioned, so neither was a regression):
+
+- **Dispatch-path streak guard.** The original implementation advanced/reset every harness's `streak-<harness>.txt` on *any* trigger. That silently over-counted: a single-harness `workflow_dispatch` leaves the other two matrix jobs reporting a trivial `success` (the "Skip non-selected harness" step exits `0` without a real gated turn), and the badge job was counting that clean skip toward "(proven)". Fixed by gating the entire per-harness streak/badge-JSON update in `bin/conformance-publish-badge.sh` on `EVENT_NAME == 'schedule'` — a `workflow_dispatch` run (single-harness or all three) is now a no-op for every harness's streak file and badge JSON. This sharpens, not changes, the "N=3 consecutive scheduled green runs" definition from the Decision above — that definition already said "scheduled"; the implementation had not enforced it.
+- **Codex CLI pin + model correction.** `@openai/codex@latest` → `@openai/codex@0.144.5` (closing the gap flagged in the "Supporting implementation decisions" bullet above and in `docs/conformance-ci.md`'s former "Known gaps"), and `codex exec -m gpt-5.4` → `codex exec -m gpt-5.5` (matching the model actually recorded live-proven in `docs/harnesses/codex.md`; `gpt-5.4` was a stale value, not what was tested).
+
+No new decision surface — these are corrections to the implementation of decisions already recorded above, not a new architectural choice.

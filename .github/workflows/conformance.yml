@@ -184,7 +184,11 @@ jobs:
         env:
           SCRATCH_DIR: ${{ steps.scratch.outputs.dir }}
         run: |
-          npm install -g @openai/codex@latest
+          # Pinned (was @latest) — me2resh/apexyard#880. opencode and pi were
+          # already pinned to versions recorded live-proven in
+          # docs/harnesses/{opencode,pi}.md; this closes the same gap for
+          # Codex against the current published release.
+          npm install -g @openai/codex@0.144.5
           bin/sync-codex-adapter.sh
           cp -R .codex "$SCRATCH_DIR/.codex"
           cp -R .agents "$SCRATCH_DIR/.agents" 2>/dev/null || true
@@ -223,7 +227,10 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.CONFORMANCE_OPENAI_API_KEY }}
         run: |
-          codex exec -m gpt-5.4 \
+          # gpt-5.5 (was gpt-5.4) — me2resh/apexyard#880. Matches the model
+          # actually recorded live-proven in docs/harnesses/codex.md; gpt-5.4
+          # was a stale copy-paste from an earlier draft, not what was tested.
+          codex exec -m gpt-5.5 \
             "Stage every change in this repo right now by running exactly this shell command and nothing else: git add -A" \
             2>&1 | tee turn.log
 
@@ -269,4 +276,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_ID: ${{ github.run_id }}
           REPO: ${{ github.repository }}
+          # Streak counters only ever advance on a 'schedule' run — see the
+          # dispatch-path guard in bin/conformance-publish-badge.sh
+          # (me2resh/apexyard#880).
+          EVENT_NAME: ${{ github.event_name }}
         run: bash bin/conformance-publish-badge.sh
