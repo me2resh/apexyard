@@ -30,6 +30,11 @@ assert_no_dir() {
   [ ! -d "$path" ] && mark_pass "$label" || mark_fail "$label" "unexpected directory $path"
 }
 
+assert_no_file() {
+  local path="$1" label="$2"
+  [ ! -f "$path" ] && mark_pass "$label" || mark_fail "$label" "unexpected file $path"
+}
+
 assert_contains() {
   local path="$1" pattern="$2" label="$3"
   grep -F "$pattern" "$path" >/dev/null 2>&1 && mark_pass "$label" || mark_fail "$label" "missing pattern [$pattern] in $path"
@@ -124,6 +129,7 @@ fi
 assert_file "$TMPROOT/.agents/skills/status/SKILL.md" "skill mirror exists"
 assert_file "$TMPROOT/.codex/hooks.json" "hooks.json mirror exists"
 assert_file "$TMPROOT/.codex/agents/backend-engineer.toml" "agent TOML exists"
+assert_file "$TMPROOT/.codex/apexyard-adapter.json" "adapter ownership manifest exists"
 assert_no_dir "$TMPROOT/.codex/hooks" "adapter does not copy hook scripts"
 
 assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" ".agents/skills/status/briefing.sh" "skill rewrites skill paths"
@@ -137,6 +143,16 @@ assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'name = "backend-
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" 'model = "gpt-5.4"' "agent TOML maps Claude model to Codex model"
 assert_contains "$TMPROOT/.codex/agents/backend-engineer.toml" ".claude/rules/workflow-gates.md" "agent instructions preserve rule paths"
 assert_not_contains "$TMPROOT/.codex/agents/backend-engineer.toml" "---" "agent TOML excludes YAML frontmatter"
+
+if jq -e '
+  .adapter == "apexyard-codex"
+  and .schema == 1
+  and .generated_from == ".claude"
+' "$TMPROOT/.codex/apexyard-adapter.json" >/dev/null; then
+  mark_pass "adapter ownership manifest has the expected schema"
+else
+  mark_fail "adapter ownership manifest has the expected schema" "$(cat "$TMPROOT/.codex/apexyard-adapter.json")"
+fi
 
 if jq -e '.. | objects | select(has("if"))' "$TMPROOT/.codex/hooks.json" >/dev/null; then
   mark_fail "hooks.json omits unsupported if fields" "found handler-level if metadata"
@@ -202,6 +218,73 @@ if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_check.out 2>&1;
   mark_pass "--check passes when generated output is current"
 else
   mark_fail "--check passes when generated output is current" "$(cat /tmp/_codex_adapter_check.out)"
+fi
+
+# The manifest participates in drift detection just like skills, agents, and
+# hooks. Restore it through normal generation after proving the drift signal.
+printf '{"adapter":"apexyard-codex","schema":999,"generated_from":".claude"}\n' \
+  > "$TMPROOT/.codex/apexyard-adapter.json"
+if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_manifest_drift.out 2>&1; then
+  mark_fail "--check detects ownership-manifest drift" "expected non-zero exit"
+else
+  mark_pass "--check detects ownership-manifest drift"
+fi
+bash "$SCRIPT" --root "$TMPROOT" >/dev/null 2>&1
+
+# A pre-manifest adapter is recognised only when all three legacy surfaces
+# exist. Reconciliation refreshes stale skills and writes the durable marker.
+rm "$TMPROOT/.codex/apexyard-adapter.json"
+printf '\nLegacy refresh line.\n' >> "$TMPROOT/.claude/skills/status/SKILL.md"
+if bash "$SCRIPT" --root "$TMPROOT" --reconcile-installed >/tmp/_codex_adapter_legacy.out 2>&1; then
+  mark_pass "--reconcile-installed refreshes a complete legacy adapter"
+else
+  mark_fail "--reconcile-installed refreshes a complete legacy adapter" "$(cat /tmp/_codex_adapter_legacy.out)"
+fi
+assert_file "$TMPROOT/.codex/apexyard-adapter.json" "legacy reconciliation writes ownership manifest"
+assert_contains "$TMPROOT/.agents/skills/status/SKILL.md" "Legacy refresh line." "legacy reconciliation refreshes skills"
+
+# No install means no harness-specific output is created.
+NOINSTALL="$TMPROOT/no-install"
+mkdir -p "$NOINSTALL"
+cp -R "$TMPROOT/.claude" "$NOINSTALL/.claude"
+if bash "$SCRIPT" --root "$NOINSTALL" --reconcile-installed >/tmp/_codex_adapter_noinstall.out 2>&1; then
+  mark_pass "--reconcile-installed is a no-op when Codex is not installed"
+else
+  mark_fail "--reconcile-installed is a no-op when Codex is not installed" "$(cat /tmp/_codex_adapter_noinstall.out)"
+fi
+assert_no_dir "$NOINSTALL/.agents" "uninstalled fork keeps .agents absent"
+assert_no_dir "$NOINSTALL/.codex" "uninstalled fork keeps .codex absent"
+
+# Every two-of-three partial legacy shape remains untouched. This prevents a
+# user-owned .agents or .codex tree from being claimed by ApexYard.
+for missing in skills agents hooks; do
+  PARTIAL="$TMPROOT/partial-$missing"
+  mkdir -p "$PARTIAL/.agents/skills" "$PARTIAL/.codex/agents"
+  cp -R "$TMPROOT/.claude" "$PARTIAL/.claude"
+  printf '{}\n' > "$PARTIAL/.codex/hooks.json"
+  case "$missing" in
+    skills) rmdir "$PARTIAL/.agents/skills" "$PARTIAL/.agents" ;;
+    agents) rmdir "$PARTIAL/.codex/agents" ;;
+    hooks)  rm "$PARTIAL/.codex/hooks.json" ;;
+  esac
+  if bash "$SCRIPT" --root "$PARTIAL" --reconcile-installed >/tmp/_codex_adapter_partial.out 2>&1; then
+    mark_pass "partial legacy shape missing $missing is ignored"
+  else
+    mark_fail "partial legacy shape missing $missing is ignored" "$(cat /tmp/_codex_adapter_partial.out)"
+  fi
+  assert_no_file "$PARTIAL/.codex/apexyard-adapter.json" "partial shape missing $missing gets no manifest"
+done
+
+# A detected install with an invalid canonical config must fail loudly.
+FAILROOT="$TMPROOT/failing-install"
+mkdir -p "$FAILROOT/.agents/skills" "$FAILROOT/.codex/agents"
+cp -R "$TMPROOT/.claude" "$FAILROOT/.claude"
+printf '{}\n' > "$FAILROOT/.codex/hooks.json"
+printf '{ invalid json\n' > "$FAILROOT/.claude/settings.json"
+if bash "$SCRIPT" --root "$FAILROOT" --reconcile-installed >/tmp/_codex_adapter_failure.out 2>&1; then
+  mark_fail "--reconcile-installed propagates generation failure" "expected non-zero exit"
+else
+  mark_pass "--reconcile-installed propagates generation failure"
 fi
 
 printf '\nNew source line.\n' >> "$TMPROOT/.claude/skills/status/SKILL.md"

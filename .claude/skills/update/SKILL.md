@@ -1,7 +1,7 @@
 ---
 name: update
 description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch, walk per-version migrations.
-argument-hint: "[--dry-run] [--rebase] [--from-version vN.N.N] [--skip-migrations]"
+argument-hint: "[--dry-run] [--rebase] [--from-version vN.N.N] [--skip-migrations] [--skip-adapter-sync]"
 allowed-tools: Bash, Read, Write, Edit
 ---
 
@@ -40,6 +40,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 /update --dry-run                    # preview only, don't touch anything
 /update --from-version v1.2.0        # override the version anchor (use when fork anchor is missing/wrong)
 /update --skip-migrations            # files-only sync; do NOT run the per-version migration chain
+/update --skip-adapter-sync          # do not refresh an already-installed Codex adapter
 /update --from-dev                   # (hidden) pull from upstream/dev — pre-release; expect breakage
 ```
 
@@ -51,6 +52,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 | `--dry-run` | Run the preview step only. Print the commit delta and exit; no fetch-after-preview, no branch creation, no merge. **Does NOT execute migrations** — only previews the planned chain. |
 | `--from-version vN.N.N` | Explicit version-anchor override. Use when `.claude/framework-version` is missing (legacy fork pre-v1.4.0) OR you've manually rolled back and the anchor is stale. The chain is built against this value instead of the file. Refuses if the value doesn't match `vMAJOR.MINOR.PATCH`. |
 | `--skip-migrations` | Sync the framework files but DO NOT run the per-version migration chain. Prints an advisory warning naming each skipped pair and reminding the operator that the migrations can be replayed later with `bash .claude/migrations/<pair>.sh`. The anchor file IS still advanced to the new release tag, so subsequent runs won't re-offer the same migrations. Use sparingly — the chain is the point. |
+| `--skip-adapter-sync` | Do not refresh an already-installed Codex adapter. Detection is installation-based, not harness-session-based: without this flag, `/update` reconciles only a manifest-backed or complete legacy ApexYard Codex adapter and leaves uninstalled forks untouched. Intended as a troubleshooting escape hatch. |
 | `--from-dev` | **Hidden / opt-in.** Sync from `upstream/dev` (pre-release work) instead of the latest `upstream/main` tag. Prints a `⚠ PRE-RELEASE SYNC` banner BEFORE any fetch/state-mutation. Same sync-branch + conflict-resolution flow; branch is named `chore/sync-upstream-dev` (or `chore/#<TICKET>-sync-upstream-dev` if a tracking issue is supplied). Intended for the framework maintainer (testing pre-release work on another machine) and for adopters who explicitly want to validate an upcoming framework change. **Not** in the skill's `description` frontmatter on purpose — `/help` should not surface it, since the adopter contract is tagged releases (see AgDR-0007 release-cut model). Combinable with `--rebase` and `--dry-run`. **When `--from-dev` is set, the migration chain is automatically skipped** — pre-release work doesn't have a release tag to anchor against. |
 
 ## Output
@@ -59,7 +61,8 @@ On success: one sync branch ready to push (e.g. `chore/#N-sync-upstream-apexyard
 
 On conflict: paused at the conflict point with per-file options (keep mine / accept upstream / open editor).
 
-On up-to-date: one line, no state change.
+On up-to-date: one line after reconciling any detected Codex adapter. Git refs
+remain unchanged, but stale generated adapter files may be refreshed.
 
 ## When NOT to use
 
@@ -79,6 +82,7 @@ FROM_DEV=0
 DRY_RUN=0
 REBASE=0
 SKIP_MIGRATIONS=0
+SKIP_ADAPTER_SYNC=0
 FROM_VERSION_OVERRIDE=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -86,6 +90,7 @@ while [ "$#" -gt 0 ]; do
     --dry-run)          DRY_RUN=1 ;;
     --rebase)           REBASE=1 ;;
     --skip-migrations)  SKIP_MIGRATIONS=1 ;;
+    --skip-adapter-sync) SKIP_ADAPTER_SYNC=1 ;;
     --from-version)     shift; FROM_VERSION_OVERRIDE="$1" ;;
     --from-version=*)   FROM_VERSION_OVERRIDE="${1#--from-version=}" ;;
   esac
@@ -167,6 +172,37 @@ if [ "$CURRENT_BRANCH" != "$DEFAULT_BRANCH" ]; then
 fi
 ```
 
+#### 1d. Define installed-adapter reconciliation
+
+Detection belongs to the generator, not to the current harness session. The
+helper below refreshes only a manifest-backed ApexYard Codex adapter or the
+complete pre-manifest shape (`.agents/skills/`, `.codex/agents/`, and
+`.codex/hooks.json`). An uninstalled or partial adapter is a silent no-op.
+
+```bash
+reconcile_installed_codex_adapter() {
+  if [ "$SKIP_ADAPTER_SYNC" = "1" ]; then
+    echo "Codex adapter reconciliation skipped (--skip-adapter-sync)."
+    return 0
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "DRY-RUN: would reconcile an installed Codex adapter."
+    return 0
+  fi
+
+  local script="$(git rev-parse --show-toplevel)/bin/sync-codex-adapter.sh"
+  if [ ! -f "$script" ]; then
+    echo "Codex adapter reconciliation failed: missing $script" >&2
+    return 1
+  fi
+  bash "$script" --reconcile-installed
+}
+```
+
+Unlike the SessionStart compatibility backstop described below, an explicit
+`/update` is strict: a detected adapter that cannot be generated and verified
+makes the update fail instead of being reported as current.
+
 ### 2. Fetch both remotes
 
 `git fetch upstream --quiet` brings down all upstream branches by default (including `upstream/dev`), so a single fetch covers both the default and the `--from-dev` target. No conditional fetch needed.
@@ -199,11 +235,20 @@ Then report. Examples:
 
 **Up-to-date (no tag drift, no commit drift):**
 
-```
-Fork is up to date with upstream/main. Nothing to sync.
+```bash
+reconcile_installed_codex_adapter || exit 1
+rm -f .claude/session/active-bootstrap
+
+echo "Fork is up to date with upstream/main. Nothing to sync."
 ```
 
 Exit 0.
+
+Any other preview path that exits 0 without creating a sync branch (for
+example, the operator declines unreleased `upstream/main` commits) MUST call
+`reconcile_installed_codex_adapter` before cleanup and exit. This closes the
+stale-adapter bug even when there is no release work to merge. `--dry-run`
+reaches the same helper but prints intent without mutating files.
 
 **No release drift, but main has moved (common, NOT actionable):**
 
@@ -866,6 +911,29 @@ Topology drift: <N projects drifted | skipped> ({…}, …)
 
 This step **always** runs after step 8b. It does NOT block the sync — drift handling is purely additive and reversible (the operator can re-run `/update` later).
 
+### 8d. Reconcile an installed Codex adapter
+
+After framework files, migrations, config offers, and topology handling have
+settled, refresh generated Codex output from the final canonical `.claude/`
+state:
+
+```bash
+reconcile_installed_codex_adapter || {
+  echo "Framework files synced, but the installed Codex adapter could not be reconciled." >&2
+  echo "Fix the generator error, then retry: bash bin/sync-codex-adapter.sh --reconcile-installed" >&2
+  exit 1
+}
+```
+
+This step is intentionally after the merge and migrations so newly added or
+rewritten skills, agents, and hooks are captured once. The first release that
+ships this behavior also carries a SessionStart compatibility backstop in
+`check-upstream-drift.sh`: a pre-fix generated `$update` cannot know these new
+instructions, but its existing Codex hook wiring already delegates that hook to
+the newly synced canonical `.claude/` file. The backstop is non-blocking and
+only bootstraps the new generated skill; explicit `/update` remains the owner of
+strict reconciliation thereafter.
+
 ### 9. Final state + next steps
 
 On clean completion, print (substituting `$UPSTREAM_REF` for the literal `upstream/main` so the operator sees the actual ref synced under `--from-dev`):
@@ -923,7 +991,7 @@ Skill done. No remote state changed.
 | No `upstream` remote | Print `git remote add` command and exit |
 | Dirty working tree | Refuse, tell user to stash/commit |
 | On non-default branch | Refuse, tell user to checkout main |
-| Already up-to-date | One-line report, exit 0 |
+| Already up-to-date | Reconcile a detected Codex adapter, then report and exit 0 |
 | Network failure on fetch | Warn, exit 1 — don't proceed on stale refs |
 | User chose rebase but has 50+ local commits | Warn about rewriting many SHAs, re-confirm |
 | Merge conflict the user aborts | Restore original branch state, delete sync branch, exit 1 |
@@ -938,6 +1006,8 @@ Skill done. No remote state changed.
 | Anchor file says `unknown` (malformed content) | Treated identically to missing — interactive prompt in step 8b. |
 | Chain has a missing link (release shipped without a migration script) | Refuse with a clear message naming the gap; advance the anchor anyway so subsequent runs don't loop on the same gap. This is a framework bug — file an issue. |
 | `--skip-migrations` passed | Chain detection runs (printed for visibility) but no `migration_run` invocations. Anchor still advances. |
+| `--skip-adapter-sync` passed | Skip adapter detection/generation on every exit path; framework sync behavior is unchanged. |
+| Codex adapter reconciliation fails during explicit `/update` | Fail non-zero and print the direct `--reconcile-installed` retry command; never report stale generated governance as current. |
 | Individual migration exits 1 (conflict) | Chain pauses. Anchor NOT advanced. Operator resolves, then re-runs `/update`. |
 | Individual migration exits 2 (hard error) | Chain aborts. Anchor NOT advanced. Print the script's stderr and exit 2. |
 | `--from-version` argument fails the semver regex | Refuse with `--from-version: expected vMAJOR.MINOR.PATCH (got 'X')`. Exit 1 before any fetch. |
