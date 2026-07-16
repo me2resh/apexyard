@@ -133,6 +133,34 @@ Issue axis — tracker-agnostic via `tracker_list` (run per project from the reg
 tracker_list "$repo" state=open labels=blocked
 ```
 
+### 9. Reconcile — open issues that already have a merged PR (#923)
+
+> Forge axis (#711) — GitHub-only until the PR/MR abstraction lands.
+
+The sibling of the reconcile-before-build rule: that rule stops NEW drift at the spawn boundary; this section surfaces EXISTING drift that already happened. The signature is cheap and mechanical — an issue that is still `OPEN` but a merged PR already references it (`Closes #N` that didn't fire because the PR merged to `dev`, not the release branch; or `Refs #N` left open on purpose for a QA gate).
+
+Fetch **once per repo**, not once per open issue — a batched query is the whole point, both for `gh` rate limits and for wall-clock time across a portfolio:
+
+```bash
+# 1. Open issue numbers for this repo (one call).
+open_issues=$(gh issue list --repo "$repo" --state open --json number --jq '.[].number')
+
+# 2. Merged PRs for this repo, bounded so the scan stays cheap (one call).
+#    --limit 200 is a reasonable default; tighten it further with --search
+#    "merged:>=<since-date>" on a very active repo, or when --since is passed.
+gh pr list --repo "$repo" --state merged \
+  --json number,title,body,url,mergedAt --limit 200
+```
+
+Then, for each merged PR's title + body, extract issue references and classify them:
+
+- **Closing keywords** — `close[sd]?`, `fix(e[sd])?`, `resolve[sd]?` immediately followed by `#N` (case-insensitive). A match here against an issue still open is very likely a **release-cut artifact** — the PR's `Closes #N` didn't auto-fire because it merged to a non-default branch.
+- **Referencing keywords** — `refs?`, `references?`, `related to` immediately followed by `#N`. A match here is likely an **intentional QA gate** — the ticket is deliberately held open pending verification (see `workflows/sdlc.md` Phase 5) — surface it as lower-urgency than a closing-keyword match.
+
+**Conservative by construction**: only count a reference when a closing/referencing keyword sits directly next to the `#N` (not any bare number appearing anywhere in a PR body) AND `N` is in the `open_issues` set fetched in step 1. A PR that happens to mention an unrelated number, or a `#N` for an issue that's already closed, produces no flag. This is what keeps the section from ever flagging a genuinely-open or gated ticket.
+
+**Graceful degradation**: if either `gh` call fails for a repo (rate limit, auth, network), skip that repo's contribution to this section and continue — same as Rule 5 below. If a repo produces zero matches, the section is simply absent for it (Rule 4).
+
 ## Output format
 
 Group everything under headings, project-prefixed:
@@ -167,7 +195,11 @@ INBOX — 2026-04-06 09:14
 🛑 Blocked items (1)
   · billing-api#19   Waiting on API key from vendor     https://…
 
-Summary: 12 items · 3 PRs to review · 1 ready to merge · 1 blocking CI failure
+🔁 Reconcile — open issues with a merged PR (2)
+  · example-app#88   Closes-but-open · merged PR #101 (release-cut?)   https://…
+  · billing-api#31   Refs-open · merged PR #64 (QA gate?)              https://…
+
+Summary: 12 items · 3 PRs to review · 1 ready to merge · 1 blocking CI failure · 2 to reconcile
 ```
 
 If everything is empty:
@@ -184,6 +216,7 @@ If everything is empty:
 | `--since <duration>` | Only items updated in the window (e.g. `24h`, `7d`) |
 | `--project <name>` | Limit to one project from the registry |
 | `--no-mentions` | Hide the mentions section |
+| `--no-reconcile` | Hide the Reconcile section (#923) |
 
 ## Rules
 
@@ -194,6 +227,7 @@ If everything is empty:
 5. **Never error on a single project** — if one repo is unreachable, mark it `?` and continue
 6. **Always include URLs** — every row needs a clickable link
 7. **No noise** — items where you have no possible action shouldn't appear (e.g. PRs you've already approved)
+8. **Reconcile is a passive surface, not an action** — flag drift, never close/re-tag the issue or comment on the PR from this skill; the operator decides what to do with each flagged item
 
 ## Related skills
 
