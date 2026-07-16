@@ -60,6 +60,27 @@ CLAUDE_DIR="$ROOT/.claude"
 [ -d "$CLAUDE_DIR" ] || { echo "ERROR: .claude not found under $ROOT" >&2; exit 1; }
 [ -f "$CLAUDE_DIR/settings.json" ] || { echo "ERROR: .claude/settings.json not found" >&2; exit 1; }
 
+assert_safe_output_paths() {
+  local path
+  for path in \
+    "$ROOT/.agents" \
+    "$ROOT/.agents/skills" \
+    "$ROOT/.codex" \
+    "$ROOT/.codex/agents" \
+    "$ROOT/.codex/hooks.json" \
+    "$ROOT/.codex/apexyard-adapter.json"; do
+    if [ -L "$path" ]; then
+      echo "ERROR: refusing Codex adapter output through symlink: $path" >&2
+      return 1
+    fi
+  done
+}
+
+# The generator deletes and replaces owned output paths. Reject symlinks before
+# installation detection reads a manifest and before any mutation can escape
+# the repository through an adapter root or critical child path.
+assert_safe_output_paths || exit 1
+
 codex_adapter_installed() {
   local manifest="$ROOT/.codex/apexyard-adapter.json"
   if [ -f "$manifest" ] \

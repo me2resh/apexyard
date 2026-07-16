@@ -275,6 +275,68 @@ for missing in skills agents hooks; do
   assert_no_file "$PARTIAL/.codex/apexyard-adapter.json" "partial shape missing $missing gets no manifest"
 done
 
+# Reconciliation must never follow generated-output symlinks outside the repo.
+# Each fixture carries a complete legacy shape, redirects one owned path to an
+# external sentinel, and proves the generator rejects it before mutation.
+assert_symlink_escape_rejected() {
+  local kind="$1" fixture="$TMPROOT/symlink-$1" external="$TMPROOT/external-$1"
+  mkdir -p "$fixture/.agents/skills" "$fixture/.codex/agents" "$external"
+  cp -R "$TMPROOT/.claude" "$fixture/.claude"
+  printf '{}\n' > "$fixture/.codex/hooks.json"
+  printf '%s\n' 'outside must survive' > "$external/sentinel.txt"
+
+  case "$kind" in
+    agents-root)
+      rmdir "$fixture/.agents/skills" "$fixture/.agents"
+      mkdir -p "$external/skills"
+      ln -s "$external" "$fixture/.agents"
+      ;;
+    codex-root)
+      rmdir "$fixture/.codex/agents"
+      rm "$fixture/.codex/hooks.json"
+      rmdir "$fixture/.codex"
+      mkdir -p "$external/agents"
+      printf '{}\n' > "$external/hooks.json"
+      ln -s "$external" "$fixture/.codex"
+      ;;
+    skills-child)
+      rmdir "$fixture/.agents/skills"
+      ln -s "$external" "$fixture/.agents/skills"
+      ;;
+    agents-child)
+      rmdir "$fixture/.codex/agents"
+      ln -s "$external" "$fixture/.codex/agents"
+      ;;
+    hooks-child)
+      rm "$fixture/.codex/hooks.json"
+      printf '{}\n' > "$external/hooks.json"
+      ln -s "$external/hooks.json" "$fixture/.codex/hooks.json"
+      ;;
+    manifest-child)
+      printf '%s\n' '{"adapter":"apexyard-codex","schema":1}' > "$external/manifest.json"
+      ln -s "$external/manifest.json" "$fixture/.codex/apexyard-adapter.json"
+      ;;
+  esac
+
+  if bash "$SCRIPT" --root "$fixture" --reconcile-installed >/tmp/_codex_adapter_symlink.out 2>&1; then
+    mark_fail "symlinked $kind is rejected" "expected non-zero exit"
+  elif grep -q 'refusing Codex adapter output through symlink' /tmp/_codex_adapter_symlink.out; then
+    mark_pass "symlinked $kind is rejected"
+  else
+    mark_fail "symlinked $kind is rejected" "$(cat /tmp/_codex_adapter_symlink.out)"
+  fi
+
+  if [ "$(cat "$external/sentinel.txt")" = 'outside must survive' ]; then
+    mark_pass "symlinked $kind cannot mutate external sentinel"
+  else
+    mark_fail "symlinked $kind cannot mutate external sentinel" "sentinel changed or missing"
+  fi
+}
+
+for symlink_kind in agents-root codex-root skills-child agents-child hooks-child manifest-child; do
+  assert_symlink_escape_rejected "$symlink_kind"
+done
+
 # A detected install with an invalid canonical config must fail loudly.
 FAILROOT="$TMPROOT/failing-install"
 mkdir -p "$FAILROOT/.agents/skills" "$FAILROOT/.codex/agents"
