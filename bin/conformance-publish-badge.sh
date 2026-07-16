@@ -43,6 +43,18 @@
 # displays the number; the harness-agnostic doc/headline flip itself
 # remains a deliberate, separate human decision (same posture as the
 # rebrand trigger in docs/harnesses/README.md).
+#
+# DISPATCH-PATH STREAK GUARD (me2resh/apexyard#880): streak counters only
+# ever advance (or reset) on a `github.event_name == 'schedule'` run, passed
+# in as EVENT_NAME. A `workflow_dispatch` — whether it drives all three
+# harnesses or, via the `harness` input, just one — is a no-op for every
+# harness's streak file and badge JSON. This closes a streak-inflation bug:
+# a single-harness dispatch leaves the other two matrix jobs reporting a
+# trivial `success` conclusion (conformance.yml's "Skip non-selected
+# harness" step sets SELECTED=false and exits 0 without running a real
+# gated turn), and without this guard the publisher counted that clean skip
+# toward "(proven)" as if a real scheduled turn had run. See
+# docs/conformance-ci.md § "The green-continuous rule".
 
 set -euo pipefail
 
@@ -53,6 +65,7 @@ HARNESSES=(opencode pi codex)
 : "${GH_TOKEN:?GH_TOKEN must be set}"
 : "${RUN_ID:?RUN_ID must be set}"
 : "${REPO:?REPO must be set}"
+: "${EVENT_NAME:?EVENT_NAME must be set (pass github.event_name)}"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -90,30 +103,31 @@ git config user.name "apexyard-conformance-ci"
 
 CHANGED=0
 
-for harness in "${HARNESSES[@]}"; do
-  conclusion="$(conclusion_for "$harness")"
+if [ "$EVENT_NAME" = "schedule" ]; then
+  for harness in "${HARNESSES[@]}"; do
+    conclusion="$(conclusion_for "$harness")"
 
-  streak_file="streak-${harness}.txt"
-  prev_streak=0
-  [ -f "$streak_file" ] && prev_streak="$(cat "$streak_file" 2>/dev/null || echo 0)"
-  case "$prev_streak" in ''|*[!0-9]*) prev_streak=0 ;; esac
+    streak_file="streak-${harness}.txt"
+    prev_streak=0
+    [ -f "$streak_file" ] && prev_streak="$(cat "$streak_file" 2>/dev/null || echo 0)"
+    case "$prev_streak" in ''|*[!0-9]*) prev_streak=0 ;; esac
 
-  if [ "$conclusion" = "success" ]; then
-    new_streak=$((prev_streak + 1))
-    color="brightgreen"
-    message="green"
-  else
-    new_streak=0
-    color="red"
-    message="red (${conclusion})"
-  fi
+    if [ "$conclusion" = "success" ]; then
+      new_streak=$((prev_streak + 1))
+      color="brightgreen"
+      message="green"
+    else
+      new_streak=0
+      color="red"
+      message="red (${conclusion})"
+    fi
 
-  if [ "$new_streak" -ge "$GREEN_CONTINUOUS_THRESHOLD" ]; then
-    message="green x${new_streak} (proven)"
-  fi
+    if [ "$new_streak" -ge "$GREEN_CONTINUOUS_THRESHOLD" ]; then
+      message="green x${new_streak} (proven)"
+    fi
 
-  # shields.io endpoint badge schema: https://shields.io/badges/endpoint-badge
-  cat > "${harness}.json" <<JSON
+    # shields.io endpoint badge schema: https://shields.io/badges/endpoint-badge
+    cat > "${harness}.json" <<JSON
 {
   "schemaVersion": 1,
   "label": "conformance: ${harness}",
@@ -121,12 +135,23 @@ for harness in "${HARNESSES[@]}"; do
   "color": "${color}"
 }
 JSON
-  printf '%s' "$new_streak" > "$streak_file"
+    printf '%s' "$new_streak" > "$streak_file"
 
-  echo "${harness}: conclusion=${conclusion} streak=${prev_streak}->${new_streak}"
-  git add "${harness}.json" "$streak_file"
-  CHANGED=1
-done
+    echo "${harness}: conclusion=${conclusion} streak=${prev_streak}->${new_streak}"
+    git add "${harness}.json" "$streak_file"
+    CHANGED=1
+  done
+else
+  # Dispatch-path streak guard (me2resh/apexyard#880) — see file header.
+  # Deliberately skip every harness's streak file and badge JSON: neither a
+  # dispatched harness's real result nor a non-dispatched harness's trivial
+  # skip-success is a scheduled run, and "(proven)" is defined as N
+  # consecutive *scheduled* green runs, not N consecutive green runs of any
+  # origin.
+  for harness in "${HARNESSES[@]}"; do
+    echo "${harness}: conclusion=$(conclusion_for "$harness") (EVENT_NAME='${EVENT_NAME}', not 'schedule' — streak/badge left untouched)"
+  done
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Cursor's badge is static and hand-authored, not computed — it has no

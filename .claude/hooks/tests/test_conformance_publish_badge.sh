@@ -16,6 +16,12 @@
 #      badge and is NEVER touched by a later run (no matrix job drives it).
 #   5. The conformance-badge branch is an orphan (no shared history with
 #      the default branch) — verified by `git merge-base` failing.
+#   6. Dispatch-path streak guard (me2resh/apexyard#880): a `workflow_dispatch`
+#      run — even one where every matrix job reports "success" (the
+#      strongest form of the regression: a single-harness dispatch leaves
+#      the two non-selected jobs reporting a trivial skip-success) — leaves
+#      every harness's streak file AND badge JSON byte-for-byte untouched,
+#      and produces no new commit on the conformance-badge branch.
 
 set -u
 
@@ -112,13 +118,14 @@ git config --global user.email "conformance-ci@apexyard.test"
 git config --global user.name "apexyard-conformance-ci"
 
 run_publisher() {
-  local run_id="$1" o="$2" p="$3" c="$4"
+  local run_id="$1" o="$2" p="$3" c="$4" event="${5:-schedule}"
   STUB_JOBS_FILE="$TMPDIR/jobs-$run_id.json"
   jobs_json_for "$o" "$p" "$c" > "$STUB_JOBS_FILE"
   PATH="$STUB_BIN:$PATH" \
     GH_TOKEN="test-token" \
     RUN_ID="$run_id" \
     REPO="apexyard-test/conformance-fixture" \
+    EVENT_NAME="$event" \
     STUB_JOBS_FILE="$STUB_JOBS_FILE" \
     bash "$PUBLISHER" >"$TMPDIR/publisher-$run_id.log" 2>&1
 }
@@ -169,6 +176,34 @@ esac
 # Cursor untouched across all three runs
 cursor_json3="$(read_badge_branch_file cursor.json)"
 assert_eq "run3: cursor badge unchanged across runs" "$cursor_json" "$cursor_json3"
+
+# --- Run 4: workflow_dispatch must NOT touch any streak or badge JSON -----
+# All three conclusions read "success" here on purpose — this is the
+# strongest form of the regression this guard closes. A real single-harness
+# dispatch would show one harness's REAL conclusion plus two trivial
+# skip-successes (SELECTED=false, exit 0, no gated turn run); collapsing
+# that to "all success" proves the guard doesn't cherry-pick which harness
+# to protect — EVENT_NAME != 'schedule' must leave every harness alone.
+BEFORE_OPENCODE_STREAK="$(read_badge_branch_file streak-opencode.txt)"
+BEFORE_PI_STREAK="$(read_badge_branch_file streak-pi.txt)"
+BEFORE_CODEX_STREAK="$(read_badge_branch_file streak-codex.txt)"
+BEFORE_OPENCODE_JSON="$(read_badge_branch_file opencode.json)"
+BEFORE_PI_JSON="$(read_badge_branch_file pi.json)"
+BEFORE_CODEX_JSON="$(read_badge_branch_file codex.json)"
+BEFORE_BADGE_HEAD="$(git ls-remote "$REMOTE" conformance-badge | cut -f1)"
+
+run_publisher 1004 success success success workflow_dispatch
+
+assert_eq "run4 (dispatch): opencode streak untouched" "$BEFORE_OPENCODE_STREAK" "$(read_badge_branch_file streak-opencode.txt)"
+assert_eq "run4 (dispatch): pi streak untouched" "$BEFORE_PI_STREAK" "$(read_badge_branch_file streak-pi.txt)"
+assert_eq "run4 (dispatch): codex streak untouched" "$BEFORE_CODEX_STREAK" "$(read_badge_branch_file streak-codex.txt)"
+assert_eq "run4 (dispatch): opencode.json untouched" "$BEFORE_OPENCODE_JSON" "$(read_badge_branch_file opencode.json)"
+assert_eq "run4 (dispatch): pi.json untouched" "$BEFORE_PI_JSON" "$(read_badge_branch_file pi.json)"
+assert_eq "run4 (dispatch): codex.json untouched" "$BEFORE_CODEX_JSON" "$(read_badge_branch_file codex.json)"
+
+AFTER_BADGE_HEAD="$(git ls-remote "$REMOTE" conformance-badge | cut -f1)"
+assert_eq "run4 (dispatch): no new commit on conformance-badge branch" "$BEFORE_BADGE_HEAD" "$AFTER_BADGE_HEAD"
+assert_contains "run4 (dispatch): publisher log explains the skip" "$(cat "$TMPDIR/publisher-1004.log")" "not 'schedule'"
 
 # --- Orphan-branch check ----------------------------------------------------
 CHECKOUT="$TMPDIR/orphan-check"
