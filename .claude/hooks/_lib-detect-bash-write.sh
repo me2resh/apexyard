@@ -146,10 +146,25 @@ _bdw_starts_with_git_subcommand() {
 #     write. Modelled by an optional trailing `\|?` on the existing `>>?`.
 # Both are added as alternatives / suffixes to the SAME anchored pattern,
 # not new logic — `2>&1`, `>&2`, `<`, `<<EOF`, `<<<` are all still excluded
-# by the same mechanisms as before (mandatory whitespace immediately after
-# the operator; `&` only recognised when it precedes `>`, never follows).
+# by the same mechanisms as before (whitespace after the operator is now
+# OPTIONAL — see the #886/#926 round-4 note below — but the exclusions
+# don't rely on mandatory whitespace; they rely on `&` only being
+# recognised when it precedes `>`, never follows).
+#
+# Whitespace after the operator is OPTIONAL (apexyard#886/#926 round 4 —
+# Hakim's adversarial re-hunt): bash accepts ZERO whitespace between a
+# redirect operator and its target (`echo hi>file`, `echo b 2>file`,
+# `echo b>>file`, `echo b>|file`, `echo b&>file` are all valid, real
+# writes) — the mandatory `[[:space:]]+` here silently dropped every one
+# of them. Relaxed to `[[:space:]]*` (zero-or-more). This does NOT open a
+# new false-positive surface for `2>&1`/`>&2`/`1>&2` (fd-dup): after the
+# operator matches, the target class `[^[:space:]&|;]+` still EXCLUDES
+# `&` — so when the very next character is `&` (as in all three fd-dup
+# forms), the target can't start there regardless of how much whitespace
+# came before it. The whitespace requirement was never what excluded
+# fd-dup; the target character class was and still is.
 _bdw_match_redirection() {
-  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+'
+  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+'
 }
 
 # 2. tee.
@@ -446,10 +461,16 @@ bash_extract_write_target() {
   # swallows a leading `&` the same way it swallows a leading digit or
   # space, so no separate strip pattern is needed for `&>`/`&>>`; the
   # trailing `\|?` addition handles `>|`/`>>|`.
+  #
+  # `[[:space:]]*` (apexyard#886/#926 round 4): whitespace between the
+  # operator and the target is optional in real bash (`echo hi>file`,
+  # `2>file`, `>>file`, `>|file`, `&>file` are all valid writes) — see the
+  # matching note on _bdw_match_redirection for why this doesn't loosen
+  # the fd-dup exclusion (the target class still rejects a leading `&`).
   local target
-  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+' \
+  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+' \
                 | head -n 1 \
-                | sed -E 's/^[^>]*>>?\|?[[:space:]]+//')
+                | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
   if [ -n "$target" ]; then
     target="${target%\"}"; target="${target#\"}"
     target="${target%\'}"; target="${target#\'}"
@@ -579,11 +600,18 @@ _bdw_targets_from_segment() {
   # need the SEGMENT to still contain the literal `|` — see
   # bash_extract_write_targets' clobber-protection step, which shields
   # these operators from the later bare-`|` (pipe) split.
+  #
+  # `[[:space:]]*` (apexyard#886/#926 round 4): a FOURTH re-hunt found the
+  # mandatory whitespace after the operator was itself a bypass — bash
+  # accepts zero whitespace (`echo hi>file`, `2>file`, `&>file`, `>|file`
+  # are all real writes). Relaxed to optional; the target class
+  # `[^[:space:]&|;]+` still rejects a leading `&`, so `2>&1`/`>&2`
+  # (fd-dup) stay correctly unmatched regardless of spacing.
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?\|?[[:space:]]+//')
+    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]+[^[:space:]&|;]+')
+  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?)[[:space:]]*[^[:space:]&|;]+')
 
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".
@@ -605,6 +633,17 @@ _bdw_targets_from_segment() {
         continue
       fi
       skip_flags=0
+      # Stop consuming tee's operand list once a redirection operator
+      # token appears (Rex review, PR #926): `tee a b 2> err.log` — the
+      # `2>` starts a shell redirect of tee's OWN stdout/stderr, not
+      # another tee file argument. Without this, naive whitespace
+      # word-splitting would emit the operator token itself (e.g. the
+      # literal string "2>") as a spurious "target". Not a bypass either
+      # way — the real redirect target ("err.log") is still independently
+      # captured by the redirection-matching loop above, so this only
+      # tightens the gate (fail-closed on a garbage path) rather than
+      # missing anything.
+      printf '%s' "$target" | grep -qE '^[0-9]*(>>?|<<?)' && break
       [ -n "$target" ] && _bdw_strip_quotes "$target"
     done
   fi

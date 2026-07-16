@@ -597,6 +597,22 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 21: #886/#926 round 4 (Hakim's fourth adversarial re-hunt) — ZERO
+# whitespace between the operator and the migration-path target:
+# `echo x > src/app.ts;>./migrations/...` (no space after the `;>`). The
+# mandatory whitespace requirement this pattern used through round 3 was
+# itself a bypass — bash accepts zero whitespace here. No ticket → block (2).
+# =============================================================================
+SB=$(make_fork)
+install_mock "$SB" gh 'exit 99'
+if run_hook_bash "$SB" "echo x > src/app.ts;>./$MIG" 2; then
+  record_pass "#886 bash: no-space '>' into migration target, no ticket → block"
+else
+  record_fail "#886 bash: no-space '>' into migration target, no ticket → block"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

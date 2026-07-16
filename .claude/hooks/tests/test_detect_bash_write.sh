@@ -308,6 +308,30 @@ assert_targets ">>| force-clobber-append variant" \
 assert_targets ">| with a space after the separator (not just no-space)" \
   "echo a > /tmp/ok; >| db/migrations/006.sql"                                        "/tmp/ok,db/migrations/006.sql"
 
+# #886/#926 round 4 (Hakim's fourth adversarial re-hunt): ZERO whitespace
+# between the operator and its target. Bash accepts this for every
+# operator — the mandatory `[[:space:]]+` this pattern used through round 3
+# silently dropped all five of these real, destructive writes. Hakim's
+# exact repros:
+assert_targets "no-space '>' (Hakim repro)" \
+  "echo hi>src/migrations/001.sql"                                                    "src/migrations/001.sql"
+assert_targets "no-space 'n>' fd-numbered (Hakim repro)" \
+  "echo a > /tmp/ok; echo b 2>src/migrations/001.sql"                                 "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '>>' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b>>src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '>|' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b>|src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+assert_targets "no-space '&>' (Hakim repro)" \
+  "echo a > /tmp/ok; echo b&>src/migrations/001.sql"                                  "/tmp/ok,src/migrations/001.sql"
+
+# Sanity: relaxing whitespace to optional must NOT open a new false-positive
+# surface on fd-dup forms written with NO space either — the target
+# character class (not the whitespace requirement) is what excludes them.
+assert_targets "no-space '>&2' fd-dup — still not a write target" \
+  "echo err>&2"                                                                       ""
+assert_targets "no-space '2>&1' fd-dup — still not a write target" \
+  "make build 2>&1;true"                                                              ""
+
 # Sanity: the broadened operator set must NOT false-positive on fd-duplication
 # forms, which look superficially similar (`&` and `>` both present) but mean
 # something entirely different — redirecting one fd to ANOTHER fd, not to a

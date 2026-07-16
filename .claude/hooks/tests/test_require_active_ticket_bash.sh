@@ -770,6 +770,64 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c "cat < src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#886 sanity: plain '<' read is not gated" 0 "" "$in" "$sb"
 
+# --- #886/#926 round 4: ZERO whitespace between operator and target -----
+#
+# Hakim's fourth adversarial re-hunt: the mandatory `[[:space:]]+` after
+# the operator was itself a bypass — bash accepts ZERO whitespace between
+# a redirect operator and its target. All five of these are real,
+# destructive truncating writes that were passing (exit 0) with no ticket.
+
+# 61. `>` with no space at all, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hi>src/migrations/001.sql" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>' (Hakim repro) blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 62. Same command, WITH an active ticket → ALLOWED.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=886
+title=no-whitespace redirect operator test
+EOF
+in=$(jq -nc --arg c "echo hi>src/migrations/001.sql" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>' allowed WITH ticket" 0 "" "$in" "$sb"
+
+# 63. `2>` (fd-numbered) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b 2>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space 'n>' fd-numbered blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 64. `>>` with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b>>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>>' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 65. `>|` (force-clobber) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b>|src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '>|' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 66. `&>` (redirect-both-streams) with no space, no ticket → BLOCKED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo a > /tmp/ok; echo b&>src/migrations/001.sql" \
+      '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 no-space '&>' blocked w/o ticket" 2 "BLOCKED" "$in" "$sb"
+
+# --- Sanity: no-space fd-dup / read forms must NOT be newly gated ------
+
+# 67. `echo err>&2` (fd-dup, NO space either) — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo err>&2" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: no-space '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
+
+# 68. `make build 2>&1;true` (fd-dup, no space) — no ticket, still ALLOWED.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "make build 2>&1;true" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#886 sanity: no-space '2>&1' fd-dup is not gated" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""
