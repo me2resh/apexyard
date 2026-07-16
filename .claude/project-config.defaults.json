@@ -241,5 +241,96 @@
       "review": "In review",
       "measurement": "Measurement"
     }
+  },
+
+  "skill_intent": {
+    "_comment": "Config for detect-skill-intent.sh — the skill-side sibling of detect-role-trigger.sh (me2resh/apexyard#894). Each entry maps a set of intent phrases to the skill that owns that work, plus the template it produces (empty string when the skill has no single template, e.g. /launch-check's 10-dimension sweep). Phrases are matched as literal, lowercased substrings against the (punctuation-stripped) prompt — data-driven so adopters can extend the map in .claude/project-config.json (shallow-merge REPLACES this whole array; copy entries you want to keep) without touching hook logic. Advisory only — see .claude/rules/skill-first.md.",
+    "map": [
+      {
+        "skill": "threat-model",
+        "template": "templates/audits/threat-model.md",
+        "phrases": ["threat model", "threat modeling", "threat modelling", "stride analysis"]
+      },
+      {
+        "skill": "dfd",
+        "template": "templates/architecture/dfd.md",
+        "phrases": ["data flow diagram", "make a dfd", "draw a dfd", "trust boundary diagram"]
+      },
+      {
+        "skill": "accessibility-audit",
+        "template": "templates/audits/accessibility-audit.md",
+        "phrases": ["accessibility audit", "a11y audit", "wcag audit", "wcag check"]
+      },
+      {
+        "skill": "compliance-check",
+        "template": "templates/audits/compliance-check.md",
+        "phrases": ["compliance check", "gdpr audit", "gdpr check", "eprivacy audit"]
+      },
+      {
+        "skill": "seo-audit",
+        "template": "templates/audits/seo-audit.md",
+        "phrases": ["seo audit", "seo check"]
+      },
+      {
+        "skill": "geo-audit",
+        "template": "templates/audits/geo-audit.md",
+        "phrases": ["geo audit", "aeo audit", "llms.txt audit"]
+      },
+      {
+        "skill": "performance-audit",
+        "template": "templates/audits/performance-audit.md",
+        "phrases": ["performance audit", "perf audit", "core web vitals audit"]
+      },
+      {
+        "skill": "monitoring-audit",
+        "template": "templates/audits/monitoring-audit.md",
+        "phrases": ["monitoring audit", "observability audit"]
+      },
+      {
+        "skill": "docs-audit",
+        "template": "templates/audits/docs-audit.md",
+        "phrases": ["docs audit", "documentation audit"]
+      },
+      {
+        "skill": "analytics-audit",
+        "template": "templates/audits/analytics-audit.md",
+        "phrases": ["analytics audit", "event taxonomy audit"]
+      },
+      {
+        "skill": "security-review",
+        "template": "templates/audits/security-review.md",
+        "phrases": ["security review", "security audit", "owasp review"]
+      },
+      {
+        "skill": "launch-check",
+        "template": "",
+        "phrases": ["launch check", "production readiness", "go no go review", "launch readiness audit"]
+      },
+      {
+        "skill": "write-spec",
+        "template": "templates/prd.md",
+        "phrases": ["write a spec", "write a prd", "draft a prd", "draft a spec", "write a feature spec"]
+      },
+      {
+        "skill": "bug",
+        "template": "templates/tickets/bug.md",
+        "phrases": ["file a bug", "report a bug", "file a bug ticket"]
+      },
+      {
+        "skill": "feature",
+        "template": "templates/tickets/feature.md",
+        "phrases": ["file a feature", "create a feature ticket", "file a feature ticket"]
+      },
+      {
+        "skill": "plan-initiative",
+        "template": "templates/initiative.md",
+        "phrases": ["plan this initiative", "plan the quarter", "plan this quarter", "plan our roadmap"]
+      },
+      {
+        "skill": "decide",
+        "template": "templates/agdr.md",
+        "phrases": ["decide between", "let's decide", "lets decide", "make a technical decision"]
+      }
+    ]
   }
 }
