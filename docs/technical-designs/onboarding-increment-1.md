@@ -75,6 +75,8 @@ FR-1 explicitly allows "a new first-run flow (skill or extension of `/setup`'s S
 
 Consequence: `onboarding-check.sh`'s banner changes from "Run `/setup`" to "Run `/onboard`" (the guided front door); `/setup` remains directly runnable for adopters who want just the config bootstrap.
 
+Recorded as [AgDR-0097](../agdr/AgDR-0097-onboard-first-run-orchestrator.md).
+
 > **Reviewer note:** D1 is the load-bearing call. If the reviewer prefers a net-new `/first-run` (Option B) for discoverability-audit or deprecation-hygiene reasons, everything downstream (D2–D6, the task breakdown) is unaffected except the skill's *name* — the architecture is identical.
 
 ### D2 — One fresh-fork detector, extracted into `_lib-fresh-fork.sh`
@@ -91,6 +93,8 @@ fresh_fork_state()   # echoes one of: fresh | configured | not-a-fork
 ```
 
 `onboarding-check.sh` becomes a thin caller (`[ "$(fresh_fork_state)" = fresh ] && echo "…run /onboard"`). `/onboard` calls the same function to decide whether to run the full guided flow, offer a re-run, or bail. This is the same refactor shape the audit-persistence design used for `_lib-audit-history.sh` — behaviour-preserving extraction, unit-testable in isolation.
+
+Recorded as [AgDR-0098](../agdr/AgDR-0098-fresh-fork-detection-shared-lib.md).
 
 ### D3 — Capability-tour content is a shared asset at `docs/onboarding/capability-tour.md`
 
