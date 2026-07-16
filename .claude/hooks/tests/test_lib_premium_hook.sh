@@ -288,6 +288,145 @@ YAML
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# Case 7 (#929): premium_hook_probe — feature disabled -> NOT_APPLICABLE (2),
+# same "nothing to report on" outcome premium_hook_run treats as a silent
+# no-op, but as its own distinguishable return code so callers can branch.
+# ---------------------------------------------------------------------------
+test_probe_not_applicable_when_feature_disabled() {
+  local sb rc
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+  cat > "$sb/features.yaml" <<'YAML'
+search:
+  enabled: false
+YAML
+
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "search" "true" "true" "true" ); rc=$?
+
+  if [ "$rc" -eq 2 ]; then
+    mark_pass "premium_hook_probe: feature disabled -> NOT_APPLICABLE (2)"
+  else
+    mark_fail "probe not applicable when feature disabled" "rc=$rc"
+  fi
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# Case 8 (#929): premium_hook_probe — feature enabled but presence check
+# fails (component absent) -> NOT_APPLICABLE (2).
+# ---------------------------------------------------------------------------
+test_probe_not_applicable_when_component_absent() {
+  local sb rc
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "search" "false" "true" "true" ); rc=$?
+
+  if [ "$rc" -eq 2 ]; then
+    mark_pass "premium_hook_probe: component absent -> NOT_APPLICABLE (2)"
+  else
+    mark_fail "probe not applicable when component absent" "rc=$rc"
+  fi
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# Case 9 (#929): premium_hook_probe — gate passes AND probe_cmd exits 0 ->
+# REACHABLE (0).
+# ---------------------------------------------------------------------------
+test_probe_reachable_returns_zero() {
+  local sb rc
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "search" "true" "true" "true" ); rc=$?
+
+  if [ "$rc" -eq 0 ]; then
+    mark_pass "premium_hook_probe: gate passes + probe succeeds -> REACHABLE (0)"
+  else
+    mark_fail "probe reachable" "rc=$rc"
+  fi
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# Case 10 (#929): premium_hook_probe — gate passes but probe_cmd exits
+# non-zero -> UNREACHABLE (1), distinguishable from NOT_APPLICABLE (2).
+# ---------------------------------------------------------------------------
+test_probe_unreachable_on_failure() {
+  local sb rc
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "search" "true" "exit 1" "true" ); rc=$?
+
+  if [ "$rc" -eq 1 ]; then
+    mark_pass "premium_hook_probe: probe_cmd exits 1 -> UNREACHABLE (1)"
+  else
+    mark_fail "probe unreachable on failure" "rc=$rc"
+  fi
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# Case 11 (#929): premium_hook_probe — a hanging probe_cmd is killed by its
+# OWN (shorter-by-default) timeout knob and treated as UNREACHABLE (1), not
+# left to hang or fall back to the general payload timeout. Skips gracefully
+# if neither `timeout` nor `gtimeout` exists.
+# ---------------------------------------------------------------------------
+test_probe_hanging_is_bounded_and_unreachable() {
+  local sb start end elapsed rc
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+
+  if ! command -v timeout >/dev/null 2>&1 && ! command -v gtimeout >/dev/null 2>&1; then
+    echo "  SKIP: neither timeout nor gtimeout is installed on this machine"
+    rm -rf "$sb"
+    return 0
+  fi
+
+  start=$(date +%s)
+  # shellcheck source=/dev/null
+  ( cd "$sb" && export PREMIUM_HOOK_PROBE_TIMEOUT_SECS=1 && . "$LIB" && premium_hook_probe "search" "true" "sleep 30" "true" )
+  rc=$?
+  end=$(date +%s)
+  elapsed=$((end - start))
+
+  if [ "$rc" -eq 1 ] && [ "$elapsed" -lt 10 ]; then
+    mark_pass "premium_hook_probe: hanging probe killed within its own timeout -> UNREACHABLE (elapsed=${elapsed}s)"
+  else
+    mark_fail "probe hanging is bounded and unreachable" "rc=$rc elapsed=${elapsed}s"
+  fi
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# Case 12 (#929): premium_hook_probe — missing feature_key or missing
+# probe_cmd -> NOT_APPLICABLE (2), never a shell error.
+# ---------------------------------------------------------------------------
+test_probe_missing_required_args_not_applicable() {
+  local sb rc1 rc2
+  sb=$(mktemp -d)
+  build_sandbox "$sb"
+
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "" "true" "true" "true" ); rc1=$?
+  # shellcheck source=/dev/null
+  ( cd "$sb" && . "$LIB" && premium_hook_probe "search" "true" "" "true" ); rc2=$?
+
+  if [ "$rc1" -eq 2 ] && [ "$rc2" -eq 2 ]; then
+    mark_pass "premium_hook_probe: missing feature_key / probe_cmd -> NOT_APPLICABLE (2)"
+  else
+    mark_fail "probe missing required args" "rc1=$rc1 rc2=$rc2"
+  fi
+  rm -rf "$sb"
+}
+
 test_feature_absent_is_silent_noop
 test_feature_absent_defaults_to_enabled_when_asked
 test_feature_explicitly_false_overrides_default_true
@@ -297,6 +436,12 @@ test_throwing_payload_is_swallowed
 test_hanging_payload_is_killed_and_swallowed
 test_missing_required_args_are_silent_noop
 test_premium_feature_enabled_standalone
+test_probe_not_applicable_when_feature_disabled
+test_probe_not_applicable_when_component_absent
+test_probe_reachable_returns_zero
+test_probe_unreachable_on_failure
+test_probe_hanging_is_bounded_and_unreachable
+test_probe_missing_required_args_not_applicable
 
 echo ""
 echo "Passed: $PASS  Failed: $FAIL"
