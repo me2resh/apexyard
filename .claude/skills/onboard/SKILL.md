@@ -10,17 +10,34 @@ allowed-tools: Bash, Read, Write, Skill
 # /onboard — Guided First-Run Onboarding
 
 This is increment 1 of the guided-onboarding walking skeleton (technical
-design: `docs/technical-designs/onboarding-increment-1.md`, ticket #910).
+design: `docs/technical-designs/onboarding-increment-1.md`, ticket #910),
+now layered with increment 2's **depth adaptivity** (technical design:
+`docs/technical-designs/onboarding-increment-2.md` § D2/D7, ticket #914).
 `/onboard` is a **thin orchestrator + router**, not a replacement for
 `/setup` or `/handover` — it sequences those two skills (plus `/feature`)
 behind a capability tour and an explicit branch. It never edits `/setup`,
 `/handover`, or `/feature`; their direct and scripted behaviour stays
 byte-for-byte unchanged (see AgDR-0097).
 
-Ships **terse mode only** in this increment — the teach-in-context glossary
-and terse/guided depth adaptivity are increment 2 (#911 and beyond). This
-flow *captures* a technical-level signal (D5) but does not yet branch
-rendering on it.
+**This flow now renders in one of two depth modes — `terse` or `guided`
+— off a single shared session marker, not a forked skill** (US-5/FR-6).
+Terse renders every step exactly as increment 1 did (byte-for-byte
+identical output — NFR Backward-compat). Guided adds one short
+"why this matters" framing sentence after each major step. Depth mode
+changes **only** explanatory narration — it never changes which gate
+fires, which approval is required, or any role boundary (the
+"presentation only" invariant, mechanically guarded by
+`.claude/hooks/tests/test_depth_mode.sh`'s invariant case). See Step 3.5
+below for derivation, and "Depth mode override + transparency" for the
+mid-session override (FR-6) and the "what mode am I in?" affordance
+(FR-9).
+
+The **per-term teach-in-context glossary + just-in-time asides** (#913)
+and the **ambient any-session lookup + full `/tutorial` glossary render**
+(#915) are sibling tickets, not yet built as of this ticket — guided mode
+here provides generic narration only. This flow already gates on the
+shared `.claude/session/onboarding-depth-mode` marker (D7's safe default:
+absent → terse), so #913's asides need no rework once they land.
 
 ## Path resolution
 
@@ -135,17 +152,108 @@ tools vs. a vague or absent description). Infer silently:
 
   Answer maps to `engineer` (used before) or `non-engineer` (new to it).
 
-Record the captured signal — this is a one-line seam for increment 2, not a
-rendering switch yet (increment 1 is terse-only regardless of the signal):
+Record the captured signal — increment 2 (#914) now acts on this
+immediately, in the very next step:
 
 ```bash
 mkdir -p .claude/session && echo "$SIGNAL" > .claude/session/onboarding-tech-level
 ```
 
 Where `$SIGNAL` is `engineer`, `non-engineer`, or `ambiguous` (if neither
-signal was usable). Never block on this — a wrong guess costs nothing since
-increment 1 doesn't act on it, and increment 2's reversibility NFR lets the
-adopter override in plain language whenever depth adaptivity ships.
+signal was usable). Never block on this — a wrong guess costs little,
+since the adopter can override the derived depth mode in plain language
+at any point (NFR Reversibility — see "Depth mode override + transparency"
+below).
+
+### 3.5 Depth mode derivation (#914 — design § D2)
+
+Immediately after writing the tech-level signal above, derive the
+session's effective **depth mode** — the setting that actually controls
+rendering verbosity for the rest of THIS flow, and for any later
+`/tutorial` run this session (D2's signal-vs-mode split: the tech-level
+signal is the *inference input*; depth mode is the *effective setting*
+the adopter can flip).
+
+Source the shared helper and derive from the signal just captured:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-onboarding-depth-mode.sh"
+mode=$(depth_mode_derive_from_signal "$SIGNAL") || mode=""
+```
+
+- `$SIGNAL` is `engineer` → `$mode` is `terse`.
+- `$SIGNAL` is `non-engineer` → `$mode` is `guided`.
+- `$SIGNAL` is `ambiguous` (the derive call fails, `$mode` is empty) —
+  this shouldn't normally happen here since Step 3's fallback question
+  already resolved `engineer`/`non-engineer`, but handle it defensively:
+  ask the SAME one-line fallback question from Step 3 if you haven't
+  already, map the answer (`engineer`→`terse`, `non-engineer`→`guided`),
+  and set `$mode` directly. Never leave `$mode` empty.
+
+Write it:
+
+```bash
+depth_mode_write "$mode"
+```
+
+From this point on, render the rest of `/onboard` **in `$mode`**:
+
+- **`terse`** — render every remaining step exactly as increment 1 did.
+  No framing sentences, no "why this matters" narration. Output is
+  byte-for-byte identical to increment 1 (NFR Backward-compat).
+- **`guided`** — after each major step (capability tour, the `/setup`
+  handoff, the handover/new-project branch, the guided first win), add
+  ONE short plain-language "why this matters" sentence before moving on.
+  Keep it to a single sentence — this is generic narration, not a
+  per-term glossary aside (that's #913's job once it lands; this flow
+  already gates on the same `$mode` marker, so no rework is needed here).
+
+Depth mode is overridable for the rest of this session from any later
+step — see "Depth mode override + transparency" immediately below.
+
+### Depth mode override + transparency (design § D2, FR-6/FR-9)
+
+At any point after Step 3.5 (including during Steps 4–6), before writing
+your own response, check the adopter's last message for two things:
+
+**1. An override phrase.** Classify it with the shared helper:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-onboarding-depth-mode.sh"
+new_mode=$(depth_mode_classify_override "$ADOPTER_MESSAGE")
+```
+
+If `$new_mode` is `guided` or `terse`, write it immediately and confirm in
+one line, then continue the flow at the new depth from your very next
+render (NFR Reversibility — no config file touched, effect is instant,
+lossless):
+
+```bash
+[ -n "$new_mode" ] && depth_mode_write "$new_mode"
+```
+
+```
+Switching to guided — I'll explain terms as they come up.
+```
+
+```
+Switching to terse — I'll skip the plain-language explanations.
+```
+
+If `$new_mode` is empty, the message wasn't an override — continue
+normally.
+
+**2. A transparency question** ("what mode am I in?" or equivalent).
+Answer plainly using the helper's canned report — don't hand-write a new
+sentence each time:
+
+```bash
+depth_mode_report
+```
+
+This satisfies FR-9: it reads the marker (default `terse` if absent) and
+states the current mode plus how to switch. Answering this question is a
+**read** — it never writes anything.
 
 ### 4. Phase 3 — handover-vs-new-project branch
 
@@ -266,13 +374,11 @@ Want to try filing your first ticket? It's a real GitHub issue, not a demo
 
 ### 6. Closing
 
-Always end with a pointer to the standalone re-entry point (even though
-`/tutorial` ships in #911 — name it now so the reference lands with the
-first PR that needs it):
+Always end with a pointer to the standalone re-entry point:
 
 ```
 Come back anytime with /tutorial to replay this tour — it works on any
-fork state and never changes anything.
+fork state and never changes anything. Your depth mode carries over.
 ```
 
 ### 7. Clear the bootstrap marker (REQUIRED — every exit path)
@@ -294,12 +400,28 @@ re-run-offer exits, and on any decline/cancel path. Never leave it set.
    real repo target, decline honestly (Step 5).
 3. **One question at a time.** Same conversational rule as `/setup`,
    `/handover`, and `/feature`.
-4. **Terse mode only, this increment.** Don't add glossary asides or
-   depth-adaptive rendering — that's increment 2 (#911+). Capture the
-   technical-level signal; don't act on it yet.
+4. **Depth mode changes rendering only, never a gate.** Terse vs guided
+   controls explanatory narration alongside `/onboard`'s output — it must
+   NEVER change which gate fires, which approval is required, or any role
+   boundary. If you catch yourself about to skip a real gate/permission
+   check because the adopter is in guided mode (or add one because
+   they're in terse), that's a bug — stop and render the SAME underlying
+   gate, just described at the current mode's verbosity (design §
+   "Depth mode is presentation only"; mechanically guarded by
+   `.claude/hooks/tests/test_depth_mode.sh`'s invariant case).
 5. **The tour content lives in one file.** Never inline or paraphrase
    `docs/onboarding/capability-tour.md` — both `/onboard` and `/tutorial`
    read the same asset verbatim.
+6. **Per-term glossary asides (#913) and the ambient any-session lookup +
+   full `/tutorial` glossary render (#915) are sibling tickets, not part
+   of this flow yet.** Guided mode here is generic "why this matters"
+   narration only — never invent per-term definitions or fabricate a
+   glossary lookup ahead of #913/#915 landing.
+7. **Only ever write the depth-mode marker via the shared helper**
+   (`_lib-onboarding-depth-mode.sh`'s `depth_mode_write`) — never hand-edit
+   `.claude/session/onboarding-depth-mode` with a raw `echo`/redirect.
+   This keeps derivation, override, and the invariant test all going
+   through one code path.
 
 ---
 
