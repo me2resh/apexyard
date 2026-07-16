@@ -32,12 +32,17 @@ below for derivation, and "Depth mode override + transparency" for the
 mid-session override (FR-6) and the "what mode am I in?" affordance
 (FR-9).
 
-The **per-term teach-in-context glossary + just-in-time asides** (#913)
-and the **ambient any-session lookup + full `/tutorial` glossary render**
-(#915) are sibling tickets, not yet built as of this ticket — guided mode
-here provides generic narration only. This flow already gates on the
-shared `.claude/session/onboarding-depth-mode` marker (D7's safe default:
-absent → terse), so #913's asides need no rework once they land.
+**The per-term teach-in-context glossary + just-in-time asides (#913) are
+now wired into this flow.** In guided mode, the first time this skill
+uses one of the five core terms — issue/ticket, PR, merge, branch, CI —
+toward the adopter, it weaves in a short inline parenthetical explaining
+it, once per term per session (design § D3). See "Just-in-time glossary
+asides" below for the mechanism. Terse mode sees zero asides — this is
+structural, not a formatting choice (the same `$mode` gate Step 3.5
+derives). The **ambient any-session lookup + full `/tutorial` glossary
+render** (#915) is still a sibling ticket, not yet built as of this
+ticket — asking "what's a merge?" outside a guided `/onboard` run isn't
+wired up yet.
 
 ## Path resolution
 
@@ -255,6 +260,55 @@ This satisfies FR-9: it reads the marker (default `terse` if absent) and
 states the current mode plus how to switch. Answering this question is a
 **read** — it never writes anything.
 
+### Just-in-time glossary asides (#913 — design § D3)
+
+From Step 3.5 onward, any time you are about to use one of the five core
+terms — **issue/ticket, PR, merge, branch, CI** — toward the adopter for
+the first time this session, check whether a short plain-language aside
+is due and, if so, weave it into your sentence as a single parenthetical.
+This can fire at any later step — most commonly Step 4 (the branch talks
+about the repo and may reach for "issue"/"ticket"), Step 5 (the guided
+first win names "ticket", "PR", "merge", "branch", "CI" directly in the
+"idea → ticket → PR → review → merge" framing), and the closing message.
+Don't wait for a dedicated "glossary step" — call this the first time you
+reach for the term, wherever that happens to be.
+
+Source the shared helper (it reads the depth-mode marker internally via
+`_lib-onboarding-depth-mode.sh`'s `depth_mode_read` — no separate mode
+check needed):
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-onboarding-glossary-seen.sh"
+aside=$(glossary_maybe_aside "ticket")   # term key: issue|ticket, pr, merge, branch, ci
+rc=$?
+```
+
+- **`$rc` is `1`, `$aside` empty** — say the term plainly, no aside. This
+  is the common path: terse mode (the design's structural "zero asides"),
+  the term already glossed once this session, or an unmapped term.
+- **`$rc` is `0`** — `$aside` holds that term's plain-language definition,
+  already sliced to exclude the glossary's "**Example**:" line (a short
+  paragraph, not the whole entry). Compress it into ONE short
+  parenthetical, right where you use the term:
+
+  ```
+  …I've opened a ticket for this (a ticket is just a tracked to-do item
+  we can both refer back to by number).
+  ```
+
+  Keep it to a single sentence — this is a per-term gloss, not the
+  generic "why this matters" framing Step 3.5 already adds in guided
+  mode; the two are complementary, never merge them into one longer
+  aside.
+
+Never hand-craft your own explanation for a term instead of calling the
+helper — the seen-set (`.claude/session/onboarding-glossary-seen`) is
+what guarantees "once per term, per session" is actually true, and it
+only updates through `glossary_maybe_aside`/`glossary_seen_add`. Terse
+mode's output is byte-for-byte unaffected by this section — the helper's
+mode gate is the same one Step 3.5 wrote, so a terse session renders
+exactly as it did before #913 landed.
+
 ### 4. Phase 3 — handover-vs-new-project branch
 
 Ask directly:
@@ -412,16 +466,24 @@ re-run-offer exits, and on any decline/cancel path. Never leave it set.
 5. **The tour content lives in one file.** Never inline or paraphrase
    `docs/onboarding/capability-tour.md` — both `/onboard` and `/tutorial`
    read the same asset verbatim.
-6. **Per-term glossary asides (#913) and the ambient any-session lookup +
-   full `/tutorial` glossary render (#915) are sibling tickets, not part
-   of this flow yet.** Guided mode here is generic "why this matters"
-   narration only — never invent per-term definitions or fabricate a
-   glossary lookup ahead of #913/#915 landing.
+6. **Per-term glossary asides (#913) are wired in; the ambient
+   any-session lookup + full `/tutorial` glossary render (#915) is still
+   a sibling ticket, not part of this flow yet.** In guided mode, gloss a
+   term via `glossary_maybe_aside` (see "Just-in-time glossary asides"
+   above) the first time you use it toward the adopter — never invent a
+   per-term definition by hand, and never fabricate a glossary lookup
+   outside a guided `/onboard`/`/tutorial` run ahead of #915 landing.
 7. **Only ever write the depth-mode marker via the shared helper**
    (`_lib-onboarding-depth-mode.sh`'s `depth_mode_write`) — never hand-edit
    `.claude/session/onboarding-depth-mode` with a raw `echo`/redirect.
    This keeps derivation, override, and the invariant test all going
    through one code path.
+8. **Only ever touch the glossary-seen marker via the shared helper**
+   (`_lib-onboarding-glossary-seen.sh`'s `glossary_seen_add` /
+   `glossary_maybe_aside`) — never hand-edit
+   `.claude/session/onboarding-glossary-seen` with a raw `echo`/redirect.
+   This is what keeps "once per term, per session" mechanically true and
+   testable (`.claude/hooks/tests/test_glossary_asides.sh`).
 
 ---
 
