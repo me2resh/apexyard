@@ -19,6 +19,18 @@ onboarding.yaml
 # sensitive-topic notes that should not leak to git — keep it local.
 .claude/project-config.json
 
+# Cognitive memory layer, Phase 0 (#692). The tracked templates are
+# MEMORY.example.md / USER.example.md; your real, accumulated notes live in
+# MEMORY.md / USER.md (this repo is typically a public fork opening PRs
+# upstream — real cross-project notes must stay LOCAL). Same example-file +
+# gitignore convention as onboarding.yaml above. db/ is reserved for a future
+# structured store and stays empty (via .gitkeep) in Phase 0 — no code reads
+# or writes here yet, but any future content there is per-clone too.
+.claude/memory/MEMORY.md
+.claude/memory/USER.md
+.claude/memory/db/*
+!.claude/memory/db/.gitkeep
+
 # Claude Code per-machine settings (permission overrides, local tool config)
 .claude/settings.local.json
 
