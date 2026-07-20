@@ -337,6 +337,42 @@ for symlink_kind in agents-root codex-root skills-child agents-child hooks-child
   assert_symlink_escape_rejected "$symlink_kind"
 done
 
+# Drift detection (and reconciliation) is scoped to adapter-owned paths only.
+# A hand-authored file living alongside generated output under .codex/ or
+# .agents/ — a native Codex config.toml, an operator scratch file — must
+# never be reported as drift, and must never be deleted by reconciliation.
+# Before this scoping, a whole-tree `diff -qr` would misreport such a file as
+# drift, which made --reconcile-installed's own post-write verification fail
+# even though every owned path was perfectly in sync — a false-positive hard
+# failure on /update's strict path.
+SCOPED="$TMPROOT/scoped-owned-paths"
+mkdir -p "$SCOPED/.agents/skills" "$SCOPED/.codex/agents"
+cp -R "$TMPROOT/.claude" "$SCOPED/.claude"
+bash "$SCRIPT" --root "$SCOPED" >/dev/null 2>&1
+printf '%s\n' 'hand-authored, not adapter output' > "$SCOPED/.codex/config.toml"
+mkdir -p "$SCOPED/.agents/notes"
+printf '%s\n' 'operator scratch file' > "$SCOPED/.agents/notes/todo.md"
+
+if bash "$SCRIPT" --root "$SCOPED" --check >/tmp/_codex_adapter_scoped_check.out 2>&1; then
+  mark_pass "--check ignores non-owned files under .codex/ and .agents/"
+else
+  mark_fail "--check ignores non-owned files under .codex/ and .agents/" "$(cat /tmp/_codex_adapter_scoped_check.out)"
+fi
+
+if bash "$SCRIPT" --root "$SCOPED" --check-installed >/tmp/_codex_adapter_scoped_check_installed.out 2>&1; then
+  mark_pass "--check-installed ignores non-owned files (no false-positive staleness)"
+else
+  mark_fail "--check-installed ignores non-owned files (no false-positive staleness)" "$(cat /tmp/_codex_adapter_scoped_check_installed.out)"
+fi
+
+if bash "$SCRIPT" --root "$SCOPED" --reconcile-installed >/tmp/_codex_adapter_scoped_reconcile.out 2>&1; then
+  mark_pass "--reconcile-installed succeeds with non-owned files present (no false-positive failure)"
+else
+  mark_fail "--reconcile-installed succeeds with non-owned files present (no false-positive failure)" "$(cat /tmp/_codex_adapter_scoped_reconcile.out)"
+fi
+assert_contains "$SCOPED/.codex/config.toml" "hand-authored, not adapter output" "reconciliation leaves a hand-authored .codex file untouched"
+assert_contains "$SCOPED/.agents/notes/todo.md" "operator scratch file" "reconciliation leaves a hand-authored .agents file untouched"
+
 # A detected install with an invalid canonical config must fail loudly.
 FAILROOT="$TMPROOT/failing-install"
 mkdir -p "$FAILROOT/.agents/skills" "$FAILROOT/.codex/agents"
@@ -354,6 +390,20 @@ if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_codex_adapter_check_drift.out
   mark_fail "--check detects drift" "expected non-zero exit"
 else
   mark_pass "--check detects drift"
+fi
+
+# --check-installed is the read-only counterpart used by the SessionStart
+# advisory: it must catch real owned-path drift (same fixture the --check
+# assertion above just proved is stale) without writing anything.
+if bash "$SCRIPT" --root "$TMPROOT" --check-installed >/tmp/_codex_adapter_check_installed_drift.out 2>&1; then
+  mark_fail "--check-installed detects real owned-path drift" "expected non-zero exit"
+else
+  mark_pass "--check-installed detects real owned-path drift"
+fi
+if grep -q "New source line." "$TMPROOT/.agents/skills/status/SKILL.md" 2>/dev/null; then
+  mark_fail "--check-installed does not write the drifted change to generated output" "generated output was mutated"
+else
+  mark_pass "--check-installed does not write the drifted change to generated output"
 fi
 
 echo

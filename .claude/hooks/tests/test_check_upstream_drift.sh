@@ -159,9 +159,11 @@ case_squash_no_changelog() {
   rm -rf "$up" "$(dirname "$fk")"
 }
 
-# CASE 6: an installed pre-manifest Codex adapter is refreshed through the
-# canonical SessionStart hook after new framework skills land.
-case_codex_bootstrap_refresh() {
+# CASE 6: an installed pre-manifest Codex adapter has drifted (new framework
+# skills landed). The SessionStart hook must WARN about the drift but must
+# NEVER mutate the tree itself — reconciliation is owned exclusively by an
+# explicit `/update` or a manual `--reconcile-installed` run.
+case_codex_bootstrap_warns_without_mutating() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
   (
@@ -175,20 +177,25 @@ case_codex_bootstrap_refresh() {
     mkdir -p .claude/skills/tutorial
     printf '%s\n' '# newly synced tutorial skill' > .claude/skills/tutorial/SKILL.md
   )
-  run_hook_from "$fk" >/tmp/_upstream_drift_codex_bootstrap.out
-  if [ -f "$fk/.codex/apexyard-adapter.json" ] \
-    && grep -q '# newly synced tutorial skill' "$fk/.agents/skills/tutorial/SKILL.md"; then
-    echo "PASS [SessionStart refreshes a legacy Codex adapter]"
+  local output
+  output=$(run_hook_from "$fk")
+  if echo "$output" | grep -q 'Codex adapter may be stale' \
+    && [ ! -e "$fk/.codex/apexyard-adapter.json" ] \
+    && [ ! -e "$fk/.agents/skills/tutorial" ]; then
+    echo "PASS [SessionStart warns on Codex adapter drift without mutating the tree]"
     PASS=$((PASS+1))
   else
-    echo "FAIL [SessionStart refreshes a legacy Codex adapter]" >&2
+    echo "FAIL [SessionStart warns on Codex adapter drift without mutating the tree]" >&2
+    echo "  output=$output" >&2
+    echo "  manifest exists=$([ -e "$fk/.codex/apexyard-adapter.json" ] && echo yes || echo no)" >&2
+    echo "  tutorial skill copied=$([ -e "$fk/.agents/skills/tutorial" ] && echo yes || echo no)" >&2
     FAIL=$((FAIL+1)); FAILED="${FAILED}codex-bootstrap "
   fi
   rm -rf "$up" "$(dirname "$fk")"
 }
 
-# CASE 7: carrying the reconciler without a detected installation must not
-# create Codex-specific files for another harness.
+# CASE 7: carrying the checker without a detected installation must not
+# create Codex-specific files for another harness, and must stay silent.
 case_codex_bootstrap_uninstalled_noop() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
@@ -208,8 +215,8 @@ case_codex_bootstrap_uninstalled_noop() {
   rm -rf "$up" "$(dirname "$fk")"
 }
 
-# CASE 8: startup reconciliation failure is visible but advisory. The session
-# hook must still return zero.
+# CASE 8: a failure inside the staleness check itself is visible but
+# advisory. The session hook must still return zero and must not mutate.
 case_codex_bootstrap_failure_warns_without_blocking() {
   local up; up=$(make_upstream)
   local fk; fk=$(make_fork "$up")
@@ -228,12 +235,13 @@ SH
   output=$(run_hook_from "$fk")
   rc=$?
   if [ "$rc" -eq 0 ] \
-    && echo "$output" | grep -q 'installed Codex adapter could not be refreshed' \
-    && echo "$output" | grep -q 'synthetic reconciliation failure'; then
-    echo "PASS [SessionStart warns without blocking on reconciliation failure]"
+    && echo "$output" | grep -q 'Codex adapter may be stale' \
+    && echo "$output" | grep -q 'synthetic reconciliation failure' \
+    && [ ! -e "$fk/.codex/apexyard-adapter.json" ]; then
+    echo "PASS [SessionStart warns without blocking or mutating on check failure]"
     PASS=$((PASS+1))
   else
-    echo "FAIL [SessionStart warns without blocking on reconciliation failure] rc=$rc output=$output" >&2
+    echo "FAIL [SessionStart warns without blocking or mutating on check failure] rc=$rc output=$output" >&2
     FAIL=$((FAIL+1)); FAILED="${FAILED}codex-failure "
   fi
   rm -rf "$up" "$(dirname "$fk")"
@@ -244,7 +252,7 @@ case_merge_commit_caught_up
 case_genuinely_behind
 case_fork_ahead
 case_squash_no_changelog
-case_codex_bootstrap_refresh
+case_codex_bootstrap_warns_without_mutating
 case_codex_bootstrap_uninstalled_noop
 case_codex_bootstrap_failure_warns_without_blocking
 

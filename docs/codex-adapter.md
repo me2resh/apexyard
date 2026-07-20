@@ -65,15 +65,22 @@ This mode refreshes and verifies an existing ApexYard Codex adapter, but is a
 silent no-op on forks where Codex support was never installed. New
 installations are identified by `.codex/apexyard-adapter.json`; adapters from
 before that manifest are recognised only when all three generated surfaces
-exist: `.agents/skills/`, `.codex/agents/`, and `.codex/hooks.json`.
+exist: `.agents/skills/`, `.codex/agents/`, and `.codex/hooks.json`. Drift
+detection (here and in `--check` / `--check-installed`) only ever compares the
+adapter's owned paths — a hand-authored file living alongside the generated
+output under `.agents/` or `.codex/` is left alone.
 
 `/update` runs this reconciliation automatically before every successful exit,
 including the already-current path. Use `--skip-adapter-sync` only as a
-troubleshooting escape hatch. For pre-manifest installs whose old generated
-`$update` skill cannot yet contain that instruction, the already-delegated
-`check-upstream-drift.sh` SessionStart hook performs a one-time non-blocking
-refresh after framework files land. That bootstrap requires trusted project
-hooks; without hook trust, run the command above once manually.
+troubleshooting escape hatch.
+
+For pre-manifest installs whose old generated `$update` skill cannot yet
+contain that instruction, the already-delegated `check-upstream-drift.sh`
+SessionStart hook runs a **read-only** `bin/sync-codex-adapter.sh
+--check-installed` on every session and prints an advisory nudge if the
+installed adapter has drifted. This hook never writes to the tree — it only
+tells the operator to run the command above (or `/update`). It does not block
+session startup.
 
 ## Clean Regeneration
 

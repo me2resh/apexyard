@@ -34,13 +34,16 @@ It deliberately does **not** copy the hooks, rules, migrations, or registries in
 bin/sync-codex-adapter.sh            # generate the adapter
 bin/sync-codex-adapter.sh --check    # verify generated files still match .claude/ (non-zero on drift)
 bin/sync-codex-adapter.sh --clean    # remove generated .agents/ and .codex/ trees before regenerating
-bin/sync-codex-adapter.sh --reconcile-installed # refresh only when ApexYard's Codex adapter is installed
+bin/sync-codex-adapter.sh --reconcile-installed # refresh (writes) only when ApexYard's Codex adapter is installed
+bin/sync-codex-adapter.sh --check-installed     # read-only staleness check; never writes
 ```
 
-`/update` invokes installed-only reconciliation automatically. A trusted
-SessionStart hook bootstraps legacy pre-manifest adapters after the first
-framework sync; untrusted project-hook installs need one manual
-`--reconcile-installed` run to pick up the new `$update` behavior.
+`/update` invokes installed-only reconciliation (`--reconcile-installed`)
+automatically. A SessionStart hook runs the **read-only** `--check-installed`
+mode on every session and prints an advisory nudge if a legacy or
+manifest-backed adapter has drifted — it never mutates the tree itself. Run
+`--reconcile-installed` manually (or `/update`) to pick up the new `$update`
+behavior on a pre-manifest install.
 
 Tracking policy, gitignore guidance, and CI `--check` enforcement: [`docs/codex-adapter.md`](../codex-adapter.md).
 

@@ -31,8 +31,19 @@
   needs a bootstrap path outside that stale prompt.
 - Existing generated Codex hook wiring already delegates the SessionStart
   `check-upstream-drift.sh` command to its canonical `.claude/hooks/` path.
-  After a framework sync, that stable command can therefore execute newly
-  merged reconciliation logic even while `.codex/hooks.json` is stale.
+  After a framework sync, that stable command can therefore run newly merged
+  reconciliation logic even while `.codex/hooks.json` is stale — but a
+  SessionStart hook fires on *every* session, so it must never itself mutate
+  the working tree; it can only advise the operator to run the real, explicit
+  reconciliation path.
+- Reconciliation deletes and replaces owned output paths (`.agents/skills`,
+  `.codex/agents`, `.codex/hooks.json`, `.codex/apexyard-adapter.json`). A
+  whole-tree comparison against `.agents/` or `.codex/` would misclassify any
+  hand-authored file living alongside the generated output (a native Codex
+  `config.toml`, a runtime cache) as drift, producing false-positive warnings
+  and — worse — a false-positive hard failure on `/update`'s strict path.
+  Drift detection therefore needs to be scoped to exactly the paths the
+  adapter owns, not the whole directory.
 
 ## Options Considered
 
@@ -55,16 +66,27 @@ stable adapter identifier, schema version, and canonical source. The manifest
 is generated output and participates in the existing `--check` comparison, so
 its absence or drift is reported like any other adapter output.
 
-The generator will expose an idempotent installed-only reconciliation mode so
-both `/update` and the bootstrap backstop use one detection and generation
-implementation. It is a silent no-op when no ApexYard Codex installation is
-detected and fails non-zero when generation or verification fails.
+The generator will expose an idempotent installed-only reconciliation mode
+(`--reconcile-installed`, mutating) and a companion read-only staleness check
+(`--check-installed`), so `/update`, the SessionStart advisory, and any manual
+invocation share one detection and generation implementation. Both are a
+silent no-op when no ApexYard Codex installation is detected; the mutating
+mode fails non-zero when generation or verification fails, and the read-only
+mode fails non-zero when the installed adapter has drifted, without ever
+writing to disk.
+
+Every drift comparison — `--check`, `--check-installed`, and
+`--reconcile-installed`'s own before/after checks — walks only the adapter's
+owned relative paths (`.agents/skills`, `.codex/agents`, `.codex/hooks.json`,
+`.codex/apexyard-adapter.json`), never a whole-tree `diff -qr` of `.agents/`
+or `.codex/`. A file outside that owned list is invisible to drift detection
+and is never touched by reconciliation.
 
 Because reconciliation deletes and replaces generated paths, the generator
 must reject symlinked `.agents` / `.codex` roots and symlinked owned child paths
 before reading installation metadata or mutating output. This prevents a
-repository-controlled adapter path from redirecting automatic SessionStart
-writes outside the repository.
+repository-controlled adapter path from redirecting a reconciliation write
+outside the repository.
 
 `/update` will consider Codex installed when either:
 
@@ -79,15 +101,18 @@ explicit troubleshooting escape hatch. Reconciliation runs the generator and
 then `--check`; generation or verification failure makes `/update` fail loudly
 instead of reporting a successful update with stale governance output.
 
-For the one-time bootstrap from a pre-fix generated `$update`, the already-wired
-`check-upstream-drift.sh` SessionStart hook invokes the same installed-only
-reconciliation mode before any of its normal silent exits. This is a
-compatibility backstop, not a second implementation: once it writes the
-manifest and refreshes `$update`, future explicit updates reconcile directly.
-The hook remains silent on success/no-install, reports a concise warning on
-failure, and does not block session startup. Codex installations without
-project-hook trust cannot use this backstop and retain the documented one-time
-manual generator path.
+For visibility between explicit `/update` runs, the already-wired
+`check-upstream-drift.sh` SessionStart hook invokes the generator's
+**read-only** `--check-installed` mode before any of its normal silent exits.
+This is an advisory nudge, not a second reconciliation implementation, and it
+never mutates the tree: on drift it prints a one-line warning naming
+`bin/sync-codex-adapter.sh --reconcile-installed` as the fix, wrapped in the
+same `timeout`-guarded pattern as the hook's sibling `git fetch` call so a
+hung generator invocation can't stall session startup. The hook remains
+silent on success/no-install, reports a concise warning on drift or failure,
+and does not block session startup. The actual reconciling write only ever
+happens through explicit `/update` or a manual `--reconcile-installed`
+invocation — never automatically at session boot.
 
 Verification is split across the existing generator smoke test and a dedicated
 `/update` reconciliation test. Together they must prove:
@@ -102,11 +127,15 @@ Verification is split across the existing generator smoke test and a dedicated
 - `--dry-run` and `--skip-adapter-sync` do not mutate adapter output; and
 - generation or verification failure propagates as a non-zero `/update`
   result instead of being downgraded to a warning;
-- the existing SessionStart wiring reaches the canonical bootstrap call, which
-  refreshes a legacy installation, leaves an uninstalled fork untouched, and
-  warns without blocking when reconciliation fails;
+- the existing SessionStart wiring reaches the canonical `--check-installed`
+  call, which leaves an uninstalled fork untouched, never mutates an installed
+  one, and warns without blocking when the adapter has drifted or the check
+  itself fails;
 - symlinked adapter roots and owned child paths fail before mutation, with
-  external sentinel files proving that reconciliation cannot escape the repo.
+  external sentinel files proving that reconciliation cannot escape the repo;
+- drift detection ignores files outside the adapter's owned paths (a
+  hand-authored file living alongside the generated output must not be
+  reported as drift or be at risk of deletion).
 
 ## Consequences
 
@@ -117,9 +146,10 @@ Verification is split across the existing generator smoke test and a dedicated
   `.codex/` files.
 - The first reconciliation of a legacy adapter writes the manifest, after
   which future detection no longer relies on directory shape.
-- A pre-fix generated `$update` self-heals on the first trusted SessionStart
-  after the framework files land; untrusted Codex hook installations still
-  require the documented one-time manual generator command.
+- A pre-fix generated `$update` gets a visible SessionStart nudge as soon as
+  the framework files land, but reconciliation itself still requires an
+  explicit `/update` run or a manual `--reconcile-installed` invocation — the
+  hook only ever advises, it does not self-heal the installation at boot.
 - A user-owned partial `.agents/` or `.codex/` tree is not treated as an
   ApexYard installation; all three legacy output surfaces must be present.
 - Symlinked generated roots or critical output children are rejected for every
@@ -127,13 +157,17 @@ Verification is split across the existing generator smoke test and a dedicated
 - Generated tracked output may become dirty after reconciliation by design;
   that is the visible update an adopter should review and commit. Ignored local
   output refreshes without changing Git state.
+- Drift detection and reconciliation are scoped to the adapter's owned paths
+  only, so a hand-authored file living alongside generated output under
+  `.agents/` or `.codex/` is never flagged as drift and never deleted.
 - The same manifest pattern can be adopted by other generated harness adapters
   later, but this decision does not claim they share Codex's generation or
   installation lifecycle.
-- `check-upstream-drift.sh` gains one local derived-file maintenance call before
-  its network/tag logic. That expands its startup responsibility slightly, but
-  reuses an already-delegated canonical execution seam and avoids permanent
-  stale-skill lockout for existing Codex adopters.
+- `check-upstream-drift.sh` gains one local, read-only, timeout-guarded
+  staleness check before its network/tag logic. That expands its startup
+  responsibility slightly, but the check never mutates the tree — it reuses an
+  already-delegated canonical execution seam purely to surface a warning, not
+  to perform the reconciliation itself.
 
 ## Artifacts
 

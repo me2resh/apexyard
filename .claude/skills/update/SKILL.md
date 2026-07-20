@@ -199,9 +199,9 @@ reconcile_installed_codex_adapter() {
 }
 ```
 
-Unlike the SessionStart compatibility backstop described below, an explicit
-`/update` is strict: a detected adapter that cannot be generated and verified
-makes the update fail instead of being reported as current.
+Unlike the SessionStart advisory nudge described below, an explicit `/update`
+is strict: a detected adapter that cannot be generated and verified makes the
+update fail instead of being reported as current.
 
 ### 2. Fetch both remotes
 
@@ -926,13 +926,16 @@ reconcile_installed_codex_adapter || {
 ```
 
 This step is intentionally after the merge and migrations so newly added or
-rewritten skills, agents, and hooks are captured once. The first release that
-ships this behavior also carries a SessionStart compatibility backstop in
-`check-upstream-drift.sh`: a pre-fix generated `$update` cannot know these new
-instructions, but its existing Codex hook wiring already delegates that hook to
-the newly synced canonical `.claude/` file. The backstop is non-blocking and
-only bootstraps the new generated skill; explicit `/update` remains the owner of
-strict reconciliation thereafter.
+rewritten skills, agents, and hooks are captured once. `check-upstream-drift.sh`'s
+SessionStart hook complements this with a **read-only** advisory: on every
+session it runs the generator's `--check-installed` mode (never writes) and
+prints a one-line nudge to stderr if the installed adapter has drifted from
+what `.claude/` would generate. The nudge exists precisely because a pre-fix
+generated `$update` cannot yet know about this reconciliation step — but the
+hook only ever *warns*, it does not regenerate anything at boot. The actual
+write always happens through this explicit `/update` step (or a manual
+`bin/sync-codex-adapter.sh --reconcile-installed` run); `/update` remains the
+sole owner of strict, mutating reconciliation.
 
 ### 9. Final state + next steps
 
