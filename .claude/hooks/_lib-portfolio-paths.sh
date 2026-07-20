@@ -403,6 +403,43 @@ portfolio_validate() {
     fi
   fi
 
+  # Fork-containment check — see me2resh/apexyard#951.
+  #
+  # The checks above compare RAW resolved paths (simple string
+  # concatenation — see _portfolio_resolve) against root_real. A
+  # `../` depth mismatch in a projects_dir/workspace_dir override can
+  # still exist on disk (a real, but WRONG, directory) while landing
+  # right back INSIDE the ops fork rather than the intended sibling
+  # portfolio repo — the plain existence check earlier in this
+  # function passes, so the misconfig stays silent and subsequent
+  # writes (clones, docs, registry edits) land in the wrong tree.
+  #
+  # Close that gap by resolving projects_dir to its canonical
+  # (`cd && pwd -P`) form and checking fork-containment on THAT, in
+  # addition to the raw check above. workspace_dir already gets this
+  # canonical treatment via $wd_real earlier in this function.
+  #
+  # Conservative by design: only fires in a confirmed v2-oriented
+  # setup — the `.apexyard-fork` marker is present, OR registry /
+  # projects_dir already resolve outside the fork (the same
+  # v2-oriented signal #373 uses above). A plain single-fork (v1)
+  # setup with untouched in-fork defaults never reaches this branch,
+  # so it can't false-positive there.
+  local pd_real
+  pd_real=$(cd "$projects_dir" 2>/dev/null && pwd -P) || pd_real="$projects_dir"
+
+  if portfolio_is_v2 || _outside_fork "$registry" || _outside_fork "$projects_dir"; then
+    if ! _outside_fork "$pd_real"; then
+      echo "broken: split-portfolio v2 misconfig — portfolio.projects_dir resolved to $projects_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch in .claude/project-config.json's portfolio.projects_dir override. See me2resh/apexyard#951."
+      return 1
+    fi
+
+    if ! _outside_fork "$wd_real"; then
+      echo "broken: split-portfolio v2 misconfig — portfolio.workspace_dir resolved to $workspace_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch in .claude/project-config.json's portfolio.workspace_dir override. See me2resh/apexyard#951."
+      return 1
+    fi
+  fi
+
   case "$onboarding" in
     "$root"/*|"$root")
       # In-fork path — leave it to onboarding-check.sh.

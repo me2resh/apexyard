@@ -218,6 +218,76 @@ exit 1
 rm -rf "$SB" "$SIB"
 
 # ---------------------------------------------------------------------------
+# Case 2c (#951): v2 marker present + projects_dir override resolves to a
+# REAL BUT WRONG directory INSIDE the ops fork (the `../` depth-mismatch
+# bug). The plain existence check alone would pass here — the decoy dir
+# genuinely exists — so validate() must additionally catch fork-containment.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+touch "$SB/.apexyard-fork"
+# Decoy dir: shares a name with what the sibling portfolio SHOULD be, but
+# lives inside the fork because the override below is missing its leading
+# "../" — exactly the layout mismatch #951 describes.
+mkdir -p "$SB/sibling-portfolio/projects"
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "projects_dir": "sibling-portfolio/projects"
+  }
+}
+JSON
+run_case "v2 (#951): projects_dir resolves inside the fork → broken" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"projects_dir"*"INSIDE the ops fork"*)
+    [ "$rc" -ne 0 ] && exit 0
+    echo "rc was 0 even though fork-containment message printed: $out"
+    exit 1
+    ;;
+esac
+echo "expected fork-containment message, got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 2d (#951): v2 marker present + projects_dir AND workspace_dir both
+# correctly resolve to the sibling private-portfolio repo → OK. Proves the
+# new check doesn't false-positive on a correctly configured v2 fork.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+touch "$SB/.apexyard-fork"
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/projects" "$SIB/workspace"
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "projects_dir": "$SIB/projects",
+    "workspace_dir": "$SIB/workspace"
+  }
+}
+JSON
+run_case "v2 (#951): correctly configured sibling projects_dir/workspace_dir → OK" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 2e (#951): v1 single-fork, no .apexyard-fork marker, untouched in-fork
+# defaults for projects_dir/workspace_dir → still OK. Proves the new
+# fork-containment check is conservative and doesn't fire on a plain v1
+# single-fork setup where in-fork defaults are correct.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v1 (#951): untouched in-fork defaults, no marker → OK (no false positive)" "$SB" '
+if portfolio_is_v2; then echo "expected v1 (no marker) for this fixture"; exit 1; fi
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Case 3: relative override resolves against fork root
 # ---------------------------------------------------------------------------
 SB=$(make_fork)
