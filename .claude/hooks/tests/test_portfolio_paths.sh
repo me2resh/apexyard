@@ -688,6 +688,134 @@ if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; e
 '
 rm -rf "$SB"
 
+# ---------------------------------------------------------------------------
+# Case 25 (#945): a RELATIVE split-portfolio v2 override that itself carries
+# a literal ".." segment (e.g. "../<fork>-portfolio/workspace" — the exact
+# shape a split-portfolio v2 adopter configures when the private sibling
+# repo lives next to the ops fork) must resolve to a canonical, `/../`-free
+# absolute path. Every other override test in this file pre-resolves its
+# sibling path via `cd ... && pwd` before writing it into project-config.json
+# (so it never exercises the buggy concatenation branch); this case
+# deliberately writes the RAW relative-with-".." string, which is what
+# actually reaches `_portfolio_resolve` in the field.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIBROOT=$(mktemp -d)
+SIBROOT=$(cd "$SIBROOT" && pwd -P)
+mkdir -p "$SIBROOT/apexyard-portfolio/workspace"
+# Re-root the sandbox so "$SB/.." really is $SIBROOT (the literal ".."
+# override below must land on a real, existing sibling directory).
+rm -rf "$SB"
+SB="$SIBROOT/apexyard"
+mkdir -p "$SB"
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@example.com"
+  git config user.name "test"
+  touch onboarding.yaml
+  cat > apexyard.projects.yaml <<'YAML'
+version: 1
+projects:
+  - name: example
+    repo: example/example
+YAML
+  mkdir -p projects
+  cat > projects/ideas-backlog.md <<'MD'
+# Ideas Backlog
+MD
+  mkdir -p .claude/hooks
+  cp "$LIB_SRC" .claude/hooks/_lib-portfolio-paths.sh
+  cp "$CONFIG_LIB_SRC" .claude/hooks/_lib-read-config.sh
+  cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+  cat > .claude/project-config.json <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "../apexyard-portfolio/workspace"
+  }
+}
+JSON
+  git add -A
+  git commit -q -m "test fixture (#945)"
+)
+run_case "#945: relative override with a literal '..' resolves /../-free" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIBROOT"'/apexyard-portfolio/workspace"
+case "$r" in
+  *"/../"*) echo "still contains a literal /../ segment: $r"; exit 1 ;;
+esac
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "#945: end-to-end — FILE_PATH under the resolved workspace now matches the gate's prefix check" "$SB" '
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+# FILE_PATH is built independently from the CANONICAL sibling root
+# ($SIBROOT, captured before this subshell via cd + plain pwd -P), NOT by
+# concatenating $WORKSPACE_DIR — this mirrors reality, where the harness
+# hands the hook an already fully-resolved absolute path with no literal
+# ".." in it, regardless of how WORKSPACE_DIR itself was computed. Deriving
+# FILE_PATH from $WORKSPACE_DIR would make this assertion pass trivially
+# even on the unfixed code (both sides would carry the same literal
+# "/../", so the prefix match "works" for the wrong reason).
+FILE_PATH="'"$SIBROOT"'/apexyard-portfolio/workspace/exampleproj/src/app.ts"
+case "$FILE_PATH" in
+  "$WORKSPACE_DIR"/*) exit 0 ;;
+esac
+echo "FILE_PATH ($FILE_PATH) did not match WORKSPACE_DIR prefix ($WORKSPACE_DIR) — Tier-0/1 marker would be silently ignored"
+exit 1
+'
+rm -rf "$SIBROOT"
+
+# ---------------------------------------------------------------------------
+# Case 26 (#945): same relative-".." override, but the leaf directory does
+# NOT exist yet (the common split-portfolio v2 state before the first
+# managed-project clone lands in workspace/). Canonicalization must still
+# collapse the ".." without requiring the leaf to exist.
+# ---------------------------------------------------------------------------
+SIBROOT=$(mktemp -d)
+SIBROOT=$(cd "$SIBROOT" && pwd -P)
+mkdir -p "$SIBROOT/apexyard-portfolio"   # sibling root exists; workspace/ leaf does not
+SB="$SIBROOT/apexyard"
+mkdir -p "$SB"
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@example.com"
+  git config user.name "test"
+  touch onboarding.yaml
+  cat > apexyard.projects.yaml <<'YAML'
+version: 1
+projects:
+  - name: example
+    repo: example/example
+YAML
+  mkdir -p projects
+  cat > projects/ideas-backlog.md <<'MD'
+# Ideas Backlog
+MD
+  mkdir -p .claude/hooks
+  cp "$LIB_SRC" .claude/hooks/_lib-portfolio-paths.sh
+  cp "$CONFIG_LIB_SRC" .claude/hooks/_lib-read-config.sh
+  cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+  cat > .claude/project-config.json <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "../apexyard-portfolio/workspace"
+  }
+}
+JSON
+  git add -A
+  git commit -q -m "test fixture (#945, no leaf yet)"
+)
+run_case "#945: relative override with '..' resolves /../-free even when the leaf dir does not exist yet" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIBROOT"'/apexyard-portfolio/workspace"
+case "$r" in
+  *"/../"*) echo "still contains a literal /../ segment: $r"; exit 1 ;;
+esac
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SIBROOT"
+
 
 # ---------------------------------------------------------------------------
 # Summary
