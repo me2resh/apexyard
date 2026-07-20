@@ -24,6 +24,7 @@ Codex support is **generated** from the canonical `.claude/` runtime rather than
 - `.claude/skills/` → `.agents/skills/` (rewriting only the skill path references)
 - `.claude/agents/*.md` → `.codex/agents/*.toml`, translating model-tier labels via the shared [`.claude/harness-models.json`](../../.claude/harness-models.json) matrix (`opus`→`gpt-5.5`, `sonnet`→`gpt-5.4`, `haiku`→`gpt-5.4-mini`)
 - `.claude/settings.json` → `.codex/hooks.json`, preserving the commands that exec `$r/.claude/hooks/*.sh`
+- `.codex/apexyard-adapter.json`, identifying ApexYard-owned generated output for safe update-time reconciliation
 
 It deliberately does **not** copy the hooks, rules, migrations, or registries into `.codex/` — those stay canonical under `.claude/`. Claude Code's handler-level `if` predicates (not part of Codex's documented hook shape) are compiled into the generated shell command as a preflight filter.
 
@@ -33,7 +34,16 @@ It deliberately does **not** copy the hooks, rules, migrations, or registries in
 bin/sync-codex-adapter.sh            # generate the adapter
 bin/sync-codex-adapter.sh --check    # verify generated files still match .claude/ (non-zero on drift)
 bin/sync-codex-adapter.sh --clean    # remove generated .agents/ and .codex/ trees before regenerating
+bin/sync-codex-adapter.sh --reconcile-installed # refresh (writes) only when ApexYard's Codex adapter is installed
+bin/sync-codex-adapter.sh --check-installed     # read-only staleness check; never writes
 ```
+
+`/update` invokes installed-only reconciliation (`--reconcile-installed`)
+automatically. A SessionStart hook runs the **read-only** `--check-installed`
+mode on every session and prints an advisory nudge if a legacy or
+manifest-backed adapter has drifted — it never mutates the tree itself. Run
+`--reconcile-installed` manually (or `/update`) to pick up the new `$update`
+behavior on a pre-manifest install.
 
 Tracking policy, gitignore guidance, and CI `--check` enforcement: [`docs/codex-adapter.md`](../codex-adapter.md).
 

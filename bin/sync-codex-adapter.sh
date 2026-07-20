@@ -10,10 +10,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK=0
 CLEAN=0
+RECONCILE_INSTALLED=0
+CHECK_INSTALLED=0
 
 usage() {
   cat <<'USAGE'
-Usage: bin/sync-codex-adapter.sh [--check] [--clean] [--root <path>]
+Usage: bin/sync-codex-adapter.sh [--check] [--clean] [--reconcile-installed] [--check-installed] [--root <path>]
 
 Generate Codex adapter files from .claude:
   .claude/skills   -> .agents/skills
@@ -23,6 +25,14 @@ Generate Codex adapter files from .claude:
 Options:
   --check       Do not write files; fail if generated output would differ.
   --clean       Remove generated .agents/.codex before writing.
+  --reconcile-installed
+                Refresh and verify an existing ApexYard Codex adapter. Silently
+                do nothing when no manifest or complete legacy adapter exists.
+  --check-installed
+                Read-only staleness check for an existing ApexYard Codex
+                adapter. Never writes; exits non-zero when the installed
+                adapter's owned paths drift from what .claude would generate.
+                Silently exits 0 when no adapter is installed.
   --root PATH   Repository root to use instead of this script's parent.
 USAGE
 }
@@ -31,6 +41,8 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --check) CHECK=1 ;;
     --clean) CLEAN=1 ;;
+    --reconcile-installed) RECONCILE_INSTALLED=1 ;;
+    --check-installed) CHECK_INSTALLED=1 ;;
     --root)
       [ "$#" -ge 2 ] || { echo "ERROR: --root requires a path" >&2; exit 2; }
       ROOT="$2"
@@ -54,6 +66,60 @@ CLAUDE_DIR="$ROOT/.claude"
 
 [ -d "$CLAUDE_DIR" ] || { echo "ERROR: .claude not found under $ROOT" >&2; exit 1; }
 [ -f "$CLAUDE_DIR/settings.json" ] || { echo "ERROR: .claude/settings.json not found" >&2; exit 1; }
+
+# Adapter-owned generated subpaths, relative to $ROOT. Every drift/reconcile
+# comparison in this script (symlink guard, --check, --check-installed,
+# --reconcile-installed) walks only these paths — anything else living under
+# .agents/ or .codex/ (a hand-authored Codex config.toml, a runtime cache, a
+# user-owned file) is left alone and never flagged as drift or mutated. This
+# mirrors exactly what the generator writes and removes further below.
+ADAPTER_OWNED_PATHS=(
+  ".agents/skills"
+  ".codex/agents"
+  ".codex/hooks.json"
+  ".codex/apexyard-adapter.json"
+)
+
+assert_safe_output_paths() {
+  local path rel
+  for path in "$ROOT/.agents" "$ROOT/.codex"; do
+    if [ -L "$path" ]; then
+      echo "ERROR: refusing Codex adapter output through symlink: $path" >&2
+      return 1
+    fi
+  done
+  for rel in "${ADAPTER_OWNED_PATHS[@]}"; do
+    if [ -L "$ROOT/$rel" ]; then
+      echo "ERROR: refusing Codex adapter output through symlink: $ROOT/$rel" >&2
+      return 1
+    fi
+  done
+}
+
+# The generator deletes and replaces owned output paths. Reject symlinks before
+# installation detection reads a manifest and before any mutation can escape
+# the repository through an adapter root or critical child path.
+assert_safe_output_paths || exit 1
+
+codex_adapter_installed() {
+  local manifest="$ROOT/.codex/apexyard-adapter.json"
+  if [ -f "$manifest" ] \
+    && grep -qE '"adapter"[[:space:]]*:[[:space:]]*"apexyard-codex"' "$manifest"; then
+    return 0
+  fi
+
+  [ -d "$ROOT/.agents/skills" ] \
+    && [ -d "$ROOT/.codex/agents" ] \
+    && [ -f "$ROOT/.codex/hooks.json" ]
+}
+
+if [ "$RECONCILE_INSTALLED" = "1" ] && ! codex_adapter_installed; then
+  exit 0
+fi
+
+if [ "$CHECK_INSTALLED" = "1" ] && ! codex_adapter_installed; then
+  exit 0
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required to generate TOML strings safely" >&2
@@ -120,6 +186,11 @@ generate_hooks_json() {
 
 copy_tree "$CLAUDE_DIR/skills" "$OUT_AGENTS/skills"
 generate_hooks_json > "$OUT_CODEX/hooks.json"
+jq -n '{
+  adapter: "apexyard-codex",
+  schema: 1,
+  generated_from: ".claude"
+}' > "$OUT_CODEX/apexyard-adapter.json"
 
 # Fail loud on a silent gate-hole (Rex, #838/#840): generate_hooks_json's jq
 # filter is written to be matcher-agnostic (it walks every event/matcher
@@ -182,17 +253,34 @@ if grep -R "$(printf '%s' "$ROOT" | sed 's/[.[\*^$()+?{}|]/\\&/g')" "$OUT_AGENTS
   exit 1
 fi
 
+# Compares one generated root (.agents or .codex) against its on-disk
+# counterpart, but ONLY across the owned relative paths listed in
+# ADAPTER_OWNED_PATHS that fall under $label — never a whole-tree `diff -qr`.
+# This keeps drift detection scoped to what the adapter actually generates:
+# a hand-authored Codex file living alongside the generated output (a native
+# config.toml, a runtime cache) is invisible to this check and never flagged.
 check_drift() {
-  local actual="$1" expected="$2" label="$3"
-  if [ ! -e "$actual" ]; then
-    echo "DRIFT: $label is missing; run bin/sync-codex-adapter.sh" >&2
-    return 1
-  fi
-  if ! diff -qr "$expected" "$actual" >/dev/null; then
-    echo "DRIFT: $label differs from generated output; run bin/sync-codex-adapter.sh" >&2
-    diff -qr "$expected" "$actual" >&2 || true
-    return 1
-  fi
+  local actual_root="$1" expected_root="$2" label="$3"
+  local rc=0 rel child_rel actual expected
+  for rel in "${ADAPTER_OWNED_PATHS[@]}"; do
+    case "$rel" in
+      "$label"/*) child_rel="${rel#"$label"/}" ;;
+      *) continue ;;
+    esac
+    actual="$actual_root/$child_rel"
+    expected="$expected_root/$child_rel"
+    if [ ! -e "$actual" ]; then
+      echo "DRIFT: $label/$child_rel is missing; run bin/sync-codex-adapter.sh" >&2
+      rc=1
+      continue
+    fi
+    if ! diff -qr "$expected" "$actual" >/dev/null 2>&1; then
+      echo "DRIFT: $label/$child_rel differs from generated output; run bin/sync-codex-adapter.sh" >&2
+      diff -qr "$expected" "$actual" >&2 2>&1 || true
+      rc=1
+    fi
+  done
+  return "$rc"
 }
 
 if [ "$CHECK" = "1" ]; then
@@ -202,6 +290,21 @@ if [ "$CHECK" = "1" ]; then
   exit "$rc"
 fi
 
+if [ "$CHECK_INSTALLED" = "1" ]; then
+  rc=0
+  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  exit "$rc"
+fi
+
+if [ "$RECONCILE_INSTALLED" = "1" ] \
+  && [ -e "$ROOT/.agents" ] \
+  && [ -e "$ROOT/.codex" ] \
+  && check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" 2>/dev/null \
+  && check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" 2>/dev/null; then
+  exit 0
+fi
+
 if [ "$CLEAN" = "1" ]; then
   rm -rf "$ROOT/.agents" "$ROOT/.codex"
 fi
@@ -209,12 +312,24 @@ fi
 mkdir -p "$ROOT/.agents" "$ROOT/.codex"
 rm -rf "$ROOT/.agents/skills" "$ROOT/.codex/agents" "$ROOT/.codex/hooks" "$ROOT/.codex/rules" \
   "$ROOT/.codex/migrations" "$ROOT/.codex/registries" "$ROOT/.codex/hooks.json" \
-  "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version"
+  "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version" \
+  "$ROOT/.codex/apexyard-adapter.json"
 cp -R "$OUT_AGENTS/skills" "$ROOT/.agents/skills"
 cp -R "$OUT_CODEX/agents" "$ROOT/.codex/agents"
 cp "$OUT_CODEX/hooks.json" "$ROOT/.codex/hooks.json"
+cp "$OUT_CODEX/apexyard-adapter.json" "$ROOT/.codex/apexyard-adapter.json"
+
+if [ "$RECONCILE_INSTALLED" = "1" ]; then
+  rc=0
+  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  [ "$rc" = "0" ] || exit "$rc"
+  echo "Reconciled installed Codex adapter from .claude."
+  exit 0
+fi
 
 echo "Generated Codex adapter from .claude:"
 echo "  .agents/skills"
 echo "  .codex/agents"
 echo "  .codex/hooks.json"
+echo "  .codex/apexyard-adapter.json"

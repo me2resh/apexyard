@@ -36,6 +36,27 @@ fi
 
 cd "$REPO_ROOT" || exit 0
 
+# Warn (never mutate) when an installed Codex adapter looks stale. SessionStart
+# is a boot-time hook that runs on every session, so it must never write to
+# the tree itself — reconciliation is a deliberate, explicit action owned by
+# `/update` (via `bin/sync-codex-adapter.sh --reconcile-installed`) or a manual
+# operator run. This hook only runs the generator's read-only
+# `--check-installed` mode (no writes, ever) and prints a one-line advisory
+# nudge on drift. The generator owns installation detection and is a silent
+# no-op for uninstalled adapters. Startup stays advisory: warn on drift or
+# failure, but never block the session, and never touch the working tree.
+CODEX_RECONCILER="$REPO_ROOT/bin/sync-codex-adapter.sh"
+if [ -f "$CODEX_RECONCILER" ]; then
+  _CODEX_TO=""
+  if command -v timeout >/dev/null 2>&1; then _CODEX_TO="timeout -k 2 5"
+  elif command -v gtimeout >/dev/null 2>&1; then _CODEX_TO="gtimeout -k 2 5"; fi
+  ADAPTER_ERROR=""
+  if ! ADAPTER_ERROR=$($_CODEX_TO bash "$CODEX_RECONCILER" --check-installed 2>&1 >/dev/null); then
+    echo "ApexYard: installed Codex adapter may be stale — run bash bin/sync-codex-adapter.sh --reconcile-installed." >&2
+    [ -n "$ADAPTER_ERROR" ] && printf '%s\n' "$ADAPTER_ERROR" >&2
+  fi
+fi
+
 # Bail if no upstream remote — either this IS the upstream repo, or the fork
 # owner hasn't run `git remote add upstream …` yet. Either case: silent.
 if ! git remote | grep -qx upstream; then
