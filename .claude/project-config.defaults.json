@@ -13,7 +13,9 @@
       "Docs",
       "Spike",
       "Prototype",
-      "Investigation"
+      "Investigation",
+      "Migration",
+      "Idea"
     ],
     "label_priority_scheme": "P0,P1,P2,P3",
     "required_sections": {
