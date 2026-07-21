@@ -175,6 +175,42 @@ else
   echo "SKIP: tracker_create glab per-project case (no yq / python3+PyYAML)"
 fi
 
+# Case 4b (#955) — glab prints the modern `/-/work_items/N` issue URL form.
+# _tracker_extract_ref_url must parse it (previously only matched /issues/N).
+if [ "$HAVE_YAML" = yes ]; then
+  SB2b=$(make_sandbox "version: 1
+projects:
+  - name: gl
+    repo: g/p
+    tracker:
+      kind: glab")
+  cat > "$SB2b/bin/glab" <<'EOF'
+#!/bin/bash
+if [ "$1" = "issue" ] && [ "$2" = "create" ]; then
+  echo "Creating issue in g/p..."
+  echo "https://gitlab.com/g/p/-/work_items/77"
+fi
+EOF
+  chmod +x "$SB2b/bin/glab"
+  printf 'glab body\n' > "$SB2b/body.md"
+  (
+    cd "$SB2b" || exit 1
+    # shellcheck source=/dev/null
+    . "$SB2b/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SB2b/bin:$PATH" tracker_create "g/p" "GL title" "$SB2b/body.md")
+    printf '%s\t%s\n' \
+      "$(printf '%s' "$out" | jq -r '.ref // empty' 2>/dev/null)" \
+      "$(printf '%s' "$out" | jq -r '.url // empty' 2>/dev/null)"
+  ) > "$SB2b/result"
+  IFS=$'\t' read -r r_ref r_url < "$SB2b/result"
+  assert_eq "tracker_create glab work_items → ref parsed"  "77" "$r_ref"
+  assert_eq "tracker_create glab work_items → url parsed"  "https://gitlab.com/g/p/-/work_items/77" "$r_url"
+  rm -rf "$SB2b"
+else
+  echo "SKIP: tracker_create glab work_items case (no yq / python3+PyYAML)"
+fi
+
 # Case 5 — per-project custom create_command. The title/body pass via ENV
 # ($TRACKER_TITLE / $TRACKER_BODY_FILE), never string-substituted — so a title
 # full of shell metacharacters cannot inject. (needs a YAML parser.)

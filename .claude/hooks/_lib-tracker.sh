@@ -569,7 +569,12 @@ tracker_state() {
 # dedicated extractor in their own adapter (Part C), not this numeric helper.
 _tracker_extract_ref_url() {
   local raw="$1" url ref
-  url=$(printf '%s\n' "$raw" | grep -oE 'https?://[^[:space:]]+' | grep -E '/issues/[0-9]+' | head -1)
+  # Match both the legacy `/-/issues/N` form and GitLab's current
+  # `/-/work_items/N` issue URL shape (me2resh/apexyard#955) — a glab adopter
+  # whose `glab issue create` prints the work_items form would otherwise get
+  # an empty parse and a false "creation failed". The trailing-numeric ref
+  # extraction below already handles both.
+  url=$(printf '%s\n' "$raw" | grep -oE 'https?://[^[:space:]]+' | grep -E '/(issues|work_items)/[0-9]+' | head -1)
   if [ -z "$url" ]; then
     return 1
   fi
