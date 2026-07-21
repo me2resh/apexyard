@@ -63,6 +63,22 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
+# --- Configurable human-approver DISPLAY title (me2resh/apexyard#957) ---
+# DISPLAY ONLY: this substitutes the printed word for the human per-PR
+# merge approver in the messages below. It does NOT affect the marker
+# filename (still "-ceo.approved"), the structured fields (sha=,
+# approved_by=user, skill_version=), or any gate logic — those are parsed
+# and compared exactly as before, regardless of this value. Default "CEO"
+# is a zero-behaviour-change no-op.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-read-config.sh" 2>/dev/null || true
+if command -v config_get_or >/dev/null 2>&1; then
+  APPROVER_TITLE=$(config_get_or '.review_markers.human_approver_title' 'CEO')
+else
+  APPROVER_TITLE="CEO"
+fi
+[ -z "$APPROVER_TITLE" ] && APPROVER_TITLE="CEO"
+
 # Parse --repo (for `gh pr merge --repo owner/repo`). The API-shape encodes
 # the repo in its URL path so we don't need the flag there — downstream
 # `gh pr view` / `gh pr checks` calls still benefit when the flag was passed.
@@ -167,7 +183,7 @@ BLOCKED: PR #${PR_NUMBER} has no recorded code-reviewer (Rex) approval.
 
 ApexYard requires two reviews before merge (workflow-gates rule #5):
   1. Code Reviewer agent (Rex) — automated, recorded in .claude/session/reviews/
-  2. Human approver (CEO) — recorded by the /approve-merge skill
+  2. Human approver (${APPROVER_TITLE}) — recorded by the /approve-merge skill
 
 Missing file:
   ${REX_APPROVAL}
@@ -175,7 +191,7 @@ Missing file:
 To unblock:
   1. Invoke the code-reviewer agent on this PR
   2. When Rex returns "approved", it records the approval automatically
-  3. Then run /approve-merge ${PR_NUMBER} for the CEO approval
+  3. Then run /approve-merge ${PR_NUMBER} for the ${APPROVER_TITLE} approval
   4. Retry the merge
 
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
@@ -223,19 +239,21 @@ if [ ! -f "$CEO_APPROVAL" ]; then
   fi
   if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
     cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} has Rex approval but no CEO approval marker.
+BLOCKED: PR #${PR_NUMBER} has Rex approval but no ${APPROVER_TITLE} approval marker.
 
 Plan-level "go" / "continue" / "ship it" does NOT authorize a merge. Each
-merge requires an explicit per-PR, per-merge CEO approval that names the
-PR. See .claude/rules/pr-workflow.md § "Plan-level 'go' is NOT merge
-approval" for the full rationale.
+merge requires an explicit per-PR, per-merge ${APPROVER_TITLE} approval that
+names the PR. See .claude/rules/pr-workflow.md § "Plan-level 'go' is NOT
+merge approval" for the full rationale.
 
 Missing file:
   ${CEO_APPROVAL}
+  (filename stays "-ceo.approved" regardless of the configured approver
+   title above — only the printed word changes, never the marker name.)
 
 To unblock:
-  1. Stop and ask the CEO explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
-  2. When the CEO says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
+  1. Stop and ask the ${APPROVER_TITLE} explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
+  2. When the ${APPROVER_TITLE} says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
      invoke the /approve-merge skill:
        /approve-merge ${PR_NUMBER}
   3. The skill writes the structured marker AND runs the merge in one turn
@@ -274,9 +292,10 @@ fi
 # without the structured fields. Either way: not acceptable.
 if [ -z "$CEO_SHA" ]; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker is in a stale or unrecognised format.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker is in a stale or unrecognised format.
 
-The marker at:
+The marker at (filename is always "-ceo.approved", regardless of the
+configured approver title):
   ${CEO_APPROVAL}
 
 does not contain the required \`sha=<HEAD>\` line. Either it's a pre-#132
@@ -295,11 +314,12 @@ fi
 
 if [ "$CEO_APPROVED_BY" != "user" ]; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker is missing the \`approved_by=user\` field.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker is missing the \`approved_by=user\` field.
 
 The marker at ${CEO_APPROVAL} has \`approved_by=${CEO_APPROVED_BY:-<empty>}\`,
 but the merge gate requires exactly \`approved_by=user\`. This field
-distinguishes a skill-written marker from a model-fabricated one.
+distinguishes a skill-written marker from a model-fabricated one. (The
+marker filename stays "-ceo.approved" regardless of the configured title.)
 
 Re-record via /approve-merge ${PR_NUMBER} (which writes the field
 correctly) — never edit the marker by hand.
@@ -311,7 +331,7 @@ fi
 # format change can bump it without breaking existing markers in flight.
 if [ -z "$CEO_SKILL_VERSION" ] || [ "$CEO_SKILL_VERSION" -lt 2 ] 2>/dev/null; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker has skill_version=${CEO_SKILL_VERSION:-<missing>}.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker has skill_version=${CEO_SKILL_VERSION:-<missing>}.
 
 The merge gate requires skill_version >= 2 (the structured-marker format
 introduced in me2resh/apexyard#48 + #132). Older markers are no longer
@@ -322,10 +342,11 @@ fi
 
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG
-BLOCKED: CEO approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
+BLOCKED: ${APPROVER_TITLE} approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
 
-New commits were pushed after the CEO approval. Re-request CEO approval
-via /approve-merge ${PR_NUMBER} on the new HEAD before merging.
+New commits were pushed after the ${APPROVER_TITLE} approval. Re-request
+${APPROVER_TITLE} approval via /approve-merge ${PR_NUMBER} on the new HEAD
+before merging.
 MSG
   exit 2
 fi
