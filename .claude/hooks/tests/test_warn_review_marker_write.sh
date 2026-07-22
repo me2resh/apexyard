@@ -51,6 +51,15 @@
 #                 literal-path READ (cat) of a rex marker, no active-reviewer
 #                                                                  → BLOCKED, exit 2 (conservative pre-#962 fallback, not a bypass)
 #
+# #974 test (residual "total ambiguity" edge case — see the hook's #974
+# header comment):
+#   (26) Bash   → MALFORMED empty-kind active-reviewer marker
+#                 ("owner/repo#<pr>:" with nothing after the colon) +
+#                 an indirected write whose role can't be resolved to any of
+#                 rex/ceo/security/architecture                    → BLOCKED, exit 2
+#                 (without the #974 fix, both sides of the kind comparison
+#                 resolve to "" and the write would be incorrectly ALLOWED)
+#
 # Exit 0 if all cases pass; 1 on failure.
 
 set -u
@@ -490,6 +499,32 @@ case25() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# (26) Bash → MALFORMED empty-kind active-reviewer marker ("owner/repo#<pr>:"
+#      with nothing after the colon) + an indirected write whose role can't
+#      be resolved (mentions .claude/session/reviews/ but no literal
+#      rex/ceo/security/architecture token) → still BLOCKED (#974).
+#
+#      Before #974: c_kind parses to "" from the malformed marker, MARKER_TYPE
+#      resolves to "" from the unresolvable indirect write, and
+#      `[ "$c_kind" = "$MARKER_TYPE" ]` -> `[ "" = "" ]` -> true, incorrectly
+#      ALLOWING the write. #974 adds explicit non-empty guards on both sides
+#      so this can never pass.
+# ---------------------------------------------------------------------------
+case26() {
+  local sb; sb=$(make_sandbox)
+  # Malformed marker: trailing colon, nothing after it (empty kind).
+  printf '%s\n' "${REPO}#42:" > "$sb/.claude/session/active-reviewer"
+  # Same fully-ambiguous indirected write shape as case24: performs a write
+  # and mentions .claude/session/reviews/, but no literal role token appears
+  # anywhere, so _extract_marker_role (and thus MARKER_TYPE) resolves to "".
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
+  run_hook "$sb" "Bash empty-kind active-reviewer marker + unresolvable indirect write -> BLOCKED (#974)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
@@ -515,6 +550,7 @@ case22
 case23
 case24
 case25
+case26
 
 # ---------------------------------------------------------------------------
 # Summary
