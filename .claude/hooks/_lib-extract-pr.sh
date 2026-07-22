@@ -92,6 +92,43 @@
 # `extract_repo_from_command` each gained a dedicated wrapper-arg extraction
 # step using `_extract_wrapper_arg` (quoted-or-bare positional-token parsing,
 # regex/parameter-expansion only — no `eval` of the command text, ever).
+#
+# JSON-ESCAPED SEPARATORS IN THE RAW-PAYLOAD FALLBACK (#973, a residual
+# finding from Hakim's #969 review of the #965 fix)
+# ------------------------------------------------------------------------
+# #965 (see the four call sites in block-unreviewed-merge.sh,
+# block-merge-on-red-ci.sh, require-design-review-for-ui.sh, and
+# require-architecture-review.sh) added a jq-free fallback: when jq is
+# unavailable, each hook calls `is_merge_command "$INPUT"` directly against
+# the RAW, still-JSON-encoded payload text instead of the jq-decoded
+# command string. That works because the command's own words (`gh`, `pr`,
+# `merge`, digits) survive JSON string-encoding unchanged — EXCEPT for the
+# command's *separators*, when those separators are themselves characters
+# JSON must escape: a literal tab encodes as the two-character sequence
+# `\t`, and some encoders emit `\uXXXX` or `\/` for other bytes. Those
+# two-character escape sequences are not whitespace to `grep -E`'s `\s`
+# class, so `is_merge_command`'s `\bgh\s+pr\s+merge\b` pattern silently
+# fails to match a merge command whose separators are JSON-escaped —
+# exactly while jq (the thing that would normally decode them into real
+# whitespace) is unavailable. A gate that can't evaluate its own
+# precondition must fail closed, not quietly no-op on a payload that IS
+# merge-shaped once decoded.
+#
+# `_normalize_json_escapes` (below) is a small, best-effort decoder for
+# the handful of escape shapes that matter here — NOT a full JSON string
+# parser, the same "regex/parameter-expansion only, sufficient for the
+# shapes real callers emit" discipline as `_extract_wrapper_arg` above.
+# It is called ONLY at the four hooks' raw-payload fallback call sites
+# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never from
+# inside `is_merge_command` itself and never on the normal jq-present
+# path: jq has ALREADY correctly decoded these same escapes for that path
+# (that's what `jq -r` does), so re-normalizing already-decoded text would
+# be redundant at best and, for the rare case of a command that legitimately
+# contains a literal backslash-t/backslash-n substring (e.g. inside a sed
+# script), actively wrong — it would corrupt real command text that jq had
+# already decoded correctly. Keeping the two paths separate is what makes
+# this change safe for the jq-present callers: their behaviour is provably
+# unchanged because they never call the new function at all.
 
 # Lazily source the tracker lib so `tracker_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
@@ -170,6 +207,64 @@ _extract_wrapper_arg() {
     fi
   done
   echo ""
+}
+
+# Best-effort decode of the JSON string escapes that could hide a merge
+# command's SEPARATORS from the raw-payload fallback scan (#973). Echoes
+# the normalized text.
+#
+# Handles six literal JSON escape sequences, decoded to the real character
+# they represent: backslash-t and backslash-u0009 both decode to a tab;
+# backslash-n and backslash-u000A (either case) decode to a newline;
+# backslash-u0020 decodes to a plain space; backslash-slash decodes to a
+# plain slash.
+#
+# This is deliberately NOT a full JSON string decoder — no handling of
+# arbitrary \uXXXX code points, no awareness of escaped-backslash context
+# (a literal `\\t` — escaped backslash followed by a bare `t` — will still
+# be (mis-)decoded as a tab; that's an accepted, documented limitation, not
+# a security gap: it can only make the fallback MORE eager to treat text as
+# merge-shaped, i.e. fail closed, never a new way to evade it). Pure bash
+# parameter expansion — no eval, no external process, no regex
+# backtracking on attacker-controlled text — matching the same discipline
+# as `_extract_wrapper_arg` above.
+#
+# Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
+# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never
+# `is_merge_command` itself and never the normal jq-present path — see the
+# file header (#973) for why mixing this into the jq-present path would be
+# unsafe.
+_normalize_json_escapes() {
+  local text="$1"
+  local tab=$'\t'
+  local nl=$'\n'
+  # Two literal backslash characters. Used as the escape-matching prefix
+  # below rather than a single backslash: bash's `${var//pattern/repl}`
+  # treats a SINGLE backslash inside an expanded pattern as a glob escape
+  # character (it would consume/escape the following char instead of
+  # matching a literal backslash), so building the pattern from a
+  # single-backslash variable silently fails to consume the backslash
+  # itself — the doubled form is what makes the pattern match one literal
+  # backslash followed by the literal marker character.
+  local bs2='\\'
+
+  local esc_u0020="${bs2}u0020"
+  local esc_u0009="${bs2}u0009"
+  local esc_u000A="${bs2}u000A"
+  local esc_u000a="${bs2}u000a"
+  local esc_slash="${bs2}/"
+  local esc_t="${bs2}t"
+  local esc_n="${bs2}n"
+
+  text="${text//$esc_u0020/ }"
+  text="${text//$esc_u0009/$tab}"
+  text="${text//$esc_u000A/$nl}"
+  text="${text//$esc_u000a/$nl}"
+  text="${text//$esc_slash//}"
+  text="${text//$esc_t/$tab}"
+  text="${text//$esc_n/$nl}"
+
+  printf '%s' "$text"
 }
 
 # Returns 0 if $1 looks like a merge command this gate should fire on.

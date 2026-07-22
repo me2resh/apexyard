@@ -82,12 +82,21 @@ if [ -z "$COMMAND" ]; then
   # string-encoding unchanged, so this is the exact same tested
   # merge-shape detector used below — not a second, drift-prone regex.
   #
+  # #973: the command's SEPARATORS do not always survive unchanged — a
+  # literal tab (or other JSON-escaped whitespace) encodes as a
+  # multi-character escape sequence (`\t`, `\uXXXX`) that `is_merge_command`'s
+  # `\s+` regex class won't recognise as whitespace. Normalize the small set
+  # of escapes that matter BEFORE scanning, so a merge command with
+  # JSON-escaped separators is caught exactly like a space-separated one —
+  # see `_normalize_json_escapes` in _lib-extract-pr.sh for the decode and
+  # why it's only ever applied on this raw-payload path, never on COMMAND.
+  #
   # A payload that isn't merge-shaped at all is a genuine no-op — exit 0,
   # unchanged behaviour for the overwhelming majority of Bash calls this
   # hook sees. A payload that DOES look merge-shaped but that we can't
   # safely parse/verify fails CLOSED (exit 2) instead of silently letting
   # an unreviewed UI change through.
-  if is_merge_command "$INPUT"; then
+  if is_merge_command "$(_normalize_json_escapes "$INPUT")"; then
     echo "BLOCKED: design-review gate cannot evaluate this command — jq is unavailable or .tool_input.command could not be parsed, but the raw input looks merge-related. Refusing to merge until this can be verified. Restore jq (see .claude/hooks/check-jq-installed.sh) and retry." >&2
     exit 2
   fi
