@@ -42,7 +42,7 @@ ollama list   # empty after fresh install
 
 ## 2. Pull an agent-grade model
 
-Tool-call reliability is the load-bearing risk for routing agents through a local model. The `qwen2.5-coder` family ships with strong tool-call behaviour and is what we'd start with for ticket-manager / data-analyst-style structured-output work. Picking a model that fits *your* hardware matters more than picking the highest-MTEB one — the model must hold tools sanely on the workloads you'll actually run, not just on benchmarks.
+Tool-call reliability is the load-bearing risk for routing agents through a local model. The `qwen2.5-coder` family ships with strong tool-call behaviour and is what we'd start with for data-analyst-style structured-output work. Picking a model that fits *your* hardware matters more than picking the highest-MTEB one — the model must hold tools sanely on the workloads you'll actually run, not just on benchmarks.
 
 | Model | Disk | RAM at load (Q4) | Notes |
 |-------|------|------------------|-------|
@@ -105,7 +105,7 @@ In your portfolio's `agent-routing.yaml` (or the fork-local copy in single-fork 
 ```yaml
 version: 1
 agents:
-  ticket-manager:
+  data-analyst:
     model: ollama/qwen2.5-coder:14b
     endpoint: http://localhost:4000
     env:
@@ -115,9 +115,9 @@ agents:
 Restart Claude Code. The `apply-agent-routing.sh` SessionStart hook will:
 
 1. Probe `http://localhost:4000/v1/models` with a 2s timeout. If the proxy is down → emit a warning, skip the endpoint override, fall through to the model rewrite only.
-2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model isn't pulled → emit `⚠ agent-routing: ticket-manager — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
-3. Rewrite `.claude/agents/ticket-manager.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
-4. Write `.claude/session/agent-env/ticket-manager.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
+2. Query `http://localhost:4000/api/tags` for `qwen2.5-coder:14b`. If the model isn't pulled → emit `⚠ agent-routing: data-analyst — model qwen2.5-coder:14b not in local Ollama; run: ollama pull qwen2.5-coder:14b`. The override still applies; Ollama may pull on first call with the cold-start cost.
+3. Rewrite `.claude/agents/data-analyst.md` frontmatter so `model: ollama/qwen2.5-coder:14b`.
+4. Write `.claude/session/agent-env/data-analyst.env` with `ANTHROPIC_BASE_URL=http://localhost:4000` (informational in v1 — see constraints below).
 5. Write `.claude/session/agent-env/__session__.env` with the same `ANTHROPIC_BASE_URL`. This is the session-wide variable Claude Code actually reads at startup.
 6. Emit a one-line banner: `ApexYard: applied 1 agent-routing override(s) from agent-routing.yaml [1 Ollama, 0 warning(s)]`.
 
@@ -125,18 +125,18 @@ The `block-agent-routing-drift.sh` pre-commit/pre-push hooks will refuse to let 
 
 ## 5. Verify it's actually routing
 
-Open a new Claude Code session in your apexyard fork. Trigger a ticket-manager invocation (e.g. `/task something-trivial`). Watch the LiteLLM proxy log — you should see an inbound POST to `/v1/messages` and a corresponding outbound call to Ollama's `/api/chat`.
+Open a new Claude Code session in your apexyard fork. Trigger a data-analyst invocation (e.g. ask a metric or SQL question that activates the Data Analyst). Watch the LiteLLM proxy log — you should see an inbound POST to `/v1/messages` and a corresponding outbound call to Ollama's `/api/chat`.
 
 If the routing didn't take effect, check in this order:
 
 1. `cat .claude/session/agent-env/__session__.env` — does it contain `ANTHROPIC_BASE_URL=http://localhost:4000`?
 2. `echo $ANTHROPIC_BASE_URL` — has the env file been sourced by your shell profile? (You may need to add `. .claude/session/agent-env/__session__.env` to your `.zshrc`/`.bashrc`.)
 3. Was the LiteLLM proxy reachable when Claude Code started? (Check the SessionStart banner — `0 warning(s)` means the reachability check passed.)
-4. `grep model .claude/agents/ticket-manager.md` — has the model frontmatter been rewritten?
+4. `grep model .claude/agents/data-analyst.md` — has the model frontmatter been rewritten?
 
 ## Constraints (read these before relying on local routing for anything important)
 
-- **Single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All agents share it. You can't have ticket-manager route to local Ollama while code-reviewer stays on Claude — that's a v2 concern, gated on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning is emitted.
+- **Single endpoint per session.** v1 sets `ANTHROPIC_BASE_URL` once at SessionStart. All agents share it. You can't have data-analyst route to local Ollama while code-reviewer stays on Claude — that's a v2 concern, gated on Claude Code surfacing per-agent invocation env scoping (see [AgDR-0050 § Axis 5](agdr/AgDR-0050-agent-runtime-overhaul.md)). If you declare multiple distinct endpoints, the first wins and a warning is emitted.
 
 - **Cold-start ~9–10s.** Measured in spike #195. The first call after `ollama serve` boot (or after `OLLAMA_KEEP_ALIVE` expires) pays full model-load cost. Subsequent calls within the keep-alive window are warm.
 

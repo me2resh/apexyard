@@ -90,8 +90,6 @@ UTILITY_AGENTS=(
   "code-reviewer:opus:Rex"
   "security-reviewer:opus:Hakim"
   "dependency-auditor:sonnet:Munir"
-  "pr-manager:sonnet:Tariq"
-  "ticket-manager:sonnet:Idris"
 )
 
 # All 19 role files (path under roles/) + expected Activation mode Class.
@@ -211,7 +209,7 @@ done
 
 # -----------------------------------------------------------------------------
 # Invariant 4b — utility agents: model + persona + escape-hatch comment.
-# Per AgDR-0050 § Axis 2, the 5 utility agents have explicit model: values
+# Per AgDR-0050 § Axis 2, the 3 utility agents have explicit model: values
 # (not `inherit`) and carry a `# routing-config:override` comment in YAML
 # frontmatter so the drift guard accepts the intentional framework-default
 # change.
