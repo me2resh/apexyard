@@ -143,7 +143,9 @@
   },
 
   "review_markers": {
-    "on_stale": "warn"
+    "on_stale": "warn",
+    "human_approver_title": "CEO",
+    "_comment_human_approver_title": "me2resh/apexyard#957 — DISPLAY-ONLY override for the prose word used for the human per-PR merge approver in hook messages and /approve-merge output (e.g. 'Maintainer', 'Dev Lead'). Default 'CEO' is a zero-behaviour-change no-op. Marker filenames stay '-ceo.approved', and the structured fields (sha=, approved_by=user, skill_version=) are UNCHANGED regardless of this value — this key only affects printed text, never gate logic. See docs/agdr/AgDR-0103-configurable-approver-display-title.md."
   },
 
   "docs_index": {

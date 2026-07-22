@@ -55,6 +55,18 @@ make_sandbox() {
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
+  # The hook sources the shared config reader (me2resh/apexyard#957, the
+  # configurable human_approver_title key) — mirror the same sandbox setup
+  # test_warn_stale_review_markers.sh already uses: copy the reader + the
+  # shipped defaults so config lookups resolve the same way they do in a
+  # real fork. Optional: harmless no-op for every case that doesn't touch
+  # review_markers.human_approver_title (they get the default "CEO").
+  if [ -f "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+    cp "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+  fi
+  if [ -f "$SRC_ROOT/.claude/project-config.defaults.json" ]; then
+    cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
+  fi
 
   # Mock `gh` so resolve_pr_head returns FIXED_SHA. The hook calls
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
@@ -193,6 +205,20 @@ run_case "missing rex marker → blocks" 2 "no recorded code-reviewer" "$sb" 201
 sb=$(make_sandbox)
 write_rex_marker "$sb" 202
 run_case "missing ceo marker → blocks" 2 "no CEO approval marker" "$sb" 202
+
+# 3b. Configurable human_approver_title (me2resh/apexyard#957) — a custom
+# title configured via .claude/project-config.json flows through to the
+# BLOCKED message's prose, while the marker filename/path printed alongside
+# it is untouched (still "-ceo.approved"). This does NOT change the default
+# behaviour asserted by case 3 above — that case's sandbox has no override
+# file, so it still reads the shipped default ("CEO") and its literal
+# "no CEO approval marker" assertion is unaffected by this feature existing.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 957
+cat > "$sb/.claude/project-config.json" <<'EOF'
+{"review_markers": {"human_approver_title": "Maintainer"}}
+EOF
+run_case "custom human_approver_title flows through to BLOCKED message (#957)" 2 "no Maintainer approval marker" "$sb" 957
 
 # 4. Bare-SHA legacy CEO marker → blocks "stale or unrecognised format"
 sb=$(make_sandbox)

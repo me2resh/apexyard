@@ -137,22 +137,37 @@ fi
 MARKER_BASENAME=$(basename "$TARGET")
 MARKER_TYPE=$(printf '%s' "$MARKER_BASENAME" | sed -E 's/^.*-(rex|ceo|security|architecture)\.approved$/\1/')
 
+# --- Configurable human-approver DISPLAY title (me2resh/apexyard#957) ---
+# DISPLAY ONLY: substitutes the printed word for the human per-PR merge
+# approver in the CEO banner below. Does NOT affect the marker filename
+# (still "-ceo.approved") or any gate logic. Default "CEO" is a
+# zero-behaviour-change no-op.
+# shellcheck source=/dev/null
+. "$HOOK_DIR/_lib-read-config.sh" 2>/dev/null || true
+if command -v config_get_or >/dev/null 2>&1; then
+  APPROVER_TITLE=$(config_get_or '.review_markers.human_approver_title' 'CEO')
+else
+  APPROVER_TITLE="CEO"
+fi
+[ -z "$APPROVER_TITLE" ] && APPROVER_TITLE="CEO"
+
 # --- CEO marker: unchanged #728 advisory-only behaviour (never blocks). ---
 if [ "$MARKER_TYPE" = "ceo" ]; then
-  cat >&2 <<'BANNER'
+  cat >&2 <<BANNER
 ======================================================================
 [apexyard] VIOLATION WARNING: Unauthorized review-marker write detected
 ======================================================================
 
-You are about to write a *-ceo.approved review marker.
+You are about to write a *-ceo.approved review marker (filename stays
+"-ceo.approved" regardless of the configured approver title below).
 
   *-ceo.approved must be written ONLY by the /approve-merge skill
-  on an explicit per-PR CEO approval. It carries structured provenance
-  fields (approved_by=user, skill_version=2) that cannot be fabricated
-  casually.
+  on an explicit per-PR ${APPROVER_TITLE} approval. It carries structured
+  provenance fields (approved_by=user, skill_version=2) that cannot be
+  fabricated casually.
 
   Who may write this marker:
-    /approve-merge skill, invoked by the orchestrator on an explicit CEO nod
+    /approve-merge skill, invoked by the orchestrator on an explicit ${APPROVER_TITLE} nod
 
 WHY THIS MATTERS
   Writing this file yourself satisfies the merge gate's FILENAME check
