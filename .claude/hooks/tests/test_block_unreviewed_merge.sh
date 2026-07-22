@@ -785,6 +785,47 @@ run_case_custom_cmd "#965: jq broken, gh-api merge shape -> BLOCKS (fail closed)
   "cannot evaluate this command" "$sb" \
   "gh api repos/me2resh/apexyard/pulls/301/merge -X PUT"
 
+# --- Fail-closed on JSON-escaped separators in the raw-payload fallback
+#     (#973, Hakim's residual finding on the #965/#969 fix) ------------
+#
+# The #965 fallback (case 14 above) scans $INPUT — the RAW, still-JSON-
+# encoded payload text — directly, because jq (which would normally
+# decode it) is unavailable. That works for a normal space-separated
+# command because `gh`, `pr`, `merge` and the spaces between them survive
+# JSON string-encoding unchanged. But a command whose SEPARATORS are
+# themselves JSON-escaped (a literal tab encodes as the two-character
+# sequence `\t`) does NOT survive unchanged — those two characters are
+# not whitespace to `is_merge_command`'s `\s+` regex, so pre-#973 this
+# evaded the fallback detector entirely and the merge sailed through
+# ungated. `run_case_custom_cmd` builds the test payload with the REAL
+# system jq (`jq -nc --arg c "$cmd" ...`, called before the sandboxed
+# broken-jq stub is on PATH), so a literal tab placed in $cmd here is
+# correctly JSON-escaped to `\t` in the payload — exactly the shape the
+# broken-jq fallback then has to recognise without jq's help.
+sb=$(make_sandbox_broken_jq)
+tab_cmd=$'gh\tpr\tmerge 305 --repo me2resh/apexyard --squash'
+run_case_custom_cmd "#973: jq broken, JSON-escaped-tab merge command -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "$tab_cmd"
+
+# 18. jq broken + a clearly non-merge command whose words ALSO happen to
+#     be tab-separated (so it exercises the same JSON-escape-normalize
+#     code path) → must still stay a no-op. Proves the #973 fix doesn't
+#     turn every tab-containing payload into a false-positive block —
+#     only ones that are merge-shaped once the escapes are decoded.
+sb=$(make_sandbox_broken_jq)
+tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$(jq -nc --arg c "$tab_nonmerge_cmd" '{tool_name:"Bash", tool_input:{command:$c}}')' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-tab-nonmerge-noop "
+fi
+
 # --- Summary ----------------------------------------------------------
 
 echo ""
