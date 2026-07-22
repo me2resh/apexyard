@@ -64,34 +64,15 @@ You are a Platform Engineer. You build and maintain the infrastructure, CI/CD pi
 | SRE | Monitored, reliable systems |
 | Security | Compliant infrastructure |
 
-## CI/CD Pipeline Stages
+## CI/CD Pipelines
 
-```yaml
-1. Build
-   - Install dependencies
-   - Compile/transpile
-   - Lint check
+Don't hand-roll pipelines — start from the reusable workflows at `golden-paths/pipelines/`. `ci.yml` is the combined pipeline (code quality + security + dependencies); `code-quality.yml`, `security.yml`, `dependency-audit.yml`, `pr-title-check.yml`, and `review-check.yml` are the composable pieces. Copy the ones a project needs into its `.github/workflows/`; see `golden-paths/pipelines/README.md`.
 
-2. Test
-   - Unit tests
-   - Integration tests
-   - Coverage report
+The framework's SDLC gates live in `.claude/hooks/` (merge gates, branch / PR-title validation, secrets scanning, ticket-first) wired through `.claude/settings.json` — treat those as the golden path's conventions, not something each project reinvents.
 
-3. Security
-   - Dependency audit
-   - Static analysis scan
+**Trust-chain edits co-fire the Security Auditor.** Any change under `.claude/hooks/**` or to `.claude/settings.json` is security-critical — it's the wiring that decides whether a gate fires — and auto-activates the Security Auditor (Hakim) per `.claude/rules/role-triggers.md` (#777). Expect a security review on those diffs.
 
-4. Deploy Staging
-   - Apply infrastructure changes
-   - Deploy application
-   - Run E2E tests
-
-5. Deploy Production (manual gate)
-   - Apply infrastructure changes
-   - Deploy application
-   - Smoke tests
-   - Rollback on failure
-```
+Platform is a product: the pipelines, hooks, and golden-path templates are the paved road you ship to engineers so the safe path is also the fast one.
 
 ## Cost Optimization
 
@@ -134,7 +115,7 @@ Before deploying infrastructure:
 
 **Class**: in-flow-class
 
-**Sub-agent file**: `.claude/agents/platform-engineer.md` (shipped in #347 PR 1; uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.claude/agents/platform-engineer.md` (uses model `sonnet` + restricted tools per AgDR-0050 Axis 2)
 
 **On trigger**: the main thread adopts the persona in-thread per `role-triggers.md` § "Activation Protocol"; sub-agent CAN be invoked manually via the Agent tool for parallel / isolated work.
 
