@@ -33,6 +33,24 @@
 #   (18) Write  → legacy bare-number marker filename, no marker  → BLOCKED, exit 2
 #   (19) Write  → legacy bare-number marker filename, matching pr+kind → ALLOWED, exit 0 (repo check skipped)
 #
+# #962 test matrix (resolved-target detection — see the hook's own #962
+# header comment for the false-negative/false-positive bugs this closes):
+#   (20) Bash   → variable-indirected write (review_marker_path + "$REX_MARKER"
+#                 redirect), no active-reviewer marker            → BLOCKED, exit 2
+#   (21) Bash   → same indirected write, WITH matching active-reviewer marker
+#                                                                  → ALLOWED, exit 0
+#   (22) Bash   → literal-path READ (cat) of a rex marker, no active-reviewer
+#                                                                  → silent, exit 0 (NOT blocked — false-positive fix)
+#   (23) Bash   → indirected tee write (review_marker_path + tee "$REX_MARKER"),
+#                 no active-reviewer marker                       → BLOCKED, exit 2
+#   (24) Bash   → fully ambiguous indirected write (mentions
+#                 .claude/session/reviews/ but no resolvable role), WITH an
+#                 active-reviewer marker present for a DIFFERENT kind
+#                                                                  → BLOCKED, exit 2 (fail-closed on total ambiguity)
+#   (25) Bash   → _lib-detect-bash-write.sh missing (graceful fallback):
+#                 literal-path READ (cat) of a rex marker, no active-reviewer
+#                                                                  → BLOCKED, exit 2 (conservative pre-#962 fallback, not a bypass)
+#
 # Exit 0 if all cases pass; 1 on failure.
 
 set -u
@@ -44,6 +62,7 @@ export APEXYARD_OPS_DISABLE_PIN=1
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/warn-review-marker-write.sh"
 LIB_OPS_ROOT="$(cd "$(dirname "$0")/.." && pwd)/_lib-ops-root.sh"
 LIB_MARKERS="$(cd "$(dirname "$0")/.." && pwd)/_lib-review-markers.sh"
+LIB_BDW="$(cd "$(dirname "$0")/.." && pwd)/_lib-detect-bash-write.sh"
 
 if [ ! -f "$HOOK_SRC" ]; then
   echo "FAIL: hook not found: $HOOK_SRC" >&2
@@ -59,6 +78,10 @@ if [ ! -f "$LIB_OPS_ROOT" ]; then
 fi
 if [ ! -f "$LIB_MARKERS" ]; then
   echo "FAIL: _lib-review-markers.sh not found at $LIB_MARKERS" >&2
+  exit 1
+fi
+if [ ! -f "$LIB_BDW" ]; then
+  echo "FAIL: _lib-detect-bash-write.sh not found at $LIB_BDW" >&2
   exit 1
 fi
 
@@ -88,7 +111,17 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews"
   cp "$HOOK_SRC" "$sb/.claude/hooks/warn-review-marker-write.sh"
   cp "$LIB_OPS_ROOT" "$sb/.claude/hooks/_lib-ops-root.sh"
+  cp "$LIB_BDW" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   chmod +x "$sb/.claude/hooks/warn-review-marker-write.sh"
+  echo "$sb"
+}
+
+# Build a sandbox with _lib-detect-bash-write.sh DELETED — used by case24 to
+# verify the graceful literal-substring-only fallback when the library is
+# missing (#962).
+make_sandbox_no_bdw_lib() {
+  local sb; sb=$(make_sandbox)
+  rm -f "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   echo "$sb"
 }
 
@@ -362,6 +395,101 @@ case19() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# (20) Bash → variable-indirected write, no active-reviewer marker → BLOCKED
+#      (#962: the documented reviewer idiom — a `review_marker_path` call
+#      assigned to a variable, then redirected into — used to evade the
+#      literal-substring detector entirely. See make_indirect_rex_write().)
+# ---------------------------------------------------------------------------
+make_indirect_rex_write() {
+  # Builds: REX_MARKER=$(review_marker_path "me2resh/apexyard" 42 rex "$MARKER_HOME"); printf '%s' sha123 > "$REX_MARKER"
+  # The role ("rex") and PR ("42") arguments are literal — matching the real
+  # reviewers' documented usage (code-reviewer.md / solution-architect.md) —
+  # but the eventual write TARGET ("$REX_MARKER") never appears as a literal
+  # path anywhere in the command text.
+  # shellcheck disable=SC2016 # deliberate — the $VARs must stay literal text
+  # for the hook to scan (the whole point of this indirection test case).
+  printf 'REX_MARKER=$(review_marker_path "%s" 42 rex "$MARKER_HOME"); printf '"'"'%%s'"'"' sha123 > "$REX_MARKER"' "$REPO"
+}
+
+case20() {
+  local sb; sb=$(make_sandbox)
+  run_hook "$sb" "Bash indirected write (review_marker_path var), no marker -> BLOCKED (#962)" \
+    "$(bash_json "$(make_indirect_rex_write)")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (21) Bash → same indirected write WITH matching active-reviewer marker
+#      → ALLOWED
+# ---------------------------------------------------------------------------
+case21() {
+  local sb; sb=$(make_sandbox)
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewer"
+  run_hook "$sb" "Bash indirected write, matching active-reviewer -> ALLOWED (#962)" \
+    "$(bash_json "$(make_indirect_rex_write)")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (22) Bash → literal-path READ (cat) of a rex marker, no active-reviewer
+#      → silent, exit 0 (#962 false-positive fix: a plain read must NOT be
+#      blocked just because the literal marker path appears in the text)
+# ---------------------------------------------------------------------------
+case22() {
+  local sb; sb=$(make_sandbox)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_hook "$sb" "Bash cat (read) of literal rex marker path -> NOT blocked (#962)" \
+    "$(bash_json "cat ${marker}")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (23) Bash → indirected TEE write, no active-reviewer marker → BLOCKED
+#      (tee/redirect variant of the #962 indirection idiom)
+# ---------------------------------------------------------------------------
+case23() {
+  local sb; sb=$(make_sandbox)
+  local cmd
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  cmd=$(printf 'REX_MARKER=$(review_marker_path "%s" 42 rex "$MARKER_HOME"); echo sha123 | tee "$REX_MARKER"' "$REPO")
+  run_hook "$sb" "Bash indirected tee write, no marker -> BLOCKED (#962)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (24) Bash → fully ambiguous indirected write (mentions .claude/session/
+#      reviews/ but the role can't be resolved to any of rex/ceo/security/
+#      architecture), WITH an active-reviewer marker present for a
+#      DIFFERENT kind → still BLOCKED. Demonstrates fail-closed-on-total-
+#      ambiguity (#962 requirement 3): an unresolved role can never match a
+#      real active-reviewer marker's kind field, by construction.
+# ---------------------------------------------------------------------------
+case24() {
+  local sb; sb=$(make_sandbox)
+  printf '%s\n' "${REPO}#42:security" > "$sb/.claude/session/active-reviewer"
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
+  run_hook "$sb" "Bash fully ambiguous indirected write -> BLOCKED (#962 fail-closed)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (25) Bash → _lib-detect-bash-write.sh missing: literal-path READ (cat) of a
+#      rex marker, no active-reviewer marker → BLOCKED (conservative pre-#962
+#      fallback — re-applies the known false-positive-on-read limitation
+#      rather than silently bypassing the gate when the library is absent).
+# ---------------------------------------------------------------------------
+case25() {
+  local sb; sb=$(make_sandbox_no_bdw_lib)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_hook "$sb" "Bash cat (read) of literal rex marker, lib missing -> BLOCKED (graceful fallback)" \
+    "$(bash_json "cat ${marker}")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
@@ -381,6 +509,12 @@ case16
 case17
 case18
 case19
+case20
+case21
+case22
+case23
+case24
+case25
 
 # ---------------------------------------------------------------------------
 # Summary
