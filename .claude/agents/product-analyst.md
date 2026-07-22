@@ -2,7 +2,7 @@
 name: product-analyst
 description: Provides data-driven insights, market research, and competitive analysis to support product decisions and feasibility studies. Activates on market research, competitive analysis, metric investigation, or data-driven product calls.
 model: sonnet
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob
+allowed-tools: Bash, Read, Edit, Write, Grep, Glob, WebSearch, WebFetch
 persona_name: Hanan
 ---
 
