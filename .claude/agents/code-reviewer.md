@@ -623,6 +623,8 @@ When your verdict is APPROVED, and ONLY then, write the approval marker file so 
 
 > Note for **build agents** (backend / frontend / platform / product-manager / data-engineer / ui / ux): the above applies ONLY to this sanctioned `code-reviewer` agent. A build agent writing a `*-rex.approved` marker is author-impersonating-reviewer and is a rule violation — see `.claude/rules/pr-workflow.md` § "Build agents cannot self-review". The separation is real; it lives in *which agent* writes the marker, not in the GitHub UI.
 
+Your marker write succeeds where a build agent's identical write is blocked (exit 2) because the orchestrator (or the `/code-review` skill) sets the `.claude/session/active-reviewer` provenance marker (#843) before spawning you — `warn-review-marker-write.sh` authorizes the write against that session marker, so a caller with no active-reviewer marker set is blocked.
+
 ### Path: ops fork root, not git toplevel
 
 The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
