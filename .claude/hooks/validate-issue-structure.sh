@@ -189,7 +189,7 @@ fi
 # Inline defaults for bare checkouts predating apexyard#109. Mirror the
 # shipped .claude/project-config.defaults.json so behaviour is identical.
 if [ -z "$PREFIX_WHITELIST" ]; then
-  PREFIX_WHITELIST="Feature Bug Chore Refactor Testing CI Docs Spike"
+  PREFIX_WHITELIST="Feature Bug Chore Refactor Testing CI Docs Spike Prototype Investigation Migration Idea"
 fi
 SKIP_MARKER="${SKIP_MARKER:-<!-- validate-issue-structure: skip -->}"
 # Framework-filing skills that file upstream with their own body template

@@ -476,6 +476,36 @@ run_case "Framework-shaped [Feature], no active-issue-skill marker → still blo
 rm -f "$TMPDIR/fork/.apexyard-fork"
 
 # ---------------------------------------------------------------------------
+# Drift guard (me2resh/apexyard#964)
+#
+# The hook carries an INLINE fallback whitelist for bare checkouts that predate
+# config (`PREFIX_WHITELIST="Feature Bug ..."`). That fallback is a hand-copied
+# mirror of `.ticket.prefix_whitelist` in project-config.defaults.json and had
+# silently drifted (missing Prototype/Investigation/Migration/Idea) — so a
+# `[Migration]`/`[Idea]` ticket filed on a config-less checkout was wrongly
+# rejected. This assertion fails loudly the next time the two lists diverge,
+# instead of leaving the drift to be discovered by a mis-rejected ticket.
+# ---------------------------------------------------------------------------
+DEFAULTS_JSON="$REPO_ROOT/.claude/project-config.defaults.json"
+# The hook's inline fallback: grep the assignment, strip to the quoted value,
+# then normalise whitespace → newline-per-token → sort.
+fallback_sorted=$(
+  grep -E 'PREFIX_WHITELIST="[^"]+"' "$HOOK" \
+    | sed -E 's/.*PREFIX_WHITELIST="([^"]+)".*/\1/' \
+    | tr ' ' '\n' | grep -v '^$' | sort
+)
+defaults_sorted=$(jq -r '.ticket.prefix_whitelist[]' "$DEFAULTS_JSON" | sort)
+if [ "$fallback_sorted" = "$defaults_sorted" ]; then
+  echo "PASS: inline fallback whitelist matches .ticket.prefix_whitelist in defaults"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: inline fallback whitelist has drifted from .ticket.prefix_whitelist" >&2
+  echo "  hook fallback : $(echo "$fallback_sorted" | tr '\n' ' ')" >&2
+  echo "  defaults json : $(echo "$defaults_sorted" | tr '\n' ' ')" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
