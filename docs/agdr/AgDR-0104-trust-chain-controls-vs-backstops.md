@@ -31,7 +31,7 @@ status: executed
 
 ## Decision
 
-Chosen: **A′ — narrow what the shell hooks are *trusted* to enforce, fix the two holes fail-closed, and name principles honestly** — a hybrid that keeps the enforce-first instinct of (A) and the cheapness of (D) while dropping (A)'s premature bypass-test *program* and (A)'s over-claim risk. This reflects [The Contrarian's](#) `proceed-with-changes` verdict: the substrate (string-matching bash text) can't be made sound, so the fix is to *shrink what it's trusted for* and lean on the server-side choke point, not to test it harder.
+Chosen: **A′ — narrow what the shell hooks are *trusted* to enforce, fix the two holes fail-closed, and name principles honestly** — a hybrid that keeps the enforce-first instinct of (A) and the cheapness of (D) while dropping (A)'s premature bypass-test *program* and (A)'s over-claim risk. This reflects The Contrarian's (Naqid) `proceed-with-changes` verdict: the substrate (string-matching bash text) can't be made sound, so the fix is to *shrink what it's trusted for* and lean on the server-side choke point, not to test it harder.
 
 Concretely, in order:
 
