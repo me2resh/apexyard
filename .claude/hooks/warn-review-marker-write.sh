@@ -136,7 +136,14 @@
 #   matcher: Write    (catches direct file writes)
 #   matcher: Bash     (catches shell redirections, echo >, printf, tee, etc.)
 #
-# References: #728, #843, #873, #957, #962, AgDR-0062, AgDR-0104,
+# #974 hardened _active_reviewer_allows() further: a malformed on-disk
+# active-reviewer marker (empty kind after a trailing colon) combined with
+# an unresolved indirect-write role could satisfy `[ "" = "" ]` and
+# incorrectly ALLOW the write — the exact "total ambiguity" case the #962
+# comment assumed was already fail-closed. Both sides of the kind
+# comparison are now guarded explicitly for non-empty before it runs.
+#
+# References: #728, #843, #873, #957, #962, #974, AgDR-0062, AgDR-0104,
 #             .claude/rules/pr-workflow.md § "Build agents cannot self-review"
 
 set -u
@@ -375,12 +382,20 @@ _active_reviewer_allows() {
   # Returns 0 (allow) iff the active-reviewer marker exists and its
   # <repo>#<pr>:<kind> content matches this write's (repo, pr, role).
   #
-  # Fail-closed by construction (#962): when MARKER_TYPE is empty (the role
-  # couldn't be resolved at all — total ambiguity on an indirect write), no
-  # well-formed active-reviewer marker can ever have an empty kind field, so
-  # `[ "$c_kind" = "$MARKER_TYPE" ]` can never succeed here. No special case
-  # is needed to reject the fully-unresolved case — the existing equality
-  # check already fails closed on it.
+  # #974: the #962 comment this replaced claimed fail-closed-on-empty-
+  # MARKER_TYPE was automatic — "no well-formed active-reviewer marker can
+  # ever have an empty kind field, so `[ "$c_kind" = "$MARKER_TYPE" ]` can
+  # never succeed". True for a WELL-FORMED marker, but a MALFORMED one on
+  # disk (a stray trailing colon: "owner/repo#42:" with nothing after it)
+  # parses to an empty c_kind below. Pair that with this write's own role
+  # being unresolved too (MARKER_TYPE="" — the #962 indirect path when
+  # _extract_marker_role finds no literal rex/ceo/security/architecture
+  # token in the review_marker_path(...) call), and the equality check
+  # collapses to `[ "" = "" ]` — TRUE — incorrectly ALLOWING the write.
+  # Guard both sides explicitly: an empty resolved role, on EITHER side,
+  # can never be treated as a match.
+  [ -n "$MARKER_TYPE" ] || return 1
+
   [ -f "$ACTIVE_REVIEWER_MARKER" ] || return 1
   local content
   content=$(tr -d '[:space:]' < "$ACTIVE_REVIEWER_MARKER" 2>/dev/null)
@@ -397,6 +412,7 @@ _active_reviewer_allows() {
   c_pr="${c_rest%%:*}"
   c_kind="${c_rest#*:}"
 
+  [ -n "$c_kind" ] || return 1
   [ "$c_kind" = "$MARKER_TYPE" ] || return 1
   [ -n "$TARGET_PR" ] && [ "$c_pr" != "$TARGET_PR" ] && return 1
   # Repo check only when the target filename encodes a repo (post-#485
