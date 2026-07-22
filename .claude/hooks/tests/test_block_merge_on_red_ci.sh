@@ -322,6 +322,31 @@ sb=$(make_sandbox_wrapper failure)
 run_case "wrapper: glab-registered project, pipeline failed -> blocks (forge dispatched via registry, not command text)" 2 "red or unresolvable" "$sb" \
   "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
 
+# --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
+#
+# Reuses make_sandbox's green gh mock, then shadows jq with a stub that
+# always fails — same code path as jq being entirely missing from PATH.
+make_sandbox_broken_jq() {
+  local sb
+  sb=$(make_sandbox green "")
+  cat > "$sb/bin/jq" <<'EOF'
+#!/bin/bash
+# Simulates a broken/unavailable jq: always fails, no output. See #965.
+exit 1
+EOF
+  chmod +x "$sb/bin/jq"
+  echo "$sb"
+}
+
+sb=$(make_sandbox_broken_jq)
+run_case "#965: jq broken, gh pr merge -> BLOCKS (fail closed, CI status unverifiable)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh pr merge 302 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox_broken_jq)
+run_case "#965: jq broken, clearly non-merge command -> stays a no-op" 0 "" "$sb" \
+  "npm test"
+
 echo ""
 echo "=== test_block_merge_on_red_ci: $PASS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

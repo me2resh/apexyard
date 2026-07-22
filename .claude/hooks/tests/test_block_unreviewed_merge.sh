@@ -731,6 +731,60 @@ else
   fi
 fi
 
+# --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
+#
+# make_sandbox_broken_jq installs a `jq` stub in $sb/bin that ALWAYS fails
+# (exit 1, no stdout) — same code path as jq being entirely missing from
+# PATH, since either way `jq -r '.tool_input.command // empty'` yields
+# nothing. $sb/bin is prepended to PATH by run_case_custom_cmd, so this
+# stub shadows the real jq for the duration of the hook's invocation only.
+make_sandbox_broken_jq() {
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/jq" <<'EOF'
+#!/bin/bash
+# Simulates a broken/unavailable jq: always fails, no output. See #965.
+exit 1
+EOF
+  chmod +x "$sb/bin/jq"
+  echo "$sb"
+}
+
+# 14. jq broken + a real `gh pr merge` with NO approval markers at all →
+#     must BLOCK (exit 2). Pre-#965 this fell through the old
+#     `[ -z "$COMMAND" ] && exit 0` no-op and merged completely ungated.
+sb=$(make_sandbox_broken_jq)
+run_case_custom_cmd "#965: jq broken, gh pr merge with no markers -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh pr merge 300 --repo me2resh/apexyard --squash"
+
+# 15. jq broken + a CLEARLY non-merge Bash command → must stay a no-op
+#     (exit 0, no stderr). Proves the fail-closed fix does NOT block every
+#     Bash command in the session just because jq is broken — only the
+#     merge-shaped ones (the boundary the #965 fix is built around).
+sb=$(make_sandbox_broken_jq)
+cmd="npm test"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [#965: jq broken, clearly non-merge command -> stays a no-op]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#965: jq broken, clearly non-merge command -> stays a no-op]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-nonmerge-noop "
+fi
+
+# 16. jq broken + the gh-api merge shape (no `gh pr merge` substring at
+#     all) → must still BLOCK. Proves the raw-text fallback detector
+#     (is_merge_command reused against $INPUT) recognises every shape the
+#     normal parsed-command path recognises, not just the literal
+#     `gh pr merge` string.
+sb=$(make_sandbox_broken_jq)
+run_case_custom_cmd "#965: jq broken, gh-api merge shape -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh api repos/me2resh/apexyard/pulls/301/merge -X PUT"
+
 # --- Summary ----------------------------------------------------------
 
 echo ""
