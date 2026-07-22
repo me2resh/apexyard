@@ -17,10 +17,10 @@ ApexYard ships **20 role definitions** in `roles/{department}/`. They are not al
 | **Head of Product** | `roles/product/head-of-product.md` | Roadmap prioritization · feasibility call · strategic product decision · resource allocation across products |
 | **Product Manager** | `roles/product/product-manager.md` | PRD creation · user-story breakdown · acceptance-criteria authoring · sprint planning |
 | **Product Analyst** | `roles/product/product-analyst.md` | Market research · competitive analysis · metric investigation · data-driven product call |
-| **Head of Design** | `roles/design/head-of-design.md` | Design-system changes · UX principles decision · cross-project visual standards |
+| **Head of Design** | `roles/design/head-of-design.md` | Design-system changes · UX principles decision · cross-project visual standards · escalation from a UI Designer (design gate) |
 | **UI Designer** | `roles/design/ui-designer.md` | Visual design · component specifications · design tokens · pixel-level work |
 | **UX Designer** | `roles/design/ux-designer.md` | User flows · information architecture · usability review · wireframing |
-| **Head of Security** | `roles/security/head-of-security.md` | Security strategy · threat model · compliance call · cross-project security architecture |
+| **Head of Security** | `roles/security/head-of-security.md` | Security strategy · threat model · compliance call · cross-project security architecture · escalation from a Security Auditor (strategy / compliance / repeated-pattern concern) |
 | **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (`.claude/hooks/**`, `.claude/settings.json`) — #777** · SAST findings · OWASP review · dependency vulnerability |
 | **Penetration Tester** | `roles/security/penetration-tester.md` | Active testing · exploit discovery · API security review · pre-release security sign-off |
 | **Head of Data** | `roles/data/head-of-data.md` | Analytics strategy · data governance · reporting architecture · cross-project data modelling |
@@ -46,6 +46,10 @@ Head of Product → Product Manager → Head of Design / UX Designer / UI Design
 ```
 
 Each handoff is explicit. The handing-off role delivers the artefact defined in its role file (PRD, tech design, PR, test plan, etc.); the receiving role reads it and moves forward.
+
+### On inbound escalation
+
+When a Head-class role is activated by an escalation named in the Activation Table — Tech Lead → Head of Engineering, UI Designer → Head of Design, Security Auditor → Head of Security — it acknowledges the escalation in its activation marker (naming the escalating role and the reason). It then makes the call within its CAN scope, or escalates further if the decision exceeds that scope, and hands the decision back to the escalating role so work resumes where it paused. Each Head's own role file defines the receiving-side specifics — what it decides, what it escalates onward, and the artefact it returns.
 
 ### How to signal activation
 
@@ -125,11 +129,20 @@ Roles deliver concrete artefacts at each handoff point. These are the contracts 
 | Head of Design → UX/UI Designer | Design system tokens + principles |
 | UX Designer → UI Designer | User flows + wireframes |
 | UI Designer → Frontend Engineer | Component specs + design tokens |
+| UI Designer → Head of Design | Escalated design call (design-system change · cross-product visual standard · design disagreement · no UI Designer available) |
 | Tech Lead → Backend / Frontend Engineer | Technical design + task breakdown |
 | Backend / Frontend Engineer → QA Engineer | Testable build + PR |
-| Security Auditor → Tech Lead | Security findings + required fixes |
+| Security Auditor → Tech Lead | Security findings + required fixes (remediation is engineering work) |
+| Security Auditor → Head of Security | Strategy / compliance / cross-project escalation + repeated-pattern concern |
 | QA Engineer → Product Manager | AC verification sign-off |
 | Platform Engineer → SRE | Production deployment + runbook |
+
+### Two authority splits worth calling out
+
+Two of the rows above encode a **practitioner-reviews / head-escalates** split — the same shape as code review (Rex → Head of Engineering) and design-artifact review (Tariq → Head of Engineering):
+
+- **UI design gate.** The **UI Designer (Nour)** owns the routine per-PR design gate: she reviews the implementation diff, and her approval is recorded through the design-approval flow (`/approve-design`, gated by `require-design-review-for-ui.sh`). The **Head of Design (Maha)** is the escalation path, not the default reviewer — a design-system change, a cross-product visual standard, a disagreement on a design call, or no UI Designer available. Making the Head the routine reviewer would bottleneck every UI PR on the org's most senior designer; recorded as AgDR-0106.
+- **Security escalation.** A **Security Auditor's findings + required fixes go to the Tech Lead** — remediation is engineering work. **Strategy, compliance, cross-project concerns, and repeated-pattern signals escalate to the Head of Security (Faisal)** instead. Both legs are real and non-overlapping: the Tech Lead fixes the diff, the Head of Security owns the posture.
 
 ## Aspirational → Real
 
