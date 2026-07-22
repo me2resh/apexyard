@@ -50,7 +50,7 @@ ApexYard is a set of plain-text primitives Claude Code reads automatically — n
 - **20 roles** across 6 departments (engineering, product, design, security, data, architecture) that activate on triggers
 - **49 shell hooks** that mechanically enforce the SDLC — ticket-first edits, a two-marker merge gate, migration gates, secrets scanning, and more
 - **66 slash-command skills** — from `/setup` and `/handover` to `/decide`, `/code-review`, `/migration`, and `/launch-check`
-- **25 sub-agents** — Rex (code review), Hakim (security), Tariq (design review), plus the department personas
+- **23 sub-agents** — Rex (code review), Hakim (security), Tariq (design review), plus the department personas
 - **18 rule files**, workflow docs, and document templates (PRD, tech design, ADR, AgDR, C4 diagrams)
 
 **Full directory tree and the complete role / hook / skill / agent breakdown → [`docs/whats-inside.md`](docs/whats-inside.md).**
