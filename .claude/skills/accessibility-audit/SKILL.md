@@ -1,14 +1,14 @@
 ---
 name: accessibility-audit
-description: WCAG 2.1 AA audit — perceivable, operable, understandable, robust criteria. Deep-dive for /launch-check accessibility.
+description: WCAG 2.2 AA audit — perceivable, operable, understandable, robust criteria. Deep-dive for /launch-check accessibility.
 disable-model-invocation: false
 argument-hint: "[project-path]"
 effort: high
 ---
 
-# /accessibility-audit — WCAG 2.1 AA Compliance
+# /accessibility-audit — WCAG 2.2 AA Compliance
 
-Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.1 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.
+Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.2 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.
 
 ## WCAG Principles (POUR)
 
@@ -58,7 +58,7 @@ ACCESSIBILITY AUDIT — <project> @ <sha>
 | A4 | 2.4.1 | Skip nav | LOW | No skip-to-content link | Add <a href="#main" class="skip-link"> |
 
 Summary: <N> findings (<N> high, <N> medium, <N> low)
-WCAG 2.1 AA estimate: <PASS / PARTIAL / FAIL>
+WCAG 2.2 AA estimate: <PASS / PARTIAL / FAIL>
 ```
 
 ## Persist the run + render trend
@@ -69,7 +69,7 @@ After printing the findings table, persist via the shared audit-history lib so t
 
 `<project-name>` from `apexyard.projects.yaml` (or basename + `/handover` reminder if unregistered).
 
-Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "WCAG 2.1 AA estimate" three-state: FAIL → `fail`, PARTIAL → `conditional`, PASS → `pass`.
+Score: `score = max(0, 100 - 25*critical - 10*high - 3*medium - 1*low)`. Verdict by worst-severity: critical/high → `fail`, medium → `conditional`, low/none → `pass`. Legacy "WCAG 2.2 AA estimate" three-state: FAIL → `fail`, PARTIAL → `conditional`, PASS → `pass`.
 
 ### Persist + render
 
