@@ -80,9 +80,21 @@ Before drafting one, run `/agdr search <term>` — the portfolio may have alread
 | **Code Reviewer (Rex)** | Flags PRs with architecture changes that don't link an AgDR. |
 | **Pre-commit hooks** | `require-agdr-for-arch-changes.sh` / `require-agdr-for-arch-pr.sh`. |
 
-The hooks are **deliberately narrow** — they fire only on `infrastructure/**`, `*.tf` / `*.tfvars`, `Dockerfile*` / `docker-compose*`, and `.github/workflows/**`, and their own header says why: *"Deliberately NARROW. Dependency bumps and API schema changes are NOT included — too noisy, not all changes need an AgDR."*
+The two hooks fire at different moments and on **different, deliberately bounded** path sets — neither is a catch-all for "any decision":
 
-That narrowness is correct, and this rule is now written to match it. A rule far broader than anything anyone would actually enforce doesn't produce more records — it produces ignored prose, and it burns the agent's ceremony budget on decisions nobody needed written down. The threshold above is wider than the hooks (it covers dependencies, data models, and cross-cutting patterns the hooks can't see) but it is no longer unbounded. Adopters who want a broader mechanical net can extend `.claude/project-config.json` → `.architecture_paths`.
+| Hook | Fires on | Default trigger set |
+|------|----------|---------------------|
+| `require-agdr-for-arch-changes.sh` | `git commit`, against the **staged** diff | `*.tf`, `*.tfvars`, `docker-compose*.yml`, `Dockerfile*`, `.github/workflows/**` |
+| `require-agdr-for-arch-pr.sh` | `gh pr create`, against the **PR** diff | `**/domain/**`, `**/infrastructure/**`, `**/migrations/**`, `infrastructure/**`, `template.yaml`, `**/*.tf(vars)`, `.github/workflows/**` — **plus dependency *additions*** to `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, `Gemfile` |
+
+Two details worth knowing, because both are easy to get wrong from the comments alone:
+
+- The commit-time hook **deliberately omits a bare `infrastructure/` directory pattern** (its `ARCH_GLOBS` excludes it even though an older header comment mentions it). Testing found it false-positived on `docs/infrastructure/notes.md` and `src/types/infrastructure/foo.ts` — the word is ambiguous between IaC and library code. Terraform is caught unambiguously via `\.tf$` at any depth instead. CDK / Pulumi projects using plain `.ts` / `.py` under `infrastructure/` should override via `.architecture_paths`.
+- Only the **PR-time** hook watches dependency manifests, and only for *additions* — a version bump of something already present does not trigger it.
+
+Both are configurable: `.architecture_paths` for the commit-time hook, `.agdr_trigger_paths[]` / `.agdr_trigger_dep_files[]` for the PR-time one, and `<!-- agdr: not-applicable -->` in a PR body bypasses the PR gate with a visible warning.
+
+That bounded shape is correct, and this rule is now written to match its spirit. A rule far broader than anything anyone would actually enforce doesn't produce more records — it produces ignored prose, and it burns the agent's ceremony budget on decisions nobody needed written down. The threshold above is still **wider** than the hooks, deliberately: it covers new technologies, security controls, and cross-cutting patterns that no path glob can see. But it is no longer unbounded.
 
 ---
 
