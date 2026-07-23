@@ -2,6 +2,54 @@
 
 All notable changes to ApexYard are documented here.
 
+## [v5.2.0] — 2026-07-24
+
+Minor release — 2 features, 13 fixes, 14 improvements.
+
+The headline is the framework's own over-process problem. A real user reported *"very slow, tons of overengineering, very bureaucratic … infinite loops of AgDRs then backend then devops and zero progress."* Three changes close that loop: **right-size-ceremony** (#993) adds a Lean floor so trivial changes stop drawing the full review chain; **role-trigger convergence** (#995) makes role banners fire once per session with a "finish the current unit" guard instead of re-firing a handover on every edit; and the **AgDR materiality threshold** (#997, AgDR-0108) records decisions that are architectural, hard to reverse, or cross-cutting rather than every implementation choice. The rest is trust-chain and merge-gate hardening, the role-spec wiring cluster, and portfolio/tracker fixes.
+
+### Added (feat)
+
+- (#993) right-size-ceremony rule — an overengineering guard for the SDLC gates — 4ee6938
+- (#963) configurable human merge-approver display title — c609c15
+
+### Fixed (fix)
+
+- (#995) role-trigger banners fire once/session + converge, not per-edit — fcaada9
+- (#992) fail closed on unresolved target PR in warn-review-marker-write indirect path — cfcba2f
+- (#973) normalise JSON escapes in merge-gate raw-payload fallback — cb59b94
+- (#974) reject empty-kind active-reviewer marker in warn-review-marker-write.sh — a871b22
+- (#970) gate review-marker writes on the resolved target, not a literal path — 36ed793
+- (#965) merge-gate hooks fail closed when jq/tool-input is unevaluable — df741c5
+- (#964) resync prefix-whitelist fallback + task skill to shipped defaults — 8ad3743
+- (#958) whitelist [Migration] and [Idea] ticket prefixes — 0bea756
+- (#950) warn when portfolio/config libs are sourced under zsh — 740e9b3
+- (#955) parse GitLab /-/work_items/N issue URLs in tracker_create — 564f316
+- (#951) portfolio_validate flags projects_dir/workspace_dir resolving inside the fork — 0773938
+- (#943) reconcile installed Codex adapters on /update (carry-forward of #944) — e02cdf0
+- (#953) canonicalize resolved portfolio paths so ticket-gate prefix match works — 5380c4b
+
+### Changed (refactor / chore / docs)
+
+- (#997) narrow AgDR rule from "any technical decision" to material ones — dc26b8c
+- (#981) security role specs — trust-chain trigger, RoE step, OWASP 2025 — b6e9aeb
+- (#984) resolve sign-off authority + escalation chains in shared docs (AgDR-0106) — d15ad1b
+- (#983) retire superseded lifecycle agents — 531d0d4
+- (#982) wire data role specs to migration gate + analytics machinery — b6e01ba
+- (#978) wire engineering role specs to framework machinery + 2026 baselines — 21c0775
+- (#980) wire design role specs to gates/journey + WCAG 2.2 — d32dfef
+- (#979) wire product role specs to skill chain + analyst web tools — d8640f4
+- (#971) audience-first README rewrite — 635e06b
+- (#966) AgDR-0104 — trust-chain controls vs backstops, honestly named — df7a397
+- (#949) bump actions/setup-node from 6.0.0 to 7.0.0 — 0950a33
+- (#948) bump actions/upload-artifact from 4.6.2 to 7.0.1 — 3bf8c27
+- (#947) bump DavidAnson/markdownlint-cli2-action from 24.0.0 to 24.1.0 — b1ab5f9
+- (#946) bump the codeql-action group with 3 updates — 7d10e40
+
+### Closes
+
+- Closes #943, #946, #947, #948, #949, #950, #951, #953, #955, #958, #963, #964, #965, #966, #970, #971, #973, #974, #978, #979, #980, #981, #982, #983, #984, #992, #993, #995, #997
+
 ## [v5.1.0] — 2026-07-16
 
 Minor release — 16 features, 11 fixes, 9 improvements.
