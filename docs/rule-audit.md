@@ -82,7 +82,7 @@ Columns:
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
 |------|--------|-------------|---------------|---------------------------------|
-| HARD STOP — run `/decide` before any technical decision | `.claude/rules/agdr-decisions.md § Trigger Patterns` | prose (self-discipline) | no | trigger patterns are chat-output phrases; linting assistant prose was rejected for the same reason as in `ticket-vocabulary.md` [^self-discipline] |
+| HARD STOP — run `/decide` before a **material** technical decision (architectural, hard to reverse, or cross-cutting) | `.claude/rules/agdr-decisions.md § The threshold` | prose (self-discipline) | no | the threshold is a judgment about blast radius, not a lintable chat-output phrase; linting assistant prose was rejected for the same reason as in `ticket-vocabulary.md` [^self-discipline]. Narrowed from "any technical decision" in [#997][997] — the blanket form manufactured the AgDR→Tech-Lead→Solution-Architect handover churn fixed in [#995][995] |
 | AgDR required for architecture / infra commits | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-changes.sh` | yes | mechanized (AgDR-0001); narrow default path list, project-config override via `.architecture_paths` |
 | AgDR required at PR time when diff touches architecture paths OR adds a new dependency | `.claude/rules/agdr-decisions.md § Enforcement` | `require-agdr-for-arch-pr.sh` | yes | mechanized ([#112][112]); fires on `gh pr create`, config via `.agdr_trigger_paths[]` + `.agdr_trigger_dep_files[]`; skip marker `<!-- agdr: not-applicable -->` bypasses with a visible warning |
 | Extend default `architecture_paths` to cover SAM / Helm / K8s / Serverless Framework | — | — | deferred | [#25][25] — default list is deliberately narrow; follow-up broadens safely |
@@ -202,3 +202,5 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [107]: https://github.com/me2resh/apexyard/issues/107
 [110]: https://github.com/me2resh/apexyard/issues/110
 [112]: https://github.com/me2resh/apexyard/issues/112
+[995]: https://github.com/me2resh/apexyard/issues/995
+[997]: https://github.com/me2resh/apexyard/issues/997

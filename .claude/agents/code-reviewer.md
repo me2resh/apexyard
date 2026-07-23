@@ -149,7 +149,7 @@ Examples that **do not** trigger the heuristic:
 
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
-**You MUST detect and enforce AgDR for any technical decisions.**
+**You MUST detect and enforce AgDR for *material* technical decisions** — architectural, hard to reverse, or cross-cutting. Routine implementation choices that are reversible inside this PR (local naming, extracting a helper, control flow, test structure, using an API from a dependency already in the manifest) do **NOT** need an AgDR and must not be flagged. See `.claude/rules/agdr-decisions.md` § "The threshold" for the full line, including the two non-negotiable rails: security / trust-chain / migration decisions are always material, and genuine ambiguity rounds **up**.
 
 #### How to detect technical decisions in code
 
