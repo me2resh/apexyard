@@ -414,7 +414,18 @@ _active_reviewer_allows() {
 
   [ -n "$c_kind" ] || return 1
   [ "$c_kind" = "$MARKER_TYPE" ] || return 1
-  [ -n "$TARGET_PR" ] && [ "$c_pr" != "$TARGET_PR" ] && return 1
+  # Fail closed when the write's target PR can't be resolved from the marker
+  # filename (#977). A marker path whose prefix carries no PR number (e.g. a
+  # non-qualified `foo-rex.approved`, or a variable-derived name that matched
+  # the marker regex but resolved no digits) leaves TARGET_PR empty. Skipping
+  # the PR-equality check there would let such a write match ANY active-reviewer
+  # marker of the same kind — regardless of which PR that review is for —
+  # breaking the gate's per-PR binding on the indirect path. The sanctioned
+  # reviewer flow always writes a repo/PR-qualified marker (via
+  # review_marker_path), so its TARGET_PR always resolves; failing closed here
+  # costs the legitimate path nothing. Mirrors the empty-kind guard shape above.
+  [ -n "$TARGET_PR" ] || return 1
+  [ "$c_pr" != "$TARGET_PR" ] && return 1
   # Repo check only when the target filename encodes a repo (post-#485
   # qualified marker). Legacy bare markers, and #962 indirect writes where
   # the repo couldn't be recovered, skip this comparison.
