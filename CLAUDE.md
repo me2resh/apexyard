@@ -135,7 +135,7 @@ Every PR must include:
 
 ### Technical Decisions
 
-Before making significant technical decisions (new libraries, architecture changes, implementation approaches), create an Agent Decision Record (AgDR):
+Before making a **material** technical decision — one that is architectural, hard to reverse, or cross-cutting (a new dependency or technology, a new service or integration, a data-model or schema change, a security-relevant control, CI/CD or infra design, a repo-wide pattern) — create an Agent Decision Record (AgDR). Routine implementation choices that are reversible inside one PR do **not** need one. Full threshold, the two rails, and the "does NOT need an AgDR" list: @.claude/rules/agdr-decisions.md
 
 Template: @templates/agdr.md
 

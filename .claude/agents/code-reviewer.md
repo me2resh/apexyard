@@ -149,7 +149,7 @@ Examples that **do not** trigger the heuristic:
 
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
-**You MUST detect and enforce AgDR for any technical decisions.**
+**You MUST detect and enforce AgDR for *material* technical decisions** — architectural, hard to reverse, or cross-cutting. Routine implementation choices that are reversible inside this PR (local naming, extracting a helper, control flow, test structure, using an API from a dependency already in the manifest) do **NOT** need an AgDR and must not be flagged. See `.claude/rules/agdr-decisions.md` § "The threshold" for the full line, including the two non-negotiable rails: security / trust-chain / migration decisions are always material, and genuine ambiguity rounds **up**.
 
 #### How to detect technical decisions in code
 
@@ -169,7 +169,7 @@ Scan the diff for these patterns:
 #### Enforcement rules
 
 1. **Check if AgDR exists** — look for `AgDR` or `agdr` links in the PR description
-2. **If a decision is detected but NO AgDR is linked** → **REQUEST CHANGES** with this template:
+2. **If a *material* decision is detected but NO AgDR is linked** → **REQUEST CHANGES** with this template. (Material per `.claude/rules/agdr-decisions.md` § "The threshold" — do NOT request changes for a routine choice reversible inside this PR.)
 
 ```markdown
 ## ⛔ AgDR Required
@@ -823,7 +823,7 @@ Report the failure in plain text with the exact command the caller needs to run.
 4. **Don't nitpick style** — that's what linters are for
 5. **First review** — a human approver does the second review before merge
 6. **Glossary is mandatory** — request changes if missing
-7. **AgDR enforcement is BLOCKING** — if you detect a technical decision without an AgDR link:
+7. **AgDR enforcement is BLOCKING** — if you detect a **material** technical decision (architectural, hard to reverse, or cross-cutting per `.claude/rules/agdr-decisions.md` § "The threshold") without an AgDR link:
    - DO NOT approve the PR
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
