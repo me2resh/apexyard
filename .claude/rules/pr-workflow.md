@@ -60,6 +60,8 @@ Also check before pushing:
 
 NO EXCEPTIONS. Not for "small fixes". Not for "just a typo".
 
+This rule (and the rest of this file) uses "CEO" as the default human-approver display title — override the printed word via `.claude/project-config.json` → `review_markers.human_approver_title` (default unchanged); the marker filename, structured fields, and gate logic are the same regardless (me2resh/apexyard#957).
+
 ### Plan-level "go" is NOT merge approval
 
 A common failure mode: you present a multi-step plan that includes a merge as one of its steps, the user says "go" or "continue" or "ship it" or "execute the plan", and you execute all the steps *including the merge*. **This is wrong.** Plan-level authorization covers everything in the plan *except* merge steps. Merge steps always require an **explicit per-PR approval that names the PR**.

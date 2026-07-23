@@ -224,6 +224,8 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 When your verdict is APPROVED, and ONLY then, write the architecture-review approval marker so the `require-architecture-review.sh` gate lets the design PR merge through.
 
+Your marker write succeeds where a build agent's identical write is blocked (exit 2) because the orchestrator (or the `/design-review` skill) sets the `.claude/session/active-reviewer` provenance marker (#843) before spawning you — `warn-review-marker-write.sh` authorizes the write against that session marker, so a caller with no active-reviewer marker set is blocked.
+
 ### Path: ops fork root, not git toplevel
 
 The marker MUST land at `<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__{number}-architecture.approved` (repo-qualified path, AgDR-0060 / #485). Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork; that's why `$MARKER_HOME` and `$PR_HOST_REPO` are resolved ONCE in "Posting the review" above (before any `cd` / `gh pr checkout`). **Reuse them here** — do not re-resolve (a second resolution risks keying the marker on a different repo than the one the review was posted to):

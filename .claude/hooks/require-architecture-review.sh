@@ -39,19 +39,70 @@
 # existence. For adversarial trust, use CODEOWNERS.
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-
-if [ -z "$COMMAND" ]; then
-  exit 0
-fi
 
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+# Sourced BEFORE the jq-based command parse below (moved up from its
+# original position after the parse) so is_merge_command is available as
+# the jq-independent fallback detector when the parse can't be trusted —
+# see #965.
 . "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 . "$(dirname "$0")/_lib-review-markers.sh"
 # cd-target → origin recovery for the no---repo split-portfolio merge (#687).
 . "$(dirname "$0")/_lib-pr-repo.sh"
+
+# Parse .tool_input.command via jq. #965: this used to be the ONLY parse
+# path, and an empty/failed result — jq missing from PATH, or jq erroring
+# on unexpected input — fell straight through to `exit 0`, silently
+# ALLOWING the merge command through with NO architecture-review check at
+# all. A gate must fail CLOSED when it can't evaluate its own
+# precondition, not fail open.
+#
+# But this hook's PreToolUse matcher is `Bash` (every Bash call this
+# session runs, not just merges — see .claude/settings.json), so the fix
+# can't be "exit 2 whenever jq is unavailable": that would block every
+# unrelated Bash command for the rest of the session the moment jq broke,
+# which is worse than the bug it replaces. The resolution below keeps the
+# jq-unparseable case a no-op EXCEPT when the raw payload text itself
+# looks merge-shaped — in that narrower case we cannot safely let the
+# command through, so we fail closed instead.
+COMMAND=""
+if command -v jq >/dev/null 2>&1; then
+  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+fi
+
+if [ -z "$COMMAND" ]; then
+  # jq is missing, OR jq is present but the parse produced nothing — a
+  # genuinely empty command (legitimate no-op) or jq choking on
+  # malformed/unexpected JSON. Those two cases are indistinguishable from
+  # a parsed field alone, so fall back to a parser-independent scan: reuse
+  # is_merge_command (plain grep/sed, no jq dependency) directly against
+  # the RAW JSON payload text instead of the parsed command. The command
+  # text's own words (`gh`, `pr`, `merge`, digits, spaces) survive JSON
+  # string-encoding unchanged, so this is the exact same tested
+  # merge-shape detector used below — not a second, drift-prone regex.
+  #
+  # #973: the command's SEPARATORS do not always survive unchanged — a
+  # literal tab (or other JSON-escaped whitespace) encodes as a
+  # multi-character escape sequence (`\t`, `\uXXXX`) that `is_merge_command`'s
+  # `\s+` regex class won't recognise as whitespace. Normalize the small set
+  # of escapes that matter BEFORE scanning, so a merge command with
+  # JSON-escaped separators is caught exactly like a space-separated one —
+  # see `_normalize_json_escapes` in _lib-extract-pr.sh for the decode and
+  # why it's only ever applied on this raw-payload path, never on COMMAND.
+  #
+  # A payload that isn't merge-shaped at all is a genuine no-op — exit 0,
+  # unchanged behaviour for the overwhelming majority of Bash calls this
+  # hook sees. A payload that DOES look merge-shaped but that we can't
+  # safely parse/verify fails CLOSED (exit 2) instead of silently letting
+  # an unreviewed design artifact through.
+  if is_merge_command "$(_normalize_json_escapes "$INPUT")"; then
+    echo "BLOCKED: architecture-review gate cannot evaluate this command — jq is unavailable or .tool_input.command could not be parsed, but the raw input looks merge-related. Refusing to merge until this can be verified. Restore jq (see .claude/hooks/check-jq-installed.sh) and retry." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 if ! is_merge_command "$COMMAND"; then
   exit 0

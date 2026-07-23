@@ -322,6 +322,53 @@ sb=$(make_sandbox_wrapper failure)
 run_case "wrapper: glab-registered project, pipeline failed -> blocks (forge dispatched via registry, not command text)" 2 "red or unresolvable" "$sb" \
   "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
 
+# --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
+#
+# Reuses make_sandbox's green gh mock, then shadows jq with a stub that
+# always fails — same code path as jq being entirely missing from PATH.
+make_sandbox_broken_jq() {
+  local sb
+  sb=$(make_sandbox green "")
+  cat > "$sb/bin/jq" <<'EOF'
+#!/bin/bash
+# Simulates a broken/unavailable jq: always fails, no output. See #965.
+exit 1
+EOF
+  chmod +x "$sb/bin/jq"
+  echo "$sb"
+}
+
+sb=$(make_sandbox_broken_jq)
+run_case "#965: jq broken, gh pr merge -> BLOCKS (fail closed, CI status unverifiable)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh pr merge 302 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox_broken_jq)
+run_case "#965: jq broken, clearly non-merge command -> stays a no-op" 0 "" "$sb" \
+  "npm test"
+
+# --- Fail-closed on JSON-escaped separators in the raw-payload fallback
+#     (#973, Hakim's residual finding on the #965/#969 fix) ------------
+#
+# Same reasoning as the sibling case in test_block_unreviewed_merge.sh: a
+# merge command whose separators are JSON-escaped (a literal tab encodes
+# as the two-character sequence `\t`) is not whitespace to
+# is_merge_command's `\s+` class, so pre-#973 it evaded the raw-payload
+# fallback scan entirely while jq was unavailable to decode it. `run_case`
+# builds the payload with the real system jq (before the sandboxed
+# broken-jq stub is on PATH), so a literal tab placed in the command here
+# is correctly JSON-escaped in the resulting payload — exactly the shape
+# the fallback has to recognise without jq's help.
+sb=$(make_sandbox_broken_jq)
+tab_cmd=$'gh\tpr\tmerge 306 --repo me2resh/apexyard --squash'
+run_case "#973: jq broken, JSON-escaped-tab merge command -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" "$tab_cmd"
+
+sb=$(make_sandbox_broken_jq)
+tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
+run_case "#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op" 0 "" "$sb" \
+  "$tab_nonmerge_cmd"
+
 echo ""
 echo "=== test_block_merge_on_red_ci: $PASS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then

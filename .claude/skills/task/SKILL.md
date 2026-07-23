@@ -136,7 +136,7 @@ Substitute the gathered inputs into the resolved template (or the inline heredoc
 Here's the ticket I'll create:
 
 ---
-**[{Chore|Refactor|Test|CI}] {title}**
+**[{Chore|Refactor|Testing|CI}] {title}**
 
 ## Driver
 {why this work is needed}

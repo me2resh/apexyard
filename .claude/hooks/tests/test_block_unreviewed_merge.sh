@@ -55,6 +55,18 @@ make_sandbox() {
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
+  # The hook sources the shared config reader (me2resh/apexyard#957, the
+  # configurable human_approver_title key) — mirror the same sandbox setup
+  # test_warn_stale_review_markers.sh already uses: copy the reader + the
+  # shipped defaults so config lookups resolve the same way they do in a
+  # real fork. Optional: harmless no-op for every case that doesn't touch
+  # review_markers.human_approver_title (they get the default "CEO").
+  if [ -f "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+    cp "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+  fi
+  if [ -f "$SRC_ROOT/.claude/project-config.defaults.json" ]; then
+    cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
+  fi
 
   # Mock `gh` so resolve_pr_head returns FIXED_SHA. The hook calls
   # `gh pr view <N> --json headRefOid -q '.headRefOid'` (or a similar
@@ -193,6 +205,20 @@ run_case "missing rex marker → blocks" 2 "no recorded code-reviewer" "$sb" 201
 sb=$(make_sandbox)
 write_rex_marker "$sb" 202
 run_case "missing ceo marker → blocks" 2 "no CEO approval marker" "$sb" 202
+
+# 3b. Configurable human_approver_title (me2resh/apexyard#957) — a custom
+# title configured via .claude/project-config.json flows through to the
+# BLOCKED message's prose, while the marker filename/path printed alongside
+# it is untouched (still "-ceo.approved"). This does NOT change the default
+# behaviour asserted by case 3 above — that case's sandbox has no override
+# file, so it still reads the shipped default ("CEO") and its literal
+# "no CEO approval marker" assertion is unaffected by this feature existing.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 957
+cat > "$sb/.claude/project-config.json" <<'EOF'
+{"review_markers": {"human_approver_title": "Maintainer"}}
+EOF
+run_case "custom human_approver_title flows through to BLOCKED message (#957)" 2 "no Maintainer approval marker" "$sb" 957
 
 # 4. Bare-SHA legacy CEO marker → blocks "stale or unrecognised format"
 sb=$(make_sandbox)
@@ -703,6 +729,101 @@ else
     echo "FAIL [warn-hook: non-marker Bash → must be silent]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-nonmarker-bash "
   fi
+fi
+
+# --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
+#
+# make_sandbox_broken_jq installs a `jq` stub in $sb/bin that ALWAYS fails
+# (exit 1, no stdout) — same code path as jq being entirely missing from
+# PATH, since either way `jq -r '.tool_input.command // empty'` yields
+# nothing. $sb/bin is prepended to PATH by run_case_custom_cmd, so this
+# stub shadows the real jq for the duration of the hook's invocation only.
+make_sandbox_broken_jq() {
+  local sb
+  sb=$(make_sandbox)
+  cat > "$sb/bin/jq" <<'EOF'
+#!/bin/bash
+# Simulates a broken/unavailable jq: always fails, no output. See #965.
+exit 1
+EOF
+  chmod +x "$sb/bin/jq"
+  echo "$sb"
+}
+
+# 14. jq broken + a real `gh pr merge` with NO approval markers at all →
+#     must BLOCK (exit 2). Pre-#965 this fell through the old
+#     `[ -z "$COMMAND" ] && exit 0` no-op and merged completely ungated.
+sb=$(make_sandbox_broken_jq)
+run_case_custom_cmd "#965: jq broken, gh pr merge with no markers -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh pr merge 300 --repo me2resh/apexyard --squash"
+
+# 15. jq broken + a CLEARLY non-merge Bash command → must stay a no-op
+#     (exit 0, no stderr). Proves the fail-closed fix does NOT block every
+#     Bash command in the session just because jq is broken — only the
+#     merge-shaped ones (the boundary the #965 fix is built around).
+sb=$(make_sandbox_broken_jq)
+cmd="npm test"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [#965: jq broken, clearly non-merge command -> stays a no-op]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#965: jq broken, clearly non-merge command -> stays a no-op]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-nonmerge-noop "
+fi
+
+# 16. jq broken + the gh-api merge shape (no `gh pr merge` substring at
+#     all) → must still BLOCK. Proves the raw-text fallback detector
+#     (is_merge_command reused against $INPUT) recognises every shape the
+#     normal parsed-command path recognises, not just the literal
+#     `gh pr merge` string.
+sb=$(make_sandbox_broken_jq)
+run_case_custom_cmd "#965: jq broken, gh-api merge shape -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "gh api repos/me2resh/apexyard/pulls/301/merge -X PUT"
+
+# --- Fail-closed on JSON-escaped separators in the raw-payload fallback
+#     (#973, Hakim's residual finding on the #965/#969 fix) ------------
+#
+# The #965 fallback (case 14 above) scans $INPUT — the RAW, still-JSON-
+# encoded payload text — directly, because jq (which would normally
+# decode it) is unavailable. That works for a normal space-separated
+# command because `gh`, `pr`, `merge` and the spaces between them survive
+# JSON string-encoding unchanged. But a command whose SEPARATORS are
+# themselves JSON-escaped (a literal tab encodes as the two-character
+# sequence `\t`) does NOT survive unchanged — those two characters are
+# not whitespace to `is_merge_command`'s `\s+` regex, so pre-#973 this
+# evaded the fallback detector entirely and the merge sailed through
+# ungated. `run_case_custom_cmd` builds the test payload with the REAL
+# system jq (`jq -nc --arg c "$cmd" ...`, called before the sandboxed
+# broken-jq stub is on PATH), so a literal tab placed in $cmd here is
+# correctly JSON-escaped to `\t` in the payload — exactly the shape the
+# broken-jq fallback then has to recognise without jq's help.
+sb=$(make_sandbox_broken_jq)
+tab_cmd=$'gh\tpr\tmerge 305 --repo me2resh/apexyard --squash'
+run_case_custom_cmd "#973: jq broken, JSON-escaped-tab merge command -> BLOCKS (fail closed)" 2 \
+  "cannot evaluate this command" "$sb" \
+  "$tab_cmd"
+
+# 18. jq broken + a clearly non-merge command whose words ALSO happen to
+#     be tab-separated (so it exercises the same JSON-escape-normalize
+#     code path) → must still stay a no-op. Proves the #973 fix doesn't
+#     turn every tab-containing payload into a false-positive block —
+#     only ones that are merge-shaped once the escapes are decoded.
+sb=$(make_sandbox_broken_jq)
+tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$(jq -nc --arg c "$tab_nonmerge_cmd" '{tool_name:"Bash", tool_input:{command:$c}}')' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
+  echo "PASS [#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}jq-broken-tab-nonmerge-noop "
 fi
 
 # --- Summary ----------------------------------------------------------

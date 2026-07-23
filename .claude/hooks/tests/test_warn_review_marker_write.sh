@@ -33,6 +33,43 @@
 #   (18) Write  → legacy bare-number marker filename, no marker  → BLOCKED, exit 2
 #   (19) Write  → legacy bare-number marker filename, matching pr+kind → ALLOWED, exit 0 (repo check skipped)
 #
+# #962 test matrix (resolved-target detection — see the hook's own #962
+# header comment for the false-negative/false-positive bugs this closes):
+#   (20) Bash   → variable-indirected write (review_marker_path + "$REX_MARKER"
+#                 redirect), no active-reviewer marker            → BLOCKED, exit 2
+#   (21) Bash   → same indirected write, WITH matching active-reviewer marker
+#                                                                  → ALLOWED, exit 0
+#   (22) Bash   → literal-path READ (cat) of a rex marker, no active-reviewer
+#                                                                  → silent, exit 0 (NOT blocked — false-positive fix)
+#   (23) Bash   → indirected tee write (review_marker_path + tee "$REX_MARKER"),
+#                 no active-reviewer marker                       → BLOCKED, exit 2
+#   (24) Bash   → fully ambiguous indirected write (mentions
+#                 .claude/session/reviews/ but no resolvable role), WITH an
+#                 active-reviewer marker present for a DIFFERENT kind
+#                                                                  → BLOCKED, exit 2 (fail-closed on total ambiguity)
+#   (25) Bash   → _lib-detect-bash-write.sh missing (graceful fallback):
+#                 literal-path READ (cat) of a rex marker, no active-reviewer
+#                                                                  → BLOCKED, exit 2 (conservative pre-#962 fallback, not a bypass)
+#
+# #974 test (residual "total ambiguity" edge case — see the hook's #974
+# header comment):
+#   (26) Bash   → MALFORMED empty-kind active-reviewer marker
+#                 ("owner/repo#<pr>:" with nothing after the colon) +
+#                 an indirected write whose role can't be resolved to any of
+#                 rex/ceo/security/architecture                    → BLOCKED, exit 2
+#                 (without the #974 fix, both sides of the kind comparison
+#                 resolve to "" and the write would be incorrectly ALLOWED)
+#
+# #977 test (per-PR binding on the indirect path — see the hook's #977 guard):
+#   (27) Bash   → indirect write whose ROLE resolves (rex) but whose PR does
+#                 NOT (variable PR arg), + an active-reviewer marker for a
+#                 DIFFERENT specific PR                            → BLOCKED, exit 2
+#                 (without #977, TARGET_PR="" skips the PR check and the write
+#                 matches the wrong-PR active-reviewer marker → wrongly ALLOWED)
+#   (28) Bash   → indirect write where BOTH role and PR resolve (literal PR,
+#                 the sanctioned idiom), matching active-reviewer marker
+#                                                                  → ALLOWED, exit 0 (no regression)
+#
 # Exit 0 if all cases pass; 1 on failure.
 
 set -u
@@ -44,6 +81,7 @@ export APEXYARD_OPS_DISABLE_PIN=1
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/warn-review-marker-write.sh"
 LIB_OPS_ROOT="$(cd "$(dirname "$0")/.." && pwd)/_lib-ops-root.sh"
 LIB_MARKERS="$(cd "$(dirname "$0")/.." && pwd)/_lib-review-markers.sh"
+LIB_BDW="$(cd "$(dirname "$0")/.." && pwd)/_lib-detect-bash-write.sh"
 
 if [ ! -f "$HOOK_SRC" ]; then
   echo "FAIL: hook not found: $HOOK_SRC" >&2
@@ -59,6 +97,10 @@ if [ ! -f "$LIB_OPS_ROOT" ]; then
 fi
 if [ ! -f "$LIB_MARKERS" ]; then
   echo "FAIL: _lib-review-markers.sh not found at $LIB_MARKERS" >&2
+  exit 1
+fi
+if [ ! -f "$LIB_BDW" ]; then
+  echo "FAIL: _lib-detect-bash-write.sh not found at $LIB_BDW" >&2
   exit 1
 fi
 
@@ -88,7 +130,17 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews"
   cp "$HOOK_SRC" "$sb/.claude/hooks/warn-review-marker-write.sh"
   cp "$LIB_OPS_ROOT" "$sb/.claude/hooks/_lib-ops-root.sh"
+  cp "$LIB_BDW" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   chmod +x "$sb/.claude/hooks/warn-review-marker-write.sh"
+  echo "$sb"
+}
+
+# Build a sandbox with _lib-detect-bash-write.sh DELETED — used by case24 to
+# verify the graceful literal-substring-only fallback when the library is
+# missing (#962).
+make_sandbox_no_bdw_lib() {
+  local sb; sb=$(make_sandbox)
+  rm -f "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   echo "$sb"
 }
 
@@ -362,6 +414,170 @@ case19() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# (20) Bash → variable-indirected write, no active-reviewer marker → BLOCKED
+#      (#962: the documented reviewer idiom — a `review_marker_path` call
+#      assigned to a variable, then redirected into — used to evade the
+#      literal-substring detector entirely. See make_indirect_rex_write().)
+# ---------------------------------------------------------------------------
+make_indirect_rex_write() {
+  # Builds: REX_MARKER=$(review_marker_path "me2resh/apexyard" 42 rex "$MARKER_HOME"); printf '%s' sha123 > "$REX_MARKER"
+  # The role ("rex") and PR ("42") arguments are literal — matching the real
+  # reviewers' documented usage (code-reviewer.md / solution-architect.md) —
+  # but the eventual write TARGET ("$REX_MARKER") never appears as a literal
+  # path anywhere in the command text.
+  # shellcheck disable=SC2016 # deliberate — the $VARs must stay literal text
+  # for the hook to scan (the whole point of this indirection test case).
+  printf 'REX_MARKER=$(review_marker_path "%s" 42 rex "$MARKER_HOME"); printf '"'"'%%s'"'"' sha123 > "$REX_MARKER"' "$REPO"
+}
+
+case20() {
+  local sb; sb=$(make_sandbox)
+  run_hook "$sb" "Bash indirected write (review_marker_path var), no marker -> BLOCKED (#962)" \
+    "$(bash_json "$(make_indirect_rex_write)")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (21) Bash → same indirected write WITH matching active-reviewer marker
+#      → ALLOWED
+# ---------------------------------------------------------------------------
+case21() {
+  local sb; sb=$(make_sandbox)
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewer"
+  run_hook "$sb" "Bash indirected write, matching active-reviewer -> ALLOWED (#962)" \
+    "$(bash_json "$(make_indirect_rex_write)")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (22) Bash → literal-path READ (cat) of a rex marker, no active-reviewer
+#      → silent, exit 0 (#962 false-positive fix: a plain read must NOT be
+#      blocked just because the literal marker path appears in the text)
+# ---------------------------------------------------------------------------
+case22() {
+  local sb; sb=$(make_sandbox)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_hook "$sb" "Bash cat (read) of literal rex marker path -> NOT blocked (#962)" \
+    "$(bash_json "cat ${marker}")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (23) Bash → indirected TEE write, no active-reviewer marker → BLOCKED
+#      (tee/redirect variant of the #962 indirection idiom)
+# ---------------------------------------------------------------------------
+case23() {
+  local sb; sb=$(make_sandbox)
+  local cmd
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  cmd=$(printf 'REX_MARKER=$(review_marker_path "%s" 42 rex "$MARKER_HOME"); echo sha123 | tee "$REX_MARKER"' "$REPO")
+  run_hook "$sb" "Bash indirected tee write, no marker -> BLOCKED (#962)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (24) Bash → fully ambiguous indirected write (mentions .claude/session/
+#      reviews/ but the role can't be resolved to any of rex/ceo/security/
+#      architecture), WITH an active-reviewer marker present for a
+#      DIFFERENT kind → still BLOCKED. Demonstrates fail-closed-on-total-
+#      ambiguity (#962 requirement 3): an unresolved role can never match a
+#      real active-reviewer marker's kind field, by construction.
+# ---------------------------------------------------------------------------
+case24() {
+  local sb; sb=$(make_sandbox)
+  printf '%s\n' "${REPO}#42:security" > "$sb/.claude/session/active-reviewer"
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
+  run_hook "$sb" "Bash fully ambiguous indirected write -> BLOCKED (#962 fail-closed)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (25) Bash → _lib-detect-bash-write.sh missing: literal-path READ (cat) of a
+#      rex marker, no active-reviewer marker → BLOCKED (conservative pre-#962
+#      fallback — re-applies the known false-positive-on-read limitation
+#      rather than silently bypassing the gate when the library is absent).
+# ---------------------------------------------------------------------------
+case25() {
+  local sb; sb=$(make_sandbox_no_bdw_lib)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_hook "$sb" "Bash cat (read) of literal rex marker, lib missing -> BLOCKED (graceful fallback)" \
+    "$(bash_json "cat ${marker}")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (26) Bash → MALFORMED empty-kind active-reviewer marker ("owner/repo#<pr>:"
+#      with nothing after the colon) + an indirected write whose role can't
+#      be resolved (mentions .claude/session/reviews/ but no literal
+#      rex/ceo/security/architecture token) → still BLOCKED (#974).
+#
+#      Before #974: c_kind parses to "" from the malformed marker, MARKER_TYPE
+#      resolves to "" from the unresolvable indirect write, and
+#      `[ "$c_kind" = "$MARKER_TYPE" ]` -> `[ "" = "" ]` -> true, incorrectly
+#      ALLOWING the write. #974 adds explicit non-empty guards on both sides
+#      so this can never pass.
+# ---------------------------------------------------------------------------
+case26() {
+  local sb; sb=$(make_sandbox)
+  # Malformed marker: trailing colon, nothing after it (empty kind).
+  printf '%s\n' "${REPO}#42:" > "$sb/.claude/session/active-reviewer"
+  # Same fully-ambiguous indirected write shape as case24: performs a write
+  # and mentions .claude/session/reviews/, but no literal role token appears
+  # anywhere, so _extract_marker_role (and thus MARKER_TYPE) resolves to "".
+  # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
+  local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
+  run_hook "$sb" "Bash empty-kind active-reviewer marker + unresolvable indirect write -> BLOCKED (#974)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (27) Bash → #962 INDIRECT write whose ROLE resolves (rex) but whose PR does
+#      NOT (review_marker_path called with a variable PR, so _extract_marker_pr
+#      recovers no literal digit), paired with an active-reviewer marker for a
+#      DIFFERENT, specific PR → BLOCKED (#977).
+#
+#      Before #977: role rex matched the marker's kind; TARGET_PR was empty so
+#      the PR-equality check was SKIPPED; TARGET_REPO is empty on the indirect
+#      path so the repo check was skipped too — the write incorrectly matched
+#      the pr=42 active-reviewer marker and was ALLOWED. #977 fails closed on an
+#      unresolved TARGET_PR, so the gate's per-PR binding holds on this path.
+# ---------------------------------------------------------------------------
+case27() {
+  local sb; sb=$(make_sandbox)
+  # Active reviewer is authorised for PR 42 specifically.
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewer"
+  # Indirect marker write: review_marker_path is called with a VARIABLE PR
+  # ("$PR") so the PR number can't be recovered; role 'rex' is a literal arg so
+  # it resolves. The redirection makes it a genuine write.
+  # shellcheck disable=SC2016 # deliberate literal — not real expansion here
+  local cmd='REX_MARKER=$(review_marker_path "$REPO" "$PR" rex "$MARKER_HOME"); printf "%s" sha123 > "$REX_MARKER"'
+  run_hook "$sb" "Bash indirect write, role resolves + PR unresolved, active-reviewer for different PR -> BLOCKED (#977)" \
+    "$(bash_json "$cmd")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (28) Bash → #962 INDIRECT write where BOTH role and PR resolve (a LITERAL PR
+#      in the review_marker_path call, matching the sanctioned reviewers'
+#      documented idiom), against a matching active-reviewer marker → ALLOWED
+#      (exit 0). Confirms #977's fail-closed guard does NOT regress the
+#      legitimate reviewer flow.
+# ---------------------------------------------------------------------------
+case28() {
+  local sb; sb=$(make_sandbox)
+  printf '%s\n' "${REPO}#42:rex" > "$sb/.claude/session/active-reviewer"
+  # shellcheck disable=SC2016 # deliberate literal — not real expansion here
+  local cmd='REX_MARKER=$(review_marker_path "$REPO" 42 rex "$MARKER_HOME"); printf "%s" sha123 > "$REX_MARKER"'
+  run_hook "$sb" "Bash indirect write, role+PR both resolve, matching active-reviewer -> ALLOWED (#977 no regression)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
@@ -381,6 +597,15 @@ case16
 case17
 case18
 case19
+case20
+case21
+case22
+case23
+case24
+case25
+case26
+case27
+case28
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -59,6 +59,18 @@ _config_repo_root() {
   # file in .claude/hooks/, so locate it via BASH_SOURCE — not via
   # `git rev-parse` (which would defeat the whole point of this fix).
   local lib_dir
+  # zsh-safe warning (me2resh/apexyard#950): these helpers are #!/bin/bash and
+  # rely on ${BASH_SOURCE[0]} for self-location, which is a bash-only feature —
+  # it is EMPTY under zsh, so an operator who `source`s this lib in an
+  # interactive zsh shell (a common manual config-verification move during
+  # setup) would silently resolve to the wrong dir and chase a phantom bug.
+  # Emit a one-line advisory so the failure is loud, not silent. (A real zsh
+  # self-location expansion was rejected — this file has other bash-only
+  # constructs that don't source cleanly under zsh anyway, so "run it under
+  # bash" is the honest guidance.)
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    printf 'apexyard: source the .claude/hooks/_lib-*.sh helpers under bash, not zsh — path resolution is unreliable under zsh. Wrap manual checks in `bash -c '"'"'...'"'"'`.\n' >&2
+  fi
   lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [ -f "$lib_dir/_lib-ops-root.sh" ]; then
     # shellcheck source=/dev/null

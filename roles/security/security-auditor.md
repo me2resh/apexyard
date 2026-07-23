@@ -50,7 +50,9 @@ For every PR:
 - [ ] Dependencies are up to date
 - [ ] No dangerous functions (eval, innerHTML, etc.)
 
-## OWASP Top 10 Detection
+## OWASP Top 10 (2025) Detection
+
+Aligned to the OWASP Top 10 (2025): supply-chain failures are now #3 (a distinct category, not just "vulnerable components"), and OWASP ASVS 5.0 is the current verification baseline for these checks.
 
 | Vulnerability | What to Look For |
 |---------------|------------------|
@@ -117,11 +119,11 @@ For every PR:
 
 **Class**: isolated-work-class
 
-**Sub-agent file**: `.claude/agents/security-auditor.md` (ships in #347 PR 3; will use model `opus` + restricted tools per AgDR-0050 Axis 2)
+**Sub-agent file**: `.claude/agents/security-reviewer.md` (model `opus` + restricted tools per AgDR-0050 Axis 2). **Naming exception**: the Security Auditor role maps to the `security-reviewer` agent slug — the Hatim→Hakim consolidation (#347/#360) preserved the filename so `/security-review` and the auto-fire trigger keep working. See `.claude/rules/role-triggers.md`.
 
-**On trigger**: once PR 3 lands, the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/security-auditor.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return. Until then, in-thread role-adoption is the active mechanism — and the existing Hatim utility agent (`.claude/agents/security-reviewer.md`) remains available via `/security-review`.
+**On trigger**: the `detect-role-trigger.sh` hook spawns the sub-agent at `.claude/agents/security-reviewer.md`; the main thread continues with the spawned agent's verdict folded back via standard sub-agent return.
 
-**Rationale**: OWASP / threat-model depth needs isolated context — matches existing Hatim utility agent pattern.
+**Rationale**: OWASP / threat-model depth needs isolated context.
 
 ---
 

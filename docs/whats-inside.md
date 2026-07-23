@@ -34,10 +34,10 @@ apexyard/
 │
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
-│   ├── hooks/             # 42 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
-│   ├── rules/             # 15 modular rule files imported via @.claude/rules/*
-│   ├── agents/            # 25 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (PR & ticket managers, dependency auditor, The Contrarian)
-│   └── skills/            # 64 slash commands — see CLAUDE.md for the full list
+│   ├── hooks/             # 49 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
+│   ├── rules/             # 18 modular rule files imported via @.claude/rules/*
+│   ├── agents/            # 23 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
+│   └── skills/            # 66 slash commands — see CLAUDE.md for the full list
 │
 ├── workspace/             # Live local clones of managed projects — gitignored
 ├── projects/              # Per-project committed docs (README, roadmap, AgDRs, updates)
@@ -152,21 +152,21 @@ This is what turns the markdown above into an enforced workflow. Claude Code pic
 
 | Layer | Path | What it is |
 |-------|------|------------|
-| **Hooks** | `.claude/hooks/` | 43 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
-| **Rules** | `.claude/rules/` | 15 modular rule files imported via `@.claude/rules/*` from `CLAUDE.md` |
-| **Agents** | `.claude/agents/` | 25 sub-agents — the department personas plus utility agents |
-| **Skills** | `.claude/skills/` | 64 slash commands |
+| **Hooks** | `.claude/hooks/` | 49 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
+| **Rules** | `.claude/rules/` | 18 modular rule files imported via `@.claude/rules/*` from `CLAUDE.md` |
+| **Agents** | `.claude/agents/` | 23 sub-agents — the department personas plus utility agents |
+| **Skills** | `.claude/skills/` | 66 slash commands |
 | **Settings** | `.claude/settings.json` | Wires hooks to `PreToolUse`, `PostToolUse`, and `SessionStart` events |
 
-### The 15 rule files
+### The 18 rule files
 
-`agdr-decisions`, `agent-role-selection`, `code-standards`, `git-conventions`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reporting-style`, `role-triggers`, `ticket-vocabulary`, `workflow-gates`.
+`agdr-decisions`, `agent-role-selection`, `code-standards`, `git-conventions`, `glossary-lookup`, `isolated-builds`, `leak-protection`, `loop-mode`, `parallel-work`, `plan-mode`, `pr-quality`, `pr-workflow`, `reconcile-before-build`, `reporting-style`, `role-triggers`, `skill-first`, `ticket-vocabulary`, `workflow-gates`.
 
-### The 25 sub-agents
+### The 23 sub-agents
 
-Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus `pr-manager`, `ticket-manager`, and `dependency-auditor`. The remaining 18 are the department-role agents (engineering, product, design, security, data — one per role file).
+Utility agents: **Rex** (`code-reviewer`), **Hakim** (`security-reviewer`), **Tariq** (`solution-architect`), **Naqid** (`contrarian`), plus `dependency-auditor`. The remaining 18 are the department-role agents (engineering, product, design, security, data — one per role file).
 
-### The 64 skills
+### The 66 skills
 
 The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Available skills". Highlights by category:
 

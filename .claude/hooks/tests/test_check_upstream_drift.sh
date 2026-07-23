@@ -11,6 +11,7 @@
 set -u
 
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/check-upstream-drift.sh"
+GENERATOR_SRC="$(cd "$(dirname "$0")/../../.." && pwd)/bin/sync-codex-adapter.sh"
 PASS=0
 FAIL=0
 FAILED=""
@@ -158,11 +159,102 @@ case_squash_no_changelog() {
   rm -rf "$up" "$(dirname "$fk")"
 }
 
+# CASE 6: an installed pre-manifest Codex adapter has drifted (new framework
+# skills landed). The SessionStart hook must WARN about the drift but must
+# NEVER mutate the tree itself — reconciliation is owned exclusively by an
+# explicit `/update` or a manual `--reconcile-installed` run.
+case_codex_bootstrap_warns_without_mutating() {
+  local up; up=$(make_upstream)
+  local fk; fk=$(make_fork "$up")
+  (
+    cd "$fk" || exit 1
+    mkdir -p bin .claude/skills/status .claude/agents
+    cp "$GENERATOR_SRC" bin/sync-codex-adapter.sh
+    printf '%s\n' '{"hooks":{}}' > .claude/settings.json
+    printf '%s\n' '# old status skill' > .claude/skills/status/SKILL.md
+    bash bin/sync-codex-adapter.sh >/dev/null
+    rm .codex/apexyard-adapter.json
+    mkdir -p .claude/skills/tutorial
+    printf '%s\n' '# newly synced tutorial skill' > .claude/skills/tutorial/SKILL.md
+  )
+  local output
+  output=$(run_hook_from "$fk")
+  if echo "$output" | grep -q 'Codex adapter may be stale' \
+    && [ ! -e "$fk/.codex/apexyard-adapter.json" ] \
+    && [ ! -e "$fk/.agents/skills/tutorial" ]; then
+    echo "PASS [SessionStart warns on Codex adapter drift without mutating the tree]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [SessionStart warns on Codex adapter drift without mutating the tree]" >&2
+    echo "  output=$output" >&2
+    echo "  manifest exists=$([ -e "$fk/.codex/apexyard-adapter.json" ] && echo yes || echo no)" >&2
+    echo "  tutorial skill copied=$([ -e "$fk/.agents/skills/tutorial" ] && echo yes || echo no)" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}codex-bootstrap "
+  fi
+  rm -rf "$up" "$(dirname "$fk")"
+}
+
+# CASE 7: carrying the checker without a detected installation must not
+# create Codex-specific files for another harness, and must stay silent.
+case_codex_bootstrap_uninstalled_noop() {
+  local up; up=$(make_upstream)
+  local fk; fk=$(make_fork "$up")
+  (
+    cd "$fk" || exit 1
+    mkdir -p bin
+    cp "$GENERATOR_SRC" bin/sync-codex-adapter.sh
+  )
+  run_hook_from "$fk" >/tmp/_upstream_drift_codex_uninstalled.out
+  if [ ! -e "$fk/.agents" ] && [ ! -e "$fk/.codex" ]; then
+    echo "PASS [SessionStart leaves an uninstalled Codex adapter absent]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [SessionStart leaves an uninstalled Codex adapter absent]" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}codex-uninstalled "
+  fi
+  rm -rf "$up" "$(dirname "$fk")"
+}
+
+# CASE 8: a failure inside the staleness check itself is visible but
+# advisory. The session hook must still return zero and must not mutate.
+case_codex_bootstrap_failure_warns_without_blocking() {
+  local up; up=$(make_upstream)
+  local fk; fk=$(make_fork "$up")
+  (
+    cd "$fk" || exit 1
+    mkdir -p bin .agents/skills .codex/agents
+    printf '%s\n' '{}' > .codex/hooks.json
+    cat > bin/sync-codex-adapter.sh <<'SH'
+#!/bin/bash
+echo "synthetic reconciliation failure" >&2
+exit 7
+SH
+    chmod +x bin/sync-codex-adapter.sh
+  )
+  local output rc
+  output=$(run_hook_from "$fk")
+  rc=$?
+  if [ "$rc" -eq 0 ] \
+    && echo "$output" | grep -q 'Codex adapter may be stale' \
+    && echo "$output" | grep -q 'synthetic reconciliation failure' \
+    && [ ! -e "$fk/.codex/apexyard-adapter.json" ]; then
+    echo "PASS [SessionStart warns without blocking or mutating on check failure]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [SessionStart warns without blocking or mutating on check failure] rc=$rc output=$output" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}codex-failure "
+  fi
+  rm -rf "$up" "$(dirname "$fk")"
+}
+
 case_squash_caught_up
 case_merge_commit_caught_up
 case_genuinely_behind
 case_fork_ahead
 case_squash_no_changelog
+case_codex_bootstrap_warns_without_mutating
+case_codex_bootstrap_uninstalled_noop
+case_codex_bootstrap_failure_warns_without_blocking
 
 echo ""
 echo "==================================="

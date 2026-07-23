@@ -47,21 +47,88 @@
 # explicit human-authorization moment. Different threat model.
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
-
-if [ -z "$COMMAND" ]; then
-  exit 0
-fi
 
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
+# Sourced BEFORE the jq-based command parse below (moved up from its
+# original position after the parse) so is_merge_command is available as
+# the jq-independent fallback detector when the parse can't be trusted —
+# see #965.
 . "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 . "$(dirname "$0")/_lib-review-markers.sh"
 
+# Parse .tool_input.command via jq. #965: this used to be the ONLY parse
+# path, and an empty/failed result — jq missing from PATH, or jq erroring
+# on unexpected input — fell straight through to `exit 0`, silently
+# ALLOWING the merge command through completely ungated. A security gate
+# must fail CLOSED when it can't evaluate its own precondition, not fail
+# open.
+#
+# But this hook's PreToolUse matcher is `Bash` (every Bash call this
+# session runs, not just merges — see .claude/settings.json), so the fix
+# can't be "exit 2 whenever jq is unavailable": that would block every
+# unrelated Bash command for the rest of the session the moment jq broke,
+# which is worse than the bug it replaces. The resolution below keeps the
+# jq-unparseable case a no-op EXCEPT when the raw payload text itself
+# looks merge-shaped — in that narrower case we cannot safely let the
+# command through, so we fail closed instead.
+COMMAND=""
+if command -v jq >/dev/null 2>&1; then
+  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+fi
+
+if [ -z "$COMMAND" ]; then
+  # jq is missing, OR jq is present but the parse produced nothing — a
+  # genuinely empty command (legitimate no-op) or jq choking on
+  # malformed/unexpected JSON. Those two cases are indistinguishable from
+  # a parsed field alone, so fall back to a parser-independent scan: reuse
+  # is_merge_command (plain grep/sed, no jq dependency) directly against
+  # the RAW JSON payload text instead of the parsed command. The command
+  # text's own words (`gh`, `pr`, `merge`, digits, spaces) survive JSON
+  # string-encoding unchanged, so this is the exact same tested
+  # merge-shape detector used below — not a second, drift-prone regex.
+  #
+  # #973: the command's SEPARATORS do not always survive unchanged — a
+  # literal tab (or other JSON-escaped whitespace) encodes as a
+  # multi-character escape sequence (`\t`, `\uXXXX`) that `is_merge_command`'s
+  # `\s+` regex class won't recognise as whitespace. Normalize the small set
+  # of escapes that matter BEFORE scanning, so a merge command with
+  # JSON-escaped separators is caught exactly like a space-separated one —
+  # see `_normalize_json_escapes` in _lib-extract-pr.sh for the decode and
+  # why it's only ever applied on this raw-payload path, never on COMMAND.
+  #
+  # A payload that isn't merge-shaped at all is a genuine no-op — exit 0,
+  # unchanged behaviour for the overwhelming majority of Bash calls this
+  # hook sees. A payload that DOES look merge-shaped but that we can't
+  # safely parse/verify fails CLOSED (exit 2) instead of silently letting
+  # an ungated merge through.
+  if is_merge_command "$(_normalize_json_escapes "$INPUT")"; then
+    echo "BLOCKED: merge gate cannot evaluate this command — jq is unavailable or .tool_input.command could not be parsed, but the raw input looks merge-related. Refusing to merge until this can be verified. Restore jq (see .claude/hooks/check-jq-installed.sh) and retry." >&2
+    exit 2
+  fi
+  exit 0
+fi
+
 if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
+
+# --- Configurable human-approver DISPLAY title (me2resh/apexyard#957) ---
+# DISPLAY ONLY: this substitutes the printed word for the human per-PR
+# merge approver in the messages below. It does NOT affect the marker
+# filename (still "-ceo.approved"), the structured fields (sha=,
+# approved_by=user, skill_version=), or any gate logic — those are parsed
+# and compared exactly as before, regardless of this value. Default "CEO"
+# is a zero-behaviour-change no-op.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-read-config.sh" 2>/dev/null || true
+if command -v config_get_or >/dev/null 2>&1; then
+  APPROVER_TITLE=$(config_get_or '.review_markers.human_approver_title' 'CEO')
+else
+  APPROVER_TITLE="CEO"
+fi
+[ -z "$APPROVER_TITLE" ] && APPROVER_TITLE="CEO"
 
 # Parse --repo (for `gh pr merge --repo owner/repo`). The API-shape encodes
 # the repo in its URL path so we don't need the flag there — downstream
@@ -167,7 +234,7 @@ BLOCKED: PR #${PR_NUMBER} has no recorded code-reviewer (Rex) approval.
 
 ApexYard requires two reviews before merge (workflow-gates rule #5):
   1. Code Reviewer agent (Rex) — automated, recorded in .claude/session/reviews/
-  2. Human approver (CEO) — recorded by the /approve-merge skill
+  2. Human approver (${APPROVER_TITLE}) — recorded by the /approve-merge skill
 
 Missing file:
   ${REX_APPROVAL}
@@ -175,7 +242,7 @@ Missing file:
 To unblock:
   1. Invoke the code-reviewer agent on this PR
   2. When Rex returns "approved", it records the approval automatically
-  3. Then run /approve-merge ${PR_NUMBER} for the CEO approval
+  3. Then run /approve-merge ${PR_NUMBER} for the ${APPROVER_TITLE} approval
   4. Retry the merge
 
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
@@ -223,19 +290,21 @@ if [ ! -f "$CEO_APPROVAL" ]; then
   fi
   if [ "$_INLINE_CEO_MARKER" != "valid" ]; then
     cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} has Rex approval but no CEO approval marker.
+BLOCKED: PR #${PR_NUMBER} has Rex approval but no ${APPROVER_TITLE} approval marker.
 
 Plan-level "go" / "continue" / "ship it" does NOT authorize a merge. Each
-merge requires an explicit per-PR, per-merge CEO approval that names the
-PR. See .claude/rules/pr-workflow.md § "Plan-level 'go' is NOT merge
-approval" for the full rationale.
+merge requires an explicit per-PR, per-merge ${APPROVER_TITLE} approval that
+names the PR. See .claude/rules/pr-workflow.md § "Plan-level 'go' is NOT
+merge approval" for the full rationale.
 
 Missing file:
   ${CEO_APPROVAL}
+  (filename stays "-ceo.approved" regardless of the configured approver
+   title above — only the printed word changes, never the marker name.)
 
 To unblock:
-  1. Stop and ask the CEO explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
-  2. When the CEO says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
+  1. Stop and ask the ${APPROVER_TITLE} explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
+  2. When the ${APPROVER_TITLE} says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
      invoke the /approve-merge skill:
        /approve-merge ${PR_NUMBER}
   3. The skill writes the structured marker AND runs the merge in one turn
@@ -274,9 +343,10 @@ fi
 # without the structured fields. Either way: not acceptable.
 if [ -z "$CEO_SHA" ]; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker is in a stale or unrecognised format.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker is in a stale or unrecognised format.
 
-The marker at:
+The marker at (filename is always "-ceo.approved", regardless of the
+configured approver title):
   ${CEO_APPROVAL}
 
 does not contain the required \`sha=<HEAD>\` line. Either it's a pre-#132
@@ -295,11 +365,12 @@ fi
 
 if [ "$CEO_APPROVED_BY" != "user" ]; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker is missing the \`approved_by=user\` field.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker is missing the \`approved_by=user\` field.
 
 The marker at ${CEO_APPROVAL} has \`approved_by=${CEO_APPROVED_BY:-<empty>}\`,
 but the merge gate requires exactly \`approved_by=user\`. This field
-distinguishes a skill-written marker from a model-fabricated one.
+distinguishes a skill-written marker from a model-fabricated one. (The
+marker filename stays "-ceo.approved" regardless of the configured title.)
 
 Re-record via /approve-merge ${PR_NUMBER} (which writes the field
 correctly) — never edit the marker by hand.
@@ -311,7 +382,7 @@ fi
 # format change can bump it without breaking existing markers in flight.
 if [ -z "$CEO_SKILL_VERSION" ] || [ "$CEO_SKILL_VERSION" -lt 2 ] 2>/dev/null; then
   cat >&2 <<MSG
-BLOCKED: PR #${PR_NUMBER} CEO marker has skill_version=${CEO_SKILL_VERSION:-<missing>}.
+BLOCKED: PR #${PR_NUMBER} ${APPROVER_TITLE} marker has skill_version=${CEO_SKILL_VERSION:-<missing>}.
 
 The merge gate requires skill_version >= 2 (the structured-marker format
 introduced in me2resh/apexyard#48 + #132). Older markers are no longer
@@ -322,10 +393,11 @@ fi
 
 if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG
-BLOCKED: CEO approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
+BLOCKED: ${APPROVER_TITLE} approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
 
-New commits were pushed after the CEO approval. Re-request CEO approval
-via /approve-merge ${PR_NUMBER} on the new HEAD before merging.
+New commits were pushed after the ${APPROVER_TITLE} approval. Re-request
+${APPROVER_TITLE} approval via /approve-merge ${PR_NUMBER} on the new HEAD
+before merging.
 MSG
   exit 2
 fi

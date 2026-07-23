@@ -218,6 +218,76 @@ exit 1
 rm -rf "$SB" "$SIB"
 
 # ---------------------------------------------------------------------------
+# Case 2c (#951): v2 marker present + projects_dir override resolves to a
+# REAL BUT WRONG directory INSIDE the ops fork (the `../` depth-mismatch
+# bug). The plain existence check alone would pass here — the decoy dir
+# genuinely exists — so validate() must additionally catch fork-containment.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+touch "$SB/.apexyard-fork"
+# Decoy dir: shares a name with what the sibling portfolio SHOULD be, but
+# lives inside the fork because the override below is missing its leading
+# "../" — exactly the layout mismatch #951 describes.
+mkdir -p "$SB/sibling-portfolio/projects"
+cat > "$SB/.claude/project-config.json" <<'JSON'
+{
+  "portfolio": {
+    "projects_dir": "sibling-portfolio/projects"
+  }
+}
+JSON
+run_case "v2 (#951): projects_dir resolves inside the fork → broken" "$SB" '
+out=$(portfolio_validate 2>&1)
+rc=$?
+case "$out" in
+  *"projects_dir"*"INSIDE the ops fork"*)
+    [ "$rc" -ne 0 ] && exit 0
+    echo "rc was 0 even though fork-containment message printed: $out"
+    exit 1
+    ;;
+esac
+echo "expected fork-containment message, got rc=$rc out=$out"
+exit 1
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 2d (#951): v2 marker present + projects_dir AND workspace_dir both
+# correctly resolve to the sibling private-portfolio repo → OK. Proves the
+# new check doesn't false-positive on a correctly configured v2 fork.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+touch "$SB/.apexyard-fork"
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SIB/projects" "$SIB/workspace"
+cat > "$SB/.claude/project-config.json" <<JSON
+{
+  "portfolio": {
+    "projects_dir": "$SIB/projects",
+    "workspace_dir": "$SIB/workspace"
+  }
+}
+JSON
+run_case "v2 (#951): correctly configured sibling projects_dir/workspace_dir → OK" "$SB" '
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB" "$SIB"
+
+# ---------------------------------------------------------------------------
+# Case 2e (#951): v1 single-fork, no .apexyard-fork marker, untouched in-fork
+# defaults for projects_dir/workspace_dir → still OK. Proves the new
+# fork-containment check is conservative and doesn't fire on a plain v1
+# single-fork setup where in-fork defaults are correct.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+run_case "v1 (#951): untouched in-fork defaults, no marker → OK (no false positive)" "$SB" '
+if portfolio_is_v2; then echo "expected v1 (no marker) for this fixture"; exit 1; fi
+if portfolio_validate >/dev/null 2>&1; then exit 0; else echo "validate failed: $(portfolio_validate)"; exit 1; fi
+'
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
 # Case 3: relative override resolves against fork root
 # ---------------------------------------------------------------------------
 SB=$(make_fork)
@@ -687,6 +757,134 @@ expected="'"$SB"'/elsewhere-hb"
 if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
 '
 rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 25 (#945): a RELATIVE split-portfolio v2 override that itself carries
+# a literal ".." segment (e.g. "../<fork>-portfolio/workspace" — the exact
+# shape a split-portfolio v2 adopter configures when the private sibling
+# repo lives next to the ops fork) must resolve to a canonical, `/../`-free
+# absolute path. Every other override test in this file pre-resolves its
+# sibling path via `cd ... && pwd` before writing it into project-config.json
+# (so it never exercises the buggy concatenation branch); this case
+# deliberately writes the RAW relative-with-".." string, which is what
+# actually reaches `_portfolio_resolve` in the field.
+# ---------------------------------------------------------------------------
+SB=$(make_fork)
+SIBROOT=$(mktemp -d)
+SIBROOT=$(cd "$SIBROOT" && pwd -P)
+mkdir -p "$SIBROOT/apexyard-portfolio/workspace"
+# Re-root the sandbox so "$SB/.." really is $SIBROOT (the literal ".."
+# override below must land on a real, existing sibling directory).
+rm -rf "$SB"
+SB="$SIBROOT/apexyard"
+mkdir -p "$SB"
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@example.com"
+  git config user.name "test"
+  touch onboarding.yaml
+  cat > apexyard.projects.yaml <<'YAML'
+version: 1
+projects:
+  - name: example
+    repo: example/example
+YAML
+  mkdir -p projects
+  cat > projects/ideas-backlog.md <<'MD'
+# Ideas Backlog
+MD
+  mkdir -p .claude/hooks
+  cp "$LIB_SRC" .claude/hooks/_lib-portfolio-paths.sh
+  cp "$CONFIG_LIB_SRC" .claude/hooks/_lib-read-config.sh
+  cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+  cat > .claude/project-config.json <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "../apexyard-portfolio/workspace"
+  }
+}
+JSON
+  git add -A
+  git commit -q -m "test fixture (#945)"
+)
+run_case "#945: relative override with a literal '..' resolves /../-free" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIBROOT"'/apexyard-portfolio/workspace"
+case "$r" in
+  *"/../"*) echo "still contains a literal /../ segment: $r"; exit 1 ;;
+esac
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+run_case "#945: end-to-end — FILE_PATH under the resolved workspace now matches the gate's prefix check" "$SB" '
+WORKSPACE_DIR=$(portfolio_workspace_dir)
+# FILE_PATH is built independently from the CANONICAL sibling root
+# ($SIBROOT, captured before this subshell via cd + plain pwd -P), NOT by
+# concatenating $WORKSPACE_DIR — this mirrors reality, where the harness
+# hands the hook an already fully-resolved absolute path with no literal
+# ".." in it, regardless of how WORKSPACE_DIR itself was computed. Deriving
+# FILE_PATH from $WORKSPACE_DIR would make this assertion pass trivially
+# even on the unfixed code (both sides would carry the same literal
+# "/../", so the prefix match "works" for the wrong reason).
+FILE_PATH="'"$SIBROOT"'/apexyard-portfolio/workspace/exampleproj/src/app.ts"
+case "$FILE_PATH" in
+  "$WORKSPACE_DIR"/*) exit 0 ;;
+esac
+echo "FILE_PATH ($FILE_PATH) did not match WORKSPACE_DIR prefix ($WORKSPACE_DIR) — Tier-0/1 marker would be silently ignored"
+exit 1
+'
+rm -rf "$SIBROOT"
+
+# ---------------------------------------------------------------------------
+# Case 26 (#945): same relative-".." override, but the leaf directory does
+# NOT exist yet (the common split-portfolio v2 state before the first
+# managed-project clone lands in workspace/). Canonicalization must still
+# collapse the ".." without requiring the leaf to exist.
+# ---------------------------------------------------------------------------
+SIBROOT=$(mktemp -d)
+SIBROOT=$(cd "$SIBROOT" && pwd -P)
+mkdir -p "$SIBROOT/apexyard-portfolio"   # sibling root exists; workspace/ leaf does not
+SB="$SIBROOT/apexyard"
+mkdir -p "$SB"
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@example.com"
+  git config user.name "test"
+  touch onboarding.yaml
+  cat > apexyard.projects.yaml <<'YAML'
+version: 1
+projects:
+  - name: example
+    repo: example/example
+YAML
+  mkdir -p projects
+  cat > projects/ideas-backlog.md <<'MD'
+# Ideas Backlog
+MD
+  mkdir -p .claude/hooks
+  cp "$LIB_SRC" .claude/hooks/_lib-portfolio-paths.sh
+  cp "$CONFIG_LIB_SRC" .claude/hooks/_lib-read-config.sh
+  cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+  cat > .claude/project-config.json <<'JSON'
+{
+  "portfolio": {
+    "workspace_dir": "../apexyard-portfolio/workspace"
+  }
+}
+JSON
+  git add -A
+  git commit -q -m "test fixture (#945, no leaf yet)"
+)
+run_case "#945: relative override with '..' resolves /../-free even when the leaf dir does not exist yet" "$SB" '
+r=$(portfolio_workspace_dir)
+expected="'"$SIBROOT"'/apexyard-portfolio/workspace"
+case "$r" in
+  *"/../"*) echo "still contains a literal /../ segment: $r"; exit 1 ;;
+esac
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+rm -rf "$SIBROOT"
 
 
 # ---------------------------------------------------------------------------

@@ -34,6 +34,25 @@ The fact that this skill now runs the merge as part of its default flow does **n
 
 ## Process
 
+### 0. Resolve the configured approver display title (SOFT, prose-only)
+
+Before addressing the user in any confirmation question or report, read the configured display title for the human per-PR merge approver:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+APPROVER_TITLE=$(config_get_or '.review_markers.human_approver_title' 'CEO')
+```
+
+Use `$APPROVER_TITLE` (default `"CEO"`) whenever you address the human approver in prose — e.g. "PR #X is ready to merge. Just confirming — explicit approval to merge PR #X, now, ${APPROVER_TITLE}?" or a status line naming the approver.
+
+**This is DISPLAY ONLY and SOFT (prose-level), not mechanically enforced.** It changes nothing about:
+
+- the marker filename (`<owner>__<repo>__<pr>-ceo.approved` — always `-ceo`, never renamed)
+- the structured marker fields (`sha=`, `approved_by=user`, `skill_version=`) written in step 5 — write them exactly as documented below, regardless of the configured title
+- `block-unreviewed-merge.sh`'s gate logic — it reads the same marker and fields whether the configured title is "CEO", "Maintainer", or anything else
+
+If `_lib-read-config.sh` or `jq` is unavailable, `config_get_or` degrades to the literal fallback `'CEO'` — never let a config-read failure block the rest of this skill.
+
 ### 1. Parse the PR number, the repo, and flags
 
 Extract the PR number from `$ARGUMENTS`. If no number is given, try to infer from:

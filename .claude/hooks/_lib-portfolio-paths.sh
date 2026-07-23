@@ -89,25 +89,116 @@ _portfolio_root() {
 }
 
 # ------------------------------------------------------------------------------
+# Internal: canonicalize an ABSOLUTE path to its logical, `/../`-free,
+# symlink-resolved form — WITHOUT requiring the leaf to already exist.
+#
+# Why this exists (me2resh/apexyard#945): callers of the public resolvers
+# below (require-active-ticket.sh, require-migration-ticket.sh) compare a
+# tool-supplied FILE_PATH against e.g. `portfolio_workspace_dir()` via a
+# shell `case "$FILE_PATH" in "$WORKSPACE_DIR"/*)` prefix match. FILE_PATH
+# arrives already normalised (no literal ".." component). Before this fix,
+# a split-portfolio v2 adopter whose `portfolio.workspace_dir` override was
+# a RELATIVE sibling path (e.g. "../<fork>-portfolio/workspace") got a
+# resolved value that still contained a literal "/../" segment — e.g.
+# "/Users/x/apexyard/../apexyard-portfolio/workspace" — because the old
+# `_portfolio_resolve` just string-concatenated `$root/$p` with no
+# normalisation. That literal "/../" never appears in a real FILE_PATH, so
+# the prefix match silently failed and the per-project ticket marker
+# (Tier 0/1) was ignored — legitimate edits got blocked (or fell through
+# to the wrong tier).
+#
+# Algorithm mirrors `_resolve_real_path()` in require-active-ticket.sh:
+# walk up to the nearest EXISTING ancestor, physically resolve it via
+# `cd ... && pwd -P` (which both collapses ".." and follows symlinks),
+# then re-append whatever tail doesn't exist yet literally — a tail that
+# doesn't exist yet cannot itself be a symlink or contain an unresolved
+# "..", since dirname/basename already stripped those out of the walked
+# portion. This is the same "realpath -m without depending on GNU
+# coreutils" trick, needed because macOS/BSD doesn't guarantee GNU
+# realpath's -m/-e flags are available.
+#
+# Fails soft: if $p can't be resolved for any reason (cd denied, etc.),
+# echoes the original input unchanged rather than an empty/broken path —
+# unlike require-active-ticket.sh's fail-CLOSED security check, a
+# portfolio path resolver has no "block on doubt" contract to uphold.
+# ------------------------------------------------------------------------------
+_portfolio_canonicalize() {
+  local p="$1" dir tail=""
+  case "$p" in
+    /*) : ;;
+    *) echo "$p"; return 0 ;;  # not absolute — nothing to canonicalize
+  esac
+
+  dir="$p"
+  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -e "$dir" ]; do
+    if [ -z "$tail" ]; then
+      tail="$(basename "$dir")"
+    else
+      tail="$(basename "$dir")/$tail"
+    fi
+    dir="$(dirname "$dir")"
+  done
+
+  if [ ! -e "$dir" ]; then
+    echo "$p"
+    return 0
+  fi
+
+  if [ -d "$dir" ]; then
+    dir="$(cd "$dir" 2>/dev/null && pwd -P)"
+  else
+    # $dir resolved to an existing FILE (not a directory) partway through
+    # the walk — canonicalize its parent and re-append its own basename.
+    local parent
+    parent="$(cd "$(dirname "$dir")" 2>/dev/null && pwd -P)"
+    if [ -n "$parent" ]; then
+      dir="$parent/$(basename "$dir")"
+    else
+      dir=""
+    fi
+  fi
+
+  if [ -z "$dir" ]; then
+    echo "$p"
+    return 0
+  fi
+
+  if [ -n "$tail" ]; then
+    if [ "$dir" = "/" ]; then
+      printf '%s%s' "$dir" "$tail"
+    else
+      printf '%s/%s' "$dir" "$tail"
+    fi
+  else
+    printf '%s' "$dir"
+  fi
+}
+
+# ------------------------------------------------------------------------------
 # Internal: resolve a possibly-relative path against the ops-fork root.
-# Outputs an absolute path. If the input is already absolute, echo as-is.
+# Outputs an absolute, canonical (symlink-free, `/../`-free) path. If the
+# input is already absolute, it is still canonicalized — an absolute
+# override in project-config.json could itself carry a relative segment
+# (e.g. "$SIBLING/../other").
 # ------------------------------------------------------------------------------
 _portfolio_resolve() {
-  local p="$1"
+  local p="$1" abs
   case "$p" in
-    /*) echo "$p" ;;
+    /*) abs="$p" ;;
     *)
       local root
       root=$(_portfolio_root)
       if [ -n "$root" ]; then
         # Strip leading ./ for tidier output.
-        echo "$root/${p#./}"
+        abs="$root/${p#./}"
       else
         # No root — return the literal so caller can detect.
         echo "$p"
+        return 0
       fi
       ;;
   esac
+  _portfolio_canonicalize "$abs"
 }
 
 # ------------------------------------------------------------------------------
@@ -401,6 +492,43 @@ portfolio_validate() {
       echo "broken: partial split-portfolio v2 config — registry/projects_dir point at a sibling repo but workspace_dir falls back to the in-fork default; set .portfolio.workspace_dir in .claude/project-config.json to the sibling path (e.g. \"../<fork>-portfolio/workspace\"). See me2resh/apexyard#373."
       return 1
     fi
+  fi
+
+  # Fork-containment check — see me2resh/apexyard#951 (and #952 for the
+  # false-positive fix below).
+  #
+  # A projects_dir/workspace_dir override that's meant to point at the
+  # sibling portfolio repo but has the wrong `../` depth (or a missing
+  # leading `../`) can resolve to a real, but WRONG, directory INSIDE the
+  # ops fork. The plain existence check earlier in this function passes —
+  # the decoy dir genuinely exists — so the misconfig stays silent and
+  # subsequent writes (clones, docs, registry edits) land in the wrong
+  # tree. Close that gap by resolving each dir to its canonical
+  # (`cd && pwd -P`) form and flagging if it lands inside.
+  #
+  # GATE ON THE RESOLVED LOCATION, NOT on portfolio_is_v2 (#952). Flag only
+  # when a dir resolves INSIDE the ops fork at a NON-DEFAULT location. The
+  # in-fork DEFAULTS ($root/projects, $root/workspace) are correct
+  # single-fork behaviour and must never be flagged; a sibling-intended
+  # override with the wrong `../` depth (or a missing leading `../`) lands
+  # inside the fork at some OTHER path, which is the misconfig #951 catches.
+  #
+  # The old `portfolio_is_v2` gate false-positived because single-fork forks
+  # ALSO carry the `.apexyard-fork` marker (it's written on every /setup,
+  # single-fork or split), so the marker can't tell a legit in-fork default
+  # from a sibling-intended override — see #952. Comparing the resolved path
+  # against the canonical default location is immune to that ambiguity and
+  # needs no (root-resolution-sensitive) config-key read.
+  local pd_real
+  pd_real=$(cd "$projects_dir" 2>/dev/null && pwd -P) || pd_real="$projects_dir"
+  if ! _outside_fork "$pd_real" && [ "$pd_real" != "$root_real/projects" ]; then
+    echo "broken: split-portfolio v2 misconfig — portfolio.projects_dir resolved to $projects_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch (or a missing leading '../') in .claude/project-config.json's portfolio.projects_dir override. See me2resh/apexyard#951."
+    return 1
+  fi
+
+  if ! _outside_fork "$wd_real" && [ "$wd_real" != "$root_real/workspace" ]; then
+    echo "broken: split-portfolio v2 misconfig — portfolio.workspace_dir resolved to $workspace_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch (or a missing leading '../') in .claude/project-config.json's portfolio.workspace_dir override. See me2resh/apexyard#951."
+    return 1
   fi
 
   case "$onboarding" in

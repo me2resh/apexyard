@@ -149,7 +149,7 @@ Examples that **do not** trigger the heuristic:
 
 ### 7. Technical Decisions (AgDR) — ⛔ BLOCKING CHECK
 
-**You MUST detect and enforce AgDR for any technical decisions.**
+**You MUST detect and enforce AgDR for *material* technical decisions** — architectural, hard to reverse, or cross-cutting. Routine implementation choices that are reversible inside this PR (local naming, extracting a helper, control flow, test structure, using an API from a dependency already in the manifest) do **NOT** need an AgDR and must not be flagged. See `.claude/rules/agdr-decisions.md` § "The threshold" for the full line, including the two non-negotiable rails: security / trust-chain / migration decisions are always material, and genuine ambiguity rounds **up**.
 
 #### How to detect technical decisions in code
 
@@ -169,7 +169,7 @@ Scan the diff for these patterns:
 #### Enforcement rules
 
 1. **Check if AgDR exists** — look for `AgDR` or `agdr` links in the PR description
-2. **If a decision is detected but NO AgDR is linked** → **REQUEST CHANGES** with this template:
+2. **If a *material* decision is detected but NO AgDR is linked** → **REQUEST CHANGES** with this template. (Material per `.claude/rules/agdr-decisions.md` § "The threshold" — do NOT request changes for a routine choice reversible inside this PR.)
 
 ```markdown
 ## ⛔ AgDR Required
@@ -623,6 +623,8 @@ When your verdict is APPROVED, and ONLY then, write the approval marker file so 
 
 > Note for **build agents** (backend / frontend / platform / product-manager / data-engineer / ui / ux): the above applies ONLY to this sanctioned `code-reviewer` agent. A build agent writing a `*-rex.approved` marker is author-impersonating-reviewer and is a rule violation — see `.claude/rules/pr-workflow.md` § "Build agents cannot self-review". The separation is real; it lives in *which agent* writes the marker, not in the GitHub UI.
 
+Your marker write succeeds where a build agent's identical write is blocked (exit 2) because the orchestrator (or the `/code-review` skill) sets the `.claude/session/active-reviewer` provenance marker (#843) before spawning you — `warn-review-marker-write.sh` authorizes the write against that session marker, so a caller with no active-reviewer marker set is blocked.
+
 ### Path: ops fork root, not git toplevel
 
 The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
@@ -821,7 +823,7 @@ Report the failure in plain text with the exact command the caller needs to run.
 4. **Don't nitpick style** — that's what linters are for
 5. **First review** — a human approver does the second review before merge
 6. **Glossary is mandatory** — request changes if missing
-7. **AgDR enforcement is BLOCKING** — if you detect a technical decision without an AgDR link:
+7. **AgDR enforcement is BLOCKING** — if you detect a **material** technical decision (architectural, hard to reverse, or cross-cutting per `.claude/rules/agdr-decisions.md` § "The threshold") without an AgDR link:
    - DO NOT approve the PR
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
