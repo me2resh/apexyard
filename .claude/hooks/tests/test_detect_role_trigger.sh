@@ -432,7 +432,9 @@ dedup_edit() {
   local sid="$1" path="$2" input
   input=$(jq -nc --arg p "$path" \
     '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
-  ( printf '%s' "$input" | ( cd "$DEDUP_REPO" && CLAUDE_CODE_SESSION_ID="$sid" bash "$HOOK" ) ) 2>&1 >/dev/null
+  # Capture stderr (the banner), discard stdout. The brace-group form keeps the
+  # redirection order unambiguous (shellcheck SC2069).
+  { printf '%s' "$input" | ( cd "$DEDUP_REPO" && CLAUDE_CODE_SESSION_ID="$sid" bash "$HOOK" ) >/dev/null; } 2>&1
 }
 
 assert_dedup() {
