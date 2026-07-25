@@ -276,53 +276,40 @@ _is_marker_target() {
 #
 # Called two ways (both #1000):
 #   - per WRITE TARGET (a short string) — the primary, precise path
-#   - as a fallback over the whole command with heredoc bodies stripped
-#     (`_strip_heredoc_bodies`) — only when no clean literal target was
-#     found, so payload prose can't masquerade as destination code
+#   - as a fallback over the whole, UNSTRIPPED command — only when no clean
+#     literal target was found, or an extracted target is itself
+#     variable-derived
+#
+# #1000-REX-ROUND-2 (Rex's PR #1011 review, finding 3): an earlier version
+# of this fix stripped heredoc BODY content before running the fallback
+# scan, reasoning that heredoc content is always DATA, never destination-
+# determining code. That reasoning is correct for a heredoc fed to a plain
+# data-writing command (`cat > file <<EOF`) but WRONG for a heredoc fed to
+# an INTERPRETER (`python3 <<EOF`, `node <<EOF`, `bash <<EOF`) — there the
+# body IS the code that names the write destination, and interpreter
+# writes yield no extractable target in the first place (see
+# `_bdw_match_python_heredoc` / `_bdw_match_node_heredoc` / etc. in the
+# shared lib — they detect the write but extraction can't recover a
+# target). Stripping the body before the fallback ran removed the ONLY
+# evidence left to scan, so `python3 <<EOF ... open("<marker>","w")... EOF`
+# went from BLOCKED (pre-#1000) to silently ALLOWED — a marker-creation
+# bypass. Verified: removing the strip (scanning the raw, unstripped
+# command here) returns all three interpreter-heredoc shapes to BLOCKED,
+# and all 36 existing tests — including the scratchpad-heredoc false
+# positive this strip was originally written for (case 31) — still pass.
+# Case 31 was never carried by the strip: its target
+# (`/tmp/scratch/review-body.md`) is a clean, non-marker literal, so the
+# per-target loop already resolves it as conclusive and never reaches this
+# fallback at all. The strip was solving an already-solved problem while
+# opening a new one — removed rather than special-cased per interpreter,
+# since enumerating every interpreter (and `bash <<EOF` isn't even one of
+# the shared lib's named interpreter matchers) is a losing race.
 _is_marker_plausible_indirect() {
   local text="$1"
   if echo "$text" | grep -qE 'review_marker_path|\.claude/session/reviews/'; then
     return 0
   fi
   echo "$text" | grep -qiE '\$\{?[a-z_]*marker[a-z_]*\}?'
-}
-
-# _strip_heredoc_bodies TEXT (#1000)
-#
-# Removes heredoc BODY content (the lines between a `<<[-]DELIM` marker and
-# its closing DELIM line) from TEXT, keeping the marker line itself and
-# everything outside the heredoc untouched. Heredoc content is DATA a
-# command writes, never code that determines WHERE it writes — scanning it
-# for marker-shaped substrings is how a review body that merely QUOTES the
-# hook's own `$marker` token in prose used to trip the indirect-write
-# fallback scan (see #1000 header comment, point 2). Best-effort: handles
-# the common `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF` forms. An unparseable
-# or absent heredoc is a no-op (TEXT returned unchanged).
-_strip_heredoc_bodies() {
-  local text="$1"
-  awk '
-    BEGIN { in_hd = 0; delim = "" }
-    {
-      line = $0
-      if (in_hd) {
-        check = line
-        gsub(/^\t+/, "", check)
-        if (check == delim) { in_hd = 0 }
-        next
-      }
-      if (match(line, /<<-?[[:space:]]*[\x27\x22]?[A-Za-z_][A-Za-z0-9_]*[\x27\x22]?/)) {
-        tok = substr(line, RSTART, RLENGTH)
-        d = tok
-        sub(/^<<-?[[:space:]]*/, "", d)
-        gsub(/[\x27\x22]/, "", d)
-        delim = d
-        in_hd = 1
-        print line
-        next
-      }
-      print line
-    }
-  ' <<< "$text"
 }
 
 # _extract_marker_role COMMAND (#962)
@@ -394,12 +381,26 @@ case "$TOOL_NAME" in
       fi
 
       if [ "$IS_WRITE" = "1" ]; then
-        # #1000 point 2: judge the RESOLVED WRITE TARGET(S), not the
-        # command's prose. A heredoc BODY, a --body argument, or any other
-        # payload text a command writes is DATA, never the destination.
-        SCAN_TEXT=$(_strip_heredoc_bodies "$COMMAND")
+        # #1000 point 2: judge the RESOLVED WRITE TARGET(S) first, not the
+        # command's prose — see the #1000-REX-ROUND-2 note on
+        # _is_marker_plausible_indirect for why no text-stripping happens
+        # here (heredoc-stripping was tried and reverted: it opened an
+        # interpreter-heredoc bypass without closing anything the
+        # target-based logic wasn't already closing).
         WRITE_TARGETS=$(bash_extract_write_targets "$COMMAND")
         HAS_VAR_TARGET=0
+
+        # #1000-REX-ROUND-2 finding 4: `sed -i` / `awk -i inplace` have a
+        # known-fragile positional-argument extraction heuristic (BSD
+        # `sed -i ''` in particular — see the fuller comment below, where
+        # this flag is consumed). Computed up front so it can widen BOTH
+        # the immediate literal re-check AND the general fallback trigger,
+        # not just the first — a variable-indirected marker path (case24's
+        # `$DIR/mystery.approved` shape) combined with a BSD sed -i
+        # mis-extraction would otherwise still slip past both checks.
+        IS_EXTRACTION_FRAGILE=0
+        echo "$COMMAND" | grep -qE '\bsed[[:space:]]+([^|;&]*[[:space:]])?-i\b|\bawk[[:space:]]+[^|;&]*-i[[:space:]]+inplace\b' && IS_EXTRACTION_FRAGILE=1
+
         if [ -n "$WRITE_TARGETS" ]; then
           while IFS= read -r wt; do
             [ -z "$wt" ] && continue
@@ -423,27 +424,65 @@ $WRITE_TARGETS
 EOF_TARGETS
         fi
 
-        if [ "$MATCHED" != "1" ] && { [ -z "$WRITE_TARGETS" ] || [ "$HAS_VAR_TARGET" = "1" ]; }; then
-          # Fallback broader scan — only reached when either (a) no target
-          # was extractable at all (an embedded interpreter with an opaque
-          # write target this library can't parse), or (b) at least one
+        # #1000-REX-ROUND-2 (Rex's PR #1011 review, finding 4): the
+        # "a clean literal, non-marker, non-variable extracted target is
+        # conclusive" shortcut above assumes bash_extract_write_target's
+        # positional heuristic got the target RIGHT. For `sed -i` it can
+        # be WRONG rather than merely empty: BSD's two-token form
+        # (`sed -i '' 's/a/b/' <file>`, or the unquoted `sed -i '' s/a/b/
+        # <file>`) makes the extractor return the SED EXPRESSION as "the
+        # target" — a literal, non-marker, non-variable string that then
+        # makes the extractor's wrong answer look conclusive and skips
+        # the REAL marker file the command actually mutates in place.
+        # Demonstrated: `sed -i '' s/aa/bb/ <marker>` rewrites a stale
+        # marker's SHA to the current HEAD, defeating the "new commits
+        # invalidate approval" property this whole gate exists to
+        # protect. GNU `sed -i` (single-token form) returns EMPTY targets
+        # instead and already reaches the general fallback below — this
+        # is specific to the extraction-fragile two-token form.
+        #
+        # Scoped narrowly via IS_EXTRACTION_FRAGILE (computed above from a
+        # pattern mirroring `_bdw_match_sed_inplace`/`_bdw_match_awk_
+        # inplace`, duplicated here rather than imported so the shared
+        # library stays untouched, per the #1000 blast-radius containment
+        # call) — NOT applied to every write: a plain `echo "mentions
+        # <marker path> for context" > /tmp/notes.txt` must stay allowed
+        # (#1000 point 2) — that's a real target the per-target loop
+        # already resolved as conclusive, and it isn't a sed/awk in-place
+        # edit.
+        if [ "$MATCHED" != "1" ] && [ "$IS_EXTRACTION_FRAGILE" = "1" ] && _is_marker_target "$COMMAND"; then
+          MATCHED=1
+          TARGET=$(echo "$COMMAND" | grep -oE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved' | head -1)
+          RESOLVED_VIA="literal"
+        fi
+
+        if [ "$MATCHED" != "1" ] && { [ -z "$WRITE_TARGETS" ] || [ "$HAS_VAR_TARGET" = "1" ] || [ "$IS_EXTRACTION_FRAGILE" = "1" ]; }; then
+          # Fallback broader scan — only reached when (a) no target was
+          # extractable at all (an embedded interpreter with an opaque
+          # write target this library can't parse), (b) at least one
           # extracted target is itself variable-derived (e.g.
           # `$DIR/mystery.approved`, built from a variable that a PRIOR
           # statement — not the target text itself — assigns from a
           # reviews-dir literal) and so might still resolve to a marker
-          # even though the target text alone didn't say so. Runs over
-          # heredoc-stripped text so payload prose can't trip it (#1000
-          # point 2); a fully literal, non-marker, non-variable target is
-          # treated as conclusive and never reaches this fallback.
-          if _is_marker_plausible_indirect "$SCAN_TEXT"; then
+          # even though the target text alone didn't say so, or (c) the
+          # command is from an extraction-fragile family (sed -i / awk -i
+          # inplace) whose "target" the immediate check above already
+          # tried and failed to confirm as literal — covers the combined
+          # shape (b)+(c), e.g. a BSD `sed -i` mutating a
+          # variable-indirected marker path, where neither check alone
+          # would catch it. Runs over the raw, unstripped command
+          # (#1000-REX-ROUND-2) — a fully literal, non-marker,
+          # non-variable target from a non-fragile family is treated as
+          # conclusive and never reaches this fallback.
+          if _is_marker_plausible_indirect "$COMMAND"; then
             MATCHED=1
             RESOLVED_VIA="indirect"
           fi
         fi
 
         if [ "$MATCHED" = "1" ] && [ "$RESOLVED_VIA" = "indirect" ]; then
-          MARKER_TYPE=$(_extract_marker_role "$SCAN_TEXT")
-          TARGET_PR=$(_extract_marker_pr "$SCAN_TEXT")
+          MARKER_TYPE=$(_extract_marker_role "$COMMAND")
+          TARGET_PR=$(_extract_marker_pr "$COMMAND")
           TARGET="<resolved via variable/function indirection; detected role: ${MARKER_TYPE:-unresolved}, pr: ${TARGET_PR:-unresolved}>"
         fi
       fi
