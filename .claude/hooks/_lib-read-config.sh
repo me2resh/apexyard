@@ -26,6 +26,12 @@
 # ------------------------------------------------------------------------------
 # Internal state: cache merged config per-process so repeated reads are cheap.
 # ------------------------------------------------------------------------------
+# `_CR` holds a literal carriage return, used by config_get to strip the CRLF
+# line endings Windows (Git Bash / MSYS2) jq.exe emits. Defined as a real
+# character rather than a `\r` escape because BSD/macOS sed does not interpret
+# `\r` in a regex — the escape form would silently no-op on macOS and leave the
+# bug half-fixed. See me2resh/apexyard#1019.
+_CR=$(printf '\r')
 _CONFIG_CACHE=""
 _CONFIG_WARNED_NO_JQ=""
 _CONFIG_ROOT_CACHE=""
@@ -147,7 +153,24 @@ config_get() {
     # document and config_get returns empty for EVERY key, silently dropping all
     # project-config overrides (incl. split-portfolio portfolio.* paths).
     # See me2resh/apexyard#629.
-    printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null
+    #
+    # The trailing-CR strip is for Windows (Git Bash / MSYS2), where the native
+    # jq.exe writes stdout through a text-mode CRT handle and rewrites every
+    # emitted \n into \r\n. A SINGLE-value filter is unharmed — command
+    # substitution strips the one trailing newline and takes the \r with it —
+    # but a MULTI-line filter (e.g. `.branch.type_whitelist[]`) leaves a \r
+    # baked into every line except the last. Callers that join with
+    # `paste -sd'|' -` then build an alternation containing stray carriage
+    # returns, which can never match a real branch name or PR title, so the
+    # validators block every branch and PR on Windows. Ten hooks read
+    # multi-line config values, so the fix belongs here rather than at each
+    # call site. See me2resh/apexyard#1019.
+    #
+    # Deliberately surgical: this removes a CR only at end-of-line, not every
+    # CR in the stream. A `tr -d '\r'` would also corrupt a config value that
+    # legitimately contains a carriage return mid-string. `$_CR` holds a real
+    # CR character because BSD/macOS sed does not interpret a `\r` escape.
+    printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null | sed "s/${_CR}\$//"
   else
     return 0
   fi
