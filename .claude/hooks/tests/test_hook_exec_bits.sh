@@ -27,7 +27,6 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 SETTINGS="$ROOT/.claude/settings.json"
-HOOKS_DIR="$ROOT/.claude/hooks"
 
 [ -f "$SETTINGS" ] || { echo "FAIL: settings.json not at $SETTINGS" >&2; exit 1; }
 
