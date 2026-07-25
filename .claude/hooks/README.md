@@ -170,7 +170,7 @@ All path patterns use the `(^|/)` anchor so they catch **monorepo layouts** (`ba
 
 **Not in the default list (known gap):** CDK / Pulumi / generic-IaC projects that use plain `.ts` / `.py` / `.go` files inside an `infrastructure/` directory. The original draft had a generic `(^|/)infrastructure/` pattern for this, but testing showed it false-positives on `docs/infrastructure/notes.md` and `src/types/infrastructure/foo.ts` — the word "infrastructure" is ambiguous as a directory name. Projects that want CDK-style coverage should add an explicit override like `(^|/)infrastructure/.*\.(ts|py|go)$` via `.architecture_paths`.
 
-**Enforces:** `.claude/rules/agdr-decisions.md § Enforcement` — specifically the line "Pre-commit hook warns if architecture files changed without an AgDR reference", which was prose-only until this hook shipped.
+**Enforces:** `.claude/rules/agdr-decisions.md § "Enforcement — and the honest limits of it"` — this hook is the mechanical, commit-time backstop for the materiality threshold defined in § "The threshold"; the rule was prose-only until this hook shipped.
 
 ### 8. Design-review-for-UI merge gate — `require-design-review-for-ui.sh`
 

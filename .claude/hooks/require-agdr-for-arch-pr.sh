@@ -592,11 +592,14 @@ fi
   cat <<'MSG'
 
 Why this is blocked:
-  .claude/rules/agdr-decisions.md calls /decide a HARD STOP before any
-  technical decision — library choice, architecture move, new dependency,
-  infra shape. Other HARD STOPs in the ruleset (merge approval, ticket-
-  first, migration-first) are mechanically enforced at PR time; this one
-  closes the gap.
+  .claude/rules/agdr-decisions.md § "The threshold" calls /decide a HARD
+  STOP before any MATERIAL technical decision — a new dependency/technology,
+  a new service/integration, a data-model or schema change, a security-
+  relevant control, CI/CD or infra design, a repo-wide pattern, or anything
+  hard to reverse. This PR's diff matched one of the trigger paths/dep-file
+  patterns below, which are a conservative proxy for that bar. Other HARD
+  STOPs in the ruleset (merge approval, ticket-first, migration-first) are
+  mechanically enforced at PR time; this one closes the gap.
 
 To unblock:
   1. Run /decide to walk through the decision and generate an AgDR file
