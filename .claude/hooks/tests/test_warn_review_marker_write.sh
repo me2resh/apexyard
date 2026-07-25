@@ -70,6 +70,38 @@
 #                 the sanctioned idiom), matching active-reviewer marker
 #                                                                  → ALLOWED, exit 0 (no regression)
 #
+# #1000 test matrix (narrow detection to actual write intent — see the
+# hook's own #1000 header comment for the three false-positive shapes this
+# closes, and why #962/#970's resolved-target work was incomplete):
+#   (29) Bash   → `rm -f` of active-reviewer, bundled with an unrelated
+#                 command (the documented orchestrator cleanup step)
+#                                                                  → NOT blocked, exit 0
+#   (30) Bash   → purely READ-ONLY command (git show | grep) whose quoted
+#                 grep PATTERN argument contains the substring "rm -f"
+#                 (a segmentation false-positive in the shared file-mover
+#                 matcher, not a real rm)                          → NOT blocked, exit 0
+#   (31) Bash   → heredoc write to a non-marker scratch path whose BODY
+#                 content quotes "$marker" and "active-reviewer" in prose
+#                                                                  → NOT blocked, exit 0
+#   (32) Bash   → the orchestrator's documented SET step (printf > literal
+#                 active-reviewer path) — previously ALSO a false block,
+#                 since role can never resolve for a plain printf
+#                                                                  → NOT blocked, exit 0
+#   (33) Bash   → `rm` bundled with a REAL literal marker forgery in the
+#                 same command (rm -f active-reviewer; printf sha >
+#                 <real marker path>)                              → BLOCKED, exit 2
+#                 (confirms the #1000 deletion-only exemption doesn't
+#                 swallow a genuine forgery riding alongside it)
+#   (34) Bash   → `rm` of a REAL *.approved marker file (not
+#                 active-reviewer) — deliberate narrowing: deletion can
+#                 only remove evidence, it cannot forge approval content
+#                                                                  → NOT blocked, exit 0 (documented behaviour change)
+#
+# Cases (1), (3), (4), (11), (20), (21), (23) already re-verify the
+# target-based literal/indirect detection still catches every genuine
+# forgery shape after #1000's narrowing (unchanged pass/fail expectations
+# — see the top-of-file test matrix) — not duplicated here.
+#
 # Exit 0 if all cases pass; 1 on failure.
 
 set -u
@@ -578,6 +610,95 @@ case28() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# (29) Bash → `rm -f` of active-reviewer, bundled with an unrelated command
+#      (the documented orchestrator cleanup step from code-review/SKILL.md
+#      § 0) -> NOT blocked, exit 0 (#1000 point 1).
+# ---------------------------------------------------------------------------
+case29() {
+  local sb; sb=$(make_sandbox)
+  local ar="$sb/.claude/session/active-reviewer"
+  run_hook "$sb" "Bash rm -f active-reviewer bundled with unrelated command -> NOT blocked (#1000)" \
+    "$(bash_json "rm -f ${ar} && gh pr checks 996")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (30) Bash → purely READ-ONLY command (git show | grep) whose quoted grep
+#      PATTERN argument contains the substring "rm -f" — a segmentation
+#      false-positive in the shared file-mover matcher (which can't see
+#      quoting), not a real rm -> NOT blocked, exit 0 (#1000 point 1).
+# ---------------------------------------------------------------------------
+case30() {
+  local sb; sb=$(make_sandbox)
+  local cmd='git show upstream/dev:.claude/hooks/warn-review-marker-write.sh | grep -nE "approved|rm -f|active-reviewer"'
+  run_hook "$sb" "Bash read-only grep pipeline with quoted 'rm -f' substring -> NOT blocked (#1000)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (31) Bash → heredoc write to a non-marker scratch path whose BODY content
+#      quotes "$marker" and "active-reviewer" in prose (a review body
+#      explaining the gate, not code targeting one) -> NOT blocked, exit 0
+#      (#1000 point 2 — judge the resolved target, not the payload).
+# ---------------------------------------------------------------------------
+case31() {
+  local sb; sb=$(make_sandbox)
+  local json
+  # shellcheck disable=SC2016 # deliberate — the $marker text is literal
+  # heredoc BODY payload, not a real expansion (that's the whole point of
+  # this test case: prose content, not code).
+  json='{"tool_name":"Bash","tool_input":{"command":"cat > /tmp/scratch/review-body.md <<'"'"'EOF'"'"'\nThe hook checks the $marker token before writing the file.\nAlso mentions active-reviewer in prose.\nEOF\necho done"}}'
+  run_hook "$sb" "Bash heredoc write to scratch path, body mentions \$marker/active-reviewer -> NOT blocked (#1000)" \
+    "$json" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (32) Bash → the orchestrator's documented SET step (printf > literal
+#      active-reviewer path, code-review/SKILL.md § 0) — previously ALSO a
+#      false block, since role can never resolve for a plain printf ->
+#      NOT blocked, exit 0 (#1000 point 3).
+# ---------------------------------------------------------------------------
+case32() {
+  local sb; sb=$(make_sandbox)
+  local ar="$sb/.claude/session/active-reviewer"
+  local cmd="printf '%s\n' \"${REPO}#1000:rex\" > \"${ar}\""
+  run_hook "$sb" "Bash SET step (printf > active-reviewer) -> NOT blocked (#1000)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (33) Bash → `rm` bundled with a REAL literal marker forgery in the same
+#      command (rm -f active-reviewer; printf sha > <real marker path>) ->
+#      BLOCKED, exit 2. Confirms the #1000 deletion-only exemption doesn't
+#      swallow a genuine forgery riding alongside an rm.
+# ---------------------------------------------------------------------------
+case33() {
+  local sb; sb=$(make_sandbox)
+  local ar="$sb/.claude/session/active-reviewer"
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  run_hook "$sb" "Bash rm + real marker forgery in same command -> still BLOCKED (#1000)" \
+    "$(bash_json "rm -f ${ar}; printf sha123 > ${marker}")" 2 "BLOCKED"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (34) Bash → `rm` of a REAL *.approved marker file (not active-reviewer) ->
+#      NOT blocked, exit 0. Deliberate, documented narrowing: deletion can
+#      only remove evidence, it cannot forge approval content (#1000).
+# ---------------------------------------------------------------------------
+case34() {
+  local sb; sb=$(make_sandbox)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  : > "$marker"
+  run_hook "$sb" "Bash rm of a real *.approved marker -> NOT blocked (#1000 narrowing)" \
+    "$(bash_json "rm ${marker}")" 0
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
@@ -606,6 +727,12 @@ case25
 case26
 case27
 case28
+case29
+case30
+case31
+case32
+case33
+case34
 
 # ---------------------------------------------------------------------------
 # Summary

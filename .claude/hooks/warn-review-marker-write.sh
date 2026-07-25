@@ -143,7 +143,84 @@
 # comment assumed was already fail-closed. Both sides of the kind
 # comparison are now guarded explicitly for non-empty before it runs.
 #
-# References: #728, #843, #873, #957, #962, #974, AgDR-0062, AgDR-0104,
+# #1000 — NARROW DETECTION TO ACTUAL WRITE INTENT (three false positives,
+# one real session, one day)
+# ----------------------------------------------------------------------
+# #962's indirect-write detector scanned the WHOLE COMMAND TEXT for
+# marker-shaped substrings whenever the command "appeared to write"
+# anything at all. That is broader than the threat it defends against
+# (forging a *.approved file's CONTENT) and produced three real false
+# blocks in one session:
+#
+#   1. `rm -f .claude/session/active-reviewer` — the orchestrator's own
+#      documented cleanup step (code-review/SKILL.md § 0) — got matched
+#      because the command "appears to write" (rm is a file-mover) and
+#      the command text mentions "active-reviewer". But `rm` can only
+#      DELETE; it can never forge marker CONTENT. Fix: a command whose
+#      ONLY write-like signal is deletion (`bash_command_is_deletion_only`
+#      — the same helper require-active-ticket.sh already uses for the
+#      identical "rm can't add content" reasoning) is no longer treated
+#      as a write for THIS gate. This incidentally closes a second,
+#      related false block too: `grep -nE "approved|rm -f|active-reviewer"`
+#      is a purely READ-ONLY command, but the `|`-preceded "rm " substring
+#      INSIDE its own quoted pattern argument satisfies the shared
+#      matcher's `[;&|(]`-anchored file-mover regex (which can't see
+#      quoting). Since no OTHER write family matches either case,
+#      `bash_command_is_deletion_only` returns true for both — one
+#      exemption closes both.
+#
+#   2. Writing to a NON-marker path (a scratchpad file) whose CONTENT
+#      happens to mention a marker-shaped variable — e.g. a review body
+#      written via heredoc that quotes the hook's own `$marker` token in
+#      prose — tripped the `\$\{?[a-z_]*marker[a-z_]*\}?` substring scan
+#      even though the write's actual TARGET was nowhere near
+#      .claude/session/reviews/. Fix: judge the RESOLVED WRITE TARGET(S)
+#      first, via `bash_extract_write_targets` (the plural extractor #886
+#      already added for gate-bypass safety). A real write target that's
+#      a clean literal path AND isn't marker-shaped is conclusive — no
+#      marker is being touched. The broader indirection scan
+#      (`_is_marker_plausible_indirect`) only runs as a fallback: no
+#      target was extractable at all, or an extracted target is itself
+#      variable-derived (so it *might* still resolve to a marker) — and
+#      even then, over TEXT with heredoc BODY content stripped out first
+#      (`_strip_heredoc_bodies`), so payload prose can no longer
+#      masquerade as destination code. This does NOT touch the sanctioned
+#      reviewer idiom (`REX_MARKER=$(review_marker_path ...); printf ... >
+#      "$REX_MARKER"`) — that idiom's target IS a *_MARKER-named variable,
+#      matched directly per-target, same detection as before.
+#
+#   3. The literal "active-reviewer" substring signal (previously one of
+#      _is_marker_plausible_indirect's OR-conditions) was ALSO found to
+#      block the orchestrator's own documented SET step (code-review/
+#      SKILL.md § 0's `printf '%s\n' "<owner>/<repo>#<pr>:rex" >
+#      "$ops_root/.claude/session/active-reviewer"`) — role can never
+#      resolve for that write (no `review_marker_path` call in it), so it
+#      hit the same fail-closed-on-unresolved-role path as a real forgery
+#      attempt. Checked whether this signal was actually load-bearing: it
+#      was not — the IDENTICAL write via the Write tool (file_path =
+#      ".../active-reviewer") was never matched by this hook at all
+#      (`_is_marker_target`'s pattern requires the reviews/ dir + an
+#      -approved suffix, which active-reviewer's path never has), so a
+#      Write-tool-based forgery of active-reviewer sailed through ungated
+#      on both sides of #1000. The Bash-only substring match was
+#      inconsistent swiss cheese that blocked the legitimate flow without
+#      closing the actual hole — removed. Per this hook's own pre-existing
+#      THREAT MODEL note (above): forging active-reviewer by hand remains
+#      a visible/auditable rule violation, not a technically-prevented
+#      one — unchanged by #1000, just now consistent across both tool
+#      shapes instead of blocking Bash only.
+#
+# What did NOT change: a genuine indirect marker write with an unresolved
+# role or PR still fails closed exactly as #962/#974/#977/#992
+# established — the per-target *_MARKER-convention match, the
+# `review_marker_path`-call role/PR extraction, and the fail-closed
+# _active_reviewer_allows() guards are all unchanged. #1000 narrows what
+# counts as "a write worth judging" and "where to look for the marker
+# signal" — it does not loosen what happens once something IS judged to
+# be one.
+#
+# References: #728, #843, #873, #957, #962, #974, #1000, AgDR-0062,
+#             AgDR-0104,
 #             .claude/rules/pr-workflow.md § "Build agents cannot self-review"
 
 set -u
@@ -175,29 +252,77 @@ _is_marker_target() {
   echo "$text" | grep -qE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved'
 }
 
-# _is_marker_plausible_indirect COMMAND (#962)
+# _is_marker_plausible_indirect TEXT (#962, narrowed #1000)
 #
-# True when COMMAND performs a write with no literal marker path in sight,
-# but still plausibly targets a review marker via the documented
+# True when TEXT plausibly targets a review marker via the documented
 # indirection idiom:
 #   REX_MARKER=$(review_marker_path "$REPO" "$PR" rex "$MARKER_HOME")
 #   printf '%s\n' "$SHA" > "$REX_MARKER"
 #
 # Signals (any one is sufficient):
-#   - a `review_marker_path` call anywhere in the command
+#   - a `review_marker_path` call anywhere in TEXT
 #   - a literal `.claude/session/reviews/` directory mention (without a full
 #     matched filename — e.g. a directory-only reference, or a path built
 #     via concatenation rather than a single contiguous literal)
-#   - a literal `active-reviewer` mention
 #   - a write-target-shaped variable name following the established
 #     *_MARKER convention this codebase's reviewers use (REX_MARKER,
 #     CEO_MARKER, SECURITY_MARKER, ARCH_MARKER, ARCHITECTURE_MARKER, …)
+#
+# #1000 removed the bare `active-reviewer` mention as a signal here — it
+# was never load-bearing (see the #1000 header comment, point 3) and was
+# blocking both the orchestrator's documented cleanup AND set steps for
+# that unrelated session marker. Forging *.approved marker CONTENT is
+# this function's job; managing active-reviewer is not.
+#
+# Called two ways (both #1000):
+#   - per WRITE TARGET (a short string) — the primary, precise path
+#   - as a fallback over the whole command with heredoc bodies stripped
+#     (`_strip_heredoc_bodies`) — only when no clean literal target was
+#     found, so payload prose can't masquerade as destination code
 _is_marker_plausible_indirect() {
   local text="$1"
-  if echo "$text" | grep -qE 'review_marker_path|\.claude/session/reviews/|active-reviewer'; then
+  if echo "$text" | grep -qE 'review_marker_path|\.claude/session/reviews/'; then
     return 0
   fi
   echo "$text" | grep -qiE '\$\{?[a-z_]*marker[a-z_]*\}?'
+}
+
+# _strip_heredoc_bodies TEXT (#1000)
+#
+# Removes heredoc BODY content (the lines between a `<<[-]DELIM` marker and
+# its closing DELIM line) from TEXT, keeping the marker line itself and
+# everything outside the heredoc untouched. Heredoc content is DATA a
+# command writes, never code that determines WHERE it writes — scanning it
+# for marker-shaped substrings is how a review body that merely QUOTES the
+# hook's own `$marker` token in prose used to trip the indirect-write
+# fallback scan (see #1000 header comment, point 2). Best-effort: handles
+# the common `<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF` forms. An unparseable
+# or absent heredoc is a no-op (TEXT returned unchanged).
+_strip_heredoc_bodies() {
+  local text="$1"
+  awk '
+    BEGIN { in_hd = 0; delim = "" }
+    {
+      line = $0
+      if (in_hd) {
+        check = line
+        gsub(/^\t+/, "", check)
+        if (check == delim) { in_hd = 0 }
+        next
+      }
+      if (match(line, /<<-?[[:space:]]*[\x27\x22]?[A-Za-z_][A-Za-z0-9_]*[\x27\x22]?/)) {
+        tok = substr(line, RSTART, RLENGTH)
+        d = tok
+        sub(/^<<-?[[:space:]]*/, "", d)
+        gsub(/[\x27\x22]/, "", d)
+        delim = d
+        in_hd = 1
+        print line
+        next
+      }
+      print line
+    }
+  ' <<< "$text"
 }
 
 # _extract_marker_role COMMAND (#962)
@@ -255,30 +380,80 @@ case "$TOOL_NAME" in
       IS_WRITE=1
       bash_command_appears_to_write "$COMMAND" || IS_WRITE=0
 
-      if [ "$IS_WRITE" = "1" ] && _is_marker_target "$COMMAND"; then
-        # Literal marker path present AND this command actually performs a
-        # write — not just a read that happens to mention the path (#962
-        # fix for the false-positive half of the bug: a bare `cat`/`grep`/
-        # `head` on a literal marker path is no longer blocked).
-        MATCHED=1
-        TARGET=$(echo "$COMMAND" | grep -oE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved' | head -1)
-        RESOLVED_VIA="literal"
-      elif [ "$IS_WRITE" = "1" ] && _is_marker_plausible_indirect "$COMMAND"; then
-        # No literal path in the command text, but it performs a write AND
-        # plausibly targets a review marker via variable/function
-        # indirection (#962 fix for the false-negative half of the bug) —
-        # e.g. REX_MARKER=$(review_marker_path ...); printf ... > "$REX_MARKER"
-        MATCHED=1
-        RESOLVED_VIA="indirect"
-        MARKER_TYPE=$(_extract_marker_role "$COMMAND")
-        TARGET_PR=$(_extract_marker_pr "$COMMAND")
-        TARGET="<resolved via variable/function indirection; detected role: ${MARKER_TYPE:-unresolved}, pr: ${TARGET_PR:-unresolved}>"
+      # #1000 point 1: a command whose ONLY write-like signal is deletion
+      # (rm, with no redirection/tee/sed-i/cp/mv/dd/install/interpreter-
+      # write also present) cannot FORGE marker content — it can only
+      # remove a file. `bash_command_is_deletion_only` is the same helper
+      # require-active-ticket.sh already uses for the identical "rm can't
+      # add content" reasoning. This also incidentally closes the
+      # `grep -nE "approved|rm -f|active-reviewer"` read-only false
+      # positive — see the #1000 header comment for why both collapse to
+      # the same exemption.
+      if [ "$IS_WRITE" = "1" ] && bash_command_is_deletion_only "$COMMAND"; then
+        IS_WRITE=0
+      fi
+
+      if [ "$IS_WRITE" = "1" ]; then
+        # #1000 point 2: judge the RESOLVED WRITE TARGET(S), not the
+        # command's prose. A heredoc BODY, a --body argument, or any other
+        # payload text a command writes is DATA, never the destination.
+        SCAN_TEXT=$(_strip_heredoc_bodies "$COMMAND")
+        WRITE_TARGETS=$(bash_extract_write_targets "$COMMAND")
+        HAS_VAR_TARGET=0
+        if [ -n "$WRITE_TARGETS" ]; then
+          while IFS= read -r wt; do
+            [ -z "$wt" ] && continue
+            case "$wt" in *'$'*) HAS_VAR_TARGET=1 ;; esac
+            if [ "$MATCHED" != "1" ] && _is_marker_target "$wt"; then
+              # A real extracted write target is a literal marker path —
+              # unambiguous, regardless of what else the command's text
+              # says elsewhere (#962 behaviour, now target-scoped).
+              MATCHED=1
+              TARGET="$wt"
+              RESOLVED_VIA="literal"
+            elif [ "$MATCHED" != "1" ] && _is_marker_plausible_indirect "$wt"; then
+              # The write target ITSELF is a *_MARKER-named variable (the
+              # sanctioned reviewer idiom) or names the reviews/ dir — e.g.
+              # REX_MARKER=$(review_marker_path ...); printf ... > "$REX_MARKER"
+              MATCHED=1
+              RESOLVED_VIA="indirect"
+            fi
+          done <<EOF_TARGETS
+$WRITE_TARGETS
+EOF_TARGETS
+        fi
+
+        if [ "$MATCHED" != "1" ] && { [ -z "$WRITE_TARGETS" ] || [ "$HAS_VAR_TARGET" = "1" ]; }; then
+          # Fallback broader scan — only reached when either (a) no target
+          # was extractable at all (an embedded interpreter with an opaque
+          # write target this library can't parse), or (b) at least one
+          # extracted target is itself variable-derived (e.g.
+          # `$DIR/mystery.approved`, built from a variable that a PRIOR
+          # statement — not the target text itself — assigns from a
+          # reviews-dir literal) and so might still resolve to a marker
+          # even though the target text alone didn't say so. Runs over
+          # heredoc-stripped text so payload prose can't trip it (#1000
+          # point 2); a fully literal, non-marker, non-variable target is
+          # treated as conclusive and never reaches this fallback.
+          if _is_marker_plausible_indirect "$SCAN_TEXT"; then
+            MATCHED=1
+            RESOLVED_VIA="indirect"
+          fi
+        fi
+
+        if [ "$MATCHED" = "1" ] && [ "$RESOLVED_VIA" = "indirect" ]; then
+          MARKER_TYPE=$(_extract_marker_role "$SCAN_TEXT")
+          TARGET_PR=$(_extract_marker_pr "$SCAN_TEXT")
+          TARGET="<resolved via variable/function indirection; detected role: ${MARKER_TYPE:-unresolved}, pr: ${TARGET_PR:-unresolved}>"
+        fi
       fi
     else
       # Library unavailable — fall back to the pre-#962 literal-substring
       # check with no read/write distinction (conservative: re-applies the
       # known false-positive-on-read limitation, but doesn't newly weaken
-      # anything that was previously caught).
+      # anything that was previously caught). #1000's target-based
+      # narrowing depends on this same library, so it is unavailable here
+      # too — unchanged fallback, matching case25's locked-in behaviour.
       if _is_marker_target "$COMMAND"; then
         MATCHED=1
         TARGET=$(echo "$COMMAND" | grep -oE '\.claude/session/reviews/[^[:space:]"'"'"']+-(rex|ceo|security|architecture)\.approved' | head -1)
