@@ -38,6 +38,8 @@ AgDR-0104 deferred its CI meta-gate pending "a third *independent* incident" —
 
 Different session, not degraded, different root causes. **`here-doc` appears verbatim in AgDR-0104's list of unbounded expressions** — the class recurred exactly where it was predicted. The trigger has fired.
 
+**On the count, taken at its strictest.** A reader could argue AgDR-0104's own "n=2 are correlated" collapses #962 and #965 into a single data point, making today only the *second* independent incident rather than the third. Two things answer that. First, today supplies **two** further bypasses (interpreter heredoc and BSD `sed -i`) with distinct root causes, so even on the collapsing reading the count reaches three. Second, and more to the point, the deferral's stated purpose was to wait until the class was *proven to recur* rather than to reach an arbitrary tally — and a bypass landing on a construct AgDR-0104 had already listed by name, inside the fix for the previous bypass, is stronger proof of recurrence than a third unrelated incident would have been. The condition is met on either reading.
+
 ### The cost being paid meanwhile
 
 In one session the blocking behaviour produced roughly **fourteen false positives**: a read-only `grep` whose *pattern string* contained the trigger words; an `rm` cleanup; an `echo` whose prose mentioned them; the sanctioned reviewer's own sign-off write **with the session marker correctly set**; and a command that merely declared a variable named `MARKER_HOME` — the name the framework's own agent spec recommends. Reviewers worked around it by base64-encoding literals and splitting filenames across `printf` calls.
@@ -64,7 +66,15 @@ Chosen: **E.** Three parts, in order.
 
 **2. Block only on a confidently-resolved marker target; warn on ambiguity.** When the hook resolves a write target to a marker path, block — that is the #843 shape and it works. When it cannot resolve role and PR (`detected role: unresolved, pr: unresolved`), emit the advisory banner and exit 0.
 
-This is not a weakening dressed as a fix. Failing open on ambiguity is *correct for a backstop* and wrong only for THE control — which, per part 1, this is not. It converts every false positive observed today into a warning while leaving the case that motivated blocking fully gated. A build agent writing a literal marker path is still blocked; a reviewer grepping for the word is not.
+This is not a weakening dressed as a fix. It converts every false positive observed today into a warning while leaving the case that motivated blocking fully gated. A build agent writing a literal marker path is still blocked; a reviewer grepping for the word is not.
+
+**Reconciling this with AgDR-0104's fail-closed instruction.** AgDR-0104 § Decision directs: *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must **block**, not allow)"* — and **#962 is this very hook**. Resting on the backstop label alone would be too thin, since the labelling requirement came from AgDR-0104 in the same breath; relabelling would then look like a way to escape its own instruction.
+
+The reconciliation is not the label, it is **what the precondition is about**. In #965 the merge gate could not evaluate whether the *protected action* was authorised, and allowed it anyway — an unverified merge proceeded. That is what "must block" governs: never admit the protected action without verifying it.
+
+This hook's ambiguity is a different question one level up. When it cannot resolve a role and PR, it does not know whether the command **is a marker write at all** — not whether an established marker write is authorised. Failing open there **declines jurisdiction**; it does not admit an unverified action. The evidence is unanimous: every false positive enumerated above — a `grep`, an `rm`, an `echo`, a bare variable declaration — was not a marker write. Blocking them protected nothing, because there was no protected action present to protect.
+
+So AgDR-0104's rule is preserved exactly where it applies. A command that *does* resolve to a marker target is the protected action, and it still blocks, fail-closed. Ambiguity about whether the action exists is not the same as ambiguity about whether it is authorised, and only the latter is what "must block, not allow" was written for.
 
 **3. Activate AgDR-0104's deferred CI meta-gate.** Its trigger has fired on its own stated terms. A trust-chain hook must ship with a paired **adversarial** test — one that attempts bypass shapes, not merely asserts the happy path. Seed it with the shapes now known: interpreter heredocs, BSD vs GNU `sed -i`, variable indirection (#962) — and the false-positive direction too, because a gate can fail by over-firing and today it mostly did.
 
@@ -84,5 +94,6 @@ The tests written in each of the three rounds all covered the shapes their autho
 - Ticket: me2resh/apexyard#1015
 - Live bypasses closed by PR #1011 (round 2) — this decision is about the gate's design, not those two fixes
 - Supersedes the deferral in [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) § Consequences ("CI meta-gate, trigger: a 3rd independent bypass incident")
+- **Qualifies** [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) § Decision step 1 — *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must block, not allow)"* — as it applies to **#962 / this hook only**. The instruction stands unchanged where the precondition concerns whether a *resolved* protected action is authorised; it does not extend to ambiguity about whether a protected action is present at all. See § Decision part 2 for the reasoning. **#965 and the merge gate are untouched by this qualification.**
 - Re-affirms [AgDR-0062](AgDR-0062-rex-marker-authenticity.md)'s accepted exposure and its rejection of the structured-marker and posted-review options
 - Related: [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md) (the local marker is the gate signal), #962, #965, #843, #1000
