@@ -76,22 +76,43 @@ PREV_TAG=$(git describe --tags --abbrev=0 upstream/main)
 # e.g. PREV_TAG=v3.2.0, so next is v3.3.0 (minor bump because of feat: commits)
 VERSION=v3.3.0
 
-# 3. Generate the CHANGELOG section
+# 3. Generate the CHANGELOG section — capture stderr too: it carries the
+#    exact commit range the script used (trailer-anchored, or the #737
+#    sync-boundary fallback). The count-mismatch guard below needs it (#1002)
+#    — DO NOT substitute `git rev-list --count upstream/main..upstream/dev`;
+#    under the release-cut squash model that range only ever grows and always
+#    false-positives the guard (v5.2.0 cut: 402 raw commits vs. ~1 real entry).
 PREV_TAG="$PREV_TAG" HEAD_REF="upstream/dev" VERSION="$VERSION" DATE="$(date +%F)" \
-  bash bin/release-changelog.sh > /tmp/changelog-section.md
+  bash bin/release-changelog.sh > /tmp/changelog-section.md 2>/tmp/release-changelog-range.txt
+LOG_RANGE=$(grep -oE 'RELEASE_CHANGELOG_RANGE=.*' /tmp/release-changelog-range.txt | cut -d= -f2-)
 # Review and edit /tmp/changelog-section.md
+
+RAW_COUNT=$(git rev-list --count "$LOG_RANGE")
+ENTRY_COUNT=$(grep -E '^- ' /tmp/changelog-section.md | grep -vcE '^- Closes ' || true)
+GAP=$(( RAW_COUNT - ${ENTRY_COUNT:-0} ))
+if [ "$GAP" -gt 5 ]; then
+  echo "WARNING: $LOG_RANGE has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries." >&2
+fi
 
 # 4. Prepend to CHANGELOG.md
 cat /tmp/changelog-section.md CHANGELOG.md > /tmp/cl_new.md
 mv /tmp/cl_new.md CHANGELOG.md
 
-# 5. Cut release branch from dev
+# 5. Cut release branch from dev — the Released-From trailer goes in THIS
+#    commit message, as its own final paragraph. It is the sole commit on
+#    the branch, so it is what a squash merge carries forward (see step 7).
+DEV_SHA=$(git rev-parse upstream/dev)
 git checkout -b "release/$VERSION" upstream/dev
 git add CHANGELOG.md
-git commit -m "chore: release $VERSION"
+git commit -m "chore: release $VERSION
+
+Refs #<release-ticket>
+
+Released-From: $DEV_SHA"
 git push upstream "release/$VERSION"
 
-# 6. Open release PR
+# 6. Open release PR — the PR body ALSO carries the trailer as its own final
+#    line (human visibility on the PR page), matching the commit above.
 gh pr create \
   --repo me2resh/apexyard \
   --base main \
@@ -103,7 +124,20 @@ gh pr create \
 # 7. Run normal review flow on the PR
 #    - /code-review
 #    - /approve-merge <pr>
-#    - gh pr merge <pr> --squash
+#    - Merge with an EXPLICIT subject + body — never a bare `gh pr merge
+#      --squash` (#1004). This repo has squash_merge_commit_message=
+#      COMMIT_MESSAGES, which builds the squash body from the branch's own
+#      commits, not the PR body — so relying on the PR body alone silently
+#      drops the trailer. Passing --body-file guarantees the merged commit
+#      matches exactly what was reviewed, independent of that repo setting:
+gh pr merge <pr> --repo me2resh/apexyard --squash \
+  --subject "release(#<ticket>): $VERSION" \
+  --body-file /tmp/release-pr-body.md
+
+# 7b. Verify the trailer landed — do not skip, do not proceed to step 9 if empty:
+git fetch upstream main
+TRAILER=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' upstream/main)
+[ -n "$TRAILER" ] || { echo "ERROR: Released-From trailer missing on main." >&2; exit 1; }
 
 # 8. After merge: CI auto-tags (auto-tag-on-release-pr-merge.yml)
 #    If CI fails, tag manually:

@@ -345,6 +345,53 @@ contains "script exits cleanly despite the bogus sha" "EXIT_CODE=0" "$out"
 contains "falls back to sync heuristic (post-sync work included)" "unreleased work after late sync" "$out"
 not_contains "falls back to sync heuristic (pre-sync work excluded, same as #737 fallback)" "unreleased work before late sync" "$out"
 
+# ── Test: #1002 — release_desc join has a space after every comma ───────────
+# Regression test for the v5.2.0 cut's "2 features,13 fixes,14 improvements."
+# (no space after the commas) — `${arr[*]}` with IFS=', ' only joins on the
+# first IFS char, silently dropping the space.
+echo "--- #1002 release_desc comma spacing ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v13.0.0
+  mc "feat(#1301): first feature"
+  mc "feat(#1302): second feature"
+  mc "fix(#1303): first fix"
+  mc "chore(#1304): first chore"
+  PREV_TAG="v13.0.0" HEAD_REF="HEAD" VERSION="v13.1.0" DATE="2026-07-24" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "space after first comma" "2 features, 1 fix" "$out"
+contains "space after second comma" "1 fix, 1 improvement" "$out"
+not_contains "no unspaced comma before 'fix'" "features,1" "$out"
+not_contains "no unspaced comma before 'improvement'" "fix,1" "$out"
+
+# ── Test: #1002 — RELEASE_CHANGELOG_RANGE is printed to stderr, not stdout ──
+# The /release skill's count-mismatch guard needs the exact range the script
+# resolved (trailer-anchored or #737-fallback) to compare against, instead of
+# the structurally-wrong `main..dev` (#1002). Verify it is emitted on stderr
+# (so it never pollutes the changelog markdown on stdout) and matches the
+# trailer-anchored range when a trailer is present.
+echo "--- #1002 RELEASE_CHANGELOG_RANGE on stderr ---"
+stderr_capture=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  CUT=$(git rev-parse HEAD)
+  git commit -q --allow-empty -m "chore: release v14.0.0" -m "Released-From: $CUT"
+  git tag v14.0.0
+  mc "feat(#1401): unreleased feature"
+  stdout_out=$(PREV_TAG="v14.0.0" HEAD_REF="HEAD" VERSION="v14.1.0" DATE="2026-07-24" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>"'"$stderr_capture"'")
+  echo "STDOUT_HAS_RANGE_LINE=$(echo "$stdout_out" | grep -c "RELEASE_CHANGELOG_RANGE=" || true)"
+  echo "EXPECT_SHA=$CUT"
+')
+stderr_out=$(cat "$stderr_capture")
+rm -f "$stderr_capture"
+contains "range line NOT on stdout" "STDOUT_HAS_RANGE_LINE=0" "$out"
+contains "range line present on stderr" "RELEASE_CHANGELOG_RANGE=" "$stderr_out"
+# Cross-check the printed range is anchored on the trailer sha, not main..dev.
+expect_sha=$(echo "$out" | grep -oE 'EXPECT_SHA=.*' | cut -d= -f2)
+contains "stderr range is anchored on the trailer sha" "RELEASE_CHANGELOG_RANGE=${expect_sha}..HEAD" "$stderr_out"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""
