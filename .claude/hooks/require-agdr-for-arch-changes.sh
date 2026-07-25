@@ -4,20 +4,23 @@
 #   (a) an AgDR reference in the commit message (AgDR-NNNN / docs/agdr/AgDR-…), OR
 #   (b) a new AgDR file in the staged changes (docs/agdr/AgDR-NNNN-*.md)
 #
-# Enforces .claude/rules/agdr-decisions.md § "Pre-commit hook warns if
-# architecture files changed without an AgDR reference" — which was prose-only
-# until this hook shipped.
+# Enforces .claude/rules/agdr-decisions.md § "Enforcement — and the honest
+# limits of it" — this hook is the mechanical, commit-time half of that
+# table; the rule itself was prose-only until this hook shipped.
 #
-# What counts as "architecture":
-#   - infrastructure/**              (terraform, pulumi, cdk, cfn)
-#   - *.tf, *.tfvars                 (terraform)
+# What counts as "architecture" (a conservative proxy for the materiality
+# threshold in agdr-decisions.md § "The threshold" — CI/CD or infra design,
+# in this hook's case):
+#   - *.tf, *.tfvars                   (terraform, at any depth)
 #   - docker-compose*.yml, Dockerfile* (container orchestration)
-#   - .github/workflows/**           (CI/CD pipeline changes)
+#   - .github/workflows/**             (CI/CD pipeline changes)
 #
-# Deliberately NARROW. Dependency bumps (package.json, go.mod, etc.) and API
-# schema changes are NOT included — too noisy, not all changes need an AgDR.
-# Projects that want a broader list can override via
-# .claude/project-config.json `.architecture_paths` (a JSON array of globs).
+# Deliberately NARROW, and deliberately does NOT include a bare
+# `infrastructure/**` pattern — see the false-positive note below ARCH_GLOBS.
+# Dependency bumps (package.json, go.mod, etc.) and API schema changes are
+# also NOT included — too noisy, not all changes need an AgDR. Projects that
+# want a broader list can override via .claude/project-config.json
+# `.architecture_paths` (a JSON array of globs).
 #
 # Multi-line -m messages are handled the same way as verify-commit-refs.sh:
 # flatten newlines before sed parsing.
