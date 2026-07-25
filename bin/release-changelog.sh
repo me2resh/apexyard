@@ -108,6 +108,15 @@ else
   fi
 fi
 
+# ── Expose the resolved range to the caller (#1002) ──────────────────────────
+# The /release skill's count-mismatch guard used to compare the changelog's
+# entry count against `git rev-list --count upstream/main..upstream/dev` —
+# structurally wrong under the release-cut squash model, where main..dev never
+# shrinks (see #1002). The guard should compare against the SAME range this
+# script actually generated the changelog from. Printed to stderr (not
+# stdout) so it never pollutes the changelog markdown callers capture.
+echo "RELEASE_CHANGELOG_RANGE=${LOG_RANGE}" >&2
+
 # ── Extract commits ──────────────────────────────────────────────────────────
 # Format: <short-sha> <subject>
 # We use %h (abbreviated sha) and %s (subject) so merge commits are included.
@@ -222,8 +231,19 @@ desc_parts=()
 [ "${#changed_lines[@]}" -gt 0 ] && desc_parts+=("${#changed_lines[@]} improvement$([ "${#changed_lines[@]}" -gt 1 ] && echo 's' || echo '')")
 
 if [ "${#desc_parts[@]}" -gt 0 ]; then
-  IFS=', '; release_desc="$bump_type — ${desc_parts[*]}."
-  IFS=$' \t\n'
+  # NB: `${arr[*]}` only joins on the FIRST character of IFS, even when IFS is
+  # set to a multi-char string like ', ' — that dropped the space and produced
+  # "2 features,13 fixes,14 improvements." on the v5.2.0 cut (#1002). Join
+  # explicitly instead of relying on IFS-based array expansion.
+  joined=""
+  for part in "${desc_parts[@]}"; do
+    if [ -z "$joined" ]; then
+      joined="$part"
+    else
+      joined="$joined, $part"
+    fi
+  done
+  release_desc="$bump_type — ${joined}."
 else
   release_desc="$bump_type."
 fi
