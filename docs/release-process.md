@@ -87,11 +87,28 @@ PREV_TAG="$PREV_TAG" HEAD_REF="upstream/dev" VERSION="$VERSION" DATE="$(date +%F
 LOG_RANGE=$(grep -oE 'RELEASE_CHANGELOG_RANGE=.*' /tmp/release-changelog-range.txt | cut -d= -f2-)
 # Review and edit /tmp/changelog-section.md
 
-RAW_COUNT=$(git rev-list --count "$LOG_RANGE")
+# #1017: fail CLOSED on a missing/unparseable range instead of letting an
+# empty $LOG_RANGE silently flow into `git rev-list --count ""` below (its
+# stderr never reaches $RAW_COUNT, so the guard would otherwise read a
+# "0 commits" pass — AgDR-0104: a gate that can't evaluate its precondition
+# must block, not allow).
+if [ -z "$LOG_RANGE" ]; then
+  echo "ERROR: RELEASE_CHANGELOG_RANGE missing from /tmp/release-changelog-range.txt — the count-mismatch guard has nothing to check. Do not proceed." >&2
+  exit 1
+fi
+RAW_COUNT=$(git rev-list --count "$LOG_RANGE") || {
+  echo "ERROR: 'git rev-list --count $LOG_RANGE' failed — cannot evaluate the count-mismatch guard. Do not proceed." >&2
+  exit 1
+}
 ENTRY_COUNT=$(grep -E '^- ' /tmp/changelog-section.md | grep -vcE '^- Closes ' || true)
-GAP=$(( RAW_COUNT - ${ENTRY_COUNT:-0} ))
+[ -n "$ENTRY_COUNT" ] || ENTRY_COUNT=0
+GAP=$(( RAW_COUNT - ENTRY_COUNT ))
 if [ "$GAP" -gt 5 ]; then
-  echo "WARNING: $LOG_RANGE has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries." >&2
+  # #1017: RAW_COUNT and ENTRY_COUNT both derive from $LOG_RANGE now, so this
+  # gap means commits genuinely inside the range aren't classifying into
+  # changelog entries — not a truncated range (that failure mode is closed at
+  # the trailer-anchoring source; see AgDR-0094 and step 7b below).
+  echo "WARNING: $LOG_RANGE has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries (some commits inside the range didn't classify into an entry)." >&2
 fi
 
 # 4. Prepend to CHANGELOG.md
