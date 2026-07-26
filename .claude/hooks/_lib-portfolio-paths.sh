@@ -121,9 +121,42 @@ _portfolio_root() {
 # echoes the original input unchanged rather than an empty/broken path —
 # unlike require-active-ticket.sh's fail-CLOSED security check, a
 # portfolio path resolver has no "block on doubt" contract to uphold.
+#
+# Windows/MSYS drive-letter normalization (me2resh/apexyard#1018): on
+# Windows Git Bash, `git rev-parse --show-toplevel` (git.exe is a native
+# Windows binary) returns a drive-letter path like "D:/Projs/fork", but
+# `cd ... && pwd -P` (run directly by bash, an MSYS binary) returns the
+# MSYS mount-point form "/d/Projs/fork" for the SAME location. The two
+# spellings are byte-different for one identical path. Before this fix,
+# the `case "$p" in /*)` guard below didn't recognize a drive-letter path
+# as absolute at all, so it hit the `*)` fallback and was returned RAW,
+# un-normalized — while a caller that instead ran `cd "$root" && pwd -P`
+# directly (portfolio_validate's root_real/wd_real) got the MSYS form.
+# Comparing the two forms via a string prefix match then always failed,
+# even for a perfectly valid, non-split single-fork setup.
+#
+# Fix: normalize a leading `<letter>:/` or `<letter>:\` to `/<letter>/`
+# BEFORE the absolute-path check, as a pure string transform — no
+# dependency on cygpath (absent on macOS/Linux) or on cd/pwd actually
+# resolving a real drive letter (which only MSYS's runtime does). This
+# is a no-op for every POSIX path: a real absolute path always starts
+# with "/", never with "<letter>:", so this branch is simply never
+# entered outside a Windows-drive-letter input.
 # ------------------------------------------------------------------------------
 _portfolio_canonicalize() {
   local p="$1" dir tail=""
+
+  case "$p" in
+    [A-Za-z]:/*|[A-Za-z]:\\*)
+      local drive rest
+      drive="${p%%:*}"
+      rest="${p#*:}"
+      rest="$(printf '%s' "$rest" | tr '\\' '/')"
+      drive="$(printf '%s' "$drive" | tr '[:upper:]' '[:lower:]')"
+      p="/${drive}${rest}"
+      ;;
+  esac
+
   case "$p" in
     /*) : ;;
     *) echo "$p"; return 0 ;;  # not absolute — nothing to canonicalize
