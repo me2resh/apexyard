@@ -47,9 +47,19 @@
 _LIB_FRESH_FORK_SOURCED=1
 
 # Locate the lib's own dir so we can source siblings (read-config, portfolio-paths).
-_FRESH_FORK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
+# default avoids a hard "parameter not set" error; the git-rev-parse
+# fallback is the actual portability fix (works under any shell).
+_FRESH_FORK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+if [ -z "$_FRESH_FORK_LIB_DIR" ] || [ ! -f "$_FRESH_FORK_LIB_DIR/_lib-read-config.sh" ]; then
+  _fresh_fork_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_fresh_fork_root" ] && [ -f "$_fresh_fork_root/.claude/hooks/_lib-read-config.sh" ]; then
+    _FRESH_FORK_LIB_DIR="$_fresh_fork_root/.claude/hooks"
+  fi
+  unset _fresh_fork_root
+fi
 
-if [ -f "$_FRESH_FORK_LIB_DIR/_lib-read-config.sh" ]; then
+if [ -n "$_FRESH_FORK_LIB_DIR" ] && [ -f "$_FRESH_FORK_LIB_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$_FRESH_FORK_LIB_DIR/_lib-read-config.sh"
 fi

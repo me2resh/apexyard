@@ -134,7 +134,19 @@
 # resolution. Guarded: only source if not already defined and the lib is
 # present. tracker_kind defaults to "gh" with no config, preserving gh behaviour.
 if ! command -v tracker_kind >/dev/null 2>&1; then
-  _lib_extract_pr_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)"
+  # ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
+  # default avoids a hard "parameter not set" error, but an empty value
+  # still makes `dirname` resolve to ".", i.e. the CALLER's cwd rather than
+  # this lib's real directory, which usually (harmlessly) misses the `-f`
+  # check below. The git-rev-parse fallback is the actual portability fix.
+  _lib_extract_pr_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd 2>/dev/null)"
+  if [ -z "$_lib_extract_pr_dir" ] || [ ! -f "$_lib_extract_pr_dir/_lib-tracker.sh" ]; then
+    _lib_extract_pr_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    if [ -n "$_lib_extract_pr_root" ] && [ -f "$_lib_extract_pr_root/.claude/hooks/_lib-tracker.sh" ]; then
+      _lib_extract_pr_dir="$_lib_extract_pr_root/.claude/hooks"
+    fi
+    unset _lib_extract_pr_root
+  fi
   if [ -n "$_lib_extract_pr_dir" ] && [ -f "$_lib_extract_pr_dir/_lib-tracker.sh" ]; then
     # shellcheck source=/dev/null
     . "$_lib_extract_pr_dir/_lib-tracker.sh"

@@ -146,7 +146,21 @@ set -u
 _PREMIUM_HOOK_DIR_CACHE=""
 _premium_hook_dir() {
   if [ -z "$_PREMIUM_HOOK_DIR_CACHE" ]; then
-    _PREMIUM_HOOK_DIR_CACHE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025). This file
+    # sets `set -u` above, so a bare reference would hard-error immediately
+    # if ever sourced under zsh (e.g. manual debugging) — worse than the
+    # usual silent-wrong-dir failure mode, because `set -u` also persists
+    # into the CALLING shell (this file is sourced, not subshelled). The
+    # `:-` default neutralises that; the git-rev-parse fallback is the
+    # actual portability fix (works under any shell).
+    _PREMIUM_HOOK_DIR_CACHE="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+    if [ -z "$_PREMIUM_HOOK_DIR_CACHE" ] || [ ! -f "$_PREMIUM_HOOK_DIR_CACHE/_lib-premium-hook.sh" ]; then
+      local _premium_root
+      _premium_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+      if [ -n "$_premium_root" ] && [ -f "$_premium_root/.claude/hooks/_lib-premium-hook.sh" ]; then
+        _PREMIUM_HOOK_DIR_CACHE="$_premium_root/.claude/hooks"
+      fi
+    fi
   fi
   printf '%s' "$_PREMIUM_HOOK_DIR_CACHE"
 }
