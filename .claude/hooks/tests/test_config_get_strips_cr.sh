@@ -109,11 +109,16 @@ last="$(config_get '.branch.type_whitelist[]' | tail -n1)"
 check "last element of a multi-line read is intact" "chore" "$last"
 
 # --- 6. a value ending in a literal 'r' survives ------------------------------
-# The reason `_CR` holds a real CR byte instead of the string `\r`: POSIX does
-# not specify `\r` as a BRE escape, so an implementation is free to read it as a
-# literal `r`. Under such a sed, `s/\r$//` would silently truncate every value
-# ending in 'r' — 'reviewer' -> 'reviewe'. That is a wrong VALUE, not a no-op,
-# and it would sail past every other check in this file. This case pins it.
+# Asserts the behavioural contract: a value ending in 'r' comes back whole.
+#
+# Be precise about what this does and does not catch, because the obvious
+# reading is wrong. On a CONFORMING sed this passes whether the code uses
+# `$_CR` or a literal `\r`, so it does NOT catch a maintainer swapping one for
+# the other — case 8 below exists for that. What it catches is a sed that reads
+# `\r` as a literal 'r' (POSIX leaves that undefined), which we can only reach
+# by sabotaging `_CR` to the string `r` — and note it then fails via the CR
+# SURVIVING, not via truncation, since the stub leaves the value as
+# 'active-reviewer\r' and `s/r$//` cannot match a trailing CR.
 cat > "$TMP/.claude/project-config.json" <<'JSON'
 { "custom": { "value": "before\rafter", "ends_in_r": "active-reviewer" } }
 JSON
@@ -132,6 +137,20 @@ _CONFIG_CACHE=""
 _CONFIG_ROOT_CACHE=""
 inner="$(config_get '.custom.value' | tr -dc '\r' | wc -c | tr -d ' ')"
 check "mid-string carriage return is preserved, not stripped" "1" "$inner"
+
+# --- 8. the source does not rely on a `\r` escape inside sed ------------------
+# The realistic regression is a maintainer "simplifying" `sed "s/${_CR}\$//"`
+# into `sed 's/\r$//'`. Every runtime check above passes on a conforming sed,
+# so no behavioural test on this machine can catch it — it would only surface
+# on whichever platform we cannot run. Assert it at the SOURCE level instead,
+# which works on every platform because it never executes sed at all.
+lib="$HOOK_DIR/_lib-read-config.sh"
+if grep -nE "sed[^|]*['\"]s/\\\\r" "$lib" >/dev/null 2>&1; then
+  found="yes"
+else
+  found="no"
+fi
+check "config_get's sed uses a real CR byte, not a \\r escape" "no" "$found"
 
 echo
 echo "==================================="

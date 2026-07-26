@@ -162,15 +162,23 @@ config_get() {
     #
     # The trailing-CR strip is for Windows (Git Bash / MSYS2), where the native
     # jq.exe writes stdout through a text-mode CRT handle and rewrites every
-    # emitted \n into \r\n. A SINGLE-value filter is unharmed — command
-    # substitution strips the one trailing newline and takes the \r with it —
-    # but a MULTI-line filter (e.g. `.branch.type_whitelist[]`) leaves a \r
-    # baked into every line except the last. Callers that join with
-    # `paste -sd'|' -` then build an alternation containing stray carriage
-    # returns, which can never match a real branch name or PR title, so the
-    # validators block every branch and PR on Windows. Ten hooks read
-    # multi-line config values, so the fix belongs here rather than at each
-    # call site. See me2resh/apexyard#1019.
+    # emitted \n into \r\n.
+    #
+    # EVERY read is affected, single-value included. Command substitution
+    # strips trailing NEWLINES only, so `$(printf 'gh\r\n')` is `gh\r` — the
+    # CR survives. Do not gate this strip to iterating filters on the belief
+    # that scalar reads are safe: ~60 single-value reads would silently
+    # regress, among them `.tracker.kind` and the `$`-anchored
+    # `.tracker.id_pattern`, where a trailing CR breaks the match.
+    #
+    # A MULTI-line filter (e.g. `.branch.type_whitelist[]`) is merely where
+    # the damage became VISIBLE rather than where it was unique: callers join
+    # with `paste -sd'|' -`, building an alternation with carriage returns
+    # inside it that can never match a real branch name or PR title — and
+    # since the branch/PR validators BLOCK, Windows adopters could not create
+    # a compliant branch or PR at all. Ten hooks read multi-line config
+    # values, so the fix belongs here rather than at each call site.
+    # See me2resh/apexyard#1019.
     #
     # Deliberately surgical: this removes a CR only at end-of-line, not every
     # CR in the stream. A `tr -d '\r'` would also corrupt a config value that
