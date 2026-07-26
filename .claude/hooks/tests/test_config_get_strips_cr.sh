@@ -155,26 +155,44 @@ check "mid-string carriage return is preserved, not stripped" "1" "$inner"
 # which works on every platform because it never executes sed at all.
 lib="$HOOK_DIR/_lib-read-config.sh"
 
-# 8a — the file must exist. Without this the two greps below both "pass"
-# vacuously on a bad $HOOK_DIR, and a test that cannot find its target while
-# reporting success is worse than no test at all.
+# 8a — the file must exist. Without this, 8c "passes" vacuously on a bad
+# $HOOK_DIR: a negative grep finds no `\r` escape in a file it cannot open, and
+# a test that misses its target while reporting success is worse than no test.
+# 8b does NOT share that failure — a positive control cannot pass vacuously,
+# which is the structural reason to have one. 8a is therefore about 8c.
 [ -f "$lib" ] && lib_found="yes" || lib_found="no"
 check "the lib under test was actually located" "yes" "$lib_found"
 
 # 8b — POSITIVE control. The negative grep in 8c is narrow: a `\r` escape can
 # hide from it behind a line continuation, a variable, or `-e`. Asserting the
 # canonical form is PRESENT is spelling-agnostic, so any rewrite that drops
-# `${_CR}` fails here even if it evades 8c.
-if grep -q 'sed "s/${_CR}' "$lib" 2>/dev/null; then
+# `${_CR}` fails here even if it evades 8c. Unlike 8c it cannot pass vacuously.
+#
+# Matched against the whole PIPELINE, not just `sed "s/${_CR}`, because a
+# file-scoped anchor is satisfied by any mention anywhere — including one of the
+# comments in this very block, which would let a rewritten sed call slip past
+# while the suite stayed green.
+#
+# `-F` (fixed string) is deliberate, not laziness: as a BRE, the `{` in
+# `${_CR}` is undefined behaviour, and at least one grep implementation
+# (ugrep 7.5) returns zero matches for the pattern form — which would make this
+# control silently vacuous. That is precisely the class of bug this PR exists to
+# fix, so the guard must not be built on it.
+if grep -qF 'jq -r "$filter" 2>/dev/null | sed "s/${_CR}' "$lib" 2>/dev/null; then
   canonical="yes"
 else
   canonical="no"
 fi
 check "config_get still strips via the \${_CR} byte" "yes" "$canonical"
 
-# 8c — negative control. Catches the direct `s/\r$//` rewrite. Note this
-# deliberately does NOT flag `sed $'s/\r$//'`: ANSI-C quoting expands to a real
-# CR byte before sed ever sees it, which satisfies the same contract as $_CR.
+# 8c — negative control. Catches the direct `s/\r$//` rewrite.
+#
+# It ALSO flags `sed $'s/\r$//'`, which is a false positive in principle: ANSI-C
+# quoting expands to a real CR byte before sed ever sees it, so that form is
+# actually portable and satisfies the same contract as $_CR. Accepted knowingly
+# — nobody writes it here, and the failure direction is safe: it forces a human
+# to look rather than waving a `\r` through. (An earlier revision of this
+# comment claimed the opposite — that 8c does not flag it. It does.)
 if grep -nE "sed[^|]*['\"]s/\\\\r" "$lib" >/dev/null 2>&1; then
   escaped="yes"
 else
