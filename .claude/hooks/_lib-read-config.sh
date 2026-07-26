@@ -167,9 +167,14 @@ config_get() {
     # EVERY read is affected, single-value included. Command substitution
     # strips trailing NEWLINES only, so `$(printf 'gh\r\n')` is `gh\r` — the
     # CR survives. Do not gate this strip to iterating filters on the belief
-    # that scalar reads are safe: ~60 single-value reads would silently
+    # that scalar reads are safe: ~40 single-value reads would silently
     # regress, among them `.tracker.kind` and the `$`-anchored
-    # `.tracker.id_pattern`, where a trailing CR breaks the match.
+    # `.tracker.id_pattern`, where a trailing CR breaks the match. (Order of
+    # magnitude, not an exact census: two independent sweeps counted 38 and 39
+    # scalar production reads against 20 and 22 iterating ones, the spread
+    # depending on whether `config_get_or` and double-quoted filters are
+    # included. Only the scalar half is at risk from that hypothetical
+    # gating.)
     #
     # A MULTI-line filter (e.g. `.branch.type_whitelist[]`) is merely where
     # the damage became VISIBLE rather than where it was unique: callers join

@@ -5,13 +5,22 @@
 # returns, even when the underlying jq emits CRLF line endings.
 #
 # The bug: on Windows (Git Bash / MSYS2) the native jq.exe writes stdout through
-# a text-mode CRT handle, silently rewriting every \n it emits into \r\n. A
-# SINGLE-value filter is unharmed — command substitution strips the one trailing
-# newline and takes the \r with it — but a MULTI-line filter (e.g.
-# `.branch.type_whitelist[]`) leaves a \r baked into every line except the last.
-# Callers that join with `paste -sd'|' -` then build a regex alternation
-# containing stray carriage returns, which can never match a real branch name or
-# PR title. Since validate-branch-name.sh and validate-pr-create.sh BLOCK on
+# a text-mode CRT handle, silently rewriting every \n it emits into \r\n.
+#
+# EVERY read is affected, and every line is affected. Command substitution
+# strips trailing NEWLINES only, so a scalar read of `gh\r\n` yields `gh\r`, and
+# a 3-element read yields three CRs with the last element ending `chore\r`
+# (both od-verified). Cases 4 and 5 below exist because of exactly this: each
+# FAILS against the unfixed lib, which is direct evidence that scalar reads and
+# the final line are harmed. Do not reintroduce the tempting "scalars and the
+# last line are safe" story — it is false, and acting on it by gating the strip
+# to iterating filters would silently regress ~40 scalar production reads,
+# `.tracker.kind` and the `$`-anchored `.tracker.id_pattern` among them.
+#
+# A MULTI-line filter is where the damage became VISIBLE, not where it was
+# unique: callers join with `paste -sd'|' -`, building a regex alternation with
+# carriage returns inside it that can never match a real branch name or PR
+# title. Since validate-branch-name.sh and validate-pr-create.sh BLOCK on
 # failure, Windows adopters could not create a compliant branch or PR at all.
 # Ten hooks read multi-line config values, so the fix lives in config_get.
 #
@@ -145,12 +154,33 @@ check "mid-string carriage return is preserved, not stripped" "1" "$inner"
 # on whichever platform we cannot run. Assert it at the SOURCE level instead,
 # which works on every platform because it never executes sed at all.
 lib="$HOOK_DIR/_lib-read-config.sh"
-if grep -nE "sed[^|]*['\"]s/\\\\r" "$lib" >/dev/null 2>&1; then
-  found="yes"
+
+# 8a — the file must exist. Without this the two greps below both "pass"
+# vacuously on a bad $HOOK_DIR, and a test that cannot find its target while
+# reporting success is worse than no test at all.
+[ -f "$lib" ] && lib_found="yes" || lib_found="no"
+check "the lib under test was actually located" "yes" "$lib_found"
+
+# 8b — POSITIVE control. The negative grep in 8c is narrow: a `\r` escape can
+# hide from it behind a line continuation, a variable, or `-e`. Asserting the
+# canonical form is PRESENT is spelling-agnostic, so any rewrite that drops
+# `${_CR}` fails here even if it evades 8c.
+if grep -q 'sed "s/${_CR}' "$lib" 2>/dev/null; then
+  canonical="yes"
 else
-  found="no"
+  canonical="no"
 fi
-check "config_get's sed uses a real CR byte, not a \\r escape" "no" "$found"
+check "config_get still strips via the \${_CR} byte" "yes" "$canonical"
+
+# 8c — negative control. Catches the direct `s/\r$//` rewrite. Note this
+# deliberately does NOT flag `sed $'s/\r$//'`: ANSI-C quoting expands to a real
+# CR byte before sed ever sees it, which satisfies the same contract as $_CR.
+if grep -nE "sed[^|]*['\"]s/\\\\r" "$lib" >/dev/null 2>&1; then
+  escaped="yes"
+else
+  escaped="no"
+fi
+check "config_get's sed uses a real CR byte, not a \\r escape" "no" "$escaped"
 
 echo
 echo "==================================="
