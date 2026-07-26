@@ -28,9 +28,15 @@
 # ------------------------------------------------------------------------------
 # `_CR` holds a literal carriage return, used by config_get to strip the CRLF
 # line endings Windows (Git Bash / MSYS2) jq.exe emits. Defined as a real
-# character rather than a `\r` escape because BSD/macOS sed does not interpret
-# `\r` in a regex — the escape form would silently no-op on macOS and leave the
-# bug half-fixed. See me2resh/apexyard#1019.
+# character rather than writing `s/\r$//` because `\r` is NOT specified by POSIX
+# as a BRE escape — whether sed expands it, matches a literal `r`, or errors is
+# implementation-defined. GNU sed and current macOS/BSD sed both happen to
+# expand it, but relying on that is relying on an accident: a sed that treats
+# `\r` as a literal `r` would silently strip the last character off any value
+# ending in `r` (`…-reviewer` -> `…-reviewe`) — a wrong-value bug, not a
+# no-op, and one that only shows up on whichever platform we didn't test.
+# A real CR byte is unambiguous on every implementation.
+# See me2resh/apexyard#1019.
 _CR=$(printf '\r')
 _CONFIG_CACHE=""
 _CONFIG_WARNED_NO_JQ=""
@@ -169,7 +175,8 @@ config_get() {
     # Deliberately surgical: this removes a CR only at end-of-line, not every
     # CR in the stream. A `tr -d '\r'` would also corrupt a config value that
     # legitimately contains a carriage return mid-string. `$_CR` holds a real
-    # CR character because BSD/macOS sed does not interpret a `\r` escape.
+    # CR byte rather than a `\r` escape — see its definition above for why the
+    # escape form is not portable.
     printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null | sed "s/${_CR}\$//"
   else
     return 0

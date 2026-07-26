@@ -48,7 +48,10 @@ JSON
 
 # --- Stub jq that mimics Windows jq.exe -------------------------------------
 # Wraps the real jq and rewrites every emitted \n into \r\n. awk is used rather
-# than `sed 's/$/\r/'` because BSD/macOS sed does not interpret a \r escape.
+# than `sed 's/$/\r/'` because POSIX does not specify `\r` as a sed escape on
+# either side of the substitution — expanding it is an implementation extension,
+# not a guarantee. awk's `printf "\r"` is specified, so the stub behaves the same
+# everywhere. (Same reasoning as the `_CR` definition in _lib-read-config.sh.)
 REAL_JQ="$(command -v jq 2>/dev/null)"
 if [ -z "$REAL_JQ" ]; then
   echo "SKIP: jq not installed — cannot simulate the Windows CRLF path"
@@ -98,12 +101,31 @@ check "a valid branch name matches the built alternation" "yes" "$matched"
 # --- 4. single-value lookups still work (no over-stripping) -------------------
 check "single-value lookup unaffected" "gh" "$(config_get '.tracker.kind')"
 
-# --- 5. a value containing an INTERNAL carriage return is preserved -----------
+# --- 5. the LAST line of a multi-line read is not damaged ---------------------
+# The strip runs on every line, including the final one. Check the last element
+# arrives whole rather than clipped — a strip that ate one byte too many would
+# still produce CR-free output and so would pass checks 1 and 2 unnoticed.
+last="$(config_get '.branch.type_whitelist[]' | tail -n1)"
+check "last element of a multi-line read is intact" "chore" "$last"
+
+# --- 6. a value ending in a literal 'r' survives ------------------------------
+# The reason `_CR` holds a real CR byte instead of the string `\r`: POSIX does
+# not specify `\r` as a BRE escape, so an implementation is free to read it as a
+# literal `r`. Under such a sed, `s/\r$//` would silently truncate every value
+# ending in 'r' — 'reviewer' -> 'reviewe'. That is a wrong VALUE, not a no-op,
+# and it would sail past every other check in this file. This case pins it.
+cat > "$TMP/.claude/project-config.json" <<'JSON'
+{ "custom": { "value": "before\rafter", "ends_in_r": "active-reviewer" } }
+JSON
+# Assign empty rather than `unset` — the lib reads these under `set -u`, so
+# unsetting them here makes it abort with "unbound variable" instead of reloading.
+_CONFIG_CACHE=""
+_CONFIG_ROOT_CACHE=""
+check "value ending in a literal 'r' is not truncated" "active-reviewer" "$(config_get '.custom.ends_in_r')"
+
+# --- 7. a value containing an INTERNAL carriage return is preserved -----------
 # The strip is deliberately anchored to end-of-line so it cannot corrupt a
 # legitimate mid-string CR. A blanket `tr -d '\r'` would fail this case.
-cat > "$TMP/.claude/project-config.json" <<'JSON'
-{ "custom": { "value": "before\rafter" } }
-JSON
 # Assign empty rather than `unset` — the lib reads these under `set -u`, so
 # unsetting them here makes it abort with "unbound variable" instead of reloading.
 _CONFIG_CACHE=""
