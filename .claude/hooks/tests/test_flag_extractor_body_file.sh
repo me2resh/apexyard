@@ -54,25 +54,32 @@ TMPDIR=$(mktemp -d -t flag-extractor.XXXXXX)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # ---------------------------------------------------------------------------
-# Part 1 — extract_flag_value, driven directly out of the hook source.
+# Part 1 — the two extractors, driven directly out of the hook source.
 #
-# Pulling the function out rather than invoking the whole hook keeps these
+# Pulling the functions out rather than invoking the whole hook keeps these
 # cases pinned to the parsing contract itself, independent of the diff
 # inspection and git state the hook otherwise needs.
+#
+# There are TWO extractors on purpose, and the split is the fix:
+#   extract_path_flag  — non-greedy, for --body-file (a path; no quotes in it)
+#   extract_flag_value — greedy, for --title / --body (content; anything in it)
 # ---------------------------------------------------------------------------
 
 eval "$(awk '/^extract_flag_value\(\) \{/,/^\}/' "$AGDR_HOOK")"
+eval "$(awk '/^extract_path_flag\(\) \{/,/^\}/' "$AGDR_HOOK")"
 
-if ! command -v extract_flag_value >/dev/null 2>&1; then
-  echo "FAIL: could not load extract_flag_value from $AGDR_HOOK" >&2
-  exit 1
-fi
+for fn in extract_flag_value extract_path_flag; do
+  if ! command -v "$fn" >/dev/null 2>&1; then
+    echo "FAIL: could not load $fn from $AGDR_HOOK" >&2
+    exit 1
+  fi
+done
 
 BODY_PATH="$TMPDIR/body.md"
 
 check_extract() {
   local name="$1" expected="$2" cmd="$3" got
-  got=$(extract_flag_value '--body-file' "$cmd")
+  got=$(extract_path_flag '--body-file' "$cmd")
   if [ "$got" = "$expected" ]; then
     echo "PASS: $name"
     PASS=$((PASS + 1))
@@ -82,6 +89,26 @@ check_extract() {
     echo "   got      [$got]"
     FAIL=$((FAIL + 1))
   fi
+}
+
+# Content extraction must NOT be truncated by a boundary character. This is
+# the guard against "fix the path case by widening the shared anchor" — that
+# approach reopens the #227 leak, and in the sibling hook it measured WORSE
+# than no fix at all (#1039). A --body carrying a quote followed by a shell
+# operator must survive intact, tail included.
+check_content() {
+  local name="$1" needle="$2" cmd="$3" got
+  got=$(extract_flag_value '--body|-b' "$cmd")
+  case "$got" in
+    *"$needle"*)
+      echo "PASS: $name"
+      PASS=$((PASS + 1)) ;;
+    *)
+      echo "FAIL: $name — content truncated before the tail"
+      echo "   expected the value to contain [$needle]"
+      echo "   got      [$got]"
+      FAIL=$((FAIL + 1)) ;;
+  esac
 }
 
 # Shapes that already worked — regression guards.
@@ -101,6 +128,24 @@ check_extract "extract: quoted path + redirect (#1038)" \
   "$BODY_PATH" "gh pr create --body-file \"$BODY_PATH\" > /dev/null"
 check_extract "extract: quoted path + semicolon (#1038)" \
   "$BODY_PATH" "gh pr create --body-file \"$BODY_PATH\"; echo done"
+
+# Content must survive a quote followed by each boundary character. These
+# fail against the rejected "widen the shared anchor" approach, which is the
+# whole point of keeping the two extractors separate.
+for boundary in '|' ';' '&' '<' '>' '(' ')'; do
+  check_content "content: quote then '$boundary' keeps the tail" \
+    "TAIL_MARKER" \
+    "gh pr create --title t --body \"The \\\"admin notice\\\" $boundary more text. TAIL_MARKER\""
+done
+check_content "content: quote then ' -t' keeps the tail" \
+  "TAIL_MARKER" \
+  "gh pr create --title t --body \"The \\\"admin notice\\\" -t more. TAIL_MARKER\""
+check_content "content: markdown table row keeps the tail" \
+  "TAIL_MARKER" \
+  "gh pr create --title t --body \"| Term | Definition |
+| \\\"thing\\\" | a thing |
+
+TAIL_MARKER\""
 check_extract "extract: single-quoted path + pipe (#1038)" \
   "$BODY_PATH" "gh pr create --body-file '$BODY_PATH' 2>&1 | tail -5"
 
