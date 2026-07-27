@@ -160,8 +160,25 @@ else
   mark_pass "hooks.json omits unsupported if fields"
 fi
 
+# Test isolation (mirrors bin/run-hook-tests.sh's APEXYARD_OPS_DISABLE_PIN
+# rationale, see #528): the generated command below is copied verbatim from
+# a real .claude/settings.json hook entry, and that literal resolves the
+# ops root via a session-pin-first, PWD-walk-up-second precedence — it
+# checks CLAUDE_CODE_SESSION_ID + $APEXYARD_OPS_PIN_DIR directly rather than
+# sourcing _lib-ops-root.sh, so it does NOT honour APEXYARD_OPS_DISABLE_PIN.
+# Running this test from inside a live Claude Code session (exactly how it
+# is normally invoked, by an agent working in this repo) leaves
+# CLAUDE_CODE_SESSION_ID set with a real ops-root pin file already on disk
+# for that session — so the session-pin branch wins and execs
+# "<real-ops-root>/.claude/hooks/block-test.sh", which only exists under
+# $TMPROOT, never under the real ops root. That is a test-isolation gap in
+# THIS test, not a defect in the generated adapter output (preserving the
+# session-pin precedence is the whole point of the "hooks.json preserves
+# Claude session pin path" assertion above) — see me2resh/apexyard#1014.
+# Unsetting the session-id var for just this invocation forces the
+# fallback PWD-walk-up path the fixture below was actually built for.
 hook_command=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$TMPROOT/.codex/hooks.json")
-printf '{"tool_name":"Bash","tool_input":{"command":"policy deny"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
+printf '{"tool_name":"Bash","tool_input":{"command":"policy deny"}}\n' | (cd "$TMPROOT" && unset CLAUDE_CODE_SESSION_ID && bash -c "$hook_command") >/tmp/_codex_adapter_block.out 2>&1
 block_rc=$?
 if [ "$block_rc" -eq 2 ]; then
   mark_pass "generated hook command preserves blocking exit"
@@ -169,7 +186,7 @@ else
   mark_fail "generated hook command preserves blocking exit" "expected exit 2, got $block_rc: $(cat /tmp/_codex_adapter_block.out)"
 fi
 
-printf '{"tool_name":"Bash","tool_input":{"command":"policy allow"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_allow.out 2>&1
+printf '{"tool_name":"Bash","tool_input":{"command":"policy allow"}}\n' | (cd "$TMPROOT" && unset CLAUDE_CODE_SESSION_ID && bash -c "$hook_command") >/tmp/_codex_adapter_allow.out 2>&1
 allow_rc=$?
 if [ "$allow_rc" -eq 0 ]; then
   mark_pass "generated hook command preserves allowing exit"
@@ -177,7 +194,7 @@ else
   mark_fail "generated hook command preserves allowing exit" "expected exit 0, got $allow_rc: $(cat /tmp/_codex_adapter_allow.out)"
 fi
 
-printf '{"tool_name":"Bash","tool_input":{"command":"other deny"}}\n' | (cd "$TMPROOT" && bash -c "$hook_command") >/tmp/_codex_adapter_skip.out 2>&1
+printf '{"tool_name":"Bash","tool_input":{"command":"other deny"}}\n' | (cd "$TMPROOT" && unset CLAUDE_CODE_SESSION_ID && bash -c "$hook_command") >/tmp/_codex_adapter_skip.out 2>&1
 skip_rc=$?
 if [ "$skip_rc" -eq 0 ]; then
   mark_pass "generated hook command skips nonmatching predicates"
