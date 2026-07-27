@@ -57,8 +57,19 @@ _LIB_PROJECT_BOARD_SOURCED=1
 # Source sibling libs — located in the same .claude/hooks/ directory.
 # Use BASH_SOURCE so the path is correct even when the lib is sourced from a
 # different cwd (e.g. from a skill that cd'd into a project clone).
+# ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
+# default avoids a hard "parameter not set" error, and the git-rev-parse
+# fallback below is the actual portability fix: it resolves correctly
+# under any shell because it depends on `git`, not on a bash-only parameter.
 # ---------------------------------------------------------------------------
-_lib_board_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_lib_board_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+if [ -z "$_lib_board_dir" ] || [ ! -f "$_lib_board_dir/_lib-ops-root.sh" ]; then
+  _lib_board_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_lib_board_root" ] && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
+    _lib_board_dir="$_lib_board_root/.claude/hooks"
+  fi
+  unset _lib_board_root
+fi
 
 # Pin-first ops-root resolver (provides resolve_ops_root).
 if [ -f "$_lib_board_dir/_lib-ops-root.sh" ]; then

@@ -53,9 +53,19 @@
 [ -n "${_LIB_ONBOARDING_DEPTH_MODE_SOURCED:-}" ] && return 0
 _LIB_ONBOARDING_DEPTH_MODE_SOURCED=1
 
-_DEPTH_MODE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
+# default avoids a hard "parameter not set" error; the git-rev-parse
+# fallback is the actual portability fix (works under any shell).
+_DEPTH_MODE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+if [ -z "$_DEPTH_MODE_LIB_DIR" ] || [ ! -f "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh" ]; then
+  _depth_mode_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_depth_mode_root" ] && [ -f "$_depth_mode_root/.claude/hooks/_lib-ops-root.sh" ]; then
+    _DEPTH_MODE_LIB_DIR="$_depth_mode_root/.claude/hooks"
+  fi
+  unset _depth_mode_root
+fi
 
-if [ -f "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh" ]; then
+if [ -n "$_DEPTH_MODE_LIB_DIR" ] && [ -f "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh" ]; then
   # shellcheck source=/dev/null
   . "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh"
 fi

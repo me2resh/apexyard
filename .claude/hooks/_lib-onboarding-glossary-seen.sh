@@ -73,9 +73,19 @@
 [ -n "${_LIB_ONBOARDING_GLOSSARY_SEEN_SOURCED:-}" ] && return 0
 _LIB_ONBOARDING_GLOSSARY_SEEN_SOURCED=1
 
-_GLOSSARY_SEEN_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
+# default avoids a hard "parameter not set" error; the git-rev-parse
+# fallback is the actual portability fix (works under any shell).
+_GLOSSARY_SEEN_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+if [ -z "$_GLOSSARY_SEEN_LIB_DIR" ] || [ ! -f "$_GLOSSARY_SEEN_LIB_DIR/_lib-ops-root.sh" ]; then
+  _glossary_seen_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_glossary_seen_root" ] && [ -f "$_glossary_seen_root/.claude/hooks/_lib-ops-root.sh" ]; then
+    _GLOSSARY_SEEN_LIB_DIR="$_glossary_seen_root/.claude/hooks"
+  fi
+  unset _glossary_seen_root
+fi
 
-if [ -f "$_GLOSSARY_SEEN_LIB_DIR/_lib-ops-root.sh" ]; then
+if [ -n "$_GLOSSARY_SEEN_LIB_DIR" ] && [ -f "$_GLOSSARY_SEEN_LIB_DIR/_lib-ops-root.sh" ]; then
   # shellcheck source=/dev/null
   . "$_GLOSSARY_SEEN_LIB_DIR/_lib-ops-root.sh"
 fi

@@ -65,38 +65,73 @@
 
 # ------------------------------------------------------------------------------
 # Internal: ensure _lib-read-config.sh is loaded so config_get_or works.
+#
+# Self-location note (#1025): ${BASH_SOURCE[0]} is bash-only. Under zsh it is
+# UNSET, not merely empty — a bare reference errors ("parameter not set")
+# whenever the caller's shell has nounset active (`set -u`, common in
+# defensive script headers), and even without nounset an empty value makes
+# `dirname` resolve to ".", silently pointing hook_dir at the CALLER's cwd
+# instead of this lib's real directory (same failure class as #950). The
+# `:-` default below neutralises the hard error under either shell; the
+# `git rev-parse --show-toplevel` fallback is the actual portability fix —
+# it works identically under bash and zsh because it depends on `git`, not
+# on a bash-only parameter. Only fall back when the BASH_SOURCE-derived path
+# didn't actually find the sibling file, so the common (bash) path stays a
+# single cheap resolution. Returns non-zero when the lib still isn't
+# loadable after both attempts, so callers can tell "loaded" from "silently
+# gave up" instead of always reading exit 0 (part of the #1025 fix — see
+# _tracker_load_portfolio_lib below for the case this asymmetry actually broke).
 # ------------------------------------------------------------------------------
 _tracker_load_config_lib() {
   if command -v config_get_or >/dev/null 2>&1; then
     return 0
   fi
   local root hook_dir
-  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [ -f "$hook_dir/_lib-read-config.sh" ]; then
+  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+  if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-read-config.sh" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$root" ] && [ -f "$root/.claude/hooks/_lib-read-config.sh" ]; then
+      hook_dir="$root/.claude/hooks"
+    fi
+  fi
+  if [ -n "$hook_dir" ] && [ -f "$hook_dir/_lib-read-config.sh" ]; then
     # shellcheck source=/dev/null
     . "$hook_dir/_lib-read-config.sh"
-    return 0
   fi
-  root=$(git rev-parse --show-toplevel 2>/dev/null)
-  if [ -n "$root" ] && [ -f "$root/.claude/hooks/_lib-read-config.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$root/.claude/hooks/_lib-read-config.sh"
-  fi
+  command -v config_get_or >/dev/null 2>&1
 }
 
 # ------------------------------------------------------------------------------
 # Internal: ensure _lib-portfolio-paths.sh is loaded so portfolio_registry works.
+#
+# Same zsh self-location hazard and fix shape as _tracker_load_config_lib
+# above (#1025) — but this function previously had NO git-rev-parse fallback
+# at all, unlike its sibling. Under zsh it would resolve hook_dir to the
+# caller's cwd, fail the `-f` test, and silently `return 0` having loaded
+# nothing. That asymmetry is what #1025 actually observed: a per-project
+# tracker.kind override (read via portfolio_registry, in
+# _tracker_project_value) silently stopped resolving under zsh, and callers
+# fell through to the global tracker.kind default with no signal anything
+# had gone wrong. Fixed to match the sibling's fallback + explicit
+# success/failure return.
 # ------------------------------------------------------------------------------
 _tracker_load_portfolio_lib() {
   if command -v portfolio_registry >/dev/null 2>&1; then
     return 0
   fi
-  local hook_dir
-  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  if [ -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
+  local hook_dir root
+  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+  if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$root" ] && [ -f "$root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
+      hook_dir="$root/.claude/hooks"
+    fi
+  fi
+  if [ -n "$hook_dir" ] && [ -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
     # shellcheck source=/dev/null
     . "$hook_dir/_lib-portfolio-paths.sh"
   fi
+  command -v portfolio_registry >/dev/null 2>&1
 }
 
 # ------------------------------------------------------------------------------

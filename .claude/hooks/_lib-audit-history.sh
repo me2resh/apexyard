@@ -49,9 +49,20 @@
 _LIB_AUDIT_HISTORY_SOURCED=1
 
 # Locate the lib's own dir so we can source siblings (read-config, portfolio-paths).
-_AUDIT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-` default
+# avoids a hard "parameter not set" error, and the git-rev-parse fallback below
+# is the actual portability fix (works under any shell, since it only depends
+# on `git`, not on a bash-only parameter).
+_AUDIT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+if [ -z "$_AUDIT_LIB_DIR" ] || [ ! -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; then
+  _audit_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_audit_root" ] && [ -f "$_audit_root/.claude/hooks/_lib-read-config.sh" ]; then
+    _AUDIT_LIB_DIR="$_audit_root/.claude/hooks"
+  fi
+  unset _audit_root
+fi
 
-if [ -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; then
+if [ -n "$_AUDIT_LIB_DIR" ] && [ -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$_AUDIT_LIB_DIR/_lib-read-config.sh"
 fi

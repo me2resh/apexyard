@@ -83,7 +83,12 @@ _config_repo_root() {
   if [ -n "${ZSH_VERSION:-}" ]; then
     printf 'apexyard: source the .claude/hooks/_lib-*.sh helpers under bash, not zsh — path resolution is unreliable under zsh. Wrap manual checks in `bash -c '"'"'...'"'"'`.\n' >&2
   fi
-  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # `:-` default (#1025): under zsh, a bare ${BASH_SOURCE[0]} reference is
+  # a hard "parameter not set" error whenever the caller's shell has
+  # nounset active, on top of the already-documented empty-value hazard
+  # above. The `git rev-parse` fallback a few lines below is what actually
+  # recovers root in that case.
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
   if [ -f "$lib_dir/_lib-ops-root.sh" ]; then
     # shellcheck source=/dev/null
     . "$lib_dir/_lib-ops-root.sh"
