@@ -26,6 +26,18 @@
 # ------------------------------------------------------------------------------
 # Internal state: cache merged config per-process so repeated reads are cheap.
 # ------------------------------------------------------------------------------
+# `_CR` holds a literal carriage return, used by config_get to strip the CRLF
+# line endings Windows (Git Bash / MSYS2) jq.exe emits. Defined as a real
+# character rather than writing `s/\r$//` because `\r` is NOT specified by POSIX
+# as a BRE escape — whether sed expands it, matches a literal `r`, or errors is
+# implementation-defined. GNU sed and current macOS/BSD sed both happen to
+# expand it, but relying on that is relying on an accident: a sed that treats
+# `\r` as a literal `r` would silently strip the last character off any value
+# ending in `r` (`…-reviewer` -> `…-reviewe`) — a wrong-value bug, not a
+# no-op, and one that only shows up on whichever platform we didn't test.
+# A real CR byte is unambiguous on every implementation.
+# See me2resh/apexyard#1019.
+_CR=$(printf '\r')
 _CONFIG_CACHE=""
 _CONFIG_WARNED_NO_JQ=""
 _CONFIG_ROOT_CACHE=""
@@ -147,7 +159,40 @@ config_get() {
     # document and config_get returns empty for EVERY key, silently dropping all
     # project-config overrides (incl. split-portfolio portfolio.* paths).
     # See me2resh/apexyard#629.
-    printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null
+    #
+    # The trailing-CR strip is for Windows (Git Bash / MSYS2), where the native
+    # jq.exe writes stdout through a text-mode CRT handle and rewrites every
+    # emitted \n into \r\n.
+    #
+    # EVERY read is affected, single-value included. Command substitution
+    # strips trailing NEWLINES only, so `$(printf 'gh\r\n')` is `gh\r` — the
+    # CR survives. Do not gate this strip to iterating filters on the belief
+    # that scalar reads are safe: dozens of single-value reads would silently
+    # regress, among them `.tracker.kind` and the `$`-anchored
+    # `.tracker.id_pattern`, where a trailing CR breaks the match. ("Dozens"
+    # is deliberate. Three independent sweeps produced three different counts
+    # — the figure moves with the scope swept (`.claude/hooks/` vs all
+    # production `.sh` vs including docs) and with how call forms are matched.
+    # Roughly 40 under `.claude/hooks/`, more repo-wide. No exact census is
+    # stated here because none of the three reproduced, and the argument does
+    # not need one: what matters is that the scalar half is large and would
+    # regress silently.)
+    #
+    # A MULTI-line filter (e.g. `.branch.type_whitelist[]`) is merely where
+    # the damage became VISIBLE rather than where it was unique: callers join
+    # with `paste -sd'|' -`, building an alternation with carriage returns
+    # inside it that can never match a real branch name or PR title — and
+    # since the branch/PR validators BLOCK, Windows adopters could not create
+    # a compliant branch or PR at all. Ten hooks read multi-line config
+    # values, so the fix belongs here rather than at each call site.
+    # See me2resh/apexyard#1019.
+    #
+    # Deliberately surgical: this removes a CR only at end-of-line, not every
+    # CR in the stream. A `tr -d '\r'` would also corrupt a config value that
+    # legitimately contains a carriage return mid-string. `$_CR` holds a real
+    # CR byte rather than a `\r` escape — see its definition above for why the
+    # escape form is not portable.
+    printf '%s' "$_CONFIG_CACHE" | jq -r "$filter" 2>/dev/null | sed "s/${_CR}\$//"
   else
     return 0
   fi
