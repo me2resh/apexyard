@@ -338,19 +338,21 @@ See AgDR-0012 for the full trade-off.
 ```
 You: "I'll execute the plan. Step 1: approve-merge, Step 2: gh pr merge."
 CEO: "go"
-You: *invokes /approve-merge*  ← FAILURE
+You: *tries to invoke /approve-merge*  ← FAILURE, twice over:
+                                          the "go" was plan-level, AND since
+                                          #1042 the model cannot invoke this
+                                          skill at all.
 ```
 
 The CEO's "go" was on the plan. It was not a per-PR approval for the merge. The correct flow:
 
 ```
 You: *executes the non-merge steps*
-You: "All other steps done. PR #X ready to merge — approved?"
-CEO: "approved"
-You: *invokes /approve-merge X*  ← writes marker AND merges in one turn
+You: "All other steps done. PR #X is ready to merge — run /approve-merge X when you're happy."
+CEO: /approve-merge X          ← writes the structured marker AND merges in one turn
 ```
 
-The discrete approval moment is **the invocation of /approve-merge**, not a separate "now do the merge" message. Treat the invocation with the seriousness the merge warrants.
+The discrete approval moment is **the invocation of /approve-merge**, not a separate "now do the merge" message. Since #1042 that invocation is mechanically restricted to a human (`disable-model-invocation: true`), so the model's job ends at getting the PR ready and saying so. Treat the invocation with the seriousness the merge warrants: once it runs, the merge runs.
 
 ---
 

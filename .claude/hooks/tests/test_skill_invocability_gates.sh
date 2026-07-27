@@ -39,9 +39,16 @@ FAIL=0
 
 # Read the frontmatter value. Only the frontmatter block counts, so the key
 # is matched at line-start and only before the closing `---`.
+#
+# Trailing \r is stripped first: a CRLF-committed SKILL.md would otherwise
+# yield "true\r", which compares unequal to "true" and fails this test for a
+# line-ending reason rather than a real one. This repo has been bitten by
+# exactly that before (#1019, where config_get left an embedded \r on Windows
+# checkouts), so the guard is cheap insurance rather than theory.
 invocation_flag() {
   local file="$1"
   awk '
+    { sub(/\r$/, "") }
     NR == 1 && $0 != "---" { exit }
     NR > 1 && $0 == "---"  { exit }
     /^disable-model-invocation:[[:space:]]*/ {

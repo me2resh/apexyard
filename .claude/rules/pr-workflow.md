@@ -82,16 +82,16 @@ You: *runs gh pr merge 10*   ← FAILURE: "go" was plan-level, not merge-level.
 You: "Here's the 6-step plan: 1. merge PR #10, 2. close PR #105, ..."
 CEO: "go"
 You: *executes steps 2–6, stops before step 1*
-You: "Steps 2–6 done. Ready to merge PR #10 — approved?"
-CEO: "approved"
-You: *invokes /approve-merge 10*   ← CORRECT: writes structured marker AND merges in one turn.
+You: "Steps 2–6 done. PR #10 is ready to merge — run /approve-merge 10 when you're happy."
+CEO: /approve-merge 10          ← CORRECT: the CEO invokes it. The skill is
+                                   human-only (#1042), so the model cannot.
 ```
 
 #### Why
 
 CEO approval is meant to be a **discrete moment per PR**. Merges are hard to reverse, externally visible, and can trigger downstream deploys. An umbrella "go" on a plan does not give you enough evidence that the CEO consciously signed off on each merge. When in doubt: stop and ask for the per-PR explicit nod.
 
-The discrete moment is the **invocation of `/approve-merge`**, not a separate "now do the merge" message. Treat the invocation with the seriousness the merge warrants — once you invoke, the merge runs.
+The discrete moment is the **invocation of `/approve-merge`**, and since #1042 that invocation can only come from a human — `disable-model-invocation: true`. Saying "approved" in prose is no longer sufficient on its own; the model's job is to get the PR ready and say so. Treat the invocation with the seriousness the merge warrants: once it runs, the merge runs.
 
 This rule also applies to other destructive / externally-visible / hard-to-reverse actions: force pushes, branch deletes, closing issues with dependents, posting to external channels. Plan-level "go" does not carry through to any of these. List them in the plan if you want — just stop before executing and ask.
 

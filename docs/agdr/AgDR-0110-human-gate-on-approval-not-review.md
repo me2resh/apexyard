@@ -25,6 +25,8 @@ This was never a regression. `/code-review`'s flag dates to `8fa3c92` (2026-04-0
 
 The two were also **coupled by accident**: because a model could not invoke `/code-review`, it could not obtain a Rex marker, so it could not merge. The locked review skill was incidentally the thing preventing autonomous merges — which is why unlocking it alone would have been actively dangerous.
 
+**That coupling was weaker than it looks, and the distinction matters.** `.claude/agents/code-reviewer.md` documents that the **orchestrator** may set the `active-reviewer` marker and spawn the reviewer sub-agent directly via the Agent tool, without going through `/code-review` at all. So the autonomous `open → review → approve → merge` path was already *reachable* before this decision, not merely latent behind a flag. The pre-existing protection was therefore weaker than "the review skill is locked" suggests — which strengthens rather than weakens the case for this change: the swap replaces an incidental, bypassable barrier with a mechanical one on the step that actually authorises the irreversible action.
+
 ## Options Considered
 
 | Option | Pros | Cons |
@@ -48,7 +50,7 @@ Chosen: **swap both**, because the two changes are only safe together and are jo
 - The operator stops typing `/code-review`, `/security-review`, `/design-review` — the orchestrator triggers them, as `auto-code-review.sh` always instructed.
 - The operator starts typing `/approve-merge <pr>`, `/approve-design <pr>`, `/approve-architecture <pr>`. Saying "approved" in prose is no longer sufficient; the *invocation* is the approval, and only a human can make it. This is the intended cost.
 - The two-marker merge gate is unchanged. Rex still writes `*-rex.approved`; the CEO marker still requires a human. What changes is that the human requirement is now **mechanical**, not prose.
-- Autonomous merge becomes structurally impossible rather than incidentally blocked. Previously the block was a side effect of an unrelated flag; now it is the design.
+- The **skill-invocation** path to an autonomous merge is closed by design rather than by side effect. This is deliberately not the claim that autonomous merge is *impossible*: raw-Bash forgery of a marker remains technically available, as AgDR-0104 and AgDR-0109 already state, and `active-reviewer` writes are not themselves gated. What changes is that the supported path now requires a human at the step that authorises the irreversible action, instead of relying on an unrelated flag to block it incidentally.
 - `warn-review-marker-write.sh` is unaffected — it gates marker *writes* on the active-reviewer session marker, which the review skills manage regardless of who invokes them.
 - A regression test pins the invariant so a future frontmatter edit cannot silently reopen the gap. This matters: the original defect was exactly a frontmatter value nobody was watching.
 
