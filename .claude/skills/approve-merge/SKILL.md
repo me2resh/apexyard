@@ -1,7 +1,7 @@
 ---
 name: approve-merge
 description: Record per-PR CEO approval and merge in one turn. ONLY on an explicit per-PR "approved" — never on umbrella "go".
-disable-model-invocation: false
+disable-model-invocation: true
 argument-hint: "<pr-number> [--no-merge]"
 effort: low
 ---

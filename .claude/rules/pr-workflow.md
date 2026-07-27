@@ -152,6 +152,14 @@ Both markers' SHAs must match the PR's HEAD as reported by GitHub (`gh pr view <
 
 Claude can technically `rm` or `touch` these files by hand, or fabricate the structured fields. Doing so is a visible, auditable, grep-able rule violation — and the whole point of recording the rule mechanically is so that the failure mode is "Claude ignored a hook" (visible) instead of "Claude inferred approval from something vague" (invisible). The structured-marker format raises the visibility bar one more notch by requiring the model to type `approved_by=user` etc. on purpose.
 
+### The approval skills are human-only (#1042, AgDR-0110)
+
+"Explicit per-PR approval" is now enforced **mechanically**, not only in prose. `/approve-merge`, `/approve-design`, and `/approve-architecture` carry `disable-model-invocation: true`, so **only a human can invoke them**. Saying "approved" in conversation is no longer sufficient on its own — the operator types the command, and that invocation *is* the approval moment this rule has always described.
+
+The mirror half matters just as much: the **review** skills (`/code-review`, `/security-review`, `/design-review`) are model-invocable, so the orchestrator triggers them itself — as `auto-code-review.sh` has always instructed. Independence comes from the reviewer being a **separate sub-agent with its own context**, not from who typed the command, so nothing is lost by letting the model start a review.
+
+Before #1042 these were exactly inverted, and the safety was accidental: a model couldn't invoke `/code-review`, so it couldn't obtain a Rex marker, so it couldn't merge. Unlocking the review skills **alone** would therefore have opened a fully autonomous `open → review → approve → merge` path. The two sides are coupled — `test_skill_invocability_gates.sh` pins both, and fails loudly if review skills are ever unlocked while approval skills are not locked.
+
 ### Both merge shapes are gated (#47)
 
 All three merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`) fire on **both** the `gh` subcommand shape and the raw REST-API shape:

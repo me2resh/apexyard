@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Security-focused PR review for vulnerabilities and best practices. Invokes the Security Reviewer agent (Hakim).
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<pr-number> [repo]"
 allowed-tools: Bash, Read, Grep, Glob
 ---

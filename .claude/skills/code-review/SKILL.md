@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: Review a PR for quality, security, and standards compliance. Invokes the Code Reviewer agent (Rex).
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<pr-number> [repo]"
 allowed-tools: Bash, Read, Grep, Glob
 ---

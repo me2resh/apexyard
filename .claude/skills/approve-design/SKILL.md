@@ -1,7 +1,7 @@
 ---
 name: approve-design
 description: Record per-PR design-review approval (UI merge gate). ONLY on an explicit per-PR designer "approved".
-disable-model-invocation: false
+disable-model-invocation: true
 argument-hint: "<pr-number>"
 effort: low
 ---
