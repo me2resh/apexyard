@@ -147,7 +147,10 @@ Design approval recorded for PR #<pr> at <sha>. The design-review merge gate wil
 
 ```
 Designer: "The mockup in Figma looks great, ship it"
-You: *invokes /approve-design 42*  ← WRONG
+You: *tries to invoke /approve-design 42*  ← WRONG, twice over: a mockup nod is
+                                             not implementation review, AND
+                                             since #1042 the model cannot
+                                             invoke this skill at all.
 ```
 
 The designer approved a **mockup**, not the **PR's implementation of that mockup**. The implementation might differ from the mockup. The correct flow:
@@ -157,7 +160,9 @@ Designer: "The mockup in Figma looks great, ship it"
 You: *implements the mockup in PR #42*
 You: "PR #42 implements the approved mockup. Can you review the PR diff to confirm the implementation matches?"
 Designer: "Reviewed PR #42, implementation matches the mockup. Design approved."
-You: *invokes /approve-design 42*  ← CORRECT
+You: "Then run /approve-design 42 to record it."
+Designer: /approve-design 42       ← CORRECT: a human invokes it. The skill is
+                                     human-only (#1042), so the model cannot.
 ```
 
 Two distinct moments. One is mockup approval (design phase). The other is implementation-review approval (code-review phase). They are not the same approval.

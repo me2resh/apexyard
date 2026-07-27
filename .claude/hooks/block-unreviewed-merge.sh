@@ -189,7 +189,8 @@ defeating the entire purpose of /release-sync.
 Use --merge instead:
   gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>} --merge --delete-branch
 
-Or invoke /approve-merge ${PR_NUMBER} — it auto-detects sync PRs and uses --merge.
+Or have the human approver run /approve-merge ${PR_NUMBER} — it auto-detects sync
+PRs and uses --merge. That skill is human-only (#1042); the model cannot invoke it.
 
 See AgDR-0053 for the full rationale.
 MSG
