@@ -149,12 +149,85 @@ TAIL_MARKER\""
 check_extract "extract: single-quoted path + pipe (#1038)" \
   "$BODY_PATH" "gh pr create --body-file '$BODY_PATH' 2>&1 | tail -5"
 
+
 # ---------------------------------------------------------------------------
 # Part 2 — validate-pr-create.sh end-to-end, quoted vs unquoted path.
+#
+# Runs the hook inside an isolated SANDBOX, not against the ambient checkout.
+#
+# Two earlier attempts failed, and the second failed in an instructive way.
+# The first ran in the repo's own working directory and asserted on the exit
+# code: passed locally, failed 3/22 in CI. The second asserted on stderr
+# instead — and failed VACUOUSLY. validate-pr-create.sh exits on the
+# ticket-existence check (~line 447) well before the --body-file logic
+# (~line 502), so in CI the hook never reached the code under test, and every
+# "this message is absent" assertion passed because nothing ran at all.
+#
+# The fix is the pattern test_validate_pr_required_sections.sh already uses
+# and which passes in CI: a `git init` sandbox on a CONFORMING branch, plus
+# the shared gh mock (_lib-mock-gh.sh) so the ticket check resolves against
+# synthetic OPEN data rather than the network. Only then does execution reach
+# the body-file parsing this PR changes.
+#
+# Asserting rc == 0 for a complete body is what makes these non-vacuous:
+# rc 0 is reachable ONLY if the hook opened the file and found its sections.
 # ---------------------------------------------------------------------------
 
-cat > "$TMPDIR/full-body.md" <<'MD'
-## Summary
+# shellcheck source=/dev/null
+. "$(dirname "$0")/_lib-mock-gh.sh"
+
+SRC_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+
+make_sandbox() {
+  local sb
+  sb=$(mktemp -d)
+  (
+    cd "$sb" || exit 1
+    git init -q
+    git config user.email "test@example.com"
+    git config user.name "test"
+    git checkout -q -b chore/GH-113-test 2>/dev/null || git checkout -q -B chore/GH-113-test
+    touch onboarding.yaml
+    git add onboarding.yaml
+    git commit -q -m "chore: seed the sandbox"
+  )
+  mkdir -p "$sb/.claude/hooks"
+  cp "$PRC_HOOK" "$sb/.claude/hooks/validate-pr-create.sh"
+  chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
+  [ -f "$SRC_ROOT/.claude/hooks/_lib-tracker.sh" ] && \
+    cp "$SRC_ROOT/.claude/hooks/_lib-tracker.sh" "$sb/.claude/hooks/_lib-tracker.sh"
+  [ -f "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" ] && \
+    cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
+  cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
+  mock_gh_install "$sb"
+  echo "$sb"
+}
+
+# run_prc BODY QUOTING -> "<rc>|<stderr>"   QUOTING: bare | double | single
+run_prc() {
+  local body_content="$1" quoting="$2" sb body_file cmd rc err
+  sb=$(make_sandbox)
+  body_file="$sb/body.md"
+  printf '%s' "$body_content" > "$body_file"
+  case "$quoting" in
+    double) cmd="gh pr create --repo me2resh/apexyard --title 'chore(#113): test' --body-file \"$body_file\"" ;;
+    single) cmd="gh pr create --repo me2resh/apexyard --title 'chore(#113): test' --body-file '$body_file'" ;;
+    *)      cmd="gh pr create --repo me2resh/apexyard --title 'chore(#113): test' --body-file $body_file" ;;
+  esac
+  # EXPORT the mock onto PATH for the whole subshell. `PATH=... jq ...` would
+  # scope it to jq alone, leaving the hook to find the real gh — which then
+  # answers from the live tracker and reports #113 as CLOSED, exactly the
+  # network dependency the mock exists to remove.
+  err=$(cd "$sb" && export PATH="$sb/bin:$PATH" && \
+        jq -nc --arg c "$cmd" '{tool_input:{command:$c}}' \
+        | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+  rc=$?
+  rm -rf "$sb"
+  printf '%s|%s' "$rc" "$err"
+}
+
+FULL_BODY='## Summary
 
 - Does a thing, and here is why it matters.
 
@@ -162,86 +235,56 @@ cat > "$TMPDIR/full-body.md" <<'MD'
 
 - Ran the suite.
 
-Refs #1038
-
 ## Glossary
 
 | Term | Definition |
 |------|------------|
 | thing | a thing |
-MD
+'
 
-# Deliberately missing ## Testing and ## Glossary.
-printf '## Summary\n\n- only a summary\n' > "$TMPDIR/thin-body.md"
+THIN_BODY='## Summary
 
-PR_CREATE="gh pr create --repo me2resh/apexyard --title \"fix(#1038): x\""
+- only a summary
+'
 
-# Assert on STDERR CONTENT, not on the exit code.
-#
-# validate-pr-create.sh derives its exit code from several independent
-# checks — branch name, ticket existence in the tracker (a network call),
-# PR-title format — all of which read AMBIENT state. An earlier version of
-# these cases asserted `exit 0`, which passed locally (conforming branch,
-# resolvable ticket) and failed 3/22 in CI, where neither holds. A PR fixing
-# false-positive hook failures cannot ship a test that itself false-fails.
-#
-# What is actually under test here is narrow: can the hook READ a quoted
-# --body-file path? That is observable precisely, and independently of every
-# ambient check, through two stderr signals:
-#
-#   "not readable"                  -> the path was mis-parsed (the #1038 bug)
-#   "missing required '## Testing'" -> it read the file but not the content
-#
-# Neither appears when extraction works, whatever the exit code ends up
-# being for unrelated reasons.
-check_stderr_absent() {
-  local name="$1" needle="$2" cmd="$3" err
-  err=$( cd "$TMPDIR" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | "$PRC_HOOK" 2>&1 >/dev/null )
-  case "$err" in
-    *"$needle"*)
-      echo "FAIL: $name — stderr still reports [$needle]"
-      echo "   stderr: $(printf '%s' "$err" | head -2)"
-      FAIL=$((FAIL + 1)) ;;
-    *)
-      echo "PASS: $name"
-      PASS=$((PASS + 1)) ;;
-  esac
+check_prc() {
+  local name="$1" want_rc="$2" absent="$3" body="$4" quoting="$5" out rc err
+  out=$(run_prc "$body" "$quoting")
+  rc=${out%%|*}
+  err=${out#*|}
+  if [ "$rc" != "$want_rc" ]; then
+    echo "FAIL: $name — expected rc=$want_rc, got $rc"
+    echo "   stderr: $(printf '%s' "$err" | head -2)"
+    FAIL=$((FAIL + 1)); return
+  fi
+  if [ -n "$absent" ]; then
+    case "$err" in
+      *"$absent"*)
+        echo "FAIL: $name — stderr still reports [$absent]"
+        echo "   stderr: $(printf '%s' "$err" | head -2)"
+        FAIL=$((FAIL + 1)); return ;;
+    esac
+  fi
+  echo "PASS: $name"
+  PASS=$((PASS + 1))
 }
 
-check_stderr_present() {
-  local name="$1" needle="$2" cmd="$3" err
-  err=$( cd "$TMPDIR" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | "$PRC_HOOK" 2>&1 >/dev/null )
-  case "$err" in
-    *"$needle"*)
-      echo "PASS: $name"
-      PASS=$((PASS + 1)) ;;
-    *)
-      echo "FAIL: $name — expected stderr to report [$needle]"
-      echo "   stderr: $(printf '%s' "$err" | head -2)"
-      FAIL=$((FAIL + 1)) ;;
-  esac
-}
+# A complete body must PASS whatever the quoting. rc 0 is reachable only if
+# the hook opened the file and found its sections, so these cannot pass
+# vacuously the way the earlier stderr-only assertions could.
+check_prc "validate-pr-create: unquoted path, complete body -> rc 0" \
+  0 "not readable" "$FULL_BODY" bare
+check_prc "validate-pr-create: QUOTED path, complete body -> rc 0 (#1038)" \
+  0 "not readable" "$FULL_BODY" double
+check_prc "validate-pr-create: single-quoted path, complete body -> rc 0 (#1038)" \
+  0 "not readable" "$FULL_BODY" single
 
-# The path must be READ — no "not readable" warning — however it is quoted.
-check_stderr_absent "validate-pr-create: unquoted path is read" \
-  "not readable" "$PR_CREATE --body-file $TMPDIR/full-body.md"
-check_stderr_absent "validate-pr-create: QUOTED path is read (#1038)" \
-  "not readable" "$PR_CREATE --body-file \"$TMPDIR/full-body.md\""
-check_stderr_absent "validate-pr-create: single-quoted path is read (#1038)" \
-  "not readable" "$PR_CREATE --body-file '$TMPDIR/full-body.md'"
-
-# Having read it, the hook must SEE the sections — the pre-fix symptom was
-# reporting them missing because the file was never opened.
-check_stderr_absent "validate-pr-create: quoted path — sections found (#1038)" \
-  "## Testing" "$PR_CREATE --body-file \"$TMPDIR/full-body.md\""
-
-# Regression: the fix must not make the hook permissive. A body genuinely
-# missing its sections is still reported, quoted or not — proving the
-# absence assertions above are meaningful rather than vacuous.
-check_stderr_present "validate-pr-create: thin body still reported (unquoted)" \
-  "## Testing" "$PR_CREATE --body-file $TMPDIR/thin-body.md"
-check_stderr_present "validate-pr-create: thin body still reported (quoted)" \
-  "## Testing" "$PR_CREATE --body-file \"$TMPDIR/thin-body.md\""
+# Regression: a body genuinely missing its sections still blocks, quoted or
+# not — so the passes above reflect real extraction, not permissiveness.
+check_prc "validate-pr-create: thin body still blocked (unquoted)" \
+  2 "" "$THIN_BODY" bare
+check_prc "validate-pr-create: thin body still blocked (quoted)" \
+  2 "" "$THIN_BODY" double
 
 # ---------------------------------------------------------------------------
 # Result
