@@ -198,12 +198,82 @@ extract_flag_value() {
   '
 }
 
+# extract_path_flag FLAG_RE COMMAND  (me2resh/apexyard#1039)
+#
+# A PATH-valued flag is not a CONTENT-valued flag, and they need opposite
+# parsing strategies. Conflating them is what caused #1039:
+#
+#   CONTENT (--title / --body): may be multi-line and may contain literally
+#     anything — quotes, pipes, semicolons, markdown tables. Extraction must
+#     be GREEDY and terminate only on a real flag boundary, or an embedded
+#     quote truncates the body and the tail goes unscanned. That is exactly
+#     the leak #227 fixed, so extract_flag_value above stays as it is.
+#
+#   PATH (--body-file / -F): a filesystem path. It never contains a quote
+#     character, so extraction must be NON-GREEDY — stop at the FIRST
+#     closing quote. Greedy matching over a path is what made
+#     `--body-file "/p/b.md" 2>&1 | tail` fall through to the unquoted
+#     branch and come back as `"/p/b.md"`, quotes attached. `[ -f ]` was
+#     then false, the body was never read, and this hook exits 0 on an
+#     empty scan — a silent leak.
+#
+# An earlier attempt at #1039 widened extract_flag_value's anchor to accept
+# shell operators. That fixed the path case and BROKE the content case:
+# `sub()` is leftmost-first and each alternative ends in `.*`, so a body
+# containing a quote followed by ` |` truncated there. A markdown table row
+# ending in a quoted term is exactly that shape — and a Glossary table is
+# mandatory in this framework's own issue bodies. Splitting the two
+# extractors is the correct fix; widening the shared one is not.
+#
+# Non-greedy `[^"]*` here is safe precisely because paths cannot contain
+# quotes — the same construct that was WRONG for content.
+extract_path_flag() {
+  local flag_re="$1"
+  local cmd="$2"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Double-quoted path: stop at the first closing quote. Allows spaces
+      # in the path; a quote inside a path is not a supported shape.
+      re = "(" FLAG_RE ")[[:space:]]+\"[^\"]*\""
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
+        sub("\"$", "", chunk)
+        print chunk
+        exit
+      }
+      # Single-quoted path: same treatment.
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "[^" SQ "]*" SQ
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
+        sub(SQ "$", "", chunk)
+        print chunk
+        exit
+      }
+      # Unquoted path: a single whitespace-delimited token.
+      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
+}
+
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
 # because `gh api -F body=@file` uses the same flag letter).
-BODY_FILE=$(extract_flag_value '--body-file' "$COMMAND")
+# #1039: a path, so use the non-greedy path extractor — NOT the greedy
+# content extractor above, whose flag-boundary anchor cannot terminate a
+# quoted path followed by a shell operator.
+BODY_FILE=$(extract_path_flag '--body-file' "$COMMAND")
 if [ -z "$BODY_FILE" ]; then
   # gh pr create / gh issue create: -F <path>
   F_VAL=$(echo "$COMMAND" | sed -nE "s/.*(^|[[:space:]])-F[[:space:]]+\"([^\"]*)\".*/\2/p" | head -1)
@@ -219,9 +289,28 @@ if [ -z "$BODY_FILE" ]; then
   fi
 fi
 
+# #1039 — DISTINGUISH "no body-file" FROM "body-file I could not read".
+#
+# These used to share a code path: an unreadable path left the content
+# empty, and the empty-haystack short-circuit below then exited 0. That
+# made every parsing gap a SILENT LEAK — the operator saw a successful
+# `gh issue create` with no sign the scan had been skipped.
+#
+# Defence in depth, and the more important half of this fix: the path
+# extractor above closes the shapes we know about, this makes the whole
+# CLASS fail closed. A future parsing gap blocks loudly instead of leaking.
 BODY_FILE_CONTENT=""
-if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
-  BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
+BODY_FILE_UNREADABLE=0
+if [ -n "$BODY_FILE" ]; then
+  if [ -f "$BODY_FILE" ]; then
+    BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
+    # Readable-but-unslurpable (permissions, race): treat as unreadable.
+    if [ -z "$BODY_FILE_CONTENT" ] && [ -s "$BODY_FILE" ]; then
+      BODY_FILE_UNREADABLE=1
+    fi
+  else
+    BODY_FILE_UNREADABLE=1
+  fi
 fi
 
 # `gh api` body field: -F body=@file or -f body='text' or -F body='text'.
@@ -258,6 +347,35 @@ fi
 # Concatenate all candidate text. A newline between each part keeps
 # line-anchored regexes honest.
 HAYSTACK=$(printf '%s\n%s\n%s\n%s\n' "$TITLE" "$BODY" "$BODY_FILE_CONTENT" "$API_BODY")
+
+# #1039 — a body-file was named but could not be read. Refuse rather than
+# scan an empty haystack: we cannot call the content clean when we never
+# saw it, and this hook writes to a PUBLIC tracker. Checked BEFORE the
+# empty-input short-circuit below, which would otherwise swallow this case.
+if [ "$BODY_FILE_UNREADABLE" -eq 1 ]; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: body-file named but not readable
+======================================================================
+
+  --body-file / -F path: ${BODY_FILE}
+
+This command targets a PUBLIC framework repo, but the body file could not
+be read, so its contents were never scanned for private project
+references. Allowing the write would mean asserting the body is clean
+without having looked at it.
+
+Common causes:
+  - the path does not exist, or is relative to a different directory
+  - a typo in the path
+
+Fix the path and retry. To reference a registered project deliberately,
+add this marker to the body:
+    <!-- private-refs: allow -->
+======================================================================
+EOF
+  exit 2
+fi
 
 # Short-circuit on truly empty input (no title + no body + no files). This is
 # deliberate: `gh issue comment <n>` with no -b / -F triggers gh's editor and

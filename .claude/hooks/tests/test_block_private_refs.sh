@@ -210,6 +210,116 @@ run_case "clean body with embedded quotes → pass (no false positive)" \
   "gh issue create --repo me2resh/apexyard --title 'fix' --body \"$CLEAN_WITH_QUOTES\""
 
 # ---------------------------------------------------------------------------
+# 14–20. me2resh/apexyard#1039 — the hook must fail CLOSED.
+#
+# extract_flag_value's quoted branches used to anchor only on `--<letter>`
+# or end-of-string. A quoted --body-file followed by a shell operator or a
+# single-dash flag missed that anchor, fell through to the unquoted branch
+# (which has none), and came back WITH its quotes attached. `[ -f "\"…\"" ]`
+# was then false, the body was never read — and because this hook exits 0
+# when it recovers no body, the private name reached a public tracker
+# unscanned. Silent leak, not a visible block.
+#
+# These cases pin BOTH halves of the fix: the widened anchor, and the
+# fail-closed behaviour when a body-file is named but unreadable. Every
+# shape below returns exit 0 (leak) against the pre-#1039 hook.
+# ---------------------------------------------------------------------------
+
+LEAK_FILE="$TMPDIR/leak-body.md"
+printf 'Discovered during the marlow-core rebuild.\n' > "$LEAK_FILE"
+CLEAN_FILE="$TMPDIR/clean-body.md"
+printf 'A generic framework bug. No project named.\n' > "$CLEAN_FILE"
+
+GH_CREATE="gh issue create --repo me2resh/apexyard --title t"
+
+# 14. Quoted path + shell pipe — the shape an operator most likely types.
+run_case "#1039: quoted --body-file + pipe → blocked (was a silent leak)" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" 2>&1 | tail -3"
+
+# 15. Quoted path + single-dash flag (the old anchor only knew `--`).
+run_case "#1039: quoted --body-file + single-dash flag → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" -t \"[Bug] x\""
+
+# 16. Single-quoted variant of the same shape.
+run_case "#1039: single-quoted --body-file + pipe → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file '$LEAK_FILE' 2>&1 | tail -3"
+
+# 17. Quoted path + redirect.
+run_case "#1039: quoted --body-file + redirect → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" > /dev/null"
+
+# 18. Fail closed on a body-file we cannot read. Defence in depth: any
+#     FUTURE parsing gap now blocks loudly instead of leaking silently.
+run_case "#1039: named but unreadable --body-file → blocked, not skipped" \
+  2 "not readable" \
+  "$GH_CREATE --body-file $TMPDIR/does-not-exist.md"
+
+# 19. Regression — a clean body in the previously-failing shape must still
+#     pass. The fix must not convert a silent leak into a false positive.
+run_case "#1039: clean body, quoted + pipe → pass (no new false positive)" \
+  0 "" \
+  "$GH_CREATE --body-file \"$CLEAN_FILE\" 2>&1 | tail -3"
+
+# 20. Regression — `gh issue comment` with no body still opens gh's editor
+#     and must remain a no-op, not a fail-closed block.
+run_case "#1039: no body at all → still a no-op (editor case)" \
+  0 "" \
+  "gh issue comment 42 --repo me2resh/apexyard"
+
+# ---------------------------------------------------------------------------
+# 21–29. #1039 round 2 — back-half detection must survive the fix.
+#
+# The FIRST attempt at #1039 widened extract_flag_value's anchor to accept
+# shell operators. That closed the --body-file bypasses above and REOPENED
+# the leak #227 fixed, in a wider form — it was measurably worse than no fix
+# at all (upstream: 5 failures; that attempt: 9).
+#
+# Mechanism: the closing-quote stripper is `sub()`, which is leftmost-first
+# rather than suffix-anchored, and each alternative ended in `.*`. So an
+# embedded `"` whose next non-space character was a boundary char truncated
+# the body there, and everything after went unscanned — while this hook
+# exits 0 on an empty scan.
+#
+# The shape that makes this not-theoretical: a markdown table row ending in
+# a quoted term followed by ` |`. A Glossary table is MANDATORY in this
+# framework's own issue and PR bodies, so the most likely body shape was the
+# triggering one.
+#
+# Cases 11–13 above could not catch it: they use quote-followed-by-WORD, and
+# case 13 passes more easily under truncation (a clean body stays clean).
+# These cases put a private ref in the BACK half, after each boundary
+# character, so truncation is detected rather than rewarded.
+#
+# The real fix is a parsing split, not a regex tweak: --body-file takes a
+# PATH (non-greedy, stops at the first closing quote — paths cannot contain
+# quotes) while --body takes CONTENT (greedy, terminates only on a real flag
+# boundary). One extractor cannot serve both.
+# ---------------------------------------------------------------------------
+
+for boundary in '|' ';' '&' '<' '>' '(' ')'; do
+  run_case "#1039 r2: inline body, quote then '$boundary' then leak → block" \
+    2 "project name: curios-dog" \
+    "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" $boundary more text. Seen during the curios-dog rebuild.\""
+done
+
+# A single-dash flag as the boundary — same class, different trigger char.
+run_case "#1039 r2: inline body, quote then ' -t' then leak → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" -t more. Seen during the curios-dog rebuild.\""
+
+# The realistic shape: a mandatory Glossary table, then a leak below it.
+run_case "#1039 r2: markdown table row then leak in the tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body \"| Term | Definition |
+| \\\"thing\\\" | a thing |
+
+Discovered during the curios-dog rebuild.\""
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
