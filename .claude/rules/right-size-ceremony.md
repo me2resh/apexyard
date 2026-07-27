@@ -45,7 +45,9 @@ And batch: N tiny independent Lean changes don't each need their own review pass
 
 ## The "watch" half — process cost vs change size
 
-The other half of the operator's ask ("something to watch the overengineering") is a **disproportion nudge**: when the *process* is about to cost more than the *work* — e.g. spawning a ~100k-token review for a 3-line doc PR, or opening a five-agent fan-out for three two-line edits — stop and take the Lean path instead. The existing `enforce-budget.sh` hook already meters token cost; this rule is the judgment that reads that meter.
+The other half of the operator's ask ("something to watch the overengineering") is a **disproportion nudge**: when the *process* is about to cost more than the *work* — e.g. spawning a ~100k-token review for a 3-line doc PR, or opening a five-agent fan-out for three two-line edits — stop and take the Lean path instead.
+
+**The watch is your own judgment. There is no token meter in the open-source framework.** Earlier versions of this rule cited `enforce-budget.sh` as an existing hook that meters token cost — that was wrong: the hook is a **premium** component (`apexyard-premium#335`, gated on a `features.budget` entitlement) and is not tracked in this repository. Adopters running the OSS framework have no automatic disproportion signal; the nudge above is entirely self-discipline. Premium adopters do get the meter, and for them this rule is the judgment that reads it. See me2resh/apexyard#1044.
 
 ## Self-check before spawning review ceremony
 
@@ -63,7 +65,9 @@ If you're spinning up the full chain for a change that's plainly Lean, you misse
 
 This rule is **primarily self-discipline** — the same shape as [`plan-mode.md`](plan-mode.md) and [`loop-mode.md`](loop-mode.md). Mechanical enforcement of the *Lean* floor isn't viable: a shell hook can't see "the agent is about to spawn a review sub-agent for a tiny change" — the `Agent`/`Task` spawn boundary has no `PreToolUse` matcher (see [AgDR-0056](../../docs/agdr/AgDR-0056-subagent-mcp-first.md)), the same reason `parallel-work.md` and `agent-role-selection.md` are self-discipline too. And a *blocking* tier-classifier would re-introduce the exact rigidity this rule exists to reduce — a mis-tier that hard-blocks is worse than the over-ceremony it replaces.
 
-So the enforcement split is deliberate: the **Heavy** classes keep their existing hard gates (merge gate, migration gate, architecture/design/security review — all unchanged); the **Lean** floor is agent judgment, watched by `enforce-budget.sh`'s token meter. Pair with feedback memory: if the operator says a change got "too much process" or "too much token burn," lean into this rule harder next time.
+So the enforcement split is deliberate: the **Heavy** classes keep their existing hard gates (merge gate, migration gate, architecture/design/security review — all unchanged); the **Lean** floor is agent judgment, with **no mechanical backstop in the OSS framework** (premium adopters additionally get `enforce-budget.sh`'s token meter — see the "watch" section above). Pair with feedback memory: if the operator says a change got "too much process" or "too much token burn," lean into this rule harder next time.
+
+Stating that plainly matters, because it changes how much weight the rule can carry. Every *other* rule in the self-discipline family (`plan-mode`, `parallel-work`, `loop-mode`) is honest that it has no enforcement. This one read as though it had a meter behind it, which made the Lean floor sound firmer than it is. It isn't — and if the recurring "too much process" feedback persists, that gap is the thing to close, not the prose.
 
 The cost of taking the Lean path on a change that turns out to need more is a follow-up review — cheap, and rail 2 makes it rare. The cost of running the full chain on every trivial change is the gatekeeper queue and token burn that prompted this rule.
 
