@@ -176,32 +176,72 @@ printf '## Summary\n\n- only a summary\n' > "$TMPDIR/thin-body.md"
 
 PR_CREATE="gh pr create --repo me2resh/apexyard --title \"fix(#1038): x\""
 
-check_hook() {
-  local name="$1" expected_exit="$2" cmd="$3" actual
-  ( cd "$TMPDIR" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | "$PRC_HOOK" ) >/dev/null 2>&1
-  actual=$?
-  if [ "$actual" = "$expected_exit" ]; then
-    echo "PASS: $name"
-    PASS=$((PASS + 1))
-  else
-    echo "FAIL: $name — expected exit $expected_exit, got $actual"
-    FAIL=$((FAIL + 1))
-  fi
+# Assert on STDERR CONTENT, not on the exit code.
+#
+# validate-pr-create.sh derives its exit code from several independent
+# checks — branch name, ticket existence in the tracker (a network call),
+# PR-title format — all of which read AMBIENT state. An earlier version of
+# these cases asserted `exit 0`, which passed locally (conforming branch,
+# resolvable ticket) and failed 3/22 in CI, where neither holds. A PR fixing
+# false-positive hook failures cannot ship a test that itself false-fails.
+#
+# What is actually under test here is narrow: can the hook READ a quoted
+# --body-file path? That is observable precisely, and independently of every
+# ambient check, through two stderr signals:
+#
+#   "not readable"                  -> the path was mis-parsed (the #1038 bug)
+#   "missing required '## Testing'" -> it read the file but not the content
+#
+# Neither appears when extraction works, whatever the exit code ends up
+# being for unrelated reasons.
+check_stderr_absent() {
+  local name="$1" needle="$2" cmd="$3" err
+  err=$( cd "$TMPDIR" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | "$PRC_HOOK" 2>&1 >/dev/null )
+  case "$err" in
+    *"$needle"*)
+      echo "FAIL: $name — stderr still reports [$needle]"
+      echo "   stderr: $(printf '%s' "$err" | head -2)"
+      FAIL=$((FAIL + 1)) ;;
+    *)
+      echo "PASS: $name"
+      PASS=$((PASS + 1)) ;;
+  esac
 }
 
-check_hook "validate-pr-create: unquoted path, complete body → pass" \
-  0 "$PR_CREATE --body-file $TMPDIR/full-body.md"
-check_hook "validate-pr-create: QUOTED path, complete body → pass (#1038)" \
-  0 "$PR_CREATE --body-file \"$TMPDIR/full-body.md\""
-check_hook "validate-pr-create: single-quoted path, complete body → pass (#1038)" \
-  0 "$PR_CREATE --body-file '$TMPDIR/full-body.md'"
+check_stderr_present() {
+  local name="$1" needle="$2" cmd="$3" err
+  err=$( cd "$TMPDIR" && jq -n --arg c "$cmd" '{tool_input:{command:$c}}' | "$PRC_HOOK" 2>&1 >/dev/null )
+  case "$err" in
+    *"$needle"*)
+      echo "PASS: $name"
+      PASS=$((PASS + 1)) ;;
+    *)
+      echo "FAIL: $name — expected stderr to report [$needle]"
+      echo "   stderr: $(printf '%s' "$err" | head -2)"
+      FAIL=$((FAIL + 1)) ;;
+  esac
+}
+
+# The path must be READ — no "not readable" warning — however it is quoted.
+check_stderr_absent "validate-pr-create: unquoted path is read" \
+  "not readable" "$PR_CREATE --body-file $TMPDIR/full-body.md"
+check_stderr_absent "validate-pr-create: QUOTED path is read (#1038)" \
+  "not readable" "$PR_CREATE --body-file \"$TMPDIR/full-body.md\""
+check_stderr_absent "validate-pr-create: single-quoted path is read (#1038)" \
+  "not readable" "$PR_CREATE --body-file '$TMPDIR/full-body.md'"
+
+# Having read it, the hook must SEE the sections — the pre-fix symptom was
+# reporting them missing because the file was never opened.
+check_stderr_absent "validate-pr-create: quoted path — sections found (#1038)" \
+  "## Testing" "$PR_CREATE --body-file \"$TMPDIR/full-body.md\""
 
 # Regression: the fix must not make the hook permissive. A body genuinely
-# missing required sections still blocks, whether the path is quoted or not.
-check_hook "validate-pr-create: thin body still blocked (unquoted)" \
-  2 "$PR_CREATE --body-file $TMPDIR/thin-body.md"
-check_hook "validate-pr-create: thin body still blocked (quoted)" \
-  2 "$PR_CREATE --body-file \"$TMPDIR/thin-body.md\""
+# missing its sections is still reported, quoted or not — proving the
+# absence assertions above are meaningful rather than vacuous.
+check_stderr_present "validate-pr-create: thin body still reported (unquoted)" \
+  "## Testing" "$PR_CREATE --body-file $TMPDIR/thin-body.md"
+check_stderr_present "validate-pr-create: thin body still reported (quoted)" \
+  "## Testing" "$PR_CREATE --body-file \"$TMPDIR/thin-body.md\""
 
 # ---------------------------------------------------------------------------
 # Result
