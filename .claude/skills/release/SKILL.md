@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /release — Cut an apexyard release
 
-Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA, and the changelog step warns loudly on a large main↔dev commit-count mismatch — both close the #872 changelog-truncation gap. Design rationale: AgDR-0076, AgDR-0094.
+Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA, and the changelog step warns loudly if commits inside the resolved changelog range aren't all making it into entries — both guard against the #872 changelog-truncation failure mode. Design rationale: AgDR-0076, AgDR-0094.
 
 This skill is **framework-only** — it's for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and don't have a release-cut flow.
 
@@ -76,6 +76,16 @@ echo "$CHANGELOG_DRAFT"
 # Released-From trailer, or the #737 sync-boundary heuristic otherwise. The
 # count-mismatch guard below MUST compare against this range, not main..dev.
 LOG_RANGE=$(grep -oE 'RELEASE_CHANGELOG_RANGE=.*' /tmp/release-changelog-range.txt | cut -d= -f2-)
+
+# #1017: fail CLOSED here, not at the arithmetic below. An empty/unparseable
+# $LOG_RANGE must stop the release, not silently flow into `git rev-list
+# --count ""` (whose stderr never reaches $RAW_COUNT and would let the guard
+# read a "0 commits, 0 gap" pass — AgDR-0104: "a gate that can't evaluate its
+# precondition must block, not allow").
+if [ -z "$LOG_RANGE" ]; then
+  echo "ERROR: could not read RELEASE_CHANGELOG_RANGE from bin/release-changelog.sh's stderr (see /tmp/release-changelog-range.txt). The count-mismatch guard has nothing to check against — do NOT proceed until this is resolved." >&2
+  exit 1
+fi
 ```
 
 The helper emits markdown to stdout in the format:
@@ -108,8 +118,17 @@ Immediately after generating the draft, sanity-check its entry count against the
 
 **#1002 — do not compare against `upstream/main..upstream/dev`.** Under the release-cut model `main` only ever receives squash merges, so every individual `dev` commit stays permanently unreachable from `main` — `main..dev` grows monotonically with every release and can never shrink. Comparing the changelog's entry count against that raw, ever-growing number always false-positives (v5.2.0 cut: 402 raw commits vs. ~1-2 real entries, a "gap" of 400 on a perfectly correct changelog). `$LOG_RANGE` is anchored on the actual cut point (the `Released-From` trailer, or the #737 sync-boundary fallback) and is the range that matters:
 
+**#1017 — what this guard can (and can't) still see.** `RAW_COUNT` and `ENTRY_COUNT` are now *both* derived from the same `$LOG_RANGE`, so the guard can no longer catch a truncated *range* the way it originally did — if `$LOG_RANGE` itself were too narrow, both counts would shrink together and the gap would stay small. That's an acceptable trade, not a silent regression: `$LOG_RANGE`'s anchor is exact by construction once a `Released-From` trailer exists (AgDR-0094), and step 6's post-merge check now makes a missing trailer a hard failure — so the truncated-range case is closed at its source. What the guard genuinely still catches is **classification drop-out inside a correct range**: a commit that really is inside `$LOG_RANGE` but that `bin/release-changelog.sh` didn't turn into a changelog bullet (a subject it failed to classify, a filtering bug, etc.). The warning text below describes that condition, not the old truncated-range one — say what's actually being detected, not what the guard detected before #1012 re-anchored it.
+
 ```bash
-RAW_COUNT=$(git rev-list --count "$LOG_RANGE")
+RAW_COUNT=$(git rev-list --count "$LOG_RANGE") || {
+  # #1017: fail CLOSED — don't let a `git rev-list` failure (empty or
+  # malformed $LOG_RANGE) leave $RAW_COUNT unset/empty and the arithmetic
+  # below silently treat it as 0 (GAP would go negative, no warning, guard
+  # passes quiet on exactly the precondition-failure case it exists to catch).
+  echo "ERROR: 'git rev-list --count $LOG_RANGE' failed — the count-mismatch guard cannot evaluate its precondition. Do NOT proceed; fix \$LOG_RANGE (see /tmp/release-changelog-range.txt) and rerun." >&2
+  exit 1
+}
 # Count changelog entry bullets, excluding the trailing "- Closes #N, ..."
 # summary line (#1002: it is a summary, not an entry, and used to be
 # miscounted as one, causing an off-by-one on every run).
@@ -118,12 +137,14 @@ ENTRY_COUNT=$(printf '%s\n' "$CHANGELOG_DRAFT" | grep -E '^- ' | grep -vcE '^- C
 GAP=$(( RAW_COUNT - ENTRY_COUNT ))
 # Tolerance: release/sync/"Merge branch" marker commits are excluded from the
 # changelog BY DESIGN (bin/release-changelog.sh's classify step) — a handful
-# of those is normal, not a bug. A gap much larger than that is the #872
-# signature (a silently truncated range).
+# of those is normal, not a bug. A gap much larger than that means commits
+# genuinely inside $LOG_RANGE are failing to classify into changelog entries
+# — NOT a truncated range (see the #1017 note above; $LOG_RANGE itself is
+# anchored on the Released-From trailer or the #737 fallback either way).
 TOLERANCE=5
 if [ "$GAP" -gt "$TOLERANCE" ]; then
   echo "⚠️  WARNING: the release range ($LOG_RANGE) has $RAW_COUNT commits but the changelog lists only $ENTRY_COUNT entries (gap: $GAP, tolerance: $TOLERANCE)."
-  echo "    This is the #872 signature — a truncated changelog range. Verify PREV_TAG/HEAD_REF and \$LOG_RANGE before proceeding."
+  echo "    Commits inside \$LOG_RANGE are not making it into changelog entries — read 'git log $LOG_RANGE --oneline' against the draft above and find what's missing before proceeding."
 fi
 ```
 
@@ -344,7 +365,7 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 7. **`<!-- multi-close: approved -->`** in the release PR body is required — release PRs legitimately close many tickets at once.
 8. **`--dry-run` stops before writing any files.** The draft CHANGELOG section and PR body are shown; nothing is committed, branched, pushed, or filed.
 9. **The `Released-From` trailer must be its own final paragraph** in BOTH the step-4 branch commit and the step-5 PR body (AgDR-0094). It is what makes the next release's changelog range deterministic — a trailer that lands mid-body (or gets pushed off the end by later edits) silently degrades back to the pre-AgDR-0094 sync-boundary heuristic, with all its known failure modes (#737, #872).
-10. **Show the count-mismatch warning if it fires** — a loud gap between `$LOG_RANGE`'s raw commit count and the changelog's entry count is the #872 signature. Don't proceed past it without the operator explicitly confirming the range is correct. **Never compare against `upstream/main..upstream/dev`** (#1002) — under the release-cut squash model that range only ever grows, so it always false-positives; `$LOG_RANGE` (captured in step 3) is the range the changelog was actually built from.
+10. **Show the count-mismatch warning if it fires** — a loud gap between `$LOG_RANGE`'s raw commit count and the changelog's entry count means commits inside that range didn't make it into changelog entries (#1017 — not a truncated range; both counts derive from the same `$LOG_RANGE`, so a truncated range can no longer produce this gap). Don't proceed past it without the operator explicitly confirming the range is correct. **Never compare against `upstream/main..upstream/dev`** (#1002) — under the release-cut squash model that range only ever grows, so it always false-positives; `$LOG_RANGE` (captured in step 3) is the range the changelog was actually built from. **A `$LOG_RANGE` that fails to resolve or fails `git rev-list` must halt the release (`exit 1`), never pass silently** (#1017) — see step 3's guard.
 11. **Merge the release PR with an explicit `--subject`/`--body-file`, never a bare `gh pr merge --squash`** (#1004) — this repo's `squash_merge_commit_message=COMMIT_MESSAGES` setting silently drops a trailer that lives only in the PR body. See step 6.
 12. **Verify the `Released-From` trailer landed on the squash commit immediately after merge, and stop before `/release-sync` if it didn't** (#1004) — a missing trailer is invisible until the *next* release cut silently mis-anchors its changelog range. See step 6's verification block and the post-tag checklist in step 7.
 
