@@ -154,43 +154,81 @@ extract_flag_value() {
   #   --title value
   #
   # Quoted-value regex is GREEDY and anchored on the next flag boundary
-  # (whitespace + `--<letter>`) or end-of-string. The earlier sed form
-  # `[^"]*` truncated at the first embedded double quote
-  # (me2resh/apexyard#227); for the leak-protection hook that's a real
-  # security tail — a body with an embedded `"` could let private refs in
-  # the back half slip past the gate. awk + greedy + boundary anchor
-  # gives us multi-line consumption and correct termination in one shot.
+  # or end-of-string. The earlier sed form `[^"]*` truncated at the first
+  # embedded double quote (me2resh/apexyard#227); for the leak-protection
+  # hook that's a real security tail — a body with an embedded `"` could
+  # let private refs in the back half slip past the gate. awk + greedy +
+  # boundary anchor gives us multi-line consumption and correct
+  # termination in one shot.
+  #
+  # #1039 — WIDEN THE ANCHOR, AND STRIP QUOTES IN THE FALLBACK.
+  # The anchor used to accept only `--<letter>` or end-of-string. Two
+  # ordinary command shapes therefore failed to match the quoted branches:
+  #
+  #   gh issue create ... --body-file "/p/b.md" 2>&1 | tail -3   (shell operator)
+  #   gh issue create ... --body-file "/p/b.md" -t "[Bug] x"     (single-dash flag)
+  #
+  # On that miss, execution fell through to the UNQUOTED branch, which has
+  # no anchor and returned the token with its quotes still attached. The
+  # caller then did `[ -f "\"/p/b.md\"" ]`, which is false, so the body was
+  # never read — and THIS hook exits 0 when it recovers no body, so a
+  # private project name reached a public tracker completely unscanned.
+  # That is a silent leak, not a false positive: the sibling hooks sharing
+  # this extractor (require-agdr-for-arch-pr.sh, #1038) merely over-block.
+  #
+  # Two changes, both of which only ever cause MORE text to be scanned:
+  #   1. The anchor now also accepts a single-dash flag (`-t`) and a shell
+  #      operator boundary (`| ; & < > (`), matching what
+  #      validate-issue-structure.sh already adopted for #695.
+  #   2. The unquoted fallback strips ONE matched surrounding quote pair,
+  #      so a value reaching it by any other route is still usable.
+  #
+  # Only a MATCHED pair is stripped, so a file literally named `"x.md"`
+  # (quotes in the filename) is not silently rewritten to `x.md` — that
+  # asymmetry would let a crafted path diverge from what gh actually reads.
   local flag_re="$1"
   local cmd="$2"
   printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      # Next-token boundary: a flag (one or two dashes), a shell operator,
+      # or end-of-string. `--?[a-zA-Z]` is used rather than an interval
+      # expression so this stays portable across BSD/GNU awk.
+      ANCH = "([[:space:]]+--?[a-zA-Z]|[[:space:]]*[|;&<>()]|[[:space:]]*$)"
+      # Double-quoted value: greedy `(.*)` anchored on the boundary above.
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"" ANCH
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"([[:space:]]+--?[a-zA-Z].*|[[:space:]]*[|;&<>()].*)?$", "", chunk)
         sub("\"[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
       # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ ANCH
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "([[:space:]]+--?[a-zA-Z].*|[[:space:]]*[|;&<>()].*)?$", "", chunk)
         sub(SQ "[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
-      # Unquoted value: single token, embedded quotes irrelevant.
+      # Unquoted value: single token. Strip ONE matched surrounding quote
+      # pair (#1039) so a quoted value that reached this branch is usable.
       re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        if (length(chunk) >= 2) {
+          first = substr(chunk, 1, 1)
+          last  = substr(chunk, length(chunk), 1)
+          if ((first == "\"" && last == "\"") || (first == SQ && last == SQ)) {
+            chunk = substr(chunk, 2, length(chunk) - 2)
+          }
+        }
         print chunk
         exit
       }
@@ -219,9 +257,29 @@ if [ -z "$BODY_FILE" ]; then
   fi
 fi
 
+# #1039 — DISTINGUISH "no body-file" FROM "body-file I could not read".
+#
+# These used to be the same code path: an unreadable path left
+# BODY_FILE_CONTENT empty, and the empty-haystack short-circuit below then
+# exited 0. That made every extractor gap a SILENT LEAK rather than a
+# visible failure — the operator saw a successful `gh issue create` with no
+# indication the scan had been skipped.
+#
+# Defence in depth: the extractor fix above closes the known shapes, but
+# this makes the *class* fail closed. Any future parsing gap that yields an
+# unreadable path now blocks loudly instead of waving the write through.
 BODY_FILE_CONTENT=""
-if [ -n "$BODY_FILE" ] && [ -f "$BODY_FILE" ]; then
-  BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
+BODY_FILE_UNREADABLE=0
+if [ -n "$BODY_FILE" ]; then
+  if [ -f "$BODY_FILE" ]; then
+    BODY_FILE_CONTENT=$(cat "$BODY_FILE" 2>/dev/null)
+    # Readable-but-unslurpable (permissions, race): treat as unreadable.
+    if [ -z "$BODY_FILE_CONTENT" ] && [ -s "$BODY_FILE" ]; then
+      BODY_FILE_UNREADABLE=1
+    fi
+  else
+    BODY_FILE_UNREADABLE=1
+  fi
 fi
 
 # `gh api` body field: -F body=@file or -f body='text' or -F body='text'.
@@ -258,6 +316,36 @@ fi
 # Concatenate all candidate text. A newline between each part keeps
 # line-anchored regexes honest.
 HAYSTACK=$(printf '%s\n%s\n%s\n%s\n' "$TITLE" "$BODY" "$BODY_FILE_CONTENT" "$API_BODY")
+
+# #1039 — a body-file was named but could not be read. Refuse rather than
+# scan an empty haystack: we cannot say the content is clean when we never
+# saw it, and this hook writes to a PUBLIC tracker. Checked BEFORE the
+# empty-input short-circuit below, which would otherwise swallow this case.
+if [ "$BODY_FILE_UNREADABLE" -eq 1 ]; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: body-file named but not readable
+======================================================================
+
+  --body-file / -F path: ${BODY_FILE}
+
+This command targets a PUBLIC framework repo, but the body file could not
+be read, so its contents were never scanned for private project
+references. Allowing the write would mean asserting the body is clean
+without having looked at it.
+
+Common causes:
+  - the path does not exist, or is relative to a different directory
+  - the value still carries surrounding quotes from the command line
+  - a typo in the path
+
+Fix the path and retry. To reference a registered project deliberately,
+add this marker to the body:
+    <!-- private-refs: allow -->
+======================================================================
+EOF
+  exit 2
+fi
 
 # Short-circuit on truly empty input (no title + no body + no files). This is
 # deliberate: `gh issue comment <n>` with no -b / -F triggers gh's editor and

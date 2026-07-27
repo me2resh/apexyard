@@ -210,6 +210,67 @@ run_case "clean body with embedded quotes → pass (no false positive)" \
   "gh issue create --repo me2resh/apexyard --title 'fix' --body \"$CLEAN_WITH_QUOTES\""
 
 # ---------------------------------------------------------------------------
+# 14–20. me2resh/apexyard#1039 — the hook must fail CLOSED.
+#
+# extract_flag_value's quoted branches used to anchor only on `--<letter>`
+# or end-of-string. A quoted --body-file followed by a shell operator or a
+# single-dash flag missed that anchor, fell through to the unquoted branch
+# (which has none), and came back WITH its quotes attached. `[ -f "\"…\"" ]`
+# was then false, the body was never read — and because this hook exits 0
+# when it recovers no body, the private name reached a public tracker
+# unscanned. Silent leak, not a visible block.
+#
+# These cases pin BOTH halves of the fix: the widened anchor, and the
+# fail-closed behaviour when a body-file is named but unreadable. Every
+# shape below returns exit 0 (leak) against the pre-#1039 hook.
+# ---------------------------------------------------------------------------
+
+LEAK_FILE="$TMPDIR/leak-body.md"
+printf 'Discovered during the marlow-core rebuild.\n' > "$LEAK_FILE"
+CLEAN_FILE="$TMPDIR/clean-body.md"
+printf 'A generic framework bug. No project named.\n' > "$CLEAN_FILE"
+
+GH_CREATE="gh issue create --repo me2resh/apexyard --title t"
+
+# 14. Quoted path + shell pipe — the shape an operator most likely types.
+run_case "#1039: quoted --body-file + pipe → blocked (was a silent leak)" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" 2>&1 | tail -3"
+
+# 15. Quoted path + single-dash flag (the old anchor only knew `--`).
+run_case "#1039: quoted --body-file + single-dash flag → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" -t \"[Bug] x\""
+
+# 16. Single-quoted variant of the same shape.
+run_case "#1039: single-quoted --body-file + pipe → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file '$LEAK_FILE' 2>&1 | tail -3"
+
+# 17. Quoted path + redirect.
+run_case "#1039: quoted --body-file + redirect → blocked" \
+  2 "marlow-core" \
+  "$GH_CREATE --body-file \"$LEAK_FILE\" > /dev/null"
+
+# 18. Fail closed on a body-file we cannot read. Defence in depth: any
+#     FUTURE parsing gap now blocks loudly instead of leaking silently.
+run_case "#1039: named but unreadable --body-file → blocked, not skipped" \
+  2 "not readable" \
+  "$GH_CREATE --body-file $TMPDIR/does-not-exist.md"
+
+# 19. Regression — a clean body in the previously-failing shape must still
+#     pass. The fix must not convert a silent leak into a false positive.
+run_case "#1039: clean body, quoted + pipe → pass (no new false positive)" \
+  0 "" \
+  "$GH_CREATE --body-file \"$CLEAN_FILE\" 2>&1 | tail -3"
+
+# 20. Regression — `gh issue comment` with no body still opens gh's editor
+#     and must remain a no-op, not a fail-closed block.
+run_case "#1039: no body at all → still a no-op (editor case)" \
+  0 "" \
+  "gh issue comment 42 --repo me2resh/apexyard"
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
