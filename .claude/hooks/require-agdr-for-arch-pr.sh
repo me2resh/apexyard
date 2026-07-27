@@ -62,37 +62,74 @@ extract_flag_value() {
   # recognised flag boundary (whitespace + `--<letter>`) or end-of-string. This
   # captures the full quoted span, including any embedded quotes, without
   # bleeding past the start of the next flag.
+  #
+  # #1038 — WIDEN THE ANCHOR, AND STRIP QUOTES IN THE FALLBACK.
+  # The anchor accepted only `--<letter>` or end-of-string, so a quoted
+  # value followed by a shell operator or a single-dash flag missed the
+  # quoted branches entirely:
+  #
+  #   gh pr create ... --body-file "/p/b.md" 2>&1 | tail -5    (shell operator)
+  #   gh pr create ... --body-file "/p/b.md" -t "x"            (single-dash flag)
+  #
+  # Execution then fell through to the unquoted branch, which has no anchor
+  # and returned the token WITH its quotes attached. The caller's
+  # `[ -f "\"/p/b.md\"" ]` was false, BODY_FILE_CONTENT stayed empty, and the
+  # `<!-- agdr: not-applicable -->` marker inside that file was never seen —
+  # so the PR was blocked for a missing AgDR that was actually declared.
+  # Note an UNQUOTED path with a trailing pipe always extracted fine; the
+  # failing combination is specifically quoted-value + non-`--flag` follower.
+  #
+  # The same defect in block-private-refs-in-public-repos.sh fails OPEN
+  # instead of closed (it exits 0 when it recovers no body), which is why
+  # that one is tracked and fixed separately as #1039.
+  #
+  # Both changes only ever cause MORE text to be scanned, and the anchor now
+  # matches what validate-issue-structure.sh already adopted for #695.
   local flag_re="$1"
   local cmd="$2"
   printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      # Double-quoted value: greedy `(.*)` anchored on next flag or EOS.
-      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      # Next-token boundary: a flag (one or two dashes), a shell operator,
+      # or end-of-string. `--?[a-zA-Z]` rather than an interval expression
+      # so this stays portable across BSD/GNU awk.
+      ANCH = "([[:space:]]+--?[a-zA-Z]|[[:space:]]*[|;&<>()]|[[:space:]]*$)"
+      # Double-quoted value: greedy `(.*)` anchored on the boundary above.
+      re = "(" FLAG_RE ")[[:space:]]+\"(.*)\"" ANCH
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub("\"([[:space:]]+--?[a-zA-Z].*|[[:space:]]*[|;&<>()].*)?$", "", chunk)
         sub("\"[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
       # Single-quoted value: same greedy + anchor treatment.
-      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ ANCH
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+        sub(SQ "([[:space:]]+--?[a-zA-Z].*|[[:space:]]*[|;&<>()].*)?$", "", chunk)
         sub(SQ "[[:space:]]*$", "", chunk)
         print chunk
         exit
       }
-      # Unquoted value: single token, embedded quotes irrelevant.
+      # Unquoted value: single token. Strip ONE matched surrounding quote
+      # pair (#1038) so a quoted value reaching this branch is still usable.
+      # Only a MATCHED pair, so a file literally named `"x.md"` is not
+      # silently rewritten to a different path than the one gh will read.
       re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        if (length(chunk) >= 2) {
+          first = substr(chunk, 1, 1)
+          last  = substr(chunk, length(chunk), 1)
+          if ((first == "\"" && last == "\"") || (first == SQ && last == SQ)) {
+            chunk = substr(chunk, 2, length(chunk) - 2)
+          }
+        }
         print chunk
         exit
       }

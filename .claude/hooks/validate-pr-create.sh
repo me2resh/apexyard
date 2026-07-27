@@ -503,6 +503,23 @@ BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:sp
 if [ -z "$BODY_FILE" ]; then
   BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-F[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
 fi
+# #1038 — strip ONE matched surrounding quote pair.
+#
+# The `[^[:space:]]+` token grab above is quote-blind, so `--body-file
+# "/p/body.md"` yielded the value WITH its quotes: `"/p/body.md"`. The
+# `-f` test below was then false, BODY_CONTENT stayed empty, and the hook
+# blocked the PR reporting `## Testing` / `## Glossary` as missing when both
+# were present in the file — an error message that points at the PR author
+# rather than at the parser. Quoting a path is correct shell practice, so
+# this fired on ordinary usage.
+#
+# Only a MATCHED pair is stripped: a file literally named `"x.md"` (quotes
+# in the filename) must keep resolving to the same path gh will read, not a
+# different one.
+case "$BODY_FILE" in
+  '"'*'"') BODY_FILE=${BODY_FILE#\"}; BODY_FILE=${BODY_FILE%\"} ;;
+  "'"*"'") BODY_FILE=${BODY_FILE#\'}; BODY_FILE=${BODY_FILE%\'} ;;
+esac
 if [ -n "$BODY_FILE" ]; then
   # Resolve relative paths against the command's cd-target (if any), so
   # 'cd /project && gh pr create --body-file body.md' finds the file at
