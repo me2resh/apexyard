@@ -271,6 +271,55 @@ run_case "#1039: no body at all → still a no-op (editor case)" \
   "gh issue comment 42 --repo me2resh/apexyard"
 
 # ---------------------------------------------------------------------------
+# 21–29. #1039 round 2 — back-half detection must survive the fix.
+#
+# The FIRST attempt at #1039 widened extract_flag_value's anchor to accept
+# shell operators. That closed the --body-file bypasses above and REOPENED
+# the leak #227 fixed, in a wider form — it was measurably worse than no fix
+# at all (upstream: 5 failures; that attempt: 9).
+#
+# Mechanism: the closing-quote stripper is `sub()`, which is leftmost-first
+# rather than suffix-anchored, and each alternative ended in `.*`. So an
+# embedded `"` whose next non-space character was a boundary char truncated
+# the body there, and everything after went unscanned — while this hook
+# exits 0 on an empty scan.
+#
+# The shape that makes this not-theoretical: a markdown table row ending in
+# a quoted term followed by ` |`. A Glossary table is MANDATORY in this
+# framework's own issue and PR bodies, so the most likely body shape was the
+# triggering one.
+#
+# Cases 11–13 above could not catch it: they use quote-followed-by-WORD, and
+# case 13 passes more easily under truncation (a clean body stays clean).
+# These cases put a private ref in the BACK half, after each boundary
+# character, so truncation is detected rather than rewarded.
+#
+# The real fix is a parsing split, not a regex tweak: --body-file takes a
+# PATH (non-greedy, stops at the first closing quote — paths cannot contain
+# quotes) while --body takes CONTENT (greedy, terminates only on a real flag
+# boundary). One extractor cannot serve both.
+# ---------------------------------------------------------------------------
+
+for boundary in '|' ';' '&' '<' '>' '(' ')'; do
+  run_case "#1039 r2: inline body, quote then '$boundary' then leak → block" \
+    2 "project name: curios-dog" \
+    "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" $boundary more text. Seen during the curios-dog rebuild.\""
+done
+
+# A single-dash flag as the boundary — same class, different trigger char.
+run_case "#1039 r2: inline body, quote then ' -t' then leak → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" -t more. Seen during the curios-dog rebuild.\""
+
+# The realistic shape: a mandatory Glossary table, then a leak below it.
+run_case "#1039 r2: markdown table row then leak in the tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body \"| Term | Definition |
+| \\\"thing\\\" | a thing |
+
+Discovered during the curios-dog rebuild.\""
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
