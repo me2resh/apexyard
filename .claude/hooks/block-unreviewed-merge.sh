@@ -341,7 +341,7 @@ MSG
     exit 2
   fi
   tracker_review_at_sha "$CMD_REPO" "$PR_NUMBER" "$CURRENT_SHA"
-    case $? in
+  case $? in
       0) : ;;   # verified — a review exists at this exact commit
       3)
         # SKIP, not block — and the distinction is principled, not a loophole.

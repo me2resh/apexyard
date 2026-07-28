@@ -110,4 +110,4 @@ gate skips with a warning rather than bricking those adopters.
   gate stays deferred, unchanged; this is a weaker sibling that is satisfiable today
 - Relies on [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md) — the comment-review
   flow that makes this satisfiable
-- Tests: `.claude/hooks/tests/test_require_posted_review.sh` (8 cases, both directions)
+- Tests: `.claude/hooks/tests/test_require_posted_review.sh` (13 cases, both directions; every fail-open shape is mutation-verified — reverting a fix drops the suite by exactly the case that names it)
