@@ -286,6 +286,16 @@ fi
 REQUIRE_POSTED_REVIEW=false
 if command -v config_get_or >/dev/null 2>&1; then
   REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
+elif [ -f "${MARKER_HOME}/.claude/project-config.json" ] || \
+     [ -f "${MARKER_HOME}/.claude/project-config.defaults.json" ]; then
+  # config_get_or is undefined — _lib-read-config.sh is missing from a fork that
+  # HAS config files. We cannot read the flag, so we cannot know whether this
+  # control was supposed to run. Defaulting to false would silently skip it on
+  # an operator who turned it on. Fail closed, same as the missing-tracker-lib
+  # guard below. This is not a JSON parser (that was the over-engineered version
+  # #1051 removed) — it is four lines refusing to guess.
+  echo "BLOCKED: .claude/hooks/_lib-read-config.sh is missing, so review_markers.require_posted_review cannot be read. This gate will not assume the check is off — restore the file (a partial install or bad sync usually explains it) and retry." >&2
+  exit 2
 fi
 if [ "$REQUIRE_POSTED_REVIEW" = "true" ]; then
   # Fail closed when the library that performs the check is missing. An

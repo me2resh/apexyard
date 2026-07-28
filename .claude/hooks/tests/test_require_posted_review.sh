@@ -219,14 +219,23 @@ run_case "flag ON + forge query FAILS -> BLOCKED (fail closed, not open)" 2 "cou
 # regression turns "couldn't check" back into "allowed" loudly, not silently.
 # ==========================================================================
 
-# NOTE on a case that is deliberately NOT here: "the config reader is missing".
-# An earlier revision grep-parsed the JSON by hand for that case. jq is a hard
-# prerequisite of this framework (43 hooks call it; check-jq-installed.sh warns
-# at SessionStart), and a missing _lib-read-config.sh is a broken install — so
-# hand-rolling a parser in one hook was workaround machinery for a state we
-# don't support, in a control whose whole argument is "don't fail open quietly".
-# It also never fired: a merge with jq absent is refused by the #965 guard
-# before the flag is read at all. Removed rather than tested.
+# The flag read has two ways to go wrong, and they get different treatment.
+#
+# jq ABSENT — not tested, deliberately. jq is a hard prerequisite (43 hooks call
+# it; check-jq-installed.sh warns at SessionStart), and the case is unreachable
+# anyway: a merge with jq absent is refused by the #965 guard at :113, long
+# before the flag is read. An earlier revision hand-parsed the JSON to survive
+# it; that was workaround machinery for a state we don't support, and it was
+# removed.
+#
+# READER MISSING — tested, below. Rex caught that removing the workaround left
+# this half as a SILENT ALLOW: config_get_or undefined, flag defaults to false,
+# control skipped on an operator who turned it on. The fix is not a parser — it
+# is a refusal to guess. Four lines, same shape as the missing-tracker-lib guard.
+sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" ""; write_markers "$sb" 42
+rm -f "$sb/.claude/hooks/_lib-read-config.sh"
+run_case "config reader missing + flag ON -> BLOCKS (refuses to guess, no silent skip)" \
+  2 "_lib-read-config.sh is missing" "$sb" 42
 
 # Hakim LOW — the missing-_lib-tracker.sh block shipped untested in f8a219fe.
 sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" "$HEAD_SHA"; write_markers "$sb" 42
