@@ -189,7 +189,8 @@ defeating the entire purpose of /release-sync.
 Use --merge instead:
   gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>} --merge --delete-branch
 
-Or invoke /approve-merge ${PR_NUMBER} — it auto-detects sync PRs and uses --merge.
+Or have the human approver run /approve-merge ${PR_NUMBER} — it auto-detects sync
+PRs and uses --merge. That skill is human-only (#1042); the model cannot invoke it.
 
 See AgDR-0053 for the full rationale.
 MSG
@@ -240,10 +241,12 @@ Missing file:
   ${REX_APPROVAL}
 
 To unblock:
-  1. Invoke the code-reviewer agent on this PR
+  1. Run the code review on this PR (/code-review ${PR_NUMBER}) — since #1042
+     this skill IS model-invocable, so you can do this yourself
   2. When Rex returns "approved", it records the approval automatically
-  3. Then run /approve-merge ${PR_NUMBER} for the ${APPROVER_TITLE} approval
-  4. Retry the merge
+  3. Tell the ${APPROVER_TITLE} the PR is ready and ask THEM to run
+     /approve-merge ${PR_NUMBER} — that skill is human-only, you cannot
+  4. Their invocation records the approval and performs the merge
 
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
 MSG
@@ -303,13 +306,16 @@ Missing file:
    title above — only the printed word changes, never the marker name.)
 
 To unblock:
-  1. Stop and ask the ${APPROVER_TITLE} explicitly: "PR #${PR_NUMBER} ready to merge — approved?"
-  2. When the ${APPROVER_TITLE} says "approved" / "merge it" / "ship it" naming PR #${PR_NUMBER},
-     invoke the /approve-merge skill:
+  1. Stop and tell the ${APPROVER_TITLE} the PR is ready, naming it:
+     "PR #${PR_NUMBER} is ready to merge."
+  2. Ask THEM to run the skill. Since #1042 it is human-only
+     (disable-model-invocation: true) — you cannot invoke it:
        /approve-merge ${PR_NUMBER}
-  3. The skill writes the structured marker AND runs the merge in one turn
+  3. Their invocation writes the structured marker AND runs the merge in
+     one turn. Your job ends at step 1.
 
-NEVER create this marker yourself from an umbrella "go" on a plan.
+NEVER create this marker yourself. You have no path to it, and that is the
+point: the invocation IS the approval, so it must come from a human.
 EVER. This is the exact failure this hook exists to prevent.
 MSG
     exit 2

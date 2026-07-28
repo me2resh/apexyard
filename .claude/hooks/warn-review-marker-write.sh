@@ -541,14 +541,19 @@ You are about to write a *-ceo.approved review marker (filename stays
   fabricated casually.
 
   Who may write this marker:
-    /approve-merge skill, invoked by the orchestrator on an explicit ${APPROVER_TITLE} nod
+    the /approve-merge skill, which since #1042 only a HUMAN can invoke
+    (disable-model-invocation: true)
 
 WHY THIS MATTERS
   Writing this file yourself satisfies the merge gate's FILENAME check
   but NOT its INTENT. block-unreviewed-merge.sh independently validates
   the structured fields before any merge is allowed, so a hand-written
-  marker without those fields is still rejected at merge time — but
-  don't write this file yourself. Invoke /approve-merge <pr>.
+  marker without those fields is still rejected at merge time.
+
+  You have no path to this marker, and that is deliberate: the invocation
+  IS the approval, so it must come from a human. Tell the ${APPROVER_TITLE}
+  the PR is ready and ask them to run /approve-merge <pr>. Do not try to
+  produce the marker some other way.
 
 ======================================================================
 BANNER

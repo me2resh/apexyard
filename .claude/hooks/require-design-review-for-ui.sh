@@ -29,9 +29,18 @@
 # carve out a specific dir (e.g. `^docs/examples/`, `^wiki/artifacts/`) where
 # `.jsx`/`.tsx` files are documentation samples rather than real UI.
 #
-# How the marker gets written: the design-reviewer records approval by
-# writing the marker file. There is no /approve-design skill yet — the
-# design reviewer writes the file manually or via a (future) skill.
+# How the marker gets written: a HUMAN runs the `/approve-design <pr>` skill,
+# which writes the repo-qualified marker via `review_marker_path` (AgDR-0060).
+# Since #1042 that skill is `disable-model-invocation: true`, so the model
+# cannot invoke it — and unlike the architecture gate (where the spawned
+# solution-architect sub-agent writes its own marker), NO agent writes
+# `*-design.approved`. A human records this one, always.
+#
+# This comment previously said "there is no /approve-design skill yet" and the
+# unblock message below told the reader to hand-write the marker with a raw
+# redirect. Both were stale and, after #1042, actively harmful: the hand-write
+# became the ONLY path the message offered, on a marker type
+# `warn-review-marker-write.sh` does not guard.
 #
 # Trust model: same as other markers. Local session state, gitignored,
 # converts invisible inference ("ah, the UI change looked fine") into
@@ -250,11 +259,20 @@ The expected approval file does not exist:
 
 To unblock:
 
-  1. Invoke the UI Designer role (or a human designer) to review the UI changes
-  2. When the designer approves, record it with the current HEAD SHA:
-       mkdir -p .claude/session/reviews
-       git rev-parse HEAD > .claude/session/reviews/${PR_NUMBER}-design.approved
-  3. Retry the merge
+  1. Review the UI changes against the design system — adopt the UI Designer
+     role (Nour), or ask a human designer to look at the PR diff
+  2. Report the verdict plainly. Do NOT write the marker yourself: since
+     #1042 recording a design approval is a human action, and no agent
+     writes this marker type
+  3. Ask the designer or operator to run:
+       /approve-design ${PR_NUMBER}
+     That skill writes the repo-qualified marker against the PR's HEAD on
+     GitHub, which is what this gate compares
+  4. They retry the merge
+
+  Do not hand-write this file. A raw redirect produces the wrong path (the
+  marker is repo-qualified, see AgDR-0060) and usually the wrong SHA (the
+  gate reads the PR's HEAD from the forge, not your local HEAD — #55).
 
 To customize which file patterns count as "UI":
 

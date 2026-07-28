@@ -82,16 +82,16 @@ You: *runs gh pr merge 10*   ← FAILURE: "go" was plan-level, not merge-level.
 You: "Here's the 6-step plan: 1. merge PR #10, 2. close PR #105, ..."
 CEO: "go"
 You: *executes steps 2–6, stops before step 1*
-You: "Steps 2–6 done. Ready to merge PR #10 — approved?"
-CEO: "approved"
-You: *invokes /approve-merge 10*   ← CORRECT: writes structured marker AND merges in one turn.
+You: "Steps 2–6 done. PR #10 is ready to merge — run /approve-merge 10 when you're happy."
+CEO: /approve-merge 10          ← CORRECT: the CEO invokes it. The skill is
+                                   human-only (#1042), so the model cannot.
 ```
 
 #### Why
 
 CEO approval is meant to be a **discrete moment per PR**. Merges are hard to reverse, externally visible, and can trigger downstream deploys. An umbrella "go" on a plan does not give you enough evidence that the CEO consciously signed off on each merge. When in doubt: stop and ask for the per-PR explicit nod.
 
-The discrete moment is the **invocation of `/approve-merge`**, not a separate "now do the merge" message. Treat the invocation with the seriousness the merge warrants — once you invoke, the merge runs.
+The discrete moment is the **invocation of `/approve-merge`**, and since #1042 that invocation can only come from a human — `disable-model-invocation: true`. Saying "approved" in prose is no longer sufficient on its own; the model's job is to get the PR ready and say so. Treat the invocation with the seriousness the merge warrants: once it runs, the merge runs.
 
 This rule also applies to other destructive / externally-visible / hard-to-reverse actions: force pushes, branch deletes, closing issues with dependents, posting to external channels. Plan-level "go" does not carry through to any of these. List them in the plan if you want — just stop before executing and ask.
 
@@ -151,6 +151,14 @@ Both markers' SHAs must match the PR's HEAD as reported by GitHub (`gh pr view <
 **Note on the load-bearing signal — local marker, not a GitHub "Approved" state (#587):** the merge gate reads the **local `*-rex.approved` marker file**, never GitHub's review-state UI. So the canonical code-reviewer flow is: post the human-readable review with `gh pr review <N> --comment` (verdict stated in the body) AND write the local marker on an APPROVED verdict. The local marker is the required gate output; the GitHub comment is for human visibility. A GitHub "Approved" review state is **optional** and, in the default single-maintainer / single-GitHub-account or auto-mode setup, **unavailable** — GitHub refuses to let an account approve its own PR, and an auto-mode write-classifier may additionally flag a `gh pr review --approve` attempt. That refusal is **expected, not a gate failure**: the sanctioned `code-reviewer` (Rex) sub-agent is a distinct review pass from the author, so writing its own marker satisfies the author-vs-reviewer separation the gate depends on regardless of the GitHub UI. Do not attempt `--approve` by default, and do not treat its block as a failure to review. (This applies ONLY to the sanctioned `code-reviewer` agent — a *build* agent writing a `*-rex.approved` marker is still the author-impersonating-reviewer violation described above.)
 
 Claude can technically `rm` or `touch` these files by hand, or fabricate the structured fields. Doing so is a visible, auditable, grep-able rule violation — and the whole point of recording the rule mechanically is so that the failure mode is "Claude ignored a hook" (visible) instead of "Claude inferred approval from something vague" (invisible). The structured-marker format raises the visibility bar one more notch by requiring the model to type `approved_by=user` etc. on purpose.
+
+### The approval skills are human-only (#1042, AgDR-0110)
+
+"Explicit per-PR approval" is now enforced **mechanically**, not only in prose. `/approve-merge`, `/approve-design`, and `/approve-architecture` carry `disable-model-invocation: true`, so **only a human can invoke them**. Saying "approved" in conversation is no longer sufficient on its own — the operator types the command, and that invocation *is* the approval moment this rule has always described.
+
+The mirror half matters just as much: the **review** skills (`/code-review`, `/security-review`, `/design-review`) are model-invocable, so the orchestrator triggers them itself — as `auto-code-review.sh` has always instructed. Independence comes from the reviewer being a **separate sub-agent with its own context**, not from who typed the command, so nothing is lost by letting the model start a review.
+
+Before #1042 these were exactly inverted, and the safety was accidental: a model couldn't invoke `/code-review`, so it couldn't obtain a Rex marker, so it couldn't merge. Unlocking the review skills **alone** would therefore have opened a fully autonomous `open → review → approve → merge` path. The two sides are coupled — `test_skill_invocability_gates.sh` pins both, and fails loudly if review skills are ever unlocked while approval skills are not locked.
 
 ### Both merge shapes are gated (#47)
 

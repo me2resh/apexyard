@@ -1,3 +1,11 @@
+---
+name: approve-architecture
+description: Record per-PR architecture-review approval for design-artifact PRs (required by the architecture gate). ONLY on an explicit per-PR architect "approved".
+disable-model-invocation: true
+argument-hint: "<pr-number>"
+effort: low
+---
+
 # /approve-architecture — Record Per-PR Design-Review Approval
 
 Writes `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.
@@ -136,17 +144,34 @@ Architecture approval recorded for PR #<pr> at <sha>. The architecture-review me
 
 ```
 Architect: "The approach we discussed sounds right, go for it"
-You: *invokes /approve-architecture 42*  ← WRONG
+You: *tries to invoke /approve-architecture 42*  ← WRONG, twice over: a verbal
+                                                  nod on an approach is not a
+                                                  review of the committed design
+                                                  artifact, AND since #1042 the
+                                                  model cannot invoke this skill
+                                                  at all.
 ```
 
 A verbal approval of an *approach* is not a review of the *committed design artifact*. The correct flow:
 
 ```
 Tech Lead: *commits the technical design to PR #42*
-You: "PR #42 carries the technical design. Run /design-review to have Tariq review it against the architecture lens?"
-... Tariq reviews, verdict APPROVED ...
-You: *Tariq writes the marker automatically* — OR a human architect says "design in #42 reviewed and approved"
-You: *invokes /approve-architecture 42*  ← CORRECT
+You: *runs /design-review so Tariq reviews it against the architecture lens*
+... Tariq reviews, verdict APPROVED, and writes the marker himself ...
+                                  ← DONE. No /approve-architecture needed.
+```
+
+Tariq writing the marker on an APPROVED verdict is the normal path, and it
+already satisfies the gate. This skill is the **operator path** for the other
+case: a *human* architect reviewed the design, or the marker needs re-recording
+after a rebase.
+
+```
+Human architect: "I've reviewed the design in #42 against the lens. Approved."
+You: "Then run /approve-architecture 42 to record it."
+Human architect: /approve-architecture 42   ← CORRECT: a human invokes it. The
+                                              skill is human-only (#1042), so
+                                              the model cannot.
 ```
 
 ## Relationship to other approval skills
