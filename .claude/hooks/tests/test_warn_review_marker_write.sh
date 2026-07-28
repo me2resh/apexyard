@@ -714,7 +714,7 @@ case32() {
 # ---------------------------------------------------------------------------
 # (33) Bash → `rm` bundled with a REAL literal marker forgery in the same
 #      command (rm -f active-reviewer; printf sha > <real marker path>) ->
-#      BLOCKED, exit 0. Confirms the #1000 deletion-only exemption doesn't
+#      DETECTED -> warns, exit 0. Confirms the #1000 deletion-only exemption doesn't
 #      swallow a genuine forgery riding alongside an rm.
 # ---------------------------------------------------------------------------
 case33() {
@@ -824,7 +824,7 @@ case38() {
 
 # ---------------------------------------------------------------------------
 # (39) Bash → GNU-form `sed -i s/aa/bb/ <marker>` on a real rex marker ->
-#      BLOCKED, exit 0. Regression guard: GNU's single-token form returns
+#      DETECTED -> warns, exit 0. Regression guard: GNU's single-token form returns
 #      EMPTY targets from bash_extract_write_target and already reached the
 #      general fallback before this fix -- confirms finding 2's fix doesn't
 #      change (or depend on masking) the already-correct GNU behaviour.

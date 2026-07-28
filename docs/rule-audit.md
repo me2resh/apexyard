@@ -34,7 +34,9 @@ regex/substring matching over bash command *text* cannot be made sound — the w
 therefore fails in *both* directions at once — it misses real writes spelled unusually, and it
 blocks ordinary commands that merely *mention* a marker (a grep pattern, a commit message, a code
 review, a JSON payload). [AgDR-0109](agdr/AgDR-0109-marker-write-gate-is-a-backstop.md) records the
-evidence and the resulting return to advisory.
+evidence and applies the backstop label; [AgDR-0111](agdr/AgDR-0111-marker-gate-plain-advisory.md)
+is the record that owns the return to plain advisory (0109 had chosen a narrower
+block-on-resolved-target design, superseded).
 
 Real merge integrity does not rest on the backstop. It rests on the per-PR human approval plus the
 controls' comparison of marker SHAs against forge-reported HEAD — and, for adopters who want a gate
