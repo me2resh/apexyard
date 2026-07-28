@@ -145,6 +145,8 @@
   "review_markers": {
     "on_stale": "warn",
     "human_approver_title": "CEO",
+    "require_posted_review": false,
+    "_comment_require_posted_review": "me2resh/apexyard#1051 — OPT-IN. When true, block-unreviewed-merge.sh additionally requires that a code review was actually POSTED to the PR at the same commit the Rex marker names, verified via the forge API. Default false because it changes merge behaviour for every adopter and is GitHub-only today (glab/custom/none skip with a warning; see tracker_review_at_sha in _lib-tracker.sh). Turn it on when you want 'Rex reviewed this' to be verifiable server-side instead of inferred from a local file an agent can write. AgDR-0062 deferred this as unsatisfiable single-account — true of APPROVED reviews only; a COMMENTED review from the PR author is accepted by GitHub and is exactly what the canonical reviewer flow already posts (AgDR-0075).",
     "_comment_human_approver_title": "me2resh/apexyard#957 — DISPLAY-ONLY override for the prose word used for the human per-PR merge approver in hook messages and /approve-merge output (e.g. 'Maintainer', 'Dev Lead'). Default 'CEO' is a zero-behaviour-change no-op. Marker filenames stay '-ceo.approved', and the structured fields (sha=, approved_by=user, skill_version=) are UNCHANGED regardless of this value — this key only affects printed text, never gate logic. See docs/agdr/AgDR-0103-configurable-approver-display-title.md."
   },
 

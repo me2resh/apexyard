@@ -270,6 +270,65 @@ MSG
   exit 2
 fi
 
+# --- Posted-review check (OPT-IN, me2resh/apexyard#1051) ---
+# The Rex marker above is a LOCAL FILE. An agent can write it. This optional
+# check asks the forge whether a review was actually posted at the same commit,
+# turning "Rex reviewed this" from an inferred claim into a verified one.
+#
+# Off by default: it changes merge behaviour for every adopter and is currently
+# GitHub-only. See .claude/project-config.defaults.json → review_markers
+# .require_posted_review, and tracker_review_at_sha in _lib-tracker.sh.
+REQUIRE_POSTED_REVIEW=false
+if command -v config_get_or >/dev/null 2>&1; then
+  REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
+fi
+if [ "$REQUIRE_POSTED_REVIEW" = "true" ]; then
+  if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$HOOK_DIR/_lib-tracker.sh"
+    tracker_review_at_sha "$CMD_REPO" "$PR_NUMBER" "$CURRENT_SHA"
+    case $? in
+      0) : ;;   # verified — a review exists at this exact commit
+      3)
+        echo "WARN: require_posted_review is enabled but this forge cannot be verified (GitHub only today) — check skipped for PR #${PR_NUMBER}." >&2
+        ;;
+      2)
+        cat >&2 <<MSG
+BLOCKED: could not verify with the forge whether PR #${PR_NUMBER} has a posted
+review at ${CURRENT_SHA:0:7}.
+
+review_markers.require_posted_review is enabled, so this check is a CONTROL and
+fails closed rather than assuming the review happened (AgDR-0104).
+
+Usually this is a network or \`gh auth\` problem. Fix that and retry. If you
+need to merge without the server-side check, set
+review_markers.require_posted_review to false in .claude/project-config.json
+— deliberately, and knowing the Rex marker is then a local file only.
+MSG
+        exit 2
+        ;;
+      *)
+        cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} has a Rex approval marker at ${CURRENT_SHA:0:7}, but NO
+code review was actually posted to the PR at that commit.
+
+The marker is a local file; this check asks the forge. They disagree, which
+means one of:
+
+  - the review agent wrote the marker without posting its review, or
+  - a review was posted against an EARLIER commit and new work has landed
+    since (post a fresh review at HEAD), or
+  - the marker was written by something that never reviewed anything.
+
+To unblock: run /code-review ${PR_NUMBER} so a real review is posted at the
+current HEAD, then merge.
+MSG
+        exit 2
+        ;;
+    esac
+  fi
+fi
+
 # --- CEO marker check ---
 # If the marker file doesn't exist on disk, check whether the COMMAND
 # itself will create it (compound command: `cat > marker && gh pr merge`).
