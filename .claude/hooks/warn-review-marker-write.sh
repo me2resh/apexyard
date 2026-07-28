@@ -265,7 +265,8 @@
 # signal" — it does not loosen what happens once something IS judged to
 # be one.
 #
-# #1026 — BACK TO ADVISORY (implements AgDR-0109; supersedes #843's promotion)
+# #1026 — BACK TO ADVISORY (AgDR-0111; supersedes #843's promotion and
+#         AgDR-0109's block-on-resolved-target decision)
 # ---------------------------------------------------------------------------
 # The paragraph above ("still fails closed") is exactly what #1026 reverses.
 # Failing closed on an UNRESOLVED role/PR sounds cautious, but the evidence

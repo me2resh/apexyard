@@ -30,7 +30,8 @@
 # The orchestrator branch also tells the caller to set the active-reviewer
 # session marker (.claude/session/active-reviewer) before spawning Rex.
 # #843 made warn-review-marker-write.sh refuse that write without the marker;
-# #1026 returned it to ADVISORY (it warns, never blocks — see AgDR-0109), so
+# #1026 returned it to ADVISORY (it warns, never blocks — see AgDR-0111,
+# which supersedes AgDR-0109's block-on-resolved-target decision), so
 # the marker now suppresses a spurious warning rather than unblocking a write.
 # Set it anyway: the convention is what keeps a real review distinguishable
 # from an author reviewing their own work, and the merge gate is what enforces.
@@ -98,7 +99,7 @@ isolated context:
   attempt to review this PR, do NOT post a review comment, and do NOT write
   ANY file under .claude/session/reviews/ (including *-rex.approved).
   Nothing will mechanically stop you: warn-review-marker-write.sh only
-  WARNS (advisory since #1026 — AgDR-0109). That is precisely why this
+  WARNS (advisory since #1026 — AgDR-0111). That is precisely why this
   instruction matters. Writing that file would record a review that never
   happened, and the human approving the merge would be relying on it.
   Report the PR back to the orchestrator

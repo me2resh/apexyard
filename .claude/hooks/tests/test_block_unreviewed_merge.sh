@@ -664,14 +664,15 @@ write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 run_case_wrapper "wrapper: cross-repo markers do not satisfy the gate (#485 parity)" 2 "no recorded code-reviewer|no CEO approval marker" "$sb" 100 "org-b/project-b"
 
-# --- warn-review-marker-write.sh tests (#494, upgraded to BLOCKING for
-# --- rex/security/architecture in #843) --------------------------------
+# --- warn-review-marker-write.sh tests (#494; BLOCKING in #843, returned
+# --- to ADVISORY in #1026 per AgDR-0111) -------------------------------
 #
 # The hook fires when a Write or Bash command targets a *-rex.approved,
 # *-ceo.approved, *-security.approved, or *-architecture.approved file.
-# *-ceo.approved stays advisory-only (always exit 0, unchanged from #728).
-# The other three now BLOCK (exit 2) unless a matching
-# .claude/session/active-reviewer marker is present. Full case coverage
+# ALL roles are advisory: the hook warns and always exits 0 (#1026,
+# AgDR-0111). A matching .claude/session/active-reviewer marker suppresses
+# the warning for the sanctioned reviewer; it does not unblock anything,
+# because nothing is blocked. Full case coverage
 # (matching marker, kind/pr/repo mismatch, legacy bare filenames, security +
 # architecture roles) lives in the dedicated test_warn_review_marker_write.sh;
 # this file only keeps the original #494 smoke assertions in sync with the
@@ -683,7 +684,7 @@ if [ ! -f "$WARN_HOOK_SRC" ]; then
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-missing "
 else
   # W1: Write to a rex.approved path, no active-reviewer marker → WARNS, exit 0.
-  # Was BLOCKED/exit 2 from #843; returned to advisory in #1026 per AgDR-0109
+  # Was BLOCKED/exit 2 from #843; returned to advisory in #1026 per AgDR-0111
   # (the marker hook is a BACKSTOP — this file's own hook is the control).
   input=$(jq -nc --arg fp ".claude/session/reviews/me2resh__apexyard__42-rex.approved" \
     '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')

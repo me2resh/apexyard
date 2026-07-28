@@ -14,7 +14,8 @@
 #
 # #1026 SUPERSEDES THAT PROMOTION — READ THIS BEFORE THE MATRIX BELOW.
 # ------------------------------------------------------------------
-# The hook is ADVISORY again (exit 0 always), per AgDR-0109. So every
+# The hook is ADVISORY again (exit 0 always), per AgDR-0111 (which
+# supersedes AgDR-0109 parts 2-3). So every
 # "BLOCKED, exit 2" in the matrix below now means **"DETECTED → warns,
 # exit 0"**. The matrix is left otherwise intact on purpose: it is still an
 # accurate record of what the hook DETECTS, and detection is what the cases

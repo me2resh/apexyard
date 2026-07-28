@@ -105,7 +105,7 @@ A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer,
 
 Build agents MUST NOT:
 
-- Write any file under `.claude/session/reviews/`, including `*-rex.approved`, `*-ceo.approved`, `*-security.approved`, or `*-architecture.approved` — the first, third, and fourth are mechanically blocked without an active-reviewer marker (see "Mechanical backstop" below); the second remains advisory but is still off-limits
+- Write any file under `.claude/session/reviews/`, including `*-rex.approved`, `*-ceo.approved`, `*-security.approved`, or `*-architecture.approved`. **Nothing mechanically stops you** — `warn-review-marker-write.sh` warns and exits 0 (see "Mechanical backstop" below). That is why this is a MUST NOT rather than a can't: writing one records a review that never happened, and the human approving the merge relies on it
 - Frame their final report as a code review, Rex review, or include a "Verdict: APPROVED / CHANGES REQUESTED" section
 - Claim to be performing an independent review
 
@@ -129,9 +129,8 @@ Build agents MUST:
 |---|---|
 | The per-PR human merge approval (`/approve-merge`) | The control. A human decides. |
 | `block-unreviewed-merge.sh` — marker SHA vs **forge-reported** HEAD | Structured state; a local file write cannot fake the forge's HEAD |
-| `review_markers.require_posted_review` (opt-in, #1051) | Asks the forge whether a review was actually **posted** at that commit — turns "Rex reviewed this" from a local file into a server-side fact. Off by default, GitHub-only. See [AgDR-0112](../../docs/agdr/AgDR-0112-verify-posted-review-at-head.md). |
 
-That last row is the successor to what AgDR-0062 deferred. Its objection — "an author-independence check can never be satisfied single-account" — holds for the `APPROVED` review state and only for it; a `COMMENTED` review from the PR's own author is accepted by GitHub and SHA-stamped, and is exactly what the canonical reviewer flow already posts (AgDR-0075).
+A stronger control — asking the forge whether a review was actually *posted* at the merge commit — is analysed in AgDR-0062 and tracked in me2resh/apexyard#1051. It is **not shipped here**; do not assume it is active.
 
 ### Mechanical enforcement
 
