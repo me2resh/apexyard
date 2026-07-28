@@ -623,7 +623,7 @@ When your verdict is APPROVED, and ONLY then, write the approval marker file so 
 
 > Note for **build agents** (backend / frontend / platform / product-manager / data-engineer / ui / ux): the above applies ONLY to this sanctioned `code-reviewer` agent. A build agent writing a `*-rex.approved` marker is author-impersonating-reviewer and is a rule violation — see `.claude/rules/pr-workflow.md` § "Build agents cannot self-review". The separation is real; it lives in *which agent* writes the marker, not in the GitHub UI.
 
-Your marker write succeeds where a build agent's identical write is blocked (exit 2) because the orchestrator (or the `/code-review` skill) sets the `.claude/session/active-reviewer` provenance marker (#843) before spawning you — `warn-review-marker-write.sh` authorizes the write against that session marker, so a caller with no active-reviewer marker set is blocked.
+The orchestrator (or the `/code-review` skill) sets the `.claude/session/active-reviewer` provenance marker before spawning you, which is what makes your marker write the *sanctioned* one. Since #1026 that is a matter of legitimacy, not mechanism: `warn-review-marker-write.sh` is **advisory** (AgDR-0111) — it warns and exits 0, so a build agent's identical write is **not** mechanically stopped. Yours is the real review because a real, independent review actually happened; theirs would be the author grading their own work. Write the marker when your verdict is APPROVED, and do not treat the absence of a block as permission for anyone else to.
 
 ### Path: ops fork root, not git toplevel
 

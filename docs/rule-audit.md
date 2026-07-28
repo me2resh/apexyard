@@ -22,7 +22,7 @@ in its own header as one of two classes:
 | Class | Decides on | Expectation | Examples |
 |-------|-----------|-------------|----------|
 | **Control** | **Structured state** — a file's contents, a SHA or CI conclusion reported by the forge | **Fail-closed**: if it cannot evaluate its precondition, it must block, never allow | `block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh` |
-| **Backstop** | **The text of a command** — inherently ambiguous | Advisory. Warns, never blocks. Known evasions are documented limits, not open bugs | `warn-review-marker-write.sh` |
+| **Backstop** | **The text of a command** — inherently ambiguous | Advisory. Warns, never blocks. The one known evasion (split path, #1026) is a documented limit, not an open bug | `warn-review-marker-write.sh` |
 
 **The guidance, in one line:** a trust-chain hook that reads command text is a *backstop* to a
 server-side gate and should warn; only a hook reading structured state is a *control* and should

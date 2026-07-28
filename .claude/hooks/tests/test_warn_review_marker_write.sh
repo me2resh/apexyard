@@ -27,8 +27,8 @@
 # (interpreter heredoc, BSD/GNU sed -i, variable indirection) ARE detected:
 # cases 20/23/27 and 35-39 below assert exactly that, and citing them as open
 # bypasses contradicts this file's own assertions. #843's root cause
-# (auto-code-review.sh
-# inducing build agents to forge markers) was fixed separately, so the block
+# (auto-code-review.sh inducing build agents to forge markers) was fixed
+# separately, so the block
 # was belt-and-braces on a repaired cause. Merge integrity rests on the
 # per-PR human approval plus block-unreviewed-merge.sh's forge-HEAD SHA match.
 #
@@ -260,7 +260,7 @@ bash_json_multiline() {
 }
 
 # ---------------------------------------------------------------------------
-# (1) Write → rex marker, no active-reviewer marker → BLOCKED, exit 2
+# (1) Write → rex marker, no active-reviewer marker → DETECTED → warns, exit 0
 # ---------------------------------------------------------------------------
 case1() {
   local sb; sb=$(make_sandbox)
@@ -713,7 +713,7 @@ case32() {
 # ---------------------------------------------------------------------------
 # (33) Bash → `rm` bundled with a REAL literal marker forgery in the same
 #      command (rm -f active-reviewer; printf sha > <real marker path>) ->
-#      BLOCKED, exit 2. Confirms the #1000 deletion-only exemption doesn't
+#      BLOCKED, exit 0. Confirms the #1000 deletion-only exemption doesn't
 #      swallow a genuine forgery riding alongside an rm.
 # ---------------------------------------------------------------------------
 case33() {
@@ -746,7 +746,7 @@ case34() {
 
 # ---------------------------------------------------------------------------
 # (35) Bash → `python3 <<EOF` interpreter heredoc writing directly to a real
-#      rex marker, no active-reviewer marker -> WARNS (advisory, #1026), exit 2.
+#      rex marker, no active-reviewer marker -> WARNS (advisory, #1026), exit 0.
 #      #1000-round2 finding 1 (Rex's PR #1011 review): the FIRST version of
 #      this fix stripped heredoc bodies before the fallback scan, reasoning
 #      all heredoc content is data. For an INTERPRETER heredoc the body is
@@ -767,7 +767,7 @@ case35() {
 
 # ---------------------------------------------------------------------------
 # (36) Bash → `bash <<EOF` wrapping an inner `python3 -c` write to a real rex
-#      marker -> WARNS (advisory, #1026), exit 2. `bash` fed a heredoc isn't itself one of
+#      marker -> WARNS (advisory, #1026), exit 0. `bash` fed a heredoc isn't itself one of
 #      the shared lib's named interpreter matchers (only python/node/ruby
 #      heredoc forms are) -- this shape is caught because target extraction
 #      runs on the unstripped command and the inner write is still visible.
@@ -785,7 +785,7 @@ case36() {
 
 # ---------------------------------------------------------------------------
 # (37) Bash → the IDENTICAL python3 -c write INLINE (no heredoc) -> WARNS (advisory, #1026),
-#      exit 2. Control for cases 35/36: same write, same target, no
+#      exit 0. Control for cases 35/36: same write, same target, no
 #      heredoc -- confirms the interpreter-write detection itself was never
 #      broken; only the (now-removed) heredoc-body strip regressed it.
 # ---------------------------------------------------------------------------
@@ -801,7 +801,7 @@ case37() {
 
 # ---------------------------------------------------------------------------
 # (38) Bash → BSD-form `sed -i '' s/aa/bb/ <marker>` rewriting a real rex
-#      marker's stale SHA -> WARNS (advisory, #1026), exit 2.
+#      marker's stale SHA -> WARNS (advisory, #1026), exit 0.
 #      #1000-round2 finding 2 (Rex's PR #1011 review): bash_extract_
 #      write_target's positional heuristic for `sed -i` assumes GNU's
 #      single-quoted-script form. BSD's two-token form (empty-string backup
@@ -823,7 +823,7 @@ case38() {
 
 # ---------------------------------------------------------------------------
 # (39) Bash → GNU-form `sed -i s/aa/bb/ <marker>` on a real rex marker ->
-#      BLOCKED, exit 2. Regression guard: GNU's single-token form returns
+#      BLOCKED, exit 0. Regression guard: GNU's single-token form returns
 #      EMPTY targets from bash_extract_write_target and already reached the
 #      general fallback before this fix -- confirms finding 2's fix doesn't
 #      change (or depend on masking) the already-correct GNU behaviour.

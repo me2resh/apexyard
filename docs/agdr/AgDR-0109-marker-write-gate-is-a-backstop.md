@@ -66,6 +66,8 @@ Chosen: **E.** Three parts, in order.
 
 **2. Block only on a confidently-resolved marker target; warn on ambiguity.** When the hook resolves a write target to a marker path, block — that is the #843 shape and it works. When it cannot resolve role and PR (`detected role: unresolved, pr: unresolved`), emit the advisory banner and exit 0.
 
+> **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** Shipped as plain advisory instead — the hook never blocks. "Confidently resolved" proved to be a state the resolver cannot be trusted to report: fed a marker path inside a JSON string, it returned the role as the literal text `…__7777-rex.approved"}}`.
+
 This is not a weakening dressed as a fix. It converts every false positive observed today into a warning while leaving the case that motivated blocking fully gated. A build agent writing a literal marker path is still blocked; a reviewer grepping for the word is not.
 
 **Reconciling this with AgDR-0104's fail-closed instruction.** AgDR-0104 § Decision directs: *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must **block**, not allow)"* — and **#962 is this very hook**. Resting on the backstop label alone would be too thin, since the labelling requirement came from AgDR-0104 in the same breath; relabelling would then look like a way to escape its own instruction.
@@ -76,7 +78,10 @@ This hook's ambiguity is a different question one level up. When it cannot resol
 
 So AgDR-0104's rule is preserved exactly where it applies. A command that *does* resolve to a marker target is the protected action, and it still blocks, fail-closed. Ambiguity about whether the action exists is not the same as ambiguity about whether it is authorised, and only the latter is what "must block, not allow" was written for.
 
-**3. Activate AgDR-0104's deferred CI meta-gate.** Its trigger has fired on its own stated terms. A trust-chain hook must ship with a paired **adversarial** test — one that attempts bypass shapes, not merely asserts the happy path. Seed it with the shapes now known: interpreter heredocs, BSD vs GNU `sed -i`, variable indirection (#962) — and the false-positive direction too, because a gate can fail by over-firing and today it mostly did.
+**3. Activate AgDR-0104's deferred CI meta-gate.** Its trigger has fired on its own stated terms.
+
+> **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** NOT built. It would impose permanent cost on every future trust-chain hook to *manage* a defect class AgDR-0111 *removes*. AgDR-0104's deferral therefore stands, un-discharged, with its trigger narrowed to "a new **control** (not a backstop) is added to the trust chain." me2resh/apexyard#1015 stays open at that scope.
+ A trust-chain hook must ship with a paired **adversarial** test — one that attempts bypass shapes, not merely asserts the happy path. Seed it with the shapes now known: interpreter heredocs, BSD vs GNU `sed -i`, variable indirection (#962) — and the false-positive direction too, because a gate can fail by over-firing and today it mostly did.
 
 The tests written in each of the three rounds all covered the shapes their author had thought of, which is definitionally the set not containing the next bypass. Only an adversarial pairing changes that.
 
