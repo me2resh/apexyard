@@ -100,40 +100,20 @@ The tests written in each of the three rounds all covered the shapes their autho
 
 ## Changelog
 
-### 2026-07-28 — implemented as plain advisory, not resolved-target blocking (#1026)
+### 2026-07-28 — parts 2 and 3 superseded by AgDR-0111 (#1026)
 
-This decision sat at `status: executed` for three days with **none of it built**. No hook carried
-the AgDR-0104 label, and the gate still blocked on ambiguity. In the session that discovered this,
-that unimplemented state produced **13 false positives across 2 hooks** — every one of them
-reporting `detected role: unresolved`, the exact case § Decision part 2 says should warn.
+This decision sat at `status: executed` for three days with **none of it built**, and that
+unimplemented state produced 13 false positives across 2 hooks in a single session.
 
-Two departures from what was decided above, both recorded here rather than in a new AgDR because
-the direction is unchanged and no option was reopened (per `docs/rule-audit.md` § "Append changelog
-vs write a new AgDR"):
+**Part 1 (label this hook a BACKSTOP) stands, and is now implemented** — the `CLASS:` label is in
+the hook header, alongside `CONTROL` labels on the four merge-gate hooks.
 
-**1. Shipped option B (plain advisory), not option E (block only on a confidently-resolved
-target).** § Options rejected B as re-opening #843's hole. Two pieces of evidence, both absent when
-this was written, changed that:
+**Parts 2 and 3 are superseded by
+[AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md).** Part 2's resolved-target blocking was
+replaced by plain advisory — the option B this document rejected — and part 3's CI meta-gate was not
+built, leaving AgDR-0104's deferral un-discharged under a narrowed trigger.
 
-- **The resolver emits garbage.** Fed a marker path inside a JSON string being piped to another
-  program, it extracted the role as the literal text `me2resh__apexyard__7777-rex.approved"}}` and
-  blocked on it. "Confidently resolved" is not a state this matcher can be trusted to report, so
-  keeping *any* text matcher in a blocking path preserves the defect class at higher complexity.
-- **#843's root cause was already repaired elsewhere.** The block was promoted because
-  `auto-code-review.sh` told build sub-agents to "Invoke Rex NOW" — impossible for them, so they
-  forged markers to comply. That banner now addresses sub-agents explicitly and tells them to stop
-  and hand back. The inducement is gone; the block was belt-and-braces on a fixed cause. The
-  banner's build-agent paragraph is retained in full — only the exit code changed.
-
-**2. The CI meta-gate (§ Decision part 3) was NOT built.** It adds permanent process cost to every
-future trust-chain hook in order to *manage* a defect class this change *removes*. Re-open it only
-if a **control** (not a backstop) is ever added to the trust chain. #1015 stays open with that
-narrowed scope.
-
-Also shipped: `warn-review-marker-write.sh`, `block-unreviewed-merge.sh`,
-`require-design-review-for-ui.sh`, `require-architecture-review.sh` and `block-merge-on-red-ci.sh`
-now carry an in-file `CLASS:` label (part 1, finally applied); the role/PR extractor no longer
-reports a role scraped from a *read* when the command also writes a different marker (#1032); and
-the five false-positive shapes are pinned as regression cases so the advisory cannot silently
-revert to blocking. #1026's "decide direction, do not add a 5th regex" is answered: the four known
-bypasses are documented accepted limits in the hook header.
+Recorded as a **new AgDR rather than a changelog entry here**, because adopting an option this
+document rejected on the record re-opens the options table, which is precisely the test
+`docs/rule-audit.md` § "Append changelog vs write a new AgDR" sets for requiring a new record. Read
+AgDR-0111 for the evidence and the reasoning.

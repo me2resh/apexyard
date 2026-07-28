@@ -346,9 +346,9 @@ case8() {
 case9() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Rex blocked banner contains BLOCKED keyword" \
+  run_hook "$sb" "Rex advisory banner contains WARNING keyword (#1026)" \
     "$(write_json "$marker")" 0 "WARNING"
-  run_hook "$sb" "Rex blocked banner mentions BUILD-CLASS SUB-AGENT" \
+  run_hook "$sb" "Rex advisory banner still mentions BUILD-CLASS SUB-AGENT (deterrent retained)" \
     "$(write_json "$marker")" 0 "BUILD-CLASS SUB-AGENT"
   rm -rf "$sb"
 }
@@ -708,7 +708,12 @@ case33() {
   local sb; sb=$(make_sandbox)
   local ar="$sb/.claude/session/active-reviewer"
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Bash rm + real marker forgery in same command -> still BLOCKED (#1000)" \
+  # NOTE: this case pins DETECTION, not prevention. Pre-#1026 it asserted the
+  # forgery was blocked; the hook is advisory now, so it asserts the forgery is
+  # still SEEN (warns) rather than swallowed by #1000's deletion-only exemption.
+  # The forgery itself is stopped at merge by block-unreviewed-merge.sh's
+  # forge-HEAD SHA comparison — do not read this case as a merge guarantee.
+  run_hook "$sb" "Bash rm + real marker forgery in same command -> still DETECTED, warns (#1000/#1026)" \
     "$(bash_json "rm -f ${ar}; printf sha123 > ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
@@ -887,8 +892,11 @@ case43() {
   # shellcheck disable=SC2016 # deliberate — these are literal, unexpanded
   # $VAR tokens in the command text the hook receives, not expansions here.
   local cmd='REX=$(review_marker_path "$HOST" 1041 rex "$MH"); CEO=$(review_marker_path "$HOST" 1041 ceo "$MH"); printf "sha=abc" > "$CEO"'
+  # Assert the exact banner field, not the bare word "unresolved" — a loose
+  # match would still pass if the role were mis-reported while some OTHER
+  # field happened to read "unresolved".
   run_hook "$sb" "rex READ + ceo WRITE -> NOT blocked, role not mis-reported as rex (#1032)" \
-    "$(bash_json "$cmd")" 0 "unresolved"
+    "$(bash_json "$cmd")" 0 "detected role: unresolved"
   rm -rf "$sb"
 }
 

@@ -20,13 +20,28 @@
 # printf) are unbounded." Four rounds of patches (#962, #1000, #1011, #1026)
 # confirmed it empirically, in BOTH directions at once.
 #
-# ACCEPTED LIMITS — these are documented behaviour, not open bugs. Do not
-# "fix" them with another pattern; #1026 asks explicitly for that restraint:
+# ACCEPTED LIMIT — one known shape is NOT detected, and that is deliberate:
 #
-#   - Split path:          S=.claude/session/reviews; printf x > "$S/…"
-#   - Interpreter heredoc: python3 <<EOF … open('…-rex.approved','w') … EOF
-#   - BSD sed -i:          sed -i '' s/a/b/ <marker>
-#   - Any other spelling that hides the path from a substring match.
+#   - Split path:  S=.claude/session/reviews; printf x > "$S/<…>-rex.approved"
+#     Neither matcher sees it: the literal check needs the whole path in one
+#     token, and the indirection heuristic keys on `review_marker_path`, the
+#     reviews/ dir, or a variable NAMED *marker* — a variable called `S`
+#     matches none. Filed as #1026 and left open on purpose.
+#
+# Do NOT close it with a fifth pattern. #1026 asks for exactly that restraint,
+# because the next spelling (command substitution, printf-concatenation, a
+# symlinked directory) would still pass. The ways to express a path are
+# unbounded; a substring matcher will always be one spelling behind.
+#
+# For the avoidance of doubt, these three ARE detected and DO warn — earlier
+# rounds closed them, and cases 20/23/27 and 35-39 pin that. Don't cite them
+# as evidence the hook sees nothing:
+#
+#   - Variable indirection (#962)   - Interpreter heredoc   - BSD/GNU sed -i
+#
+# The point is not that detection is hopeless. It is that detection is
+# unreliable in BOTH directions, so the consequence of a match must be a
+# warning rather than a block.
 #
 # The symmetric limit is over-firing: the text of a command that merely
 # MENTIONS a marker — a grep pattern, a commit message, a code review, a
