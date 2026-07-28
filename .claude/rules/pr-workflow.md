@@ -105,7 +105,7 @@ A build-class sub-agent (backend-engineer, frontend-engineer, platform-engineer,
 
 Build agents MUST NOT:
 
-- Write any file under `.claude/session/reviews/`, including `*-rex.approved`, `*-ceo.approved`, `*-security.approved`, or `*-architecture.approved` — the first, third, and fourth are mechanically blocked without an active-reviewer marker (see "Mechanical backstop" below); the second remains advisory but is still off-limits
+- Write any file under `.claude/session/reviews/`, including `*-rex.approved`, `*-ceo.approved`, `*-security.approved`, or `*-architecture.approved`. **Nothing mechanically stops you** — `warn-review-marker-write.sh` warns and exits 0 (see "Mechanical backstop" below). That is why this is a MUST NOT rather than a can't: writing one records a review that never happened, and the human approving the merge relies on it
 - Frame their final report as a code review, Rex review, or include a "Verdict: APPROVED / CHANGES REQUESTED" section
 - Claim to be performing an independent review
 
@@ -116,14 +116,21 @@ Build agents MUST:
 
 ### Mechanical backstop
 
-As of me2resh/apexyard#843, `warn-review-marker-write.sh` is a **BLOCKING** gate for the three marker roles a build agent can be induced to impersonate — the #728 hardening had made the banner "unmissable" but left the write itself unblocked (the harness gives hooks no reliable per-agent-type signal, so it couldn't distinguish the sanctioned reviewer from an impersonator by identity); #843 gates on session-state provenance instead:
+**`warn-review-marker-write.sh` is ADVISORY — it warns, it does not block.** It was a blocking gate from #843 until #1026 returned it to advisory per [AgDR-0111](../../docs/agdr/AgDR-0111-marker-gate-plain-advisory.md). Do not read it as enforcement:
 
-1. `warn-review-marker-write.sh` — PreToolUse hook that fires when a Write or Bash call targets `*-rex.approved`, `*-security.approved`, or `*-architecture.approved` under `.claude/session/reviews/`. The write is **blocked (exit 2)** unless a matching **active-reviewer session marker** exists at `.claude/session/active-reviewer` (one line: `<owner>/<repo>#<pr>:<kind>`), written by the orchestrator (or one of `/code-review`, `/security-review`, `/design-review`) immediately before spawning the sanctioned reviewer agent. A build-class sub-agent — which never has a reason to see that marker set for its own PR — is blocked with a message telling it to stop and hand back to the orchestrator. The `*-ceo.approved` marker keeps its original **advisory-only** behaviour (unchanged since #728) — it has its own structured-field defence in `block-unreviewed-merge.sh` (`sha=` / `approved_by=user` / `skill_version=`) and is written by a human-invoked skill, not a reviewer agent. A `clear-active-reviewer-marker.sh` SessionStart hook sweeps stale markers left by an interrupted session, mirroring `clear-bootstrap-marker.sh`.
-2. The prompt-convention guardrail in each build-agent file — the primary human-in-the-loop safety net is the per-PR CEO nod required by `/approve-merge`; the orchestrator running a real, separate Rex review is the second. These are the current enforcement layers.
+1. `warn-review-marker-write.sh` — PreToolUse hook that fires when a Write or Bash call looks like it targets `*-rex.approved`, `*-security.approved`, or `*-architecture.approved` under `.claude/session/reviews/`. It prints a warning and **exits 0** when no matching **active-reviewer session marker** exists at `.claude/session/active-reviewer` (one line: `<owner>/<repo>#<pr>:<kind>`), written by the orchestrator (or one of `/code-review`, `/security-review`, `/design-review`) immediately before spawning the sanctioned reviewer. Setting that marker suppresses the warning for the sanctioned write; it does not "unblock" anything, because nothing is blocked. `*-ceo.approved` has always been advisory-only and has its own structured-field defence in `block-unreviewed-merge.sh` (`sha=` / `approved_by=user` / `skill_version=`). A `clear-active-reviewer-marker.sh` SessionStart hook sweeps stale markers, mirroring `clear-bootstrap-marker.sh`.
+2. The prompt-convention guardrail in each build-agent file — a build agent is told plainly not to write these files, and that nothing will stop it, which is exactly why the instruction matters.
 
-This closes the specific induced-impersonation failure mode from #843: `auto-code-review.sh`'s PostToolUse banner used to tell whoever ran `gh pr create` to "Invoke Rex NOW using the Agent tool" unconditionally. A build-class sub-agent (which cannot nest the Agent tool) could not comply, and twice (PRs #835, #842) resolved the contradiction by writing the `*-rex.approved` marker itself. The banner is now written to address both possible readers explicitly (a shell hook cannot reliably tell orchestrator from sub-agent context — see AgDR-0056), and the marker write it used to induce is now mechanically blocked for a caller with no active-reviewer marker set.
+**Why it stopped blocking.** It decided by pattern-matching the *text* of a shell command, which AgDR-0104 established cannot be made sound. It failed in both directions at once: 13 false positives in a single session (a read-only `grep`, a commit message, a reviewer's own prose, `/approve-merge`'s documented merge step) while the split-path spelling walked straight through. #843's actual root cause was separately repaired — `auto-code-review.sh`'s banner used to tell whoever ran `gh pr create` to "Invoke Rex NOW", which a build-class sub-agent cannot do, so twice (PRs #835, #842) it resolved the contradiction by writing the marker itself. That banner now addresses both readers explicitly (AgDR-0056), so the inducement is gone and the block was belt-and-braces on a fixed cause.
 
-A stronger mechanical gate — requiring a real posted GitHub review at the PR HEAD before the merge gate passes — is analysed in AgDR-0062 and deferred as an explicit **opt-in for future hands-off / multi-account setups**. In a single-maintainer / single-GitHub-account setup (the default), Rex posts reviews from the same account that opened the PR, so an author-independence check can never be satisfied and would block every merge. The gate will be re-enabled behind a config flag if/when merging becomes unattended or a separate reviewer identity (bot account) exists.
+**What actually enforces this**, and where to look if you want it stronger:
+
+| Layer | Strength |
+|---|---|
+| The per-PR human merge approval (`/approve-merge`) | The control. A human decides. |
+| `block-unreviewed-merge.sh` — marker SHA vs **forge-reported** HEAD | Structured state; a local file write cannot fake the forge's HEAD |
+
+A stronger control — asking the forge whether a review was actually *posted* at the merge commit — is analysed in AgDR-0062 and tracked in me2resh/apexyard#1051. It is **not shipped here**; do not assume it is active.
 
 ### Mechanical enforcement
 

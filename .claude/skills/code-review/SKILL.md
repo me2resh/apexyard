@@ -38,7 +38,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
-Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker so `warn-review-marker-write.sh` lets Rex's `*-rex.approved` write through the blocking marker gate. At skill entry:
+Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). At skill entry:
 
 ```bash
 ops_root=$(git rev-parse --show-toplevel)
@@ -58,7 +58,7 @@ On skill exit (after Rex posts its verdict, whether APPROVED or CHANGES REQUESTE
 rm -f "$ops_root/.claude/session/active-reviewer"
 ```
 
-Without this marker, a build-class sub-agent attempting the same write is correctly blocked — see `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+Nothing mechanically stops a build-class sub-agent writing the same file; what makes Rex's marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff

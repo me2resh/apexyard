@@ -12,6 +12,42 @@ This audit is the **single view** of the governance surface ApexYard ships with.
 
 ---
 
+## Trust-chain hooks: control vs backstop
+
+The hooks that gate merges and approval markers are **not all the same kind of thing**, and reading
+them as if they were is how the framework spent four rounds patching one file. Per
+[AgDR-0104](agdr/AgDR-0104-trust-chain-controls-vs-backstops.md), every trust-chain hook is labelled
+in its own header as one of two classes:
+
+| Class | Decides on | Expectation | Examples |
+|-------|-----------|-------------|----------|
+| **Control** | **Structured state** — a file's contents, a SHA or CI conclusion reported by the forge | **Fail-closed**: if it cannot evaluate its precondition, it must block, never allow | `block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh` |
+| **Backstop** | **The text of a command** — inherently ambiguous | Advisory. Warns, never blocks. The one known evasion (split path, #1026) is a documented limit, not an open bug | `warn-review-marker-write.sh` |
+
+**The guidance, in one line:** a trust-chain hook that reads command text is a *backstop* to a
+server-side gate and should warn; only a hook reading structured state is a *control* and should
+fail closed.
+
+Why the split is load-bearing: AgDR-0104 established that "a security gate implemented as
+regex/substring matching over bash command *text* cannot be made sound — the ways to express a path
+(`$VAR`, `$(…)`, concat, here-doc, symlink, `printf`) are unbounded." A backstop tuned to block
+therefore fails in *both* directions at once — it misses real writes spelled unusually, and it
+blocks ordinary commands that merely *mention* a marker (a grep pattern, a commit message, a code
+review, a JSON payload). [AgDR-0109](agdr/AgDR-0109-marker-write-gate-is-a-backstop.md) records the
+evidence and applies the backstop label; [AgDR-0111](agdr/AgDR-0111-marker-gate-plain-advisory.md)
+is the record that owns the return to plain advisory (0109 had chosen a narrower
+block-on-resolved-target design, superseded).
+
+Real merge integrity does not rest on the backstop. It rests on the per-PR human approval plus the
+controls' comparison of marker SHAs against forge-reported HEAD — and, for adopters who want a gate
+no local process can reach at all, on the forge's own server-side protection (GitHub branch
+protection; GitLab protected branches + MR approval rules).
+
+**If you are about to add a pattern to a backstop so it catches one more spelling — don't.** That is
+the loop this section exists to stop.
+
+---
+
 ## Audit table
 
 Columns:

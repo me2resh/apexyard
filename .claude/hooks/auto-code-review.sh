@@ -28,10 +28,13 @@
 # no-op for that reader.
 #
 # The orchestrator branch also tells the caller to set the active-reviewer
-# session marker (.claude/session/active-reviewer) before spawning Rex —
-# without it, warn-review-marker-write.sh (upgraded to a BLOCKING gate in
-# #843) refuses the *-rex.approved write even from the real code-reviewer
-# agent.
+# session marker (.claude/session/active-reviewer) before spawning Rex.
+# #843 made warn-review-marker-write.sh refuse that write without the marker;
+# #1026 returned it to ADVISORY (it warns, never blocks — see AgDR-0111,
+# which supersedes AgDR-0109's block-on-resolved-target decision), so
+# the marker now suppresses a spurious warning rather than unblocking a write.
+# Set it anyway: the convention is what keeps a real review distinguishable
+# from an author reviewing their own work, and the merge gate is what enforces.
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -94,9 +97,12 @@ isolated context:
 
   You CANNOT nest the Agent tool, so you cannot spawn Rex yourself. Do NOT
   attempt to review this PR, do NOT post a review comment, and do NOT write
-  ANY file under .claude/session/reviews/ (including *-rex.approved) —
-  warn-review-marker-write.sh will BLOCK that write anyway (#843), but the
-  instruction stands regardless. Report the PR back to the orchestrator
+  ANY file under .claude/session/reviews/ (including *-rex.approved).
+  Nothing will mechanically stop you: warn-review-marker-write.sh only
+  WARNS (advisory since #1026 — AgDR-0111). That is precisely why this
+  instruction matters. Writing that file would record a review that never
+  happened, and the human approving the merge would be relying on it.
+  Report the PR back to the orchestrator
   plainly ("PR ${PR_REF} created: ${PR_URL}") and stop. The orchestrator
   runs the real, independent Rex review after you hand back.
 --------------------------------------------------------------------------
@@ -109,10 +115,11 @@ build sub-agent just handed this PR back to you):
 
   The skill sets the active-reviewer session marker, spawns Rex, and
   clears the marker for you — you should NOT set that marker by hand.
-  The skill's marker management is what authorises Rex's *-rex.approved
-  write through the blocking gate (#843); spawning the code-reviewer
-  agent directly without it leaves the write blocked by
-  warn-review-marker-write.sh — by design.
+  Use the skill rather than spawning the code-reviewer agent directly:
+  it is what makes the review a separate, sanctioned pass instead of the
+  author grading their own work. (The marker also suppresses an advisory
+  warning on Rex's own marker write, but that is a side effect, not the
+  reason — the hook warns and never blocks since #1026.)
 --------------------------------------------------------------------------
 
 The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval

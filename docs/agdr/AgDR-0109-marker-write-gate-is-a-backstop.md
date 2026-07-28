@@ -66,6 +66,8 @@ Chosen: **E.** Three parts, in order.
 
 **2. Block only on a confidently-resolved marker target; warn on ambiguity.** When the hook resolves a write target to a marker path, block — that is the #843 shape and it works. When it cannot resolve role and PR (`detected role: unresolved, pr: unresolved`), emit the advisory banner and exit 0.
 
+> **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** Shipped as plain advisory instead — the hook never blocks. "Confidently resolved" proved to be a state the resolver cannot be trusted to report: fed a marker path inside a JSON string, it returned the role as the literal text `…__7777-rex.approved"}}`.
+
 This is not a weakening dressed as a fix. It converts every false positive observed today into a warning while leaving the case that motivated blocking fully gated. A build agent writing a literal marker path is still blocked; a reviewer grepping for the word is not.
 
 **Reconciling this with AgDR-0104's fail-closed instruction.** AgDR-0104 § Decision directs: *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must **block**, not allow)"* — and **#962 is this very hook**. Resting on the backstop label alone would be too thin, since the labelling requirement came from AgDR-0104 in the same breath; relabelling would then look like a way to escape its own instruction.
@@ -76,7 +78,10 @@ This hook's ambiguity is a different question one level up. When it cannot resol
 
 So AgDR-0104's rule is preserved exactly where it applies. A command that *does* resolve to a marker target is the protected action, and it still blocks, fail-closed. Ambiguity about whether the action exists is not the same as ambiguity about whether it is authorised, and only the latter is what "must block, not allow" was written for.
 
-**3. Activate AgDR-0104's deferred CI meta-gate.** Its trigger has fired on its own stated terms. A trust-chain hook must ship with a paired **adversarial** test — one that attempts bypass shapes, not merely asserts the happy path. Seed it with the shapes now known: interpreter heredocs, BSD vs GNU `sed -i`, variable indirection (#962) — and the false-positive direction too, because a gate can fail by over-firing and today it mostly did.
+**3. Activate AgDR-0104's deferred CI meta-gate.** Its trigger has fired on its own stated terms.
+
+> **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** NOT built. It would impose permanent cost on every future trust-chain hook to *manage* a defect class AgDR-0111 *removes*. AgDR-0104's deferral therefore stands, un-discharged, with its trigger narrowed to "a new **control** (not a backstop) is added to the trust chain." me2resh/apexyard#1015 stays open at that scope.
+ A trust-chain hook must ship with a paired **adversarial** test — one that attempts bypass shapes, not merely asserts the happy path. Seed it with the shapes now known: interpreter heredocs, BSD vs GNU `sed -i`, variable indirection (#962) — and the false-positive direction too, because a gate can fail by over-firing and today it mostly did.
 
 The tests written in each of the three rounds all covered the shapes their author had thought of, which is definitionally the set not containing the next bypass. Only an adversarial pairing changes that.
 
@@ -84,9 +89,11 @@ The tests written in each of the three rounds all covered the shapes their autho
 
 - The ~14 false positives per session collapse to warnings; the sanctioned reviewer stops being blocked by the gate it is reviewing, and reviewers stop needing base64 workarounds that read as evasion.
 - The #843 induced-impersonation case stays blocked. A build agent naming a marker path literally — the observed failure — is unaffected.
+  > **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** No longer true: the hook is plainly advisory, so a literal marker write warns rather than blocks. The #843 *inducement* was independently repaired in `auto-code-review.sh`, and the banner's build-agent deterrent is retained verbatim.
 - **Accepted exposure:** a build agent that reaches a marker through indirection the extractor cannot resolve now gets a warning instead of a block. This is the exposure AgDR-0062 already accepted, re-affirmed deliberately rather than inherited: the per-PR human nod is the control, and the merge gate independently validates the SHA against forge-reported HEAD.
 - Every future trust-chain hook costs one adversarial test. Intended; the alternative is a fourth round.
 - AgDR-0104's deferred item is discharged. Its other deferral — compliance mapping, trigger-attached to an adopter request — is untouched.
+  > **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** Not discharged: the CI meta-gate was never built. It remains **deferred**, with its trigger narrowed to "a new *control* (not a backstop) is added to the trust chain." me2resh/apexyard#1015 stays open at that scope.
 - The honest-naming correction stands: absent a separate reviewer identity this is **structured self-review plus an audit trail**, not separation of duties. Narrowing a backstop does not change that claim, because the backstop was never what supported it.
 
 ## Artifacts
@@ -97,3 +104,23 @@ The tests written in each of the three rounds all covered the shapes their autho
 - **Qualifies** [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) § Decision step 1 — *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must block, not allow)"* — as it applies to **#962 / this hook only**. The instruction stands unchanged where the precondition concerns whether a *resolved* protected action is authorised; it does not extend to ambiguity about whether a protected action is present at all. See § Decision part 2 for the reasoning. **#965 and the merge gate are untouched by this qualification.**
 - Re-affirms [AgDR-0062](AgDR-0062-rex-marker-authenticity.md)'s accepted exposure and its rejection of the structured-marker and posted-review options
 - Related: [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md) (the local marker is the gate signal), #962, #965, #843, #1000
+
+## Changelog
+
+### 2026-07-28 — parts 2 and 3 superseded by AgDR-0111 (#1026)
+
+This decision sat at `status: executed` for three days with **none of it built**, and that
+unimplemented state produced 13 false positives across 2 hooks in a single session.
+
+**Part 1 (label this hook a BACKSTOP) stands, and is now implemented** — the `CLASS:` label is in
+the hook header, alongside `CONTROL` labels on the four merge-gate hooks.
+
+**Parts 2 and 3 are superseded by
+[AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md).** Part 2's resolved-target blocking was
+replaced by plain advisory — the option B this document rejected — and part 3's CI meta-gate was not
+built, leaving AgDR-0104's deferral un-discharged under a narrowed trigger.
+
+Recorded as a **new AgDR rather than a changelog entry here**, because adopting an option this
+document rejected on the record re-opens the options table, which is precisely the test
+`docs/rule-audit.md` § "Append changelog vs write a new AgDR" sets for requiring a new record. Read
+AgDR-0111 for the evidence and the reasoning.
