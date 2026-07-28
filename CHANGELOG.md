@@ -2,6 +2,40 @@
 
 All notable changes to ApexYard are documented here.
 
+## [v5.3.0] — 2026-07-29
+
+Minor release — 1 feature, 12 fixes, 4 improvements.
+
+### Added (feat)
+
+- (#1051) opt-in merge gate on a review actually posted at HEAD — b41dc12
+
+### Fixed (fix)
+
+- (#1026) the marker-write gate is a backstop — make it advisory — 9130cdb
+- (#1042) put the human gate on approval, not on review — 3b28b93
+- (#1038) PR-create hooks mis-parse a quoted --body-file path — 64e996c
+- (#1039) leak-protection hook fails closed on an unreadable body-file — f625d84
+- (#1029) normalize Windows drive-letter paths in portfolio path canonicalizer — 2554869
+- (#1025) make tracker/onboarding lib self-location zsh-safe, fail loudly — 4c24c2e
+- (#1019) strip trailing CR from config_get so Windows multi-line reads work — ad8daa4
+- (#1030) isolate test_sync_codex_adapter.sh from the ambient session-pin — c9297aa
+- (#1017) count-guard warning text + fail-open range parse (#1017) — b468e76
+- (#1000) narrow warn-review-marker-write.sh to actual write intent — c5ee25c
+- (#1012) release count-mismatch guard + Released-From trailer under squash releases — 3163b37
+- (#1008) set exec bit on reindex-on-session-start.sh — a60d612
+
+### Changed (refactor / chore / docs)
+
+- (#1045) right-size-ceremony cited a premium-only hook as its OSS watchdog — f34e3eb
+- (#1015) AgDR-0109 — marker-write gate is a backstop; activate AgDR-0104 deferred meta-gate — ee56e06
+- (#999) align .claude/hooks AgDR wording with materiality threshold (#999) — 5b60803
+- (#1007) fix stale hook count in CLAUDE.md (47 -> 49) — b8be74b
+
+### Closes
+
+- Closes #999, #1000, #1005, #1007, #1008, #1012, #1015, #1017, #1019, #1025, #1026, #1029, #1030, #1038, #1039, #1042, #1045, #1051
+
 ## [v5.2.0] — 2026-07-24
 
 Minor release — 2 features, 13 fixes, 14 improvements.
