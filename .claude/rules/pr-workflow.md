@@ -130,7 +130,7 @@ Build agents MUST:
 | The per-PR human merge approval (`/approve-merge`) | The control. A human decides. |
 | `block-unreviewed-merge.sh` — marker SHA vs **forge-reported** HEAD | Structured state; a local file write cannot fake the forge's HEAD |
 
-A stronger control — asking the forge whether a review was actually *posted* at the merge commit — is analysed in AgDR-0062 and tracked in me2resh/apexyard#1051. It is **not shipped here**; do not assume it is active.
+A stronger control — asking the forge whether a review was actually *posted* at the merge commit — ships behind `review_markers.require_posted_review` (**default off**, GitHub-only). Enabling it makes "Rex reviewed this" a server-side fact rather than a local file an agent can write. It is deliberately weaker than the author-independence gate AgDR-0062 deferred: it accepts a review from the PR's own author, so it is **not** separation of duties. See [AgDR-0112](../../docs/agdr/AgDR-0112-verify-posted-review-at-head.md) and me2resh/apexyard#1051.
 
 ### Mechanical enforcement
 

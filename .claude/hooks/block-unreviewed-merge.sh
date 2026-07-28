@@ -270,6 +270,118 @@ MSG
   exit 2
 fi
 
+# --- Posted-review check (OPT-IN, me2resh/apexyard#1051) ---
+# The Rex marker above is a LOCAL FILE. An agent can write it. This optional
+# check asks the forge whether a review was actually posted at the same commit,
+# turning "Rex reviewed this" from an inferred claim into a verified one.
+#
+# Off by default: it changes merge behaviour for every adopter and is currently
+# GitHub-only. See .claude/project-config.defaults.json → review_markers
+# .require_posted_review, and tracker_review_at_sha in _lib-tracker.sh.
+# Read the flag. jq is a hard prerequisite of this framework (43 hooks call it,
+# and check-jq-installed.sh warns at SessionStart when it's missing) — so this
+# does NOT hand-roll a JSON parser for the jq-less case. A merge with jq absent
+# is already refused by the #965 guard above, which cannot parse the command and
+# fails closed at :113.
+REQUIRE_POSTED_REVIEW=false
+if command -v config_get_or >/dev/null 2>&1; then
+  REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
+elif [ -f "${MARKER_HOME}/.claude/project-config.json" ] || \
+     [ -f "${MARKER_HOME}/.claude/project-config.defaults.json" ]; then
+  # config_get_or is undefined — _lib-read-config.sh is missing from a fork that
+  # HAS config files. We cannot read the flag, so we cannot know whether this
+  # control was supposed to run. Defaulting to false would silently skip it on
+  # an operator who turned it on. Fail closed, same as the missing-tracker-lib
+  # guard below. This is not a JSON parser (that was the over-engineered version
+  # #1051 removed) — it is four lines refusing to guess.
+  echo "BLOCKED: .claude/hooks/_lib-read-config.sh is missing, so review_markers.require_posted_review cannot be read. This gate will not assume the check is off — restore the file (a partial install or bad sync usually explains it) and retry." >&2
+  exit 2
+fi
+if [ "$REQUIRE_POSTED_REVIEW" = "true" ]; then
+  # Fail closed when the library that performs the check is missing. An
+  # `if [ -f … ]` with no else would silently ALLOW the merge here — "couldn't
+  # check" masquerading as "checked, fine", which is the one outcome this
+  # control exists to prevent (AgDR-0104, and this feature's own AgDR-0112).
+  # The operator asked for verification; not being able to verify is a block.
+  if [ ! -f "$HOOK_DIR/_lib-tracker.sh" ]; then
+    cat >&2 <<MSG
+BLOCKED: review_markers.require_posted_review is enabled, but the library that
+performs the check is missing:
+
+  ${HOOK_DIR}/_lib-tracker.sh
+
+This control cannot evaluate its precondition, so it denies rather than allows.
+Restore the file (a partial install or a bad sync usually explains it), or set
+review_markers.require_posted_review to false in .claude/project-config.json if
+you deliberately want the server-side check off.
+MSG
+    exit 2
+  fi
+  # (The guard above already exited when the lib is absent, so no -f test here.)
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-tracker.sh"
+  # Sourcing can succeed on a truncated/corrupt file without defining the
+  # function. Fail closed on that too, rather than letting `command not found`
+  # produce a rc the case below would misread.
+  if ! command -v tracker_review_at_sha >/dev/null 2>&1; then
+    echo "BLOCKED: require_posted_review is enabled but tracker_review_at_sha is undefined after sourcing ${HOOK_DIR}/_lib-tracker.sh (truncated or corrupt file). This control cannot evaluate its precondition, so it denies." >&2
+    exit 2
+  fi
+  tracker_review_at_sha "$CMD_REPO" "$PR_NUMBER" "$CURRENT_SHA"
+  case $? in
+      0) : ;;   # verified — a review exists at this exact commit
+      3)
+        # SKIP, not block — and the distinction is principled, not a loophole.
+        # rc=2 means "I should have been able to check and could not" (broken
+        # auth, network, missing CLI): a precondition failure, so it blocks.
+        # rc=3 means "this forge is outside my jurisdiction at all" — there is
+        # no check to have failed. This is the same distinction AgDR-0109 drew
+        # between ambiguity about whether an action is AUTHORISED (block) and
+        # ambiguity about whether the action EXISTS (decline). Blocking here
+        # would brick every GitLab adopter who enables the flag, in exchange
+        # for no security: the check was never available to them.
+        #
+        # The honest cost, stated here and in the config comment: on a non-gh
+        # forge this flag is a NO-OP. Do not enable it and believe you are
+        # protected. Tracked for GitLab support in me2resh/apexyard#1051.
+        echo "WARN: require_posted_review is enabled but this forge cannot be verified (GitHub only today) — the check is a NO-OP for PR #${PR_NUMBER}; do not rely on it here." >&2
+        ;;
+      2)
+        cat >&2 <<MSG
+BLOCKED: could not verify with the forge whether PR #${PR_NUMBER} has a posted
+review at ${CURRENT_SHA:0:7}.
+
+review_markers.require_posted_review is enabled, so this check is a CONTROL and
+fails closed rather than assuming the review happened (AgDR-0104).
+
+Usually this is a network or \`gh auth\` problem. Fix that and retry. If you
+need to merge without the server-side check, set
+review_markers.require_posted_review to false in .claude/project-config.json
+— deliberately, and knowing the Rex marker is then a local file only.
+MSG
+        exit 2
+        ;;
+      *)
+        cat >&2 <<MSG
+BLOCKED: PR #${PR_NUMBER} has a Rex approval marker at ${CURRENT_SHA:0:7}, but NO
+code review was actually posted to the PR at that commit.
+
+The marker is a local file; this check asks the forge. They disagree, which
+means one of:
+
+  - the review agent wrote the marker without posting its review, or
+  - a review was posted against an EARLIER commit and new work has landed
+    since (post a fresh review at HEAD), or
+  - the marker was written by something that never reviewed anything.
+
+To unblock: run /code-review ${PR_NUMBER} so a real review is posted at the
+current HEAD, then merge.
+MSG
+        exit 2
+        ;;
+  esac
+fi
+
 # --- CEO marker check ---
 # If the marker file doesn't exist on disk, check whether the COMMAND
 # itself will create it (compound command: `cat > marker && gh pr merge`).
