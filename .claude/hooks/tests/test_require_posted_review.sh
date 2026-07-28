@@ -80,7 +80,16 @@ case "\$*" in
   *"pr view"*"headRepository"*) echo "$TEST_REPO" ;;
   *api*reviews*)
     st=\$(cat "$sb/.gh-reviews-state" 2>/dev/null || echo "")
-    [ "\$st" = "FAIL" ] && exit 1
+    # Real \`gh api\` prints the error BODY to stdout on a 4xx/5xx and still
+    # exits non-zero. Emulating that faithfully matters: it is what makes the
+    # test able to catch a fail-open regression. If the checks in
+    # tracker_review_at_sha were reordered so a non-empty stdout were read
+    # before the exit code, this branch would return "review found" for a
+    # failed query — a shim that exits silently cannot detect that.
+    if [ "\$st" = "FAIL" ]; then
+      echo '{"message":"Not Found","documentation_url":"https://docs.github.com/rest"}'
+      exit 1
+    fi
     if [ -n "\$st" ] && printf '%s' "\$*" | grep -q "\$st"; then echo "9001"; fi
     ;;
   *) ;;

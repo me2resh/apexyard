@@ -20,14 +20,27 @@ local file, and after AgDR-0111 nothing mechanically prevents an agent writing i
 The gap is narrow but real. A forged marker with the correct SHA passes the gate, and the human
 approving the merge sees "Rex approved" with no review comment on the PR to read.
 
-**AgDR-0062 considered this exact control and deferred it**, on the grounds that it is
-"unsatisfiable in a single-account setup — GitHub refuses to let an account approve its own PR, so
-an author-independence check can never be satisfied and would block every merge."
+**AgDR-0062 considered a related control and deferred it.** Its option was *"require at least one
+review at the PR HEAD SHA **by an independent reviewer (not the PR author)**"*, deferred because in
+a single-maintainer setup "an author-independence check can never be satisfied and would block every
+merge."
 
-That reasoning is correct **for the `APPROVED` review state, and only for it.** It does not hold for
-a `COMMENTED` review, which GitHub accepts from the PR's own author. Verified against a live
-same-account PR (me2resh/apexyard#1049): reviews posted by the PR author return from
-`GET /repos/{repo}/pulls/{pr}/reviews` with `state: COMMENTED` and a `commit_id`.
+**That reasoning is correct and this decision does not overturn it.** What ships here is a
+deliberately **weaker** control: it requires that *a review exists at HEAD*, and drops the
+author-independence requirement entirely. That is why it is satisfiable where AgDR-0062's version
+was not — not because AgDR-0062 was wrong, but because this is a different, lesser check.
+
+Being explicit about what that costs: a review posted by the PR's own account satisfies this gate.
+It therefore does **not** deliver separation of duties, and must never be described as doing so —
+the honest-naming correction from AgDR-0104 § 2 applies here unchanged. What it does deliver is
+narrow and real: the review must **exist on the forge, at this commit**, which a local file write
+cannot fabricate. It closes "no review happened at all," nothing more.
+
+The mechanism is available because GitHub accepts a `COMMENTED` review from the PR's own author and
+returns it with a `commit_id` — verified against a live same-account PR (me2resh/apexyard#1049),
+where the PR author's reviews come back from `GET /repos/{repo}/pulls/{pr}/reviews` with
+`state: COMMENTED` and a populated `commit_id`. (GitHub refuses only self-*approval*, i.e. the
+`APPROVED` state.)
 
 And the canonical reviewer flow **already posts exactly that shape**: per #587 / [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md),
 `/code-review` submits with `--comment` and states the verdict in the body, precisely because
@@ -39,8 +52,8 @@ produced on every review. Nothing new is asked of adopters.
 | Option | Pros | Cons |
 |--------|------|------|
 | **A — Do nothing** | No work; the human nod is still the control | Leaves "a review happened" inferred from a writable local file, immediately after AgDR-0111 removed the write guard |
-| **B — Require an APPROVED review at HEAD** | Strongest signal | AgDR-0062's objection stands: unsatisfiable single-account, would block every merge |
-| **C — Require ANY posted review at HEAD, opt-in (chosen)** | Satisfiable single-account; verifies server-side; uses an artifact the reviewer flow already produces; default-off so no adopter breaks | GitHub-only today; a determined agent could still post a fake review comment |
+| **B — AgDR-0062's version: a review at HEAD by an INDEPENDENT reviewer (not the PR author)** | True separation of duties | Its objection stands unchanged: unsatisfiable single-account, would block every merge. Still the right control once a separate reviewer identity exists |
+| **C — Require ANY posted review at HEAD, author included, opt-in (chosen)** | Satisfiable single-account; verifies server-side; uses an artifact the reviewer flow already produces; default-off so no adopter breaks | Strictly weaker than B — **no author-independence, so NOT separation of duties**; GitHub-only today; a determined agent could still post a fake review comment |
 | **D — Structure the rex marker** | Raises the local bar | Rejected twice (AgDR-0062, AgDR-0109): "a determined build agent can still type out the fields; gives false confidence" |
 
 ## Decision
@@ -73,8 +86,9 @@ gate skips with a warning rather than bricking those adopters.
 - When enabled, "Rex reviewed this" becomes verifiable on the forge instead of inferred from a local
   file. The residual local-forgery exposure accepted in AgDR-0062/0109/0111 is closed for GitHub
   adopters who opt in.
-- **Partially reverses AgDR-0062's deferral** — its objection is preserved for the APPROVED state
-  and narrowed away from the COMMENTED one.
+- **Does NOT reverse AgDR-0062's deferral.** Its independent-reviewer control stays deferred on its
+  original terms, and remains the right target once a separate reviewer identity exists. This ships
+  a lesser check alongside it.
 - A reviewer that writes its marker but fails to post (network) now blocks the merge instead of
   passing it. Correct, and the message says how to fix it.
 - Not a proof of review *quality*: an agent that posts a real comment and writes the marker passes.
@@ -87,8 +101,8 @@ gate skips with a warning rather than bricking those adopters.
 - Ticket: me2resh/apexyard#1051
 - Builds on [AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md) (the backstop went advisory; this
   strengthens the control instead)
-- **Narrows** [AgDR-0062](AgDR-0062-rex-marker-authenticity.md)'s deferral of the posted-review
-  requirement to the APPROVED state only
+- **Does not supersede** [AgDR-0062](AgDR-0062-rex-marker-authenticity.md) — its independent-reviewer
+  gate stays deferred, unchanged; this is a weaker sibling that is satisfiable today
 - Relies on [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md) — the comment-review
   flow that makes this satisfiable
 - Tests: `.claude/hooks/tests/test_require_posted_review.sh` (8 cases, both directions)

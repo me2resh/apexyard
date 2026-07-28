@@ -1253,14 +1253,20 @@ tracker_review_submit() {
 # the server-side counterpart to the local *-rex.approved marker file.
 #
 # WHY THIS EXISTS (me2resh/apexyard#1051). The merge gate's evidence that a code
-# review happened is a local file an agent can write. AgDR-0062 considered
-# requiring a real posted review and DEFERRED it as "unsatisfiable in a
-# single-account setup, would block every merge" — because GitHub refuses to let
-# an account APPROVE its own PR. That reasoning holds for the `APPROVED` state
-# and only for it: a COMMENTED review from the PR's own author is accepted by
-# GitHub and returned by the API with a commit_id. Verified against a real
-# same-account PR. Since #587/AgDR-0075 the canonical reviewer flow already
-# posts exactly that shape, so this check costs adopters nothing new.
+# review happened is a local file an agent can write.
+#
+# WHAT THIS IS NOT. AgDR-0062 deferred a STRONGER control — a review at HEAD by
+# an INDEPENDENT reviewer (not the PR author) — as unsatisfiable single-account.
+# That objection stands; this is a deliberately weaker check that drops the
+# independence requirement, which is exactly why it IS satisfiable. It does not
+# provide separation of duties and must not be described as if it did. What it
+# proves is narrow and real: a review exists ON THE FORGE at this commit, which
+# a local file write cannot fabricate. See AgDR-0112.
+#
+# It works because GitHub refuses only self-APPROVAL; a COMMENTED review from
+# the PR's own author is accepted and returned with a commit_id (verified on a
+# live same-account PR). Since #587/AgDR-0075 the canonical reviewer flow
+# already posts exactly that shape, so this costs adopters nothing new.
 #
 # Exit codes are deliberately four-way so the caller can fail closed on
 # "couldn't check" without conflating it with "checked, nothing there":

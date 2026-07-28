@@ -283,6 +283,25 @@ if command -v config_get_or >/dev/null 2>&1; then
   REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
 fi
 if [ "$REQUIRE_POSTED_REVIEW" = "true" ]; then
+  # Fail closed when the library that performs the check is missing. An
+  # `if [ -f … ]` with no else would silently ALLOW the merge here — "couldn't
+  # check" masquerading as "checked, fine", which is the one outcome this
+  # control exists to prevent (AgDR-0104, and this feature's own AgDR-0112).
+  # The operator asked for verification; not being able to verify is a block.
+  if [ ! -f "$HOOK_DIR/_lib-tracker.sh" ]; then
+    cat >&2 <<MSG
+BLOCKED: review_markers.require_posted_review is enabled, but the library that
+performs the check is missing:
+
+  ${HOOK_DIR}/_lib-tracker.sh
+
+This control cannot evaluate its precondition, so it denies rather than allows.
+Restore the file (a partial install or a bad sync usually explains it), or set
+review_markers.require_posted_review to false in .claude/project-config.json if
+you deliberately want the server-side check off.
+MSG
+    exit 2
+  fi
   if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
     # shellcheck source=/dev/null
     . "$HOOK_DIR/_lib-tracker.sh"
