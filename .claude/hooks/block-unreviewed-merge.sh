@@ -291,15 +291,21 @@ if command -v config_get_or >/dev/null 2>&1; then
 else
   # Reader unavailable (missing lib, or jq absent). Grep the override directly:
   # a bare `"require_posted_review": true` on one line is the shape both the
-  # defaults file and any sane hand-edit produce. False negatives here are
-  # possible with exotic JSON formatting, so warn loudly rather than pretend
-  # the answer is authoritative.
+  # defaults file and any sane hand-edit produce.
+  #
+  # The grep can still MISS on exotic JSON formatting (the key and value split
+  # across lines), and a silent miss would disable the control exactly the way
+  # the undefined-reader case did — narrower, but the same shape. So warn
+  # whenever the reader is unavailable, not only when the grep matches: the
+  # operator always learns that config was read by a degraded path, whichever
+  # answer it produced.
+  echo "WARN: .claude/hooks/_lib-read-config.sh (or jq) is unavailable — reading review_markers.require_posted_review by direct grep, which can miss non-standard JSON formatting. Restore it so config is parsed properly." >&2
   for _cfg in "${MARKER_HOME}/.claude/project-config.json" \
               "${MARKER_HOME}/.claude/project-config.defaults.json"; do
     [ -f "$_cfg" ] || continue
     if grep -qE '"require_posted_review"[[:space:]]*:[[:space:]]*true' "$_cfg"; then
       REQUIRE_POSTED_REVIEW=true
-      echo "WARN: config reader unavailable; read require_posted_review=true by direct grep of ${_cfg}. Restore .claude/hooks/_lib-read-config.sh (and jq) so config is parsed properly." >&2
+      echo "WARN: grep found require_posted_review=true in ${_cfg} — the server-side check WILL run." >&2
       break
     fi
   done
@@ -324,10 +330,17 @@ you deliberately want the server-side check off.
 MSG
     exit 2
   fi
-  if [ -f "$HOOK_DIR/_lib-tracker.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$HOOK_DIR/_lib-tracker.sh"
-    tracker_review_at_sha "$CMD_REPO" "$PR_NUMBER" "$CURRENT_SHA"
+  # (The guard above already exited when the lib is absent, so no -f test here.)
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-tracker.sh"
+  # Sourcing can succeed on a truncated/corrupt file without defining the
+  # function. Fail closed on that too, rather than letting `command not found`
+  # produce a rc the case below would misread.
+  if ! command -v tracker_review_at_sha >/dev/null 2>&1; then
+    echo "BLOCKED: require_posted_review is enabled but tracker_review_at_sha is undefined after sourcing ${HOOK_DIR}/_lib-tracker.sh (truncated or corrupt file). This control cannot evaluate its precondition, so it denies." >&2
+    exit 2
+  fi
+  tracker_review_at_sha "$CMD_REPO" "$PR_NUMBER" "$CURRENT_SHA"
     case $? in
       0) : ;;   # verified — a review exists at this exact commit
       3)
@@ -379,8 +392,7 @@ current HEAD, then merge.
 MSG
         exit 2
         ;;
-    esac
-  fi
+  esac
 fi
 
 # --- CEO marker check ---

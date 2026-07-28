@@ -269,6 +269,16 @@ m2() {
 }
 m2
 
+# Sourcing a truncated/corrupt lib SUCCEEDS but leaves the function undefined.
+# Without an explicit check, `tracker_review_at_sha` would be a command-not-found
+# whose rc the case statement misreads — another "couldn't check" turning into a
+# wrong answer. (Hakim raised this as a sibling of the missing-lib hole.)
+sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" "$HEAD_SHA"; write_markers "$sb" 42
+printf '%s\n' '# truncated: sourcing succeeds, function never defined' \
+  > "$sb/.claude/hooks/_lib-tracker.sh"
+run_case "truncated _lib-tracker.sh (sources OK, fn undefined) -> BLOCKS" \
+  2 "undefined after sourcing" "$sb" 42
+
 echo
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"

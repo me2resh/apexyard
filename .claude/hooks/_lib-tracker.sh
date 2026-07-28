@@ -1298,7 +1298,10 @@ tracker_review_at_sha() {
     *[!0-9a-fA-F]*) return 2 ;;
   esac
   [ "${#sha}" -ge 7 ] && [ "${#sha}" -le 40 ] || return 2
-  # `repo` reaches a URL path — reject traversal and anything not owner/name.
+  # `repo` reaches a URL path. This rejects path traversal and whitespace; it
+  # does NOT fully validate owner/name shape (gh itself rejects a malformed
+  # slug, and over-tightening here would break legitimate org names). Stated
+  # precisely so nobody reads it as more than it is.
   case "$repo" in
     */../*|*/..|../*|*' '*) return 2 ;;
   esac
