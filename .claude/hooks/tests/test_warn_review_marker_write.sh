@@ -22,9 +22,12 @@
 #
 # Why: #843's blocking promotion cost 13 false positives in a single session
 # across 2 hooks — including a read-only grep, a commit message, a code
-# review's own prose, and /approve-merge's documented merge step — while four
-# distinct bypasses (split path, interpreter heredoc, BSD sed -i, variable
-# indirection) stayed open. #843's actual root cause (auto-code-review.sh
+# review's own prose, and /approve-merge's documented merge step — while the
+# split-path shape (#1026) stayed undetected. Note the OTHER known shapes
+# (interpreter heredoc, BSD/GNU sed -i, variable indirection) ARE detected:
+# cases 20/23/27 and 35-39 below assert exactly that, and citing them as open
+# bypasses contradicts this file's own assertions. #843's root cause
+# (auto-code-review.sh
 # inducing build agents to forge markers) was fixed separately, so the block
 # was belt-and-braces on a repaired cause. Merge integrity rests on the
 # per-PR human approval plus block-unreviewed-merge.sh's forge-HEAD SHA match.
@@ -66,7 +69,10 @@
 #   (24) Bash   → fully ambiguous indirected write (mentions
 #                 .claude/session/reviews/ but no resolvable role), WITH an
 #                 active-reviewer marker present for a DIFFERENT kind
-#                                                                  → BLOCKED, exit 2 (fail-closed on total ambiguity)
+#                                                                  → BLOCKED, exit 2 (was "fail-closed on total ambiguity";
+#                                                                    since #1026 the hook is a BACKSTOP and never fails
+#                                                                    closed — it warns. Fail-closed is now a property of
+#                                                                    the CONTROL hooks only. See the preamble above.)
 #   (25) Bash   → _lib-detect-bash-write.sh missing (graceful fallback):
 #                 literal-path READ (cat) of a rex marker, no active-reviewer
 #                                                                  → BLOCKED, exit 2 (conservative pre-#962 fallback, not a bypass)
@@ -541,16 +547,22 @@ case23() {
 # (24) Bash → fully ambiguous indirected write (mentions .claude/session/
 #      reviews/ but the role can't be resolved to any of rex/ceo/security/
 #      architecture), WITH an active-reviewer marker present for a
-#      DIFFERENT kind → still BLOCKED. Demonstrates fail-closed-on-total-
-#      ambiguity (#962 requirement 3): an unresolved role can never match a
-#      real active-reviewer marker's kind field, by construction.
+#      DIFFERENT kind → still DETECTED (warns). Originally this demonstrated
+#      "fail-closed on total ambiguity" (#962 requirement 3): an unresolved
+#      role can never match a real active-reviewer marker's kind field, by
+#      construction. Since #1026 the hook is a BACKSTOP and does not fail
+#      closed at all — it warns. What this case still pins is the DETECTION
+#      half of that property. Fail-closed now belongs exclusively to the
+#      CONTROL hooks (block-unreviewed-merge.sh et al), which is precisely
+#      the distinction AgDR-0104/0111 draw — do not reintroduce the phrase
+#      here without meaning it.
 # ---------------------------------------------------------------------------
 case24() {
   local sb; sb=$(make_sandbox)
   printf '%s\n' "${REPO}#42:security" > "$sb/.claude/session/active-reviewer"
   # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
   local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
-  run_hook "$sb" "Bash fully ambiguous indirected write -> WARNS (advisory, #1026) (#962 fail-closed)" \
+  run_hook "$sb" "Bash fully ambiguous indirected write -> WARNS (advisory, #1026) (#962 detection half)" \
     "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }

@@ -84,9 +84,11 @@ The tests written in each of the three rounds all covered the shapes their autho
 
 - The ~14 false positives per session collapse to warnings; the sanctioned reviewer stops being blocked by the gate it is reviewing, and reviewers stop needing base64 workarounds that read as evasion.
 - The #843 induced-impersonation case stays blocked. A build agent naming a marker path literally — the observed failure — is unaffected.
+  > **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** No longer true: the hook is plainly advisory, so a literal marker write warns rather than blocks. The #843 *inducement* was independently repaired in `auto-code-review.sh`, and the banner's build-agent deterrent is retained verbatim.
 - **Accepted exposure:** a build agent that reaches a marker through indirection the extractor cannot resolve now gets a warning instead of a block. This is the exposure AgDR-0062 already accepted, re-affirmed deliberately rather than inherited: the per-PR human nod is the control, and the merge gate independently validates the SHA against forge-reported HEAD.
 - Every future trust-chain hook costs one adversarial test. Intended; the alternative is a fourth round.
 - AgDR-0104's deferred item is discharged. Its other deferral — compliance mapping, trigger-attached to an adopter request — is untouched.
+  > **Superseded 2026-07-28 ([AgDR-0111](AgDR-0111-marker-gate-plain-advisory.md)).** Not discharged: the CI meta-gate was never built. It remains **deferred**, with its trigger narrowed to "a new *control* (not a backstop) is added to the trust chain." me2resh/apexyard#1015 stays open at that scope.
 - The honest-naming correction stands: absent a separate reviewer identity this is **structured self-review plus an audit trail**, not separation of duties. Narrowing a backstop does not change that claim, because the backstop was never what supported it.
 
 ## Artifacts

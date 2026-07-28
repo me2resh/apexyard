@@ -60,7 +60,7 @@ retire that objection:
 | **E — block on resolved target, warn on ambiguity** (AgDR-0109's choice) | Keeps a block on the #843 shape | Rests on a resolver demonstrably capable of returning garbage; retains a text matcher in a blocking path, so the defect class survives at higher complexity; more code than B |
 | **B — plain advisory, exit 0 always (chosen)** | Removes every false positive; restores AgDR-0062's recorded design; one line plus banner wording; keeps the deterrent | A forgery attempt of any spelling now warns rather than blocks |
 | **F — relocate to PostToolUse / marker-read time** | Sees the real file, so spelling stops mattering | More machinery; and the merge gate already reads the file and compares its SHA to forge HEAD — this would duplicate the control that already exists |
-| **G — do nothing (leave AgDR-0109 unimplemented)** | No work | The status quo that produced 13 false positives and 4 evasions |
+| **G — do nothing (leave AgDR-0109 unimplemented)** | No work | The status quo that produced 13 false positives in one session, while still not detecting the split-path shape |
 
 ## Decision
 
