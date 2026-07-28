@@ -682,15 +682,17 @@ if [ ! -f "$WARN_HOOK_SRC" ]; then
   echo "FAIL: warn-review-marker-write.sh not found at $WARN_HOOK_SRC" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-missing "
 else
-  # W1: Write to a rex.approved path, no active-reviewer marker → BLOCKED, exit 2 (#843)
+  # W1: Write to a rex.approved path, no active-reviewer marker → WARNS, exit 0.
+  # Was BLOCKED/exit 2 from #843; returned to advisory in #1026 per AgDR-0109
+  # (the marker hook is a BACKSTOP — this file's own hook is the control).
   input=$(jq -nc --arg fp ".claude/session/reviews/me2resh__apexyard__42-rex.approved" \
     '{tool_name:"Write", tool_input:{file_path:$fp, content:"abc"}}')
   got_stderr=$(echo "$input" | bash "$WARN_HOOK_SRC" 2>&1 >/dev/null)
   got_rc=$?
-  if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "BLOCKED"; then
-    echo "PASS [warn-hook: Write to rex.approved with no active-reviewer marker → BLOCKED, exit 2 (#843)]"; PASS=$((PASS+1))
+  if [ "$got_rc" = "0" ] && echo "$got_stderr" | grep -q "WARNING"; then
+    echo "PASS [warn-hook: Write to rex.approved with no active-reviewer marker → WARNS, exit 0 (#1026)]"; PASS=$((PASS+1))
   else
-    echo "FAIL [warn-hook: Write to rex.approved → BLOCKED, exit 2]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
+    echo "FAIL [warn-hook: Write to rex.approved → WARNS, exit 0]: rc=$got_rc stderr=${got_stderr:0:200}" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}warn-hook-write-rex "
   fi
 

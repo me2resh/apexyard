@@ -97,3 +97,43 @@ The tests written in each of the three rounds all covered the shapes their autho
 - **Qualifies** [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) § Decision step 1 — *"Fix #962 and #965 fail-closed (a gate that can't evaluate its precondition must block, not allow)"* — as it applies to **#962 / this hook only**. The instruction stands unchanged where the precondition concerns whether a *resolved* protected action is authorised; it does not extend to ambiguity about whether a protected action is present at all. See § Decision part 2 for the reasoning. **#965 and the merge gate are untouched by this qualification.**
 - Re-affirms [AgDR-0062](AgDR-0062-rex-marker-authenticity.md)'s accepted exposure and its rejection of the structured-marker and posted-review options
 - Related: [AgDR-0075](AgDR-0075-code-reviewer-local-marker-is-gate-signal.md) (the local marker is the gate signal), #962, #965, #843, #1000
+
+## Changelog
+
+### 2026-07-28 — implemented as plain advisory, not resolved-target blocking (#1026)
+
+This decision sat at `status: executed` for three days with **none of it built**. No hook carried
+the AgDR-0104 label, and the gate still blocked on ambiguity. In the session that discovered this,
+that unimplemented state produced **13 false positives across 2 hooks** — every one of them
+reporting `detected role: unresolved`, the exact case § Decision part 2 says should warn.
+
+Two departures from what was decided above, both recorded here rather than in a new AgDR because
+the direction is unchanged and no option was reopened (per `docs/rule-audit.md` § "Append changelog
+vs write a new AgDR"):
+
+**1. Shipped option B (plain advisory), not option E (block only on a confidently-resolved
+target).** § Options rejected B as re-opening #843's hole. Two pieces of evidence, both absent when
+this was written, changed that:
+
+- **The resolver emits garbage.** Fed a marker path inside a JSON string being piped to another
+  program, it extracted the role as the literal text `me2resh__apexyard__7777-rex.approved"}}` and
+  blocked on it. "Confidently resolved" is not a state this matcher can be trusted to report, so
+  keeping *any* text matcher in a blocking path preserves the defect class at higher complexity.
+- **#843's root cause was already repaired elsewhere.** The block was promoted because
+  `auto-code-review.sh` told build sub-agents to "Invoke Rex NOW" — impossible for them, so they
+  forged markers to comply. That banner now addresses sub-agents explicitly and tells them to stop
+  and hand back. The inducement is gone; the block was belt-and-braces on a fixed cause. The
+  banner's build-agent paragraph is retained in full — only the exit code changed.
+
+**2. The CI meta-gate (§ Decision part 3) was NOT built.** It adds permanent process cost to every
+future trust-chain hook in order to *manage* a defect class this change *removes*. Re-open it only
+if a **control** (not a backstop) is ever added to the trust chain. #1015 stays open with that
+narrowed scope.
+
+Also shipped: `warn-review-marker-write.sh`, `block-unreviewed-merge.sh`,
+`require-design-review-for-ui.sh`, `require-architecture-review.sh` and `block-merge-on-red-ci.sh`
+now carry an in-file `CLASS:` label (part 1, finally applied); the role/PR extractor no longer
+reports a role scraped from a *read* when the command also writes a different marker (#1032); and
+the five false-positive shapes are pinned as regression cases so the advisory cannot silently
+revert to blocking. #1026's "decide direction, do not add a 5th regex" is answered: the four known
+bypasses are documented accepted limits in the hook header.

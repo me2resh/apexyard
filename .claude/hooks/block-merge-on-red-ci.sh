@@ -1,4 +1,10 @@
 #!/bin/bash
+# CLASS: CONTROL (AgDR-0104 labelling, AgDR-0109). This hook decides on
+# STRUCTURED STATE, not on the text of a command: the CI conclusion the forge reports for the PR's HEAD.
+# That is what makes it trustworthy where a text-matching backstop like
+# warn-review-marker-write.sh is not. Keep it fail-closed: if it cannot
+# evaluate its precondition it must block, never allow (AgDR-0104).
+#
 # PreToolUse hook on `gh pr merge` / `gh api .../pulls/<N>/merge` AND their
 # GitLab counterparts `glab mr merge` / `glab api .../merge_requests/<N>/merge`:
 # blocks the merge if CI is failing, pending, or unresolvable.

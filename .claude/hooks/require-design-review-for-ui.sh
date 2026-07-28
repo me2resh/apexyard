@@ -1,4 +1,10 @@
 #!/bin/bash
+# CLASS: CONTROL (AgDR-0104 labelling, AgDR-0109). This hook decides on
+# STRUCTURED STATE, not on the text of a command: the PR's real diff from the forge, plus a marker file's SHA.
+# That is what makes it trustworthy where a text-matching backstop like
+# warn-review-marker-write.sh is not. Keep it fail-closed: if it cannot
+# evaluate its precondition it must block, never allow (AgDR-0104).
+#
 # PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: when the
 # PR's diff touches UI files, require a design approval marker at
 # .claude/session/reviews/<pr>-design.approved (with a matching HEAD SHA) before

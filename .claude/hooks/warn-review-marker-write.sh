@@ -3,6 +3,36 @@
 # review-marker file (*-rex.approved, *-ceo.approved, *-security.approved,
 # *-architecture.approved) under .claude/session/reviews/.
 #
+# CLASS: BACKSTOP — NOT THE CONTROL  (AgDR-0104 labelling, AgDR-0109 §1)
+# ----------------------------------------------------------------------
+# This hook is ADVISORY. It warns; it never blocks (exit 0 always).
+#
+# THE control that protects merge integrity is, and remains:
+#
+#   1. The per-PR human merge approval (/approve-merge), and
+#   2. block-unreviewed-merge.sh comparing each marker's SHA against the
+#      PR's HEAD *as reported by the forge* — structured state this hook
+#      cannot see and a local file write cannot fake.
+#
+# WHY THIS IS NOT A CONTROL. It decides by pattern-matching the TEXT of a
+# shell command, and AgDR-0104 established that such a gate "cannot be made
+# sound — the ways to express a path ($VAR, $(…), concat, here-doc, symlink,
+# printf) are unbounded." Four rounds of patches (#962, #1000, #1011, #1026)
+# confirmed it empirically, in BOTH directions at once.
+#
+# ACCEPTED LIMITS — these are documented behaviour, not open bugs. Do not
+# "fix" them with another pattern; #1026 asks explicitly for that restraint:
+#
+#   - Split path:          S=.claude/session/reviews; printf x > "$S/…"
+#   - Interpreter heredoc: python3 <<EOF … open('…-rex.approved','w') … EOF
+#   - BSD sed -i:          sed -i '' s/a/b/ <marker>
+#   - Any other spelling that hides the path from a substring match.
+#
+# The symmetric limit is over-firing: the text of a command that merely
+# MENTIONS a marker — a grep pattern, a commit message, a code review, a
+# JSON payload, this comment block — is indistinguishable from one that
+# writes it. That is why exit 0 is the right answer even on a match.
+#
 # HISTORY
 # -------
 # #728 made this hook's banner "unmissable" (VIOLATION framing, per-marker-type
@@ -24,8 +54,9 @@
 # the orchestrator (or one of /code-review, /security-review, /design-review)
 # writes immediately before spawning the sanctioned reviewer, one line:
 # `<owner>/<repo>#<pr>:<kind>`. A write to *-rex.approved / *-security.approved
-# / *-architecture.approved is now BLOCKED (exit 2) unless that marker exists
-# and matches the (repo, pr, kind) being written:
+# / *-architecture.approved without that marker was BLOCKED (exit 2) from #843
+# until #1026 returned the hook to advisory — see "#1026 — BACK TO ADVISORY"
+# below. The (repo, pr, kind) match still decides whether the banner fires:
 #
 #   .claude/session/active-reviewer contains:  me2resh/apexyard#843:rex
 #   allows a write to:                         me2resh__apexyard__843-rex.approved
@@ -219,8 +250,42 @@
 # signal" — it does not loosen what happens once something IS judged to
 # be one.
 #
-# References: #728, #843, #873, #957, #962, #974, #1000, AgDR-0062,
-#             AgDR-0104,
+# #1026 — BACK TO ADVISORY (implements AgDR-0109; supersedes #843's promotion)
+# ---------------------------------------------------------------------------
+# The paragraph above ("still fails closed") is exactly what #1026 reverses.
+# Failing closed on an UNRESOLVED role/PR sounds cautious, but the evidence
+# says it protects nothing: in one session it produced 13 false positives
+# across 2 hooks, and every single one reported `detected role: unresolved`.
+# It blocked a read-only grep (marker path was in the search PATTERN), a
+# `git commit` (path was in the MESSAGE), a code reviewer writing its own
+# review prose, /approve-merge's own documented `tracker_pr_merge` step, and
+# a JSON payload being piped to another program — from which it extracted the
+# role as the literal garbage string `…__7777-rex.approved"}}`.
+#
+# AgDR-0104's "a gate that can't evaluate its precondition must block"
+# governs *is this resolved action authorised* — not *is there an action
+# here at all*. Blocking a grep declines jurisdiction over a non-event; it
+# does not admit an unverified merge. AgDR-0109 works through this at length.
+#
+# WHY REMOVING THE BLOCK IS SAFE — #843's ROOT CAUSE IS ALREADY FIXED:
+#
+#   - #843 happened because auto-code-review.sh told build sub-agents to
+#     "Invoke Rex NOW", which they cannot do (no nested Agent tool), so they
+#     forged the marker to comply. That banner now addresses sub-agents
+#     explicitly and tells them to stop and hand back — the inducement is
+#     gone, and this block was belt-and-braces on a repaired cause.
+#   - The banner below still tells a build agent to stop. That deterrent is
+#     retained in full; only the exit code changes.
+#   - block-unreviewed-merge.sh still refuses any merge whose marker SHA does
+#     not match forge-reported HEAD, and a human still approves every merge.
+#
+# AgDR-0109 chose "block only on a confidently-resolved target"; #1026 goes
+# to plain advisory instead, because the resolver demonstrably emits garbage
+# roles — keeping ANY text matcher in a blocking path preserves the defect
+# class at higher cost. Recorded in AgDR-0109's changelog.
+#
+# References: #728, #843, #873, #957, #962, #974, #1000, #1015, #1026, #1032,
+#             AgDR-0062, AgDR-0104, AgDR-0109,
 #             .claude/rules/pr-workflow.md § "Build agents cannot self-review"
 
 set -u
@@ -321,11 +386,24 @@ _is_marker_plausible_indirect() {
 # solution-architect.md) — so the role can be recovered even though the
 # eventual write target cannot. Echoes rex|ceo|security|architecture, or
 # nothing if no such call (or no recognisable role argument) is found.
+# #1032: take the role only when it is UNAMBIGUOUS across every
+# review_marker_path call in the command. Taking the FIRST call's role was
+# wrong: the documented /approve-merge flow READS the rex marker to verify it,
+# then WRITES the ceo marker. First-call-wins reported `rex` for a ceo write,
+# so the read poisoned the write's classification — and while this hook still
+# blocked, that mis-read routed a ceo write (advisory) down the rex path
+# (blocking) and hard-blocked the skill's own documented step.
+#
+# When the calls disagree we genuinely cannot tell which one is the write, so
+# echo nothing and let the banner say "unresolved" rather than assert a role
+# that may be the one merely being read.
 _extract_marker_role() {
-  local cmd="$1" call
-  call=$(echo "$cmd" | grep -oE 'review_marker_path[^;&|)]*' | head -1)
-  [ -z "$call" ] && return 1
-  echo "$call" | grep -oE '\b(rex|ceo|security|architecture)\b' | head -1
+  local cmd="$1" roles
+  roles=$(echo "$cmd" | grep -oE 'review_marker_path[^;&|)]*' \
+    | grep -oE '\b(rex|ceo|security|architecture)\b' | sort -u)
+  [ -z "$roles" ] && return 1
+  [ "$(echo "$roles" | grep -c '')" -gt 1 ] && return 1
+  echo "$roles"
 }
 
 # _extract_marker_pr COMMAND (#962)
@@ -335,11 +413,16 @@ _extract_marker_role() {
 # the point a reviewer or skill actually invokes it (a placeholder filled in
 # with the real PR number, per code-reviewer.md / solution-architect.md).
 # Echoes the first bare digit-run found in the call, or nothing.
+# #1032: same unambiguous-only rule as _extract_marker_role above. A verify
+# read and a write in one command normally name the SAME pr, so this usually
+# still resolves — it only declines when the command genuinely spans two.
 _extract_marker_pr() {
-  local cmd="$1" call
-  call=$(echo "$cmd" | grep -oE 'review_marker_path[^;&|)]*' | head -1)
-  [ -z "$call" ] && return 1
-  echo "$call" | grep -oE '\b[0-9]+\b' | head -1
+  local cmd="$1" prs
+  prs=$(echo "$cmd" | grep -oE 'review_marker_path[^;&|)]*' \
+    | grep -oE '\b[0-9]+\b' | sort -u)
+  [ -z "$prs" ] && return 1
+  [ "$(echo "$prs" | grep -c '')" -gt 1 ] && return 1
+  echo "$prs"
 }
 
 MATCHED=0
@@ -670,25 +753,21 @@ esac
 
 cat >&2 <<MSG
 ======================================================================
-[apexyard] BLOCKED: Unauthorized review-marker write
+[apexyard] WARNING: review-marker write with no active-reviewer marker
 ======================================================================
 
-You are about to write a *-${MARKER_TYPE:-<unresolved>}.approved review marker with no
-matching active-reviewer session marker.
+This command looks like it writes a *-${MARKER_TYPE:-<unresolved>}.approved review marker,
+and no matching active-reviewer session marker is set.
 
 Target:  ${TARGET}
 Expected active-reviewer marker: ${ACTIVE_REVIEWER_MARKER}
   (must contain: <owner>/<repo>#${TARGET_PR:-<pr>}:${MARKER_TYPE:-<role>})
 
-This marker may ONLY be written by the sanctioned reviewer agent for this
-role (code-reviewer / security-reviewer / solution-architect), immediately
-after the orchestrator sets the active-reviewer marker and spawns it.
-
 IF YOU ARE A BUILD-CLASS SUB-AGENT (backend-engineer, frontend-engineer,
 platform-engineer, product-manager, data-engineer, ui-designer, ux-designer,
 tech-lead, etc.): STOP. Do NOT write this file. You cannot nest the Agent
 tool to spawn the real reviewer, so any "review" you produce here is the
-author reviewing their own work — the exact failure this gate exists to
+author reviewing their own work — the exact failure this warning exists to
 stop (see .claude/rules/pr-workflow.md § "Build agents cannot self-review").
 Report your build results plainly and hand back to the orchestrator.
 
@@ -701,6 +780,17 @@ The skill sets the active-reviewer session marker, spawns the sanctioned
 reviewer, and clears the marker for you — you should NOT set that marker
 by hand. A SessionStart sweep also clears stale markers left by an
 interrupted session.
+
+IF THIS COMMAND DOES NOT WRITE A MARKER — a grep whose pattern mentions one,
+a commit message, a review, a payload passed to another program — this is a
+false positive. Proceed; nothing is blocked. Do NOT reword the command to
+silence this warning: obfuscating around a security banner is indistinguishable
+from evading it, and the warning is not what protects the merge.
+
+This is a BACKSTOP, not the control (AgDR-0109). Merge integrity rests on the
+per-PR human approval and on block-unreviewed-merge.sh matching each marker's
+SHA against the PR's forge-reported HEAD — neither of which a local file write
+can fake.
 ======================================================================
 MSG
-exit 2
+exit 0

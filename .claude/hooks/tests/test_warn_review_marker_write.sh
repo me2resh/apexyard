@@ -12,7 +12,27 @@
 # structured-field defence in block-unreviewed-merge.sh and is written by a
 # human-invoked skill, not a reviewer agent.
 #
-# Test matrix:
+# #1026 SUPERSEDES THAT PROMOTION — READ THIS BEFORE THE MATRIX BELOW.
+# ------------------------------------------------------------------
+# The hook is ADVISORY again (exit 0 always), per AgDR-0109. So every
+# "BLOCKED, exit 2" in the matrix below now means **"DETECTED → warns,
+# exit 0"**. The matrix is left otherwise intact on purpose: it is still an
+# accurate record of what the hook DETECTS, and detection is what the cases
+# exercise. Only the consequence changed.
+#
+# Why: #843's blocking promotion cost 13 false positives in a single session
+# across 2 hooks — including a read-only grep, a commit message, a code
+# review's own prose, and /approve-merge's documented merge step — while four
+# distinct bypasses (split path, interpreter heredoc, BSD sed -i, variable
+# indirection) stayed open. #843's actual root cause (auto-code-review.sh
+# inducing build agents to forge markers) was fixed separately, so the block
+# was belt-and-braces on a repaired cause. Merge integrity rests on the
+# per-PR human approval plus block-unreviewed-merge.sh's forge-HEAD SHA match.
+#
+# Cases 41-45 pin the false-positive direction. Do NOT "restore" a block
+# here without re-reading AgDR-0109 and AgDR-0104 first.
+#
+# Test matrix (read "BLOCKED, exit 2" as "detected → warns, exit 0"):
 #   (1)  Write  → rex marker, no active-reviewer marker         → BLOCKED, exit 2
 #   (2)  Write  → ceo marker                                    → advisory, exit 0 (unchanged)
 #   (3)  Bash   → echo redirect to rex marker, no marker         → BLOCKED, exit 2
@@ -239,8 +259,8 @@ bash_json_multiline() {
 case1() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Write rex marker, no active-reviewer marker -> BLOCKED" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write rex marker, no active-reviewer marker -> WARNS (advisory, #1026)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -261,8 +281,8 @@ case2() {
 case3() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Bash echo redirect rex marker, no marker -> BLOCKED" \
-    "$(bash_json "echo 'abc123' > ${marker}")" 2 "BLOCKED"
+  run_hook "$sb" "Bash echo redirect rex marker, no marker -> WARNS (advisory, #1026)" \
+    "$(bash_json "echo 'abc123' > ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -272,8 +292,8 @@ case3() {
 case4() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Bash tee rex marker, no marker -> BLOCKED" \
-    "$(bash_json "printf sha | tee ${marker}")" 2 "BLOCKED"
+  run_hook "$sb" "Bash tee rex marker, no marker -> WARNS (advisory, #1026)" \
+    "$(bash_json "printf sha | tee ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -305,8 +325,8 @@ case6() {
 case7() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 architecture "$sb")
-  run_hook "$sb" "Write architecture marker, no marker -> BLOCKED (#843)" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write architecture marker, no marker -> WARNS (advisory, #1026) (#843)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -327,9 +347,9 @@ case9() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   run_hook "$sb" "Rex blocked banner contains BLOCKED keyword" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+    "$(write_json "$marker")" 0 "WARNING"
   run_hook "$sb" "Rex blocked banner mentions BUILD-CLASS SUB-AGENT" \
-    "$(write_json "$marker")" 2 "BUILD-CLASS SUB-AGENT"
+    "$(write_json "$marker")" 0 "BUILD-CLASS SUB-AGENT"
   rm -rf "$sb"
 }
 
@@ -352,8 +372,8 @@ case10() {
 case11() {
   local sb; sb=$(make_sandbox)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Bash printf rex marker, no marker -> BLOCKED" \
-    "$(bash_json "printf '%s' sha > ${marker}")" 2 "BLOCKED"
+  run_hook "$sb" "Bash printf rex marker, no marker -> WARNS (advisory, #1026)" \
+    "$(bash_json "printf '%s' sha > ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -400,8 +420,8 @@ case15() {
   local sb; sb=$(make_sandbox)
   printf '%s\n' "${REPO}#42:security" > "$sb/.claude/session/active-reviewer"
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Write rex marker, active-reviewer marker wrong kind -> BLOCKED" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write rex marker, active-reviewer marker wrong kind -> WARNS (advisory, #1026)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -412,8 +432,8 @@ case16() {
   local sb; sb=$(make_sandbox)
   printf '%s\n' "${REPO}#999:rex" > "$sb/.claude/session/active-reviewer"
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Write rex marker, active-reviewer marker wrong pr -> BLOCKED" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write rex marker, active-reviewer marker wrong pr -> WARNS (advisory, #1026)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -424,8 +444,8 @@ case17() {
   local sb; sb=$(make_sandbox)
   printf '%s\n' "other-owner/other-repo#42:rex" > "$sb/.claude/session/active-reviewer"
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Write rex marker, active-reviewer marker wrong repo -> BLOCKED" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write rex marker, active-reviewer marker wrong repo -> WARNS (advisory, #1026)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -436,8 +456,8 @@ case17() {
 case18() {
   local sb; sb=$(make_sandbox)
   local marker="$sb/.claude/session/reviews/42-rex.approved"
-  run_hook "$sb" "Write legacy bare-number marker, no marker -> BLOCKED" \
-    "$(write_json "$marker")" 2 "BLOCKED"
+  run_hook "$sb" "Write legacy bare-number marker, no marker -> WARNS (advisory, #1026)" \
+    "$(write_json "$marker")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -473,8 +493,8 @@ make_indirect_rex_write() {
 
 case20() {
   local sb; sb=$(make_sandbox)
-  run_hook "$sb" "Bash indirected write (review_marker_path var), no marker -> BLOCKED (#962)" \
-    "$(bash_json "$(make_indirect_rex_write)")" 2 "BLOCKED"
+  run_hook "$sb" "Bash indirected write (review_marker_path var), no marker -> WARNS (advisory, #1026) (#962)" \
+    "$(bash_json "$(make_indirect_rex_write)")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -512,8 +532,8 @@ case23() {
   local cmd
   # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
   cmd=$(printf 'REX_MARKER=$(review_marker_path "%s" 42 rex "$MARKER_HOME"); echo sha123 | tee "$REX_MARKER"' "$REPO")
-  run_hook "$sb" "Bash indirected tee write, no marker -> BLOCKED (#962)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash indirected tee write, no marker -> WARNS (advisory, #1026) (#962)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -530,8 +550,8 @@ case24() {
   printf '%s\n' "${REPO}#42:security" > "$sb/.claude/session/active-reviewer"
   # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
   local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
-  run_hook "$sb" "Bash fully ambiguous indirected write -> BLOCKED (#962 fail-closed)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash fully ambiguous indirected write -> WARNS (advisory, #1026) (#962 fail-closed)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -544,8 +564,8 @@ case24() {
 case25() {
   local sb; sb=$(make_sandbox_no_bdw_lib)
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
-  run_hook "$sb" "Bash cat (read) of literal rex marker, lib missing -> BLOCKED (graceful fallback)" \
-    "$(bash_json "cat ${marker}")" 2 "BLOCKED"
+  run_hook "$sb" "Bash cat (read) of literal rex marker, lib missing -> WARNS (advisory, #1026) (graceful fallback)" \
+    "$(bash_json "cat ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -570,8 +590,8 @@ case26() {
   # anywhere, so _extract_marker_role (and thus MARKER_TYPE) resolves to "".
   # shellcheck disable=SC2016 # deliberate — literal text, not real expansion
   local cmd='DIR="$MARKER_HOME/.claude/session/reviews"; printf "%s" sha123 > "$DIR/mystery.approved"'
-  run_hook "$sb" "Bash empty-kind active-reviewer marker + unresolvable indirect write -> BLOCKED (#974)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash empty-kind active-reviewer marker + unresolvable indirect write -> WARNS (advisory, #1026) (#974)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -596,8 +616,8 @@ case27() {
   # it resolves. The redirection makes it a genuine write.
   # shellcheck disable=SC2016 # deliberate literal — not real expansion here
   local cmd='REX_MARKER=$(review_marker_path "$REPO" "$PR" rex "$MARKER_HOME"); printf "%s" sha123 > "$REX_MARKER"'
-  run_hook "$sb" "Bash indirect write, role resolves + PR unresolved, active-reviewer for different PR -> BLOCKED (#977)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash indirect write, role resolves + PR unresolved, active-reviewer for different PR -> WARNS (advisory, #1026) (#977)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -689,7 +709,7 @@ case33() {
   local ar="$sb/.claude/session/active-reviewer"
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   run_hook "$sb" "Bash rm + real marker forgery in same command -> still BLOCKED (#1000)" \
-    "$(bash_json "rm -f ${ar}; printf sha123 > ${marker}")" 2 "BLOCKED"
+    "$(bash_json "rm -f ${ar}; printf sha123 > ${marker}")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -709,7 +729,7 @@ case34() {
 
 # ---------------------------------------------------------------------------
 # (35) Bash → `python3 <<EOF` interpreter heredoc writing directly to a real
-#      rex marker, no active-reviewer marker -> BLOCKED, exit 2.
+#      rex marker, no active-reviewer marker -> WARNS (advisory, #1026), exit 2.
 #      #1000-round2 finding 1 (Rex's PR #1011 review): the FIRST version of
 #      this fix stripped heredoc bodies before the fallback scan, reasoning
 #      all heredoc content is data. For an INTERPRETER heredoc the body is
@@ -723,14 +743,14 @@ case35() {
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   local cmd
   cmd=$(printf 'python3 <<EOF\nopen("%s","w").write("sha123")\nEOF' "$marker")
-  run_hook "$sb" "Bash python3 heredoc write to rex marker, no marker -> BLOCKED (#1000-round2 F1)" \
-    "$(bash_json_multiline "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash python3 heredoc write to rex marker, no marker -> WARNS (advisory, #1026) (#1000-round2 F1)" \
+    "$(bash_json_multiline "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
 # ---------------------------------------------------------------------------
 # (36) Bash → `bash <<EOF` wrapping an inner `python3 -c` write to a real rex
-#      marker -> BLOCKED, exit 2. `bash` fed a heredoc isn't itself one of
+#      marker -> WARNS (advisory, #1026), exit 2. `bash` fed a heredoc isn't itself one of
 #      the shared lib's named interpreter matchers (only python/node/ruby
 #      heredoc forms are) -- this shape is caught because target extraction
 #      runs on the unstripped command and the inner write is still visible.
@@ -741,13 +761,13 @@ case36() {
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   local cmd
   cmd=$(printf 'bash <<EOF\npython3 -c '"'"'open("%s","w").write("sha123")'"'"'\nEOF' "$marker")
-  run_hook "$sb" "Bash bash-heredoc wrapping python3 -c write to rex marker -> BLOCKED (#1000-round2 F2)" \
-    "$(bash_json_multiline "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash bash-heredoc wrapping python3 -c write to rex marker -> WARNS (advisory, #1026) (#1000-round2 F2)" \
+    "$(bash_json_multiline "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
 # ---------------------------------------------------------------------------
-# (37) Bash → the IDENTICAL python3 -c write INLINE (no heredoc) -> BLOCKED,
+# (37) Bash → the IDENTICAL python3 -c write INLINE (no heredoc) -> WARNS (advisory, #1026),
 #      exit 2. Control for cases 35/36: same write, same target, no
 #      heredoc -- confirms the interpreter-write detection itself was never
 #      broken; only the (now-removed) heredoc-body strip regressed it.
@@ -757,14 +777,14 @@ case37() {
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   local cmd
   cmd=$(printf 'python3 -c '"'"'open("%s","w").write("sha123")'"'"'' "$marker")
-  run_hook "$sb" "Bash inline python3 -c write to rex marker (heredoc control) -> BLOCKED" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash inline python3 -c write to rex marker (heredoc control) -> WARNS (advisory, #1026)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
 # ---------------------------------------------------------------------------
 # (38) Bash → BSD-form `sed -i '' s/aa/bb/ <marker>` rewriting a real rex
-#      marker's stale SHA -> BLOCKED, exit 2.
+#      marker's stale SHA -> WARNS (advisory, #1026), exit 2.
 #      #1000-round2 finding 2 (Rex's PR #1011 review): bash_extract_
 #      write_target's positional heuristic for `sed -i` assumes GNU's
 #      single-quoted-script form. BSD's two-token form (empty-string backup
@@ -779,8 +799,8 @@ case38() {
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   printf '%s\n' "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > "$marker"
   local cmd="sed -i '' s/aa/bb/ ${marker}"
-  run_hook "$sb" "Bash BSD sed -i '' mis-extracted target on rex marker -> BLOCKED (#1000-round2 finding2)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash BSD sed -i '' mis-extracted target on rex marker -> WARNS (advisory, #1026) (#1000-round2 finding2)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -796,8 +816,8 @@ case39() {
   local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
   printf '%s\n' "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > "$marker"
   local cmd="sed -i s/aa/bb/ ${marker}"
-  run_hook "$sb" "Bash GNU sed -i on rex marker -> BLOCKED (regression guard)" \
-    "$(bash_json "$cmd")" 2 "BLOCKED"
+  run_hook "$sb" "Bash GNU sed -i on rex marker -> WARNS (advisory, #1026) (regression guard)" \
+    "$(bash_json "$cmd")" 0 "WARNING"
   rm -rf "$sb"
 }
 
@@ -812,6 +832,92 @@ case40() {
   local sb; sb=$(make_sandbox)
   local cmd="sed -i '' s/foo/bar/ /tmp/scratch/notes.txt"
   run_hook "$sb" "Bash sed -i on non-marker file -> NOT blocked (negative control)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ===========================================================================
+# #1026 REGRESSIONS — real false positives observed in one session.
+#
+# These are not hypotheticals. Each of the five below hard-blocked a real
+# command while this hook was a blocking gate, and every one of them reported
+# `detected role: unresolved`. They are pinned here so the advisory behaviour
+# cannot silently regress to blocking.
+#
+# The general shape: a command that MENTIONS a marker path is textually
+# indistinguishable from one that WRITES it. That is the defect class
+# AgDR-0104 named and AgDR-0109 acted on -- do not "fix" it with a pattern.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# (41) Bash → read-only grep whose SEARCH PATTERN contains a marker redirect.
+#      Blocked a repo sweep that was looking for this very bug. exit 0.
+# ---------------------------------------------------------------------------
+case41() {
+  local sb; sb=$(make_sandbox)
+  local cmd="grep -rn '> .claude/session/reviews/me2resh__apexyard__7777-rex.approved' .claude/hooks/"
+  run_hook "$sb" "read-only grep, marker redirect inside the PATTERN -> NOT blocked (#1026)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (42) Bash → `git commit -F -` whose COMMIT MESSAGE names a marker path.
+#      Blocked the commit that fixed a hook for instructing a raw marker
+#      write -- the message had to describe the thing being removed. exit 0.
+# ---------------------------------------------------------------------------
+case42() {
+  local sb; sb=$(make_sandbox)
+  local cmd
+  cmd=$'git commit -F - <<EOF\nfix: stop instructing a redirect into .claude/session/reviews/me2resh__apexyard__7777-design.approved\nEOF'
+  run_hook "$sb" "git commit whose MESSAGE names a marker path -> NOT blocked (#1026)" \
+    "$(bash_json_multiline "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (43) Bash → /approve-merge's documented flow: READ the rex marker to verify
+#      it, then WRITE the ceo marker. First-call-wins role extraction reported
+#      `rex` for a ceo write, routing an advisory write down the blocking
+#      path (#1032). Roles now disagree -> role is reported as unresolved
+#      rather than asserted wrongly. exit 0.
+# ---------------------------------------------------------------------------
+case43() {
+  local sb; sb=$(make_sandbox)
+  # shellcheck disable=SC2016 # deliberate — these are literal, unexpanded
+  # $VAR tokens in the command text the hook receives, not expansions here.
+  local cmd='REX=$(review_marker_path "$HOST" 1041 rex "$MH"); CEO=$(review_marker_path "$HOST" 1041 ceo "$MH"); printf "sha=abc" > "$CEO"'
+  run_hook "$sb" "rex READ + ceo WRITE -> NOT blocked, role not mis-reported as rex (#1032)" \
+    "$(bash_json "$cmd")" 0 "unresolved"
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (44) Bash → a command whose only marker-ish token is a variable NAMED
+#      MARKER_HOME -- the name this framework's own skills and agent specs
+#      tell you to use -- plus a redirect to an unresolvable variable target.
+#      This blocked /approve-merge's own documented step 7. exit 0.
+# ---------------------------------------------------------------------------
+case44() {
+  local sb; sb=$(make_sandbox)
+  # shellcheck disable=SC2016 # literal command text, see case43.
+  local cmd='MARKER_HOME=/repo; . "$MARKER_HOME/.claude/hooks/_lib-tracker.sh"; tracker_pr_merge "o/r" "1041" "squash" true > "$OUT"'
+  run_hook "$sb" "MARKER_HOME declaration + variable redirect -> NOT blocked (#1026)" \
+    "$(bash_json "$cmd")" 0
+  rm -rf "$sb"
+}
+
+# ---------------------------------------------------------------------------
+# (45) Bash → a marker path inside a JSON STRING being piped to another
+#      program. Three quoting layers deep and not a write at all; the role
+#      extractor returned the literal garbage `…__7777-rex.approved"}}` and
+#      the gate blocked on it -- it blocked this hook's own test harness.
+#      exit 0.
+# ---------------------------------------------------------------------------
+case45() {
+  local sb; sb=$(make_sandbox)
+  local cmd='printf %s "{\"command\":\"printf x > .claude/session/reviews/me2resh__apexyard__7777-rex.approved\"}" | ./some-consumer'
+  run_hook "$sb" "marker path inside a JSON payload piped to another program -> NOT blocked (#1026)" \
     "$(bash_json "$cmd")" 0
   rm -rf "$sb"
 }
@@ -856,6 +962,11 @@ case37
 case38
 case39
 case40
+case41
+case42
+case43
+case44
+case45
 
 # ---------------------------------------------------------------------------
 # Summary
