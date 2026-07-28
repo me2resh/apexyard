@@ -16,7 +16,7 @@ status: executed
 - Operator feedback (2026-07-23): the new version feels "corporate / bureaucratic"; Rex → Hisham → Tariq → Nour handoff chains create a waiting queue; token burn is high; *"something needs to watch the overengineering — it's out of control."*
 - The framework already detects every **high-blast** class (trust-chain, migration, design artifact, UI, auth/crypto/secrets) and gates it hard. The gap is the missing **Lean floor** — everything not-Heavy was silently treated as Standard-full-ceremony, so a `CODE_OF_CONDUCT.md` PR spawned a full Rex sub-agent and ran the same role chain as real code.
 - A *blocking* tier-classifier would re-introduce the exact rigidity being complained about — a mis-tier that hard-blocks is worse than the over-ceremony it replaces.
-- The `Agent`-tool spawn boundary has no `PreToolUse` hook (AgDR-0056), so the Lean floor cannot be mechanically enforced regardless; `enforce-budget.sh` already meters token cost.
+- The `Agent`-tool spawn boundary has no `PreToolUse` hook (AgDR-0056), so the Lean floor cannot be mechanically enforced regardless; `enforce-budget.sh` already meters token cost. **[Incorrect — see Correction below: that hook is premium-only and does not ship in OSS.]**
 
 ## Options Considered
 
@@ -28,7 +28,7 @@ status: executed
 
 ## Decision
 
-Chosen: **an advisory self-discipline rule** (`.claude/rules/right-size-ceremony.md`) with a three-tier model (Lean / Standard / Heavy) selected from **path class + blast radius + behavior surface**, and two non-negotiable safety rails — **security / trust-chain / migration never goes Lean**, and **ambiguity rounds up a tier**. No new hook: the Heavy classes keep their existing hard gates (merge gate, migration gate, architecture / design / security review — all unchanged), and `enforce-budget.sh` is the token watch. The rule joins the `plan-mode` / `parallel-work` / `loop-mode` self-discipline family.
+Chosen: **an advisory self-discipline rule** (`.claude/rules/right-size-ceremony.md`) with a three-tier model (Lean / Standard / Heavy) selected from **path class + blast radius + behavior surface**, and two non-negotiable safety rails — **security / trust-chain / migration never goes Lean**, and **ambiguity rounds up a tier**. No new hook: the Heavy classes keep their existing hard gates (merge gate, migration gate, architecture / design / security review — all unchanged), and `enforce-budget.sh` is the token watch. **[The token-watch clause is incorrect — see Correction below: that hook is premium-only. The rest of this decision stands.]** The rule joins the `plan-mode` / `parallel-work` / `loop-mode` self-discipline family.
 
 ## Consequences
 
@@ -37,8 +37,19 @@ Chosen: **an advisory self-discipline rule** (`.claude/rules/right-size-ceremony
 - The failure mode is bounded to "occasionally too much review on a borderline case" (rail 2), never "too little on a risky one."
 - The Lean floor is self-discipline; if it proves insufficient in practice, a dedicated advisory nudge-hook (process-cost-vs-change-size) is the deferred next increment.
 
+## Correction (me2resh/apexyard#1044)
+
+Two statements above are **factually wrong about what ships**, and are corrected here rather than edited in place — the decision was made as recorded; only the availability claim was mistaken.
+
+The Consequences and Decision sections cite `enforce-budget.sh` as an existing hook that "already meters token cost" and serves as "the token watch" for the Lean floor. **That hook is not tracked in this repository.** It is a premium component (`apexyard-premium#335`, gated on a `features.budget` entitlement), so open-source adopters have no automatic disproportion signal at all.
+
+The practical effect on this decision: the enforcement split described above is **advisory-rule-plus-nothing** for OSS adopters, not advisory-rule-plus-meter. The chosen option is unchanged and still stands on its own reasoning — a blocking tier-classifier would reintroduce the rigidity the rule exists to reduce, and the `Agent`-spawn boundary remains unhooked (AgDR-0056). But the "watch half" it leans on is weaker than recorded, which matters if the recurring over-process feedback persists: the deferred "dedicated advisory nudge-hook" listed in Consequences is then the *first* increment, not a contingency.
+
+`.claude/rules/right-size-ceremony.md` and `CLAUDE.md` have been corrected to state the OSS enforcement honestly.
+
 ## Artifacts
 
 - `.claude/rules/right-size-ceremony.md`
 - `CLAUDE.md` wiring (Quality Rules bullet + rules-layer count)
 - [me2resh/apexyard#993](https://github.com/me2resh/apexyard/issues/993)
+- [me2resh/apexyard#1044](https://github.com/me2resh/apexyard/issues/1044) — the availability correction above
