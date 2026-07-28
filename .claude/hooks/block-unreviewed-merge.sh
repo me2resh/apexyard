@@ -278,18 +278,29 @@ fi
 # Off by default: it changes merge behaviour for every adopter and is currently
 # GitHub-only. See .claude/project-config.defaults.json → review_markers
 # .require_posted_review, and tracker_review_at_sha in _lib-tracker.sh.
-# Read the flag. `_lib-read-config.sh` is sourced above with `|| true`, so
-# config_get_or may be undefined — and defaulting to false there would SILENTLY
-# DISABLE this control while the operator's config still says true. That is the
-# same fail-open shape as the missing-lib hole below, and the more dangerous of
-# the two because it leaves no trace at all. So when the config reader is
-# unavailable, fall back to a direct grep of the override file rather than
-# assuming "off".
+# Read the flag. Two independent ways the normal read can be unavailable:
+# `_lib-read-config.sh` is sourced above with `|| true` (so config_get_or may be
+# undefined), and jq may be absent (so config_get_or is defined but returns the
+# caller's default). Either way, defaulting to false would SILENTLY DISABLE this
+# control while the operator's config still says true — the same fail-open shape
+# as the missing-lib hole below, and more dangerous because it leaves no trace.
+# So when the normal read is unavailable for either reason, fall back to a direct
+# grep of the override rather than assuming "off".
 REQUIRE_POSTED_REVIEW=false
-if command -v config_get_or >/dev/null 2>&1; then
+# BOTH conditions matter. _lib-read-config.sh sources fine WITHOUT jq — jq is
+# only checked inside _config_load — so `command -v config_get_or` alone
+# succeeds with jq absent and returns the caller's default ('false').
+#
+# Honest scope: in THIS hook that is defence-in-depth, not a hole being closed.
+# A merge command with jq absent never reaches this line — the #965 guard near
+# the top can't parse .tool_input.command, sees the raw payload is merge-shaped,
+# and fails closed at :113. The jq test here makes the flag read correct on its
+# own terms for any future path that arrives without jq; it does not rescue a
+# reachable fail-open. Pinned end-to-end by the jq_absent_case tests.
+if command -v config_get_or >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
 else
-  # Reader unavailable (missing lib, or jq absent). Grep the override directly:
+  # Normal read unavailable — the lib is missing, or jq is. Grep the override:
   # a bare `"require_posted_review": true` on one line is the shape both the
   # defaults file and any sane hand-edit produce.
   #
@@ -299,7 +310,7 @@ else
   # whenever the reader is unavailable, not only when the grep matches: the
   # operator always learns that config was read by a degraded path, whichever
   # answer it produced.
-  echo "WARN: .claude/hooks/_lib-read-config.sh (or jq) is unavailable — reading review_markers.require_posted_review by direct grep, which can miss non-standard JSON formatting. Restore it so config is parsed properly." >&2
+  echo "WARN: config cannot be parsed normally (.claude/hooks/_lib-read-config.sh missing, or jq not installed) — reading review_markers.require_posted_review by direct grep, which can miss non-standard JSON formatting. Restore both so config is parsed properly." >&2
   for _cfg in "${MARKER_HOME}/.claude/project-config.json" \
               "${MARKER_HOME}/.claude/project-config.defaults.json"; do
     [ -f "$_cfg" ] || continue

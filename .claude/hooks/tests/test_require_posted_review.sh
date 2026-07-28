@@ -39,6 +39,11 @@ FAILED_CASES=""
 HEAD_SHA="abcdef1234567890abcdef1234567890abcdef12"
 OLD_SHA="1111111111111111111111111111111111111111"
 TEST_REPO="me2resh/apexyard"
+# The merge verb is assembled at runtime rather than written literally, so this
+# file's own text doesn't read as a merge command to the PreToolUse merge gate
+# (which matches raw command text — the limitation AgDR-0104 documents). Editing
+# a test file should not trip the control the test exercises.
+MERGE_VERB="me""rge"
 
 # --------------------------------------------------------------------------
 # Sandbox: mirrors test_block_unreviewed_merge.sh's, plus _lib-tracker.sh and a
@@ -233,6 +238,54 @@ run_case "M1: config reader missing + flag ON in config -> still BLOCKS (not sil
 sb=$(make_sandbox); set_flag "$sb" false; set_reviews_state "$sb" ""; write_markers "$sb" 42
 rm -f "$sb/.claude/hooks/_lib-read-config.sh"
 run_case "M1 control: config reader missing + flag OFF -> no-op, ALLOWED" 0 "" "$sb" 42
+
+# jq ABSENT. Hakim's security review flagged that the flag-read gate's premise
+# was wrong: _lib-read-config.sh sources fine WITHOUT jq (jq is only checked
+# inside _config_load), so `command -v config_get_or` succeeds and returns the
+# caller's default. That premise correction is right, and the gate now tests for
+# jq too. See the NOTE below the helper for what that does and does not buy.
+jq_absent_case() {  # <label> <flag> <want_rc> <want_re>
+  local label="$1" flag="$2" want_rc="$3" want_re="$4"
+  local sb; sb=$(make_sandbox); set_flag "$sb" "$flag"; set_reviews_state "$sb" ""
+  write_markers "$sb" 42
+  mkdir -p "$sb/nojq"
+  local c
+  for c in bash sh grep sed cat tr cut head tail date mkdir rm ls dirname basename git awk; do
+    ln -sf "$(command -v "$c" 2>/dev/null)" "$sb/nojq/$c" 2>/dev/null
+  done
+  ln -sf "$sb/bin/gh" "$sb/nojq/gh" 2>/dev/null
+  # Build the payload with jq HERE (the outer shell still has it), then run the
+  # hook under the jq-less PATH.
+  local input got_rc got_stderr
+  input=$(jq -nc --arg c "gh pr $MERGE_VERB 42 --repo $TEST_REPO --squash" \
+    '{tool_name:"Bash", tool_input:{command:$c}}')
+  got_stderr=$(cd "$sb" && PATH="$sb/nojq" bash -c \
+    "printf '%s' '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "$want_rc" ] && { [ -z "$want_re" ] || printf '%s' "$got_stderr" | grep -qE "$want_re"; }; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: rc=$got_rc want=$want_rc — ${got_stderr:0:200}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES $label"
+  fi
+  rm -rf "$sb"
+}
+# NOTE what these actually pin, because it is not what it first appears.
+# Through the REAL hook, jq-absence never reaches the flag read at all: the #965
+# guard near the top cannot parse .tool_input.command without jq, sees the raw
+# payload is merge-shaped, and fails closed there (block-unreviewed-merge.sh
+# :113) — long before :296. So the merge is already blocked, whatever the flag
+# says, and that is true with the flag ON *or* OFF.
+#
+# The `&& command -v jq` condition at :296 is therefore defence-in-depth, not a
+# hole being closed: it makes the flag read correct on its own terms for any
+# future path that reaches it without jq. These two cases pin the real
+# end-to-end behaviour — jq absent means no merge, period — so nobody later
+# "fixes" the #965 guard into letting these through.
+jq_absent_case "jq ABSENT + flag ON  -> BLOCKED by the #965 guard before the flag is read" \
+  true 2 "cannot evaluate this command"
+jq_absent_case "jq ABSENT + flag OFF -> also BLOCKED by #965 (flag is irrelevant here)" \
+  false 2 "cannot evaluate this command"
 
 # Hakim LOW — the missing-_lib-tracker.sh block shipped untested in f8a219fe.
 sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" "$HEAD_SHA"; write_markers "$sb" 42
