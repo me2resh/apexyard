@@ -100,12 +100,74 @@ extract_flag_value() {
   '
 }
 
+# extract_path_flag FLAG_RE COMMAND  (me2resh/apexyard#1038)
+#
+# A PATH-valued flag needs the OPPOSITE parsing strategy to a CONTENT-valued
+# one, and conflating them is the actual defect behind #1038:
+#
+#   CONTENT (--title / --body): may contain anything — quotes, pipes,
+#     semicolons, markdown tables. Extraction must be GREEDY and terminate
+#     only on a real flag boundary, or an embedded quote truncates the value.
+#     extract_flag_value above is therefore left exactly as #227 wrote it.
+#
+#   PATH (--body-file / -F): a filesystem path, which never contains a quote.
+#     Extraction must be NON-GREEDY — stop at the FIRST closing quote. The
+#     greedy content matcher cannot terminate `--body-file "/p/b.md" 2>&1 |
+#     tail`, so it fell through to the unquoted branch and returned the token
+#     WITH quotes attached. `[ -f ]` was then false, the body file was never
+#     read, and the `<!-- agdr: not-applicable -->` marker inside it was
+#     never seen — blocking the PR for a missing AgDR that WAS declared.
+#
+# An earlier attempt widened extract_flag_value's anchor to accept shell
+# operators. That fixed the path case and broke the content case: `sub()` is
+# leftmost-first and each alternative ended in `.*`, so a body containing a
+# quote followed by ` |` truncated there. In the sibling leak hook that same
+# change was measurably WORSE than no fix at all (see #1039). Splitting the
+# extractors is the correct fix; widening the shared one is not.
+extract_path_flag() {
+  local flag_re="$1"
+  local cmd="$2"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Double-quoted path: stop at the first closing quote.
+      re = "(" FLAG_RE ")[[:space:]]+\"[^\"]*\""
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
+        sub("\"$", "", chunk)
+        print chunk
+        exit
+      }
+      # Single-quoted path: same treatment.
+      re = "(" FLAG_RE ")[[:space:]]+" SQ "[^" SQ "]*" SQ
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
+        sub(SQ "$", "", chunk)
+        print chunk
+        exit
+      }
+      # Unquoted path: a single whitespace-delimited token.
+      re = "(" FLAG_RE ")[[:space:]]+[^[:space:]]+"
+      if (match(s, re)) {
+        chunk = substr(s, RSTART, RLENGTH)
+        sub("^(" FLAG_RE ")[[:space:]]+", "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
+}
+
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
 # because `gh api -F body=@file` uses the same flag letter).
-BODY_FILE=$(extract_flag_value '--body-file' "$COMMAND")
+# #1038: a PATH, so use the non-greedy path extractor.
+BODY_FILE=$(extract_path_flag '--body-file' "$COMMAND")
 if [ -z "$BODY_FILE" ]; then
   F_VAL=$(echo "$COMMAND" | sed -nE "s/.*(^|[[:space:]])-F[[:space:]]+\"([^\"]*)\".*/\2/p" | head -1)
   if [ -z "$F_VAL" ]; then
