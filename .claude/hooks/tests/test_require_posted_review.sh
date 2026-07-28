@@ -213,6 +213,62 @@ run_case "flag ON + review only at an OLDER commit -> BLOCKED" 2 "NO" "$sb" 42
 sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" "FAIL"; write_markers "$sb" 42
 run_case "flag ON + forge query FAILS -> BLOCKED (fail closed, not open)" 2 "could not verify" "$sb" 42
 
+# ==========================================================================
+# Hakim's security-review findings (#1052) — all three fail-OPEN shapes.
+# Each of these was reproduced against the pre-fix code; they exist so a
+# regression turns "couldn't check" back into "allowed" loudly, not silently.
+# ==========================================================================
+
+# M1 — the FLAG READ itself must not fail open. _lib-read-config.sh is sourced
+# with `|| true`, so if it (or jq) is missing, config_get_or is undefined. The
+# original code defaulted to false there, silently DISABLING the control while
+# the operator's config still said true — no warning, no trace.
+sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" ""; write_markers "$sb" 42
+rm -f "$sb/.claude/hooks/_lib-read-config.sh"
+run_case "M1: config reader missing + flag ON in config -> still BLOCKS (not silently disabled)" \
+  2 "NO|could not verify" "$sb" 42
+
+# M1 control: reader missing AND flag off -> still a no-op. The grep fallback
+# must not invent a `true` that isn't there.
+sb=$(make_sandbox); set_flag "$sb" false; set_reviews_state "$sb" ""; write_markers "$sb" 42
+rm -f "$sb/.claude/hooks/_lib-read-config.sh"
+run_case "M1 control: config reader missing + flag OFF -> no-op, ALLOWED" 0 "" "$sb" 42
+
+# Hakim LOW — the missing-_lib-tracker.sh block shipped untested in f8a219fe.
+sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" "$HEAD_SHA"; write_markers "$sb" 42
+rm -f "$sb/.claude/hooks/_lib-tracker.sh"
+run_case "missing _lib-tracker.sh + flag ON -> BLOCKS (fail closed, names the file)" \
+  2 "_lib-tracker.sh" "$sb" 42
+
+# M2 — a crafted sha must not break out of the jq string literal. A value
+# containing a quote could close the literal and rewrite the filter into one
+# that always matches: a fail-OPEN. Guard rejects non-hex before it is
+# interpolated. (Unreachable from today's caller, whose sha is forge-derived,
+# but this is a public function of a CONTROL library.)
+m2() {
+  local sb; sb=$(make_sandbox); set_flag "$sb" true; set_reviews_state "$sb" ""
+  local out
+  out=$(cd "$sb" && PATH="$sb/bin:$PATH" bash -c '
+    . .claude/hooks/_lib-read-config.sh 2>/dev/null
+    . .claude/hooks/_lib-tracker.sh
+    tracker_review_at_sha "'"$TEST_REPO"'" 42 "\") or true #"; echo "inject=$?"
+    tracker_review_at_sha "'"$TEST_REPO"'" 42 "deadbee";     echo "short_ok=$?"
+    tracker_review_at_sha "'"$TEST_REPO"'" 42 "zzzz";        echo "nonhex=$?"
+    tracker_review_at_sha "../../etc/passwd" 42 "'"$HEAD_SHA"'"; echo "traversal=$?"
+  ' 2>/dev/null)
+  # inject/nonhex/traversal must be 2 (rejected), never 0 (fail-open).
+  if printf '%s' "$out" | grep -q "inject=2" \
+     && printf '%s' "$out" | grep -q "nonhex=2" \
+     && printf '%s' "$out" | grep -q "traversal=2"; then
+    echo "PASS [M2: crafted sha / traversal rejected with rc=2, never fail-open]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [M2: injection guards]: got [$out]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES M2-injection"
+  fi
+  rm -rf "$sb"
+}
+m2
+
 echo
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"

@@ -84,8 +84,13 @@ gate skips with a warning rather than bricking those adopters.
 ## Consequences
 
 - When enabled, "Rex reviewed this" becomes verifiable on the forge instead of inferred from a local
-  file. The residual local-forgery exposure accepted in AgDR-0062/0109/0111 is closed for GitHub
-  adopters who opt in.
+  file. The local-forgery exposure accepted in AgDR-0062/0109/0111 is **raised in cost and made
+  auditable — not closed.** An agent with `gh` auth can still satisfy this gate by posting a stub
+  `--comment` review at HEAD, and can disable the check outright by editing
+  `.claude/project-config.json` (untracked by design, so that edit leaves no git trace). Treat this
+  as an **integrity and auditability check, not an anti-adversary barrier**: it catches the
+  forged-marker case that actually occurred (#843), catches a stale review after new commits, and
+  forces an artifact a human can read on the PR. It does not stop a determined agent.
 - **Does NOT reverse AgDR-0062's deferral.** Its independent-reviewer control stays deferred on its
   original terms, and remains the right target once a separate reviewer identity exists. This ships
   a lesser check alongside it.

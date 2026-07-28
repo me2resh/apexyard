@@ -1287,6 +1287,21 @@ tracker_review_at_sha() {
   local repo="$1" pr="$2" sha="$3"
   [ -n "$repo" ] && [ -n "$pr" ] && [ -n "$sha" ] || return 2
   case "$pr" in ''|*[!0-9]*) return 2 ;; esac
+  # `sha` is interpolated into a jq string literal below. Today's only caller
+  # passes a forge-derived SHA, but this is a public function of a CONTROL
+  # library: a crafted value containing a quote could close the literal and
+  # alter the filter into one that always matches — a fail-OPEN. Validate the
+  # shape here rather than trusting every future caller. (`pr` is already
+  # validated numerically one line up; this closes the same class one argument
+  # over.) 7-40 hex chars covers both abbreviated and full SHAs.
+  case "$sha" in
+    *[!0-9a-fA-F]*) return 2 ;;
+  esac
+  [ "${#sha}" -ge 7 ] && [ "${#sha}" -le 40 ] || return 2
+  # `repo` reaches a URL path — reject traversal and anything not owner/name.
+  case "$repo" in
+    */../*|*/..|../*|*' '*) return 2 ;;
+  esac
 
   local kind
   kind=$(tracker_kind "$repo")

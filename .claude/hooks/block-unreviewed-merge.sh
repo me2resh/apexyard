@@ -278,9 +278,31 @@ fi
 # Off by default: it changes merge behaviour for every adopter and is currently
 # GitHub-only. See .claude/project-config.defaults.json → review_markers
 # .require_posted_review, and tracker_review_at_sha in _lib-tracker.sh.
+# Read the flag. `_lib-read-config.sh` is sourced above with `|| true`, so
+# config_get_or may be undefined — and defaulting to false there would SILENTLY
+# DISABLE this control while the operator's config still says true. That is the
+# same fail-open shape as the missing-lib hole below, and the more dangerous of
+# the two because it leaves no trace at all. So when the config reader is
+# unavailable, fall back to a direct grep of the override file rather than
+# assuming "off".
 REQUIRE_POSTED_REVIEW=false
 if command -v config_get_or >/dev/null 2>&1; then
   REQUIRE_POSTED_REVIEW=$(config_get_or '.review_markers.require_posted_review' 'false')
+else
+  # Reader unavailable (missing lib, or jq absent). Grep the override directly:
+  # a bare `"require_posted_review": true` on one line is the shape both the
+  # defaults file and any sane hand-edit produce. False negatives here are
+  # possible with exotic JSON formatting, so warn loudly rather than pretend
+  # the answer is authoritative.
+  for _cfg in "${MARKER_HOME}/.claude/project-config.json" \
+              "${MARKER_HOME}/.claude/project-config.defaults.json"; do
+    [ -f "$_cfg" ] || continue
+    if grep -qE '"require_posted_review"[[:space:]]*:[[:space:]]*true' "$_cfg"; then
+      REQUIRE_POSTED_REVIEW=true
+      echo "WARN: config reader unavailable; read require_posted_review=true by direct grep of ${_cfg}. Restore .claude/hooks/_lib-read-config.sh (and jq) so config is parsed properly." >&2
+      break
+    fi
+  done
 fi
 if [ "$REQUIRE_POSTED_REVIEW" = "true" ]; then
   # Fail closed when the library that performs the check is missing. An
@@ -309,7 +331,20 @@ MSG
     case $? in
       0) : ;;   # verified — a review exists at this exact commit
       3)
-        echo "WARN: require_posted_review is enabled but this forge cannot be verified (GitHub only today) — check skipped for PR #${PR_NUMBER}." >&2
+        # SKIP, not block — and the distinction is principled, not a loophole.
+        # rc=2 means "I should have been able to check and could not" (broken
+        # auth, network, missing CLI): a precondition failure, so it blocks.
+        # rc=3 means "this forge is outside my jurisdiction at all" — there is
+        # no check to have failed. This is the same distinction AgDR-0109 drew
+        # between ambiguity about whether an action is AUTHORISED (block) and
+        # ambiguity about whether the action EXISTS (decline). Blocking here
+        # would brick every GitLab adopter who enables the flag, in exchange
+        # for no security: the check was never available to them.
+        #
+        # The honest cost, stated here and in the config comment: on a non-gh
+        # forge this flag is a NO-OP. Do not enable it and believe you are
+        # protected. Tracked for GitLab support in me2resh/apexyard#1051.
+        echo "WARN: require_posted_review is enabled but this forge cannot be verified (GitHub only today) — the check is a NO-OP for PR #${PR_NUMBER}; do not rely on it here." >&2
         ;;
       2)
         cat >&2 <<MSG
