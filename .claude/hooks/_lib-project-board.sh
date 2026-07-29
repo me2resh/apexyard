@@ -65,7 +65,11 @@ _LIB_PROJECT_BOARD_SOURCED=1
 _lib_board_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_lib_board_dir" ] || [ ! -f "$_lib_board_dir/_lib-ops-root.sh" ]; then
   _lib_board_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_lib_board_root" ] && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is
+  # actually an apexyard fork. Without this the fallback would source a
+  # trust-chain library out of ANY repo the cwd happens to be inside --
+  # a workspace/<project> clone, or an unrelated checkout.
+  if [ -n "$_lib_board_root" ] && { [ -f "$_lib_board_root/.apexyard-fork" ] || { [ -f "$_lib_board_root/onboarding.yaml" ] && [ -f "$_lib_board_root/apexyard.projects.yaml" ]; }; } && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _lib_board_dir="$_lib_board_root/.claude/hooks"
   fi
   unset _lib_board_root

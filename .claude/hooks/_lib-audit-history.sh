@@ -56,7 +56,11 @@ _LIB_AUDIT_HISTORY_SOURCED=1
 _AUDIT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_AUDIT_LIB_DIR" ] || [ ! -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; then
   _audit_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_audit_root" ] && [ -f "$_audit_root/.claude/hooks/_lib-read-config.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is
+  # actually an apexyard fork. Without this the fallback would source a
+  # trust-chain library out of ANY repo the cwd happens to be inside --
+  # a workspace/<project> clone, or an unrelated checkout.
+  if [ -n "$_audit_root" ] && { [ -f "$_audit_root/.apexyard-fork" ] || { [ -f "$_audit_root/onboarding.yaml" ] && [ -f "$_audit_root/apexyard.projects.yaml" ]; }; } && [ -f "$_audit_root/.claude/hooks/_lib-read-config.sh" ]; then
     _AUDIT_LIB_DIR="$_audit_root/.claude/hooks"
   fi
   unset _audit_root

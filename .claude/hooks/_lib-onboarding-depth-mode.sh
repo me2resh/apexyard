@@ -59,7 +59,11 @@ _LIB_ONBOARDING_DEPTH_MODE_SOURCED=1
 _DEPTH_MODE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_DEPTH_MODE_LIB_DIR" ] || [ ! -f "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh" ]; then
   _depth_mode_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_depth_mode_root" ] && [ -f "$_depth_mode_root/.claude/hooks/_lib-ops-root.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is
+  # actually an apexyard fork. Without this the fallback would source a
+  # trust-chain library out of ANY repo the cwd happens to be inside --
+  # a workspace/<project> clone, or an unrelated checkout.
+  if [ -n "$_depth_mode_root" ] && { [ -f "$_depth_mode_root/.apexyard-fork" ] || { [ -f "$_depth_mode_root/onboarding.yaml" ] && [ -f "$_depth_mode_root/apexyard.projects.yaml" ]; }; } && [ -f "$_depth_mode_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _DEPTH_MODE_LIB_DIR="$_depth_mode_root/.claude/hooks"
   fi
   unset _depth_mode_root

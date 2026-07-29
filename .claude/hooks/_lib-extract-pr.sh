@@ -142,7 +142,11 @@ if ! command -v tracker_kind >/dev/null 2>&1; then
   _lib_extract_pr_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd 2>/dev/null)"
   if [ -z "$_lib_extract_pr_dir" ] || [ ! -f "$_lib_extract_pr_dir/_lib-tracker.sh" ]; then
     _lib_extract_pr_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-    if [ -n "$_lib_extract_pr_root" ] && [ -f "$_lib_extract_pr_root/.claude/hooks/_lib-tracker.sh" ]; then
+    # me2resh/apexyard#1033: only accept a git-derived root that is
+    # actually an apexyard fork. Without this the fallback would source a
+    # trust-chain library out of ANY repo the cwd happens to be inside --
+    # a workspace/<project> clone, or an unrelated checkout.
+    if [ -n "$_lib_extract_pr_root" ] && { [ -f "$_lib_extract_pr_root/.apexyard-fork" ] || { [ -f "$_lib_extract_pr_root/onboarding.yaml" ] && [ -f "$_lib_extract_pr_root/apexyard.projects.yaml" ]; }; } && [ -f "$_lib_extract_pr_root/.claude/hooks/_lib-tracker.sh" ]; then
       _lib_extract_pr_dir="$_lib_extract_pr_root/.claude/hooks"
     fi
     unset _lib_extract_pr_root

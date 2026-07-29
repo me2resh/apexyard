@@ -157,7 +157,11 @@ _premium_hook_dir() {
     if [ -z "$_PREMIUM_HOOK_DIR_CACHE" ] || [ ! -f "$_PREMIUM_HOOK_DIR_CACHE/_lib-premium-hook.sh" ]; then
       local _premium_root
       _premium_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-      if [ -n "$_premium_root" ] && [ -f "$_premium_root/.claude/hooks/_lib-premium-hook.sh" ]; then
+      # me2resh/apexyard#1033: only accept a git-derived root that is
+      # actually an apexyard fork. Without this the fallback would source a
+      # trust-chain library out of ANY repo the cwd happens to be inside --
+      # a workspace/<project> clone, or an unrelated checkout.
+      if [ -n "$_premium_root" ] && { [ -f "$_premium_root/.apexyard-fork" ] || { [ -f "$_premium_root/onboarding.yaml" ] && [ -f "$_premium_root/apexyard.projects.yaml" ]; }; } && [ -f "$_premium_root/.claude/hooks/_lib-premium-hook.sh" ]; then
         _PREMIUM_HOOK_DIR_CACHE="$_premium_root/.claude/hooks"
       fi
     fi

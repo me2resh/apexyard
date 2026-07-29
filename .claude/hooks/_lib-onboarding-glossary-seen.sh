@@ -79,7 +79,11 @@ _LIB_ONBOARDING_GLOSSARY_SEEN_SOURCED=1
 _GLOSSARY_SEEN_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_GLOSSARY_SEEN_LIB_DIR" ] || [ ! -f "$_GLOSSARY_SEEN_LIB_DIR/_lib-ops-root.sh" ]; then
   _glossary_seen_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_glossary_seen_root" ] && [ -f "$_glossary_seen_root/.claude/hooks/_lib-ops-root.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is
+  # actually an apexyard fork. Without this the fallback would source a
+  # trust-chain library out of ANY repo the cwd happens to be inside --
+  # a workspace/<project> clone, or an unrelated checkout.
+  if [ -n "$_glossary_seen_root" ] && { [ -f "$_glossary_seen_root/.apexyard-fork" ] || { [ -f "$_glossary_seen_root/onboarding.yaml" ] && [ -f "$_glossary_seen_root/apexyard.projects.yaml" ]; }; } && [ -f "$_glossary_seen_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _GLOSSARY_SEEN_LIB_DIR="$_glossary_seen_root/.claude/hooks"
   fi
   unset _glossary_seen_root

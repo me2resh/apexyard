@@ -53,7 +53,11 @@ _LIB_FRESH_FORK_SOURCED=1
 _FRESH_FORK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_FRESH_FORK_LIB_DIR" ] || [ ! -f "$_FRESH_FORK_LIB_DIR/_lib-read-config.sh" ]; then
   _fresh_fork_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_fresh_fork_root" ] && [ -f "$_fresh_fork_root/.claude/hooks/_lib-read-config.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is
+  # actually an apexyard fork. Without this the fallback would source a
+  # trust-chain library out of ANY repo the cwd happens to be inside --
+  # a workspace/<project> clone, or an unrelated checkout.
+  if [ -n "$_fresh_fork_root" ] && { [ -f "$_fresh_fork_root/.apexyard-fork" ] || { [ -f "$_fresh_fork_root/onboarding.yaml" ] && [ -f "$_fresh_fork_root/apexyard.projects.yaml" ]; }; } && [ -f "$_fresh_fork_root/.claude/hooks/_lib-read-config.sh" ]; then
     _FRESH_FORK_LIB_DIR="$_fresh_fork_root/.claude/hooks"
   fi
   unset _fresh_fork_root
