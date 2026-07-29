@@ -186,6 +186,36 @@ run_case_missing_file() {
   PASS=$((PASS+1))
 }
 
+# Same as run_case_missing_file, but the caller supplies the (nonexistent)
+# path verbatim — used to exercise paths containing shell/printf metacharacters.
+run_case_missing_file_path() {
+  local label="$1" missing="$2" want_rc="$3" want_stderr_regex="$4" reject_stderr_regex="${5:-}"
+  local sb; sb=$(make_sandbox)
+  mock_gh_install "$sb"
+  local cmd="gh pr create --repo me2resh/apexyard --title 'chore(#113): test' --body-file $missing"
+  local input; input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
+  local got_stderr got_rc
+  got_stderr=$(cd "$sb" && echo "$input" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
+  got_rc=$?
+  rm -rf "$sb"
+
+  if [ "$got_rc" != "$want_rc" ]; then
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc (stderr: ${got_stderr:0:200})" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ -n "$want_stderr_regex" ] && ! echo "$got_stderr" | grep -qE "$want_stderr_regex"; then
+    echo "FAIL [$label]: stderr did not match /$want_stderr_regex/" >&2
+    echo "    stderr: $got_stderr" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ -n "$reject_stderr_regex" ] && echo "$got_stderr" | grep -qE "$reject_stderr_regex"; then
+    echo "FAIL [$label]: stderr WRONGLY matched /$reject_stderr_regex/" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
 # The core defect: no section claim may be made about an unread file.
 run_case_missing_file "#1058: unreadable body-file does NOT claim '## Testing' is missing" \
   2 "" "missing required '## Testing' section"
@@ -207,6 +237,28 @@ run_case_missing_file "#1058: the block names the unreadable body-file as the ca
 
 run_case_missing_file "#1058: the block quotes the offending path" \
   2 "PR body file could not be read:.*definitely-not-here-1058\.md" ""
+
+# The message must NAME the sections it did not verify. An earlier draft said
+# "the sections above", which referred to nothing — this branch replaces the
+# per-section list rather than following it.
+run_case_missing_file "#1058: the block names the sections it could not verify" \
+  2 "UNVERIFIED, not missing: ## Testing, ## Glossary" ""
+
+# A '%' in the body-file path must survive into the message. `printf "$ERRORS"`
+# treated the accumulated text as a FORMAT STRING, so a path containing '%s'
+# or a trailing '%' printed a DIFFERENT path and silently swallowed the
+# guidance lines after it. Caught by Rex on PR #1060; fixed with `printf '%b'`.
+# A typo'd path is precisely the scenario this whole branch exists to serve,
+# so a path-shaped typo corrupting the message is not acceptable.
+run_case_missing_file_path "#1058: a '%' in the body-file path does not corrupt the message" \
+  '/tmp/nope%s-100%.md' 2 "PR body file could not be read: /tmp/nope%s-100%\.md" ""
+
+# Uses the SAME path shape as the case above deliberately: a lone '%d' still
+# left the guidance lines intact pre-fix (printf substituted 0 and carried on),
+# so it proved nothing. The '%s' + trailing-'%' shape is what actually
+# truncated the format and swallowed everything after it.
+run_case_missing_file_path "#1058: guidance lines survive a '%' path" \
+  '/tmp/nope%s-100%.md' 2 "Fix the path \(check for a typo" ""
 
 # ---- No-regression guards for #1058 -------------------------------------
 # The fix must not make the hook permissive. A body the hook CAN read and

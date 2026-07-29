@@ -596,8 +596,14 @@ EOF
         # never read — so their absence is unproven. Report the cause we
         # actually have evidence for. Still fail closed (a body we cannot
         # inspect is not a body we can pass), just stop misdirecting the fix.
+        # Name the sections explicitly. An earlier draft said "the sections
+        # above", which referred to nothing — this branch replaces the
+        # per-section list rather than following it, so the author was left
+        # without the one fact they need. On a fix whose whole subject is
+        # message accuracy, a dangling reference is the wrong thing to ship.
+        _unchecked=$(printf '%b' "$MISSING_SECTIONS" | sed '/^$/d' | sed 's/^/## /' | paste -sd, - | sed 's/,/, /g')
         ERRORS="${ERRORS}PR body file could not be read: ${BODY_FILE}\n"
-        ERRORS="${ERRORS}  The required-section check was NOT run — the sections above may well be present.\n"
+        ERRORS="${ERRORS}  The required-section check was NOT run, so these are UNVERIFIED, not missing: ${_unchecked}\n"
         ERRORS="${ERRORS}  Fix the path (check for a typo, or make it absolute) and retry.\n"
       else
         # The body WAS read and the sections genuinely are not in it.
@@ -751,7 +757,13 @@ fi
 
 if [ -n "$ERRORS" ]; then
   echo "PR VALIDATION BLOCKED:" >&2
-  printf "$ERRORS" >&2
+  # '%b' — NOT `printf "$ERRORS"`. The bare form treats accumulated error text
+  # as a FORMAT STRING, so any '%' inside it is consumed as a conversion spec.
+  # That was latent until #1058 started interpolating a user-supplied path into
+  # a message: `--body-file /tmp/nope%s-100%.md` printed a different path and
+  # silently swallowed the guidance lines that followed. '%b' keeps the '\n'
+  # expansion every existing message relies on while making '%' literal.
+  printf '%b' "$ERRORS" >&2
   echo "" >&2
   echo "Fix the issues above before creating the PR." >&2
   echo "See .claude/rules/git-conventions.md and .claude/rules/pr-quality.md." >&2
