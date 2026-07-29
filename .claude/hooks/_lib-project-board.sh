@@ -65,7 +65,20 @@ _LIB_PROJECT_BOARD_SOURCED=1
 _lib_board_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_lib_board_dir" ] || [ ! -f "$_lib_board_dir/_lib-ops-root.sh" ]; then
   _lib_board_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_lib_board_root" ] && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is actually
+  # an apexyard fork. Without this the fallback sources a trust-chain
+  # library out of ANY repo the cwd happens to be inside -- a
+  # workspace/<project> clone, or an unrelated checkout.
+  #
+  # This narrows an ACCIDENT surface. It is NOT an access-control boundary:
+  # the anchors are unauthenticated presence-only files, and -f follows
+  # symlinks, so anyone able to write to the candidate root can satisfy it.
+  # What it prevents is a cwd-driven misresolution, not a hostile library.
+  # Anchor pair per AgDR-0021 §A/§E -- the same test
+  # resolve_ops_root_walk applies, evaluated against one candidate rather
+  # than a walk. (resolve_ops_root itself is unusable here: three of these
+  # sites are locating _lib-ops-root.sh, and its pin is session-scoped.)
+  if [ -n "$_lib_board_root" ] && { [ -f "$_lib_board_root/.apexyard-fork" ] || { [ -f "$_lib_board_root/onboarding.yaml" ] && [ -f "$_lib_board_root/apexyard.projects.yaml" ]; }; } && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _lib_board_dir="$_lib_board_root/.claude/hooks"
   fi
   unset _lib_board_root

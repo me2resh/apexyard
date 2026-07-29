@@ -90,7 +90,20 @@ _tracker_load_config_lib() {
   hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
   if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-read-config.sh" ]; then
     root=$(git rev-parse --show-toplevel 2>/dev/null)
-    if [ -n "$root" ] && [ -f "$root/.claude/hooks/_lib-read-config.sh" ]; then
+    # me2resh/apexyard#1033: only accept a git-derived root that is actually
+    # an apexyard fork. Without this the fallback sources a trust-chain
+    # library out of ANY repo the cwd happens to be inside -- a
+    # workspace/<project> clone, or an unrelated checkout.
+    #
+    # This narrows an ACCIDENT surface. It is NOT an access-control boundary:
+    # the anchors are unauthenticated presence-only files, and -f follows
+    # symlinks, so anyone able to write to the candidate root can satisfy it.
+    # What it prevents is a cwd-driven misresolution, not a hostile library.
+    # Anchor pair per AgDR-0021 §A/§E -- the same test
+    # resolve_ops_root_walk applies, evaluated against one candidate rather
+    # than a walk. (resolve_ops_root itself is unusable here: three of these
+    # sites are locating _lib-ops-root.sh, and its pin is session-scoped.)
+    if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; } && [ -f "$root/.claude/hooks/_lib-read-config.sh" ]; then
       hook_dir="$root/.claude/hooks"
     fi
   fi
@@ -123,7 +136,20 @@ _tracker_load_portfolio_lib() {
   hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
   if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
     root=$(git rev-parse --show-toplevel 2>/dev/null)
-    if [ -n "$root" ] && [ -f "$root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
+    # me2resh/apexyard#1033: only accept a git-derived root that is actually
+    # an apexyard fork. Without this the fallback sources a trust-chain
+    # library out of ANY repo the cwd happens to be inside -- a
+    # workspace/<project> clone, or an unrelated checkout.
+    #
+    # This narrows an ACCIDENT surface. It is NOT an access-control boundary:
+    # the anchors are unauthenticated presence-only files, and -f follows
+    # symlinks, so anyone able to write to the candidate root can satisfy it.
+    # What it prevents is a cwd-driven misresolution, not a hostile library.
+    # Anchor pair per AgDR-0021 §A/§E -- the same test
+    # resolve_ops_root_walk applies, evaluated against one candidate rather
+    # than a walk. (resolve_ops_root itself is unusable here: three of these
+    # sites are locating _lib-ops-root.sh, and its pin is session-scoped.)
+    if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; } && [ -f "$root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
       hook_dir="$root/.claude/hooks"
     fi
   fi

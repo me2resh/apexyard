@@ -59,7 +59,20 @@ _LIB_ONBOARDING_DEPTH_MODE_SOURCED=1
 _DEPTH_MODE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 if [ -z "$_DEPTH_MODE_LIB_DIR" ] || [ ! -f "$_DEPTH_MODE_LIB_DIR/_lib-ops-root.sh" ]; then
   _depth_mode_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-  if [ -n "$_depth_mode_root" ] && [ -f "$_depth_mode_root/.claude/hooks/_lib-ops-root.sh" ]; then
+  # me2resh/apexyard#1033: only accept a git-derived root that is actually
+  # an apexyard fork. Without this the fallback sources a trust-chain
+  # library out of ANY repo the cwd happens to be inside -- a
+  # workspace/<project> clone, or an unrelated checkout.
+  #
+  # This narrows an ACCIDENT surface. It is NOT an access-control boundary:
+  # the anchors are unauthenticated presence-only files, and -f follows
+  # symlinks, so anyone able to write to the candidate root can satisfy it.
+  # What it prevents is a cwd-driven misresolution, not a hostile library.
+  # Anchor pair per AgDR-0021 §A/§E -- the same test
+  # resolve_ops_root_walk applies, evaluated against one candidate rather
+  # than a walk. (resolve_ops_root itself is unusable here: three of these
+  # sites are locating _lib-ops-root.sh, and its pin is session-scoped.)
+  if [ -n "$_depth_mode_root" ] && { [ -f "$_depth_mode_root/.apexyard-fork" ] || { [ -f "$_depth_mode_root/onboarding.yaml" ] && [ -f "$_depth_mode_root/apexyard.projects.yaml" ]; }; } && [ -f "$_depth_mode_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _DEPTH_MODE_LIB_DIR="$_depth_mode_root/.claude/hooks"
   fi
   unset _depth_mode_root
