@@ -157,13 +157,19 @@ _premium_hook_dir() {
     if [ -z "$_PREMIUM_HOOK_DIR_CACHE" ] || [ ! -f "$_PREMIUM_HOOK_DIR_CACHE/_lib-premium-hook.sh" ]; then
       local _premium_root
       _premium_root="$(git rev-parse --show-toplevel 2>/dev/null)"
-      # me2resh/apexyard#1033: only accept a git-derived root that is
-      # actually an apexyard fork. Without this the fallback would source a
-      # trust-chain library out of ANY repo the cwd happens to be inside --
-      # a workspace/<project> clone, or an unrelated checkout.
-# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
-# (marker file over three alternatives; v2 marker with legacy-pair
-# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
+      # me2resh/apexyard#1033: only accept a git-derived root that is actually
+      # an apexyard fork. Without this the fallback sources a trust-chain
+      # library out of ANY repo the cwd happens to be inside -- a
+      # workspace/<project> clone, or an unrelated checkout.
+      #
+      # This narrows an ACCIDENT surface. It is NOT an access-control boundary:
+      # the anchors are unauthenticated presence-only files, and -f follows
+      # symlinks, so anyone able to write to the candidate root can satisfy it.
+      # What it prevents is a cwd-driven misresolution, not a hostile library.
+      # Anchor pair per AgDR-0021 §A/§E -- the same test
+      # resolve_ops_root_walk applies, evaluated against one candidate rather
+      # than a walk. (resolve_ops_root itself is unusable here: three of these
+      # sites are locating _lib-ops-root.sh, and its pin is session-scoped.)
       if [ -n "$_premium_root" ] && { [ -f "$_premium_root/.apexyard-fork" ] || { [ -f "$_premium_root/onboarding.yaml" ] && [ -f "$_premium_root/apexyard.projects.yaml" ]; }; } && [ -f "$_premium_root/.claude/hooks/_lib-premium-hook.sh" ]; then
         _PREMIUM_HOOK_DIR_CACHE="$_premium_root/.claude/hooks"
       fi
