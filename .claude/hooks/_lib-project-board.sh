@@ -69,6 +69,9 @@ if [ -z "$_lib_board_dir" ] || [ ! -f "$_lib_board_dir/_lib-ops-root.sh" ]; then
   # actually an apexyard fork. Without this the fallback would source a
   # trust-chain library out of ANY repo the cwd happens to be inside --
   # a workspace/<project> clone, or an unrelated checkout.
+# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
+# (marker file over three alternatives; v2 marker with legacy-pair
+# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
   if [ -n "$_lib_board_root" ] && { [ -f "$_lib_board_root/.apexyard-fork" ] || { [ -f "$_lib_board_root/onboarding.yaml" ] && [ -f "$_lib_board_root/apexyard.projects.yaml" ]; }; } && [ -f "$_lib_board_root/.claude/hooks/_lib-ops-root.sh" ]; then
     _lib_board_dir="$_lib_board_root/.claude/hooks"
   fi

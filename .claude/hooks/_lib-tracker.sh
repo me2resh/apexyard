@@ -94,6 +94,9 @@ _tracker_load_config_lib() {
     # actually an apexyard fork. Without this the fallback would source a
     # trust-chain library out of ANY repo the cwd happens to be inside --
     # a workspace/<project> clone, or an unrelated checkout.
+# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
+# (marker file over three alternatives; v2 marker with legacy-pair
+# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
     if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; } && [ -f "$root/.claude/hooks/_lib-read-config.sh" ]; then
       hook_dir="$root/.claude/hooks"
     fi
@@ -131,6 +134,9 @@ _tracker_load_portfolio_lib() {
     # actually an apexyard fork. Without this the fallback would source a
     # trust-chain library out of ANY repo the cwd happens to be inside --
     # a workspace/<project> clone, or an unrelated checkout.
+# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
+# (marker file over three alternatives; v2 marker with legacy-pair
+# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
     if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; } && [ -f "$root/.claude/hooks/_lib-portfolio-paths.sh" ]; then
       hook_dir="$root/.claude/hooks"
     fi

@@ -161,6 +161,9 @@ _premium_hook_dir() {
       # actually an apexyard fork. Without this the fallback would source a
       # trust-chain library out of ANY repo the cwd happens to be inside --
       # a workspace/<project> clone, or an unrelated checkout.
+# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
+# (marker file over three alternatives; v2 marker with legacy-pair
+# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
       if [ -n "$_premium_root" ] && { [ -f "$_premium_root/.apexyard-fork" ] || { [ -f "$_premium_root/onboarding.yaml" ] && [ -f "$_premium_root/apexyard.projects.yaml" ]; }; } && [ -f "$_premium_root/.claude/hooks/_lib-premium-hook.sh" ]; then
         _PREMIUM_HOOK_DIR_CACHE="$_premium_root/.claude/hooks"
       fi

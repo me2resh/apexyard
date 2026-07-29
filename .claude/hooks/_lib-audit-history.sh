@@ -60,6 +60,9 @@ if [ -z "$_AUDIT_LIB_DIR" ] || [ ! -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; t
   # actually an apexyard fork. Without this the fallback would source a
   # trust-chain library out of ANY repo the cwd happens to be inside --
   # a workspace/<project> clone, or an unrelated checkout.
+# The anchor pair is not a new choice -- it is AgDR-0021 SS A/E
+# (marker file over three alternatives; v2 marker with legacy-pair
+# fallback), already used by _lib-ops-root.sh. Cite it, do not re-derive.
   if [ -n "$_audit_root" ] && { [ -f "$_audit_root/.apexyard-fork" ] || { [ -f "$_audit_root/onboarding.yaml" ] && [ -f "$_audit_root/apexyard.projects.yaml" ]; }; } && [ -f "$_audit_root/.claude/hooks/_lib-read-config.sh" ]; then
     _AUDIT_LIB_DIR="$_audit_root/.claude/hooks"
   fi
