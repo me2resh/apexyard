@@ -213,11 +213,32 @@ _portfolio_canonicalize() {
 # input is already absolute, it is still canonicalized — an absolute
 # override in project-config.json could itself carry a relative segment
 # (e.g. "$SIBLING/../other").
+#
+# Absoluteness has TWO spellings, not one (me2resh/apexyard#1034). #1029
+# taught `_portfolio_canonicalize` (below) to normalize a Windows
+# drive-letter prefix, but left this function's own test as a bare `/*)`.
+# A drive-letter path IS absolute and does NOT start with "/", so it fell
+# into the relative arm and got concatenated onto the ops-fork root:
+#
+#   .portfolio.registry: "D:/Portfolio/apexyard.projects.yaml"
+#     -> /Users/fork/D:/Portfolio/apexyard.projects.yaml
+#
+# The drive-letter arm below mirrors the pattern `_portfolio_canonicalize`
+# already uses, so the two functions now agree on what "absolute" means.
+#
+# Deliberately NOT matched: drive-RELATIVE spellings (`C:foo`, bare `C:`).
+# `C:foo` means "foo, relative to the current directory ON drive C" — it is
+# genuinely not absolute, and treating it as such would resolve it somewhere
+# the caller never asked for. The `[/\\]` after the colon is what draws that
+# line, and it is load-bearing: do not relax it to a bare `[A-Za-z]:*)`.
+# Pinned by the drive-relative case in
+# tests/test_portfolio_paths_windows_drive_letter.sh.
 # ------------------------------------------------------------------------------
 _portfolio_resolve() {
   local p="$1" abs
   case "$p" in
     /*) abs="$p" ;;
+    [A-Za-z]:/*|[A-Za-z]:\\*) abs="$p" ;;
     *)
       local root
       root=$(_portfolio_root)

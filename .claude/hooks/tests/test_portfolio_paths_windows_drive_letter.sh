@@ -269,6 +269,117 @@ if [ \"\$out\" = \"OK\" ] && [ \"\$rc\" -eq 0 ]; then exit 0; else echo \"got ou
 "
 rm -rf "$SB"
 
+# ===========================================================================
+# me2resh/apexyard#1034 — the follow-up gap #1029 left open.
+#
+# #1029 taught `_portfolio_canonicalize` about drive-letter prefixes, but
+# `_portfolio_resolve` kept its own absoluteness test as a bare `case "$p" in
+# /*)`. A drive-letter path is absolute and does NOT start with "/", so it
+# fell into the relative arm and was concatenated onto the ops-fork root:
+#
+#   _portfolio_resolve "D:/Portfolio/apexyard.projects.yaml"
+#     -> /Users/fork/D:/Portfolio/apexyard.projects.yaml     (wrong)
+#
+# The cases below drive `_portfolio_resolve` directly with a stubbed
+# `_portfolio_root`, for the same reason the #1018 cases above drive
+# `_portfolio_canonicalize` directly: the drive-letter/MSYS equivalence only
+# exists inside the MSYS runtime, so a filesystem fixture cannot reproduce it
+# on a POSIX CI runner. Stubbing the root keeps the assertion about the
+# absoluteness DECISION, which is the actual defect.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Case 10 (the core acceptance criterion): an absolute drive-letter path is
+# treated as ABSOLUTE — not concatenated onto the fork root.
+# ---------------------------------------------------------------------------
+run_case "#1034: absolute drive-letter path is NOT concatenated onto the fork root" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "D:/Portfolio/apexyard.projects.yaml")
+case "$r" in
+  /Users/fork/*) echo "got=$r — still concatenated onto the fork root (the #1034 bug)"; exit 1 ;;
+esac
+expected="/d/Portfolio/apexyard.projects.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 11: lowercase drive letter, same treatment.
+# ---------------------------------------------------------------------------
+run_case "#1034: lowercase absolute drive-letter path resolves absolute" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "d:/portfolio/projects")
+expected="/d/portfolio/projects"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 12: native backslash spelling, same treatment.
+# ---------------------------------------------------------------------------
+run_case "#1034: backslash drive-letter path resolves absolute" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "C:\Portfolio\apexyard.projects.yaml")
+expected="/c/Portfolio/apexyard.projects.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 13 (must-NOT-change): a POSIX absolute path still resolves absolute.
+# ---------------------------------------------------------------------------
+run_case "#1034: POSIX absolute path still resolves absolute (no regression)" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "/nonexistent-1034/registry.yaml")
+expected="/nonexistent-1034/registry.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 14 (must-NOT-change): a genuinely relative path is STILL joined to the
+# fork root. This is the guard that stops the fix from making everything
+# absolute — the failure mode that would silently break every default setup.
+# ---------------------------------------------------------------------------
+run_case "#1034: relative path is still joined to the fork root (no regression)" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "sub/registry.yaml")
+expected="/Users/fork/sub/registry.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+run_case "#1034: ./-prefixed relative path is still joined to the fork root (no regression)" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "./registry.yaml")
+expected="/Users/fork/registry.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 15: DRIVE-RELATIVE spellings (`C:foo`, bare `C:`) deliberately do NOT
+# match the absolute arm and keep falling through as relative.
+#
+# `C:foo` means "foo, relative to the current directory ON drive C" — it is
+# genuinely not absolute, so treating it as such would resolve it to the wrong
+# place. #1034 called out that the comment block never said this, leaving a
+# future reader liable to "fix" it. This case pins the behaviour so that
+# reader gets a failing test instead of a silent semantic change.
+# ---------------------------------------------------------------------------
+run_case "#1034: drive-RELATIVE C:foo stays relative (documented, deliberate)" '
+_portfolio_root() { echo "/Users/fork"; }
+r=$(_portfolio_resolve "C:foo/registry.yaml")
+expected="/Users/fork/C:foo/registry.yaml"
+if [ "$r" = "$expected" ]; then exit 0; else echo "got=$r expected=$expected"; exit 1; fi
+'
+
+# ---------------------------------------------------------------------------
+# Case 16: the two spellings of the SAME absolute location resolve equal —
+# the property that makes downstream prefix comparisons work, mirroring
+# case 4 above but at the `_portfolio_resolve` level.
+# ---------------------------------------------------------------------------
+run_case "#1034: drive-letter and MSYS spellings resolve EQUAL through _portfolio_resolve" '
+_portfolio_root() { echo "/Users/fork"; }
+a=$(_portfolio_resolve "D:/Portfolio/apexyard.projects.yaml")
+b=$(_portfolio_resolve "/d/Portfolio/apexyard.projects.yaml")
+if [ "$a" = "$b" ]; then exit 0; else echo "a=$a b=$b (should match)"; exit 1; fi
+'
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
