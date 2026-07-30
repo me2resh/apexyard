@@ -464,7 +464,7 @@ Read the operator's reply.
 
 | Reply | Action |
 |-------|--------|
-| `y` | Run `remove_deprecated_config_keys` (edits `.claude/project-config.json` in place, no commit), then `git add .claude/project-config.json` to stage the change for the operator's review. Print `Removed N keys. Staged for review — diff with: git diff --staged .claude/project-config.json`. |
+| `y` | Back the file up first (`cp .claude/project-config.json .claude/project-config.json.bak`), then run `remove_deprecated_config_keys` (edits `.claude/project-config.json` in place, no commit). Print `Removed N keys. Backup at .claude/project-config.json.bak — compare with: diff .claude/project-config.json.bak .claude/project-config.json`. **Do NOT `git add` the file** (me2resh/apexyard#1031): it is gitignored and untracked, so staging exits 1 and `git diff --staged` would show nothing anyway. A plain-file backup is the reviewable artefact here, because git holds no copy to diff against — which is exactly why an unrecoverable edit needs one. |
 | `n` | Print `Leaving override untouched. Re-run /update later if you change your mind.` and continue to step 9. |
 | `s` | Run `show_deprecated_config_keys` (prints each key + current value), then re-prompt with the same y/n options (no `s` recursion). |
 

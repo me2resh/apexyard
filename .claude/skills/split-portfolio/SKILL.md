@@ -338,7 +338,14 @@ cat > .claude/project-config.json <<JSON
 }
 JSON
 
-git add .gitignore .claude/project-config.json
+# NOTE (me2resh/apexyard#1031): .claude/project-config.json is deliberately
+# NOT staged. It is gitignored and untracked upstream, so `git add` on it
+# exits 1 — git still stages the other paths, but the non-zero exit stops
+# this step and the commit below never runs. It is also the wrong file to
+# commit here: the block just written names the PRIVATE sibling repo's path,
+# and this ops fork may be public. Never `git add -f` it — that restores the
+# tracked copy whose overwrite-on-checkout is the data loss #1031 fixed.
+git add .gitignore
 git commit -m "chore: configure split-portfolio mode (#143 / #145)"
 ```
 

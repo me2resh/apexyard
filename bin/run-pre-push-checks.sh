@@ -14,23 +14,32 @@
 # in sync.
 #
 # NOTE (apexyard#1031): `.claude/project-config.json` is now gitignored AND
-# untracked, so a fresh clone does not have one. The two paths therefore
-# degrade differently, on purpose:
+# untracked, so a fresh clone does not have one. Be precise about what that
+# costs, because the obvious reassurance is wrong:
 #
-#   - terminal `git push` → .githooks/pre-push → this script. The command set
-#     below is hardcoded, so it runs on a fresh clone with no setup.
 #   - a Claude Code push → pre-push-gate.sh → reads .pre_push.commands from
-#     config. With no project-config.json that list is empty and the gate is
-#     a no-op, by the same design that makes an empty list a no-op for any
-#     adopter.
+#     config. With no project-config.json the list is empty and the gate is
+#     a no-op.
+#   - terminal `git push` → .githooks/pre-push → this script. This does NOT
+#     silently cover the gap: .githooks only runs where someone has opted in
+#     with `git config core.hooksPath .githooks`, which is per-clone local
+#     config and documented as optional (docs/getting-started.md
+#     § "Terminal push hook"). On a fresh clone it is unset, so this path is
+#     inactive too.
 #
-# Contributors who want both paths active copy the template once:
+# So on a fresh clone BOTH pre-push paths are inactive. That is acceptable
+# only because pre-push is a latency optimisation rather than the guardrail:
+# the real backstop is CI, where markdown-lint.yml, shellcheck.yml and
+# extract-subpacks-on-release.yml all run on `pull_request`. Nothing broken
+# can merge whether or not a contributor has a local config.
+#
+# Contributors who want the local fast feedback do both, once:
 #   cp .claude/project-config.example.json .claude/project-config.json
+#   git config core.hooksPath .githooks
 #
-# The commands deliberately do NOT live in project-config.defaults.json:
-# _lib-read-config.sh merges with `jq -s '.[0] * .[1]'`, so every adopter
-# without their own pre_push would inherit apexyard's repo-specific checks —
-# including the subpack test below, which only makes sense in this repo.
+# The commands deliberately do NOT live in project-config.defaults.json —
+# see docs/project-config.md for why (the defaults merge would push these
+# repo-specific checks onto every adopter).
 #
 # Exit codes:
 #   0 — all checks passed (or all missing-tool checks were skipped)

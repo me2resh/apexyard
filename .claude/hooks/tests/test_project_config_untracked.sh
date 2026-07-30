@@ -21,19 +21,16 @@
 #
 # WHAT IS ASSERTED, AND WHICH CASES ARE DISCRIMINATING
 # ----------------------------------------------------
-# Cases 1 and 3 FAIL against the unfixed tree and pass after — they are the
-# discriminating pair that proves the fix does something.
+# `config-untracked` and `example-tracked` FAIL against the unfixed tree and
+# pass after — they are the discriminating pair that proves the fix does
+# something.
 #
-# Case 2 (the ignore rule matches) and case 4 (framework-specific pre_push
-# must not leak into the shipped defaults) both pass before AND after. They
-# are stated honestly as REGRESSION GUARDS, not as proof of the fix. Case 4
-# in particular guards the trap found while fixing this: `_lib-read-config.sh`
-# merges with `jq -s '.[0] * .[1]'`, so an adopter who defines no `pre_push`
-# of their own inherits whatever is in the defaults file. Moving the
-# framework's own dog-fooding commands there would silently make every
-# adopter run apexyard's `test_subpack_extraction.sh` on push. The framework's
-# copy belongs in `project-config.example.json`, mirroring the
-# `onboarding.example.yaml` precedent this issue identifies as correct.
+# `gitignore-entry-present` and `defaults-pre-push-empty` pass before AND
+# after. They are labelled REGRESSION GUARDS rather than presented as proof:
+# the first stops a future cleanup removing the ignore entry once the visible
+# drift is gone, the second pins `defaults.pre_push.commands` empty so the
+# defaults-merge trap cannot be reintroduced. Why that trap matters is
+# documented once, in docs/project-config.md — not restated here.
 #
 # Exit 0 if all cases pass; exit 1 on first failure.
 
@@ -43,10 +40,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 PASS=0
 FAIL=0
+SKIP=0
 FAILED_CASES=""
 
 ok()   { PASS=$((PASS+1)); echo "PASS [$1]"; }
 bad()  { FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}\n  - $1: $2"; echo "FAIL [$1] $2"; }
+# Every case must land in exactly one counter. An un-counted skip makes the
+# summary read as a smaller suite than it is, which is how a silently
+# disabled assertion hides.
+skipc() { SKIP=$((SKIP+1)); echo "SKIP [$1] $2"; }
 
 cd "$REPO_ROOT" || { echo "cannot cd to repo root"; exit 1; }
 
@@ -76,17 +78,27 @@ else
 fi
 
 # --- Case 3 (DISCRIMINATING): a tracked example template must exist ---------
+# Split into two independently-ledgered cases: "is tracked" is the
+# discriminating assertion, "is valid JSON" is a separate quality check that
+# can skip when jq is absent without silently swallowing the first one.
 EXAMPLE=".claude/project-config.example.json"
-if ! git ls-files --error-unmatch "$EXAMPLE" >/dev/null 2>&1; then
+if git ls-files --error-unmatch "$EXAMPLE" >/dev/null 2>&1; then
+  ok "example-tracked"
+  EXAMPLE_TRACKED=1
+else
   bad "example-tracked" \
     "$EXAMPLE is not tracked — adopters and framework contributors have no template to copy, mirroring onboarding.example.yaml"
+  EXAMPLE_TRACKED=0
+fi
+
+if [ "$EXAMPLE_TRACKED" -eq 0 ]; then
+  skipc "example-valid-json" "$EXAMPLE is not tracked; nothing to parse"
 elif ! command -v jq >/dev/null 2>&1; then
-  echo "SKIP [example-valid-json]: jq not installed"
-  ok "example-tracked"
-elif ! jq -e . "$EXAMPLE" >/dev/null 2>&1; then
-  bad "example-tracked" "$EXAMPLE is tracked but is not valid JSON"
+  skipc "example-valid-json" "jq not installed"
+elif jq -e . "$EXAMPLE" >/dev/null 2>&1; then
+  ok "example-valid-json"
 else
-  ok "example-tracked"
+  bad "example-valid-json" "$EXAMPLE is tracked but is not valid JSON"
 fi
 
 # --- Case 4 (REGRESSION GUARD): defaults must not carry framework commands --
@@ -94,7 +106,7 @@ fi
 # repo-specific pre-push commands through the defaults merge.
 DEFAULTS=".claude/project-config.defaults.json"
 if ! command -v jq >/dev/null 2>&1; then
-  echo "SKIP [defaults-pre-push-empty]: jq not installed"
+  skipc "defaults-pre-push-empty" "jq not installed"
 elif [ ! -f "$DEFAULTS" ]; then
   bad "defaults-pre-push-empty" "$DEFAULTS is missing"
 else
@@ -108,7 +120,7 @@ else
 fi
 
 echo
-echo "passed: $PASS   failed: $FAIL"
+echo "passed: $PASS   failed: $FAIL   skipped: $SKIP"
 if [ "$FAIL" -gt 0 ]; then
   # shellcheck disable=SC2059
   printf "failed cases:$FAILED_CASES\n"

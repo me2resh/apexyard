@@ -20,6 +20,24 @@ Until #1031 the framework tracked `project-config.json` *and* listed it in `.git
 
 **If you have an existing fork that committed this file**, run `git rm --cached .claude/project-config.json` once. It leaves the file on disk and lets the ignore entry finally apply. Back the file up first if it holds a `portfolio` block: it is not recoverable from git.
 
+#### Resolving the `/update` conflict — use `--cached`, or you lose the file
+
+If you sync before doing the above, the merge hits a modify/delete conflict, because upstream deleted the file while your fork modified it:
+
+```
+CONFLICT (modify/delete): .claude/project-config.json deleted in upstream
+and modified in HEAD. Version HEAD of .claude/project-config.json left in tree.
+```
+
+Git leaves your version on disk, so **nothing is lost yet**. The trap is the resolution. "Accept upstream's deletion" is the natural reading, and the obvious command for it destroys your config:
+
+| Resolution | Effect |
+|---|---|
+| `git rm .claude/project-config.json` | ❌ removes it from the index **and from disk** — your `portfolio` block is gone, and it was never in git to restore from |
+| `git rm --cached .claude/project-config.json` | ✅ removes it from the index only; the file stays on disk and the ignore entry now applies |
+
+Always use `--cached` here. Back the file up first regardless — this is the same unrecoverable loss described above, reached by a different route.
+
 ### Why the framework's own `pre_push` is in the example, not the defaults
 
 The defaults file would be the obvious home, and it is the wrong one. `_lib-read-config.sh` merges with `jq -s '.[0] * .[1]'`, so an adopter who defines no `pre_push` of their own **inherits whatever the defaults file ships** — which would mean every fork running apexyard's repo-specific commands on push, including its own `test_subpack_extraction.sh`. `pre_push.commands` in the defaults therefore stays `[]`, and `.claude/hooks/tests/test_project_config_untracked.sh` guards that it stays that way.

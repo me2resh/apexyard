@@ -323,7 +323,10 @@ JSON
 # fallback for un-migrated forks).
 echo "# This file marks the directory as an ApexYard ops fork (split-portfolio v2)." > .apexyard-fork
 
-git add .gitignore .claude/project-config.json .apexyard-fork
+# .claude/project-config.json is deliberately NOT staged (me2resh/apexyard#1031):
+# it is gitignored + untracked, so `git add` on it exits 1 and stops this step.
+# It also holds the private sibling-repo path, and this fork may be public.
+git add .gitignore .apexyard-fork
 git commit -m "chore: configure split-portfolio v2 (config-block path resolution + marker)"
 git push
 ```
@@ -717,7 +720,8 @@ jq --arg onb "$SIBLING/onboarding.yaml" \
     | .portfolio.workspace_dir = (.portfolio.workspace_dir // $ws)' \
    .claude/project-config.json > /tmp/pc.json && mv /tmp/pc.json .claude/project-config.json
 
-git add .gitignore .apexyard-fork .claude/project-config.json
+# .claude/project-config.json is deliberately NOT staged — see #1031.
+git add .gitignore .apexyard-fork
 ```
 
 ### Migrating from single-fork to split-portfolio
