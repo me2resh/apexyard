@@ -52,6 +52,10 @@ projects:
     repo: acme-private/marlow-svc
     workspace: workspace/ws-marlow
     status: active
+  - name: zebrafish
+    repo: acme/zebrafish-app
+    workspace: workspace/zebrafish
+    status: active
 YAML
 
 # A directory to cd into so the hook walks up to find the registry.
@@ -431,6 +435,291 @@ run_case "#1046: a misplaced marker gets a diagnostic explaining why it did not 
 run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted here)" \
   2 "project name: curios-dog" \
   "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
+
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 — a trailing --repo ANYWHERE on the line disables
+# the gate entirely.
+#
+# TARGET_REPO used to be resolved with a single greedy sed match:
+#     sed -nE 's/.*--repo[[:space:]]+...'
+# The leading `.*` is greedy, so on a line with more than one `--repo` token
+# it binds the LAST one, not the one belonging to the actual write. A
+# chained second `gh` call, or even a bare trailing shell comment mentioning
+# `--repo`, made the hook resolve the wrong target, decide "not public
+# class" at step 3, and exit 0 having scanned NOTHING — before any title or
+# body extraction ran. `| head -1` only de-dupes matched LINES; sed's
+# single substitution already picked the last match within a line before
+# `head` ever sees it.
+#
+# The fix anchors resolution on the matched write invocation (`gh issue
+# create`, `gh pr create`, `gh issue comment`, `gh pr comment`, `gh api`)
+# and takes the FIRST `--repo` (or `repos/<owner>/<repo>` path, for the api
+# shape) found AFTER that anchor — not the last one anywhere on the line.
+#
+# Baseline arithmetic, stated explicitly so it reconciles: the suite had
+# 48 cases before any #1068 work. Cases 21-27 below are the 7 added for
+# round 1 (55 total at that point). Cases 28-31 further down are the 4
+# added for round 2 (59 total by the end of this file). Every count in
+# this file's comments should reduce to those two numbers — if it doesn't,
+# the comment is wrong, not the arithmetic.
+#
+# Cases 21-23 are genuine RED-before-round-1-fix leaks (exit 0, nothing
+# scanned) — confirmed against the pre-fix hook. Case 24 is the CONTROL:
+# it already blocked correctly pre-fix, which is what makes 21-23 bypasses
+# rather than ordinary match failures. Cases 25-27 already behaved
+# correctly pre-round-1-fix too, each for a different, more fragile reason
+# than the real fix below — so the honest split for the 7 round-1 cases is
+# 3 net fail→pass (21, 22, 23) and 4 already green (24 control, 25, 26, 27):
+#
+# NOTE on 21-23's expected message: once TARGET_REPO resolves correctly,
+# these three commands hit a SECOND, previously-unreachable gap —
+# extract_flag_value's greedy match() has no terminator alternative for
+# "a shell command is chained right after this quoted value", so it falls
+# through to a truncated unquoted read instead of the real body. The fix
+# does not attempt to parse the chain (that class of widening is exactly
+# what #1040 tried and #1039r2 below proves unsafe); it detects the
+# truncation signature and refuses. So 21-23 block on "could not safely
+# determine where the value ends", not on a specific "project name: x"
+# match — the hook is correctly refusing to trust an extraction it knows
+# is incomplete, which is the safe-direction behaviour #1068 asked for.
+# This truncation-refusal is a COUPLING worth naming: 21-23 block only
+# because refusal catches them once resolution has already decided the
+# target is public. Removing the refusal later would silently reopen them.
+#   - 25 (gh api shape) never had this bug — the api-path fallback already
+#     used `grep -oE ... | head -1`, which is first-occurrence, not
+#     last-occurrence like the buggy `--repo`-flag sed. Kept as a
+#     same-shape regression guard for the shape the fix now also covers
+#     explicitly.
+#   - 26 never had this bug either — a single, unchained command with
+#     --repo legitimately placed after --title/--body resolves the same
+#     way both before and after any of this file's fixes.
+#
+# Case 27 is DELIBERATELY FLIPPED in round 2, and that is a correction to
+# the test, not a new requirement discovered by the test. Round 1 encoded
+# "private target, public repo mentioned later in a chained call → no-op"
+# as a requirement. Round 2's class-based fix (see the source file's
+# large comment above the resolution code) treats ANY public-repo mention
+# anywhere in the write segment as reason to scan — which is what closes
+# the round-1-introduced holes below — so this exact shape now BLOCKS
+# instead. That is over-blocking (the explicitly sanctioned safe
+# direction for this fix), not under-blocking, and it is a conscious
+# tradeoff: a single Bash call chaining a private write with a public one
+# now gets its private title/body scanned too, because the public repo's
+# slug is present somewhere in the combined text the hook cannot cleanly
+# attribute to one invocation or the other.
+# ---------------------------------------------------------------------------
+
+# 21. The exact repro from the issue: a chained SECOND gh call mentions an
+#     unrelated --repo after the real write. Pre-fix this exits 0 with
+#     nothing scanned; the greedy match binds `acme/zebrafish-app`.
+run_case "#1068: chained second gh call's --repo must not override the real target" \
+  2 "could not safely determine" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh pr list --repo acme/zebrafish-app"
+
+# 22. A bare trailing shell COMMENT is enough — no second command required.
+run_case "#1068: trailing shell comment mentioning --repo must not override the real target" \
+  2 "could not safely determine" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" # see --repo foo/bar"
+
+# 23. Same shape, `gh pr create` instead of `gh issue create` — the anchor
+#     must cover every one of the five recognised write shapes, not just
+#     the one in the issue's own repro.
+run_case "#1068: chained bypass via gh pr create must not override the real target" \
+  2 "could not safely determine" \
+  "gh pr create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh issue list --repo acme/zebrafish-app"
+
+# 24. CONTROL — identical command, no trailing --repo. This already blocked
+#     correctly before the fix; it is what proves 21/22/23 are bypasses
+#     rather than a match failure the fix accidentally also repairs.
+run_case "#1068 control: same command without the trailing --repo → still blocks" \
+  2 "project name: zebrafish" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\""
+
+# 25. gh api shape — the same class of bypass via the REST path form, a
+#     second gh api call chained on.
+run_case "#1068: gh api chained bypass must not override the real target" \
+  2 "project name: zebrafish" \
+  "gh api repos/me2resh/apexyard/issues -f title=T -f body='found during zebrafish rebuild' && gh api repos/acme/zebrafish-app/pulls"
+
+# 26. Regression — --repo legitimately appearing AFTER --title/--body in a
+#     single, unchained command (no bypass attempt at all) must still
+#     resolve correctly. The fix must not start requiring --repo to appear
+#     FIRST in the command.
+run_case "#1068: --repo after title/body in a single command still resolves" \
+  2 "project name: zebrafish" \
+  "gh issue create --title \"T\" --body \"found during zebrafish rebuild\" --repo me2resh/apexyard"
+
+# 27. DELIBERATELY FLIPPED in round 2 (was "stays a no-op" in round 1 — see
+#     the block comment above case 21 for why that was the wrong bar).
+#     A private-target write chained with a later call that mentions the
+#     public framework repo now BLOCKS: the class-based fix treats any
+#     public-repo mention in the write segment as reason to scan, so this
+#     over-blocks rather than risk the ordering hole round 1 introduced.
+run_case "#1068 round 2: private target chained with a later public mention now over-blocks (was a no-op; deliberate tradeoff)" \
+  2 "could not safely determine" \
+  "gh issue create --repo acme/zebrafish-app --title \"T\" --body \"mentions zebrafish freely, private target\" && gh pr list --repo me2resh/apexyard"
+
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 round 2 — security AND code review both found that
+# round 1's "first --repo after the anchor" fix closed the AFTER hole
+# (chained/trailing --repo, cases 21-23 above) but opened a BEFORE hole:
+# a --repo-SHAPED token embedded inside an EARLIER flag's quoted value
+# (--title or --body) now wins over the real flag, because it appears
+# first in raw text. Round 1's own code comment claimed this shape was
+# "a pre-existing weakness of the previous implementation too" — that
+# claim was WRONG, not just unproven. Verified below against the actual
+# `upstream/dev` blob at the commit this branch forked from (not reasoned
+# from the code's shape): dev's "last --repo on the line wins" happens to
+# land on the real, later flag for every one of these shapes, so dev
+# BLOCKS all three. Round 1 LEAKS on all three. This is the mistake
+# AgDR-0113 exists to catch — every "pre-existing" claim must cite the
+# check that proves it against the real prior behaviour.
+#
+# The fix (see the source file's step 2/3 comment): class-based, not
+# positional. Collect every --repo / repos/<owner>/<repo> candidate in the
+# write segment and scan if ANY is public-class, rather than committing to
+# one candidate by position (first OR last). All three shapes below close
+# under that fix without touching extract_flag_value at all.
+# ---------------------------------------------------------------------------
+
+# 28. --title carries a --repo-shaped decoy BEFORE the real flag. This is
+#     the more adversarial-looking of the two "before" shapes, but still
+#     needs no special crafting beyond ordinary prose.
+run_case "#1068 round 2: --repo-shaped text inside --title (before the real flag) must not be picked as target" \
+  2 "project name: zebrafish" \
+  "gh issue create --title \"use --repo acme-private/zebrafish here\" --repo me2resh/apexyard --body \"zebrafish leak\""
+
+# 29. --body carries the decoy instead. Called out specifically because it
+#     needs NO adversarial crafting at all: --body routinely precedes
+#     --repo in real invocations, and body prose quoting a --repo example
+#     is this very repo's own habit — #1068's own issue body does exactly
+#     this. So this is the ordinary shape of an upstream bug report about
+#     `gh`, not a crafted exploit.
+run_case "#1068 round 2: --repo-shaped text inside --body (before the real flag) must not be picked as target" \
+  2 "project name: zebrafish" \
+  "gh issue create --body \"run with --repo other/x for zebrafish\" --repo me2resh/apexyard --title \"T\""
+
+# 30. Two REAL writes chained: a private-repo write first, a public-repo
+#     write second, with the leak in the SECOND (public) write's body.
+#     Round 1 mis-resolved the target to the private repo (whichever
+#     --repo it picked positionally) and exited 0 with the public write's
+#     own leak never scanned. The class-based fix finds the public repo's
+#     slug present in the segment (from the second write's own --repo
+#     flag) and scans.
+run_case "#1068 round 2: two real writes, private-then-public, leak in the public one's body" \
+  2 "project name: zebrafish" \
+  "gh issue create --repo acme-private/zebrafish --title \"A\" --body \"clean\" && gh issue create --repo me2resh/apexyard --title \"B\" --body \"zebrafish leak\""
+
+# 31. DOCUMENTED, NOT FIXED — the `--repo=owner/name` equals form. Verified
+#     against the real `upstream/dev` blob: it resolves nothing there
+#     either (rc=0, nothing scanned), so this is genuinely pre-existing,
+#     not something round 1 or round 2 introduced or silently regressed.
+#     Asserting CURRENT (gap) behaviour here, not a requirement — a future
+#     fix for the equals form should update this case, not treat its
+#     presence as a regression.
+run_case "#1068: KNOWN GAP (pre-existing on dev, not fixed here) — --repo=owner/name equals form resolves nothing" \
+  0 "" \
+  "gh issue create --repo=me2resh/apexyard --title \"T\" --body \"zebrafish leak here\""
+
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 round 3 (security review of round 2) — the round-2
+# code comment claimed `find_write_segment`'s `(^|[[:space:]])gh` anchor
+# "mirrors" step 1's `\bgh` classification regex. It does not: `\b` is a
+# WORD boundary, firing wherever "gh"'s leading `g` is preceded by any
+# NON-word character — `;`, `&`, `|`, `(`, `$`, not only whitespace. The
+# anchor only covered the whitespace case, so step 1 (which matches `\b`)
+# and the segment finder (which required a space) DISAGREED on exactly
+# these four shapes. When they disagreed, step 1 said "this is a write"
+# but the segment finder found no match, returned nothing, and the hook
+# exited 0 at the empty-segment check — having scanned NOTHING, upstream
+# of every fix in this file so far.
+#
+# The `$(...)` capture form (case 33) is the one that matters operationally:
+# capturing a newly created issue/PR's URL — `out=$(gh issue create ...)`
+# — is a routine agent idiom, not a crafted shape.
+#
+# This is also the second time in as many rounds that an unverified
+# "these two things behave the same" claim in this file's own comments was
+# wrong (round 1's "pre-existing" residue claim was the first) — plausible,
+# cheap to check, and false both times. Every case below was confirmed
+# failing (rc=0, nothing scanned) against the round-2 committed hook before
+# the anchor fix.
+#
+# But NOT all six are the same class of finding against `dev`, and an
+# earlier check here made exactly the mistake this file keeps warning
+# about: it used a body where the leak token ("zebrafish") was the FIRST
+# word, which let dev's truncated read catch it BY ACCIDENT and masked the
+# real gap. Re-verified with a non-frontloaded body ("found during
+# zebrafish rebuild"):
+#   - 32 (`;gh`), 34 (`&&gh`), 35 (`|gh`) genuinely BLOCK on the real
+#     `upstream/dev` blob — real regressions this round closes.
+#   - 33 (`out=$(gh ...)`, single write, no chaining) also ALLOWS on dev
+#     (rc=0) — pre-existing there too, NOT a round-2 regression, because
+#     dev has no truncation-detection concept at all: the trailing `)`
+#     defeats dev's extraction the same way it defeats this hook's, dev
+#     just has no mechanism to notice and refuse. This fix still closes
+#     it, but as a side effect of the segment no longer being empty (so
+#     round 1/2's OWN refusal mechanism gets to run) — an improvement
+#     over dev on this shape, not parity restoration.
+#   - 36 is not a dev-comparison case at all — dev never had a truncation
+#     refusal to defeat. It proves this round restores round 1/2's OWN
+#     prior behaviour (case 21 unwrapped) once wrapped in `$(...)`.
+#   - 37 (`-R`) is a new capability neither dev nor round 1/2 had; closing
+#     an inconsistency, not a regression fix.
+# ---------------------------------------------------------------------------
+
+# 32. Semicolon immediately before "gh", no space.
+run_case "#1068 round 3: ';gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "echo hi ;gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 33. `$(...)` COMMAND SUBSTITUTION — the operationally important shape.
+#     Capturing the created issue/PR URL is routine agent usage, not an
+#     adversarial construction.
+#
+#     Expected message here is the TRUNCATION REFUSAL, not a named leak —
+#     and that is correct, not a second bug. The trailing `)` that closes
+#     the substitution sits right after --body's closing quote, so
+#     extract_flag_value's boundary check (whitespace+--flag OR
+#     whitespace* END-OF-STRING) fails there too: a lone `)` is neither.
+#     Widening that boundary to accept a bare `)` was NOT done, because
+#     `)` is one of the exact boundary characters #1039r2 below already
+#     proves must NOT be treated as a terminator (a body legitimately
+#     containing `(...)` followed by more leak content must still be
+#     scanned to the end). So a write wrapped in `$(...)` correctly hits
+#     the SAME safe refusal as a chained command — over-blocking, not a
+#     leak, and the anchor fix has already done its job by this point:
+#     the target resolved to public and the hook did not exit 0 silently.
+run_case "#1068 round 3: out=\$(gh ...) command substitution must still anchor the write (and correctly hits the truncation refusal, not a silent leak)" \
+  2 "could not safely determine" \
+  "out=\$(gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\")"
+
+# 34. `&&gh` — no space between the chain operator and "gh".
+run_case "#1068 round 3: '&&gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "true &&gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 35. `|gh` — no space between the pipe and "gh".
+run_case "#1068 round 3: '|gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "echo hi |gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 36. Structural proof that the anchor bug also defeated the truncation
+#     refusal from round 1/2: this EXACT chained-command shape correctly
+#     REFUSES unwrapped (case 21 above); wrapped in `$(...)` it used to
+#     exit 0 instead, because the segment finder ran before extraction and
+#     found nothing to extract from.
+run_case "#1068 round 3: \$(...) wrapping must not silently defeat the truncation refusal" \
+  2 "could not safely determine" \
+  "out=\$(gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh pr list --repo acme/zebrafish-app)"
+
+# 37. `-R` — gh's own documented short flag for `--repo` (`gh help issue
+#     create` lists `-R, --repo [HOST/]OWNER/REPO`), on the same footing as
+#     the `-t`/`-b` short forms this hook already recognises. Previously
+#     undetected; closes an inconsistency rather than adding scope.
+run_case "#1068 round 3: -R (short flag for --repo) must be recognised" \
+  2 "project name: zebrafish" \
+  "gh issue create -R me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
 
 # ---------------------------------------------------------------------------
 # Portability lock: no ERE intervals in the hook's awk program.
