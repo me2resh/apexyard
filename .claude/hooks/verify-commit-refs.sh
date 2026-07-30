@@ -121,6 +121,56 @@ if [ -z "$REFS" ]; then
   exit 0
 fi
 
+# Resolve the WORKING DIRECTORY the `git commit` is actually executing in —
+# NOT the hook process's own cwd (me2resh/apexyard#1050). In a
+# split-portfolio / worktree-based sub-agent session, the harness's Bash cwd
+# for this call can be a managed project's worktree while the hook process
+# itself inherits a different cwd (typically the ops fork). Every
+# cwd-relative git call below must run against the COMMIT's directory, not
+# wherever this script happened to start.
+#
+# Priority (highest first) — mirrors suggest-mcp-reindex-after-pull.sh's
+# cwd-then-command-parsed fallback chain, but ordered so an explicit,
+# in-command override always wins over the ambient payload cwd:
+#   1. an explicit `git -C <path>` on the commit invocation itself —
+#      authoritative regardless of cwd or any earlier `cd`.
+#   2. a `cd <path> &&`-style prefix earlier in the SAME compound command —
+#      changes the effective cwd for everything that follows it.
+#   3. the harness-provided `.cwd` (or `.tool_input.cwd`) for this Bash
+#      call — the common case: a bare `git commit -m ...` run from inside
+#      the intended worktree with no path arguments at all.
+#   4. fall back to the hook's own process cwd — IDENTICAL to the pre-fix
+#      behavior, so a session with no worktree involved sees no change.
+resolve_commit_workdir() {
+  local cmd="$1" payload_cwd="$2" dir
+  # 1. `git -C <path>` anywhere in the command (last one wins, matching how
+  # git itself would apply repeated -C flags).
+  dir=$(echo "$cmd" | grep -oE 'git[[:space:]]+-C[[:space:]]+[^[:space:]]+' | tail -1 | sed -E 's/^git[[:space:]]+-C[[:space:]]+//')
+  if [ -n "$dir" ]; then
+    echo "$dir"
+    return
+  fi
+  # 2. `cd <path>` at the start of the command or after a shell separator.
+  dir=$(echo "$cmd" | grep -oE '(^|&&|;)[[:space:]]*cd[[:space:]]+[^[:space:]&|;]+' | tail -1 | sed -E 's/^(&&|;)?[[:space:]]*cd[[:space:]]+//')
+  if [ -n "$dir" ]; then
+    echo "$dir"
+    return
+  fi
+  # 3. Harness-provided cwd for this Bash call.
+  if [ -n "$payload_cwd" ]; then
+    echo "$payload_cwd"
+    return
+  fi
+}
+
+PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+WORKDIR=$(resolve_commit_workdir "$COMMAND" "$PAYLOAD_CWD")
+# 4. No hint resolved anything usable — fall back to this process's own cwd,
+# exactly what every git call below did before this fix.
+if [ -z "$WORKDIR" ] || [ ! -d "$WORKDIR" ]; then
+  WORKDIR="$PWD"
+fi
+
 # Resolve tracker repo.
 #
 # Two roots come into play:
@@ -133,13 +183,15 @@ fi
 #     operator configured Linear / Jira / Asana / custom at the ops-fork
 #     level (me2resh/apexyard#310). _lib-ops-root.sh walks up to the
 #     ops-fork anchor (v2 marker or v1 pair) and is the right primitive.
+#     Both REPO_ROOT and the resolve_ops_root walk now start from WORKDIR
+#     (the commit's own directory) instead of $PWD — see above.
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+REPO_ROOT=$(git -C "$WORKDIR" rev-parse --show-toplevel 2>/dev/null)
 CONFIG_ROOT=""
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-ops-root.sh"
-  CONFIG_ROOT=$(resolve_ops_root "$PWD")
+  CONFIG_ROOT=$(resolve_ops_root "$WORKDIR")
 fi
 if [ -z "$CONFIG_ROOT" ]; then
   CONFIG_ROOT="$REPO_ROOT"
@@ -150,7 +202,7 @@ if [ -n "$CONFIG_ROOT" ] && [ -f "${CONFIG_ROOT}/.claude/project-config.json" ];
   TRACKER_REPO=$(jq -r '.tracker_repo // empty' "${CONFIG_ROOT}/.claude/project-config.json" 2>/dev/null)
 fi
 if [ -z "$TRACKER_REPO" ]; then
-  ORIGIN_URL=$(git remote get-url origin 2>/dev/null)
+  ORIGIN_URL=$(git -C "$WORKDIR" remote get-url origin 2>/dev/null)
   TRACKER_REPO=$(echo "$ORIGIN_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
 fi
 
@@ -189,8 +241,8 @@ fi
 # Upstream fallback only applies to the gh kind. Linear / Jira / Asana
 # don't have a fork-of-a-tracker concept.
 UPSTREAM_REPO=""
-if [ "$TRACKER_KIND" = "gh" ] && git remote get-url upstream >/dev/null 2>&1; then
-  UPSTREAM_URL=$(git remote get-url upstream 2>/dev/null)
+if [ "$TRACKER_KIND" = "gh" ] && git -C "$WORKDIR" remote get-url upstream >/dev/null 2>&1; then
+  UPSTREAM_URL=$(git -C "$WORKDIR" remote get-url upstream 2>/dev/null)
   UPSTREAM_REPO=$(echo "$UPSTREAM_URL" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1)
   # Don't double-check if upstream resolves to the same repo as the primary
   # tracker (e.g. running INSIDE the framework repo itself, where origin and
