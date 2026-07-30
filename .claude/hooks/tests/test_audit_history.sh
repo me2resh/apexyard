@@ -357,7 +357,112 @@ EOF
   )
 }
 
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10 case_11; do
+# ---------------------------------------------------------------------------
+# Case 12: audit_run_persist leaves NO file (and returns non-zero) on empty
+# stdin -- apexyard#1063. jq exits 0 on empty stdin (no findings emitted at
+# all), so the pre-fix code took the success path and moved a zero-byte JSON
+# into place while returning rc=0 -- reporting success for a run that never
+# happened. This is the discriminating case: the pre-existing `|| return 1`
+# guard already caught malformed input (jq exits non-zero there), but NOT
+# empty/absent stdin (jq exits 0 with no output).
+# ---------------------------------------------------------------------------
+case_12() {
+  local case_name="audit_run_persist: empty stdin leaves no file, returns non-zero"
+  local sb
+  sb=$(fresh_sandbox)
+  ( source_lib_with_projects_dir "$sb"
+    body=$(mktemp); echo "## Body" > "$body"
+    printf '' | audit_run_persist "demo" "threat-model" "2026-06-01T00:00:00Z" "fail" 0 "$body"
+    rc=$?
+    json="$sb/projects/demo/audits/threat-model/runs/2026-06-01T00-00-00Z.json"
+    md="$sb/projects/demo/audits/threat-model/2026-06-01T00-00-00Z.md"
+    [ "$rc" -ne 0 ] || { mark_fail "$case_name" "expected non-zero rc, got $rc"; return; }
+    [ -f "$json" ] && { mark_fail "$case_name" "zero-byte JSON left at $json"; return; }
+    [ -f "$md" ] && { mark_fail "$case_name" "orphan MD left at $md (json step never succeeded)"; return; }
+    rm -f "$body"
+    mark_pass "$case_name"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Case 13: audit_run_persist leaves NO file on malformed (non-JSON) stdin.
+# jq exits non-zero here, so the pre-fix `|| return 1` guard already
+# reported failure -- but the `>` redirect had already truncated/created
+# json_path before jq ran, so a zero-byte file survived the return 1. This
+# case pins that the file itself must not survive either.
+# ---------------------------------------------------------------------------
+case_13() {
+  local case_name="audit_run_persist: malformed stdin leaves no file, returns non-zero"
+  local sb
+  sb=$(fresh_sandbox)
+  ( source_lib_with_projects_dir "$sb"
+    body=$(mktemp); echo "## Body" > "$body"
+    printf 'not json' | audit_run_persist "demo" "threat-model" "2026-06-02T00:00:00Z" "fail" 0 "$body"
+    rc=$?
+    json="$sb/projects/demo/audits/threat-model/runs/2026-06-02T00-00-00Z.json"
+    [ "$rc" -ne 0 ] || { mark_fail "$case_name" "expected non-zero rc, got $rc"; return; }
+    [ -f "$json" ] && { mark_fail "$case_name" "zero-byte JSON left at $json"; return; }
+    rm -f "$body"
+    mark_pass "$case_name"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Case 14: audit_run_list defensively skips a pre-existing zero-byte run
+# file on disk (belt-and-braces for forks that already carry one from
+# before this fix -- apexyard#1063).
+# ---------------------------------------------------------------------------
+case_14() {
+  local case_name="audit_run_list skips a pre-existing zero-byte run file"
+  local sb
+  sb=$(fresh_sandbox)
+  ( source_lib_with_projects_dir "$sb"
+    body=$(mktemp); echo "x" > "$body"
+    printf '{"findings":[]}' \
+      | audit_run_persist "demo" "threat-model" "2026-05-11T20:30:00Z" "pass" 90 "$body"
+    # Simulate a pre-existing zero-byte orphan left by the old bug.
+    dim_dir="$sb/projects/demo/audits/threat-model"
+    : > "$dim_dir/runs/2026-05-12T00-00-00Z.json"
+    out=$(audit_run_list "demo" "threat-model" 10)
+    echo "$out" | grep -q "2026-05-12T00-00-00Z.json" \
+      && { mark_fail "$case_name" "zero-byte run was not skipped: $out"; return; }
+    echo "$out" | grep -q "2026-05-11T20-30-00Z.json" \
+      || { mark_fail "$case_name" "valid run missing from list: $out"; return; }
+    rm -f "$body"
+    mark_pass "$case_name"
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Case 15: audit_render_trend still renders correctly when an orphan
+# zero-byte JSON and an orphan .md (no matching JSON) sit alongside valid
+# runs -- apexyard#1063 AC.
+# ---------------------------------------------------------------------------
+case_15() {
+  local case_name="audit_render_trend renders correctly with orphan zero-byte/md present"
+  local sb
+  sb=$(fresh_sandbox)
+  ( source_lib_with_projects_dir "$sb"
+    body=$(mktemp); echo "x" > "$body"
+    for ts in "2026-04-15T14:22:00Z" "2026-05-11T20:30:00Z"; do
+      printf '{"findings":[]}' \
+        | audit_run_persist "demo" "threat-model" "$ts" "pass" 90 "$body"
+    done
+    dim_dir="$sb/projects/demo/audits/threat-model"
+    : > "$dim_dir/runs/2026-05-12T00-00-00Z.json"           # orphan zero-byte JSON
+    echo "orphan body, no matching run" > "$dim_dir/2026-05-13T00-00-00Z.md"  # orphan MD
+    out=$(audit_render_trend "demo" "threat-model" 5)
+    echo "$out" | grep -q "## Trend (last 2 runs)" \
+      || { mark_fail "$case_name" "orphan files broke the trend render. out=$out"; return; }
+    echo "$out" | grep -q "2026-05-12" \
+      && { mark_fail "$case_name" "orphan zero-byte run leaked into trend: $out"; return; }
+    rm -f "$body"
+    mark_pass "$case_name"
+  )
+}
+
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10 case_11 \
+          case_12 case_13 case_14 case_15; do
   run_case "$fn"
 done
 
