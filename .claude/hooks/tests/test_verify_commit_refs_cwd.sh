@@ -300,6 +300,13 @@ assert_case() {
 # ---- Case 7: trailing, unrelated `git -C <dir> log` after the real ----
 # ---- commit must not bind to it (round-2 hijack, row 3).             ----
 #
+# REGRESSION LOCK, not a discriminator: this shape happened to pass under
+# BOTH the round-1 and round-2 implementations (verified — round-1's
+# unscoped `tail -1` scrape didn't end up preferring the decoy here either),
+# so it doesn't prove the round-2 fix by itself. Kept anyway to pin the
+# behavior going forward, since the commit-boundary logic this depends on
+# has since changed again (round 3, token-boundary fix below).
+#
 # No payload .cwd. Hook cwd = "real" (has the issue). The command has a
 # real, separate `git -C <decoy> log` AFTER the actual commit invocation —
 # a `-C` that belongs to a DIFFERENT git invocation, not this one.
@@ -313,7 +320,7 @@ assert_case() {
   cmd=$(build_command 'fix: trailing unrelated -C\n\nCloses #507' "" "" " && git -C ${decoy} log")
   out=$(run_hook "$real" "" "$cmd")
   rc=$?
-  assert_case "a trailing, unrelated 'git -C <dir> log' does not bind to this commit" \
+  assert_case "[regression lock] a trailing, unrelated 'git -C <dir> log' does not bind to this commit" \
     "$out" "$rc" 0 ""
   rm -rf "$real" "$decoy"
 }
@@ -371,6 +378,86 @@ assert_case() {
   assert_case "a relative cd path is not trusted; falls back to the hook's own cwd" \
     "$out" "$rc" 0 ""
   rm -rf "$ops"
+}
+
+# ---- Cases 11-13: a directory whose NAME merely CONTAINS the substring ----
+# ---- "commit" must not truncate the commit-boundary cut (round-3       ----
+# ---- hijack — a real bug in the round-2 fix's own `${cmd%%commit*}`,   ----
+# ---- caught end-to-end by the reviewer before merge).                  ----
+#
+# `${cmd%%commit*}` cuts at the first literal SUBSTRING "commit", not a
+# token boundary — so a path component like "commitizen" or "commits-repo"
+# truncates mid-directory. The truncated parent is usually not a git repo,
+# so the (pre-fix) failure mode is FAIL-OPEN: TRACKER_REPO ends up empty,
+# the hook hits the "could not resolve tracker repo — skipping" branch, and
+# ref verification is silently disabled (same class as round-1's
+# message-prose hijack, just a different trigger).
+#
+# Discriminator design: the referenced issue is set to NOT EXIST in the
+# CORRECT (untruncated) repo's origin. If the fix correctly resolves the
+# full path, the hook queries that origin, finds the ref missing, and
+# BLOCKS (rc=2, "do not exist in <repo>"). If truncation still occurs, the
+# truncated parent has no origin, TRACKER_REPO is empty, and the hook exits
+# 0 via the skip branch instead — silently passing a fabricated ref. So
+# rc=2 (not rc=0) is the proof that real verification happened against the
+# right repo, and the stderr assertion additionally rules out the skip
+# message appearing at all.
+
+# Case 11: `cd <path>/commitizen && git commit` — reviewer's row 1 example.
+{
+  ops=$(make_repo "me2resh/apexyard")
+  commitizen=$(make_repo "managed-org/tool" "commitizen")
+  mock_gh_install "$commitizen"
+  mock_gh_set_repo_existence "$commitizen" 511 "managed-org/tool" no
+
+  cmd=$(build_command 'fix: cd into a dir named commitizen\n\nCloses #511' "cd ${commitizen} && ")
+  out=$(run_hook "$ops" "" "$cmd")
+  rc=$?
+  assert_case "cd into .../commitizen resolves the FULL path, not truncated at 'commit'" \
+    "$out" "$rc" 2 "do not exist"
+  if echo "$out" | grep -qF "could not resolve tracker repo"; then
+    echo "FAIL [cd .../commitizen]: silently skipped instead of verifying — output: ${out:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cd-commitizen-silent-skip "
+  fi
+  rm -rf "$ops" "$commitizen"
+}
+
+# Case 12: `git -C <path>/commitizen commit` — reviewer's row 2 example.
+{
+  ops=$(make_repo "me2resh/apexyard")
+  commitizen=$(make_repo "managed-org/tool2" "commitizen")
+  mock_gh_install "$commitizen"
+  mock_gh_set_repo_existence "$commitizen" 512 "managed-org/tool2" no
+
+  cmd=$(build_command 'fix: -C into a dir named commitizen\n\nCloses #512' "" "-C ${commitizen} ")
+  out=$(run_hook "$ops" "" "$cmd")
+  rc=$?
+  assert_case "git -C .../commitizen resolves the FULL path, not truncated at 'commit'" \
+    "$out" "$rc" 2 "do not exist"
+  if echo "$out" | grep -qF "could not resolve tracker repo"; then
+    echo "FAIL [-C .../commitizen]: silently skipped instead of verifying — output: ${out:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}dash-C-commitizen-silent-skip "
+  fi
+  rm -rf "$ops" "$commitizen"
+}
+
+# Case 13: `cd <path>/commits-repo && git commit` — reviewer's row 3 example.
+{
+  ops=$(make_repo "me2resh/apexyard")
+  commitsrepo=$(make_repo "managed-org/tool3" "commits-repo")
+  mock_gh_install "$commitsrepo"
+  mock_gh_set_repo_existence "$commitsrepo" 513 "managed-org/tool3" no
+
+  cmd=$(build_command 'fix: cd into a dir named commits-repo\n\nCloses #513' "cd ${commitsrepo} && ")
+  out=$(run_hook "$ops" "" "$cmd")
+  rc=$?
+  assert_case "cd into .../commits-repo resolves the FULL path, not truncated at 'commit'" \
+    "$out" "$rc" 2 "do not exist"
+  if echo "$out" | grep -qF "could not resolve tracker repo"; then
+    echo "FAIL [cd .../commits-repo]: silently skipped instead of verifying — output: ${out:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cd-commits-repo-silent-skip "
+  fi
+  rm -rf "$ops" "$commitsrepo"
 }
 
 # ---- Summary ------------------------------------------------------------

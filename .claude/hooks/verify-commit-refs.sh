@@ -36,8 +36,15 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-# Only check on git commit
-if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+# Only check on git commit. Also recognizes `git -C <path> commit` (quoted
+# or bare) — a bare `\bgit\s+commit\b` check misses this shape entirely
+# (the `-C <path>` sits between "git" and "commit", so the two tokens are
+# never adjacent), which meant a commit made via explicit `-C` — exactly
+# the pattern a worktree-based sub-agent uses (me2resh/apexyard#1050) —
+# skipped ref verification altogether, regardless of any cwd-resolution fix
+# below. Round-3 review caught this: the WORKDIR resolver's `-C`-bound-to-
+# commit priority level was otherwise unreachable in practice.
+if ! echo "$COMMAND" | grep -qE '\bgit[[:space:]]+(-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]+)[[:space:]]+)?commit\b'; then
   exit 0
 fi
 
@@ -201,12 +208,47 @@ strip_message_from_command() {
 
 # Extract a governing directory from the (message-stripped) command, bound
 # to THIS commit invocation only. Only the portion of the command BEFORE
-# the first `commit` keyword is considered — a `-C` / `cd` at or after that
+# the first `commit` TOKEN is considered — a `-C` / `cd` at or after that
 # point belongs to a later command in the same compound line and must not
 # be read as governing this one.
+#
+# The cut point MUST be a token boundary, not a bare substring search. An
+# earlier version of this function used `${cmd%%commit*}`, which cuts at
+# the first literal SUBSTRING "commit" — truncating mid-path for any
+# directory name that merely CONTAINS that substring (`commitizen`,
+# `pre-commit-hooks`, `commitlint`, `commits-repo`, ...). That failure is
+# fail-OPEN: the truncated parent is usually not a git repo, so the caller
+# falls through to the "could not resolve tracker repo — skipping" branch
+# and ref verification is silently disabled (me2resh/apexyard#1050 review,
+# round 3). A leading space is prepended so the boundary pattern
+# `[[:space:]]commit([[:space:]]|$)` can require a preceding space
+# uniformly, with no special case for "commit" occurring at position 0.
 resolve_commit_workdir_from_command() {
-  local cmd="$1" prefix dir
-  prefix="${cmd%%commit*}"
+  local cmd="$1" padded pos prefix dir
+  padded=" $cmd"
+  pos=$(printf '%s' "$padded" | awk '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      if (match(buf, /[[:space:]]commit([[:space:]]|$)/)) {
+        print RSTART
+      } else {
+        print 0
+      }
+    }
+  ')
+  if [ "$pos" -gt 1 ] 2>/dev/null; then
+    # RSTART (1-based, in PADDED) points at the whitespace char immediately
+    # before the "commit" token. padded[2..pos] == cmd[1..pos-1] — the
+    # commit's own leading directory hints, with the artificial leading
+    # space dropped.
+    prefix=$(printf '%s' "$padded" | cut -c "2-${pos}")
+  else
+    # No bounded "commit" token found at all (e.g. it only ever appeared
+    # inside the now-stripped message) — nothing to bound against; fall
+    # through to scanning the whole (message-stripped) string, same as
+    # before this token-boundary fix existed.
+    prefix="$cmd"
+  fi
 
   # `-C <path>` immediately preceding THIS commit (`git -C <path> commit`).
   # Anchored at the END of prefix so a `-C` on an earlier, unrelated git
@@ -243,18 +285,34 @@ PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/nu
 CMD_SANS_MSG=$(strip_message_from_command "$COMMAND" "$MSG")
 
 # 1. Structured harness cwd wins outright when present and absolute.
+# WORKDIR_SOURCE distinguishes "we resolved a hint" from "nothing resolved
+# and we fell back" — used below to give the "could not resolve tracker
+# repo" warning a sharper message when a HINT was found but didn't pan out
+# (e.g. it resolved to a directory with no git origin at all), versus the
+# unremarkable case where no hint existed and the fallback is expected.
 WORKDIR=""
+WORKDIR_SOURCE="fallback"
 if [ -n "$PAYLOAD_CWD" ] && [ "${PAYLOAD_CWD#/}" != "$PAYLOAD_CWD" ]; then
   WORKDIR="$PAYLOAD_CWD"
+  WORKDIR_SOURCE="payload_cwd"
 fi
 # 2 & 3. Only reached when .cwd is absent — scraped, message-stripped,
 # same-invocation-only command parsing.
 if [ -z "$WORKDIR" ]; then
   WORKDIR=$(resolve_commit_workdir_from_command "$CMD_SANS_MSG")
+  if [ -n "$WORKDIR" ]; then
+    WORKDIR_SOURCE="scraped_command"
+  fi
 fi
 # 4. No hint resolved anything usable — fall back to this process's own cwd,
 # exactly what every git call below did before this fix.
 if [ -z "$WORKDIR" ] || [ ! -d "$WORKDIR" ]; then
+  if [ -n "$WORKDIR" ]; then
+    # A hint WAS found (payload .cwd or scraped command) but the directory
+    # doesn't even exist — worth remembering for the warning below, since
+    # this is exactly the shape a truncated/incorrect scrape produces.
+    WORKDIR_SOURCE="${WORKDIR_SOURCE}_unresolvable:${WORKDIR}"
+  fi
   WORKDIR="$PWD"
 fi
 
@@ -316,8 +374,25 @@ fi
 # `tracker.kind = gh` (default) still requires an origin / configured repo;
 # preserve today's behaviour. For non-gh kinds the {owner_repo} placeholder
 # in the configured view_command may be unused, so we don't gate on it.
+#
+# The message distinguishes "no cwd/-C/cd hint existed at all" (WORKDIR_SOURCE
+# = fallback; unremarkable, this is the ordinary interactive/local-repo case)
+# from "a hint WAS resolved but it doesn't have a usable git origin"
+# (payload_cwd / scraped_command, or the *_unresolvable:<dir> shape when the
+# resolved directory didn't even exist) — the latter is worth a sharper
+# signal, since a truncated or mis-scraped directory hint silently landing
+# here (ref verification skipped, not blocked) is exactly the failure class
+# a prior version of this fix introduced (me2resh/apexyard#1050 review,
+# round 3: a path substring-matching "commit" got truncated mid-directory).
 if [ "$TRACKER_KIND" = "gh" ] && [ -z "$TRACKER_REPO" ]; then
-  echo "WARN: verify-commit-refs.sh could not resolve tracker repo. Skipping." >&2
+  case "$WORKDIR_SOURCE" in
+    fallback)
+      echo "WARN: verify-commit-refs.sh could not resolve tracker repo. Skipping." >&2
+      ;;
+    *)
+      echo "WARN: verify-commit-refs.sh resolved a working-directory hint (source: ${WORKDIR_SOURCE}, dir: ${WORKDIR}) but it has no usable git origin — skipping ref verification. If this directory looks truncated or wrong, that's a bug in the cwd/-C/cd scraper, not a config problem." >&2
+      ;;
+  esac
   exit 0
 fi
 
