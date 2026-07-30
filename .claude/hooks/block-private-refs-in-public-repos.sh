@@ -213,7 +213,16 @@ extract_flag_value() {
     # correct here.
     function trim_mode(chunk, d) {
       if (MODE != "first") return trim_to_last(chunk, d)
-      sub(d "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+      # `-{1,2}` here, NOT `--`. A single-dash flag is the same flag: `-l` IS
+      # `--label`. Keying the conservative cut on a double dash closed
+      # `--label "<marker>"` and left `-l "<marker>"` open, so the subset
+      # silently became a superset again for the short spellings.
+      #
+      # Safe by construction: a more aggressive cut yields a SMALLER subset,
+      # and smaller is fail-closed for the marker consumer. This branch is
+      # never reached by leak detection, which always uses "last", so it
+      # cannot affect #227/#1039 behaviour.
+      sub(d "([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
       sub(d "[[:space:]]*$", "", chunk)
       return chunk
     }
@@ -609,5 +618,31 @@ reference a registered project by name):
 
 See .claude/rules/leak-protection.md for the full rationale.
 MSG
+
+# Diagnostic for the one confusing case: the marker IS somewhere in the
+# command, but not where it counts. Without this the operator reads the
+# escape-hatch advice above, adds the marker, is blocked again, and has no
+# way to tell why — they go hunting for a typo in a marker that is
+# demonstrably present. Both haystacks already exist, so this costs a grep.
+#
+# It fires when the marker is in the greedy haystack but not the conservative
+# one: either it sat past the `first`-mode cut inside the body, or it was in a
+# later flag value (`--label`/`-l`) that only over-capture ever surfaced.
+if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER" 2>/dev/null; then
+  cat >&2 <<'DIAG'
+
+NOTE: the skip marker IS present in this command, but not in a position
+that counts, so it did not apply. It must appear in the --title, in the
+--body BEFORE any embedded quote followed by a flag-shaped token, or in
+the --body-file (which is read whole and has no such restriction).
+
+A marker in a later flag value (--label / -l / --assignee / -a) is
+deliberately ignored: it is not part of what gets published, and honouring
+it there would let the bypass ride in on a parsing artefact rather than on
+something you actually wrote into the ticket.
+
+The most reliable placement is --body-file.
+DIAG
+fi
 
 exit 2

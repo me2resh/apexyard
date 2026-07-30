@@ -403,6 +403,35 @@ run_case "#1046: skip marker in the title still bypasses (documented escape hatc
   0 "" \
   "gh issue create --repo me2resh/apexyard --title \"<!-- private-refs: allow -->\" --body \"curios-dog\""
 
+# Round-2 security review: the first scope-asymmetry fix keyed the conservative
+# cut on a DOUBLE dash, so it closed `--label` and left the short spellings
+# open. `-l` IS `--label` — same shape, two spellings. The anchor is now
+# `-{1,2}[a-zA-Z]` in the "first" branch only, which cannot reach detection.
+run_case "#1046: skip marker in -l must NOT bypass (short spelling of --label)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in -a must NOT bypass (short spelling of --assignee)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -a \"<!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in --assignee must NOT bypass" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --assignee \"<!-- private-refs: allow -->\""
+
+# A marker present but not where it counts used to block with no explanation:
+# the operator reads the escape-hatch advice, adds the marker, is blocked
+# again, and goes hunting for a typo in a marker that is demonstrably there.
+run_case "#1046: a misplaced marker gets a diagnostic explaining why it did not apply" \
+  2 "not in a position" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+
+# ...and the diagnostic must NOT fire when no marker was supplied at all,
+# or it becomes noise on every ordinary block.
+run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted here)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
+
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
