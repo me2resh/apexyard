@@ -140,6 +140,14 @@ fi
 #        (rc=0), so this is a pre-existing gap, not a regression. Not
 #        fixed here — flagging it as a documented, tested gap (case 31 in
 #        the test file) rather than silently leaving it undiscovered.
+#      - Four further gaps, each spot-checked against the real dev blob
+#        and confirmed ALLOW there too (dev, round 2, and round 3 alike —
+#        none introduced or widened by this PR): a repo slug in different
+#        CASE (`ME2RESH/APEXYARD`), a slug immediately followed by a shell
+#        operator with no separating whitespace (`--repo owner/repo&&gh
+#        ...`), a `gh api` REST path carrying a `?query` suffix, and the
+#        `--repo=` equals form above. Not fixed here — one follow-up
+#        ticket to cover all four, rather than four separate ones.
 # ---------------------------------------------------------------------------
 
 find_write_segment() {
@@ -168,9 +176,26 @@ find_write_segment() {
   #
   # Verified, not assumed (the mistake AgDR-0113 exists to catch, and the
   # rule extends to equivalence claims about two expressions, not only to
-  # "pre-existing" claims about behaviour): all four divergent shapes
-  # above BLOCK on the real `upstream/dev` blob and LEAKED (exit 0,
-  # nothing scanned) on the round-2 HEAD this replaces.
+  # "pre-existing" claims about behaviour) — and verified with a body
+  # whose leak token is NOT the first word, because an earlier check
+  # against a frontloaded body ("zebrafish leak") masked the exact
+  # distinction that matters here: dev has no truncation detection at
+  # all, so a leak token that happens to land in the truncated fragment
+  # dev DOES manage to read gets caught by accident, hiding the real gap.
+  #
+  # `;gh …`, `&&gh …`, `|gh …` all BLOCK on the real `upstream/dev` blob
+  # and LEAKED (exit 0, nothing scanned) on the round-2 HEAD this
+  # replaces — genuine regressions this fix closes.
+  #
+  # `out=$(gh …)` is DIFFERENT and does not fit the same sentence: it
+  # ALSO leaks on dev (rc=0, "found during zebrafish rebuild" truncates to
+  # "found" and the leak is never reached) — pre-existing on dev, not a
+  # round-2 regression, because dev's extraction has no notion of
+  # truncation failure at all. This fix still closes it, but as a
+  # byproduct of the segment now being non-empty so the (round 1/2)
+  # truncation-refusal mechanism gets a chance to run on it — an
+  # improvement over dev's behaviour on this shape, not a restoration of
+  # parity with it.
   #
   # Fix: `(^|[^A-Za-z0-9_.-])` before "gh" is a hand-rolled word boundary
   # that actually matches what `\b` matches — anything that is NOT a word

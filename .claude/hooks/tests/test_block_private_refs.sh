@@ -643,9 +643,29 @@ run_case "#1068: KNOWN GAP (pre-existing on dev, not fixed here) — --repo=owne
 # wrong (round 1's "pre-existing" residue claim was the first) — plausible,
 # cheap to check, and false both times. Every case below was confirmed
 # failing (rc=0, nothing scanned) against the round-2 committed hook before
-# the anchor fix, and confirmed blocking against the real `upstream/dev`
-# blob, so these are genuine regressions being closed, not new invented
-# requirements.
+# the anchor fix.
+#
+# But NOT all six are the same class of finding against `dev`, and an
+# earlier check here made exactly the mistake this file keeps warning
+# about: it used a body where the leak token ("zebrafish") was the FIRST
+# word, which let dev's truncated read catch it BY ACCIDENT and masked the
+# real gap. Re-verified with a non-frontloaded body ("found during
+# zebrafish rebuild"):
+#   - 32 (`;gh`), 34 (`&&gh`), 35 (`|gh`) genuinely BLOCK on the real
+#     `upstream/dev` blob — real regressions this round closes.
+#   - 33 (`out=$(gh ...)`, single write, no chaining) also ALLOWS on dev
+#     (rc=0) — pre-existing there too, NOT a round-2 regression, because
+#     dev has no truncation-detection concept at all: the trailing `)`
+#     defeats dev's extraction the same way it defeats this hook's, dev
+#     just has no mechanism to notice and refuse. This fix still closes
+#     it, but as a side effect of the segment no longer being empty (so
+#     round 1/2's OWN refusal mechanism gets to run) — an improvement
+#     over dev on this shape, not parity restoration.
+#   - 36 is not a dev-comparison case at all — dev never had a truncation
+#     refusal to defeat. It proves this round restores round 1/2's OWN
+#     prior behaviour (case 21 unwrapped) once wrapped in `$(...)`.
+#   - 37 (`-R`) is a new capability neither dev nor round 1/2 had; closing
+#     an inconsistency, not a regression fix.
 # ---------------------------------------------------------------------------
 
 # 32. Semicolon immediately before "gh", no space.
