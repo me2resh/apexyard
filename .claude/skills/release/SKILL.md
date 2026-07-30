@@ -88,6 +88,8 @@ if [ -z "$LOG_RANGE" ]; then
 fi
 ```
 
+**#1077 — `PR_LOOKUP_REPO` is derived from `HEAD_REF`, not hardcoded.** `bin/release-changelog.sh` resolves an unscoped commit's trailing PR number back to the issue it closes via a `gh pr view --repo <repo>` lookup (see the script's own header for the full mechanism). That `<repo>` is derived from **`HEAD_REF`** — the one knob this skill already sets above (`HEAD_REF="upstream/dev"`) — not hardcoded to `me2resh/apexyard`. The invariant is "resolve against wherever the commits actually came from": `HEAD_REF`'s remote-qualified prefix IS that repo, whether it's `upstream/dev` (this repo's own contributor workflow — cutting from upstream's commits, so resolving against `me2resh/apexyard` is correct, not a bug) or `origin/dev` (an **adopter fork cutting its own independent release** from its own commits). Nothing needs setting for either case — this is zero-configuration by design. `REPO_REMOTE` still exists as an **explicit override** (for the rare case where the repo whose PRs you're resolving isn't the one `HEAD_REF` names), and as the fallback target for a bare, unqualified `HEAD_REF` (e.g. hand-invoking with `HEAD_REF="HEAD"` — see the script's own header for why that fallback is safe). If the repo can't be resolved at all, the lookup is skipped entirely rather than guessing (see `bin/release-changelog.sh`'s header, "prefer a missing close over a wrong close").
+
 The helper emits markdown to stdout in the format:
 
 ```markdown

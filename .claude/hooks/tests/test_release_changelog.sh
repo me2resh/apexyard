@@ -32,7 +32,9 @@ eq() {  # eq <label> <expected> <actual>
 }
 
 contains() {  # contains <label> <needle> <haystack>
-  if echo "$3" | grep -qF "$2"; then
+  # "--" stops grep from treating a needle starting with "-" (e.g. "--repo
+  # foo") as an option instead of a literal pattern.
+  if echo "$3" | grep -qF -- "$2"; then
     echo "  ok: $1"
     pass=$((pass + 1))
   else
@@ -44,13 +46,13 @@ contains() {  # contains <label> <needle> <haystack>
 }
 
 not_contains() {  # not_contains <label> <needle> <haystack>
-  if ! echo "$3" | grep -qF "$2"; then
+  if ! echo "$3" | grep -qF -- "$2"; then
     echo "  ok: $1"
     pass=$((pass + 1))
   else
     echo "  FAIL: $1 — expected NOT to find [$2] in output"
     echo "  Offending line:"
-    echo "$3" | grep -F "$2" | head -3 | sed 's/^/    /'
+    echo "$3" | grep -F -- "$2" | head -3 | sed 's/^/    /'
     fail=$((fail + 1))
   fi
 }
@@ -393,17 +395,34 @@ expect_sha=$(echo "$out" | grep -oE 'EXPECT_SHA=.*' | cut -d= -f2)
 contains "stderr range is anchored on the trailer sha" "RELEASE_CHANGELOG_RANGE=${expect_sha}..HEAD" "$stderr_out"
 
 # ── #1056 helper — a stub `gh` binary for ref-resolution tests ──────────────
-# Writes a fake `gh` to <dir>/gh, controlled by two env vars the caller sets
-# before invoking the changelog script: STUB_GH_BODY (the PR body text `gh pr
-# view --json body -q .body` should "return") and STUB_GH_EXIT (non-zero to
-# simulate a `gh` failure — auth, rate limit, or an unreachable forge, the
-# exact failure mode hit live during the v5.3.0 cut). Every `$` in the heredoc
-# body is backslash-escaped so it survives heredoc creation literally and only
-# expands when the stub itself runs later, inside the test's own subshell.
+# Writes a fake `gh` to <dir>/gh, controlled by env vars the caller sets
+# before invoking the changelog script:
+#   STUB_GH_BODY     — the PR body text `gh pr view --json body -q .body`
+#                       should "return"
+#   STUB_GH_EXIT      — non-zero to simulate a `gh` failure — auth, rate
+#                       limit, or an unreachable forge, the exact failure
+#                       mode hit live during the v5.3.0 cut
+#   STUB_GH_SLEEP     — (#1078) seconds to sleep before responding, to
+#                       simulate a hung/unresponsive forge — the exact
+#                       failure mode verified live: no error, no output,
+#                       just silence until an external `timeout` killed it
+#   STUB_GH_CALL_LOG  — (#1077) a file path; every invocation appends its
+#                       full argument list here, so tests can assert on
+#                       exactly which --repo the script queried (or that it
+#                       never queried at all)
+# Every `$` in the heredoc body is backslash-escaped so it survives heredoc
+# creation literally and only expands when the stub itself runs later,
+# inside the test's own subshell.
 make_stub_gh() {  # make_stub_gh <dir>
   mkdir -p "$1"
   cat > "$1/gh" <<STUBEOF
 #!/usr/bin/env bash
+if [ -n "\${STUB_GH_CALL_LOG:-}" ]; then
+  echo "GH_CALLED_WITH: \$*" >> "\$STUB_GH_CALL_LOG"
+fi
+if [ -n "\${STUB_GH_SLEEP:-}" ]; then
+  sleep "\${STUB_GH_SLEEP}"
+fi
 if [ "\${STUB_GH_EXIT:-0}" != "0" ]; then
   exit "\${STUB_GH_EXIT}"
 fi
@@ -461,6 +480,7 @@ out=$(run_test '
   mc "chore: initial"
   git tag v17.0.0
   mc "docs: rework the onboarding flow copy (#2001)"
+  git remote add upstream https://github.com/testowner/testrepo.git
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
   PATH="$fakebin:$PATH" STUB_GH_BODY="See also. Refs #2000" \
@@ -480,6 +500,7 @@ out=$(run_test '
   mc "chore: initial"
   git tag v18.0.0
   mc "docs: fix a typo in the README (#2101)"
+  git remote add upstream https://github.com/testowner/testrepo.git
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
   PATH="$fakebin:$PATH" STUB_GH_BODY="Just a typo fix, no issue linked." \
@@ -497,6 +518,7 @@ out=$(run_test '
   mc "chore: initial"
   git tag v19.0.0
   mc "docs: update the contributing guide (#2201)"
+  git remote add upstream https://github.com/testowner/testrepo.git
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
   PATH="$fakebin:$PATH" STUB_GH_EXIT=1 \
@@ -506,6 +528,130 @@ out=$(run_test '
 ')
 contains "degrades to the PR number when gh is unreachable" "Closes #2201" "$out"
 contains "script still exits cleanly (no abort on forge failure)" "EXIT_CODE=0" "$out"
+
+# ── Test: #1077 — repo is derived from the ACTUAL remote, not hardcoded ─────
+# An adopter fork cutting its OWN release must resolve its own PR numbers
+# against its OWN repo. REPO_REMOTE="origin" (an adopter fork's own remote,
+# not "upstream") points at a repo that is NOT me2resh/apexyard — assert the
+# stub actually received --repo testadopter/theirfork, proving derivation
+# reads the configured remote instead of a hardcoded default.
+echo "--- #1077 repo derived from the actual (non-upstream) remote ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v20.0.0
+  mc "docs: rework the release notes template (#2301)"
+  git remote add origin https://github.com/testadopter/theirfork.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #2300" STUB_GH_CALL_LOG="'"$call_log"'" \
+    REPO_REMOTE="origin" \
+    PREV_TAG="v20.0.0" HEAD_REF="HEAD" VERSION="v20.1.0" DATE="2026-07-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+contains     "resolves via the derived (fork) repo" "Closes #2300" "$out"
+contains     "gh was actually invoked" "GH_CALLED_WITH:" "$call_log_contents"
+contains     "queried the fork's own repo (from origin), not upstream" "--repo testadopter/theirfork" "$call_log_contents"
+not_contains "never queried the hardcoded upstream default" "--repo me2resh/apexyard" "$call_log_contents"
+
+# ── Test: #1077 — the DEFAULT-CONFIG adopter fork case, zero REPO_REMOTE ────
+# The exact topology the ticket was filed against, with NO explicit
+# REPO_REMOTE override at all: an adopter fork that followed apexyard's own
+# docs and ran `git remote add upstream ...` (for /update) ALSO has "origin"
+# pointing at their own fork, and cuts their OWN release with HEAD_REF
+# pointing at their OWN dev branch ("origin/dev") rather than "upstream/dev".
+# `refs/remotes/origin/dev` is created directly via update-ref (no real
+# network fetch needed) so HEAD_REF resolves to a real ref, exactly mirroring
+# a fetched remote-tracking branch.
+#
+# Before the HEAD_REF-derived REPO_REMOTE fix, REPO_REMOTE defaulted to
+# "upstream" unconditionally — which resolves to me2resh/apexyard in this
+# topology regardless of which branch is actually being released, byte-
+# identical to the hardcode #1077 was filed to remove. This is the case
+# that must be fixed with ZERO configuration, not by telling every adopter
+# to discover and set REPO_REMOTE=origin by hand.
+echo "--- #1077 default-config adopter fork: zero-config derivation via HEAD_REF ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v23.0.0
+  mc "docs: rework the release checklist (#2601)"
+  git remote add upstream https://github.com/me2resh/apexyard.git
+  git remote add origin https://github.com/testadopter2/theirfork.git
+  git update-ref refs/remotes/origin/dev HEAD
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #2600" STUB_GH_CALL_LOG="'"$call_log"'" \
+    PREV_TAG="v23.0.0" HEAD_REF="origin/dev" VERSION="v23.1.0" DATE="2026-07-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+contains     "resolves via the fork's own repo, derived from HEAD_REF alone (no REPO_REMOTE set)" "Closes #2600" "$out"
+contains     "queried origin's own repo (HEAD_REF's remote prefix)" "--repo testadopter2/theirfork" "$call_log_contents"
+not_contains "never queried upstream despite it being configured too (the #1077 regression case)" "--repo me2resh/apexyard" "$call_log_contents"
+
+# ── Test: #1077 — underivable remote emits no gh call and no wrong close ────
+# No remote at all is configured (no "upstream", no "origin") and REPO_REMOTE
+# is left at its default. The repo cannot be derived confidently — per the
+# "missing over wrong" principle, the script must NOT fall back to a
+# hardcoded repo guess. It should never even invoke `gh`, and the emitted
+# Closes bullet is only the PR's own number (a same-repo no-op), never a
+# cross-repo guess.
+echo "--- #1077 underivable remote: no gh call, no wrong-repo guess ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v21.0.0
+  mc "docs: another unscoped change (#2401)"
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #9999" STUB_GH_CALL_LOG="'"$call_log"'" \
+    PREV_TAG="v21.0.0" HEAD_REF="HEAD" VERSION="v21.1.0" DATE="2026-07-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+  echo "EXIT_CODE=$?"
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+eq          "gh is never invoked when the repo can't be derived" "" "$call_log_contents"
+contains    "falls back to the PR's own number (same-repo no-op)" "Closes #2401" "$out"
+not_contains "never guesses the unrelated issue from a wrong-repo lookup" "Closes #9999" "$out"
+contains    "script still exits cleanly" "EXIT_CODE=0" "$out"
+
+# ── Test: #1078 — a hung `gh` call times out instead of blocking forever ───
+# The stub sleeps well past a short PR_LOOKUP_TIMEOUT, simulating exactly the
+# verified live failure: no error, no output, just silence. The call must be
+# bounded — the generator degrades to the PR number and the whole script
+# still exits 0, instead of hanging indefinitely.
+echo "--- #1078 hung gh call is bounded by PR_LOOKUP_TIMEOUT ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v22.0.0
+  mc "docs: yet another unscoped change (#2501)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  START=$(date +%s)
+  PATH="$fakebin:$PATH" STUB_GH_SLEEP=30 PR_LOOKUP_TIMEOUT=2 \
+    PREV_TAG="v22.0.0" HEAD_REF="HEAD" VERSION="v22.1.0" DATE="2026-07-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+  EXIT_CODE=$?
+  END=$(date +%s)
+  echo "EXIT_CODE=$EXIT_CODE"
+  echo "ELAPSED=$((END - START))"
+')
+contains "degrades to the PR number when gh hangs" "Closes #2501" "$out"
+contains "script still exits cleanly (no hang-induced abort)" "EXIT_CODE=0" "$out"
+elapsed=$(echo "$out" | grep -oE 'ELAPSED=[0-9]+' | cut -d= -f2)
+if [ -n "$elapsed" ] && [ "$elapsed" -lt 15 ]; then
+  echo "  ok: bounded by the timeout, not the 30s sleep (elapsed=${elapsed}s)"
+  pass=$((pass + 1))
+else
+  echo "  FAIL: bounded by the timeout, not the 30s sleep — elapsed=${elapsed}s (expected < 15s)"
+  fail=$((fail + 1))
+fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
