@@ -154,36 +154,53 @@ MSG
     # section always still runs. See
     # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
     #
-    # ALSO IMPORTANT (fourth review round): is_tag_push's TRUE verdict is
-    # only trusted when _is_genuine_single_tag_push confirms it describes
-    # the ONE push in this command, not decoy text sitting alongside a
-    # real, separate, REF-LESS `git push`. Decision point 4's scan-all
-    # check above only ever sees EXPLICIT refs -- a bare `git push` has
-    # none, so scan-all has nothing to say about it, and the local-HEAD
-    # fallback that WOULD catch a ref-less push on a protected branch
-    # lives entirely inside the block this flag skips. Skipping it on an
-    # untrusted verdict is not "costs nothing" for that shape -- it is the
-    # one case with no other backstop at all. See
-    # _is_genuine_single_tag_push's doc comment in _lib-extract-push-ref.sh.
+    # ALSO IMPORTANT (per-occurrence check, seventh review round):
+    # is_tag_push's TRUE verdict is a WHOLE-COMMAND signal ("some push
+    # somewhere looks tag-shaped") — it must never be trusted or
+    # distrusted as a single whole-command boolean, because both directions
+    # of that mistake produced a real, verified bug in earlier rounds of
+    # this file: trusting it unconditionally let a decoy hide a real
+    # ref-less push (fixed by not skipping the whole script — see above);
+    # and later, DIS-trusting it whenever ANY occurrence lacked evidence
+    # false-blocked a perfectly ordinary compound push
+    # (`git push origin feature/GH-1-x && git push origin --tags` — one
+    # explicit-ref push plus one genuine tag push, no heredoc anywhere;
+    # `dev` allows it, this file blocked it with a message blaming heredoc
+    # structure that does not exist in the command at all).
+    #
+    # The correct question is per-occurrence, not whole-command:
+    # `_command_has_untagged_refless_push` scans every push-shaped
+    # occurrence and asks, for EACH one, "does this specific occurrence
+    # carry its own tag evidence, or an explicit ref?" — either answer
+    # means the occurrence is already safe (exempt, or already checked by
+    # decision point 4's scan-all above). Only a BARE occurrence with
+    # NEITHER (no tag evidence AND no explicit ref) is unaddressed by
+    # anything else in this hook, because scan-all has nothing to check
+    # (no ref) and the tag exemption doesn't apply (no evidence) — that
+    # occurrence, and only that occurrence, needs the local-HEAD fallback
+    # forced. See _command_has_untagged_refless_push's doc comment in
+    # _lib-extract-push-ref.sh and docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
     UNTRUSTED_TAG_SIGNAL=0
     if is_tag_push "$COMMAND"; then
-      if declare -F _is_genuine_single_tag_push > /dev/null 2>&1 \
-         && _is_genuine_single_tag_push "$COMMAND"; then
-        SKIP_PUSH_BRANCH_CHECK=1
-      else
-        # is_tag_push's verdict isn't attributable to a single, genuine
-        # tag-push occurrence in this command -- don't trust it. We ALSO
-        # must not trust extract_push_ref's ordinary single first-match
-        # result below: it can read the SAME decoy segment that fooled
-        # is_tag_push (e.g. "git push origin --tags for releases" yields
-        # the non-empty, non-protected-looking ref "for"), which would
-        # silently replace the local-HEAD fallback with that wrong answer
-        # instead of falling through to it. Force the ref-less path
-        # instead: decision point 4's scan-all (above) has ALREADY ruled
-        # out any occurrence with an explicit PROTECTED ref, so the only
-        # remaining question here is whether the real, uncontaminated push
-        # needs the local-branch fallback -- which this guarantees it gets.
+      if declare -F _command_has_untagged_refless_push > /dev/null 2>&1 \
+         && _command_has_untagged_refless_push "$COMMAND"; then
+        # At least one occurrence is bare (no ref) AND carries no tag
+        # evidence of its own -- neither scan-all nor the tag exemption
+        # covers it. We must not trust extract_push_ref's ordinary single
+        # first-match result below either: it can read a DIFFERENT
+        # occurrence's decoy/tag segment and return a confident,
+        # non-protected-looking ref (e.g. "for" from
+        # "git push origin --tags for releases"), which would silently
+        # replace the local-HEAD fallback with that wrong answer instead
+        # of falling through to it. Force the ref-less path instead.
         UNTRUSTED_TAG_SIGNAL=1
+      else
+        # No bare, evidence-less occurrence anywhere in this command:
+        # every occurrence is either a genuine tag push (exempt) or
+        # carries an explicit ref that decision point 4's scan-all has
+        # ALREADY checked against the protected list above. Nothing left
+        # to validate -- safe to skip the ordinary branch-check entirely.
+        SKIP_PUSH_BRANCH_CHECK=1
       fi
     fi
 
@@ -209,14 +226,18 @@ MSG
           cat >&2 <<MSG
 BLOCKED: Cannot safely determine the push destination for this command.
 
-This command contains "git push", and a naive scan (ignoring any heredoc
-structure) found what looks like an explicit destination ref -- but
-heredoc-aware parsing found none, which means a heredoc body in this same
-command may be hiding the real destination.
+This command contains "git push", and a naive scan found what looks like
+an explicit destination ref elsewhere in the same command -- but the
+push actually being validated has no ref of its own, so it isn't
+possible to confirm that the other ref-shaped text is unrelated. This
+can happen because of a heredoc body (a commit message or PR body
+mentioning a push) or other prose sitting alongside a real, ref-less
+push in the same Bash call.
 
-To unblock: run the heredoc-writing step and the "git push" step in
-SEPARATE Bash calls -- never inline a heredoc alongside a git command in
-the same invocation (me2resh/apexyard#1066's own mitigation note).
+To unblock: run the heredoc/text-writing step and the "git push" step in
+SEPARATE Bash calls -- never inline a heredoc or unrelated prose
+alongside a git command in the same invocation (me2resh/apexyard#1066's
+own mitigation note).
 MSG
           exit 2
         fi

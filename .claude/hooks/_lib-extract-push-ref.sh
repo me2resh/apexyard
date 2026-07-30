@@ -264,6 +264,17 @@ _extract_push_ref_core() {
     return 0
   fi
 
+  # Strip a single pair of surrounding quote characters, if present, e.g.
+  # `git push origin "main"` or `git push origin 'main'`. Without this,
+  # the extracted ref carries its quotes into the protected-branch /
+  # naming-convention regex match, which never matches `"main"` against
+  # `^(main|master|dev|develop)$` — the push then executes unvalidated.
+  # Mirrors block-main-push.sh's `cd`-target quote-stripping, which the
+  # #580 review of #549 called "the security-critical part" for the same
+  # reason (me2resh/apexyard#1079).
+  ref="${ref#\"}"; ref="${ref#\'}"
+  ref="${ref%\"}"; ref="${ref%\'}"
+
   # Strip any leading `+` (force-update marker on a refspec).
   ref="${ref#+}"
 
@@ -429,6 +440,10 @@ _extract_all_push_refs_core() {
     done
 
     [ -z "$ref" ] && continue
+    # Strip a single pair of surrounding quote characters, if present --
+    # see _extract_push_ref_core's identical comment (me2resh/apexyard#1079).
+    ref="${ref#\"}"; ref="${ref#\'}"
+    ref="${ref%\"}"; ref="${ref%\'}"
     ref="${ref#+}"
     case "$ref" in *:*) ref="${ref#*:}" ;; esac
     [ -z "$ref" ] && continue
@@ -438,81 +453,153 @@ _extract_all_push_refs_core() {
   done
 }
 
-# Returns true (0) ONLY when the raw command contains EXACTLY ONE
-# "git push"-shaped occurrence, AND that single occurrence itself carries
-# tag-push evidence (a `--tags` flag, a `tag <name>` keyword, or a
-# `refs/tags/` reference) within its own segment text. This is the
-# condition under which `is_tag_push`'s TRUE verdict can be trusted as
-# describing one specific, genuine tag push — not decoy text sitting
-# elsewhere in the command.
+# Returns true (0) when the raw command contains AT LEAST ONE "git
+# push"-shaped occurrence that is BOTH (a) missing its own tag-push
+# evidence (no `--tags` flag, `tag <name>` keyword, or `refs/tags/`
+# reference within that occurrence's own segment text) AND (b) missing an
+# explicit destination ref (a bare push, relying on upstream tracking).
+# Such an occurrence is the one case neither of the other two checks in
+# this file can validate: decision point 4's scan-all only ever inspects
+# EXPLICIT refs (a bare push has none), and `is_tag_push`'s global
+# exemption cannot safely cover it either (it is not a genuine tag push).
+# It needs the local-branch fallback, unconditionally — and per-occurrence
+# is the only granularity at which that determination is safe. See the
+# THIRD version note below for why a whole-command boolean (either "does
+# this command have exactly one occurrence" or "does every occurrence
+# carry evidence") cannot make this call correctly.
 #
-# WHY THIS EXISTS (me2resh/apexyard#1075, fourth security-review round)
+# WHY PER-OCCURRENCE, NOT A WHOLE-COMMAND VERDICT (me2resh/apexyard#1075,
+# seventh review round — this replaced a SECOND over-narrow version,
+# `_is_genuine_single_tag_push`, in the same file)
 # ------------------------------------------------------------------------
-# `is_tag_push`'s three checks are GLOBAL over whatever text they're given:
-# `\brefs/tags/\b` matches anywhere at all, with no requirement that it sit
-# inside an actual `git push` segment, and even the `--tags` / `tag <name>`
-# checks don't ask "is this the ONLY push in the command." Two consequences
-# follow, both verified at the hook level, not just in theory:
+# Two prior versions of this check, both whole-command booleans, each
+# failed a DIFFERENT real shape:
 #
-#   1. Decoy text that IS push-shaped and DOES carry tag evidence (a
-#      heredoc `strip_heredoc_bodies` declines to strip because it's
-#      unconfirmed, a quoted string, or a commit message — none of these
-#      need heredocs at all) can sit ALONGSIDE a real, separate, ref-less
-#      `git push` elsewhere in the same command:
+#   FIRST version: "exactly one push-shaped occurrence in the command,
+#   and it carries tag evidence." Over-blocked a normal release step —
+#   pushing tags to two remotes in one command:
 #
-#        cat > /tmp/m.txt <<END.OF
-#        we always use git push origin --tags for releases
-#        END.OF
-#        git push
+#     git push origin --tags && git push upstream --tags
 #
-#      `is_tag_push` returns TRUE (the decoy segment matches `--tags`).
-#      Before this check existed, that TRUE caused block-main-push.sh to
-#      skip the push-branch-check ENTIRELY — including its local-HEAD
-#      fallback, which is the ONLY thing that would have caught the bare
-#      `git push` landing on a protected branch. Decision point 4's
-#      scan-all check does not help here: it only ever sees EXPLICIT refs
-#      (a bare `git push` has none), so it has nothing to say about this
-#      shape. Verified: a bare push on `main` blocks (rc=2) with no decoy
-#      present; the SAME bare push with this decoy heredoc added exits 0.
+#   has TWO occurrences, both genuinely tag-shaped, no decoy anywhere —
+#   rejected anyway, because "exactly one" counted occurrences instead of
+#   asking whether each one was safe.
 #
-#   2. Tag evidence that ISN'T inside any push segment at all (a bare
-#      `refs/tags/v1` mention in unrelated prose, nowhere near the word
-#      "push") can ALSO make `is_tag_push` return TRUE for a command whose
-#      one real `git push` occurrence carries no tag evidence whatsoever.
+#   SECOND version (a same-day fix to the first): "every occurrence
+#   carries its own tag evidence." This fixed the two-remote case, but
+#   broke a DIFFERENT genuine shape it hadn't been checked against — a
+#   plain, ordinary push to a non-protected branch, followed by a
+#   SEPARATE genuine tag push, no heredoc anywhere:
 #
-# Both consequences are closed by requiring BOTH conditions at once:
-# exactly one push-shaped occurrence in the whole command (rules out any
-# second, real push hiding elsewhere — case 1), AND that occurrence's own
-# text carries the tag evidence (rules out evidence sitting outside any
-# push segment — case 2). A genuine tag push (`git push origin --tags`,
-# alone, or preceded only by a CONFIRMED, correctly-stripped heredoc with
-# no decoy) satisfies both trivially — it's the only occurrence in the
-# command, and it's the one carrying its own evidence.
+#     git push origin feature/GH-1-x && git push origin --tags
+#
+#   Under "every occurrence must carry evidence," the feature-branch
+#   occurrence (no tag evidence at all — it's an ordinary push) made the
+#   WHOLE command untrusted, which forced PUSH_DST empty and triggered the
+#   fail-closed block with a message blaming heredoc structure that does
+#   not exist in this command at all. `dev` allows this command; so did
+#   this file before either whole-command version existed.
+#
+#   The reason BOTH whole-command versions kept failing on a NEW shape
+#   each time: an occurrence that carries an EXPLICIT ref needs no
+#   special handling here at all — decision point 4's scan-all has
+#   ALREADY checked it against the protected list, independent of
+#   whether it's a tag push. Folding that occurrence into a "does the
+#   WHOLE command's tag-push signal deserve trust" verdict was always the
+#   wrong question. The right question is per-occurrence: does THIS
+#   occurrence need something neither scan-all nor the tag exemption
+#   already covers? Only a bare, evidence-less push does — because it has
+#   no ref for scan-all to check, and no tag evidence for the exemption
+#   to cover.
+#
+# A genuine tag push (alone, after a confirmed decoy-free heredoc, to
+# several remotes, or alongside an ordinary explicit-ref push to a
+# different, non-protected branch) never has a bare evidence-less
+# occurrence, so this correctly returns false (nothing to force) for all
+# of them.
 #
 # Deliberately independent of heredoc parsing, matching
 # _extract_all_push_refs_core's philosophy: operates on the RAW command,
 # does not call strip_heredoc_bodies, does not care whether any heredoc in
 # the command was confirmed or declined.
 #
-# Returns: 0 (true, safe to trust the tag exemption) or 1 (false, do not
-# trust it — fall through to the normal branch-check). Always exits
+# NOTE ON NAMING: this function's name no longer contains "tag" or
+# "single" precisely because its predecessors' names (and the reasoning
+# embedded in them) actively misled two rounds of otherwise-careful
+# review toward a whole-command verdict. The name states exactly what the
+# function checks: is there an untagged, ref-less push anywhere in this
+# command.
+#
+# Returns: 0 (true — found at least one; force the ref-less fallback path)
+# or 1 (false — none found; every occurrence is either a genuine tag push
+# or already covered by decision point 4's scan-all). Always exits
 # cleanly either way.
-_is_genuine_single_tag_push() {
-  local cmd="$1" stripped_cmd segment count has_evidence
+_command_has_untagged_refless_push() {
+  local cmd="$1" stripped_cmd segment has_evidence seg
+  local positional_count skip_next token ref found
 
   stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
-  count=0
-  has_evidence=0
+  found=1
 
   while IFS= read -r segment; do
     [ -z "$segment" ] && continue
-    count=$((count + 1))
+
+    # --delete / -d shapes have no source ref and no branch to protect —
+    # not the shape this function looks for, skip like
+    # _extract_all_push_refs_core does.
+    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+      continue
+    fi
+
+    has_evidence=0
     if echo "$segment" | grep -qE '\s--tags(\s|$)' \
        || echo "$segment" | grep -qE '\stag\s+\S' \
        || echo "$segment" | grep -qE 'refs/tags/'; then
       has_evidence=1
     fi
+
+    # Determine whether THIS segment has an explicit positional ref —
+    # same token walk as _extract_all_push_refs_core, applied per segment
+    # so evidence and ref-presence are checked on the SAME occurrence.
+    seg="${segment#*git}"
+    seg="${seg#"${seg%%[![:space:]]*}"}"
+    seg="${seg#push}"
+    positional_count=0
+    skip_next=0
+    ref=""
+
+    # shellcheck disable=SC2086
+    for token in $seg; do
+      if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+      fi
+      case "$token" in
+        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
+          skip_next=1
+          continue
+          ;;
+        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
+          continue
+          ;;
+        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
+          continue
+          ;;
+        -*)
+          continue
+          ;;
+      esac
+      positional_count=$((positional_count + 1))
+      if [ "$positional_count" -eq 2 ]; then
+        ref="$token"
+        break
+      fi
+    done
+
+    if [ "$has_evidence" -eq 0 ] && [ -z "$ref" ]; then
+      found=0
+    fi
   done < <(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
 
-  [ "$count" -eq 1 ] && [ "$has_evidence" -eq 1 ]
+  return "$found"
 }

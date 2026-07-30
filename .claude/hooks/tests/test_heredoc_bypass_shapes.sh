@@ -370,6 +370,58 @@ run_cmd "TAGBOUND T5 control: genuine tag push after a confirmed, decoy-free her
   "block-main-push.sh" "main" "$SHAPE_T5" 0
 
 # ---------------------------------------------------------------------------
+# N7 + MIXED: two rounds of over-narrowing (sixth and seventh review
+# rounds on #1075), each a whole-command boolean that failed a DIFFERENT
+# genuine shape.
+#
+# N7: the first version (_is_genuine_single_tag_push) required EXACTLY
+# ONE push-shaped occurrence total. Pushing tags to two remotes in one
+# command has TWO occurrences, both genuinely tag-shaped, no decoy
+# anywhere -- false-blocked anyway.
+#
+# A same-day fix ("every occurrence must carry its own tag evidence")
+# repaired N7 but broke a DIFFERENT genuine shape it hadn't been tested
+# against: MIXED below -- an ordinary push to a non-protected branch,
+# plus a separate genuine tag push, no heredoc anywhere. Under "every
+# occurrence must carry evidence," the ordinary push's lack of evidence
+# untrusted the WHOLE command, forcing PUSH_DST empty and blocking with a
+# message blaming heredoc structure that doesn't exist in the command.
+#
+# Both are fixed by evaluating PER-OCCURRENCE instead of as one
+# whole-command verdict (_command_has_untagged_refless_push): an
+# occurrence with its own tag evidence is exempt; an occurrence with an
+# explicit ref is already covered by decision point 4's scan-all; only a
+# BARE occurrence with neither needs the ref-less fallback forced.
+# ---------------------------------------------------------------------------
+run_cmd "N7: genuine tag push to two remotes in one command -> stays exempt (was false-blocked)" \
+  "block-main-push.sh" "main" "git push origin --tags && git push upstream --tags" 0
+
+run_cmd "MIXED: ordinary explicit-ref push + separate genuine tag push, no heredoc -> stays allowed (was false-blocked)" \
+  "block-main-push.sh" "main" "git push origin feature/GH-1-x && git push origin --tags" 0
+
+# ---------------------------------------------------------------------------
+# Quoted-ref bypass (me2resh/apexyard#1079, closed by this round). The
+# extracted ref carried surrounding quote characters into the
+# protected-branch match, so `git push origin "main"` never matched
+# `^(main|master|dev|develop)$` and the push to main executed
+# unvalidated. No heredoc, no decoy -- a plain quoting bug in the token
+# extraction shared by _extract_push_ref_core and
+# _extract_all_push_refs_core. Fixed by stripping a single pair of
+# surrounding quote characters from the extracted ref, mirroring the
+# cd-target quote-stripping in block-main-push.sh's commit-check (the
+# #580 review of #549 called that "the security-critical part" for the
+# identical reason).
+# ---------------------------------------------------------------------------
+run_cmd "QUOTED-REF: double-quoted \"main\" still blocks (was allowed)" \
+  "block-main-push.sh" "main" 'git push origin "main"' 2
+run_cmd "QUOTED-REF: single-quoted 'main' still blocks (was allowed)" \
+  "block-main-push.sh" "main" "git push origin 'main'" 2
+run_cmd "QUOTED-REF: double-quoted \"dev\" still blocks (was allowed)" \
+  "block-main-push.sh" "main" 'git push origin "dev"' 2
+run_cmd "QUOTED-REF regression: unquoted feature branch still passes" \
+  "block-main-push.sh" "main" "git push origin feature/GH-9-x" 0
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
