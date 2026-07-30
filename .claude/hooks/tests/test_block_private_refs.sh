@@ -449,17 +449,31 @@ run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted
 
 HOOK_SRC="$REPO_ROOT/.claude/hooks/block-private-refs-in-public-repos.sh"
 
-# Strip comment lines BEFORE matching. The first version of this check
-# grepped the raw file and flagged the explanatory comment that documents
-# why the interval was removed — a check that fires on prose describing the
-# bug rather than on the bug. That is the same class as me2resh/apexyard#1066
-# (hooks matching command text rather than commands), reproduced here in
-# miniature, so it is worth naming rather than quietly fixing.
+# BLANK comments rather than deleting the lines, and blank trailing comments
+# too — `sed 's/#.*$//'`, not `grep -v '^[[:space:]]*#'`.
 #
-# Only bracket-quantifier forms like {1,2} / {2} / {1,} count. Braces in
-# awk's own block syntax and in shell ${VAR} expansions are not intervals,
-# and neither is matched by this pattern.
-INTERVAL_HITS=$(grep -vE '^[[:space:]]*#' "$HOOK_SRC" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
+# This check has now had the same bug twice, which is why the mechanism is
+# spelled out. v1 grepped the raw file and flagged the explanatory comment
+# saying why the interval was removed — firing on prose describing the bug
+# rather than on the bug, i.e. me2resh/apexyard#1066's class inside the guard
+# against it. v2 dropped whole comment lines, which left two residues:
+#   - a TRAILING comment on a code line still matched (`x=1  # the {1,2} case`)
+#   - `grep -n` then numbered the *filtered* stream, so a hit at real line 669
+#     reported as 396 — the same `grep -n` interaction that caused v1
+#
+# Blanking preserves line numbering and kills both. `${1}` / `${3}` still trip
+# it; that is a false positive and it fails CLOSED, so leave it. Do NOT
+# "fix" it by loosening the pattern — a looser pattern is how the real
+# interval gets back in.
+#
+# SCOPE: this lock reads THIS FILE ONLY. No sourced lib currently contains an
+# interval or performs the conservative cut, so today's surface is covered.
+# If the awk program ever moves into a shared lib, this must follow it.
+#
+# Only bracket-quantifier forms like {1,2} / {2} / {1,} count. `{,3}` is
+# deliberately not matched: it is not a valid POSIX interval, so every awk
+# treats it literally and there is no divergence to catch.
+INTERVAL_HITS=$(sed 's/#.*$//' "$HOOK_SRC" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
 if [ -n "$INTERVAL_HITS" ]; then
   FAIL=$((FAIL+1))
   echo "FAIL: hook source contains an ERE interval {n,m} — not portable across awks; use --? or an explicit alternation"
@@ -468,6 +482,36 @@ else
   PASS=$((PASS+1))
   echo "PASS: no ERE intervals in hook source (portable across awk implementations)"
 fi
+
+# Both directions of the lock itself, against fixtures. Proving only that it
+# FIRES on a reintroduced interval is half a test: this check's first two
+# versions both fired on prose *describing* an interval, which is the failure
+# that actually happened. The false-positive direction is the one with a
+# track record here, so it gets asserted rather than assumed.
+LOCKFIX=$(mktemp)
+cat > "$LOCKFIX" <<'FIXTURE'
+# We removed the {1,2} interval here because awk support is not universal.
+sub(d "([[:space:]]+--?[a-zA-Z].*)?$", "", chunk)   # was -{1,2}, see #1046
+mode="${3:-last}"
+FIXTURE
+if [ -z "$(sed 's/#.*$//' "$LOCKFIX" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)" ]; then
+  PASS=$((PASS+1))
+  echo "PASS: interval lock ignores intervals mentioned in full-line AND trailing comments"
+else
+  FAIL=$((FAIL+1))
+  echo "FAIL: interval lock fires on prose describing an interval (me2resh/apexyard#1066 class)"
+fi
+
+printf 'x = 1\nsub(s, "-{1,2}[a-z]", "")\n' > "$LOCKFIX"
+LOCK_HIT=$(sed 's/#.*$//' "$LOCKFIX" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
+if [ "${LOCK_HIT%%:*}" = "2" ]; then
+  PASS=$((PASS+1))
+  echo "PASS: interval lock catches a real interval and reports the correct line number"
+else
+  FAIL=$((FAIL+1))
+  echo "FAIL: interval lock missed a real interval, or misreported its line (got '${LOCK_HIT:-nothing}', want line 2)"
+fi
+rm -f "$LOCKFIX"
 
 # ---------------------------------------------------------------------------
 # Result
