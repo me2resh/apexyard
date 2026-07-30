@@ -320,6 +320,200 @@ run_case "#1039 r2: markdown table row then leak in the tail → block" \
 Discovered during the curios-dog rebuild.\""
 
 # ---------------------------------------------------------------------------
+# me2resh/apexyard#1046 — the trim, not the match anchor.
+#
+# extract_flag_value's greedy match() captured the body correctly, but the
+# trim that followed used
+#     sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+# and POSIX ERE substitution is leftmost-longest. It therefore deleted from
+# the EARLIEST quote that happened to be followed by ` --<letter>` through to
+# end-of-string, amputating the body's tail. The hook then exited 0 with the
+# tail never scanned — a silent fail-open on a leak gate.
+#
+# TWO conditions must co-occur: an embedded quote AND a later double-dash
+# token. Either alone still blocked correctly, which is why the repro
+# originally filed on #1046 (a bare `--verbose` in prose, no embedded quote)
+# did NOT reproduce. Both single-condition cases are asserted below so a
+# future reader can see why.
+#
+# The fix scans backwards for the closing delimiter instead of regex-trimming,
+# and deliberately leaves the greedy match() anchors alone: widening those was
+# tried in #1040 and rejected for reopening #227 (9 failures vs 5).
+# ---------------------------------------------------------------------------
+
+# The two leaking commands recorded on the issue. Both exited 0 pre-fix.
+run_case "#1046: double-quoted body, embedded quote then --flag, leak in tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose then curios-dog here\""
+
+run_case "#1046: same shape with a trailing --label after the body → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"x \\\"y\\\" --a b curios-dog\" --label bug"
+
+# NOT on the issue: the single-quoted branch carried the identical
+# leftmost-longest defect and leaked on the equivalent command shape.
+run_case "#1046: single-quoted body, embedded quote then --flag, leak in tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body 'quote '\"'\"'done'\"'\"' --verbose then curios-dog here'"
+
+# Single-condition controls — these passed BEFORE the fix too. They are here to
+# document why the originally filed repro did not reproduce, not as proof.
+run_case "#1046 control: embedded quote alone (no --flag) → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" then curios-dog here\""
+
+run_case "#1046 control: --flag alone (no embedded quote) → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"no quotes --verbose curios-dog\""
+
+# The false-positive guard: both trigger conditions present, nothing private.
+run_case "#1046: embedded quote + --flag but clean body → pass" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose and nothing private\""
+
+# Item 1 — the fail-closed message advised a bypass that cannot work, because
+# the skip-marker check runs downstream of this block. The marker is read out
+# of scanned body content; it cannot be read out of a file that never opened.
+# Asserting on the corrected wording, which is absent pre-fix.
+run_case "#1046: unreadable body-file message no longer advises the skip marker" \
+  2 "does NOT apply here" \
+  "gh issue create --repo me2resh/apexyard --title t --body-file /nonexistent-xyz-1046.md"
+
+run_case "#1046: skip marker in --body does not unblock an unreadable --body-file" \
+  2 "body-file named but not readable" \
+  "gh issue create --repo me2resh/apexyard --title t --body-file /nonexistent-xyz-1046.md --body \"<!-- private-refs: allow -->\""
+
+# Scope asymmetry (found in security review of this PR, not in #1046 itself).
+# Retaining a superset is fail-closed for DETECTION but fail-OPEN for the
+# skip MARKER: the greedy match cannot tell where the body ends, so a marker
+# in a later quoted flag value rode in on the over-capture and bypassed the
+# gate. Blocked on dev, briefly bypassed mid-PR, blocked again now that the
+# marker check reads a conservative (subset) extraction.
+run_case "#1046: skip marker in a later --label must NOT bypass the gate" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --label \"<!-- private-refs: allow -->\""
+
+# The legitimate bypasses must still work — the marker is a documented escape
+# hatch, and narrowing its scope must not remove it from title or body.
+run_case "#1046: skip marker in the body still bypasses (documented escape hatch)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog <!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in the title still bypasses (documented escape hatch)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"<!-- private-refs: allow -->\" --body \"curios-dog\""
+
+# Round-2 security review: the first scope-asymmetry fix keyed the conservative
+# cut on a DOUBLE dash, so it closed `--label` and left the short spellings
+# open. `-l` IS `--label` — same shape, two spellings. The anchor is now
+# `-{1,2}[a-zA-Z]` in the "first" branch only, which cannot reach detection.
+run_case "#1046: skip marker in -l must NOT bypass (short spelling of --label)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in -a must NOT bypass (short spelling of --assignee)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -a \"<!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in --assignee must NOT bypass" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --assignee \"<!-- private-refs: allow -->\""
+
+# A marker present but not where it counts used to block with no explanation:
+# the operator reads the escape-hatch advice, adds the marker, is blocked
+# again, and goes hunting for a typo in a marker that is demonstrably there.
+run_case "#1046: a misplaced marker gets a diagnostic explaining why it did not apply" \
+  2 "not in a position" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+
+# ...and the diagnostic must NOT fire when no marker was supplied at all,
+# or it becomes noise on every ordinary block.
+run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted here)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
+
+# ---------------------------------------------------------------------------
+# Portability lock: no ERE intervals in the hook's awk program.
+#
+# `{n,m}` support is not universal in awk — mawk 1.3.3 lacks it, BWK awk only
+# gained it around 2019, gawk 3.x needed --re-interval. Where unsupported the
+# pattern is treated LITERALLY, which for the conservative trim means the cut
+# fires only at end-of-chunk and the subset silently degrades toward the
+# superset, reopening the marker bypass on some machines and not others.
+#
+# The behavioural cases above cannot catch this — they pass on any awk that
+# DOES support intervals, which includes most developer machines and CI. This
+# is a source-level assertion precisely because the failure is environmental.
+# `--?[a-zA-Z]` is exactly equivalent and interval-free.
+# ---------------------------------------------------------------------------
+
+HOOK_SRC="$REPO_ROOT/.claude/hooks/block-private-refs-in-public-repos.sh"
+
+# BLANK comments rather than deleting the lines, and blank trailing comments
+# too — `sed 's/#.*$//'`, not `grep -v '^[[:space:]]*#'`.
+#
+# This check has now had the same bug twice, which is why the mechanism is
+# spelled out. v1 grepped the raw file and flagged the explanatory comment
+# saying why the interval was removed — firing on prose describing the bug
+# rather than on the bug, i.e. me2resh/apexyard#1066's class inside the guard
+# against it. v2 dropped whole comment lines, which left two residues:
+#   - a TRAILING comment on a code line still matched (`x=1  # the {1,2} case`)
+#   - `grep -n` then numbered the *filtered* stream, so a hit at real line 669
+#     reported as 396 — the same `grep -n` interaction that caused v1
+#
+# Blanking preserves line numbering and kills both. `${1}` / `${3}` still trip
+# it; that is a false positive and it fails CLOSED, so leave it. Do NOT
+# "fix" it by loosening the pattern — a looser pattern is how the real
+# interval gets back in.
+#
+# SCOPE: this lock reads THIS FILE ONLY. No sourced lib currently contains an
+# interval or performs the conservative cut, so today's surface is covered.
+# If the awk program ever moves into a shared lib, this must follow it.
+#
+# Only bracket-quantifier forms like {1,2} / {2} / {1,} count. `{,3}` is
+# deliberately not matched: it is not a valid POSIX interval, so every awk
+# treats it literally and there is no divergence to catch.
+INTERVAL_HITS=$(sed 's/#.*$//' "$HOOK_SRC" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
+if [ -n "$INTERVAL_HITS" ]; then
+  FAIL=$((FAIL+1))
+  echo "FAIL: hook source contains an ERE interval {n,m} — not portable across awks; use --? or an explicit alternation"
+  printf '%s\n' "$INTERVAL_HITS" | head -3
+else
+  PASS=$((PASS+1))
+  echo "PASS: no ERE intervals in hook source (portable across awk implementations)"
+fi
+
+# Both directions of the lock itself, against fixtures. Proving only that it
+# FIRES on a reintroduced interval is half a test: this check's first two
+# versions both fired on prose *describing* an interval, which is the failure
+# that actually happened. The false-positive direction is the one with a
+# track record here, so it gets asserted rather than assumed.
+LOCKFIX=$(mktemp)
+cat > "$LOCKFIX" <<'FIXTURE'
+# We removed the {1,2} interval here because awk support is not universal.
+sub(d "([[:space:]]+--?[a-zA-Z].*)?$", "", chunk)   # was -{1,2}, see #1046
+mode="${3:-last}"
+FIXTURE
+if [ -z "$(sed 's/#.*$//' "$LOCKFIX" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)" ]; then
+  PASS=$((PASS+1))
+  echo "PASS: interval lock ignores intervals mentioned in full-line AND trailing comments"
+else
+  FAIL=$((FAIL+1))
+  echo "FAIL: interval lock fires on prose describing an interval (me2resh/apexyard#1066 class)"
+fi
+
+printf 'x = 1\nsub(s, "-{1,2}[a-z]", "")\n' > "$LOCKFIX"
+LOCK_HIT=$(sed 's/#.*$//' "$LOCKFIX" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
+if [ "${LOCK_HIT%%:*}" = "2" ]; then
+  PASS=$((PASS+1))
+  echo "PASS: interval lock catches a real interval and reports the correct line number"
+else
+  FAIL=$((FAIL+1))
+  echo "FAIL: interval lock missed a real interval, or misreported its line (got '${LOCK_HIT:-nothing}', want line 2)"
+fi
+rm -f "$LOCKFIX"
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 

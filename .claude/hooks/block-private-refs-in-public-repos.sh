@@ -160,9 +160,89 @@ extract_flag_value() {
   # security tail — a body with an embedded `"` could let private refs in
   # the back half slip past the gate. awk + greedy + boundary anchor
   # gives us multi-line consumption and correct termination in one shot.
+  # $3 = trim mode. Default "last" (greedy retention, for leak DETECTION).
+  # Pass "first" for the conservative subset the skip-marker check needs —
+  # see the SCOPE ASYMMETRY note below.
+  #
+  # INVARIANT for anyone adding a caller: any consumer that makes an
+  # ALLOW / bypass decision MUST pass "first". Detection consumers take the
+  # default. The default is deliberately the detection-safe one, which means
+  # a new allow-path caller that forgets $3 silently gets the superset — and
+  # a superset is fail-OPEN in that direction. Read the asymmetry note before
+  # adding a call site.
   local flag_re="$1"
   local cmd="$2"
-  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+  local mode="${3:-last}"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" -v MODE="$mode" '
+    # Truncate CHUNK at its LAST occurrence of delimiter D.
+    #
+    # A regex sub() cannot do this job (me2resh/apexyard#1046). POSIX ERE
+    # substitution is leftmost-longest, so the previous
+    #   sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+    # found the EARLIEST quote that happened to be followed by ` --<letter>`
+    # and deleted from there to end-of-string. A body containing an embedded
+    # quote and, later, any double-dash token was therefore amputated at the
+    # quote, and everything after it went unscanned — a silent fail-open on a
+    # leak gate. Both conditions had to co-occur, which is why the originally
+    # filed single-condition repro did not reproduce.
+    #
+    # Scanning backwards is exact rather than heuristic: match() already
+    # anchored the region on the real closing delimiter, and the only thing
+    # that can follow it is the boundary ` --<letter>` or trailing space,
+    # neither of which contains a delimiter. So the last D in CHUNK IS the
+    # closing delimiter, including when the body legitimately ends in one.
+    #
+    # This deliberately does NOT touch the greedy match() anchors above it.
+    # Widening those was tried in #1040 and rejected: it reopened #227 across
+    # every boundary character (9 failures vs 5 — measurably worse than no
+    # fix). The anchor was never the defect; the trim was.
+    function trim_to_last(chunk, d,    i) {
+      for (i = length(chunk); i >= 1; i--) {
+        if (substr(chunk, i, 1) == d) return substr(chunk, 1, i - 1)
+      }
+      return chunk
+    }
+    # SCOPE ASYMMETRY (me2resh/apexyard#1046, caught in security review).
+    #
+    # Retaining a SUPERSET is fail-closed for leak DETECTION — scanning more
+    # than the body can only over-block. It is fail-OPEN for the skip MARKER,
+    # because a wider scan gives `<!-- private-refs: allow -->` more places to
+    # be found. Concretely, `--body "<private>" --label "<marker>"` blocked
+    # before this fix and bypassed after it: the greedy match legitimately
+    # cannot tell where the body ends, so the marker rode in on the
+    # over-capture.
+    #
+    # So the two consumers need opposite trims. Detection uses "last" (the
+    # superset). The marker check uses "first" — the pre-fix earliest-
+    # qualifying cut, which is a SUBSET and therefore fail-closed in the
+    # bypass direction. "first" is deliberately the OLD, buggy-for-detection
+    # behaviour: its under-capture is precisely the property that makes it
+    # correct here.
+    function trim_mode(chunk, d) {
+      if (MODE != "first") return trim_to_last(chunk, d)
+      # `--?` here, NOT `--`. A single-dash flag is the same flag: `-l` IS
+      # `--label`. Keying the conservative cut on a double dash closed
+      # `--label "<marker>"` and left `-l "<marker>"` open, so the subset
+      # silently became a superset again for the short spellings.
+      #
+      # `--?` and NOT `-{1,2}`, which is what this originally used: `{n,m}`
+      # is an ERE interval and awk support for it is not universal (mawk
+      # 1.3.3 lacks it; BWK awk only gained it around 2019; gawk 3.x needed
+      # --re-interval). Where it is unsupported the pattern is treated
+      # LITERALLY, the cut then fires only at end-of-chunk, and this branch
+      # silently degrades back toward the superset — reopening the very
+      # bypass it exists to close, on some machines and not others. That is
+      # the same silent-failure class as the bug this hook is fixing, so the
+      # dependency is not worth carrying when `--?` is exactly equivalent.
+      #
+      # Safe by construction: a more aggressive cut yields a SMALLER subset,
+      # and smaller is fail-closed for the marker consumer. This branch is
+      # never reached by leak detection, which always uses "last", so it
+      # cannot affect #227/#1039 behaviour.
+      sub(d "([[:space:]]+--?[a-zA-Z].*)?$", "", chunk)
+      sub(d "[[:space:]]*$", "", chunk)
+      return chunk
+    }
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
@@ -171,19 +251,18 @@ extract_flag_value() {
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub("\"[[:space:]]*$", "", chunk)
-        print chunk
+        print trim_mode(chunk, "\"")
         exit
       }
-      # Single-quoted value: same greedy + anchor treatment.
+      # Single-quoted value: same greedy + anchor treatment. This branch had
+      # the identical leftmost-longest defect and is fixed the same way; it is
+      # not mentioned in #1046 but leaks on the single-quoted equivalent of the
+      # same command shape.
       re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub(SQ "[[:space:]]*$", "", chunk)
-        print chunk
+        print trim_mode(chunk, SQ)
         exit
       }
       # Unquoted value: single token, embedded quotes irrelevant.
@@ -267,6 +346,13 @@ extract_path_flag() {
 
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
+
+# Conservative (subset) extraction, used ONLY for the skip-marker check in
+# step 6. See the SCOPE ASYMMETRY note in extract_flag_value: the greedy
+# extraction above is fail-closed for detection but fail-OPEN for the bypass
+# marker, because over-capture hands the marker extra places to appear.
+TITLE_STRICT=$(extract_flag_value '--title|-t' "$COMMAND" first)
+BODY_STRICT=$(extract_flag_value '--body|-b' "$COMMAND" first)
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
 # because `gh api -F body=@file` uses the same flag letter).
@@ -368,10 +454,18 @@ without having looked at it.
 Common causes:
   - the path does not exist, or is relative to a different directory
   - a typo in the path
+  - the file is written in a LATER tool call than the one running this
+    command (a PreToolUse hook blocks the whole call, so a heredoc that
+    creates the file alongside the gh command never runs)
 
-Fix the path and retry. To reference a registered project deliberately,
-add this marker to the body:
-    <!-- private-refs: allow -->
+Fix the path and retry — that is the only way past this block.
+
+The <!-- private-refs: allow --> skip marker does NOT apply here, and
+earlier versions of this message wrongly suggested it did. That marker is
+read out of body content this hook has actually scanned; it cannot be read
+out of a file that could not be opened. There is deliberately no bypass for
+an unreadable body: the marker means "I looked, and this reference is
+intentional", which is not a claim anyone can make about unread bytes.
 ======================================================================
 EOF
   exit 2
@@ -392,7 +486,13 @@ SKIP_MARKER=$(config_get_or '.leak_protection.skip_marker' '<!-- private-refs: a
 # Fallback if the config lib didn't source successfully (e.g. on a bare
 # checkout predating apexyard#109).
 SKIP_MARKER="${SKIP_MARKER:-<!-- private-refs: allow -->}"
-if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER"; then
+# Grep the CONSERVATIVE haystack, not the greedy one. A marker found only in
+# over-captured content (e.g. a subsequent `--label "<marker>"`) must not
+# bypass the gate — the operator has to put it in the title or body they are
+# actually publishing. Body-file and gh-api content are read from a file /
+# discrete field, so they carry no over-capture risk and are included as-is.
+MARKER_HAYSTACK=$(printf '%s\n%s\n%s\n%s\n' "$TITLE_STRICT" "$BODY_STRICT" "$BODY_FILE_CONTENT" "$API_BODY")
+if echo "$MARKER_HAYSTACK" | grep -qF -- "$SKIP_MARKER"; then
   echo "WARN: private-refs: allow marker present — leak-protection hook bypassed for this ${TARGET_REPO} call. See .claude/rules/leak-protection.md." >&2
   exit 0
 fi
@@ -535,5 +635,34 @@ reference a registered project by name):
 
 See .claude/rules/leak-protection.md for the full rationale.
 MSG
+
+# Diagnostic for the one confusing case: the marker IS somewhere in the
+# command, but not where it counts. Without this the operator reads the
+# escape-hatch advice above, adds the marker, is blocked again, and has no
+# way to tell why — they go hunting for a typo in a marker that is
+# demonstrably present. Both haystacks already exist, so this costs a grep.
+#
+# It fires when the marker is in the greedy haystack but not the conservative
+# one: either it sat past the `first`-mode cut inside the body, or it was in a
+# later flag value (`--label`/`-l`) that only over-capture ever surfaced.
+if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER" 2>/dev/null; then
+  cat >&2 <<'DIAG'
+
+NOTE: the skip marker IS present in this command, but not in a position
+that counts, so it did not apply.
+
+The reliable placement is --body-file: it is read whole, with none of the
+restrictions below. Prefer it.
+
+--title and --body both work, but only BEFORE any embedded quote that is
+followed by a flag-shaped token. Past that point the value is cut short
+and a marker there is not seen — in the title exactly as in the body.
+
+A marker in a later flag value (--label / -l / --assignee / -a) is
+deliberately ignored: it is not part of what gets published, and honouring
+it there would let the bypass ride in on a parsing artefact rather than on
+something you actually wrote into the ticket.
+DIAG
+fi
 
 exit 2
