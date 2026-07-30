@@ -1,5 +1,7 @@
 #!/bin/bash
-# .githooks/pre-push — terminal-push companion to .claude/hooks/pre-push-gate.sh.
+# .githooks/pre-push — terminal-push companion to .claude/hooks/pre-push-gate.sh,
+# AND (as of me2resh/apexyard#1086 step 2) the git-native enforcement layer
+# for "no direct pushes to a protected branch" on terminal `git push`.
 #
 # pre-push-gate.sh fires only on Claude Code-driven pushes (it is a
 # PreToolUse hook). This git hook covers the same check set for terminal
@@ -9,19 +11,147 @@
 # degrade logic, and the same command set. The command set is defined in
 # bin/run-pre-push-checks.sh, which this hook delegates to.
 #
-# Opt-in once per clone:
+# Opt-in once per clone (or run bin/install-git-hooks.sh, which does this
+# for you and is now invoked by /setup and /handover — #1086 step 1):
 #   git config core.hooksPath .githooks
 #
-# Or set it globally for all apexyard clones (the hook is a no-op outside
-# apexyard because bin/run-pre-push-checks.sh checks for the repo root):
-#   git config --global core.hooksPath .githooks
-#
 # See docs/getting-started.md § "Terminal push hook" for details.
+#
+# ---------------------------------------------------------------------------
+# PROTECTED-BRANCH ENFORCEMENT (#1086 step 2)
+# ---------------------------------------------------------------------------
+# Git's pre-push hook receives the refs being pushed on STDIN, one line per
+# ref, already resolved by git itself:
+#
+#   <local ref> SP <local sha1> SP <remote ref> SP <remote sha1> LF
+#
+# That is ground truth — git did the refspec resolution, the upstream-
+# tracking resolution, and the tag-vs-branch classification. There is no
+# command text here to misparse: no heredocs, no decoys, no redirects, no
+# quoting — none of the shapes recorded in #1066, #1081, #1083, #1084,
+# #1085 exist at this layer, because there is no command string being
+# scanned at all. The block below reads ONLY these stdin lines. See
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the class of bug
+# this design sidesteps entirely rather than patches further.
+#
+# Deletion (local sha1 = 40 zeroes): the remote ref named on the line is
+# being DELETED, not updated. Deleting a protected branch is at least as
+# destructive as pushing to one — arguably more, since there's no single
+# commit to revert — so a deletion of a protected branch is blocked exactly
+# like an update would be. This also closes a real, pre-existing gap in the
+# text-based `.claude/hooks/block-main-push.sh`: its extract_push_ref
+# deliberately bails out (returns empty) on a `--delete`/`-d` push, which
+# falls back to validating the CURRENT checked-out branch rather than the
+# branch actually being deleted — so `git push origin --delete main` run
+# from a feature-branch checkout was never actually validated there. This
+# hook has no such gap: the branch being deleted is read directly off the
+# remote-ref field regardless of what's currently checked out.
+#
+# New-ref creation (remote sha1 = 40 zeroes): means the branch doesn't
+# exist on the remote YET. It does not change the decision below — the
+# check is purely "does this ref's NAME match the protected list", which
+# holds whether the remote side starts empty or not.
+#
+# Non-branch refs (tags, notes, anything not under refs/heads/) are
+# categorically exempt — not via a heuristic ("does this look like a tag
+# push"), but structurally: the remote ref's own namespace says so, and git
+# is the one who put it there. A two-remote tag push, or an ordinary branch
+# push alongside a separate `--tags` push, both correctly fall out of this
+# with no special-casing, because each ref line is judged independently on
+# its own `remote_ref` value.
+#
+# `--force` / `--force-with-lease` do not change any of the above either:
+# remote_ref and local_sha are the same regardless of the force flag, so a
+# force push to a protected branch is blocked exactly like an ordinary one
+# — a correctness property this design gets for free, not something it had
+# to special-case.
+# ---------------------------------------------------------------------------
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
-  # Not a git repo — nothing to do.
+  # Not a git repo — nothing to do. (No stdin has been read yet; git never
+  # invokes a hook outside a repository in practice, this is defensive for
+  # manual/test invocations only.)
   exit 0
+fi
+
+# Read every ref line git is offering, ONCE, up front. Nothing downstream in
+# this hook — nor bin/run-pre-push-checks.sh, delegated to at the bottom —
+# reads stdin again. See the "STDIN HAND-OFF" note near the bottom of this
+# file for why that delegation is safe.
+STDIN_REFS=$(cat)
+
+ALL_ZERO_SHA='0000000000000000000000000000000000000000'
+
+PROTECTED_LIB="$REPO_ROOT/.claude/hooks/_lib-protected-branches.sh"
+if [ ! -f "$PROTECTED_LIB" ]; then
+  # Old clone that hasn't pulled the lib file yet. Fail open, same shape as
+  # the "RUNNER not found" case below — visible, not silent.
+  echo "WARN: $PROTECTED_LIB not found — protected-branch enforcement skipped at the git layer for this push. Pull latest to enable it." >&2
+else
+  # shellcheck disable=SC1090,SC1091
+  . "$PROTECTED_LIB"
+
+  if [ -n "$STDIN_REFS" ] && command -v protected_branch_regex >/dev/null 2>&1; then
+    PROTECTED_REGEX=$(protected_branch_regex)
+
+    if [ -n "$PROTECTED_REGEX" ]; then
+      # Process substitution (not a pipe) so `exit 1` inside the loop exits
+      # THIS script, not a subshell — a pipe (`cmd | while read; do ...;
+      # done`) runs the loop body in a subshell in bash, and `exit` there
+      # would only terminate the subshell, silently letting the push
+      # through. `printf '%s\n'` guarantees a trailing newline regardless of
+      # whether $STDIN_REFS had one — `$(cat)` above already stripped any
+      # trailing newline from the real input, and `read` does NOT execute
+      # the loop body for a final line that arrives without one (it fills
+      # the read variables but returns non-zero, which is also the while
+      # condition, so the loop exits before running the body). Almost every
+      # real push has exactly ONE ref line — silently skipping it would be
+      # the single worst way this hook could fail.
+      # shellcheck disable=SC2034  # LOCAL_REF/REMOTE_SHA kept named (not
+      # read into `_`) for readability — this is the security-critical
+      # decision loop and a future reader debugging it benefits from every
+      # field of git's own stdin line being visible by name, even the two
+      # this particular check doesn't need.
+      while IFS=' ' read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+        [ -z "$REMOTE_REF" ] && continue
+
+        case "$REMOTE_REF" in
+          refs/heads/*) BRANCH="${REMOTE_REF#refs/heads/}" ;;
+          *) continue ;;  # tags, notes, anything else: never subject to this check
+        esac
+
+        if echo "$BRANCH" | grep -qE "^(${PROTECTED_REGEX})$"; then
+          if [ "$LOCAL_SHA" = "$ALL_ZERO_SHA" ]; then
+            ACTION_VERB="Deleting"
+            ACTION_NAME="delete"
+          else
+            ACTION_VERB="Pushing to"
+            ACTION_NAME="update"
+          fi
+          cat >&2 <<MSG
+BLOCKED: ${ACTION_VERB} protected branch '${BRANCH}' on the remote is not allowed.
+
+All changes must go through a PR (.claude/rules/git-conventions.md
+§ "No Direct Main"). This was decided from git's own pre-push ref
+resolution (${REMOTE_REF}, action: ${ACTION_NAME}) — no command text was
+parsed to reach this decision.
+
+To unblock:
+  1. Create a feature branch from your current work:
+       git checkout -b feature/GH-<ticket>-<short-description>
+  2. Push the feature branch:
+       git push -u origin feature/GH-<ticket>-<short-description>
+  3. Open a PR via /feature → /start-ticket → gh pr create, OR if the
+     ticket exists, just: gh pr create --base ${BRANCH} --head <feature-branch>
+
+Customise (rare): .claude/project-config.json → .git.protected_branches[]
+MSG
+          exit 1
+        fi
+      done < <(printf '%s\n' "$STDIN_REFS")
+    fi
+  fi
 fi
 
 RUNNER="$REPO_ROOT/bin/run-pre-push-checks.sh"
@@ -32,4 +162,11 @@ if [ ! -f "$RUNNER" ]; then
   exit 0
 fi
 
+# STDIN HAND-OFF NOTE (#1086 step 2): bin/run-pre-push-checks.sh was audited
+# and does not read stdin anywhere — its markdownlint / shellcheck / subpacks
+# checks all run via `bash -c "$cmd"` with no `read` of their own — so
+# consuming stdin above via `cat` is safe; the runner never expected it.
+# `exec` is kept here (rather than `bash "$RUNNER"; exit $?`) to preserve
+# the exact prior behaviour byte-for-byte: this hook's own exit status IS
+# the runner's exit status via process replacement.
 exec bash "$RUNNER"
