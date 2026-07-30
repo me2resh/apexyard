@@ -59,7 +59,13 @@ fi
 # 2/3. Determine whether this write targets a PUBLIC / framework-class repo.
 #
 #    CLASS-BASED, not positional (me2resh/apexyard#1068, round 2 — security
-#    review of the round-1 fix).
+#    review of the round-1 fix). The membership-check logic in this block
+#    is unchanged since round 2 and was independently re-verified sound in
+#    round 3's review. Round 3 fixed a SEPARATE bug one level upstream of
+#    this block — the write-segment ANCHOR itself could return empty for
+#    a write step 1 had already classified as one, which skipped this
+#    whole block via the empty-segment exit below. See the large comment
+#    inside `find_write_segment` for that fix.
 #
 #    Round 1 anchored on the matched write invocation and took the FIRST
 #    `--repo` value found after it, replacing dev's greedy "last `--repo`
@@ -141,19 +147,45 @@ find_write_segment() {
   # invocation, or nothing if none is found. Everything BEFORE that point
   # is out of scope for --repo/repos-path candidates: a flag cannot belong
   # to a gh invocation that hasn't started yet in the raw text.
+  #
+  # me2resh/apexyard#1068 round 3 (security review) — the anchor here used
+  # to be `(^|[[:space:]])gh`, with a code comment claiming it "mirrors"
+  # step 1's `\bgh` (GNU grep -E). It does NOT: `\b` is a WORD boundary — it
+  # fires wherever a word character (`gh`'s `g`) is preceded by a NON-word
+  # character, which includes `;`, `&`, `|`, `(`, `$` as well as
+  # whitespace. `[[:space:]]` only covers the whitespace case. So step 1
+  # and this anchor DISAGREED on `;gh …`, `&&gh …`, `|gh …`, and — the
+  # shape that matters most, because it is a routine agent idiom, not a
+  # crafted exploit — `out=$(gh …)` (capturing a created issue/PR URL).
+  # Step 1 classified all four as a write (matched `\bgh`); this anchor
+  # found no match, `find_write_segment` returned empty, and the hook
+  # exited 0 at the empty-segment check below having scanned NOTHING.
+  # Because the segment finder runs BEFORE content extraction, this also
+  # silently defeated the truncation-refusal fix a few hundred lines down:
+  # `out=$(gh issue create --repo pub --body "leak" && gh pr list --repo
+  # other)` — which correctly REFUSES unwrapped — exits 0 once wrapped in
+  # `$(...)`, because the segment is empty before extraction ever runs.
+  #
+  # Verified, not assumed (the mistake AgDR-0113 exists to catch, and the
+  # rule extends to equivalence claims about two expressions, not only to
+  # "pre-existing" claims about behaviour): all four divergent shapes
+  # above BLOCK on the real `upstream/dev` blob and LEAKED (exit 0,
+  # nothing scanned) on the round-2 HEAD this replaces.
+  #
+  # Fix: `(^|[^A-Za-z0-9_.-])` before "gh" is a hand-rolled word boundary
+  # that actually matches what `\b` matches — anything that is NOT a word
+  # character (alnum, `_`) immediately before "gh", which now correctly
+  # includes `;`, `&`, `|`, `(`, `$`, in addition to whitespace and start
+  # of string — while still rejecting "gh" as a bare substring of an
+  # unrelated word (e.g. "high api" contains the literal text "gh api" but
+  # is not a gh invocation, and `h` immediately before the `g` is a word
+  # character, so the boundary correctly does not fire there).
   local cmd="$1"
   printf '%s' "$cmd" | awk '
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      # `(^|[[:space:]])` before "gh" and a trailing boundary after the
-      # keyword keep this from matching "gh" as a bare substring of an
-      # unrelated word (e.g. "high api" contains the literal text
-      # "gh api" but is not a gh invocation) — mirroring the `\b`
-      # word-boundary the step-1 classification regex already relies on
-      # (GNU grep -E extension; not available inside awk EREs, so
-      # reproduced explicitly here).
-      anchor_re = "(^|[[:space:]])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
+      anchor_re = "(^|[^A-Za-z0-9_.-])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
       if (!match(s, anchor_re)) { exit }
       print substr(s, RSTART)
     }
@@ -201,17 +233,23 @@ if [ "${AUTO_DETECT_UPSTREAM:-true}" != "false" ]; then
 fi
 
 # Class-based membership check: does the write segment name ANY known
-# public repo as a --repo value or a repos/<owner>/<repo> path, anywhere?
-# First match wins arbitrarily — it is used only for messaging (the
-# ${TARGET_REPO} interpolated into the BLOCKED text below) and for the
-# target's-own-name exemption in step 8; the security property here is
-# the YES/NO membership test, not which specific match produced it.
+# public repo as a --repo/-R value or a repos/<owner>/<repo> path,
+# anywhere? First match wins arbitrarily — it is used only for messaging
+# (the ${TARGET_REPO} interpolated into the BLOCKED text below) and for
+# the target's-own-name exemption in step 8; the security property here
+# is the YES/NO membership test, not which specific match produced it.
+#
+# `-R` is `gh`'s own documented short form of `--repo` (`gh help issue
+# create` lists `-R, --repo [HOST/]OWNER/REPO`), on the same footing as
+# the `-t`/`-b` short forms this hook already recognises for title/body —
+# so recognising it here closes an inconsistency rather than adding scope
+# (me2resh/apexyard#1068 round 3).
 TARGET_REPO=""
 for r in $PUBLIC_REPOS; do
   esc=$(printf '%s' "$r" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
-  # --repo flag form: the slug, optionally quoted, terminated by a
+  # --repo/-R flag form: the slug, optionally quoted, terminated by a
   # matching quote, whitespace, or end of segment.
-  if printf '%s' "$WRITE_SEGMENT" | grep -qE -- "--repo[[:space:]]+[\"']?${esc}([\"'[:space:]]|\$)"; then
+  if printf '%s' "$WRITE_SEGMENT" | grep -qE -- "(--repo|-R)[[:space:]]+[\"']?${esc}([\"'[:space:]]|\$)"; then
     TARGET_REPO="$r"
     break
   fi

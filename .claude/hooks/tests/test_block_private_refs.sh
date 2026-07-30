@@ -622,6 +622,86 @@ run_case "#1068: KNOWN GAP (pre-existing on dev, not fixed here) — --repo=owne
   "gh issue create --repo=me2resh/apexyard --title \"T\" --body \"zebrafish leak here\""
 
 # ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 round 3 (security review of round 2) — the round-2
+# code comment claimed `find_write_segment`'s `(^|[[:space:]])gh` anchor
+# "mirrors" step 1's `\bgh` classification regex. It does not: `\b` is a
+# WORD boundary, firing wherever "gh"'s leading `g` is preceded by any
+# NON-word character — `;`, `&`, `|`, `(`, `$`, not only whitespace. The
+# anchor only covered the whitespace case, so step 1 (which matches `\b`)
+# and the segment finder (which required a space) DISAGREED on exactly
+# these four shapes. When they disagreed, step 1 said "this is a write"
+# but the segment finder found no match, returned nothing, and the hook
+# exited 0 at the empty-segment check — having scanned NOTHING, upstream
+# of every fix in this file so far.
+#
+# The `$(...)` capture form (case 33) is the one that matters operationally:
+# capturing a newly created issue/PR's URL — `out=$(gh issue create ...)`
+# — is a routine agent idiom, not a crafted shape.
+#
+# This is also the second time in as many rounds that an unverified
+# "these two things behave the same" claim in this file's own comments was
+# wrong (round 1's "pre-existing" residue claim was the first) — plausible,
+# cheap to check, and false both times. Every case below was confirmed
+# failing (rc=0, nothing scanned) against the round-2 committed hook before
+# the anchor fix, and confirmed blocking against the real `upstream/dev`
+# blob, so these are genuine regressions being closed, not new invented
+# requirements.
+# ---------------------------------------------------------------------------
+
+# 32. Semicolon immediately before "gh", no space.
+run_case "#1068 round 3: ';gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "echo hi ;gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 33. `$(...)` COMMAND SUBSTITUTION — the operationally important shape.
+#     Capturing the created issue/PR URL is routine agent usage, not an
+#     adversarial construction.
+#
+#     Expected message here is the TRUNCATION REFUSAL, not a named leak —
+#     and that is correct, not a second bug. The trailing `)` that closes
+#     the substitution sits right after --body's closing quote, so
+#     extract_flag_value's boundary check (whitespace+--flag OR
+#     whitespace* END-OF-STRING) fails there too: a lone `)` is neither.
+#     Widening that boundary to accept a bare `)` was NOT done, because
+#     `)` is one of the exact boundary characters #1039r2 below already
+#     proves must NOT be treated as a terminator (a body legitimately
+#     containing `(...)` followed by more leak content must still be
+#     scanned to the end). So a write wrapped in `$(...)` correctly hits
+#     the SAME safe refusal as a chained command — over-blocking, not a
+#     leak, and the anchor fix has already done its job by this point:
+#     the target resolved to public and the hook did not exit 0 silently.
+run_case "#1068 round 3: out=\$(gh ...) command substitution must still anchor the write (and correctly hits the truncation refusal, not a silent leak)" \
+  2 "could not safely determine" \
+  "out=\$(gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\")"
+
+# 34. `&&gh` — no space between the chain operator and "gh".
+run_case "#1068 round 3: '&&gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "true &&gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 35. `|gh` — no space between the pipe and "gh".
+run_case "#1068 round 3: '|gh' (no space) must still anchor the write" \
+  2 "project name: zebrafish" \
+  "echo hi |gh issue create --repo me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# 36. Structural proof that the anchor bug also defeated the truncation
+#     refusal from round 1/2: this EXACT chained-command shape correctly
+#     REFUSES unwrapped (case 21 above); wrapped in `$(...)` it used to
+#     exit 0 instead, because the segment finder ran before extraction and
+#     found nothing to extract from.
+run_case "#1068 round 3: \$(...) wrapping must not silently defeat the truncation refusal" \
+  2 "could not safely determine" \
+  "out=\$(gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh pr list --repo acme/zebrafish-app)"
+
+# 37. `-R` — gh's own documented short flag for `--repo` (`gh help issue
+#     create` lists `-R, --repo [HOST/]OWNER/REPO`), on the same footing as
+#     the `-t`/`-b` short forms this hook already recognises. Previously
+#     undetected; closes an inconsistency rather than adding scope.
+run_case "#1068 round 3: -R (short flag for --repo) must be recognised" \
+  2 "project name: zebrafish" \
+  "gh issue create -R me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
+
+# ---------------------------------------------------------------------------
 # Portability lock: no ERE intervals in the hook's awk program.
 #
 # `{n,m}` support is not universal in awk — mawk 1.3.3 lacks it, BWK awk only
