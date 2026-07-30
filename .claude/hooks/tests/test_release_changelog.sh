@@ -392,6 +392,121 @@ contains "range line present on stderr" "RELEASE_CHANGELOG_RANGE=" "$stderr_out"
 expect_sha=$(echo "$out" | grep -oE 'EXPECT_SHA=.*' | cut -d= -f2)
 contains "stderr range is anchored on the trailer sha" "RELEASE_CHANGELOG_RANGE=${expect_sha}..HEAD" "$stderr_out"
 
+# ── #1056 helper — a stub `gh` binary for ref-resolution tests ──────────────
+# Writes a fake `gh` to <dir>/gh, controlled by two env vars the caller sets
+# before invoking the changelog script: STUB_GH_BODY (the PR body text `gh pr
+# view --json body -q .body` should "return") and STUB_GH_EXIT (non-zero to
+# simulate a `gh` failure — auth, rate limit, or an unreachable forge, the
+# exact failure mode hit live during the v5.3.0 cut). Every `$` in the heredoc
+# body is backslash-escaped so it survives heredoc creation literally and only
+# expands when the stub itself runs later, inside the test's own subshell.
+make_stub_gh() {  # make_stub_gh <dir>
+  mkdir -p "$1"
+  cat > "$1/gh" <<STUBEOF
+#!/usr/bin/env bash
+if [ "\${STUB_GH_EXIT:-0}" != "0" ]; then
+  exit "\${STUB_GH_EXIT}"
+fi
+if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
+  printf "%s" "\${STUB_GH_BODY:-}"
+  exit 0
+fi
+exit 1
+STUBEOF
+  chmod +x "$1/gh"
+}
+
+# ── Test: #1056 defect 1 — Closes repeats the keyword per reference ─────────
+# A comma-joined "Closes #A, #B, #C" line only auto-closes #A — GitHub only
+# honours the reference immediately following the closing keyword. Every
+# reference must get its own "- Closes #N" bullet so all of them fire.
+echo "--- #1056 Closes repeats keyword per reference (>=3 refs) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v15.0.0
+  mc "feat(#1501): first unreleased feature"
+  mc "fix(#1502): second unreleased fix"
+  mc "chore(#1503): third unreleased chore"
+  PREV_TAG="v15.0.0" HEAD_REF="HEAD" VERSION="v15.1.0" DATE="2026-07-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains   "Closes #1501 own bullet" "Closes #1501" "$out"
+contains   "Closes #1502 own bullet" "Closes #1502" "$out"
+contains   "Closes #1503 own bullet" "Closes #1503" "$out"
+not_contains "no comma-joined Closes line (#1501, #1502 inert-past-first bug)" "Closes #1501, #1502" "$out"
+not_contains "no comma-joined Closes line (any pairing)" "#1502, #1503" "$out"
+
+# ── Test: #1056 defect 2 — scoped subject is unaffected (no PR lookup) ──────
+# `fix(#1042): ...` — the scope IS the issue number by convention. This must
+# resolve straight from the subject with no `gh` call at all (no stub `gh` is
+# put on PATH for this test — if the script tried to shell out, it would hit
+# whatever real `gh` is on the runner's PATH and could flake or hang).
+echo "--- #1056 scoped subject resolves directly, no PR lookup ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v16.0.0
+  mc "fix(#1600): put the human gate on approval flow (#1601)"
+  PREV_TAG="v16.0.0" HEAD_REF="HEAD" VERSION="v16.1.0" DATE="2026-07-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains     "closes the ISSUE number from the scope" "Closes #1600" "$out"
+not_contains "does not close the trailing PR number instead" "Closes #1601" "$out"
+
+# ── Test: #1056 defect 2 — unscoped subject resolves via the PR's own body ──
+# `docs: ... (#2001)` has no `type(#N):` scope — the only "(#N)" present is
+# the trailing squash-merge PR number, not an issue. The generator must look
+# up PR #2001's body, find its "Refs #2000", and close #2000 — not #2001.
+echo "--- #1056 unscoped subject resolves issue from PR body (Refs #N) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v17.0.0
+  mc "docs: rework the onboarding flow copy (#2001)"
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="See also. Refs #2000" \
+    PREV_TAG="v17.0.0" HEAD_REF="HEAD" VERSION="v17.1.0" DATE="2026-07-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains     "resolves to the referenced issue" "Closes #2000" "$out"
+not_contains "does not close the PR number itself" "Closes #2001" "$out"
+contains     "display line still shows the PR number" "(#2001)" "$out"
+
+# ── Test: #1056 defect 2 — unscoped subject whose PR resolves to nothing ────
+# The PR body carries no Closes/Fixes/Resolves/Refs reference at all — the
+# generator must degrade to the PR number (today'"'"'s behaviour), not drop the
+# entry or crash.
+echo "--- #1056 unscoped subject, PR body has no closing reference (falls back to PR number) ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v18.0.0
+  mc "docs: fix a typo in the README (#2101)"
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="Just a typo fix, no issue linked." \
+    PREV_TAG="v18.0.0" HEAD_REF="HEAD" VERSION="v18.1.0" DATE="2026-07-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "falls back to the PR number when nothing resolves" "Closes #2101" "$out"
+
+# ── Test: #1056 fail-soft — an unreachable forge never aborts the release ───
+# Simulates the exact failure hit live during the v5.3.0 cut: `gh` errors out
+# (DNS blip on api.github.com). The generator must degrade to the PR number
+# and exit 0 — a release cut must never abort because the forge was down.
+echo "--- #1056 fail-soft: gh failure degrades to PR number, script still exits 0 ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v19.0.0
+  mc "docs: update the contributing guide (#2201)"
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_EXIT=1 \
+    PREV_TAG="v19.0.0" HEAD_REF="HEAD" VERSION="v19.1.0" DATE="2026-07-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+  echo "EXIT_CODE=$?"
+')
+contains "degrades to the PR number when gh is unreachable" "Closes #2201" "$out"
+contains "script still exits cleanly (no abort on forge failure)" "EXIT_CODE=0" "$out"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

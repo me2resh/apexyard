@@ -12,7 +12,14 @@
 #   DATE       — the release date in YYYY-MM-DD format
 #
 # Optional:
-#   REPO_REMOTE — the git remote to use for upstream refs (default: upstream)
+#   REPO_REMOTE    — the git remote to use for upstream refs (default: upstream)
+#   PR_LOOKUP_REPO — owner/repo used to resolve an UNSCOPED commit's trailing
+#                    PR number back to the issue it actually closes (default:
+#                    me2resh/apexyard). Only consulted for commits with no
+#                    `type(#N):` scope (#1056) — see "Closes resolution"
+#                    below. Best-effort: a `gh` failure of any kind (missing
+#                    binary, auth, rate limit, or an unreachable forge) always
+#                    falls back to today's behaviour and never aborts.
 #
 # Output format (matches the existing CHANGELOG.md convention):
 #
@@ -33,7 +40,23 @@
 #   - <subject> — <short-sha>
 #   ...
 #   ### Closes
-#   - Closes #N, #M, ...
+#   - Closes #N
+#   - Closes #M
+#   ...
+#
+# Closes resolution (#1056):
+#   GitHub's `Closes` keyword only auto-closes the reference IMMEDIATELY
+#   FOLLOWING it — a single "Closes #A, #B, #C" line only ever closes #A, so
+#   the section above emits one "- Closes #N" bullet per reference instead.
+#
+#   Which number goes in that bullet depends on whether the commit subject
+#   carries a conventional-commit SCOPE: `fix(#1042): ...` — by apexyard
+#   convention the scope IS the issue number, used directly. A subject with
+#   no scope, e.g. `docs: ... (#1045)`, only has GitHub's squash-appended
+#   trailing PR number — that is NOT an issue, so it is resolved via a
+#   best-effort `gh pr view` lookup of the PR's own body for a closing-keyword
+#   reference (Closes/Fixes/Resolves/Refs #N), falling back to the PR number
+#   itself if nothing resolves or the forge can't be reached.
 #
 # Exit codes:
 #   0 — success (even if the commit list is empty; that is a valid patch release)
@@ -147,6 +170,45 @@ extract_pr_num() {
   echo ""
 }
 
+# Does the subject carry a conventional-commit SCOPE holding the issue
+# number, i.e. "type(#N): ..." (optionally with a breaking "!") right at the
+# start? By apexyard convention (git-conventions.md) that scope IS the issue
+# number — nothing to resolve. Anything else — no scope at all, or only a
+# trailing "(#N)" GitHub appends on squash-merge — is a PR number, not an
+# issue (#1056).
+has_scope_issue() {
+  local subject="$1"
+  echo "$subject" | grep -qE '^[a-z]+\(#[0-9]+\)!?:'
+}
+
+# Best-effort: resolve a trailing PR number back to the ISSUE it actually
+# closes/references, by reading the PR's own body for a closing-keyword
+# reference (#1056). Every failure path — no `gh` on PATH, auth failure, rate
+# limit, or (the exact live failure that motivated this) a DNS blip on
+# api.github.com — degrades to printing nothing, so the caller falls back to
+# the PR number itself. A release cut must never abort because the forge
+# was briefly unreachable. Always returns 0 so `set -e` can never trip on it.
+PR_LOOKUP_REPO="${PR_LOOKUP_REPO:-me2resh/apexyard}"
+
+resolve_issue_from_pr() {
+  local pr_num="$1"  # numeric, no leading '#'
+  local body ref
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo ""
+    return 0
+  fi
+
+  if ! body=$(gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
+    echo ""
+    return 0
+  fi
+
+  ref=$(echo "$body" | grep -oiE '(Closes|Fixes|Resolves|Refs) #[0-9]+' | head -1 | grep -oE '#[0-9]+' || true)
+  echo "$ref"
+  return 0
+}
+
 # Strip conventional-commit prefix from a subject for cleaner display
 strip_cc_prefix() {
   local subject="$1"
@@ -184,9 +246,26 @@ while IFS= read -r line; do
   # Build the display line
   if [ -n "$pr_num" ]; then
     entry="- ($pr_num) $display_subject — $short_sha"
-    # Collect PR number for Closes section
     num_only="${pr_num#\#}"
-    closes_nums+=("$num_only")
+
+    # #1056 — the DISPLAY line always shows $pr_num as extracted above (a
+    # scoped commit's issue number, or an unscoped commit's trailing PR
+    # number) unchanged. The Closes section is different: an unscoped
+    # commit's only "(#N)" is a PR number, not an issue, and must be resolved
+    # back to the issue that PR actually references before it goes in Closes
+    # — otherwise the release closes a PR (a no-op) and leaves the real issue
+    # open, which is exactly the defect this fixes.
+    if has_scope_issue "$subject"; then
+      closes_num="$num_only"
+    else
+      resolved=$(resolve_issue_from_pr "$num_only")
+      if [ -n "$resolved" ]; then
+        closes_num="${resolved#\#}"
+      else
+        closes_num="$num_only"
+      fi
+    fi
+    closes_nums+=("$closes_num")
   else
     entry="- $display_subject — $short_sha"
   fi
@@ -286,10 +365,14 @@ if [ "${#closes_nums[@]}" -gt 0 ]; then
   echo ""
   echo "### Closes"
   echo ""
-  # Deduplicate and sort
-  unique_nums=$(printf '%s\n' "${closes_nums[@]}" | sort -un | tr '\n' ' ' | sed 's/ $//')
-  closes_str=""
-  for n in $unique_nums; do closes_str="${closes_str}#${n}, "; done
-  closes_str="${closes_str%, }"  # trim trailing comma+space
-  echo "- Closes $closes_str"
+  # #1056 — one "- Closes #N" bullet per reference, deduplicated and sorted.
+  # GitHub only honours the reference IMMEDIATELY FOLLOWING a closing
+  # keyword, so the old single "Closes #A, #B, #C" line auto-closed at most
+  # #A — every reference after the first was silently inert. Repeating the
+  # keyword (one bullet each) makes every reference its own closing directive.
+  unique_nums=$(printf '%s\n' "${closes_nums[@]}" | sort -un)
+  while IFS= read -r n; do
+    [ -n "$n" ] || continue
+    echo "- Closes #${n}"
+  done <<< "$unique_nums"
 fi

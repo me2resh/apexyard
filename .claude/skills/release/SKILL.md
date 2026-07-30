@@ -109,8 +109,12 @@ Minor release — N features, M fixes.
 - <only if breaking-marker commits exist>
 
 ### Closes
-- Closes #N, #M, ...
+- Closes #N
+- Closes #M
+...
 ```
+
+**#1056 — one bullet per reference, not a comma list.** GitHub's `Closes` keyword only auto-closes the reference *immediately following* it — a single `Closes #N, #M, #P` line only ever closed `#N`; everything after the first was silently inert. The generator now emits one `- Closes #N` bullet per reference so every one of them actually fires. It also resolves which number goes in that bullet: a scoped commit (`fix(#1042): ...`) uses the scope directly (that's the issue, by convention); an unscoped commit (`docs: ... (#1045)`) only has GitHub's squash-appended PR number, which the generator resolves back to the issue that PR references via a best-effort `gh pr view` lookup — falling back to the PR number itself if nothing resolves or the forge is unreachable, so a network hiccup never aborts the release.
 
 #### Count-mismatch guard (AgDR-0094, option D)
 
@@ -129,9 +133,12 @@ RAW_COUNT=$(git rev-list --count "$LOG_RANGE") || {
   echo "ERROR: 'git rev-list --count $LOG_RANGE' failed — the count-mismatch guard cannot evaluate its precondition. Do NOT proceed; fix \$LOG_RANGE (see /tmp/release-changelog-range.txt) and rerun." >&2
   exit 1
 }
-# Count changelog entry bullets, excluding the trailing "- Closes #N, ..."
-# summary line (#1002: it is a summary, not an entry, and used to be
-# miscounted as one, causing an off-by-one on every run).
+# Count changelog entry bullets, excluding the "- Closes #N" summary bullets
+# (#1002: they are a summary, not an entry, and used to be miscounted as one,
+# causing an off-by-one on every run; #1056 emits one such bullet PER
+# reference instead of a single comma-joined line, so `grep -v` here still
+# needs to exclude ALL of them — `-c` already counts non-matching lines, so
+# no change to this filter itself was needed, only to this comment).
 ENTRY_COUNT=$(printf '%s\n' "$CHANGELOG_DRAFT" | grep -E '^- ' | grep -vcE '^- Closes ' || true)
 [ -n "$ENTRY_COUNT" ] || ENTRY_COUNT=0
 GAP=$(( RAW_COUNT - ENTRY_COUNT ))
