@@ -167,19 +167,9 @@ CLONE_STATUS="cloned"   # or "preserved" | "declined" | "failed: <reason>"
 
 All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo root whenever `$CLONE_STATUS` is `cloned` or `preserved`. When `$CLONE_STATUS` is `declined` or `failed`, fall back to GitHub API reads via `gh api` / `gh -R <owner/name> …` (degraded but functional).
 
-### 1.5-git-hooks. Install the tracked git hooks in the new clone (default: always attempt)
-
-After a successful clone (`$CLONE_STATUS=cloned` or `preserved`), attempt to install ApexYard's tracked git hooks into the workspace clone the same way `/setup` does for the ops fork — `core.hooksPath` is per-clone git config, never committed, so this fresh clone starts unset regardless of what any other clone of the same project has configured:
-
-```bash
-bash bin/install-git-hooks.sh --repo-dir "$WORKSPACE_DIR/<name>"
-```
-
-This is a **best-effort, non-fatal** step — most managed-project clones don't carry a `.githooks/` directory of their own yet (adopting that is a separate, out-of-scope piece of work per me2resh/apexyard#1086), so exit 3 ("nothing to install") is the common, expected outcome here, not a failure to report loudly. Branch on the exit code:
-
-- **0** (installed / repaired / already correct): note it in the step 10 summary, one line.
-- **3** (no tracked hooks dir in the clone): silent — this is the expected case for the vast majority of handovers today; don't clutter the summary with an expected no-op.
-- **1** (a real, different `core.hooksPath` the operator configured on purpose in that clone) or **2** (misuse / not a git repo, shouldn't happen right after a successful clone): print a one-line note and continue — this step never blocks the rest of `/handover`.
+> **`bin/install-git-hooks.sh` is deliberately NOT invoked here.** An earlier version of this step called it against the freshly-cloned workspace, on the reasoning that it mirrors `/setup`'s call for the ops fork. It does not: `/setup` points `core.hooksPath` at the **ops fork's own** `.githooks/`, which ApexYard controls. Calling the same installer against an arbitrary, just-cloned third-party repo instead points git at *that repo's own* `.githooks/` (whatever it ships), and does so with no provenance check — the installer's only gate is "does a directory of that name exist." Git deliberately never clones `$GIT_DIR/hooks`, which is exactly what makes `git clone` of an untrusted repo a safe, read-only act; repointing `core.hooksPath` at a *tracked* directory removes that property, and a hostile `.githooks/post-checkout` or `.githooks/reference-transaction` then runs as the operator on the very next ordinary git operation — no push required. `/handover`'s whole point is to evaluate a repo before deeper commitment, so this is exactly the wrong moment to hand it code execution. Confirmed by security review on PR #1087 (HIGH-1).
+>
+> The gap this leaves — a managed-project clone's *own* `.githooks/` still isn't wired up by anything, so its terminal `git push` stays unprotected — is real and deliberately deferred, not silently dropped. The correct shape is for the framework to install **its own** hook into the clone's untracked `.git/hooks/` (never point at a tracked third-party directory), which needs its own design and its own ticket. Do not attempt it here.
 
 ### 1.5-reindex. Reindex the cloned repo in MCP (default: always attempt)
 

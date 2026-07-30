@@ -29,6 +29,7 @@ set -u
 
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/check-git-hooks-installed.sh"
 LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-git-hooks-path.sh"
+LIB_PATH_RESOLVE_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-path-resolve.sh"
 PASS=0
 FAIL=0
 FAILED=""
@@ -64,6 +65,9 @@ build_repo() {
   chmod +x "$dir/.claude/hooks/check-git-hooks-installed.sh"
   if [ -f "$LIB_SRC" ]; then
     cp "$LIB_SRC" "$dir/.claude/hooks/_lib-git-hooks-path.sh"
+  fi
+  if [ -f "$LIB_PATH_RESOLVE_SRC" ]; then
+    cp "$LIB_PATH_RESOLVE_SRC" "$dir/.claude/hooks/_lib-path-resolve.sh"
   fi
   ( cd "$dir" && git init -q )
 }
@@ -142,6 +146,35 @@ case_foreign_clone() {
   rm -rf "$parent"
 }
 
+# CASE 4b (PR #1087 review §2b + LOW-6 — the third-party branch had ZERO
+# coverage; deleting it outright still passed the suite 6/6). A real,
+# existing directory OUTSIDE the repo with no `.git` component (the
+# canonical "adopter configured a shared hooks dir" shape) must fire the
+# banner, AND the banner must NOT recommend --force (LOW-6: a banner that
+# suggests overriding a deliberate choice erodes the one guard protecting
+# it — dropped in favour of pointing at --help).
+case_third_party() {
+  local parent; parent=$(mktemp -d)
+  local repo="$parent/repo"
+  local external="$parent/company-wide-hooks"
+  build_repo "$repo"
+  add_githooks "$repo"
+  mkdir -p "$external"
+  git -C "$repo" config core.hooksPath "$external"
+
+  local out
+  out=$(run_hook_from "$repo")
+  assert_fires "third-party -> banner fires" "isn't this" "$out"
+  if printf '%s' "$out" | grep -qE -- '--force'; then
+    echo "FAIL [third-party banner must NOT recommend --force] — got: $out" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}third-party-no-force-mention "
+  else
+    echo "PASS [third-party banner must NOT recommend --force]"
+    PASS=$((PASS+1))
+  fi
+  rm -rf "$parent"
+}
+
 # CASE 5: no tracked .githooks/ at all -> silent
 case_no_githooks_dir() {
   local sandbox; sandbox=$(mktemp -d)
@@ -162,6 +195,7 @@ case_not_a_repo() {
   cp "$HOOK_SRC" "$outside/.claude/hooks/check-git-hooks-installed.sh"
   chmod +x "$outside/.claude/hooks/check-git-hooks-installed.sh"
   [ -f "$LIB_SRC" ] && cp "$LIB_SRC" "$outside/.claude/hooks/_lib-git-hooks-path.sh"
+  [ -f "$LIB_PATH_RESOLVE_SRC" ] && cp "$LIB_PATH_RESOLVE_SRC" "$outside/.claude/hooks/_lib-path-resolve.sh"
   assert_silent "not a git repo -> silent" "$(run_hook_from "$outside")"
   rm -rf "$outside"
 }
@@ -170,6 +204,7 @@ case_unset
 case_correct
 case_missing_dir
 case_foreign_clone
+case_third_party
 case_no_githooks_dir
 case_not_a_repo
 

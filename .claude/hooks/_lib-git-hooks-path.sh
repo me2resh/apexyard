@@ -9,55 +9,20 @@
 # never drift on what counts as "unset" / "correct" / "stale" / "deliberate
 # third-party" — see me2resh/apexyard#1086.
 
-# ------------------------------------------------------------------------
-# _resolve_real_path PATH
-#
-# Resolves PATH to its canonical, symlink-free absolute form. Walks up to
-# the nearest EXISTING ancestor, physically resolves it (`pwd -P`, which
-# follows symlinks), then re-appends any not-yet-created tail literally —
-# a tail that doesn't exist yet cannot itself be a symlink. This mirrors
-# `realpath -m` without depending on GNU coreutils (not guaranteed present
-# on macOS/BSD). Echoes the resolved path, or nothing if even "/" can't be
-# stat'd (should not happen for a well-formed absolute path).
-#
-# Copied verbatim from require-active-ticket.sh's _resolve_real_path (see
-# that file for the fuller symlink-bypass rationale) rather than sourcing
-# it directly — that hook's copy carries ticket-gate-specific comments and
-# the two call sites shouldn't share a lifecycle.
-# ------------------------------------------------------------------------
-_resolve_real_path() {
-  local p="$1" dir tail=""
-  [ -n "$p" ] || return 0
-  dir="$p"
-  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -e "$dir" ]; do
-    if [ -z "$tail" ]; then
-      tail="$(basename "$dir")"
-    else
-      tail="$(basename "$dir")/$tail"
-    fi
-    dir="$(dirname "$dir")"
-  done
-  if [ ! -e "$dir" ]; then
-    return 0
-  fi
-  if [ -d "$dir" ]; then
-    dir="$(cd "$dir" 2>/dev/null && pwd -P)"
-  else
-    local parent
-    parent="$(cd "$(dirname "$dir")" 2>/dev/null && pwd -P)"
-    if [ -n "$parent" ]; then
-      dir="$parent/$(basename "$dir")"
-    else
-      dir=""
-    fi
-  fi
-  [ -n "$dir" ] || return 0
-  if [ -n "$tail" ]; then
-    printf '%s/%s' "$dir" "$tail"
-  else
-    printf '%s' "$dir"
-  fi
-}
+# _resolve_real_path is sourced from _lib-path-resolve.sh — the single
+# shared definition (PR #1087 review, Rex finding #4). This file used to
+# carry its own inline copy with a comment claiming it was deliberately
+# separate from require-active-ticket.sh's; that "copied verbatim, not
+# sourced" shape is exactly the AgDR-0113 pattern #1086 exists to retire,
+# and the two copies had already started drifting. See
+# _lib-path-resolve.sh's header comment for the full rationale, including
+# why it is NOT the same thing as _lib-portfolio-paths.sh's
+# `_portfolio_canonicalize` (a deliberately different, fail-soft sibling).
+_LGHP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+if [ -f "$_LGHP_LIB_DIR/_lib-path-resolve.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_LGHP_LIB_DIR/_lib-path-resolve.sh"
+fi
 
 # ------------------------------------------------------------------------
 # ghp_classify REPO_ROOT HOOKS_DIR_NAME

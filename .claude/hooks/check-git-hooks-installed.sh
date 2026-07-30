@@ -87,9 +87,8 @@ MSG
     RAW="${REST%%:*}"
     cat >&2 <<MSG
 ApexYard: core.hooksPath is set to '$RAW', a directory that isn't this
-repo's tracked $HOOKS_DIR_NAME. If that's deliberate, ignore this. To
-install ApexYard's tracked hooks instead:
-  bash bin/install-git-hooks.sh --force
+repo's tracked $HOOKS_DIR_NAME. If that's deliberate, ignore this — see
+bash bin/install-git-hooks.sh --help if you want to review or change it.
 MSG
     ;;
 esac

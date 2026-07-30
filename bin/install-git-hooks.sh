@@ -43,10 +43,26 @@
 #       or was already correct)
 #   1 — refused: an existing, real, non-stale core.hooksPath is set to
 #       something else; re-run with --force to override
-#   2 — usage error, or the target isn't a git repository at all
+#   2 — usage error, the target isn't a git repository at all, --repo-dir
+#       resolved to a DIFFERENT (enclosing) repo than requested, the
+#       tracked hooks dir is a symlink, or --hooks-dir resolves outside
+#       the target repo
 #   3 — the target repo has no tracked hooks dir to install (e.g. a
 #       managed-project clone that hasn't adopted .githooks/ yet) — not a
 #       bug, just nothing to do here
+#   4 — the core.hooksPath write did not take effect (a `git config`
+#       error, e.g. a stale .git/config.lock or a multi-valued key) —
+#       fails CLOSED: never reports success on an unverified write
+#
+# Security note (PR #1087 review, HIGH-1): this script gates only on
+# whether $TARGET_ROOT/$HOOKS_DIR_NAME exists. It performs NO provenance
+# check on what that directory contains. That is fine when the caller
+# controls the target repo (the ops fork configuring its own .githooks/,
+# via /setup) — it is NOT fine against an arbitrary, just-cloned
+# third-party repo, because doing so points git at THAT repo's own
+# scripts with no operator confirmation. Callers MUST NOT invoke this
+# against an untrusted clone. See .claude/skills/handover/SKILL.md's
+# explicit note on why /handover deliberately does not call this script.
 #
 # See me2resh/apexyard#1086 for the full driver and the two follow-up
 # steps (enforcement inside .githooks/pre-push; demoting block-main-push.sh
@@ -83,9 +99,52 @@ Options:
 Exit codes:
   0 — core.hooksPath is now correctly set (fresh, repaired, or already correct)
   1 — refused: a deliberate third-party core.hooksPath exists; re-run with --force
-  2 — usage / not-a-git-repo error
+  2 — usage / not-a-git-repo / wrong-repo-resolved / symlinked-hooks-dir error
   3 — target repo has no tracked hooks dir to install (nothing to do)
+  4 — the core.hooksPath write did not take effect (fails closed)
 USAGE
+}
+
+# ---------------------------------------------------------------------------
+# _ghp_set_hookspath TARGET_ROOT HOOKS_DIR_NAME
+#
+# Writes core.hooksPath and FAILS CLOSED (PR #1087 review, MEDIUM-2): the
+# advisory hook is allowed to fail open (warn, never block), but this
+# installer's whole job is telling the operator their clone IS protected —
+# reporting success on a write that silently didn't take is worse than not
+# writing at all, because the operator stops worrying about exactly the
+# thing that's still broken.
+#
+# Two independent checks, neither trusted alone:
+#   1. `git config`'s own exit status — catches a stale .git/config.lock
+#      (a routine race when several worktree agents run in parallel) and
+#      a multi-valued core.hooksPath (`git config <key> <value>` refuses
+#      to collapse multiple values to one and exits non-zero).
+#   2. Re-classify afterward and require "correct" — a defence-in-depth
+#      read-back in case some git version/config-shape combination exits
+#      0 without the value actually landing.
+#
+# Prints nothing on success (caller prints its own message); prints a
+# specific error and returns 1 on failure.
+# ---------------------------------------------------------------------------
+_ghp_set_hookspath() {
+  local target_root="$1" hooks_dir_name="$2"
+  local err rc recheck
+
+  err=$(git -C "$target_root" config core.hooksPath "$hooks_dir_name" 2>&1)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "ERROR: 'git config core.hooksPath' failed (exit $rc): $err" >&2
+    return 1
+  fi
+
+  recheck=$(ghp_classify "$target_root" "$hooks_dir_name")
+  if [ "$recheck" != "correct" ]; then
+    echo "ERROR: core.hooksPath write did not take effect (post-write state: '$recheck'). Not reporting success." >&2
+    return 1
+  fi
+
+  return 0
 }
 
 REPO_DIR=""
@@ -128,23 +187,78 @@ if [ -z "$TARGET_ROOT" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# MEDIUM-3 (PR #1087 review): when --repo-dir is given but is not itself a
+# repo's own root, `git rev-parse --show-toplevel` walks UP and silently
+# returns whatever repo ENCLOSES it — e.g. --repo-dir <ops>/workspace/proj
+# on a failed or partial clone resolves to the ops fork itself. Without
+# this check the installer would then configure a repo the caller never
+# named, and report success as if it had configured the one it did name.
+# This is exactly the wrong-repo-write class .claude/rules/isolated-builds.md
+# exists to prevent: a wrong-target resolution must stop, not continue.
+# Compare resolved, symlink-free forms so a legitimate symlinked repo path
+# doesn't false-positive here.
+# ---------------------------------------------------------------------------
+if [ -n "$REPO_DIR" ]; then
+  REQUESTED_RESOLVED=$(_resolve_real_path "$REPO_DIR")
+  TARGET_RESOLVED_FOR_CHECK=$(_resolve_real_path "$TARGET_ROOT")
+  if [ -z "$REQUESTED_RESOLVED" ] || [ "$REQUESTED_RESOLVED" != "$TARGET_RESOLVED_FOR_CHECK" ]; then
+    echo "ERROR: --repo-dir '$REPO_DIR' is not itself a git repository root — it resolved to the ENCLOSING repo at '$TARGET_ROOT' instead. Refusing to silently configure a different repo than requested. Pass the actual repo root, or omit --repo-dir to target the current directory's repo." >&2
+    exit 2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# LOW-5 (PR #1087 review): refuse a tracked hooks dir committed as a
+# SYMLINK, checked BEFORE the existence/directory test below. `[ -L ]`
+# tests the entry itself without following it, so it catches a symlink
+# named .githooks regardless of what it points to (a real dir outside the
+# repo, a missing target, anything) — `[ -d ]` alone would follow a
+# symlink-to-directory and treat it as an ordinary tracked dir, letting it
+# resolve hooks from wherever the link leads instead of what "the repo's
+# tracked hooks directory" is supposed to mean.
+# ---------------------------------------------------------------------------
+if [ -L "$TARGET_ROOT/$HOOKS_DIR_NAME" ]; then
+  echo "ERROR: $TARGET_ROOT/$HOOKS_DIR_NAME is a symlink, not a real directory. Refusing to point core.hooksPath at a symlinked hooks dir (it can resolve outside the repo tree)." >&2
+  exit 2
+fi
+
+# ---------------------------------------------------------------------------
 # Nothing to install if this repo carries no tracked hooks dir at all — this
 # is the expected, non-error state for a managed-project clone that hasn't
-# adopted .githooks/ yet (see /handover's invocation of this script). Still
-# loud (non-zero, explicit message) rather than a silent no-op.
+# adopted .githooks/ yet. Still loud (non-zero, explicit message) rather
+# than a silent no-op.
 # ---------------------------------------------------------------------------
 if [ ! -d "$TARGET_ROOT/$HOOKS_DIR_NAME" ]; then
   echo "No $HOOKS_DIR_NAME/ directory in $TARGET_ROOT — nothing to install (this repo hasn't adopted ApexYard's tracked git hooks). Skipping." >&2
   exit 3
 fi
 
+# ---------------------------------------------------------------------------
+# LOW-4 (PR #1087 review): reject a --hooks-dir value that resolves OUTSIDE
+# the target repo (e.g. `--hooks-dir ../evil-hooks`). The classifier lib
+# already reasons carefully about "outside REPO_ROOT" when DETECTING state;
+# this is the matching check on the value we're about to WRITE.
+# ---------------------------------------------------------------------------
+HOOKS_DIR_RESOLVED=$(_resolve_real_path "$TARGET_ROOT/$HOOKS_DIR_NAME")
+case "$HOOKS_DIR_RESOLVED" in
+  "$TARGET_ROOT"/*|"$TARGET_ROOT") : ;;
+  *)
+    echo "ERROR: --hooks-dir '$HOOKS_DIR_NAME' resolves to '$HOOKS_DIR_RESOLVED', which is outside $TARGET_ROOT. Refusing to point core.hooksPath outside the repo tree." >&2
+    exit 2
+    ;;
+esac
+
 STATE=$(ghp_classify "$TARGET_ROOT" "$HOOKS_DIR_NAME")
 
 case "$STATE" in
   unset)
-    git -C "$TARGET_ROOT" config core.hooksPath "$HOOKS_DIR_NAME"
-    echo "core.hooksPath set to $HOOKS_DIR_NAME in $TARGET_ROOT (was unset)."
-    exit 0
+    if _ghp_set_hookspath "$TARGET_ROOT" "$HOOKS_DIR_NAME"; then
+      echo "core.hooksPath set to $HOOKS_DIR_NAME in $TARGET_ROOT (was unset)."
+      exit 0
+    else
+      echo "ERROR: failed to set core.hooksPath in $TARGET_ROOT — clone is NOT protected. Check for a stale .git/config.lock, retry, or investigate the error above." >&2
+      exit 4
+    fi
     ;;
 
   correct)
@@ -154,18 +268,26 @@ case "$STATE" in
 
   missing:*)
     RAW="${STATE#missing:}"
-    git -C "$TARGET_ROOT" config core.hooksPath "$HOOKS_DIR_NAME"
-    echo "core.hooksPath repaired: was '$RAW' (points at a non-existent directory), now $HOOKS_DIR_NAME in $TARGET_ROOT."
-    exit 0
+    if _ghp_set_hookspath "$TARGET_ROOT" "$HOOKS_DIR_NAME"; then
+      echo "core.hooksPath repaired: was '$RAW' (points at a non-existent directory), now $HOOKS_DIR_NAME in $TARGET_ROOT."
+      exit 0
+    else
+      echo "ERROR: failed to repair core.hooksPath in $TARGET_ROOT (was '$RAW') — clone is NOT protected. Check for a stale .git/config.lock, retry, or investigate the error above." >&2
+      exit 4
+    fi
     ;;
 
   foreign-git-dir:*)
     REST="${STATE#foreign-git-dir:}"
     RAW="${REST%%:*}"
     RESOLVED="${REST#*:}"
-    git -C "$TARGET_ROOT" config core.hooksPath "$HOOKS_DIR_NAME"
-    echo "core.hooksPath repaired: was '$RAW' (resolves to $RESOLVED — a different clone's git hooks dir), now $HOOKS_DIR_NAME in $TARGET_ROOT."
-    exit 0
+    if _ghp_set_hookspath "$TARGET_ROOT" "$HOOKS_DIR_NAME"; then
+      echo "core.hooksPath repaired: was '$RAW' (resolves to $RESOLVED — a different clone's git hooks dir), now $HOOKS_DIR_NAME in $TARGET_ROOT."
+      exit 0
+    else
+      echo "ERROR: failed to repair core.hooksPath in $TARGET_ROOT (was '$RAW') — clone is NOT protected. Check for a stale .git/config.lock, retry, or investigate the error above." >&2
+      exit 4
+    fi
     ;;
 
   third-party:*)
@@ -183,9 +305,13 @@ Re-run with --force to install ApexYard's tracked hooks ($HOOKS_DIR_NAME) instea
 MSG
       exit 1
     fi
-    git -C "$TARGET_ROOT" config core.hooksPath "$HOOKS_DIR_NAME"
-    echo "core.hooksPath overwritten (--force): was '$RAW', now $HOOKS_DIR_NAME in $TARGET_ROOT."
-    exit 0
+    if _ghp_set_hookspath "$TARGET_ROOT" "$HOOKS_DIR_NAME"; then
+      echo "core.hooksPath overwritten (--force): was '$RAW', now $HOOKS_DIR_NAME in $TARGET_ROOT."
+      exit 0
+    else
+      echo "ERROR: failed to overwrite core.hooksPath in $TARGET_ROOT (was '$RAW') — clone is NOT protected. Check for a stale .git/config.lock, retry, or investigate the error above." >&2
+      exit 4
+    fi
     ;;
 
   *)

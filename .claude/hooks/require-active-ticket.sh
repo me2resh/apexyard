@@ -52,55 +52,24 @@
 # let a command that also names an out-of-governance target FIRST slip an
 # in-repo target past a gate that stopped looking after target #1.
 
-# Resolve PATH to its canonical, symlink-free absolute form. Walks up to
-# the nearest EXISTING ancestor, physically resolves it (`pwd -P`, which
-# follows symlinks), then re-appends any not-yet-created tail literally —
-# a tail that doesn't exist yet cannot itself be a symlink. This mirrors
-# `realpath -m` without depending on GNU coreutils (not guaranteed present
-# on macOS/BSD). Echoes the resolved path, or nothing if even "/" can't be
-# stat'd (should not happen for a well-formed absolute path).
+# _resolve_real_path — portable, symlink-safe path canonicalisation.
 #
 # Why this matters (#883): without resolving symlinks first, a symlink
 # living under $HOME that POINTS INTO a governed tree (e.g.
 # ~/link-into-repo → the ops fork) would compare as "outside" the repo
 # under a naive string-prefix check, silently bypassing the gate.
-_resolve_real_path() {
-  local p="$1" dir tail=""
-  [ -n "$p" ] || return 0
-  dir="$p"
-  while [ -n "$dir" ] && [ "$dir" != "/" ] && [ ! -e "$dir" ]; do
-    if [ -z "$tail" ]; then
-      tail="$(basename "$dir")"
-    else
-      tail="$(basename "$dir")/$tail"
-    fi
-    dir="$(dirname "$dir")"
-  done
-  if [ ! -e "$dir" ]; then
-    # Nothing on the path exists at all — cannot resolve. Should not
-    # happen for an absolute path since "/" always exists.
-    return 0
-  fi
-  if [ -d "$dir" ]; then
-    dir="$(cd "$dir" 2>/dev/null && pwd -P)"
-  else
-    # $dir resolved to an existing FILE (not a directory) partway through
-    # the walk — canonicalize its parent and re-append its own basename.
-    local parent
-    parent="$(cd "$(dirname "$dir")" 2>/dev/null && pwd -P)"
-    if [ -n "$parent" ]; then
-      dir="$parent/$(basename "$dir")"
-    else
-      dir=""
-    fi
-  fi
-  [ -n "$dir" ] || return 0
-  if [ -n "$tail" ]; then
-    printf '%s/%s' "$dir" "$tail"
-  else
-    printf '%s' "$dir"
-  fi
-}
+#
+# Sourced from the single shared definition at _lib-path-resolve.sh (PR
+# #1087 review, Rex finding #4) rather than defined inline — this used to
+# be a self-contained copy, which put THREE near-identical
+# implementations of the same algorithm in .claude/hooks/ across two
+# files, one of which had already silently diverged. See
+# _lib-path-resolve.sh's own header comment for the full rationale.
+_RATC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$_RATC_HOOK_DIR/_lib-path-resolve.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_RATC_HOOK_DIR/_lib-path-resolve.sh"
+fi
 
 # ------------------------------------------------------------------------------
 # _ratc_evaluate_target FILE_PATH TOOL_NAME

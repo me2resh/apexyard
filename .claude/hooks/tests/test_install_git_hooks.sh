@@ -232,6 +232,162 @@ case_no_hooks_dir() {
   rm -rf "$sandbox"
 }
 
+# ---------------------------------------------------------------------------
+# CASE 9 (PR #1087 review §2a — kills the _resolve_real_path passthrough
+# mutant): core.hooksPath set through a SYMLINK to the repo's own real
+# .githooks dir must classify as "correct" (idempotent no-op), not
+# "third-party". A mutant that replaces _resolve_real_path's body with a
+# bare passthrough (`printf '%s' "$1"`) makes this flip from rc=0
+# "idempotent" to rc=1 "refuses" — proven by direct probe during review;
+# this case pins the shipped (correct) behaviour so a regression is caught.
+# ---------------------------------------------------------------------------
+case_symlinked_repo_idempotent() {
+  local sandbox; sandbox=$(mktemp -d)
+  local repo="$sandbox/repo"
+  build_repo "$repo"
+  local link="$sandbox/githooks-link"
+  ln -s "$repo/.githooks" "$link"
+  git -C "$repo" config core.hooksPath "$link"
+
+  local out rc
+  out=$(run_installer --repo-dir "$repo"); rc=$?
+  assert_eq "symlinked repo idempotent: exit code" "0" "$rc"
+  assert_match "symlinked repo idempotent: message says idempotent" "idempotent" "$out"
+  assert_eq "symlinked repo idempotent: config UNCHANGED (still the symlink path)" "$link" "$(git -C "$repo" config --get core.hooksPath)"
+
+  rm -rf "$sandbox"
+}
+
+# ---------------------------------------------------------------------------
+# CASE 10 (PR #1087 review §2c — kills the classifier's external-third-party
+# fallthrough mutant, the branch guarding this PR's central safety
+# property): core.hooksPath pointing at a real, existing directory OUTSIDE
+# the repo tree, with no `.git` component in its path — the canonical
+# "adopter configured a company-wide shared hooks dir" shape the lib's own
+# comment names. Cases 5/6 above only exercise the third-party branch via a
+# directory INSIDE the repo (the "$repo_root"/* prefix branch); this one
+# exercises the DIFFERENT, final fallthrough branch. A mutant that turns
+# that fallthrough into `unset` makes the installer silently CLOBBER this
+# deliberate value with no --force — proven during review; this case pins
+# the shipped (refuse) behaviour.
+# ---------------------------------------------------------------------------
+case_external_third_party_no_force() {
+  local sandbox; sandbox=$(mktemp -d)
+  local repo="$sandbox/repo"
+  local external="$sandbox/company-wide-hooks"
+  build_repo "$repo"
+  mkdir -p "$external"
+
+  git -C "$repo" config core.hooksPath "$external"
+
+  local out rc
+  out=$(run_installer --repo-dir "$repo"); rc=$?
+  assert_eq "external third-party no --force: exit code" "1" "$rc"
+  assert_match "external third-party no --force: message says refusing" "[Rr]efusing to overwrite" "$out"
+  assert_eq "external third-party no --force: config UNCHANGED" "$external" "$(git -C "$repo" config --get core.hooksPath)"
+
+  rm -rf "$sandbox"
+}
+
+# ---------------------------------------------------------------------------
+# CASE 11 (PR #1087 review MEDIUM-3): --repo-dir naming a directory that
+# exists but is NOT itself a repo root must refuse rather than silently
+# walk up and configure the ENCLOSING repo. Reproduced during review via
+# workspace/<project> on a partial clone; this sandbox reproduces the
+# general shape (a plain subdirectory of a real repo).
+# ---------------------------------------------------------------------------
+case_repo_dir_retarget_refused() {
+  local sandbox; sandbox=$(mktemp -d)
+  local outer="$sandbox/outer"
+  build_repo "$outer"
+  local not_a_repo="$outer/subdir-not-a-repo"
+  mkdir -p "$not_a_repo"
+
+  local out rc
+  out=$(run_installer --repo-dir "$not_a_repo"); rc=$?
+  assert_eq "repo-dir retarget: exit code" "2" "$rc"
+  assert_match "repo-dir retarget: message names the enclosing repo" "ENCLOSING repo" "$out"
+  assert_eq "repo-dir retarget: outer repo's config UNCHANGED" "" "$(git -C "$outer" config --get core.hooksPath 2>/dev/null || true)"
+
+  rm -rf "$sandbox"
+}
+
+# ---------------------------------------------------------------------------
+# CASE 12 (PR #1087 review LOW-4): --hooks-dir resolving outside the repo
+# tree (path traversal) must be refused, not written verbatim.
+# ---------------------------------------------------------------------------
+case_hooks_dir_traversal_refused() {
+  local sandbox; sandbox=$(mktemp -d)
+  local repo="$sandbox/repo"
+  build_repo "$repo"
+  mkdir -p "$sandbox/evil-outside-hooks"
+
+  local out rc
+  out=$(run_installer --repo-dir "$repo" --hooks-dir "../evil-outside-hooks"); rc=$?
+  assert_eq "hooks-dir traversal: exit code" "2" "$rc"
+  assert_match "hooks-dir traversal: message says outside" "outside" "$out"
+  assert_eq "hooks-dir traversal: config UNCHANGED" "" "$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+
+  rm -rf "$sandbox"
+}
+
+# ---------------------------------------------------------------------------
+# CASE 13 (PR #1087 review LOW-5): a tracked hooks dir committed as a
+# SYMLINK must be refused, not silently followed.
+# ---------------------------------------------------------------------------
+case_symlinked_hooks_dir_refused() {
+  local sandbox; sandbox=$(mktemp -d)
+  local repo="$sandbox/repo"
+  local elsewhere="$sandbox/real-hooks-elsewhere"
+  mkdir -p "$repo" "$elsewhere"
+  ( cd "$repo" && git init -q )
+  printf '#!/bin/sh\nexit 0\n' > "$elsewhere/pre-push"
+  ln -s "$elsewhere" "$repo/.githooks"
+  ( cd "$repo" && git add .githooks && GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t.com \
+      GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t.com \
+      git commit -q -m "chore: init" )
+
+  local out rc
+  out=$(run_installer --repo-dir "$repo"); rc=$?
+  assert_eq "symlinked hooks dir: exit code" "2" "$rc"
+  assert_match "symlinked hooks dir: message says symlink" "symlink" "$out"
+  assert_eq "symlinked hooks dir: config UNCHANGED" "" "$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+
+  rm -rf "$sandbox"
+}
+
+# ---------------------------------------------------------------------------
+# CASE 14 (PR #1087 review MEDIUM-2): a `git config` write that fails (a
+# stale .git/config.lock — routine when several worktree agents run in
+# parallel) must fail CLOSED: non-zero exit, no false success message, and
+# the config value left exactly as it was. Uses a REAL git lock file, not
+# a mock, so this is a genuine end-to-end reproduction of the review's
+# finding, not a simulation of one.
+# ---------------------------------------------------------------------------
+case_config_lock_fails_closed() {
+  local sandbox; sandbox=$(mktemp -d)
+  local repo="$sandbox/repo"
+  build_repo "$repo"
+
+  : > "$repo/.git/config.lock"
+
+  local out rc
+  out=$(run_installer --repo-dir "$repo"); rc=$?
+  rm -f "$repo/.git/config.lock"
+
+  assert_eq "config.lock fails closed: exit code is 4 (fail-closed), not 0" "4" "$rc"
+  if printf '%s' "$out" | grep -qE "core\.hooksPath set to \.githooks.*was unset"; then
+    echo "FAIL [config.lock fails closed: must NOT print the success message]" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}config.lock-no-false-success "
+  else
+    echo "PASS [config.lock fails closed: no false success message]"
+    PASS=$((PASS+1))
+  fi
+  assert_eq "config.lock fails closed: config still unset (write never took)" "" "$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)"
+
+  rm -rf "$sandbox"
+}
+
 if [ ! -f "$SCRIPT_SRC" ]; then
   echo "FAIL: bin/install-git-hooks.sh not found at $SCRIPT_SRC" >&2
   exit 1
@@ -245,6 +401,12 @@ case_third_party_no_force
 case_third_party_with_force
 case_not_a_git_repo
 case_no_hooks_dir
+case_symlinked_repo_idempotent
+case_external_third_party_no_force
+case_repo_dir_retarget_refused
+case_hooks_dir_traversal_refused
+case_symlinked_hooks_dir_refused
+case_config_lock_fails_closed
 
 echo ""
 echo "==================================="
