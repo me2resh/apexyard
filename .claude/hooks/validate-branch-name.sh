@@ -15,22 +15,18 @@ fi
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Strip heredoc body text BEFORE any pattern matching below, including the
-# presence-check just below. A heredoc body — a commit message, a PR body,
-# review prose — is literal payload, not a command, but this repo's own
-# commit messages routinely *discuss* git behaviour in prose. Without this,
-# a heredoc merely mentioning "git push" fires the presence-check on a
-# command that isn't pushing at all, and extract_push_ref would match that
-# prose instead of the real invocation. See me2resh/apexyard#1066.
-COMMAND_FOR_MATCH="$COMMAND"
-if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
-  # shellcheck disable=SC1090,SC1091
-  . "$HOOK_DIR/_lib-extract-push-ref.sh"
-  COMMAND_FOR_MATCH=$(strip_heredoc_bodies "$COMMAND")
-fi
-
-# Only check on git push
-if ! echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+push\b'; then
+# Only check on git push. This presence check MUST run against the RAW,
+# unfiltered command — never against heredoc-stripped text. A security
+# review of the first #1066 fix (me2resh/apexyard#1075) found that routing
+# this specific check through stripped text let a malformed heredoc (an
+# unterminated one, a backslash/multi-word/dotted delimiter, two heredocs on
+# one line, or plain prose merely mentioning "<<EOF") make the stripper eat
+# the real push, so the presence check never fired and the branch was never
+# validated at all — a silent bypass, not merely a false positive. See
+# _lib-strip-heredoc.sh's governance comment and
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the incident and
+# the additive-(safe)-vs-subtractive-(dangerous) framing that fixes it.
+if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
 
@@ -43,6 +39,13 @@ fi
 # Falls back to local HEAD when the push has no source ref (no-arg push,
 # `git push origin` with no ref, etc.) — preserves today's behaviour for
 # anyone not passing the ref explicitly. See me2resh/apexyard#194, #547.
+#
+# is_tag_push() and extract_push_ref() are heredoc-aware internally (they
+# strip CONFIRMED heredoc bodies before parsing) — that's fine, because
+# "which ref / is this exempt" is an ADDITIVE question with the fail-closed
+# check below as its own backstop. Passing them the RAW $COMMAND (not a
+# pre-stripped variable) keeps that internal stripping the ONLY place it
+# happens, per _lib-strip-heredoc.sh's governance rule.
 PUSH_REF=""
 if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # shellcheck disable=SC1090,SC1091
@@ -53,11 +56,43 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # This guard runs before extract_push_ref so shell redirections appended
   # to a tag-push command (e.g. `git push --tags 2>&1 | tail`) don't cause
   # is_tag_push() to miss the --tags flag. See me2resh/apexyard#547.
-  if is_tag_push "$COMMAND_FOR_MATCH"; then
+  if is_tag_push "$COMMAND"; then
     exit 0
   fi
 
-  PUSH_REF=$(extract_push_ref "$COMMAND_FOR_MATCH")
+  PUSH_REF=$(extract_push_ref "$COMMAND")
+
+  # Fail closed rather than silently falling back to local HEAD when the
+  # heredoc-aware extraction found nothing BUT a naive, unstripped parse of
+  # the same raw command DID find something ref-shaped. That disagreement
+  # means heredoc-stripping may have hidden the real destination rather than
+  # this being a genuinely ref-less push — and we cannot tell which from
+  # here. Falling back to local HEAD in that case would validate the wrong
+  # thing; blocking and asking the operator to split the call (the ticket's
+  # own mitigation) is the safe direction. See me2resh/apexyard#1075.
+  if [ -z "$PUSH_REF" ]; then
+    RAW_REF=$(_extract_push_ref_core "$COMMAND")
+    if [ -n "$RAW_REF" ]; then
+      cat >&2 <<MSG
+BLOCKED: Cannot safely determine the push destination for this command.
+
+This command contains "git push", and a naive scan (ignoring any heredoc
+structure) found what looks like an explicit destination ref -- but
+heredoc-aware parsing found none, which means a heredoc body in this same
+command may be hiding the real destination rather than this genuinely
+being a ref-less push.
+
+To unblock: run the heredoc-writing step (e.g. writing a commit message
+or PR body to a file) and the "git push" step in SEPARATE Bash calls --
+never inline a heredoc alongside a git command in the same invocation
+(.claude/rules -- see me2resh/apexyard#1066's own mitigation note).
+MSG
+      exit 2
+    fi
+    # else: genuinely no ref anywhere, even ignoring heredoc structure --
+    # a real bare `git push` / `git push origin` relying on upstream
+    # tracking. Fall through to the local-HEAD fallback below, unchanged.
+  fi
 fi
 
 # When the push has no explicit source ref (no-arg `git push`, `git push
@@ -79,7 +114,7 @@ BRANCH_DIR=""
 if [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-pr-repo.sh"
-  CD_TARGET=$(pr_cmd_cd_target "$COMMAND_FOR_MATCH")
+  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
   if [ -n "$CD_TARGET" ]; then
     CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
     if [ -n "$CD_TOPLEVEL" ]; then

@@ -26,10 +26,11 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/validate-branch-name.sh"
 LIB_SRC="$SRC_ROOT/.claude/hooks/_lib-extract-push-ref.sh"
+LIB_STRIP_HEREDOC_SRC="$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh"
 LIB_CONFIG_SRC="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_PR_REPO_SRC="$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh"
 
-for f in "$HOOK_SRC" "$LIB_SRC"; do
+for f in "$HOOK_SRC" "$LIB_SRC" "$LIB_STRIP_HEREDOC_SRC"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -61,6 +62,9 @@ make_sandbox_with_wrong_local_branch() {
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-branch-name.sh"
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
+  if [ -f "$LIB_STRIP_HEREDOC_SRC" ]; then
+    cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
+  fi
   if [ -f "$LIB_CONFIG_SRC" ]; then
     cp "$LIB_CONFIG_SRC" "$sb/.claude/hooks/_lib-read-config.sh"
   fi

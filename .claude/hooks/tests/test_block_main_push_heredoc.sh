@@ -1,5 +1,6 @@
 #!/bin/bash
-# Hook-level regression test for me2resh/apexyard#1066.
+# Hook-level regression test for me2resh/apexyard#1066 (and its follow-up
+# security-review fix, #1075).
 #
 # Two distinct false-positive/false-negative shapes were confirmed in one
 # session (see the ticket's "Investigation Notes"):
@@ -16,8 +17,20 @@
 #      bug: a heredoc mentioning `git push` in prose could make the hook
 #      resolve the wrong destination branch.
 #
-# Both are fixed by stripping heredoc bodies (COMMAND_FOR_MATCH) before any
-# grep presence-check, cd-target extraction, or ref extraction in this hook.
+# #2 (the push-ref "which ref" question) is fixed by heredoc-stripping via
+# _lib-strip-heredoc.sh, used ONLY inside extract_push_ref/is_tag_push.
+#
+# #1 (the commit-check) is DELIBERATELY narrower than the first version of
+# this fix. A security review of that first version (PR #1075) found that
+# routing the PRESENCE checks (`grep -qE 'git push'`/`'git commit'`)
+# through heredoc-stripped text let a malformed heredoc make the stripper
+# eat the real command, so the gate silently never fired — a bypass, not a
+# false positive. The commit-check has no "which ref" refinement step to
+# safely lean on (it only checks current branch), so its presence check now
+# runs against the RAW command unconditionally, same as `dev`'s baseline
+# behaviour. This means case (a) below now DOES block — that is the
+# accepted, documented trade-off, not a regression. See
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -26,10 +39,11 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/block-main-push.sh"
 LIB_SRC="$SRC_ROOT/.claude/hooks/_lib-extract-push-ref.sh"
+LIB_STRIP_HEREDOC_SRC="$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh"
 LIB_CONFIG_SRC="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_OPS_ROOT_SRC="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
 
-for f in "$HOOK_SRC" "$LIB_SRC"; do
+for f in "$HOOK_SRC" "$LIB_SRC" "$LIB_STRIP_HEREDOC_SRC"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -63,6 +77,9 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/block-main-push.sh"
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
+  if [ -f "$LIB_STRIP_HEREDOC_SRC" ]; then
+    cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
+  fi
   if [ -f "$LIB_CONFIG_SRC" ]; then
     cp "$LIB_CONFIG_SRC" "$sb/.claude/hooks/_lib-read-config.sh"
   fi
@@ -95,13 +112,16 @@ run_case() {
 }
 
 # ---------------------------------------------------------------------------
-# (a) #1066: a heredoc merely mentioning "git commit" in prose, cwd on a
-#     protected branch, with NO real commit anywhere in the command -> must
-#     be a no-op (was: falsely BLOCKED because the raw text contained the
-#     substring "git commit").
+# (a) #1075 (security-review correction to #1066): a heredoc merely
+#     mentioning "git commit" in prose, cwd on a protected branch, with NO
+#     real commit anywhere in the command -> now BLOCKS. This is the
+#     deliberate, documented narrowing: the commit-check's presence test
+#     must run against RAW text (never heredoc-stripped text), because
+#     unlike the push-check it has no independent "which ref" fallback to
+#     safely lean on. Matches `dev`'s pre-#1066 conservative behaviour.
 # ---------------------------------------------------------------------------
 SB=$(make_sandbox "dev")
-run_case "#1066: heredoc-only prose mentions 'git commit', no real commit -> no-op (cwd=dev)" \
+run_case "#1075: heredoc-only prose mentions 'git commit', cwd=dev -> blocks (raw presence check, deliberate)" \
   "$SB" "$(cat <<'CMD'
 cat > /tmp/rev.txt <<EOF
 The reviewer noted that a quoted `git commit -m "wip"` inside a heredoc
@@ -109,7 +129,7 @@ should not be treated as a real commit.
 EOF
 echo done
 CMD
-)" 0
+)" 2
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------

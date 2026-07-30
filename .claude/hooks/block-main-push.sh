@@ -46,20 +46,20 @@ fi
 # regardless of the harness's $PWD.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Strip heredoc body text before ANY pattern matching below. A heredoc body
-# — a commit message, a PR body, review prose — is literal payload, not a
-# command, but this repo's own commit messages and review comments routinely
-# *discuss* git behaviour. Without this, a heredoc merely mentioning "git
-# commit" or "git push" fires the presence-checks below on a command that
-# isn't committing/pushing anything at all, and (for push) extract_push_ref
-# would match that prose instead of the real destination branch. See
-# me2resh/apexyard#1066.
-COMMAND_FOR_MATCH="$COMMAND"
-if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
-  # shellcheck disable=SC1090,SC1091
-  . "$HOOK_DIR/_lib-extract-push-ref.sh"
-  COMMAND_FOR_MATCH=$(strip_heredoc_bodies "$COMMAND")
-fi
+# NOTE on heredoc bodies (me2resh/apexyard#1066, #1075): every presence
+# check and cd-target extraction below runs against the RAW $COMMAND, never
+# against heredoc-stripped text. A security review of the first #1066 fix
+# found that routing these checks through stripped text let a malformed
+# heredoc (unterminated, a backslash/multi-word/dotted delimiter, two
+# heredocs on one line, or plain prose merely mentioning "<<EOF") make the
+# stripper eat the real command, so the presence check never fired and
+# neither gate below ever ran -- a silent bypass. `is_tag_push` /
+# `extract_push_ref` (sourced below) DO strip heredoc bodies internally,
+# but that is safe ONLY because it answers the narrower, additive "which
+# ref" question with the fail-closed check below as backstop -- never the
+# "is there a push/commit here at all" question. See
+# _lib-strip-heredoc.sh's governance comment and
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
 
 # Resolve protected-branch list from project config (shared reader, #109).
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -84,18 +84,46 @@ fi
 # origin` relying on upstream tracking), fall back to local HEAD so the hook
 # still catches pushes on protected branches made without an explicit ref.
 # ---------------------------------------------------------------------------
-if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+push\b'; then
+if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
     # shellcheck disable=SC1090,SC1091
     . "$HOOK_DIR/_lib-extract-push-ref.sh"
 
-    # Tag pushes are never subject to a branch-protection check.
-    if is_tag_push "$COMMAND_FOR_MATCH"; then
+    # Tag pushes are never subject to a branch-protection check. Pass the
+    # RAW command — is_tag_push strips heredoc bodies internally, which is
+    # safe here (a false NEGATIVE just means we go on to validate a real
+    # tag push as a branch push; a false POSITIVE would be dangerous, and
+    # stripping can only remove text, never manufacture a "--tags" that
+    # wasn't already in the raw command).
+    if is_tag_push "$COMMAND"; then
       exit 0
     fi
 
-    PUSH_DST=$(extract_push_ref "$COMMAND_FOR_MATCH")
+    PUSH_DST=$(extract_push_ref "$COMMAND")
+
+    # Fail closed rather than silently falling back to the current branch
+    # when heredoc-aware extraction found nothing BUT a naive, unstripped
+    # parse of the same raw command found something ref-shaped. See
+    # me2resh/apexyard#1075 and validate-branch-name.sh's identical check.
+    if [ -z "$PUSH_DST" ]; then
+      RAW_PUSH_DST=$(_extract_push_ref_core "$COMMAND")
+      if [ -n "$RAW_PUSH_DST" ]; then
+        cat >&2 <<MSG
+BLOCKED: Cannot safely determine the push destination for this command.
+
+This command contains "git push", and a naive scan (ignoring any heredoc
+structure) found what looks like an explicit destination ref -- but
+heredoc-aware parsing found none, which means a heredoc body in this same
+command may be hiding the real destination.
+
+To unblock: run the heredoc-writing step and the "git push" step in
+SEPARATE Bash calls -- never inline a heredoc alongside a git command in
+the same invocation (me2resh/apexyard#1066's own mitigation note).
+MSG
+        exit 2
+      fi
+    fi
   else
     # Lib missing — best-effort fallback: no explicit ref extracted.
     PUSH_DST=""
@@ -115,9 +143,11 @@ if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+push\b'; then
     # protected branch like `dev`.
     #
     # This mirrors the same pattern used in the commit section below for #549.
+    # Uses the RAW command — see the file-level note on why cd-detection
+    # never consults heredoc-stripped text.
     PUSH_WORKTREE_PATH=""
-    if echo "$COMMAND_FOR_MATCH" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
-      PUSH_WORKTREE_PATH=$(echo "$COMMAND_FOR_MATCH" \
+    if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+      PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
         | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
         | tail -n 1 \
         | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
@@ -168,13 +198,17 @@ fi
 # For plain `git commit` (no `cd` prefix) fall back to the session cwd —
 # preserving the original behaviour for the normal single-worktree case.
 # ---------------------------------------------------------------------------
-if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+commit\b'; then
+if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   # Detect `cd <path>` prefix in compound commands, e.g.:
   #   cd ../wt && git commit -m "msg"
   #   cd /abs/path && git commit …
-  # Match `cd` as the first meaningful token before any separator.
+  # Match `cd` as the first meaningful token before any separator. Uses the
+  # RAW command throughout this section — the commit-check has no "which
+  # ref" refinement step at all (it only checks current branch), so there
+  # is nothing here for heredoc-stripping to safely improve, only a
+  # presence question that must stay on raw text.
   WORKTREE_PATH=""
-  if echo "$COMMAND_FOR_MATCH" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
     # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
     # targets b, not a) and STRIP surrounding quotes. Quote-stripping is the
     # security-critical part: without it, `cd "path" && git commit` would pass
@@ -183,7 +217,7 @@ if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+commit\b'; then
     # worktree slips through. That false-negative was caught in the #580 review
     # of this fix (#549). Handles double-quoted, single-quoted (incl. spaces),
     # and bare paths.
-    WORKTREE_PATH=$(echo "$COMMAND_FOR_MATCH" \
+    WORKTREE_PATH=$(echo "$COMMAND" \
       | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
       | tail -n 1 \
       | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
