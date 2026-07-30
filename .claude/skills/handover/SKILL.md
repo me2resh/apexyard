@@ -167,6 +167,20 @@ CLONE_STATUS="cloned"   # or "preserved" | "declined" | "failed: <reason>"
 
 All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo root whenever `$CLONE_STATUS` is `cloned` or `preserved`. When `$CLONE_STATUS` is `declined` or `failed`, fall back to GitHub API reads via `gh api` / `gh -R <owner/name> …` (degraded but functional).
 
+### 1.5-git-hooks. Install the tracked git hooks in the new clone (default: always attempt)
+
+After a successful clone (`$CLONE_STATUS=cloned` or `preserved`), attempt to install ApexYard's tracked git hooks into the workspace clone the same way `/setup` does for the ops fork — `core.hooksPath` is per-clone git config, never committed, so this fresh clone starts unset regardless of what any other clone of the same project has configured:
+
+```bash
+bash bin/install-git-hooks.sh --repo-dir "$WORKSPACE_DIR/<name>"
+```
+
+This is a **best-effort, non-fatal** step — most managed-project clones don't carry a `.githooks/` directory of their own yet (adopting that is a separate, out-of-scope piece of work per me2resh/apexyard#1086), so exit 3 ("nothing to install") is the common, expected outcome here, not a failure to report loudly. Branch on the exit code:
+
+- **0** (installed / repaired / already correct): note it in the step 10 summary, one line.
+- **3** (no tracked hooks dir in the clone): silent — this is the expected case for the vast majority of handovers today; don't clutter the summary with an expected no-op.
+- **1** (a real, different `core.hooksPath` the operator configured on purpose in that clone) or **2** (misuse / not a git repo, shouldn't happen right after a successful clone): print a one-line note and continue — this step never blocks the rest of `/handover`.
+
 ### 1.5-reindex. Reindex the cloned repo in MCP (default: always attempt)
 
 After a successful clone (`$CLONE_STATUS=cloned`), trigger an MCP reindex so `search_code` and `search_docs` return results during the deep-dive phases that follow (steps 2–6). Without this step those queries return empty against the just-cloned repo, and the agent silently falls back to `find` + `cat` + `Bash` — defeating the token-cost benefit of cloning early.

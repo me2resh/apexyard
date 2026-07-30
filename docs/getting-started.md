@@ -137,27 +137,25 @@ Create an AgDR.
 
 ---
 
-## Optional: Terminal push hook (`core.hooksPath`)
+## Terminal push hook (`core.hooksPath`)
 
 The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, and the subpack extraction smoke test — for terminal `git push` commands.
 
 The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Claude Code_. The git hook covers pushes made directly from the terminal.
 
-### One-time opt-in per clone
+### Installed automatically by `/setup`
+
+As of me2resh/apexyard#1086, `/setup` runs `bin/install-git-hooks.sh` for you, so a fresh ops-fork clone that's been through `/setup` already has `core.hooksPath` pointing at `.githooks`. A `check-git-hooks-installed.sh` SessionStart advisory also warns — same non-blocking shape as `check-upstream-drift.sh` — if a clone's `core.hooksPath` is unset, stale (points at a deleted directory), or a leftover pointer into a different clone's `.git/hooks`.
+
+If you skipped `/setup`, or want to run it by hand:
 
 ```bash
-git config core.hooksPath .githooks
+bash bin/install-git-hooks.sh
 ```
 
-Run this once inside your apexyard clone. Git then picks up `.githooks/pre-push` on every `git push` regardless of how you invoke it.
+Idempotent — safe to re-run. Repairs the stale-pointer cases above automatically; refuses to overwrite a `core.hooksPath` you set to something else on purpose unless you pass `--force`. See `bash bin/install-git-hooks.sh --help`.
 
-To enable it globally for all clones of apexyard (useful if you work across multiple machines or re-clone often):
-
-```bash
-git config --global core.hooksPath .githooks
-```
-
-Note: `--global` affects every git repo on your machine, not just apexyard. If other repos ship their own hooks under `.git/hooks/`, those will be shadowed. The safest approach is per-clone.
+`core.hooksPath` is per-clone git config (never committed), so this needs to run once per clone — that's exactly why `/setup` and `/handover` call it rather than leaving it as a one-time manual step to remember. `--global` also works (`git config --global core.hooksPath .githooks`) if you want every clone on a machine covered at once, but note it affects every git repo on that machine, not just apexyard — if other repos ship their own hooks under `.git/hooks/`, those get shadowed. Per-clone (what the installer does by default) is the safer default.
 
 ### Missing tools degrade gracefully
 

@@ -71,6 +71,16 @@ The marker is cleared in Step 8 below (and on the next SessionStart by `clear-bo
 
 See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
+### Step 0.5: Install the tracked git hooks (REQUIRED)
+
+`core.hooksPath` is a **per-clone** git config value — it lives in `.git/config`, never committed, so every fresh clone of the ops fork starts unset regardless of how many sibling clones already have it configured. Left unset, `.githooks/pre-push` (tracked, but inert without this) never runs on a terminal `git push` — only Claude-Code-driven pushes go through the equivalent `pre-push-gate.sh` PreToolUse hook. Run the installer once per fork, here, so a fresh `/setup` always leaves the clone protected on both paths:
+
+```bash
+bash bin/install-git-hooks.sh
+```
+
+Idempotent — a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force` — overriding a deliberate adopter choice isn't this step's call to make silently. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party).
+
 ### Step 1: Check current state
 
 Read `onboarding.yaml`. Four modes:
