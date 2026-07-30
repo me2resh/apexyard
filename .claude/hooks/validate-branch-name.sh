@@ -13,8 +13,24 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Strip heredoc body text BEFORE any pattern matching below, including the
+# presence-check just below. A heredoc body — a commit message, a PR body,
+# review prose — is literal payload, not a command, but this repo's own
+# commit messages routinely *discuss* git behaviour in prose. Without this,
+# a heredoc merely mentioning "git push" fires the presence-check on a
+# command that isn't pushing at all, and extract_push_ref would match that
+# prose instead of the real invocation. See me2resh/apexyard#1066.
+COMMAND_FOR_MATCH="$COMMAND"
+if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-extract-push-ref.sh"
+  COMMAND_FOR_MATCH=$(strip_heredoc_bodies "$COMMAND")
+fi
+
 # Only check on git push
-if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+if ! echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+push\b'; then
   exit 0
 fi
 
@@ -27,7 +43,6 @@ fi
 # Falls back to local HEAD when the push has no source ref (no-arg push,
 # `git push origin` with no ref, etc.) — preserves today's behaviour for
 # anyone not passing the ref explicitly. See me2resh/apexyard#194, #547.
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 PUSH_REF=""
 if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # shellcheck disable=SC1090,SC1091
@@ -38,11 +53,11 @@ if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
   # This guard runs before extract_push_ref so shell redirections appended
   # to a tag-push command (e.g. `git push --tags 2>&1 | tail`) don't cause
   # is_tag_push() to miss the --tags flag. See me2resh/apexyard#547.
-  if is_tag_push "$COMMAND"; then
+  if is_tag_push "$COMMAND_FOR_MATCH"; then
     exit 0
   fi
 
-  PUSH_REF=$(extract_push_ref "$COMMAND")
+  PUSH_REF=$(extract_push_ref "$COMMAND_FOR_MATCH")
 fi
 
 # When the push has no explicit source ref (no-arg `git push`, `git push
@@ -64,7 +79,7 @@ BRANCH_DIR=""
 if [ -f "$HOOK_DIR/_lib-pr-repo.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$HOOK_DIR/_lib-pr-repo.sh"
-  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
+  CD_TARGET=$(pr_cmd_cd_target "$COMMAND_FOR_MATCH")
   if [ -n "$CD_TARGET" ]; then
     CD_TOPLEVEL=$(git -C "$CD_TARGET" rev-parse --show-toplevel 2>/dev/null)
     if [ -n "$CD_TOPLEVEL" ]; then

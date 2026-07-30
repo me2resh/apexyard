@@ -31,6 +31,109 @@
 #
 # Refs: me2resh/apexyard#194, me2resh/apexyard#547
 
+# Strips heredoc BODY text (and the heredoc's own start/terminator lines)
+# from a command string before any git-command pattern matching runs.
+#
+# WHY THIS EXISTS (me2resh/apexyard#1066)
+# ----------------------------------------
+# A heredoc body is literal payload data — a commit message, a PR body,
+# review prose — not a command. But `is_tag_push` / `extract_push_ref` (and
+# the presence-checks in validate-branch-name.sh / block-main-push.sh) used
+# to scan the WHOLE raw command text for `git push` / `git commit`. This
+# repo's own commit messages routinely *discuss* git behaviour in prose, so
+# a call like:
+#
+#   cat > /tmp/m.txt <<EOF
+#   The previous commit claimed terminal `git push` still runs the checks...
+#   EOF
+#   git commit -F /tmp/m.txt
+#   git push upstream fix/GH-1031-untrack-project-config-json
+#
+# matched the FIRST "git push" occurrence — inside the prose — and
+# extracted "still" as the branch name instead of the real push destination.
+#
+# Fix: before any matching, drop every heredoc BODY (the lines between a
+# `<<[-]TERM` operator and the line that equals TERM) from the command text.
+# The line carrying the operator keeps whatever precedes it (it may hold a
+# real command, e.g. `cd foo && cat > x.txt <<EOF`) — only the operator
+# itself and everything after it on that line is dropped, along with every
+# line up to and including the terminator line.
+#
+# Handles: <<EOF, <<'EOF', <<"EOF", <<-EOF (leading-tab-stripped, per POSIX
+# `<<-` semantics). The terminator word is read from the operator itself,
+# not hardcoded to "EOF" — any identifier the caller chooses works.
+#
+# Deliberately narrow, not a general shell parser:
+#   - Only the FIRST heredoc-start pattern on a line is recognised; multiple
+#     heredocs on one line are not specially handled.
+#   - A line containing a here-STRING (`<<<`) is never treated as a heredoc
+#     start, so `wc -l <<< "$var"` is left untouched.
+#   - If a heredoc is left unterminated (no matching TERM line found before
+#     the command ends), the remainder of the command is treated as body
+#     and dropped. This never creates a false ALLOW: every caller still
+#     falls back to validating the actual local git state (current branch /
+#     push destination on disk) when no ref is extracted. Over-stripping
+#     fails toward "validate something real", never toward "skip validation
+#     entirely" — see AgDR-0104's framing of this class of control.
+#
+# Returns: prints the command with heredoc bodies removed. Always exits 0.
+strip_heredoc_bodies() {
+  local cmd="$1"
+  local in_heredoc=0 strip_tabs=0 terminator="" out="" line check_line marker tab
+  tab="$(printf '\t')"
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$in_heredoc" -eq 1 ]; then
+      check_line="$line"
+      if [ "$strip_tabs" -eq 1 ]; then
+        while [ "${check_line:0:1}" = "$tab" ]; do
+          check_line="${check_line:1}"
+        done
+      fi
+      if [ "$check_line" = "$terminator" ]; then
+        in_heredoc=0
+      fi
+      # Every heredoc body line (including the terminator line itself) is
+      # dropped — none of it is a real command.
+      continue
+    fi
+
+    marker=""
+    case "$line" in
+      *'<<<'*) : ;;  # here-string on this line — never a heredoc start
+      *'<<'*)
+        marker=$(echo "$line" \
+          | grep -oE '<<-?[[:space:]]*['"'"'"]?[A-Za-z_][A-Za-z0-9_]*['"'"'"]?' \
+          | head -1)
+        ;;
+    esac
+
+    if [ -n "$marker" ]; then
+      strip_tabs=0
+      case "$marker" in
+        '<<-'*) strip_tabs=1 ;;
+      esac
+      terminator="${marker#<<}"
+      terminator="${terminator#-}"
+      # Trim leading whitespace.
+      terminator="${terminator#"${terminator%%[![:space:]]*}"}"
+      # Strip a single pair of surrounding quotes, if present.
+      case "$terminator" in
+        \"*\") terminator="${terminator#\"}"; terminator="${terminator%\"}" ;;
+        \'*\') terminator="${terminator#\'}"; terminator="${terminator%\'}" ;;
+      esac
+      in_heredoc=1
+      # Keep whatever precedes the heredoc operator on this line.
+      out+="${line%%<<*}"$'\n'
+      continue
+    fi
+
+    out+="$line"$'\n'
+  done <<< "$cmd"
+
+  printf '%s' "$out"
+}
+
 # Returns true (0) when the command is a tag push that has no branch ref at all.
 # Tag pushes must be a no-op for a *branch*-name validator.
 #
@@ -44,6 +147,11 @@
 #                                            validator falls back to local HEAD)
 is_tag_push() {
   local cmd="$1"
+
+  # Strip heredoc bodies FIRST (me2resh/apexyard#1066) — prose inside a
+  # heredoc that mentions "--tags" or "tag <name>" must not be mistaken for
+  # a real tag-push flag.
+  cmd=$(strip_heredoc_bodies "$cmd")
 
   # Strip everything after the first shell redirection/pipe so the check isn't
   # fooled by `2>&1 | tail` appended to the command.
@@ -108,6 +216,13 @@ is_tag_push() {
 extract_push_ref() {
   local cmd="$1"
   local push_segment ref
+
+  # Strip heredoc bodies FIRST (me2resh/apexyard#1066) — a heredoc body is
+  # literal payload (commit message, PR body, review prose), not a command.
+  # Without this, the FIRST "git push"-shaped text anywhere in the raw
+  # command — including inside prose that merely *mentions* a push — wins
+  # over the real invocation. See the function doc above strip_heredoc_bodies.
+  cmd=$(strip_heredoc_bodies "$cmd")
 
   # Bail on `--delete` / `-d` shapes — they don't have a source ref.
   if echo "$cmd" | grep -qE '\bgit\s+push\b[^|;&]*(--delete\b|[[:space:]]-d\b)'; then

@@ -46,6 +46,21 @@ fi
 # regardless of the harness's $PWD.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Strip heredoc body text before ANY pattern matching below. A heredoc body
+# — a commit message, a PR body, review prose — is literal payload, not a
+# command, but this repo's own commit messages and review comments routinely
+# *discuss* git behaviour. Without this, a heredoc merely mentioning "git
+# commit" or "git push" fires the presence-checks below on a command that
+# isn't committing/pushing anything at all, and (for push) extract_push_ref
+# would match that prose instead of the real destination branch. See
+# me2resh/apexyard#1066.
+COMMAND_FOR_MATCH="$COMMAND"
+if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-extract-push-ref.sh"
+  COMMAND_FOR_MATCH=$(strip_heredoc_bodies "$COMMAND")
+fi
+
 # Resolve protected-branch list from project config (shared reader, #109).
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 PROTECTED=""
@@ -69,18 +84,18 @@ fi
 # origin` relying on upstream tracking), fall back to local HEAD so the hook
 # still catches pushes on protected branches made without an explicit ref.
 # ---------------------------------------------------------------------------
-if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+push\b'; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
     # shellcheck disable=SC1090,SC1091
     . "$HOOK_DIR/_lib-extract-push-ref.sh"
 
     # Tag pushes are never subject to a branch-protection check.
-    if is_tag_push "$COMMAND"; then
+    if is_tag_push "$COMMAND_FOR_MATCH"; then
       exit 0
     fi
 
-    PUSH_DST=$(extract_push_ref "$COMMAND")
+    PUSH_DST=$(extract_push_ref "$COMMAND_FOR_MATCH")
   else
     # Lib missing — best-effort fallback: no explicit ref extracted.
     PUSH_DST=""
@@ -101,8 +116,8 @@ if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
     #
     # This mirrors the same pattern used in the commit section below for #549.
     PUSH_WORKTREE_PATH=""
-    if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
-      PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
+    if echo "$COMMAND_FOR_MATCH" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+      PUSH_WORKTREE_PATH=$(echo "$COMMAND_FOR_MATCH" \
         | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
         | tail -n 1 \
         | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
@@ -153,13 +168,13 @@ fi
 # For plain `git commit` (no `cd` prefix) fall back to the session cwd —
 # preserving the original behaviour for the normal single-worktree case.
 # ---------------------------------------------------------------------------
-if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
+if echo "$COMMAND_FOR_MATCH" | grep -qE '\bgit\s+commit\b'; then
   # Detect `cd <path>` prefix in compound commands, e.g.:
   #   cd ../wt && git commit -m "msg"
   #   cd /abs/path && git commit …
   # Match `cd` as the first meaningful token before any separator.
   WORKTREE_PATH=""
-  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+  if echo "$COMMAND_FOR_MATCH" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
     # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
     # targets b, not a) and STRIP surrounding quotes. Quote-stripping is the
     # security-critical part: without it, `cd "path" && git commit` would pass
@@ -168,7 +183,7 @@ if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
     # worktree slips through. That false-negative was caught in the #580 review
     # of this fix (#549). Handles double-quoted, single-quoted (incl. spaces),
     # and bare paths.
-    WORKTREE_PATH=$(echo "$COMMAND" \
+    WORKTREE_PATH=$(echo "$COMMAND_FOR_MATCH" \
       | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
       | tail -n 1 \
       | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
