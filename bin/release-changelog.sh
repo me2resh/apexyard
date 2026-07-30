@@ -130,10 +130,29 @@ done
 # own remote prefix (up to the first "/") WHEN that prefix names a remote
 # that actually exists — "upstream/dev" -> upstream, "origin/dev" -> origin.
 # This is what makes the PR_LOOKUP_REPO fix below zero-config: HEAD_REF is
-# already required, and its remote qualifier IS the repo the release is
-# being cut for. A bare HEAD_REF (no "/", e.g. "HEAD" or a local branch
-# name) or a prefix matching no configured remote falls back to "upstream"
-# — today's pre-#1077 default, unchanged for that case.
+# already required, and its remote qualifier IS where the trailing PR
+# numbers in that range actually came from — cutting from upstream/dev
+# means those PR numbers really are upstream's, so resolving against
+# me2resh/apexyard from that branch is correct, not a bug the fork needs
+# to route around. This is the invariant to hold onto: derive from where
+# the commits came from, not from "whichever repo happens to be the fork".
+#
+# A bare HEAD_REF (no "/" at all — "dev", "HEAD", "refs/heads/dev" (whose
+# "/"-prefix is "refs", never a remote), "release/v2", or a raw SHA) falls
+# back to "upstream" — today's pre-#1077 default, unchanged for that case.
+# This is the ONE branch in this file that still guesses instead of
+# skipping (contrast every path inside resolve_issue_from_pr(), which
+# prefers a missing close over a wrong one). That's deliberate, not an
+# oversight: /release always passes a remote-qualified HEAD_REF
+# ("upstream/dev"), so this fallback is unreachable through the sanctioned
+# path — it only bites hand-invocation with a bare ref. Making it skip
+# instead of guessing would also silently regress the common, CORRECT
+# hand-invocation case (running this script directly inside the very repo
+# being released, e.g. this contributor fork, where "upstream" genuinely
+# is the right target regardless of whether the caller bothered to
+# qualify HEAD_REF) — trading a real, working case for a narrow misuse
+# scenario that already has a one-argument fix: pass a remote-qualified
+# HEAD_REF, or set REPO_REMOTE explicitly (both already supported).
 if [ -z "${REPO_REMOTE:-}" ]; then
   _head_ref_remote="${HEAD_REF%%/*}"
   if [ "$_head_ref_remote" != "$HEAD_REF" ] && git remote get-url "$_head_ref_remote" >/dev/null 2>&1; then
