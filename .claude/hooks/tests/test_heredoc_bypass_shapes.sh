@@ -308,6 +308,68 @@ run_cmd "X4 control: CONFIRMED heredoc, decoy correctly stripped, real push to m
   "block-main-push.sh" "main" "$SHAPE_X4" 2
 
 # ---------------------------------------------------------------------------
+# Tag-exemption breadth (fifth review round on #1075). The TAGDECOY case
+# above already proved is_tag_push's verdict can't safely trigger a
+# script-level exit. This shape is narrower and worse in a different way:
+# even after NOT exiting the script, the ordinary push-branch-check still
+# used extract_push_ref's single first-match result, which reads the SAME
+# decoy segment that fooled is_tag_push. For a REF-LESS real push (bare
+# `git push`, or `git push -u origin` with no branch named), that decoy
+# match is a non-empty, non-protected-looking ref ("for", "v1.0.0", ...)
+# that silently REPLACES the local-HEAD fallback -- the one thing that
+# would have caught the real push landing on a protected branch. Decision
+# point 4's scan-all check does not help here either: it only inspects
+# EXPLICIT refs, and a bare `git push` has none.
+#
+# Verified control pair (the security reviewer's own minimal repro):
+#   git push                                    (no decoy) -> rc=2 BLOCKED
+#   <tag-decoy heredoc> + git push               (T1 below) -> was rc=0 ALLOWED
+#
+# Fix: is_tag_push's verdict is only trusted (_is_genuine_single_tag_push)
+# when the command has EXACTLY ONE push-shaped occurrence AND that same
+# occurrence carries its own tag evidence. When untrusted, the ref-less
+# fallback path is forced explicitly (not just "don't skip") so the
+# decoy's hijacked ref can never substitute for the local-branch check.
+# Genuine, single tag pushes (no second occurrence anywhere in the
+# command) must remain exempt -- tested alongside the decoys per the
+# rule adopted in this AgDR: every coverage claim gets a test or gets
+# demoted to residue.
+# ---------------------------------------------------------------------------
+run_cmd "TAGBOUND control: bare git push, no decoy, on main -> blocks" \
+  "block-main-push.sh" "main" "git push" 2
+
+SHAPE_T1=$(cat <<'CMD'
+cat > /tmp/m.txt <<END.OF
+we always use git push origin --tags for releases
+END.OF
+git push
+CMD
+)
+run_cmd "TAGBOUND T1: dotted-delimiter heredoc decoy + bare push on main -> blocks (was allowed)" \
+  "block-main-push.sh" "main" "$SHAPE_T1" 2
+
+SHAPE_U4=$(cat <<'CMD'
+echo "see refs/tags/v1 docs" && git push
+CMD
+)
+run_cmd "TAGBOUND U4: refs/tags/ mention detached from any push segment + bare push on main -> blocks" \
+  "block-main-push.sh" "main" "$SHAPE_U4" 2
+
+SHAPE_T4='git push origin --tags'
+run_cmd "TAGBOUND T4 control: genuine single tag push (no heredoc) on main -> stays exempt" \
+  "block-main-push.sh" "main" "$SHAPE_T4" 0
+
+SHAPE_T5=$(cat <<'CMD'
+cat > /tmp/n.md <<EOF
+release notes
+EOF
+git push upstream --tags
+CMD
+)
+run_cmd "TAGBOUND T5 control: genuine tag push after a confirmed, decoy-free heredoc -> stays exempt" \
+  "block-main-push.sh" "main" "$SHAPE_T5" 0
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -150,21 +150,59 @@ MSG
     # section below entirely, letting a real commit on a protected branch
     # slip through — a worse bug than the one this guard exists to avoid.
     # Setting a flag and falling through means: (a) a genuine tag push
-    # still skips the push-branch-check below (the scan-all check just
-    # above it is unaffected either way, since it runs first and doesn't
-    # care about is_tag_push at all), and (b) the commit-check section
-    # always still runs. See docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+    # still skips the push-branch-check below, and (b) the commit-check
+    # section always still runs. See
+    # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+    #
+    # ALSO IMPORTANT (fourth review round): is_tag_push's TRUE verdict is
+    # only trusted when _is_genuine_single_tag_push confirms it describes
+    # the ONE push in this command, not decoy text sitting alongside a
+    # real, separate, REF-LESS `git push`. Decision point 4's scan-all
+    # check above only ever sees EXPLICIT refs -- a bare `git push` has
+    # none, so scan-all has nothing to say about it, and the local-HEAD
+    # fallback that WOULD catch a ref-less push on a protected branch
+    # lives entirely inside the block this flag skips. Skipping it on an
+    # untrusted verdict is not "costs nothing" for that shape -- it is the
+    # one case with no other backstop at all. See
+    # _is_genuine_single_tag_push's doc comment in _lib-extract-push-ref.sh.
+    UNTRUSTED_TAG_SIGNAL=0
     if is_tag_push "$COMMAND"; then
-      SKIP_PUSH_BRANCH_CHECK=1
+      if declare -F _is_genuine_single_tag_push > /dev/null 2>&1 \
+         && _is_genuine_single_tag_push "$COMMAND"; then
+        SKIP_PUSH_BRANCH_CHECK=1
+      else
+        # is_tag_push's verdict isn't attributable to a single, genuine
+        # tag-push occurrence in this command -- don't trust it. We ALSO
+        # must not trust extract_push_ref's ordinary single first-match
+        # result below: it can read the SAME decoy segment that fooled
+        # is_tag_push (e.g. "git push origin --tags for releases" yields
+        # the non-empty, non-protected-looking ref "for"), which would
+        # silently replace the local-HEAD fallback with that wrong answer
+        # instead of falling through to it. Force the ref-less path
+        # instead: decision point 4's scan-all (above) has ALREADY ruled
+        # out any occurrence with an explicit PROTECTED ref, so the only
+        # remaining question here is whether the real, uncontaminated push
+        # needs the local-branch fallback -- which this guarantees it gets.
+        UNTRUSTED_TAG_SIGNAL=1
+      fi
     fi
 
     if [ "$SKIP_PUSH_BRANCH_CHECK" != "1" ]; then
-      PUSH_DST=$(extract_push_ref "$COMMAND")
+      if [ "$UNTRUSTED_TAG_SIGNAL" = "1" ]; then
+        PUSH_DST=""
+      else
+        PUSH_DST=$(extract_push_ref "$COMMAND")
+      fi
 
       # Fail closed rather than silently falling back to the current branch
       # when heredoc-aware extraction found nothing BUT a naive, unstripped
       # parse of the same raw command found something ref-shaped. See
       # me2resh/apexyard#1075 and validate-branch-name.sh's identical check.
+      # This also legitimately fires for the untrusted-tag-signal case
+      # above (PUSH_DST forced empty, RAW_PUSH_DST reads the decoy) --
+      # blocking there is just as correct an outcome as the local-HEAD
+      # fallback below would have been, since the decoy proves the
+      # command's structure is genuinely ambiguous.
       if [ -z "$PUSH_DST" ]; then
         RAW_PUSH_DST=$(_extract_push_ref_core "$COMMAND")
         if [ -n "$RAW_PUSH_DST" ]; then

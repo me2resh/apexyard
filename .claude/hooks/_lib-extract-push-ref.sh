@@ -437,3 +437,82 @@ _extract_all_push_refs_core() {
     echo "$ref"
   done
 }
+
+# Returns true (0) ONLY when the raw command contains EXACTLY ONE
+# "git push"-shaped occurrence, AND that single occurrence itself carries
+# tag-push evidence (a `--tags` flag, a `tag <name>` keyword, or a
+# `refs/tags/` reference) within its own segment text. This is the
+# condition under which `is_tag_push`'s TRUE verdict can be trusted as
+# describing one specific, genuine tag push — not decoy text sitting
+# elsewhere in the command.
+#
+# WHY THIS EXISTS (me2resh/apexyard#1075, fourth security-review round)
+# ------------------------------------------------------------------------
+# `is_tag_push`'s three checks are GLOBAL over whatever text they're given:
+# `\brefs/tags/\b` matches anywhere at all, with no requirement that it sit
+# inside an actual `git push` segment, and even the `--tags` / `tag <name>`
+# checks don't ask "is this the ONLY push in the command." Two consequences
+# follow, both verified at the hook level, not just in theory:
+#
+#   1. Decoy text that IS push-shaped and DOES carry tag evidence (a
+#      heredoc `strip_heredoc_bodies` declines to strip because it's
+#      unconfirmed, a quoted string, or a commit message — none of these
+#      need heredocs at all) can sit ALONGSIDE a real, separate, ref-less
+#      `git push` elsewhere in the same command:
+#
+#        cat > /tmp/m.txt <<END.OF
+#        we always use git push origin --tags for releases
+#        END.OF
+#        git push
+#
+#      `is_tag_push` returns TRUE (the decoy segment matches `--tags`).
+#      Before this check existed, that TRUE caused block-main-push.sh to
+#      skip the push-branch-check ENTIRELY — including its local-HEAD
+#      fallback, which is the ONLY thing that would have caught the bare
+#      `git push` landing on a protected branch. Decision point 4's
+#      scan-all check does not help here: it only ever sees EXPLICIT refs
+#      (a bare `git push` has none), so it has nothing to say about this
+#      shape. Verified: a bare push on `main` blocks (rc=2) with no decoy
+#      present; the SAME bare push with this decoy heredoc added exits 0.
+#
+#   2. Tag evidence that ISN'T inside any push segment at all (a bare
+#      `refs/tags/v1` mention in unrelated prose, nowhere near the word
+#      "push") can ALSO make `is_tag_push` return TRUE for a command whose
+#      one real `git push` occurrence carries no tag evidence whatsoever.
+#
+# Both consequences are closed by requiring BOTH conditions at once:
+# exactly one push-shaped occurrence in the whole command (rules out any
+# second, real push hiding elsewhere — case 1), AND that occurrence's own
+# text carries the tag evidence (rules out evidence sitting outside any
+# push segment — case 2). A genuine tag push (`git push origin --tags`,
+# alone, or preceded only by a CONFIRMED, correctly-stripped heredoc with
+# no decoy) satisfies both trivially — it's the only occurrence in the
+# command, and it's the one carrying its own evidence.
+#
+# Deliberately independent of heredoc parsing, matching
+# _extract_all_push_refs_core's philosophy: operates on the RAW command,
+# does not call strip_heredoc_bodies, does not care whether any heredoc in
+# the command was confirmed or declined.
+#
+# Returns: 0 (true, safe to trust the tag exemption) or 1 (false, do not
+# trust it — fall through to the normal branch-check). Always exits
+# cleanly either way.
+_is_genuine_single_tag_push() {
+  local cmd="$1" stripped_cmd segment count has_evidence
+
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
+  count=0
+  has_evidence=0
+
+  while IFS= read -r segment; do
+    [ -z "$segment" ] && continue
+    count=$((count + 1))
+    if echo "$segment" | grep -qE '\s--tags(\s|$)' \
+       || echo "$segment" | grep -qE '\stag\s+\S' \
+       || echo "$segment" | grep -qE 'refs/tags/'; then
+      has_evidence=1
+    fi
+  done < <(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
+
+  [ "$count" -eq 1 ] && [ "$has_evidence" -eq 1 ]
+}
