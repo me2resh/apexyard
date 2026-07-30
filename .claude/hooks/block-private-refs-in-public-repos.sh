@@ -59,17 +59,111 @@ fi
 # 2. Resolve the target repo.
 #    - From `--repo owner/name` for the subcommand shape.
 #    - From the URL path for the api shape: `gh api repos/<owner>/<repo>/...`.
+#
+#    Anchored on the matched WRITE invocation (me2resh/apexyard#1068).
+#
+#    The previous implementation was a single greedy sed match:
+#        sed -nE 's/.*--repo[[:space:]]+.../\1/p'
+#    The leading `.*` is greedy, and POSIX substitution finds the leftmost
+#    STARTING position where the whole pattern can match (position 0) then
+#    extends `.*` as far right as it can while still allowing `--repo` to
+#    match somewhere after it. With more than one `--repo` token on the
+#    line, that binds the LAST one, not the one belonging to the write —
+#    so a chained second `gh` call, or even a bare trailing shell comment
+#    mentioning `--repo`, silently resolved to the wrong target and the
+#    hook exited 0 at step 3 before extracting anything. `| head -1`
+#    de-dupes matched LINES, not matches within a line, so it did not help.
+#
+#    The fix: find the leftmost occurrence of one of the five recognised
+#    write shapes (`gh issue create`, `gh pr create`, `gh issue comment`,
+#    `gh pr comment`, `gh api`), then take the FIRST `--repo` value (or,
+#    for the api shape, the first `repos/<owner>/<repo>` path) found AFTER
+#    that anchor — not the last one anywhere on the line. This is
+#    structural (anchored on the matched invocation) rather than a tighter
+#    pattern, which is the direction #1040 tried and measurably regressed
+#    (see extract_flag_value's history below).
+#
+#    Deliberately NOT done: truncating the search region at the next shell
+#    operator (&&, ||, ;, |, #). A value like `--body "a | b"` legitimately
+#    contains those characters inside quotes, and a naive cut there would
+#    silently stop the scan before reaching a --repo that legitimately
+#    appears later in the same, single, unchained command — trading one
+#    silent-leak shape for another. Taking the first match after the
+#    anchor, with no upper bound, avoids that trade entirely.
+#
+#    Residual (documented, not solved here — command-text matching cannot
+#    be made fully sound per AgDR-0104):
+#      - Two REAL writes chained to DIFFERENT repos in one Bash call
+#        resolve only the FIRST — a pre-existing limitation TITLE/BODY
+#        extraction below already has (it has always read the first
+#        occurrence across the whole command, never per-invocation).
+#      - A `--repo` token embedded inside an EARLIER flag's quoted value
+#        (e.g. inside `--title`) that textually precedes the real `--repo`
+#        flag can still be picked up first. This requires deliberately
+#        crafting the command against its own safety hook, is narrower and
+#        more contrived than the reported bypass (which needed no quoting
+#        trickery at all), and is a pre-existing weakness of the previous
+#        implementation too — not something this fix introduces.
 # ---------------------------------------------------------------------------
 
-TARGET_REPO=""
+find_target_repo() {
+  local cmd="$1"
+  printf '%s' "$cmd" | awk -v SQ="'" '
+    function extract_repo_after(rest,    re, chunk) {
+      # Double-quoted value.
+      re = "--repo[[:space:]]+\"([^\"]*)\""
+      if (match(rest, re)) {
+        chunk = substr(rest, RSTART, RLENGTH)
+        sub(/^--repo[[:space:]]+"/, "", chunk)
+        sub(/"$/, "", chunk)
+        return chunk
+      }
+      # Single-quoted value.
+      re = "--repo[[:space:]]+" SQ "([^" SQ "]*)" SQ
+      if (match(rest, re)) {
+        chunk = substr(rest, RSTART, RLENGTH)
+        sub("^--repo[[:space:]]+" SQ, "", chunk)
+        sub(SQ "$", "", chunk)
+        return chunk
+      }
+      # Unquoted value: single whitespace-delimited token.
+      re = "--repo[[:space:]]+[^[:space:]]+"
+      if (match(rest, re)) {
+        chunk = substr(rest, RSTART, RLENGTH)
+        sub(/^--repo[[:space:]]+/, "", chunk)
+        return chunk
+      }
+      return ""
+    }
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      s = buf
+      # Leftmost occurrence of a recognised write shape. `(^|[[:space:]])`
+      # before "gh" and a trailing boundary after the keyword keep this
+      # from matching "gh" as a bare substring of an unrelated word (e.g.
+      # "high api" contains the literal text "gh api" but is not a gh
+      # invocation) — mirroring the `\b` word-boundary the step-1
+      # classification regex already relies on (GNU grep -E extension; not
+      # available inside awk EREs, so reproduced explicitly here).
+      anchor_re = "(^|[[:space:]])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
+      if (!match(s, anchor_re)) { exit }
+      rest = substr(s, RSTART)
+      r = extract_repo_after(rest)
+      if (r != "") { print r; exit }
+      # gh api shape: first `repos/<owner>/<repo>` path AFTER the anchor.
+      # Accepts both `repos/owner/repo/...` and `/repos/owner/repo/...`.
+      path_re = "/?repos/[^/[:space:]\"" SQ "]+/[^/[:space:]\"" SQ "]+"
+      if (match(rest, path_re)) {
+        chunk = substr(rest, RSTART, RLENGTH)
+        sub(/^\/?repos\//, "", chunk)
+        print chunk
+        exit
+      }
+    }
+  '
+}
 
-# --repo flag, supports quoted or unquoted value.
-TARGET_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+["'"'"']?([^[:space:]"'"'"']+)["'"'"']?.*/\1/p' | head -1)
-
-if [ -z "$TARGET_REPO" ] && [ "$IS_GH_API" -eq 1 ]; then
-  # Accept both `repos/owner/repo/...` and `/repos/owner/repo/...`.
-  TARGET_REPO=$(echo "$COMMAND" | grep -oE '/?repos/[^/[:space:]]+/[^/[:space:]]+' | head -1 | sed -E 's|^/?repos/||')
-fi
+TARGET_REPO=$(find_target_repo "$COMMAND")
 
 if [ -z "$TARGET_REPO" ]; then
   # No target repo resolvable — the hook has nothing to evaluate. Default
@@ -346,6 +440,71 @@ extract_path_flag() {
 
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
+
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 (follow-on) — a chained shell command (or a trailing
+# comment) after a quoted --title/--body value has no representation in
+# extract_flag_value's greedy match(): the closing quote is real (there is
+# no other quote to try), but what follows it is neither a real `--flag`
+# nor end-of-string, so BOTH quoted branches fail to match at all. The
+# function then falls through to the UNQUOTED branch, which greedily grabs
+# the leading quote character plus exactly one whitespace-delimited token
+# — e.g. `--body "found during zebrafish rebuild" && gh pr list --repo x`
+# silently returns `"found` as the body. The truncation looks like ordinary
+# (non-empty) content, so nothing downstream flags it, and the hook would
+# scan a haystack missing everything after the first word.
+#
+# This was reachable only once the TARGET_REPO fix above stopped the hook
+# from exiting at step 3 on these exact commands — before that fix, a
+# chained/trailing `--repo` always mis-resolved the target as non-public
+# and the hook never reached content extraction at all.
+#
+# Widening extract_flag_value's terminator set to recognise shell operators
+# was tried and rejected for the sibling bug this same file documents
+# above (#1040 reopened #227; the #1039r2 tests a few hundred lines down
+# assert that a LONE `|`, `;`, `&`, etc. embedded in legitimate body prose
+# must NOT be treated as a terminator). Anything general enough to accept
+# "a new command starts here" is exactly as good at truncating a body that
+# legitimately contains that same text as prose. So this does not attempt
+# to parse the chain — it detects the FAILURE signature structurally
+# instead: a value returned by extract_flag_value can begin with a raw `"`
+# or `'` ONLY via this unquoted fallback firing on a quote-opened value it
+# could not safely close. Refuse rather than scan a haystack known to be
+# truncated — same fail-closed shape as BODY_FILE_UNREADABLE below, and
+# the same "over-block, never silently scan nothing" instruction #1068
+# gave for this whole fix.
+case "$TITLE" in
+  \"*|\'*) TITLE_TRUNCATED=1 ;;
+  *) TITLE_TRUNCATED=0 ;;
+esac
+case "$BODY" in
+  \"*|\'*) BODY_TRUNCATED=1 ;;
+  *) BODY_TRUNCATED=0 ;;
+esac
+
+if [ "$TITLE_TRUNCATED" -eq 1 ] || [ "$BODY_TRUNCATED" -eq 1 ]; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: could not safely determine where a --title/--body value ends
+======================================================================
+
+This command targets a PUBLIC framework repo (${TARGET_REPO}), but a
+quoted --title or --body value is followed by text this hook does not
+recognise as a valid terminator (a real flag, or end of command).
+
+The most likely cause: a second command chained after the write with
+&& / ; / |, or a trailing shell comment (me2resh/apexyard#1068). Example:
+
+  gh issue create --repo ${TARGET_REPO} --title "T" --body "..." && gh pr list --repo other/repo
+
+Extraction cannot safely tell where the quoted value ends in that shape,
+so it refuses rather than scan a value it cannot rule out is truncated.
+
+Fix: run the write as its own, unchained Bash call.
+======================================================================
+EOF
+  exit 2
+fi
 
 # Conservative (subset) extraction, used ONLY for the skip-marker check in
 # step 6. See the SCOPE ASYMMETRY note in extract_flag_value: the greedy

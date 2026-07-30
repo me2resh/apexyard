@@ -52,6 +52,10 @@ projects:
     repo: acme-private/marlow-svc
     workspace: workspace/ws-marlow
     status: active
+  - name: zebrafish
+    repo: acme/zebrafish-app
+    workspace: workspace/zebrafish
+    status: active
 YAML
 
 # A directory to cd into so the hook walks up to find the registry.
@@ -431,6 +435,110 @@ run_case "#1046: a misplaced marker gets a diagnostic explaining why it did not 
 run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted here)" \
   2 "project name: curios-dog" \
   "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
+
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1068 — a trailing --repo ANYWHERE on the line disables
+# the gate entirely.
+#
+# TARGET_REPO used to be resolved with a single greedy sed match:
+#     sed -nE 's/.*--repo[[:space:]]+...'
+# The leading `.*` is greedy, so on a line with more than one `--repo` token
+# it binds the LAST one, not the one belonging to the actual write. A
+# chained second `gh` call, or even a bare trailing shell comment mentioning
+# `--repo`, made the hook resolve the wrong target, decide "not public
+# class" at step 3, and exit 0 having scanned NOTHING — before any title or
+# body extraction ran. `| head -1` only de-dupes matched LINES; sed's
+# single substitution already picked the last match within a line before
+# `head` ever sees it.
+#
+# The fix anchors resolution on the matched write invocation (`gh issue
+# create`, `gh pr create`, `gh issue comment`, `gh pr comment`, `gh api`)
+# and takes the FIRST `--repo` (or `repos/<owner>/<repo>` path, for the api
+# shape) found AFTER that anchor — not the last one anywhere on the line.
+#
+# Cases 21-23 are genuine RED-before-this-fix leaks (exit 0, nothing
+# scanned) — confirmed against the pre-fix hook. Case 24 is the CONTROL:
+# it already blocked correctly pre-fix, which is what makes 21-23 bypasses
+# rather than ordinary match failures. Cases 25-27 already behaved
+# correctly pre-fix too, each for a different, more fragile reason than the
+# real fix below:
+#
+# NOTE on 21-23's expected message: once TARGET_REPO resolves correctly,
+# these three commands hit a SECOND, previously-unreachable gap —
+# extract_flag_value's greedy match() has no terminator alternative for
+# "a shell command is chained right after this quoted value", so it falls
+# through to a truncated unquoted read instead of the real body. The fix
+# does not attempt to parse the chain (that class of widening is exactly
+# what #1040 tried and #1039r2 below proves unsafe); it detects the
+# truncation signature and refuses. So 21-23 block on "could not safely
+# determine where the value ends", not on a specific "project name: x"
+# match — the hook is correctly refusing to trust an extraction it knows
+# is incomplete, which is the safe-direction behaviour #1068 asked for.
+#   - 25 (gh api shape) never had this bug — the api-path fallback already
+#     used `grep -oE ... | head -1`, which is first-occurrence, not
+#     last-occurrence like the buggy `--repo`-flag sed. Kept as a
+#     same-shape regression guard for the shape the fix now also covers
+#     explicitly.
+#   - 27 (private target, public repo chained after) passed pre-fix by
+#     ACCIDENT: the greedy sed mis-resolved TARGET_REPO to the chained
+#     public repo, but the unrelated chained text then broke the body's
+#     own flag-boundary anchor in extract_flag_value, truncating BODY to
+#     its first word before any leak token was reached — a double failure
+#     that happened to cancel out. Post-fix it is a no-op for the RIGHT
+#     reason: TARGET_REPO resolves to the real (private) target and the
+#     hook exits before ever extracting title/body. Kept specifically to
+#     catch a regression where the fix resolves the target correctly but
+#     then something else in the same command starts leaking.
+# ---------------------------------------------------------------------------
+
+# 21. The exact repro from the issue: a chained SECOND gh call mentions an
+#     unrelated --repo after the real write. Pre-fix this exits 0 with
+#     nothing scanned; the greedy match binds `acme/zebrafish-app`.
+run_case "#1068: chained second gh call's --repo must not override the real target" \
+  2 "could not safely determine" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh pr list --repo acme/zebrafish-app"
+
+# 22. A bare trailing shell COMMENT is enough — no second command required.
+run_case "#1068: trailing shell comment mentioning --repo must not override the real target" \
+  2 "could not safely determine" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" # see --repo foo/bar"
+
+# 23. Same shape, `gh pr create` instead of `gh issue create` — the anchor
+#     must cover every one of the five recognised write shapes, not just
+#     the one in the issue's own repro.
+run_case "#1068: chained bypass via gh pr create must not override the real target" \
+  2 "could not safely determine" \
+  "gh pr create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\" && gh issue list --repo acme/zebrafish-app"
+
+# 24. CONTROL — identical command, no trailing --repo. This already blocked
+#     correctly before the fix; it is what proves 21/22/23 are bypasses
+#     rather than a match failure the fix accidentally also repairs.
+run_case "#1068 control: same command without the trailing --repo → still blocks" \
+  2 "project name: zebrafish" \
+  "gh issue create --repo me2resh/apexyard --title \"T\" --body \"found during zebrafish rebuild\""
+
+# 25. gh api shape — the same class of bypass via the REST path form, a
+#     second gh api call chained on.
+run_case "#1068: gh api chained bypass must not override the real target" \
+  2 "project name: zebrafish" \
+  "gh api repos/me2resh/apexyard/issues -f title=T -f body='found during zebrafish rebuild' && gh api repos/acme/zebrafish-app/pulls"
+
+# 26. Regression — --repo legitimately appearing AFTER --title/--body in a
+#     single, unchained command (no bypass attempt at all) must still
+#     resolve correctly. The fix must not start requiring --repo to appear
+#     FIRST in the command.
+run_case "#1068: --repo after title/body in a single command still resolves" \
+  2 "project name: zebrafish" \
+  "gh issue create --title \"T\" --body \"found during zebrafish rebuild\" --repo me2resh/apexyard"
+
+# 27. Symmetry check — the real target is PRIVATE and a later chained call
+#     mentions the PUBLIC framework repo. The hook must resolve the real
+#     (private) target and stay a no-op, not get confused by the trailing
+#     public mention into scanning (or blocking) a write that never targeted
+#     a public repo at all.
+run_case "#1068: private target with a later public --repo mention stays a no-op" \
+  0 "" \
+  "gh issue create --repo acme/zebrafish-app --title \"T\" --body \"mentions zebrafish freely, private target\" && gh pr list --repo me2resh/apexyard"
 
 # ---------------------------------------------------------------------------
 # Portability lock: no ERE intervals in the hook's awk program.
