@@ -12,13 +12,24 @@
 #   DATE       — the release date in YYYY-MM-DD format
 #
 # Optional:
-#   REPO_REMOTE    — the git remote whose repo this release is being cut for
-#                    (default: upstream). Used for two things: as the base of
-#                    the git log range (see below), and — since #1077 — as the
-#                    source PR_LOOKUP_REPO derives from. Set this to whichever
-#                    remote your OWN fork's dev/main actually lives on (e.g.
-#                    "origin") when cutting an independent release from an
-#                    adopter fork — see PR_LOOKUP_REPO below.
+#   REPO_REMOTE    — which remote's repo PR_LOOKUP_REPO derives from (see
+#                    below). This is its ONLY effect — it does NOT affect
+#                    the git log range; that range is controlled entirely by
+#                    PREV_TAG/HEAD_REF (see "Build the git log range" below).
+#
+#                    Default (#1077, zero-config): derived from HEAD_REF
+#                    itself. HEAD_REF is already a required input and, by
+#                    convention, is remote-qualified — "upstream/dev" in a
+#                    contributor fork, "origin/dev" in an adopter's own fork
+#                    cutting an independent release. Whichever remote it
+#                    names IS the repo the release is being cut for, so that
+#                    prefix is used automatically WHEN it names a remote
+#                    that actually exists (guards against a plain branch
+#                    name that happens to contain a "/", e.g. "release/v2").
+#                    Falls back to "upstream" for a bare HEAD_REF (no remote
+#                    prefix, e.g. "HEAD" or a local branch name) — today's
+#                    pre-#1077 default, unchanged for that case. Set
+#                    REPO_REMOTE explicitly to override either derivation.
 #   PR_LOOKUP_REPO — owner/repo used to resolve an UNSCOPED commit's trailing
 #                    PR number back to the issue it actually closes. Only
 #                    consulted for commits with no `type(#N):` scope (#1056)
@@ -33,20 +44,33 @@
 #                    against ITS OWN repo, not upstream's (a fork resolving
 #                    its own PR #12 against me2resh/apexyard's PR #12 would
 #                    emit whatever unrelated issue upstream's #12 happens to
-#                    close). If REPO_REMOTE can't be resolved to an owner/repo
-#                    shape at all (no such remote, or an unparseable URL),
-#                    PR_LOOKUP_REPO is left EMPTY and the lookup is skipped
-#                    entirely — "prefer a missing close over a wrong close":
-#                    a missing close is an annoyance fixed by hand; a wrong
-#                    close silently reaches into an unrelated issue. Set this
-#                    explicitly to override derivation (still supported).
+#                    close). Combined with the zero-config REPO_REMOTE
+#                    derivation above, this resolves correctly with NO
+#                    configuration for both populations: a contributor fork
+#                    (HEAD_REF=upstream/dev -> upstream -> me2resh/apexyard,
+#                    unchanged) and an adopter fork with an upstream remote
+#                    configured too, cutting its own release (HEAD_REF=
+#                    origin/dev -> origin -> the fork's own repo, fixed —
+#                    this is the exact topology #1077 was filed against; a
+#                    fork with only "upstream" pointed at me2resh/apexyard
+#                    and no remote-qualified HEAD_REF would previously have
+#                    derived me2resh/apexyard regardless of REPO_REMOTE's
+#                    default). If neither derivation resolves to an
+#                    owner/repo shape at all, PR_LOOKUP_REPO is left EMPTY
+#                    and the lookup is skipped entirely — "prefer a missing
+#                    close over a wrong close": a missing close is an
+#                    annoyance fixed by hand; a wrong close silently reaches
+#                    into an unrelated issue. Set PR_LOOKUP_REPO explicitly
+#                    to override derivation entirely.
 #
 #                    PR_LOOKUP_TIMEOUT — seconds to bound each `gh pr view`
 #                    call (default: 10). Prefers GNU `timeout`, falls back to
-#                    macOS `gtimeout`, degrades to unbounded if neither exists
-#                    (#1078) — an unresponsive forge must never stall a
-#                    release cut indefinitely; a release cut walks this path
-#                    once per unscoped commit in range.
+#                    macOS `gtimeout`; if neither is on PATH (stock macOS,
+#                    notably) the call degrades to unbounded — never worse
+#                    than pre-#1078, but surfaced with a one-time stderr
+#                    warning rather than degrading silently, since that's
+#                    the one failure mode an operator can least guess the
+#                    cause of by symptom alone.
 #
 # Output format (matches the existing CHANGELOG.md convention):
 #
@@ -101,7 +125,23 @@ for var in PREV_TAG HEAD_REF VERSION DATE; do
   fi
 done
 
-REPO_REMOTE="${REPO_REMOTE:-upstream}"
+# ── Resolve which remote this release is being cut for (#1077) ─────────────
+# An explicit REPO_REMOTE always wins. Otherwise derive it from HEAD_REF's
+# own remote prefix (up to the first "/") WHEN that prefix names a remote
+# that actually exists — "upstream/dev" -> upstream, "origin/dev" -> origin.
+# This is what makes the PR_LOOKUP_REPO fix below zero-config: HEAD_REF is
+# already required, and its remote qualifier IS the repo the release is
+# being cut for. A bare HEAD_REF (no "/", e.g. "HEAD" or a local branch
+# name) or a prefix matching no configured remote falls back to "upstream"
+# — today's pre-#1077 default, unchanged for that case.
+if [ -z "${REPO_REMOTE:-}" ]; then
+  _head_ref_remote="${HEAD_REF%%/*}"
+  if [ "$_head_ref_remote" != "$HEAD_REF" ] && git remote get-url "$_head_ref_remote" >/dev/null 2>&1; then
+    REPO_REMOTE="$_head_ref_remote"
+  else
+    REPO_REMOTE="upstream"
+  fi
+fi
 
 # ── Build the git log range ──────────────────────────────────────────────────
 
@@ -232,9 +272,27 @@ if [ -z "${PR_LOOKUP_REPO:-}" ]; then
   PR_LOOKUP_REPO=$(_derive_pr_lookup_repo)
 fi
 
+# ── Resolve the gh-call timeout wrapper once (#1078) ────────────────────────
+# Computed once here — NOT per-call inside resolve_issue_from_pr() — so the
+# "no timeout binary" warning below can fire at most once per release cut,
+# not once per unscoped commit needing resolution. Only bothers checking at
+# all when a lookup could actually happen (gh present AND a repo was
+# resolved); otherwise resolve_issue_from_pr() short-circuits before ever
+# reaching a gh call, so a wrapper decision here would be moot noise.
+PR_LOOKUP_TO=""
+if command -v gh >/dev/null 2>&1 && [ -n "$PR_LOOKUP_REPO" ]; then
+  if command -v timeout >/dev/null 2>&1; then
+    PR_LOOKUP_TO="timeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    PR_LOOKUP_TO="gtimeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
+  else
+    echo "WARN: neither 'timeout' nor 'gtimeout' found on PATH — gh pr view calls in resolve_issue_from_pr() are UNBOUNDED; a hung forge could stall this release cut indefinitely (#1078). On macOS: brew install coreutils for gtimeout." >&2
+  fi
+fi
+
 resolve_issue_from_pr() {
   local pr_num="$1"  # numeric, no leading '#'
-  local body ref to
+  local body ref
 
   if ! command -v gh >/dev/null 2>&1; then
     echo ""
@@ -249,18 +307,9 @@ resolve_issue_from_pr() {
     return 0
   fi
 
-  # #1078 — bound the call so an unresponsive forge can't stall a release
-  # cut indefinitely. Prefers GNU `timeout`, then macOS `gtimeout`; degrades
-  # to unbounded (today's pre-#1078 behaviour) if neither is on PATH — same
-  # posture as every other best-effort fallback in this function.
-  to=""
-  if command -v timeout >/dev/null 2>&1; then
-    to="timeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    to="gtimeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
-  fi
-
-  if ! body=$($to gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
+  # #1078 — PR_LOOKUP_TO (resolved once above) bounds the call so an
+  # unresponsive forge can't stall a release cut indefinitely.
+  if ! body=$($PR_LOOKUP_TO gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
     echo ""
     return 0
   fi

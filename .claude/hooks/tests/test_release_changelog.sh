@@ -556,6 +556,43 @@ contains     "gh was actually invoked" "GH_CALLED_WITH:" "$call_log_contents"
 contains     "queried the fork's own repo (from origin), not upstream" "--repo testadopter/theirfork" "$call_log_contents"
 not_contains "never queried the hardcoded upstream default" "--repo me2resh/apexyard" "$call_log_contents"
 
+# ── Test: #1077 — the DEFAULT-CONFIG adopter fork case, zero REPO_REMOTE ────
+# The exact topology the ticket was filed against, with NO explicit
+# REPO_REMOTE override at all: an adopter fork that followed apexyard's own
+# docs and ran `git remote add upstream ...` (for /update) ALSO has "origin"
+# pointing at their own fork, and cuts their OWN release with HEAD_REF
+# pointing at their OWN dev branch ("origin/dev") rather than "upstream/dev".
+# `refs/remotes/origin/dev` is created directly via update-ref (no real
+# network fetch needed) so HEAD_REF resolves to a real ref, exactly mirroring
+# a fetched remote-tracking branch.
+#
+# Before the HEAD_REF-derived REPO_REMOTE fix, REPO_REMOTE defaulted to
+# "upstream" unconditionally — which resolves to me2resh/apexyard in this
+# topology regardless of which branch is actually being released, byte-
+# identical to the hardcode #1077 was filed to remove. This is the case
+# that must be fixed with ZERO configuration, not by telling every adopter
+# to discover and set REPO_REMOTE=origin by hand.
+echo "--- #1077 default-config adopter fork: zero-config derivation via HEAD_REF ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v23.0.0
+  mc "docs: rework the release checklist (#2601)"
+  git remote add upstream https://github.com/me2resh/apexyard.git
+  git remote add origin https://github.com/testadopter2/theirfork.git
+  git update-ref refs/remotes/origin/dev HEAD
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #2600" STUB_GH_CALL_LOG="'"$call_log"'" \
+    PREV_TAG="v23.0.0" HEAD_REF="origin/dev" VERSION="v23.1.0" DATE="2026-07-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+contains     "resolves via the fork's own repo, derived from HEAD_REF alone (no REPO_REMOTE set)" "Closes #2600" "$out"
+contains     "queried origin's own repo (HEAD_REF's remote prefix)" "--repo testadopter2/theirfork" "$call_log_contents"
+not_contains "never queried upstream despite it being configured too (the #1077 regression case)" "--repo me2resh/apexyard" "$call_log_contents"
+
 # ── Test: #1077 — underivable remote emits no gh call and no wrong close ────
 # No remote at all is configured (no "upstream", no "origin") and REPO_REMOTE
 # is left at its default. The repo cannot be derived confidently — per the
