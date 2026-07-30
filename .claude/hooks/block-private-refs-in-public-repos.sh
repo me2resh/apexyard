@@ -160,9 +160,13 @@ extract_flag_value() {
   # security tail — a body with an embedded `"` could let private refs in
   # the back half slip past the gate. awk + greedy + boundary anchor
   # gives us multi-line consumption and correct termination in one shot.
+  # $3 = trim mode. Default "last" (greedy retention, for leak DETECTION).
+  # Pass "first" for the conservative subset the skip-marker check needs —
+  # see the SCOPE ASYMMETRY note below.
   local flag_re="$1"
   local cmd="$2"
-  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+  local mode="${3:-last}"
+  printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" -v MODE="$mode" '
     # Truncate CHUNK at its LAST occurrence of delimiter D.
     #
     # A regex sub() cannot do this job (me2resh/apexyard#1046). POSIX ERE
@@ -191,6 +195,28 @@ extract_flag_value() {
       }
       return chunk
     }
+    # SCOPE ASYMMETRY (me2resh/apexyard#1046, caught in security review).
+    #
+    # Retaining a SUPERSET is fail-closed for leak DETECTION — scanning more
+    # than the body can only over-block. It is fail-OPEN for the skip MARKER,
+    # because a wider scan gives `<!-- private-refs: allow -->` more places to
+    # be found. Concretely, `--body "<private>" --label "<marker>"` blocked
+    # before this fix and bypassed after it: the greedy match legitimately
+    # cannot tell where the body ends, so the marker rode in on the
+    # over-capture.
+    #
+    # So the two consumers need opposite trims. Detection uses "last" (the
+    # superset). The marker check uses "first" — the pre-fix earliest-
+    # qualifying cut, which is a SUBSET and therefore fail-closed in the
+    # bypass direction. "first" is deliberately the OLD, buggy-for-detection
+    # behaviour: its under-capture is precisely the property that makes it
+    # correct here.
+    function trim_mode(chunk, d) {
+      if (MODE != "first") return trim_to_last(chunk, d)
+      sub(d "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+      sub(d "[[:space:]]*$", "", chunk)
+      return chunk
+    }
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
@@ -199,7 +225,7 @@ extract_flag_value() {
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        print trim_to_last(chunk, "\"")
+        print trim_mode(chunk, "\"")
         exit
       }
       # Single-quoted value: same greedy + anchor treatment. This branch had
@@ -210,7 +236,7 @@ extract_flag_value() {
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        print trim_to_last(chunk, SQ)
+        print trim_mode(chunk, SQ)
         exit
       }
       # Unquoted value: single token, embedded quotes irrelevant.
@@ -294,6 +320,13 @@ extract_path_flag() {
 
 TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
+
+# Conservative (subset) extraction, used ONLY for the skip-marker check in
+# step 6. See the SCOPE ASYMMETRY note in extract_flag_value: the greedy
+# extraction above is fail-closed for detection but fail-OPEN for the bypass
+# marker, because over-capture hands the marker extra places to appear.
+TITLE_STRICT=$(extract_flag_value '--title|-t' "$COMMAND" first)
+BODY_STRICT=$(extract_flag_value '--body|-b' "$COMMAND" first)
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
 # because `gh api -F body=@file` uses the same flag letter).
@@ -427,7 +460,13 @@ SKIP_MARKER=$(config_get_or '.leak_protection.skip_marker' '<!-- private-refs: a
 # Fallback if the config lib didn't source successfully (e.g. on a bare
 # checkout predating apexyard#109).
 SKIP_MARKER="${SKIP_MARKER:-<!-- private-refs: allow -->}"
-if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER"; then
+# Grep the CONSERVATIVE haystack, not the greedy one. A marker found only in
+# over-captured content (e.g. a subsequent `--label "<marker>"`) must not
+# bypass the gate — the operator has to put it in the title or body they are
+# actually publishing. Body-file and gh-api content are read from a file /
+# discrete field, so they carry no over-capture risk and are included as-is.
+MARKER_HAYSTACK=$(printf '%s\n%s\n%s\n%s\n' "$TITLE_STRICT" "$BODY_STRICT" "$BODY_FILE_CONTENT" "$API_BODY")
+if echo "$MARKER_HAYSTACK" | grep -qF -- "$SKIP_MARKER"; then
   echo "WARN: private-refs: allow marker present — leak-protection hook bypassed for this ${TARGET_REPO} call. See .claude/rules/leak-protection.md." >&2
   exit 0
 fi

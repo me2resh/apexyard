@@ -383,6 +383,26 @@ run_case "#1046: skip marker in --body does not unblock an unreadable --body-fil
   2 "body-file named but not readable" \
   "gh issue create --repo me2resh/apexyard --title t --body-file /nonexistent-xyz-1046.md --body \"<!-- private-refs: allow -->\""
 
+# Scope asymmetry (found in security review of this PR, not in #1046 itself).
+# Retaining a superset is fail-closed for DETECTION but fail-OPEN for the
+# skip MARKER: the greedy match cannot tell where the body ends, so a marker
+# in a later quoted flag value rode in on the over-capture and bypassed the
+# gate. Blocked on dev, briefly bypassed mid-PR, blocked again now that the
+# marker check reads a conservative (subset) extraction.
+run_case "#1046: skip marker in a later --label must NOT bypass the gate" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --label \"<!-- private-refs: allow -->\""
+
+# The legitimate bypasses must still work — the marker is a documented escape
+# hatch, and narrowing its scope must not remove it from title or body.
+run_case "#1046: skip marker in the body still bypasses (documented escape hatch)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog <!-- private-refs: allow -->\""
+
+run_case "#1046: skip marker in the title still bypasses (documented escape hatch)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"<!-- private-refs: allow -->\" --body \"curios-dog\""
+
 # ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
