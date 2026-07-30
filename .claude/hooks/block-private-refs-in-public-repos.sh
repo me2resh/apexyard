@@ -56,132 +56,127 @@ if [ "$IS_GH_SUBCMD" -eq 0 ] && [ "$IS_GH_API" -eq 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 2. Resolve the target repo.
-#    - From `--repo owner/name` for the subcommand shape.
-#    - From the URL path for the api shape: `gh api repos/<owner>/<repo>/...`.
+# 2/3. Determine whether this write targets a PUBLIC / framework-class repo.
 #
-#    Anchored on the matched WRITE invocation (me2resh/apexyard#1068).
+#    CLASS-BASED, not positional (me2resh/apexyard#1068, round 2 — security
+#    review of the round-1 fix).
 #
-#    The previous implementation was a single greedy sed match:
-#        sed -nE 's/.*--repo[[:space:]]+.../\1/p'
-#    The leading `.*` is greedy, and POSIX substitution finds the leftmost
-#    STARTING position where the whole pattern can match (position 0) then
-#    extends `.*` as far right as it can while still allowing `--repo` to
-#    match somewhere after it. With more than one `--repo` token on the
-#    line, that binds the LAST one, not the one belonging to the write —
-#    so a chained second `gh` call, or even a bare trailing shell comment
-#    mentioning `--repo`, silently resolved to the wrong target and the
-#    hook exited 0 at step 3 before extracting anything. `| head -1`
-#    de-dupes matched LINES, not matches within a line, so it did not help.
+#    Round 1 anchored on the matched write invocation and took the FIRST
+#    `--repo` value found after it, replacing dev's greedy "last `--repo`
+#    on the line wins". That closed the reported bypass (a chained SECOND
+#    gh call, or a trailing comment, mentioning `--repo` AFTER the real
+#    write) but OPENED the mirror hole: a `--repo`-shaped token embedded in
+#    an EARLIER flag's quoted value — e.g. inside `--title` — now won
+#    instead of the real flag, because it appears first in raw text.
+#    Verified against the actual `upstream/dev` blob at the commit this
+#    branch forked from (not reasoned from theory): both
+#        gh issue create --title "use --repo priv/x here" --repo pub/y --body "leak"
+#        gh issue create --body "run with --repo priv/x for leak" --repo pub/y --title "T"
+#    BLOCK on dev (its last-wins happens to land on the real, later flag
+#    for this shape) and LEAKED (exit 0, nothing scanned) on round 1. So the
+#    round-1 code comment claiming this was "a pre-existing weakness of the
+#    previous implementation too" was WRONG — dev did not have this hole;
+#    round 1 introduced it. Recorded here so the mistake isn't repeated:
+#    every "pre-existing" claim in this file must cite the check that
+#    proved it against the actual dev blob, not be reasoned from the shape
+#    of the code (AgDR-0113).
 #
-#    The fix: find the leftmost occurrence of one of the five recognised
-#    write shapes (`gh issue create`, `gh pr create`, `gh issue comment`,
-#    `gh pr comment`, `gh api`), then take the FIRST `--repo` value (or,
-#    for the api shape, the first `repos/<owner>/<repo>` path) found AFTER
-#    that anchor — not the last one anywhere on the line. This is
-#    structural (anchored on the matched invocation) rather than a tighter
-#    pattern, which is the direction #1040 tried and measurably regressed
-#    (see extract_flag_value's history below).
+#    Neither "first after anchor" (round 1) nor "last on the line" (dev)
+#    can be made sound, because BOTH are positional: they commit to picking
+#    ONE occurrence and trust it to be the real one, and a `--repo`-shaped
+#    string can appear anywhere in a flag's free-text VALUE regardless of
+#    where the real flag sits.
 #
-#    Deliberately NOT done: truncating the search region at the next shell
-#    operator (&&, ||, ;, |, #). A value like `--body "a | b"` legitimately
-#    contains those characters inside quotes, and a naive cut there would
-#    silently stop the scan before reaching a --repo that legitimately
-#    appears later in the same, single, unchained command — trading one
-#    silent-leak shape for another. Taking the first match after the
-#    anchor, with no upper bound, avoids that trade entirely.
+#    The fix is class-based instead of positional: within the write segment
+#    (the substring starting at the leftmost recognised write invocation —
+#    `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`,
+#    `gh api` — so nothing BEFORE the write's own subcommand is in scope),
+#    check whether ANY known public-class repo is named as a `--repo` value
+#    or a `repos/<owner>/<repo>` URL path, ANYWHERE in that segment. If one
+#    is, the write is treated as targeting it — regardless of whether that
+#    mention sits before or after other flags, or inside another flag's
+#    quoted text. This does not try to determine the ONE true target the
+#    way round 1 and dev both did; it asks a narrower, answerable question:
+#    "is a public repo plausibly this write's target?" A false YES only
+#    ever leads to MORE scanning (the safe direction); it can never cause
+#    an unscanned public write, which is the property both prior
+#    approaches lacked.
+#
+#    Deliberate tradeoff, chosen consciously: a single Bash call chaining
+#    TWO real writes — one to a private repo, one to a public repo — now
+#    scans the private write's title/body too, because the public repo's
+#    slug is present somewhere in the combined segment. That is over-
+#    blocking, not under-blocking, and is the explicit bar for this fix:
+#    fail in the safe direction. (See test 27 in the test file, which
+#    intentionally flips from a no-op to a block under this change.)
 #
 #    Residual (documented, not solved here — command-text matching cannot
-#    be made fully sound per AgDR-0104):
-#      - Two REAL writes chained to DIFFERENT repos in one Bash call
-#        resolve only the FIRST — a pre-existing limitation TITLE/BODY
-#        extraction below already has (it has always read the first
-#        occurrence across the whole command, never per-invocation).
-#      - A `--repo` token embedded inside an EARLIER flag's quoted value
-#        (e.g. inside `--title`) that textually precedes the real `--repo`
-#        flag can still be picked up first. This requires deliberately
-#        crafting the command against its own safety hook, is narrower and
-#        more contrived than the reported bypass (which needed no quoting
-#        trickery at all), and is a pre-existing weakness of the previous
-#        implementation too — not something this fix introduces.
+#    be made fully sound per AgDR-0104), VERIFIED against the real
+#    `upstream/dev` blob rather than assumed:
+#      - Two REAL writes chained in one Bash call, where a LEAK sits in an
+#        EARLIER write's title/body and a LATER write's --repo names a
+#        DIFFERENT (non-public) repo, can still go unscanned: this hook
+#        (both before and after this fix) extracts only ONE title/body
+#        across the whole command, not per-invocation, so a segment-wide
+#        "any public repo present" YES does not guarantee the extracted
+#        title/body belongs to the SAME invocation that produced the YES.
+#        Confirmed against the real dev blob with a synthetic registry:
+#            gh issue create --repo <public> --title "A" --body "<leak>" \
+#              && gh issue create --repo <private> --title "B" --body "clean"
+#        returns rc=0 (no scan) on dev exactly as it does on this branch —
+#        genuinely pre-existing, not introduced here. Closing it requires
+#        per-invocation title/body extraction, which is a materially larger
+#        change than this bug fix's scope.
+#      - `--repo=owner/name` (the `=`-joined form `gh` also accepts) is not
+#        recognised by either the flag-form or the api-path-form check
+#        above — a write using it resolves no target at all and the hook
+#        exits 0. Verified against the real dev blob: it does the same
+#        (rc=0), so this is a pre-existing gap, not a regression. Not
+#        fixed here — flagging it as a documented, tested gap (case 31 in
+#        the test file) rather than silently leaving it undiscovered.
 # ---------------------------------------------------------------------------
 
-find_target_repo() {
+find_write_segment() {
+  # Prints the substring of $1 starting at the leftmost recognised write
+  # invocation, or nothing if none is found. Everything BEFORE that point
+  # is out of scope for --repo/repos-path candidates: a flag cannot belong
+  # to a gh invocation that hasn't started yet in the raw text.
   local cmd="$1"
-  printf '%s' "$cmd" | awk -v SQ="'" '
-    function extract_repo_after(rest,    re, chunk) {
-      # Double-quoted value.
-      re = "--repo[[:space:]]+\"([^\"]*)\""
-      if (match(rest, re)) {
-        chunk = substr(rest, RSTART, RLENGTH)
-        sub(/^--repo[[:space:]]+"/, "", chunk)
-        sub(/"$/, "", chunk)
-        return chunk
-      }
-      # Single-quoted value.
-      re = "--repo[[:space:]]+" SQ "([^" SQ "]*)" SQ
-      if (match(rest, re)) {
-        chunk = substr(rest, RSTART, RLENGTH)
-        sub("^--repo[[:space:]]+" SQ, "", chunk)
-        sub(SQ "$", "", chunk)
-        return chunk
-      }
-      # Unquoted value: single whitespace-delimited token.
-      re = "--repo[[:space:]]+[^[:space:]]+"
-      if (match(rest, re)) {
-        chunk = substr(rest, RSTART, RLENGTH)
-        sub(/^--repo[[:space:]]+/, "", chunk)
-        return chunk
-      }
-      return ""
-    }
+  printf '%s' "$cmd" | awk '
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      # Leftmost occurrence of a recognised write shape. `(^|[[:space:]])`
-      # before "gh" and a trailing boundary after the keyword keep this
-      # from matching "gh" as a bare substring of an unrelated word (e.g.
-      # "high api" contains the literal text "gh api" but is not a gh
-      # invocation) — mirroring the `\b` word-boundary the step-1
-      # classification regex already relies on (GNU grep -E extension; not
-      # available inside awk EREs, so reproduced explicitly here).
+      # `(^|[[:space:]])` before "gh" and a trailing boundary after the
+      # keyword keep this from matching "gh" as a bare substring of an
+      # unrelated word (e.g. "high api" contains the literal text
+      # "gh api" but is not a gh invocation) — mirroring the `\b`
+      # word-boundary the step-1 classification regex already relies on
+      # (GNU grep -E extension; not available inside awk EREs, so
+      # reproduced explicitly here).
       anchor_re = "(^|[[:space:]])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
       if (!match(s, anchor_re)) { exit }
-      rest = substr(s, RSTART)
-      r = extract_repo_after(rest)
-      if (r != "") { print r; exit }
-      # gh api shape: first `repos/<owner>/<repo>` path AFTER the anchor.
-      # Accepts both `repos/owner/repo/...` and `/repos/owner/repo/...`.
-      path_re = "/?repos/[^/[:space:]\"" SQ "]+/[^/[:space:]\"" SQ "]+"
-      if (match(rest, path_re)) {
-        chunk = substr(rest, RSTART, RLENGTH)
-        sub(/^\/?repos\//, "", chunk)
-        print chunk
-        exit
-      }
+      print substr(s, RSTART)
     }
   '
 }
 
-TARGET_REPO=$(find_target_repo "$COMMAND")
+WRITE_SEGMENT=$(find_write_segment "$COMMAND")
 
-if [ -z "$TARGET_REPO" ]; then
-  # No target repo resolvable — the hook has nothing to evaluate. Default
-  # gh behaviour (current-dir repo) is safe to ignore here: the hook is a
-  # backstop against cross-repo leaks, not a universal scrubber.
+if [ -z "$WRITE_SEGMENT" ]; then
+  # No recognised write invocation found — the hook has nothing to
+  # evaluate. Default gh behaviour (current-dir repo) is safe to ignore
+  # here: the hook is a backstop against cross-repo leaks, not a universal
+  # scrubber.
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# 3. Determine whether the target is public / framework-class.
-#    Sources (in order):
-#      1. `.claude/project-config.*.json` → `leak_protection.public_framework_repos[]`
-#         (read via the shared config lib landed in apexyard#109)
-#      2. Shipped default: `me2resh/apexyard`
-#      3. Auto-detected: whatever the fork's `upstream` remote resolves to
-#         (unless `leak_protection.auto_detect_upstream` is set to `false`).
-# ---------------------------------------------------------------------------
-
+# Sources for the public-repo list (in order):
+#   1. `.claude/project-config.*.json` → `leak_protection.public_framework_repos[]`
+#      (read via the shared config lib landed in apexyard#109)
+#   2. Shipped default: `me2resh/apexyard`
+#   3. Auto-detected: whatever the fork's `upstream` remote resolves to
+#      (unless `leak_protection.auto_detect_upstream` is set to `false`).
+#
 # Load the shared config reader if available. The hook still works without
 # it — falls through to the shipped defaults.
 REPO_ROOT_FOR_CONFIG=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -205,15 +200,32 @@ if [ "${AUTO_DETECT_UPSTREAM:-true}" != "false" ]; then
   fi
 fi
 
-IS_PUBLIC_TARGET=0
+# Class-based membership check: does the write segment name ANY known
+# public repo as a --repo value or a repos/<owner>/<repo> path, anywhere?
+# First match wins arbitrarily — it is used only for messaging (the
+# ${TARGET_REPO} interpolated into the BLOCKED text below) and for the
+# target's-own-name exemption in step 8; the security property here is
+# the YES/NO membership test, not which specific match produced it.
+TARGET_REPO=""
 for r in $PUBLIC_REPOS; do
-  if [ "$TARGET_REPO" = "$r" ]; then
-    IS_PUBLIC_TARGET=1
+  esc=$(printf '%s' "$r" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
+  # --repo flag form: the slug, optionally quoted, terminated by a
+  # matching quote, whitespace, or end of segment.
+  if printf '%s' "$WRITE_SEGMENT" | grep -qE -- "--repo[[:space:]]+[\"']?${esc}([\"'[:space:]]|\$)"; then
+    TARGET_REPO="$r"
+    break
+  fi
+  # gh api shape: repos/<owner>/<repo> URL path, same boundary treatment
+  # plus `/` for a trailing path segment (.../issues, .../pulls).
+  if printf '%s' "$WRITE_SEGMENT" | grep -qE -- "(^|[^A-Za-z0-9_.-])repos/${esc}([/[:space:]\"'>]|\$)"; then
+    TARGET_REPO="$r"
     break
   fi
 done
 
-if [ "$IS_PUBLIC_TARGET" -eq 0 ]; then
+if [ -z "$TARGET_REPO" ]; then
+  # No known public repo is named as this write's target — the hook has
+  # nothing to evaluate.
   exit 0
 fi
 
@@ -473,6 +485,23 @@ BODY=$(extract_flag_value '--body|-b' "$COMMAND")
 # truncated — same fail-closed shape as BODY_FILE_UNREADABLE below, and
 # the same "over-block, never silently scan nothing" instruction #1068
 # gave for this whole fix.
+#
+# Why this check is sound rather than another AgDR-0104 pattern guess (a
+# distinction raised in code review and worth stating explicitly): it
+# detects the FAILURE, not the ATTACK. Both quoted branches in
+# extract_flag_value strip their own opening delimiter before returning —
+# look at the `sub(/^--title[[:space:]]+"/, ...)` / `sub("^--body...` calls
+# above — so a successful quoted-branch match can NEVER hand back a value
+# starting with a raw quote character. A leading raw quote is therefore
+# structurally unreachable through the success path; it is an INVARIANT of
+# the extractor (only the degenerate unquoted fallback can produce it),
+# not a heuristic guess about what a bypass attempt looks like in command
+# text. That is the same reason this hook does not try to name which
+# specific project leaked when it hits this branch: fabricating a
+# "project name: X" from content it never actually finished reading would
+# be indistinguishable, in an audit trail, from a real detection. Refusing
+# to claim a specific finding it cannot back is the more honest posture
+# when the read itself is known-incomplete.
 case "$TITLE" in
   \"*|\'*) TITLE_TRUNCATED=1 ;;
   *) TITLE_TRUNCATED=0 ;;
