@@ -1,0 +1,20 @@
+{
+  "_comment": "TEMPLATE \u2014 copy to .claude/project-config.json (gitignored, untracked) to activate. This copy is the apexyard framework repo's own pre-push dog-fooding; a managed project sets its own pre_push.commands. Why these live here and not in project-config.defaults.json, and why the real file is untracked: docs/project-config.md. See me2resh/apexyard#1031.",
+  "pre_push": {
+    "_comment": "Commands mirror the locally-runnable CI jobs from .github/workflows/. Each entry guards for a missing tool: a missing tool prints an actionable install message and exits 0 (skip-with-note) so a contributor without the tool is not hard-blocked. Link-check (lychee) is intentionally excluded \u2014 it is slow and network-flaky, unsuitable for pre-push. See docs/getting-started.md for the git pre-push hook (core.hooksPath) wiring.",
+    "commands": [
+      {
+        "name": "markdownlint",
+        "run": "command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found \u2014 markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=$(git ls-files '*.md' 2>/dev/null); [ -z \"$md_files\" ] && { echo 'INFO: no tracked markdown files found \u2014 markdownlint check skipped.'; exit 0; }; echo \"$md_files\" | tr '\\n' '\\0' | xargs -0 npx --yes markdownlint-cli2 2>&1"
+      },
+      {
+        "name": "shellcheck",
+        "run": "command -v shellcheck >/dev/null 2>&1 || { echo 'INFO: shellcheck not installed \u2014 shell-script check skipped. Install with: brew install shellcheck  (macOS) | apt-get install shellcheck  (Debian/Ubuntu) | dnf install shellcheck  (Fedora).'; exit 0; }; find .claude/hooks -maxdepth 1 -name '*.sh' | sort | xargs shellcheck --severity=warning 2>&1"
+      },
+      {
+        "name": "subpacks",
+        "run": "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1"
+      }
+    ]
+  }
+}

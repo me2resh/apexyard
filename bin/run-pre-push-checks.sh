@@ -9,8 +9,37 @@
 #     defined to match what this script does.
 #
 # This script is the canonical reference for "what checks run before push".
-# If you add a check, add it here AND mirror it in .claude/project-config.json
-# → pre_push.commands so both paths stay in sync.
+# If you add a check, add it here AND mirror it in
+# .claude/project-config.example.json → pre_push.commands so both paths stay
+# in sync.
+#
+# NOTE (apexyard#1031): `.claude/project-config.json` is now gitignored AND
+# untracked, so a fresh clone does not have one. Be precise about what that
+# costs, because the obvious reassurance is wrong:
+#
+#   - a Claude Code push → pre-push-gate.sh → reads .pre_push.commands from
+#     config. With no project-config.json the list is empty and the gate is
+#     a no-op.
+#   - terminal `git push` → .githooks/pre-push → this script. This does NOT
+#     silently cover the gap: .githooks only runs where someone has opted in
+#     with `git config core.hooksPath .githooks`, which is per-clone local
+#     config and documented as optional (docs/getting-started.md
+#     § "Terminal push hook"). On a fresh clone it is unset, so this path is
+#     inactive too.
+#
+# So on a fresh clone BOTH pre-push paths are inactive. That is acceptable
+# only because pre-push is a latency optimisation rather than the guardrail:
+# the real backstop is CI, where markdown-lint.yml, shellcheck.yml and
+# extract-subpacks-on-release.yml all run on `pull_request`. Nothing broken
+# can merge whether or not a contributor has a local config.
+#
+# Contributors who want the local fast feedback do both, once:
+#   cp .claude/project-config.example.json .claude/project-config.json
+#   git config core.hooksPath .githooks
+#
+# The commands deliberately do NOT live in project-config.defaults.json —
+# see docs/project-config.md for why (the defaults merge would push these
+# repo-specific checks onto every adopter).
 #
 # Exit codes:
 #   0 — all checks passed (or all missing-tool checks were skipped)
@@ -85,7 +114,8 @@ run_check() {
 }
 
 # ---------------------------------------------------------------------------
-# Check set — keep in sync with .claude/project-config.json pre_push.commands
+# Check set — keep in sync with .claude/project-config.example.json's
+# pre_push.commands (the tracked template; the real file is untracked, #1031)
 # ---------------------------------------------------------------------------
 
 cd "$REPO_ROOT"
