@@ -9,8 +9,28 @@
 #     defined to match what this script does.
 #
 # This script is the canonical reference for "what checks run before push".
-# If you add a check, add it here AND mirror it in .claude/project-config.json
-# → pre_push.commands so both paths stay in sync.
+# If you add a check, add it here AND mirror it in
+# .claude/project-config.example.json → pre_push.commands so both paths stay
+# in sync.
+#
+# NOTE (apexyard#1031): `.claude/project-config.json` is now gitignored AND
+# untracked, so a fresh clone does not have one. The two paths therefore
+# degrade differently, on purpose:
+#
+#   - terminal `git push` → .githooks/pre-push → this script. The command set
+#     below is hardcoded, so it runs on a fresh clone with no setup.
+#   - a Claude Code push → pre-push-gate.sh → reads .pre_push.commands from
+#     config. With no project-config.json that list is empty and the gate is
+#     a no-op, by the same design that makes an empty list a no-op for any
+#     adopter.
+#
+# Contributors who want both paths active copy the template once:
+#   cp .claude/project-config.example.json .claude/project-config.json
+#
+# The commands deliberately do NOT live in project-config.defaults.json:
+# _lib-read-config.sh merges with `jq -s '.[0] * .[1]'`, so every adopter
+# without their own pre_push would inherit apexyard's repo-specific checks —
+# including the subpack test below, which only makes sense in this repo.
 #
 # Exit codes:
 #   0 — all checks passed (or all missing-tool checks were skipped)
@@ -85,7 +105,8 @@ run_check() {
 }
 
 # ---------------------------------------------------------------------------
-# Check set — keep in sync with .claude/project-config.json pre_push.commands
+# Check set — keep in sync with .claude/project-config.example.json's
+# pre_push.commands (the tracked template; the real file is untracked, #1031)
 # ---------------------------------------------------------------------------
 
 cd "$REPO_ROOT"
