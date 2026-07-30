@@ -1,31 +1,66 @@
 #!/bin/bash
 # Tests for verify-commit-refs.sh cwd-vs-worktree resolution (me2resh/apexyard#1050)
+# and its follow-up hijack fixes (PR #1073 review).
 #
-# Bug: the hook resolved the tracker repo from `git rev-parse --show-toplevel`
-# / `git remote get-url origin` run with NO `-C`, which means both commands
-# used the HOOK PROCESS'S OWN cwd — not the directory the `git commit` is
-# actually executing in. In a split-portfolio / worktree-based sub-agent
-# session, the harness's Bash cwd for that call (the payload `.cwd` field,
-# same field `suggest-mcp-reindex-after-pull.sh` already reads) can be a
-# managed project's worktree while the hook process itself is invoked from
-# the ops fork. The hook then validates `Closes #N` against the OPS FORK's
-# tracker instead of the PROJECT's tracker, false-blocking a legitimate
-# reference.
+# Round 1 bug: the hook resolved the tracker repo from `git rev-parse
+# --show-toplevel` / `git remote get-url origin` run with NO `-C`, which
+# means both commands used the HOOK PROCESS'S OWN cwd — not the directory
+# the `git commit` is actually executing in. In a split-portfolio /
+# worktree-based sub-agent session, the harness's Bash cwd for that call
+# (the payload `.cwd` field, same field suggest-mcp-reindex-after-pull.sh
+# already reads) can be a managed project's worktree while the hook process
+# itself is invoked from the ops fork. The hook then validated `Closes #N`
+# against the OPS FORK's tracker instead of the PROJECT's, false-blocking a
+# legitimate reference.
+#
+# Round 2 bug (caught in PR #1073 review, before merge): the round-1 fix
+# passed the WHOLE raw command — including the commit MESSAGE — to the
+# `-C`/`cd` scraper, and checked those scraped hints BEFORE the structured
+# harness `.cwd` field. That combination is reachable in both directions:
+#   - a commit MESSAGE containing the text `git -C <dir>` got scraped as
+#     real shell syntax
+#   - `git commit -m "..." && git -C /other log` — a `-C` belonging to a
+#     LATER, unrelated git invocation bound to this commit
+#   - `cd /real && git -C /other status && git commit` — same shape,
+#     discarding the real governing `cd /real`
+#   - a relative `cd ../sibling` resolved against the hook's own cwd — the
+#     very cwd the round-1 fix exists to distrust
+#   - a quoted path with spaces (`cd "/my path/repo"`) truncated at the
+#     first space, silently reverting to pre-fix behavior
+# The fix: strip the commit message out of the command before scanning
+# (literal substring removal, not a regex), bind `-C` detection to THIS
+# commit invocation only (immediately preceding the `commit` token, not
+# anywhere else in the command), and check the harness `.cwd` FIRST —
+# structured beats scraped — so the scraped fallback only matters when
+# `.cwd` is genuinely absent.
 #
 # Coverage:
 #   - payload .cwd points at a different repo than the hook's own cwd →
-#     the referenced issue exists ONLY in the .cwd repo → must PASS
-#     (pre-fix: BLOCKS, because it checks the hook's own cwd's repo instead)
-#   - explicit `git -C <path> commit ...` in the command → must resolve
-#     against <path>'s repo, regardless of .cwd or the hook's own cwd
-#   - `cd <path> && git commit ...` compound prefix → must resolve against
-#     <path>'s repo
+#     must resolve via .cwd (round-1 core case)
+#   - payload .cwd wins outright even when the command ALSO carries a
+#     competing, plausible-looking `-C` elsewhere (pins "structured beats
+#     scraped" explicitly)
+#   - explicit `git -C <path> commit ...`, .cwd ABSENT → resolves via the
+#     command (round-1 fallback case, still covered)
+#   - `cd <path> && git commit ...`, .cwd ABSENT → resolves via the command
 #   - no .cwd, no -C, no cd-prefix → falls back to the hook's own process
-#     cwd, UNCHANGED from before the fix (no-regression case)
+#     cwd, UNCHANGED from before either fix (no-regression case)
+#   - commit MESSAGE containing `git -C <dir>` text, .cwd ABSENT → must NOT
+#     be scraped as real syntax (round-2 hijack, message-content direction)
+#   - `git commit -m "..." && git -C <other> log`, .cwd ABSENT → the
+#     trailing, unrelated `-C` must NOT bind to this commit (round-2 hijack)
+#   - `cd <real> && git -C <other> status && git commit`, .cwd ABSENT → the
+#     intervening, unrelated `-C` must NOT override the real governing `cd`
+#   - `cd "<path with spaces>" && git commit ...`, .cwd ABSENT → a quoted,
+#     spacey path must resolve correctly, not truncate at the first space
+#   - a RELATIVE `cd ../sibling`, .cwd ABSENT → must NOT be trusted (only
+#     absolute paths are accepted out of the scraped fallback); falls
+#     through to the hook's own cwd rather than an ambiguous relative
+#     resolution
 #
-# Each case builds two isolated one-commit git sandboxes with different
-# `origin` remotes (simulating the ops fork vs. a managed project's
-# worktree), installs the shared mock `gh`, and pipes a synthetic
+# Each case builds one-or-two isolated one-commit git sandboxes with
+# different `origin` remotes (simulating the ops fork vs. a managed
+# project's worktree), installs the shared mock `gh`, and pipes a synthetic
 # PreToolUse JSON blob at the hook while the hook's OWN process cwd is
 # deliberately the "wrong" sandbox.
 
@@ -45,10 +80,18 @@ FAILED_CASES=""
 
 # Build a one-commit git sandbox with the given origin remote. No upstream
 # remote (keeps the upstream-fallback branch out of play for these cases).
+# $2, if given, is a subdirectory name to create the repo inside (used to
+# manufacture a path containing spaces).
 make_repo() {
-  local origin_slug="$1"
-  local rp
-  rp=$(mktemp -d)
+  local origin_slug="$1" subdir="${2:-}"
+  local base rp
+  base=$(mktemp -d)
+  if [ -n "$subdir" ]; then
+    rp="$base/$subdir"
+    mkdir -p "$rp"
+  else
+    rp="$base"
+  fi
   (
     cd "$rp" || exit 1
     git init -q
@@ -67,12 +110,17 @@ make_repo() {
 # newlines here, same as test_verify_commit_refs_upstream.sh does, so the
 # hook's REFS regex sees an actual word boundary before "Closes" / "Refs"
 # instead of a literal backslash-n glued directly onto the prior word.
-# $2 is an optional prefix prepended verbatim in front of `git commit`
-# (e.g. "git -C /path/to/repo " or "cd /path/to/repo && ").
+# $2 is an optional prefix prepended verbatim BEFORE the `git` token (e.g.
+# "cd /path/to/repo && "). $3 is optional FLAGS inserted BETWEEN `git` and
+# `commit` (e.g. "-C /path/to/repo "). $4 is an optional SUFFIX appended
+# after the closing quote of the -m value (e.g. ' && git -C /other log').
+# Keeping prefix/flags/suffix as separate slots (rather than one combined
+# string) avoids accidentally emitting a duplicated `git` token or losing
+# track of exactly where the real commit invocation sits.
 build_command() {
-  local msg_literal="$1" prefix="${2:-}"
+  local msg_literal="$1" prefix="${2:-}" flags="${3:-}" suffix="${4:-}"
   local msg; msg=$(printf '%b' "$msg_literal")
-  printf '%sgit commit -m "%s"' "$prefix" "$msg"
+  printf '%sgit %scommit -m "%s"%s' "$prefix" "$flags" "$msg" "$suffix"
 }
 
 # Run the hook with:
@@ -132,10 +180,34 @@ assert_case() {
   rm -rf "$ops" "$proj"
 }
 
-# ---- Case 2: explicit `git -C <path>` in the command wins outright ----
+# ---- Case 1b: structured .cwd wins even when a competing -C is present ----
 #
-# Hook process cwd AND payload .cwd both = "ops" repo (issue 501 missing there).
-# The command itself carries `-C <proj>`, which must take priority over both.
+# Payload .cwd = proj (has the issue). The command ALSO carries a plausible
+# `-C <decoy>` bound directly to this same commit invocation. Per the #1073
+# review, structured beats scraped: .cwd must win outright and the `-C`
+# must never even be considered. Set decoy's mock answer to "no" so a wrong
+# resolution would BLOCK, making this a real discriminator.
+{
+  ops=$(make_repo "me2resh/apexyard")
+  proj=$(make_repo "managed-org/example")
+  decoy=$(make_repo "someone-else/decoy")
+  mock_gh_install "$proj"
+  mock_gh_set_repo_existence "$proj" 505 "managed-org/example" yes
+  mock_gh_set_repo_existence "$proj" 505 "someone-else/decoy" no
+
+  cmd=$(build_command 'fix: cwd beats a competing -C\n\nCloses #505' "" "-C ${decoy} ")
+  out=$(run_hook "$ops" "$proj" "$cmd")
+  rc=$?
+  assert_case "payload .cwd wins outright over a competing in-command -C" \
+    "$out" "$rc" 0 ""
+  rm -rf "$ops" "$proj" "$decoy"
+}
+
+# ---- Case 2: explicit `git -C <path>` in the command, .cwd ABSENT ----
+#
+# No payload .cwd supplied. Hook process cwd = "ops" (issue 501 missing
+# there). The command carries `-C <proj>` bound directly to this commit —
+# with no structured .cwd to prefer, this scraped hint is what resolves it.
 {
   ops=$(make_repo "me2resh/apexyard")
   proj=$(make_repo "managed-org/example")
@@ -143,19 +215,15 @@ assert_case() {
   mock_gh_set_repo_existence "$proj" 501 "managed-org/example" yes
   mock_gh_set_repo_existence "$proj" 501 "me2resh/apexyard" no
 
-  cmd=$(build_command 'fix: dash-C commit\n\nCloses #501' "git -C ${proj} ")
-  out=$(run_hook "$ops" "$ops" "$cmd")
+  cmd=$(build_command 'fix: dash-C commit\n\nCloses #501' "" "-C ${proj} ")
+  out=$(run_hook "$ops" "" "$cmd")
   rc=$?
-  assert_case "explicit git -C <path> resolves against that path's repo" \
+  assert_case "explicit git -C <path> resolves against that path's repo (no .cwd)" \
     "$out" "$rc" 0 ""
   rm -rf "$ops" "$proj"
 }
 
-# ---- Case 3: `cd <path> && git commit ...` compound prefix ----
-#
-# Hook process cwd AND payload .cwd both = "ops" repo (issue 502 missing there).
-# The command is a compound `cd <proj> && git commit ...` — the effective
-# cwd for the git call is proj, even though nothing else says so.
+# ---- Case 3: `cd <path> && git commit ...` compound prefix, .cwd ABSENT ----
 {
   ops=$(make_repo "me2resh/apexyard")
   proj=$(make_repo "managed-org/example")
@@ -164,9 +232,9 @@ assert_case() {
   mock_gh_set_repo_existence "$proj" 502 "me2resh/apexyard" no
 
   cmd=$(build_command 'fix: cd-prefix commit\n\nCloses #502' "cd ${proj} && ")
-  out=$(run_hook "$ops" "$ops" "$cmd")
+  out=$(run_hook "$ops" "" "$cmd")
   rc=$?
-  assert_case "cd <path> && git commit prefix resolves against that path's repo" \
+  assert_case "cd <path> && git commit prefix resolves against that path's repo (no .cwd)" \
     "$out" "$rc" 0 ""
   rm -rf "$ops" "$proj"
 }
@@ -187,8 +255,8 @@ assert_case() {
 }
 
 # ---- Case 5: cwd mismatch producing a genuine block — the false-BLOCK ----
-# ---- shape from the bug report: referenced issue exists ONLY in the    ----
-# ---- project repo, hook (pre-fix) checks the wrong one and blocks.      ----
+# ---- shape from the round-1 bug report: referenced issue exists ONLY   ----
+# ---- in the project repo; hook must resolve via .cwd, not block.       ----
 {
   ops=$(make_repo "me2resh/apexyard")
   proj=$(make_repo "managed-org/example")
@@ -202,6 +270,107 @@ assert_case() {
   assert_case "payload .cwd case again with Refs keyword → pass, not false-blocked" \
     "$out" "$rc" 0 ""
   rm -rf "$ops" "$proj"
+}
+
+# ---- Case 6: commit MESSAGE containing `git -C <dir>` text must not be ----
+# ---- scraped as real shell syntax (round-2 hijack, message direction). ----
+#
+# No payload .cwd. Hook cwd = "real" (has the issue). The message's PROSE
+# mentions a real, existing directory ("decoy", a different repo without
+# the issue) via the literal text "git -C <decoy>". Pre-round-2-fix, the
+# resolver scanned the WHOLE raw command (including this prose) and would
+# have picked up "decoy" as though it were real command syntax, blocking a
+# legitimate reference. Fixed: the message is stripped before scanning, so
+# this text is never read as syntax; falls back to the hook's own cwd.
+{
+  real=$(make_repo "managed-org/real")
+  decoy=$(make_repo "someone-else/decoy")
+  mock_gh_install "$real"
+  mock_gh_set_repo_existence "$real" 506 "managed-org/real" yes
+  mock_gh_set_repo_existence "$real" 506 "someone-else/decoy" no
+
+  cmd=$(build_command "fix: mentions git -C ${decoy} in prose\n\nSee git -C ${decoy} for the reproduction steps.\n\nCloses #506")
+  out=$(run_hook "$real" "" "$cmd")
+  rc=$?
+  assert_case "commit message text 'git -C <dir>' is not scraped as real syntax" \
+    "$out" "$rc" 0 ""
+  rm -rf "$real" "$decoy"
+}
+
+# ---- Case 7: trailing, unrelated `git -C <dir> log` after the real ----
+# ---- commit must not bind to it (round-2 hijack, row 3).             ----
+#
+# No payload .cwd. Hook cwd = "real" (has the issue). The command has a
+# real, separate `git -C <decoy> log` AFTER the actual commit invocation —
+# a `-C` that belongs to a DIFFERENT git invocation, not this one.
+{
+  real=$(make_repo "managed-org/real")
+  decoy=$(make_repo "someone-else/decoy")
+  mock_gh_install "$real"
+  mock_gh_set_repo_existence "$real" 507 "managed-org/real" yes
+  mock_gh_set_repo_existence "$real" 507 "someone-else/decoy" no
+
+  cmd=$(build_command 'fix: trailing unrelated -C\n\nCloses #507' "" "" " && git -C ${decoy} log")
+  out=$(run_hook "$real" "" "$cmd")
+  rc=$?
+  assert_case "a trailing, unrelated 'git -C <dir> log' does not bind to this commit" \
+    "$out" "$rc" 0 ""
+  rm -rf "$real" "$decoy"
+}
+
+# ---- Case 8: governing `cd <real> &&` plus an INTERVENING unrelated  ----
+# ---- `git -C <decoy> status &&` before the real commit (round-2      ----
+# ---- hijack, row 4) — the intervening -C must not override the real  ----
+# ---- governing cd.                                                    ----
+{
+  real=$(make_repo "managed-org/real")
+  decoy=$(make_repo "someone-else/decoy")
+  mock_gh_install "$real"
+  mock_gh_set_repo_existence "$real" 508 "managed-org/real" yes
+  mock_gh_set_repo_existence "$real" 508 "someone-else/decoy" no
+
+  cmd=$(build_command 'fix: governing cd with intervening -C\n\nCloses #508' \
+    "cd ${real} && git -C ${decoy} status && ")
+  out=$(run_hook "$decoy" "" "$cmd")
+  rc=$?
+  assert_case "an intervening, unrelated 'git -C <dir> status' does not override the governing cd" \
+    "$out" "$rc" 0 ""
+  rm -rf "$real" "$decoy"
+}
+
+# ---- Case 9: quoted path with spaces must resolve correctly, not     ----
+# ---- truncate at the first space (round-2 hijack, row 6).            ----
+{
+  base=$(mktemp -d)
+  spacey=$(make_repo "managed-org/spacey" "my repo with spaces")
+  ops=$(make_repo "me2resh/apexyard")
+  mock_gh_install "$spacey"
+  mock_gh_set_repo_existence "$spacey" 509 "managed-org/spacey" yes
+  mock_gh_set_repo_existence "$spacey" 509 "me2resh/apexyard" no
+
+  cmd=$(build_command 'fix: quoted spacey path\n\nCloses #509' "cd \"${spacey}\" && ")
+  out=$(run_hook "$ops" "" "$cmd")
+  rc=$?
+  assert_case "a quoted cd path containing spaces resolves correctly, not truncated" \
+    "$out" "$rc" 0 ""
+  rm -rf "$base" "$spacey" "$ops"
+}
+
+# ---- Case 10: a RELATIVE cd path must not be trusted (round-2 hijack, ----
+# ---- row 5) — only absolute scraped paths are honored; a relative one ----
+# ---- falls through to the hook's own cwd rather than an ambiguous     ----
+# ---- resolution against an unknown base.                              ----
+{
+  ops=$(make_repo "managed-org/example")
+  mock_gh_install "$ops"
+  mock_gh_set_repo_existence "$ops" 510 "managed-org/example" yes
+
+  cmd=$(build_command 'fix: relative cd is not trusted\n\nCloses #510' "cd ../some-sibling && ")
+  out=$(run_hook "$ops" "" "$cmd")
+  rc=$?
+  assert_case "a relative cd path is not trusted; falls back to the hook's own cwd" \
+    "$out" "$rc" 0 ""
+  rm -rf "$ops"
 }
 
 # ---- Summary ------------------------------------------------------------

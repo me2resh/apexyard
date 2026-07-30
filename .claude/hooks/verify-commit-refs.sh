@@ -129,42 +129,129 @@ fi
 # cwd-relative git call below must run against the COMMIT's directory, not
 # wherever this script happened to start.
 #
-# Priority (highest first) — mirrors suggest-mcp-reindex-after-pull.sh's
-# cwd-then-command-parsed fallback chain, but ordered so an explicit,
-# in-command override always wins over the ambient payload cwd:
-#   1. an explicit `git -C <path>` on the commit invocation itself —
-#      authoritative regardless of cwd or any earlier `cd`.
-#   2. a `cd <path> &&`-style prefix earlier in the SAME compound command —
-#      changes the effective cwd for everything that follows it.
-#   3. the harness-provided `.cwd` (or `.tool_input.cwd`) for this Bash
-#      call — the common case: a bare `git commit -m ...` run from inside
-#      the intended worktree with no path arguments at all.
+# Priority (highest first) — corrected per PR #1073 review. The harness
+# `.cwd` field is STRUCTURED: the harness itself sets it for this exact Bash
+# call, and it cannot be influenced by anything the commit message says.
+# Everything else is SCRAPED out of $COMMAND text, which can be tricked by
+# the commit message's own prose, or by an unrelated LATER git invocation in
+# the same compound command. Structured beats scraped, so `.cwd` goes first
+# — this now correctly mirrors suggest-mcp-reindex-after-pull.sh (see its
+# cwd-first fallback chain around lines 109-138: `.cwd` is "the common
+# case", checked FIRST, with command-parsing only as a fallback). An earlier
+# version of this fix put the scraped `-C`/`cd` parsing AHEAD of `.cwd` and
+# justified it as "an explicit in-command override always wins" — that
+# ordering is exactly what made these reachable:
+#   - a commit MESSAGE containing the text `git -C <dir>` got scraped as
+#     real shell syntax, silently disabling ref verification (if <dir>
+#     isn't a git repo) or validating a real ref against the wrong repo (if
+#     it is)
+#   - `git commit -m "..." && git -C /other log` — a `-C` belonging to a
+#     LATER, unrelated git invocation got treated as though it governed
+#     this commit
+#   - `cd /real && git -C /other status && git commit` — same shape,
+#     discarding the real governing `cd /real`
+#   - a relative `cd ../sibling` resolved against the HOOK's OWN cwd — the
+#     very cwd this fix exists to distrust
+#
+# Priority now:
+#   1. the harness-provided `.cwd` (`.tool_input.cwd`) for this Bash call.
+#   2. `git -C <path>` bound DIRECTLY to this commit invocation
+#      (`git -C <path> commit`), scraped from the command with the commit
+#      MESSAGE stripped out first (so prose can never be read as syntax),
+#      and matched only when the `-C` is the last thing before THIS
+#      `commit` token — a `-C` on a different git invocation cannot bind.
+#   3. the LAST `cd <path>` occurring before this commit invocation, same
+#      message-stripped, same-invocation-only scoping.
 #   4. fall back to the hook's own process cwd — IDENTICAL to the pre-fix
 #      behavior, so a session with no worktree involved sees no change.
-resolve_commit_workdir() {
-  local cmd="$1" payload_cwd="$2" dir
-  # 1. `git -C <path>` anywhere in the command (last one wins, matching how
-  # git itself would apply repeated -C flags).
-  dir=$(echo "$cmd" | grep -oE 'git[[:space:]]+-C[[:space:]]+[^[:space:]]+' | tail -1 | sed -E 's/^git[[:space:]]+-C[[:space:]]+//')
-  if [ -n "$dir" ]; then
+# Only ABSOLUTE paths are trusted out of (1)-(3); a relative path is
+# ambiguous about what it's relative TO, so it's treated as absent rather
+# than resolved against the hook's own cwd via a coincidental `-d` pass.
+
+# Strip the commit message out of COMMAND before any scraping below — a
+# literal, non-regex substring removal. Deliberately NOT `awk -v` on the raw
+# content: POSIX awk's `-v`/command-line-operand assignment undergoes its
+# own escape-sequence processing, which can silently mangle a message
+# containing backslash sequences (a commit message describing THIS hook is
+# exactly that kind of text — see #1073's review). Both values are piped in
+# through stdin instead, joined by a private sentinel, and sliced with
+# index()/substr() so nothing is ever regex- or escape-interpreted.
+strip_message_from_command() {
+  local cmd="$1" msg="$2" sep="__apexyard_1050_msg_boundary__"
+  if [ -z "$msg" ]; then
+    printf '%s' "$cmd"
+    return
+  fi
+  printf '%s%s%s' "$cmd" "$sep" "$msg" | awk -v sep="$sep" '
+    { buf = (NR == 1 ? $0 : buf "\n" $0) }
+    END {
+      sidx = index(buf, sep)
+      if (sidx == 0) { printf "%s", buf; exit }
+      c = substr(buf, 1, sidx - 1)
+      m = substr(buf, sidx + length(sep))
+      midx = index(c, m)
+      if (midx > 0 && length(m) > 0) {
+        printf "%s%s", substr(c, 1, midx - 1), substr(c, midx + length(m))
+      } else {
+        printf "%s", c
+      }
+    }
+  '
+}
+
+# Extract a governing directory from the (message-stripped) command, bound
+# to THIS commit invocation only. Only the portion of the command BEFORE
+# the first `commit` keyword is considered — a `-C` / `cd` at or after that
+# point belongs to a later command in the same compound line and must not
+# be read as governing this one.
+resolve_commit_workdir_from_command() {
+  local cmd="$1" prefix dir
+  prefix="${cmd%%commit*}"
+
+  # `-C <path>` immediately preceding THIS commit (`git -C <path> commit`).
+  # Anchored at the END of prefix so a `-C` on an earlier, unrelated git
+  # invocation in the same compound command does not match.
+  dir=""
+  if echo "$prefix" | grep -qE 'git[[:space:]]+-C[[:space:]]+"[^"]*"[[:space:]]*$'; then
+    dir=$(echo "$prefix" | sed -E 's/^.*git[[:space:]]+-C[[:space:]]+"([^"]*)"[[:space:]]*$/\1/')
+  elif echo "$prefix" | grep -qE "git[[:space:]]+-C[[:space:]]+'[^']*'[[:space:]]*\$"; then
+    dir=$(echo "$prefix" | sed -E "s/^.*git[[:space:]]+-C[[:space:]]+'([^']*)'[[:space:]]*\$/\1/")
+  elif echo "$prefix" | grep -qE 'git[[:space:]]+-C[[:space:]]+[^[:space:]]+[[:space:]]*$'; then
+    dir=$(echo "$prefix" | sed -E 's/^.*git[[:space:]]+-C[[:space:]]+([^[:space:]]+)[[:space:]]*$/\1/')
+  fi
+  if [ -n "$dir" ] && [ "${dir#/}" != "$dir" ]; then
     echo "$dir"
     return
   fi
-  # 2. `cd <path>` at the start of the command or after a shell separator.
-  dir=$(echo "$cmd" | grep -oE '(^|&&|;)[[:space:]]*cd[[:space:]]+[^[:space:]&|;]+' | tail -1 | sed -E 's/^(&&|;)?[[:space:]]*cd[[:space:]]+//')
-  if [ -n "$dir" ]; then
-    echo "$dir"
-    return
+
+  # Last `cd <path>` occurring anywhere before this commit invocation.
+  dir=""
+  if echo "$prefix" | grep -qE '(^|&&|;)[[:space:]]*cd[[:space:]]+"[^"]*"'; then
+    dir=$(echo "$prefix" | grep -oE '(^|&&|;)[[:space:]]*cd[[:space:]]+"[^"]*"' | tail -1 | sed -E 's/^(&&|;)?[[:space:]]*cd[[:space:]]+"([^"]*)"$/\2/')
+  elif echo "$prefix" | grep -qE "(^|&&|;)[[:space:]]*cd[[:space:]]+'[^']*'"; then
+    dir=$(echo "$prefix" | grep -oE "(^|&&|;)[[:space:]]*cd[[:space:]]+'[^']*'" | tail -1 | sed -E "s/^(&&|;)?[[:space:]]*cd[[:space:]]+'([^']*)'\$/\2/")
+  elif echo "$prefix" | grep -qE '(^|&&|;)[[:space:]]*cd[[:space:]]+[^[:space:]&|;]+'; then
+    dir=$(echo "$prefix" | grep -oE '(^|&&|;)[[:space:]]*cd[[:space:]]+[^[:space:]&|;]+' | tail -1 | sed -E 's/^(&&|;)?[[:space:]]*cd[[:space:]]+//')
   fi
-  # 3. Harness-provided cwd for this Bash call.
-  if [ -n "$payload_cwd" ]; then
-    echo "$payload_cwd"
+  if [ -n "$dir" ] && [ "${dir#/}" != "$dir" ]; then
+    echo "$dir"
     return
   fi
 }
 
 PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
-WORKDIR=$(resolve_commit_workdir "$COMMAND" "$PAYLOAD_CWD")
+CMD_SANS_MSG=$(strip_message_from_command "$COMMAND" "$MSG")
+
+# 1. Structured harness cwd wins outright when present and absolute.
+WORKDIR=""
+if [ -n "$PAYLOAD_CWD" ] && [ "${PAYLOAD_CWD#/}" != "$PAYLOAD_CWD" ]; then
+  WORKDIR="$PAYLOAD_CWD"
+fi
+# 2 & 3. Only reached when .cwd is absent — scraped, message-stripped,
+# same-invocation-only command parsing.
+if [ -z "$WORKDIR" ]; then
+  WORKDIR=$(resolve_commit_workdir_from_command "$CMD_SANS_MSG")
+fi
 # 4. No hint resolved anything usable — fall back to this process's own cwd,
 # exactly what every git call below did before this fix.
 if [ -z "$WORKDIR" ] || [ ! -d "$WORKDIR" ]; then
