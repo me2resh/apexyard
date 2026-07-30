@@ -185,7 +185,22 @@ audit_run_persist() {
 
   # Read stdin JSON. Augment with top-level metadata, derive stats from
   # findings[] if absent.
+  #
+  # Written to a scratch file in the SAME directory as the destination
+  # first, then promoted with `mv` (atomic rename on one filesystem) only
+  # if jq produced usable output. This is deliberately NOT just an
+  # exit-status check: jq exits 0 on empty/absent stdin -- it reads no
+  # input, emits no output, and reports success -- so a caller that
+  # forgot to pipe a payload previously got a zero-byte run file promoted
+  # AND a rc=0 "it worked" from this function (apexyard#1063). A reader
+  # (`audit_run_list` / `audit_render_trend`) must never be able to
+  # observe a partially-written or empty run file at json_path.
   local json_path="$dim_dir/runs/$ts_safe.json"
+  local json_tmp
+  json_tmp=$(mktemp "$dim_dir/runs/.audit-run-tmp.XXXXXX" 2>/dev/null) || {
+    echo "audit_run_persist: mktemp failed while staging $json_path" >&2
+    return 1
+  }
   jq --arg ts "$ts" --arg dim "$dimension" --arg v "$verdict" --argjson s "$score" '
     . as $in
     | (.findings // []) as $f
@@ -201,13 +216,35 @@ audit_run_persist() {
       + { ts: $ts, dimension: $dim, verdict: $v, score: $s,
           schema_version: ($in.schema_version // 1),
           stats: ($existing_stats // $derived_stats) }
-  ' > "$json_path" || {
-    echo "audit_run_persist: jq failed writing JSON" >&2
+  ' > "$json_tmp"
+  local jq_rc=$?
+
+  # Promotion gate: exit status alone is not enough (empty stdin exits 0
+  # with zero bytes written) -- also require non-empty AND independently
+  # re-parseable output before this run is allowed to exist on disk.
+  if [ "$jq_rc" -ne 0 ] || [ ! -s "$json_tmp" ] || ! jq -e . "$json_tmp" >/dev/null 2>&1; then
+    rm -f "$json_tmp"
+    echo "audit_run_persist: jq produced no usable JSON for $json_path (rc=$jq_rc; empty or malformed stdin?)" >&2
+    return 1
+  fi
+
+  mv "$json_tmp" "$json_path" || {
+    rm -f "$json_tmp"
+    echo "audit_run_persist: failed to move staged JSON into place at $json_path" >&2
     return 1
   }
 
-  # Build frontmatter from the just-written JSON, then concatenate with body.
+  # Build frontmatter from the just-written JSON, then concatenate with
+  # body -- staged the same way. Reaching this point means json_path
+  # already holds a valid run, so an .md file can never be written
+  # without a matching JSON run behind it (the orphan-.md defect also
+  # reported in apexyard#1063).
   local md_path="$dim_dir/$ts_safe.md"
+  local md_tmp
+  md_tmp=$(mktemp "$dim_dir/.audit-run-tmp.XXXXXX" 2>/dev/null) || {
+    echo "audit_run_persist: mktemp failed while staging $md_path" >&2
+    return 1
+  }
   local fm
   fm=$(jq -r '
     "---",
@@ -226,14 +263,25 @@ audit_run_persist() {
     "---",
     ""
   ' "$json_path") || {
-    echo "audit_run_persist: jq failed building frontmatter" >&2
+    rm -f "$md_tmp"
+    echo "audit_run_persist: jq failed building frontmatter for $md_path" >&2
     return 1
   }
 
   {
     printf '%s\n' "$fm"
     cat "$body_file"
-  } > "$md_path" || return 1
+  } > "$md_tmp" || {
+    rm -f "$md_tmp"
+    echo "audit_run_persist: failed writing staged MD for $md_path" >&2
+    return 1
+  }
+
+  mv "$md_tmp" "$md_path" || {
+    rm -f "$md_tmp"
+    echo "audit_run_persist: failed to move staged MD into place at $md_path" >&2
+    return 1
+  }
 
   _audit_apply_marker "$dim_dir"
   return 0
@@ -283,6 +331,13 @@ audit_run_list() {
       [ -d "$d" ] || continue
       for f in "$d"/*.json; do
         [ -f "$f" ] || continue
+        # Defensive: skip zero-byte / orphaned run files that may already
+        # be sitting on disk from before apexyard#1063's fix (or any other
+        # source of a truncated write). The ts-empty check below already
+        # incidentally catches this (jq on an empty/unparseable file emits
+        # nothing), but make the intent explicit rather than relying on
+        # that side effect.
+        [ -s "$f" ] || continue
         local ts
         ts=$(jq -r '.ts // ""' "$f" 2>/dev/null) || ts=""
         [ -n "$ts" ] || continue
