@@ -21,15 +21,50 @@
 # Same shape pattern as `_lib-extract-pr.sh` for the merge-gate hooks (#47):
 # gate on the command's actual context, not the harness's $PWD.
 #
+# HEREDOC-BODY HANDLING (me2resh/apexyard#1066, #1075) — READ THIS
+# ------------------------------------------------------------------
+# `is_tag_push` and `extract_push_ref` both strip CONFIRMED heredoc bodies
+# (via `strip_heredoc_bodies` in `_lib-strip-heredoc.sh`) before answering
+# "which ref / is this exempt". That is an ADDITIVE refinement: correct only
+# for deciding WHICH ref, never for deciding WHETHER a push exists at all.
+#
+# **Callers MUST perform their own "is there a push/commit here" presence
+# check against the RAW, unfiltered command — never against this file's
+# output.** A first version of the #1066 fix ran the presence check itself
+# through heredoc-stripped text; a security review found eight malformed-
+# heredoc shapes that made the stripper eat the real command, so the
+# presence check silently never fired (exit 0, no validation at all). See
+# `_lib-strip-heredoc.sh`'s governance comment and
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the full
+# incident and the additive-vs-subtractive framing that fixes it.
+#
 # USAGE
 # -----
 #   . "$(dirname "$0")/_lib-extract-push-ref.sh"
-#   PUSH_REF=$(extract_push_ref "$COMMAND")
-#   # Check is_tag_push first — tag pushes must be no-ops for a branch validator.
+#   # 1. Presence check against RAW $COMMAND (never stripped text):
+#   if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then exit 0; fi
+#   # 2. is_tag_push / extract_push_ref may freely use heredoc-stripped text
+#   #    internally — that's the additive "which ref" question:
 #   if is_tag_push "$COMMAND"; then exit 0; fi
-#   BRANCH="${PUSH_REF:-$(git branch --show-current)}"
+#   PUSH_REF=$(extract_push_ref "$COMMAND")
+#   # 3. Fail closed, don't silently fall back, when raw text plainly has an
+#   #    explicit ref that heredoc-stripping made disappear:
+#   if [ -z "$PUSH_REF" ]; then
+#     RAW_REF=$(_extract_push_ref_core "$COMMAND")   # no heredoc stripping
+#     if [ -n "$RAW_REF" ]; then
+#       # ambiguous — block, don't guess. See hook scripts for the message.
+#     fi
+#     # else: genuinely bare push (no ref anywhere) — fall back to local HEAD.
+#   fi
 #
-# Refs: me2resh/apexyard#194, me2resh/apexyard#547
+# Refs: me2resh/apexyard#194, me2resh/apexyard#547, me2resh/apexyard#1066
+
+HOOK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./_lib-strip-heredoc.sh
+if [ -f "$HOOK_LIB_DIR/_lib-strip-heredoc.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOOK_LIB_DIR/_lib-strip-heredoc.sh"
+fi
 
 # Returns true (0) when the command is a tag push that has no branch ref at all.
 # Tag pushes must be a no-op for a *branch*-name validator.
@@ -42,8 +77,23 @@
 #   git push <remote> +refs/tags/<name>:refs/tags/<name>  → true (refspec targeting tags/)
 #   git push <remote> v1.0.0              → NOT detected (bare tag name = branch name,
 #                                            validator falls back to local HEAD)
+#
+# Uses heredoc-stripped text internally (see file header) — this is safe
+# because the only failure direction is a FALSE NEGATIVE (over-stripping a
+# genuine `--tags` mention makes this return false, so the caller proceeds
+# to validate a real tag push as if it were a branch push — annoying, not a
+# bypass). A FALSE POSITIVE would be dangerous (skips validation of a real
+# branch push); stripping can only ever remove text, never add a `--tags`
+# that wasn't already in the raw command, so it cannot manufacture one.
 is_tag_push() {
   local cmd="$1"
+
+  # Strip heredoc bodies FIRST (me2resh/apexyard#1066) — prose inside a
+  # heredoc that mentions "--tags" or "tag <name>" must not be mistaken for
+  # a real tag-push flag. Safe direction only — see doc comment above.
+  if declare -F strip_heredoc_bodies > /dev/null 2>&1; then
+    cmd=$(strip_heredoc_bodies "$cmd")
+  fi
 
   # Strip everything after the first shell redirection/pipe so the check isn't
   # fooled by `2>&1 | tail` appended to the command.
@@ -71,7 +121,11 @@ is_tag_push() {
 }
 
 # Echoes the DESTINATION branch ref from a `git push` command, or empty if
-# none found.
+# none found. Operates on WHATEVER TEXT IT IS GIVEN — no heredoc stripping.
+# This is the shared token-parsing core; `extract_push_ref` (below) is the
+# heredoc-aware wrapper most callers want. Exposed directly so callers can
+# also run it against the RAW command as a comparison signal for the
+# fail-closed check described in the file header (me2resh/apexyard#1075).
 #
 # KEY BEHAVIOUR CHANGES vs the original (me2resh/apexyard#547):
 #
@@ -105,7 +159,7 @@ is_tag_push() {
 #   git push upstream HEAD:feature/GH-1-foo 2>&1 | tl → feature/GH-1-foo (redirections stripped)
 #
 # Returns: prints the ref to stdout (or empty), always exits 0.
-extract_push_ref() {
+_extract_push_ref_core() {
   local cmd="$1"
   local push_segment ref
 
@@ -210,6 +264,17 @@ extract_push_ref() {
     return 0
   fi
 
+  # Strip a single pair of surrounding quote characters, if present, e.g.
+  # `git push origin "main"` or `git push origin 'main'`. Without this,
+  # the extracted ref carries its quotes into the protected-branch /
+  # naming-convention regex match, which never matches `"main"` against
+  # `^(main|master|dev|develop)$` — the push then executes unvalidated.
+  # Mirrors block-main-push.sh's `cd`-target quote-stripping, which the
+  # #580 review of #549 called "the security-critical part" for the same
+  # reason (me2resh/apexyard#1079).
+  ref="${ref#\"}"; ref="${ref#\'}"
+  ref="${ref%\"}"; ref="${ref%\'}"
+
   # Strip any leading `+` (force-update marker on a refspec).
   ref="${ref#+}"
 
@@ -239,4 +304,302 @@ extract_push_ref() {
   ref="${ref#refs/heads/}"
 
   echo "$ref"
+}
+
+# Heredoc-aware wrapper around _extract_push_ref_core (me2resh/apexyard#1066).
+#
+# A heredoc body is literal payload data — a commit message, a PR body,
+# review prose — not a command. But _extract_push_ref_core scans the WHOLE
+# text it's given for the first `git push`-shaped match. This repo's own
+# commit messages routinely *discuss* git behaviour in prose, so a call like:
+#
+#   cat > /tmp/m.txt <<EOF
+#   The previous commit claimed terminal `git push` still runs the checks...
+#   EOF
+#   git commit -F /tmp/m.txt
+#   git push upstream fix/GH-1031-untrack-project-config-json
+#
+# would otherwise match the FIRST "git push" occurrence — inside the prose —
+# and extract "still" as the branch name instead of the real push destination.
+#
+# This function strips CONFIRMED heredoc bodies (see _lib-strip-heredoc.sh)
+# before delegating to the core parser. This is an ADDITIVE refinement of
+# "which ref" — see the file header and _lib-strip-heredoc.sh's governance
+# comment for why callers must NEVER use this function's emptiness to decide
+# whether a push exists at all; that's a separate, RAW-text presence check.
+extract_push_ref() {
+  local cmd="$1"
+  if declare -F strip_heredoc_bodies > /dev/null 2>&1; then
+    cmd=$(strip_heredoc_bodies "$cmd")
+  fi
+  _extract_push_ref_core "$cmd"
+}
+
+# Scans the RAW command for EVERY "git push ..." occurrence — not just the
+# first — and echoes every destination ref found, one per line (skipping
+# occurrences with no ref: --delete/-d shapes, --tags-only, a bare `git
+# push`). Deliberately independent of heredoc parsing: does not call
+# strip_heredoc_bodies, does not care whether a heredoc is confirmed or
+# declined, does not touch stripped text at all.
+#
+# WHY THIS EXISTS (me2resh/apexyard#1075 — decoy-ref hijack, second review
+# round on top of the presence-check fix)
+# ------------------------------------------------------------------------
+# `_lib-strip-heredoc.sh` only strips a heredoc it can CONFIRM (anchored +
+# terminated) — by design, an unconfirmed candidate (a backslash-escaped,
+# multi-word, or dotted delimiter; `<<EOF` merely inside a quoted string;
+# two heredocs on one line) is left completely untouched, because stripping
+# it would risk eating a real command that follows. That conservatism is
+# correct for the STRIPPER's own job, but it means the (declined) heredoc
+# BODY stays visible to `extract_push_ref`'s single first-match scan. If
+# that body happens to contain a plausible, non-protected decoy ref BEFORE
+# the real `git push` later in the command, `extract_push_ref` returns the
+# decoy — a confident WRONG answer, not empty — so the fail-closed check in
+# block-main-push.sh (which only engages when the result is EMPTY) never
+# fires. Real bash terminates the heredoc at its actual delimiter and
+# executes the real push regardless of what the decoy said:
+#
+#   cat > /tmp/m.txt <<END.OF
+#   see git push origin feature/GH-1-safe
+#   END.OF
+#   git push origin main
+#
+# `extract_push_ref` returns `feature/GH-1-safe` (not protected) here — not
+# empty — while bash terminates at `END.OF` and pushes to `main` for real.
+#
+# Rather than trying to make heredoc-delimiter parsing perfect (it can't
+# be — see AgDR-0104), this scans the RAW command for every push-shaped
+# occurrence and lets the caller (block-main-push.sh) block if ANY of them
+# names a protected branch. That closes the decoy-hijack without depending
+# on heredoc detection succeeding at all — a decoy sitting in a body this
+# parser can't confirm is still just TEXT, and text-with-a-protected-name
+# is exactly what this function looks for, independent of where it sits.
+#
+# Accepted trade-off, same direction as elsewhere in this file: a
+# heredoc-authored commit message that merely *discusses* pushing to a
+# protected branch, with no real push to it anywhere in the command, will
+# also surface that mention here and can cause an over-block. See
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+#
+# Returns: zero or more refs, one per line, in the order they appear.
+# Always exits 0.
+_extract_all_push_refs_core() {
+  local cmd="$1"
+  local stripped_cmd
+
+  # Same redirect/pipe stripping as _extract_push_ref_core, applied to the
+  # WHOLE command before segmenting.
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
+
+  echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | while IFS= read -r segment; do
+    [ -z "$segment" ] && continue
+
+    # --delete / -d shapes have no source ref — skip this occurrence, keep
+    # scanning the rest.
+    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+      continue
+    fi
+
+    # Strip the "git push" prefix so remaining tokens are args/flags only.
+    segment="${segment#*git}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    segment="${segment#push}"
+
+    local positional_count=0
+    local skip_next=0
+    local ref=""
+
+    # shellcheck disable=SC2086
+    for token in $segment; do
+      if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+      fi
+
+      case "$token" in
+        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
+          skip_next=1
+          continue
+          ;;
+        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
+          continue
+          ;;
+        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
+          continue
+          ;;
+        -*)
+          continue
+          ;;
+      esac
+
+      positional_count=$((positional_count + 1))
+      if [ "$positional_count" -eq 2 ]; then
+        ref="$token"
+        break
+      fi
+    done
+
+    [ -z "$ref" ] && continue
+    # Strip a single pair of surrounding quote characters, if present --
+    # see _extract_push_ref_core's identical comment (me2resh/apexyard#1079).
+    ref="${ref#\"}"; ref="${ref#\'}"
+    ref="${ref%\"}"; ref="${ref%\'}"
+    ref="${ref#+}"
+    case "$ref" in *:*) ref="${ref#*:}" ;; esac
+    [ -z "$ref" ] && continue
+    [ "$ref" = "HEAD" ] && continue
+    ref="${ref#refs/heads/}"
+    echo "$ref"
+  done
+}
+
+# Returns true (0) when the raw command contains AT LEAST ONE "git
+# push"-shaped occurrence that is BOTH (a) missing its own tag-push
+# evidence (no `--tags` flag, `tag <name>` keyword, or `refs/tags/`
+# reference within that occurrence's own segment text) AND (b) missing an
+# explicit destination ref (a bare push, relying on upstream tracking).
+# Such an occurrence is the one case neither of the other two checks in
+# this file can validate: decision point 4's scan-all only ever inspects
+# EXPLICIT refs (a bare push has none), and `is_tag_push`'s global
+# exemption cannot safely cover it either (it is not a genuine tag push).
+# It needs the local-branch fallback, unconditionally — and per-occurrence
+# is the only granularity at which that determination is safe. See the
+# THIRD version note below for why a whole-command boolean (either "does
+# this command have exactly one occurrence" or "does every occurrence
+# carry evidence") cannot make this call correctly.
+#
+# WHY PER-OCCURRENCE, NOT A WHOLE-COMMAND VERDICT (me2resh/apexyard#1075,
+# seventh review round — this replaced a SECOND over-narrow version,
+# `_is_genuine_single_tag_push`, in the same file)
+# ------------------------------------------------------------------------
+# Two prior versions of this check, both whole-command booleans, each
+# failed a DIFFERENT real shape:
+#
+#   FIRST version: "exactly one push-shaped occurrence in the command,
+#   and it carries tag evidence." Over-blocked a normal release step —
+#   pushing tags to two remotes in one command:
+#
+#     git push origin --tags && git push upstream --tags
+#
+#   has TWO occurrences, both genuinely tag-shaped, no decoy anywhere —
+#   rejected anyway, because "exactly one" counted occurrences instead of
+#   asking whether each one was safe.
+#
+#   SECOND version (a same-day fix to the first): "every occurrence
+#   carries its own tag evidence." This fixed the two-remote case, but
+#   broke a DIFFERENT genuine shape it hadn't been checked against — a
+#   plain, ordinary push to a non-protected branch, followed by a
+#   SEPARATE genuine tag push, no heredoc anywhere:
+#
+#     git push origin feature/GH-1-x && git push origin --tags
+#
+#   Under "every occurrence must carry evidence," the feature-branch
+#   occurrence (no tag evidence at all — it's an ordinary push) made the
+#   WHOLE command untrusted, which forced PUSH_DST empty and triggered the
+#   fail-closed block with a message blaming heredoc structure that does
+#   not exist in this command at all. `dev` allows this command; so did
+#   this file before either whole-command version existed.
+#
+#   The reason BOTH whole-command versions kept failing on a NEW shape
+#   each time: an occurrence that carries an EXPLICIT ref needs no
+#   special handling here at all — decision point 4's scan-all has
+#   ALREADY checked it against the protected list, independent of
+#   whether it's a tag push. Folding that occurrence into a "does the
+#   WHOLE command's tag-push signal deserve trust" verdict was always the
+#   wrong question. The right question is per-occurrence: does THIS
+#   occurrence need something neither scan-all nor the tag exemption
+#   already covers? Only a bare, evidence-less push does — because it has
+#   no ref for scan-all to check, and no tag evidence for the exemption
+#   to cover.
+#
+# A genuine tag push (alone, after a confirmed decoy-free heredoc, to
+# several remotes, or alongside an ordinary explicit-ref push to a
+# different, non-protected branch) never has a bare evidence-less
+# occurrence, so this correctly returns false (nothing to force) for all
+# of them.
+#
+# Deliberately independent of heredoc parsing, matching
+# _extract_all_push_refs_core's philosophy: operates on the RAW command,
+# does not call strip_heredoc_bodies, does not care whether any heredoc in
+# the command was confirmed or declined.
+#
+# NOTE ON NAMING: this function's name no longer contains "tag" or
+# "single" precisely because its predecessors' names (and the reasoning
+# embedded in them) actively misled two rounds of otherwise-careful
+# review toward a whole-command verdict. The name states exactly what the
+# function checks: is there an untagged, ref-less push anywhere in this
+# command.
+#
+# Returns: 0 (true — found at least one; force the ref-less fallback path)
+# or 1 (false — none found; every occurrence is either a genuine tag push
+# or already covered by decision point 4's scan-all). Always exits
+# cleanly either way.
+_command_has_untagged_refless_push() {
+  local cmd="$1" stripped_cmd segment has_evidence seg
+  local positional_count skip_next token ref found
+
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
+  found=1
+
+  while IFS= read -r segment; do
+    [ -z "$segment" ] && continue
+
+    # --delete / -d shapes have no source ref and no branch to protect —
+    # not the shape this function looks for, skip like
+    # _extract_all_push_refs_core does.
+    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+      continue
+    fi
+
+    has_evidence=0
+    if echo "$segment" | grep -qE '\s--tags(\s|$)' \
+       || echo "$segment" | grep -qE '\stag\s+\S' \
+       || echo "$segment" | grep -qE 'refs/tags/'; then
+      has_evidence=1
+    fi
+
+    # Determine whether THIS segment has an explicit positional ref —
+    # same token walk as _extract_all_push_refs_core, applied per segment
+    # so evidence and ref-presence are checked on the SAME occurrence.
+    seg="${segment#*git}"
+    seg="${seg#"${seg%%[![:space:]]*}"}"
+    seg="${seg#push}"
+    positional_count=0
+    skip_next=0
+    ref=""
+
+    # shellcheck disable=SC2086
+    for token in $seg; do
+      if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+      fi
+      case "$token" in
+        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
+          skip_next=1
+          continue
+          ;;
+        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
+          continue
+          ;;
+        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
+          continue
+          ;;
+        -*)
+          continue
+          ;;
+      esac
+      positional_count=$((positional_count + 1))
+      if [ "$positional_count" -eq 2 ]; then
+        ref="$token"
+        break
+      fi
+    done
+
+    if [ "$has_evidence" -eq 0 ] && [ -z "$ref" ]; then
+      found=0
+    fi
+  done < <(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
+
+  return "$found"
 }

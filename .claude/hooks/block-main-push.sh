@@ -46,6 +46,21 @@ fi
 # regardless of the harness's $PWD.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# NOTE on heredoc bodies (me2resh/apexyard#1066, #1075): every presence
+# check and cd-target extraction below runs against the RAW $COMMAND, never
+# against heredoc-stripped text. A security review of the first #1066 fix
+# found that routing these checks through stripped text let a malformed
+# heredoc (unterminated, a backslash/multi-word/dotted delimiter, two
+# heredocs on one line, or plain prose merely mentioning "<<EOF") make the
+# stripper eat the real command, so the presence check never fired and
+# neither gate below ever ran -- a silent bypass. `is_tag_push` /
+# `extract_push_ref` (sourced below) DO strip heredoc bodies internally,
+# but that is safe ONLY because it answers the narrower, additive "which
+# ref" question with the fail-closed check below as backstop -- never the
+# "is there a push/commit here at all" question. See
+# _lib-strip-heredoc.sh's governance comment and
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+
 # Resolve protected-branch list from project config (shared reader, #109).
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 PROTECTED=""
@@ -69,54 +84,206 @@ fi
 # origin` relying on upstream tracking), fall back to local HEAD so the hook
 # still catches pushes on protected branches made without an explicit ref.
 # ---------------------------------------------------------------------------
+PUSH_DST=""
+SKIP_PUSH_BRANCH_CHECK=0
 if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
   # Source the shared push-ref extractor if available.
   if [ -f "$HOOK_DIR/_lib-extract-push-ref.sh" ]; then
     # shellcheck disable=SC1090,SC1091
     . "$HOOK_DIR/_lib-extract-push-ref.sh"
 
-    # Tag pushes are never subject to a branch-protection check.
-    if is_tag_push "$COMMAND"; then
-      exit 0
+    # Defense-in-depth, independent of heredoc parsing entirely (#1075,
+    # second security-review round): scan the RAW command for EVERY
+    # push-shaped occurrence and block immediately if ANY of them names a
+    # protected branch. This closes the decoy-ref hijack: for a heredoc
+    # `strip_heredoc_bodies` declines to strip (an unconfirmed candidate —
+    # backslash/multi-word/dotted delimiter, `<<EOF` merely inside a quoted
+    # string, two heredocs on one line), the body stays visible, and if it
+    # contains a plausible NON-protected decoy ref before the real push,
+    # extract_push_ref's first-match semantics return that decoy — a
+    # confident WRONG answer, not empty — so the empty-only fail-closed
+    # check further below never engages. This check doesn't care whether
+    # any stripping happened; it just asks "does ANY push-shaped text in
+    # this raw command name a protected branch", which is why it runs
+    # before is_tag_push too — a decoy `--tags` mention hiding a real
+    # protected-branch push would be a mirror-image version of the same
+    # bug. See _lib-extract-push-ref.sh's _extract_all_push_refs_core doc
+    # comment and docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+    if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
+      while IFS= read -r ANY_PUSH_DST; do
+        [ -z "$ANY_PUSH_DST" ] && continue
+        if echo "$ANY_PUSH_DST" | grep -qE "^(${PROTECTED})$"; then
+          cat >&2 <<MSG
+BLOCKED: Cannot push directly to a protected branch ('${ANY_PUSH_DST}').
+
+All changes must go through a PR (.claude/rules/git-conventions.md
+§ "No Direct Main"). Protected branches: ${PROTECTED//|/, }.
+
+This command contains more than one push-shaped occurrence of text, and
+at least one names a protected branch. If that text is inside a heredoc
+body describing a DIFFERENT push (not an actual command), run the
+heredoc-writing step and the "git push" step in SEPARATE Bash calls --
+never inline a heredoc alongside a git command in the same invocation
+(me2resh/apexyard#1066's own mitigation note).
+
+To unblock a genuine push:
+  1. Create a feature branch from your current work:
+       git checkout -b feature/GH-<ticket>-<short-description>
+  2. Push the feature branch:
+       git push -u origin feature/GH-<ticket>-<short-description>
+MSG
+          exit 2
+        fi
+      done < <(_extract_all_push_refs_core "$COMMAND")
     fi
 
-    PUSH_DST=$(extract_push_ref "$COMMAND")
-  else
-    # Lib missing — best-effort fallback: no explicit ref extracted.
-    PUSH_DST=""
-  fi
-
-  # Determine which branch to check against the protected list.
-  if [ -n "$PUSH_DST" ]; then
-    TARGET_PUSH_BRANCH="$PUSH_DST"
-  else
-    # No explicit ref in the command (e.g. `git push -u origin` or bare `git
-    # push`): the push targets the current branch of the repo the command runs
-    # in.  For a compound `cd <path> && git push -u origin` (the worktree case
-    # — #727), we must resolve the branch of the TARGET worktree via the `cd`
-    # destination, NOT the hook's session cwd.  Without this, a developer on a
-    # feature-branch worktree who runs `git push -u origin` is falsely blocked
-    # because the hook's session cwd (the primary checkout) may sit on a
-    # protected branch like `dev`.
+    # Tag pushes are never subject to a branch-protection check. Pass the
+    # RAW command — is_tag_push strips heredoc bodies internally.
     #
-    # This mirrors the same pattern used in the commit section below for #549.
-    PUSH_WORKTREE_PATH=""
-    if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
-      PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
-        | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
-        | tail -n 1 \
-        | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+    # IMPORTANT: this must NOT be a script-level `exit 0`. is_tag_push can
+    # itself be fooled by decoy prose in a heredoc `strip_heredoc_bodies`
+    # correctly declines to strip (unconfirmed — e.g. a dotted delimiter) —
+    # "we always use `git push origin --tags` for releases" as body text
+    # makes is_tag_push return true even with no real tag push anywhere in
+    # the command (verified: me2resh/apexyard#1075, third review round). A
+    # script-level exit here would then skip the UNRELATED commit-check
+    # section below entirely, letting a real commit on a protected branch
+    # slip through — a worse bug than the one this guard exists to avoid.
+    # Setting a flag and falling through means: (a) a genuine tag push
+    # still skips the push-branch-check below, and (b) the commit-check
+    # section always still runs. See
+    # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+    #
+    # ALSO IMPORTANT (per-occurrence check, seventh review round):
+    # is_tag_push's TRUE verdict is a WHOLE-COMMAND signal ("some push
+    # somewhere looks tag-shaped") — it must never be trusted or
+    # distrusted as a single whole-command boolean, because both directions
+    # of that mistake produced a real, verified bug in earlier rounds of
+    # this file: trusting it unconditionally let a decoy hide a real
+    # ref-less push (fixed by not skipping the whole script — see above);
+    # and later, DIS-trusting it whenever ANY occurrence lacked evidence
+    # false-blocked a perfectly ordinary compound push
+    # (`git push origin feature/GH-1-x && git push origin --tags` — one
+    # explicit-ref push plus one genuine tag push, no heredoc anywhere;
+    # `dev` allows it, this file blocked it with a message blaming heredoc
+    # structure that does not exist in the command at all).
+    #
+    # The correct question is per-occurrence, not whole-command:
+    # `_command_has_untagged_refless_push` scans every push-shaped
+    # occurrence and asks, for EACH one, "does this specific occurrence
+    # carry its own tag evidence, or an explicit ref?" — either answer
+    # means the occurrence is already safe (exempt, or already checked by
+    # decision point 4's scan-all above). Only a BARE occurrence with
+    # NEITHER (no tag evidence AND no explicit ref) is unaddressed by
+    # anything else in this hook, because scan-all has nothing to check
+    # (no ref) and the tag exemption doesn't apply (no evidence) — that
+    # occurrence, and only that occurrence, needs the local-HEAD fallback
+    # forced. See _command_has_untagged_refless_push's doc comment in
+    # _lib-extract-push-ref.sh and docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+    UNTRUSTED_TAG_SIGNAL=0
+    if is_tag_push "$COMMAND"; then
+      if declare -F _command_has_untagged_refless_push > /dev/null 2>&1 \
+         && _command_has_untagged_refless_push "$COMMAND"; then
+        # At least one occurrence is bare (no ref) AND carries no tag
+        # evidence of its own -- neither scan-all nor the tag exemption
+        # covers it. We must not trust extract_push_ref's ordinary single
+        # first-match result below either: it can read a DIFFERENT
+        # occurrence's decoy/tag segment and return a confident,
+        # non-protected-looking ref (e.g. "for" from
+        # "git push origin --tags for releases"), which would silently
+        # replace the local-HEAD fallback with that wrong answer instead
+        # of falling through to it. Force the ref-less path instead.
+        UNTRUSTED_TAG_SIGNAL=1
+      else
+        # No bare, evidence-less occurrence anywhere in this command:
+        # every occurrence is either a genuine tag push (exempt) or
+        # carries an explicit ref that decision point 4's scan-all has
+        # ALREADY checked against the protected list above. Nothing left
+        # to validate -- safe to skip the ordinary branch-check entirely.
+        SKIP_PUSH_BRANCH_CHECK=1
+      fi
     fi
-    if [ -n "$PUSH_WORKTREE_PATH" ]; then
-      TARGET_PUSH_BRANCH=$(git -C "$PUSH_WORKTREE_PATH" branch --show-current 2>/dev/null)
-    else
-      # Plain `git push -u origin` with no `cd` prefix — use session cwd.
-      TARGET_PUSH_BRANCH=$(git branch --show-current 2>/dev/null)
+
+    if [ "$SKIP_PUSH_BRANCH_CHECK" != "1" ]; then
+      if [ "$UNTRUSTED_TAG_SIGNAL" = "1" ]; then
+        PUSH_DST=""
+      else
+        PUSH_DST=$(extract_push_ref "$COMMAND")
+      fi
+
+      # Fail closed rather than silently falling back to the current branch
+      # when heredoc-aware extraction found nothing BUT a naive, unstripped
+      # parse of the same raw command found something ref-shaped. See
+      # me2resh/apexyard#1075 and validate-branch-name.sh's identical check.
+      # This also legitimately fires for the untrusted-tag-signal case
+      # above (PUSH_DST forced empty, RAW_PUSH_DST reads the decoy) --
+      # blocking there is just as correct an outcome as the local-HEAD
+      # fallback below would have been, since the decoy proves the
+      # command's structure is genuinely ambiguous.
+      if [ -z "$PUSH_DST" ]; then
+        RAW_PUSH_DST=$(_extract_push_ref_core "$COMMAND")
+        if [ -n "$RAW_PUSH_DST" ]; then
+          cat >&2 <<MSG
+BLOCKED: Cannot safely determine the push destination for this command.
+
+This command contains "git push", and a naive scan found what looks like
+an explicit destination ref elsewhere in the same command -- but the
+push actually being validated has no ref of its own, so it isn't
+possible to confirm that the other ref-shaped text is unrelated. This
+can happen because of a heredoc body (a commit message or PR body
+mentioning a push) or other prose sitting alongside a real, ref-less
+push in the same Bash call.
+
+To unblock: run the heredoc/text-writing step and the "git push" step in
+SEPARATE Bash calls -- never inline a heredoc or unrelated prose
+alongside a git command in the same invocation (me2resh/apexyard#1066's
+own mitigation note).
+MSG
+          exit 2
+        fi
+      fi
     fi
   fi
 
-  if [ -n "$TARGET_PUSH_BRANCH" ] && echo "$TARGET_PUSH_BRANCH" | grep -qE "^(${PROTECTED})$"; then
-    cat >&2 <<MSG
+  # Determine which branch to check against the protected list. Runs
+  # regardless of whether the lib was found (best-effort: PUSH_DST stays
+  # empty and we fall back to local-branch resolution) and regardless of
+  # SKIP_PUSH_BRANCH_CHECK's earlier state EXCEPT when a genuine tag push
+  # was confirmed above -- a tag push has nothing to check here at all.
+  if [ "$SKIP_PUSH_BRANCH_CHECK" != "1" ]; then
+    if [ -n "$PUSH_DST" ]; then
+      TARGET_PUSH_BRANCH="$PUSH_DST"
+    else
+      # No explicit ref in the command (e.g. `git push -u origin` or bare
+      # `git push`): the push targets the current branch of the repo the
+      # command runs in. For a compound `cd <path> && git push -u origin`
+      # (the worktree case — #727), we must resolve the branch of the
+      # TARGET worktree via the `cd` destination, NOT the hook's session
+      # cwd. Without this, a developer on a feature-branch worktree who
+      # runs `git push -u origin` is falsely blocked because the hook's
+      # session cwd (the primary checkout) may sit on a protected branch
+      # like `dev`.
+      #
+      # This mirrors the same pattern used in the commit section below
+      # for #549. Uses the RAW command — see the file-level note on why
+      # cd-detection never consults heredoc-stripped text.
+      PUSH_WORKTREE_PATH=""
+      if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+        PUSH_WORKTREE_PATH=$(echo "$COMMAND" \
+          | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+          | tail -n 1 \
+          | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+      fi
+      if [ -n "$PUSH_WORKTREE_PATH" ]; then
+        TARGET_PUSH_BRANCH=$(git -C "$PUSH_WORKTREE_PATH" branch --show-current 2>/dev/null)
+      else
+        # Plain `git push -u origin` with no `cd` prefix — use session cwd.
+        TARGET_PUSH_BRANCH=$(git branch --show-current 2>/dev/null)
+      fi
+    fi
+
+    if [ -n "$TARGET_PUSH_BRANCH" ] && echo "$TARGET_PUSH_BRANCH" | grep -qE "^(${PROTECTED})$"; then
+      cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${TARGET_PUSH_BRANCH}').
 
 All changes must go through a PR (.claude/rules/git-conventions.md
@@ -137,7 +304,8 @@ protection from a default-protected branch (e.g. you legitimately use
 protection to a new branch, write the array INCLUDING it. The hook
 trusts whichever list you provide — get the direction right.
 MSG
-    exit 2
+      exit 2
+    fi
   fi
 fi
 
@@ -157,7 +325,11 @@ if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   # Detect `cd <path>` prefix in compound commands, e.g.:
   #   cd ../wt && git commit -m "msg"
   #   cd /abs/path && git commit …
-  # Match `cd` as the first meaningful token before any separator.
+  # Match `cd` as the first meaningful token before any separator. Uses the
+  # RAW command throughout this section — the commit-check has no "which
+  # ref" refinement step at all (it only checks current branch), so there
+  # is nothing here for heredoc-stripping to safely improve, only a
+  # presence question that must stay on raw text.
   WORKTREE_PATH=""
   if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
     # Resolve the LAST `cd <path>` in the chain (so `cd a && cd b && git commit`
