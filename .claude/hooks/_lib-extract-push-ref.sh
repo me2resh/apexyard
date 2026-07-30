@@ -323,3 +323,117 @@ extract_push_ref() {
   fi
   _extract_push_ref_core "$cmd"
 }
+
+# Scans the RAW command for EVERY "git push ..." occurrence — not just the
+# first — and echoes every destination ref found, one per line (skipping
+# occurrences with no ref: --delete/-d shapes, --tags-only, a bare `git
+# push`). Deliberately independent of heredoc parsing: does not call
+# strip_heredoc_bodies, does not care whether a heredoc is confirmed or
+# declined, does not touch stripped text at all.
+#
+# WHY THIS EXISTS (me2resh/apexyard#1075 — decoy-ref hijack, second review
+# round on top of the presence-check fix)
+# ------------------------------------------------------------------------
+# `_lib-strip-heredoc.sh` only strips a heredoc it can CONFIRM (anchored +
+# terminated) — by design, an unconfirmed candidate (a backslash-escaped,
+# multi-word, or dotted delimiter; `<<EOF` merely inside a quoted string;
+# two heredocs on one line) is left completely untouched, because stripping
+# it would risk eating a real command that follows. That conservatism is
+# correct for the STRIPPER's own job, but it means the (declined) heredoc
+# BODY stays visible to `extract_push_ref`'s single first-match scan. If
+# that body happens to contain a plausible, non-protected decoy ref BEFORE
+# the real `git push` later in the command, `extract_push_ref` returns the
+# decoy — a confident WRONG answer, not empty — so the fail-closed check in
+# block-main-push.sh (which only engages when the result is EMPTY) never
+# fires. Real bash terminates the heredoc at its actual delimiter and
+# executes the real push regardless of what the decoy said:
+#
+#   cat > /tmp/m.txt <<END.OF
+#   see git push origin feature/GH-1-safe
+#   END.OF
+#   git push origin main
+#
+# `extract_push_ref` returns `feature/GH-1-safe` (not protected) here — not
+# empty — while bash terminates at `END.OF` and pushes to `main` for real.
+#
+# Rather than trying to make heredoc-delimiter parsing perfect (it can't
+# be — see AgDR-0104), this scans the RAW command for every push-shaped
+# occurrence and lets the caller (block-main-push.sh) block if ANY of them
+# names a protected branch. That closes the decoy-hijack without depending
+# on heredoc detection succeeding at all — a decoy sitting in a body this
+# parser can't confirm is still just TEXT, and text-with-a-protected-name
+# is exactly what this function looks for, independent of where it sits.
+#
+# Accepted trade-off, same direction as elsewhere in this file: a
+# heredoc-authored commit message that merely *discusses* pushing to a
+# protected branch, with no real push to it anywhere in the command, will
+# also surface that mention here and can cause an over-block. See
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
+#
+# Returns: zero or more refs, one per line, in the order they appear.
+# Always exits 0.
+_extract_all_push_refs_core() {
+  local cmd="$1"
+  local stripped_cmd
+
+  # Same redirect/pipe stripping as _extract_push_ref_core, applied to the
+  # WHOLE command before segmenting.
+  stripped_cmd=$(echo "$cmd" | sed 's/[[:space:]][0-9]*[>|].*$//')
+
+  echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*' | while IFS= read -r segment; do
+    [ -z "$segment" ] && continue
+
+    # --delete / -d shapes have no source ref — skip this occurrence, keep
+    # scanning the rest.
+    if echo "$segment" | grep -qE '(--delete\b|[[:space:]]-d\b)'; then
+      continue
+    fi
+
+    # Strip the "git push" prefix so remaining tokens are args/flags only.
+    segment="${segment#*git}"
+    segment="${segment#"${segment%%[![:space:]]*}"}"
+    segment="${segment#push}"
+
+    local positional_count=0
+    local skip_next=0
+    local ref=""
+
+    # shellcheck disable=SC2086
+    for token in $segment; do
+      if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+      fi
+
+      case "$token" in
+        -o|--push-option|--recurse-submodules|--signed|--receive-pack|--exec|--repo)
+          skip_next=1
+          continue
+          ;;
+        --push-option=*|--recurse-submodules=*|--signed=*|--receive-pack=*|--exec=*|--repo=*)
+          continue
+          ;;
+        -[unfvq]|-[unfvq][unfvq]*|--force|--force-with-lease*|--tags|--follow-tags|--atomic|--dry-run|--no-verify|--set-upstream|--prune|--mirror|--all|--no-tags|--quiet|--verbose|--ipv4|--ipv6|--progress|--no-progress|--thin|--no-thin|--porcelain|--no-recurse-submodules)
+          continue
+          ;;
+        -*)
+          continue
+          ;;
+      esac
+
+      positional_count=$((positional_count + 1))
+      if [ "$positional_count" -eq 2 ]; then
+        ref="$token"
+        break
+      fi
+    done
+
+    [ -z "$ref" ] && continue
+    ref="${ref#+}"
+    case "$ref" in *:*) ref="${ref#*:}" ;; esac
+    [ -z "$ref" ] && continue
+    [ "$ref" = "HEAD" ] && continue
+    ref="${ref#refs/heads/}"
+    echo "$ref"
+  done
+}

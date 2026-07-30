@@ -33,6 +33,27 @@
 #     prose (which a separate assertion, the BAD case, checks by pushing
 #     to a non-conforming name instead of a protected one).
 #
+# --- X1-X4: the decoy-ref hijack (a second security-review round, still
+# on #1075) -----------------------------------------------------------------
+# The eight-shapes fix above closes "the stripper eats the real command so
+# the gate never even asks". It does NOT close a narrower, second bug: for
+# a heredoc the (now-correct, conservative) stripper DECLINES to strip
+# (unconfirmed — X1's dotted delimiter, X2's backslash-escaped delimiter,
+# or X3's no-heredoc-at-all quoted string), the body stays visible to
+# `extract_push_ref`'s first-match scan. If that body contains a
+# plausible, NON-protected decoy ref before the REAL `git push` later in
+# the command, `extract_push_ref` returns the decoy — a confident WRONG
+# answer, not empty — so the earlier fail-closed check (which only fires
+# on an EMPTY result) never engages, and the gate exits 0 while the real
+# push to `main` genuinely runs. Fixed independently of heredoc parsing:
+# block-main-push.sh now scans the raw command for EVERY push-shaped
+# occurrence via `_extract_all_push_refs_core` and blocks if ANY names a
+# protected branch. X4 is the control (a CONFIRMED heredoc, already
+# correctly handled by the first round). See AgDR-0113 for the full
+# record, including the accepted trade-off this introduces (a legitimate
+# heredoc that merely discusses pushing to a protected branch, with no
+# real push to it, can now also be blocked).
+#
 # Exit 0 if all cases pass; 1 on first failure.
 
 set -u
@@ -203,6 +224,88 @@ run_cmd "H: C++ operator-<< in a quoted message" "validate-branch-name.sh" "main
 SHAPE_BAD='echo "see cat <<EOF" && git push origin badbranchname'
 run_cmd "BAD sanity: dest=badbranchname, not protected -> allowed" "block-main-push.sh" "main" "$SHAPE_BAD" 0
 run_cmd "BAD sanity: dest=badbranchname, non-conforming -> blocks" "validate-branch-name.sh" "main" "$SHAPE_BAD" 2
+
+# ---------------------------------------------------------------------------
+# Decoy --tags hijack (fourth review round on #1075). is_tag_push scans
+# heredoc-stripped text for "--tags" -- but for an UNCONFIRMED heredoc
+# (dotted delimiter here), stripping declines, so decoy prose mentioning
+# "--tags" survives and makes is_tag_push return TRUE with no real tag
+# push anywhere in the command. block-main-push.sh used to treat that as
+# a script-level `exit 0`, which skipped the UNRELATED commit-check
+# section below it entirely -- letting a real `git commit` on a protected
+# branch slip through uninspected. Verified against `dev`'s cwd=dev,
+# real-commit case for comparison: this shape has always been exploitable
+# there too (is_tag_push existed before #1066), but the earlier rounds of
+# this ticket never looked at it because they were scoped to push-ref
+# extraction, not tag-push detection.
+#
+# Fix: is_tag_push's verdict now only skips the PUSH-branch-check (which
+# the scan-all check just above it, run first, already covers
+# independently) -- it never short-circuits the whole script, so the
+# commit-check always still runs.
+# ---------------------------------------------------------------------------
+SHAPE_TAGDECOY=$(cat <<'CMD'
+cat > /tmp/m.txt <<END.OF
+we always use git push --tags for releases
+END.OF
+git commit -m "bad commit"
+CMD
+)
+run_cmd "TAGDECOY: decoy --tags in unconfirmed heredoc must not hide a real commit on a protected branch" \
+  "block-main-push.sh" "dev" "$SHAPE_TAGDECOY" 2
+
+# ---------------------------------------------------------------------------
+# Decoy-ref hijack (second security-review round on top of the eight shapes
+# above). For a heredoc `strip_heredoc_bodies` correctly DECLINES to strip
+# (unconfirmed — a backslash/dotted delimiter, or no heredoc at all), the
+# body stays visible to text matching. If that body contains a plausible,
+# NON-protected decoy ref BEFORE the real `git push` later in the command,
+# `extract_push_ref`'s first-match semantics return the decoy — a confident
+# WRONG answer, not empty — so the empty-only fail-closed check from the
+# first round never engages, and the gate exits 0 while the REAL push
+# (to a PROTECTED branch) genuinely runs. Fixed independently of heredoc
+# parsing: block-main-push.sh now scans the raw command for EVERY
+# push-shaped occurrence and blocks if ANY names a protected branch. See
+# _extract_all_push_refs_core's doc comment in _lib-extract-push-ref.sh.
+#
+# X4 is the CONTROL: a CONFIRMED (anchored + terminated) heredoc, already
+# correctly handled by the first round's fix (the decoy is genuinely
+# stripped) — included here to prove the new check doesn't change a case
+# that was already right.
+# ---------------------------------------------------------------------------
+SHAPE_X1=$(cat <<'CMD'
+cat > /tmp/m.txt <<END.OF
+see git push origin feature/GH-1-safe
+END.OF
+git push origin main
+CMD
+)
+run_cmd "X1: dotted-delimiter heredoc hides a decoy ref before the real push to main" \
+  "block-main-push.sh" "main" "$SHAPE_X1" 2
+
+SHAPE_X2=$(cat <<'CMD'
+cat > /tmp/m.txt <<E\OF
+see git push origin feature/GH-1-safe
+EOF
+git push origin main
+CMD
+)
+run_cmd "X2: backslash-escaped-delimiter heredoc hides a decoy ref before the real push to main" \
+  "block-main-push.sh" "main" "$SHAPE_X2" 2
+
+SHAPE_X3='echo "see git push origin feature/GH-1-safe" && git push origin main'
+run_cmd "X3: no heredoc at all, decoy ref in a quoted string before the real push to main" \
+  "block-main-push.sh" "main" "$SHAPE_X3" 2
+
+SHAPE_X4=$(cat <<'CMD'
+cat > /tmp/m.txt <<EOF
+see git push origin feature/GH-1-safe
+EOF
+git push origin main
+CMD
+)
+run_cmd "X4 control: CONFIRMED heredoc, decoy correctly stripped, real push to main still blocks" \
+  "block-main-push.sh" "main" "$SHAPE_X4" 2
 
 # ---------------------------------------------------------------------------
 # Summary
