@@ -163,6 +163,34 @@ extract_flag_value() {
   local flag_re="$1"
   local cmd="$2"
   printf '%s' "$cmd" | awk -v FLAG_RE="$flag_re" -v SQ="'" '
+    # Truncate CHUNK at its LAST occurrence of delimiter D.
+    #
+    # A regex sub() cannot do this job (me2resh/apexyard#1046). POSIX ERE
+    # substitution is leftmost-longest, so the previous
+    #   sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+    # found the EARLIEST quote that happened to be followed by ` --<letter>`
+    # and deleted from there to end-of-string. A body containing an embedded
+    # quote and, later, any double-dash token was therefore amputated at the
+    # quote, and everything after it went unscanned — a silent fail-open on a
+    # leak gate. Both conditions had to co-occur, which is why the originally
+    # filed single-condition repro did not reproduce.
+    #
+    # Scanning backwards is exact rather than heuristic: match() already
+    # anchored the region on the real closing delimiter, and the only thing
+    # that can follow it is the boundary ` --<letter>` or trailing space,
+    # neither of which contains a delimiter. So the last D in CHUNK IS the
+    # closing delimiter, including when the body legitimately ends in one.
+    #
+    # This deliberately does NOT touch the greedy match() anchors above it.
+    # Widening those was tried in #1040 and rejected: it reopened #227 across
+    # every boundary character (9 failures vs 5 — measurably worse than no
+    # fix). The anchor was never the defect; the trim was.
+    function trim_to_last(chunk, d,    i) {
+      for (i = length(chunk); i >= 1; i--) {
+        if (substr(chunk, i, 1) == d) return substr(chunk, 1, i - 1)
+      }
+      return chunk
+    }
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
@@ -171,19 +199,18 @@ extract_flag_value() {
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+\"", "", chunk)
-        sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub("\"[[:space:]]*$", "", chunk)
-        print chunk
+        print trim_to_last(chunk, "\"")
         exit
       }
-      # Single-quoted value: same greedy + anchor treatment.
+      # Single-quoted value: same greedy + anchor treatment. This branch had
+      # the identical leftmost-longest defect and is fixed the same way; it is
+      # not mentioned in #1046 but leaks on the single-quoted equivalent of the
+      # same command shape.
       re = "(" FLAG_RE ")[[:space:]]+" SQ "(.*)" SQ "([[:space:]]+--[a-zA-Z]|[[:space:]]*$)"
       if (match(s, re)) {
         chunk = substr(s, RSTART, RLENGTH)
         sub("^(" FLAG_RE ")[[:space:]]+" SQ, "", chunk)
-        sub(SQ "([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
-        sub(SQ "[[:space:]]*$", "", chunk)
-        print chunk
+        print trim_to_last(chunk, SQ)
         exit
       }
       # Unquoted value: single token, embedded quotes irrelevant.
@@ -368,10 +395,18 @@ without having looked at it.
 Common causes:
   - the path does not exist, or is relative to a different directory
   - a typo in the path
+  - the file is written in a LATER tool call than the one running this
+    command (a PreToolUse hook blocks the whole call, so a heredoc that
+    creates the file alongside the gh command never runs)
 
-Fix the path and retry. To reference a registered project deliberately,
-add this marker to the body:
-    <!-- private-refs: allow -->
+Fix the path and retry — that is the only way past this block.
+
+The <!-- private-refs: allow --> skip marker does NOT apply here, and
+earlier versions of this message wrongly suggested it did. That marker is
+read out of body content this hook has actually scanned; it cannot be read
+out of a file that could not be opened. There is deliberately no bypass for
+an unreadable body: the marker means "I looked, and this reference is
+intentional", which is not a claim anyone can make about unread bytes.
 ======================================================================
 EOF
   exit 2

@@ -320,6 +320,70 @@ run_case "#1039 r2: markdown table row then leak in the tail → block" \
 Discovered during the curios-dog rebuild.\""
 
 # ---------------------------------------------------------------------------
+# me2resh/apexyard#1046 — the trim, not the match anchor.
+#
+# extract_flag_value's greedy match() captured the body correctly, but the
+# trim that followed used
+#     sub("\"([[:space:]]+--[a-zA-Z].*)?$", "", chunk)
+# and POSIX ERE substitution is leftmost-longest. It therefore deleted from
+# the EARLIEST quote that happened to be followed by ` --<letter>` through to
+# end-of-string, amputating the body's tail. The hook then exited 0 with the
+# tail never scanned — a silent fail-open on a leak gate.
+#
+# TWO conditions must co-occur: an embedded quote AND a later double-dash
+# token. Either alone still blocked correctly, which is why the repro
+# originally filed on #1046 (a bare `--verbose` in prose, no embedded quote)
+# did NOT reproduce. Both single-condition cases are asserted below so a
+# future reader can see why.
+#
+# The fix scans backwards for the closing delimiter instead of regex-trimming,
+# and deliberately leaves the greedy match() anchors alone: widening those was
+# tried in #1040 and rejected for reopening #227 (9 failures vs 5).
+# ---------------------------------------------------------------------------
+
+# The two leaking commands recorded on the issue. Both exited 0 pre-fix.
+run_case "#1046: double-quoted body, embedded quote then --flag, leak in tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose then curios-dog here\""
+
+run_case "#1046: same shape with a trailing --label after the body → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"x \\\"y\\\" --a b curios-dog\" --label bug"
+
+# NOT on the issue: the single-quoted branch carried the identical
+# leftmost-longest defect and leaked on the equivalent command shape.
+run_case "#1046: single-quoted body, embedded quote then --flag, leak in tail → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title t --body 'quote '\"'\"'done'\"'\"' --verbose then curios-dog here'"
+
+# Single-condition controls — these passed BEFORE the fix too. They are here to
+# document why the originally filed repro did not reproduce, not as proof.
+run_case "#1046 control: embedded quote alone (no --flag) → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" then curios-dog here\""
+
+run_case "#1046 control: --flag alone (no embedded quote) → block" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"no quotes --verbose curios-dog\""
+
+# The false-positive guard: both trigger conditions present, nothing private.
+run_case "#1046: embedded quote + --flag but clean body → pass" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose and nothing private\""
+
+# Item 1 — the fail-closed message advised a bypass that cannot work, because
+# the skip-marker check runs downstream of this block. The marker is read out
+# of scanned body content; it cannot be read out of a file that never opened.
+# Asserting on the corrected wording, which is absent pre-fix.
+run_case "#1046: unreadable body-file message no longer advises the skip marker" \
+  2 "does NOT apply here" \
+  "gh issue create --repo me2resh/apexyard --title t --body-file /nonexistent-xyz-1046.md"
+
+run_case "#1046: skip marker in --body does not unblock an unreadable --body-file" \
+  2 "body-file named but not readable" \
+  "gh issue create --repo me2resh/apexyard --title t --body-file /nonexistent-xyz-1046.md --body \"<!-- private-refs: allow -->\""
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
