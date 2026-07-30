@@ -163,6 +163,13 @@ extract_flag_value() {
   # $3 = trim mode. Default "last" (greedy retention, for leak DETECTION).
   # Pass "first" for the conservative subset the skip-marker check needs —
   # see the SCOPE ASYMMETRY note below.
+  #
+  # INVARIANT for anyone adding a caller: any consumer that makes an
+  # ALLOW / bypass decision MUST pass "first". Detection consumers take the
+  # default. The default is deliberately the detection-safe one, which means
+  # a new allow-path caller that forgets $3 silently gets the superset — and
+  # a superset is fail-OPEN in that direction. Read the asymmetry note before
+  # adding a call site.
   local flag_re="$1"
   local cmd="$2"
   local mode="${3:-last}"
@@ -213,16 +220,26 @@ extract_flag_value() {
     # correct here.
     function trim_mode(chunk, d) {
       if (MODE != "first") return trim_to_last(chunk, d)
-      # `-{1,2}` here, NOT `--`. A single-dash flag is the same flag: `-l` IS
+      # `--?` here, NOT `--`. A single-dash flag is the same flag: `-l` IS
       # `--label`. Keying the conservative cut on a double dash closed
       # `--label "<marker>"` and left `-l "<marker>"` open, so the subset
       # silently became a superset again for the short spellings.
+      #
+      # `--?` and NOT `-{1,2}`, which is what this originally used: `{n,m}`
+      # is an ERE interval and awk support for it is not universal (mawk
+      # 1.3.3 lacks it; BWK awk only gained it around 2019; gawk 3.x needed
+      # --re-interval). Where it is unsupported the pattern is treated
+      # LITERALLY, the cut then fires only at end-of-chunk, and this branch
+      # silently degrades back toward the superset — reopening the very
+      # bypass it exists to close, on some machines and not others. That is
+      # the same silent-failure class as the bug this hook is fixing, so the
+      # dependency is not worth carrying when `--?` is exactly equivalent.
       #
       # Safe by construction: a more aggressive cut yields a SMALLER subset,
       # and smaller is fail-closed for the marker consumer. This branch is
       # never reached by leak detection, which always uses "last", so it
       # cannot affect #227/#1039 behaviour.
-      sub(d "([[:space:]]+-{1,2}[a-zA-Z].*)?$", "", chunk)
+      sub(d "([[:space:]]+--?[a-zA-Z].*)?$", "", chunk)
       sub(d "[[:space:]]*$", "", chunk)
       return chunk
     }
@@ -632,16 +649,19 @@ if echo "$HAYSTACK" | grep -qF -- "$SKIP_MARKER" 2>/dev/null; then
   cat >&2 <<'DIAG'
 
 NOTE: the skip marker IS present in this command, but not in a position
-that counts, so it did not apply. It must appear in the --title, in the
---body BEFORE any embedded quote followed by a flag-shaped token, or in
-the --body-file (which is read whole and has no such restriction).
+that counts, so it did not apply.
+
+The reliable placement is --body-file: it is read whole, with none of the
+restrictions below. Prefer it.
+
+--title and --body both work, but only BEFORE any embedded quote that is
+followed by a flag-shaped token. Past that point the value is cut short
+and a marker there is not seen — in the title exactly as in the body.
 
 A marker in a later flag value (--label / -l / --assignee / -a) is
 deliberately ignored: it is not part of what gets published, and honouring
 it there would let the bypass ride in on a parsing artefact rather than on
 something you actually wrote into the ticket.
-
-The most reliable placement is --body-file.
 DIAG
 fi
 

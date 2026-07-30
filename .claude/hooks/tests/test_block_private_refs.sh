@@ -433,6 +433,43 @@ run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted
   "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
 
 # ---------------------------------------------------------------------------
+# Portability lock: no ERE intervals in the hook's awk program.
+#
+# `{n,m}` support is not universal in awk — mawk 1.3.3 lacks it, BWK awk only
+# gained it around 2019, gawk 3.x needed --re-interval. Where unsupported the
+# pattern is treated LITERALLY, which for the conservative trim means the cut
+# fires only at end-of-chunk and the subset silently degrades toward the
+# superset, reopening the marker bypass on some machines and not others.
+#
+# The behavioural cases above cannot catch this — they pass on any awk that
+# DOES support intervals, which includes most developer machines and CI. This
+# is a source-level assertion precisely because the failure is environmental.
+# `--?[a-zA-Z]` is exactly equivalent and interval-free.
+# ---------------------------------------------------------------------------
+
+HOOK_SRC="$REPO_ROOT/.claude/hooks/block-private-refs-in-public-repos.sh"
+
+# Strip comment lines BEFORE matching. The first version of this check
+# grepped the raw file and flagged the explanatory comment that documents
+# why the interval was removed — a check that fires on prose describing the
+# bug rather than on the bug. That is the same class as me2resh/apexyard#1066
+# (hooks matching command text rather than commands), reproduced here in
+# miniature, so it is worth naming rather than quietly fixing.
+#
+# Only bracket-quantifier forms like {1,2} / {2} / {1,} count. Braces in
+# awk's own block syntax and in shell ${VAR} expansions are not intervals,
+# and neither is matched by this pattern.
+INTERVAL_HITS=$(grep -vE '^[[:space:]]*#' "$HOOK_SRC" | grep -nE '\{[0-9]+(,[0-9]*)?\}' || true)
+if [ -n "$INTERVAL_HITS" ]; then
+  FAIL=$((FAIL+1))
+  echo "FAIL: hook source contains an ERE interval {n,m} — not portable across awks; use --? or an explicit alternation"
+  printf '%s\n' "$INTERVAL_HITS" | head -3
+else
+  PASS=$((PASS+1))
+  echo "PASS: no ERE intervals in hook source (portable across awk implementations)"
+fi
+
+# ---------------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------------
 
