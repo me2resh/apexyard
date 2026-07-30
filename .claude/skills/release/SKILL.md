@@ -88,6 +88,8 @@ if [ -z "$LOG_RANGE" ]; then
 fi
 ```
 
+**#1077 — `PR_LOOKUP_REPO` is derived, not hardcoded.** `bin/release-changelog.sh` resolves an unscoped commit's trailing PR number back to the issue it closes via a `gh pr view --repo <repo>` lookup (see the script's own header for the full mechanism). That `<repo>` is derived from `REPO_REMOTE`'s own git remote URL (`REPO_REMOTE` defaults to `upstream`) — **not** hardcoded to `me2resh/apexyard`. This repo's own contributor workflow (push to upstream, PR against `me2resh/apexyard`) needs no changes: `upstream` already resolves correctly here. An **adopter fork cutting its own independent release** — where `HEAD_REF` points at that fork's own dev branch rather than `upstream/dev` — should set `REPO_REMOTE` to whichever remote actually holds that dev branch (commonly `origin`), so the fork's own PR numbers resolve against its own repo instead of upstream's. If the configured remote can't be resolved at all, the lookup is skipped entirely rather than guessing (see `bin/release-changelog.sh`'s header, "prefer a missing close over a wrong close").
+
 The helper emits markdown to stdout in the format:
 
 ```markdown

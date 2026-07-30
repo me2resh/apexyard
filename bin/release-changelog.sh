@@ -12,14 +12,41 @@
 #   DATE       — the release date in YYYY-MM-DD format
 #
 # Optional:
-#   REPO_REMOTE    — the git remote to use for upstream refs (default: upstream)
+#   REPO_REMOTE    — the git remote whose repo this release is being cut for
+#                    (default: upstream). Used for two things: as the base of
+#                    the git log range (see below), and — since #1077 — as the
+#                    source PR_LOOKUP_REPO derives from. Set this to whichever
+#                    remote your OWN fork's dev/main actually lives on (e.g.
+#                    "origin") when cutting an independent release from an
+#                    adopter fork — see PR_LOOKUP_REPO below.
 #   PR_LOOKUP_REPO — owner/repo used to resolve an UNSCOPED commit's trailing
-#                    PR number back to the issue it actually closes (default:
-#                    me2resh/apexyard). Only consulted for commits with no
-#                    `type(#N):` scope (#1056) — see "Closes resolution"
-#                    below. Best-effort: a `gh` failure of any kind (missing
-#                    binary, auth, rate limit, or an unreachable forge) always
-#                    falls back to today's behaviour and never aborts.
+#                    PR number back to the issue it actually closes. Only
+#                    consulted for commits with no `type(#N):` scope (#1056)
+#                    — see "Closes resolution" below. Best-effort: a `gh`
+#                    failure of any kind (missing binary, auth, rate limit,
+#                    or an unreachable forge) always falls back to today's
+#                    behaviour and never aborts.
+#
+#                    Default (#1077): derived from REPO_REMOTE's own git
+#                    remote URL, NOT hardcoded — apexyard is built to be
+#                    forked, and every fork's own PR numbers must be resolved
+#                    against ITS OWN repo, not upstream's (a fork resolving
+#                    its own PR #12 against me2resh/apexyard's PR #12 would
+#                    emit whatever unrelated issue upstream's #12 happens to
+#                    close). If REPO_REMOTE can't be resolved to an owner/repo
+#                    shape at all (no such remote, or an unparseable URL),
+#                    PR_LOOKUP_REPO is left EMPTY and the lookup is skipped
+#                    entirely — "prefer a missing close over a wrong close":
+#                    a missing close is an annoyance fixed by hand; a wrong
+#                    close silently reaches into an unrelated issue. Set this
+#                    explicitly to override derivation (still supported).
+#
+#                    PR_LOOKUP_TIMEOUT — seconds to bound each `gh pr view`
+#                    call (default: 10). Prefers GNU `timeout`, falls back to
+#                    macOS `gtimeout`, degrades to unbounded if neither exists
+#                    (#1078) — an unresponsive forge must never stall a
+#                    release cut indefinitely; a release cut walks this path
+#                    once per unscoped commit in range.
 #
 # Output format (matches the existing CHANGELOG.md convention):
 #
@@ -184,22 +211,56 @@ has_scope_issue() {
 # Best-effort: resolve a trailing PR number back to the ISSUE it actually
 # closes/references, by reading the PR's own body for a closing-keyword
 # reference (#1056). Every failure path — no `gh` on PATH, auth failure, rate
-# limit, or (the exact live failure that motivated this) a DNS blip on
+# limit, an unresolvable/underivable target repo (#1077), a hung request
+# (#1078), or (the exact live failure that motivated this) a DNS blip on
 # api.github.com — degrades to printing nothing, so the caller falls back to
 # the PR number itself. A release cut must never abort because the forge
-# was briefly unreachable. Always returns 0 so `set -e` can never trip on it.
-PR_LOOKUP_REPO="${PR_LOOKUP_REPO:-me2resh/apexyard}"
+# was briefly unreachable, or hang because it never answered at all. Always
+# returns 0 so `set -e` can never trip on it.
+
+# Derive PR_LOOKUP_REPO from the ACTUAL remote this release is being cut for
+# (#1077), rather than hardcoding it. See the file header for the full
+# rationale. An explicit PR_LOOKUP_REPO (env var already set by the caller)
+# always wins over derivation.
+_derive_pr_lookup_repo() {
+  local url
+  url=$(git remote get-url "$REPO_REMOTE" 2>/dev/null) || return 0
+  echo "$url" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1
+}
+
+if [ -z "${PR_LOOKUP_REPO:-}" ]; then
+  PR_LOOKUP_REPO=$(_derive_pr_lookup_repo)
+fi
 
 resolve_issue_from_pr() {
   local pr_num="$1"  # numeric, no leading '#'
-  local body ref
+  local body ref to
 
   if ! command -v gh >/dev/null 2>&1; then
     echo ""
     return 0
   fi
 
-  if ! body=$(gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
+  # #1077 — no confidently-derived repo means no query at all. Guessing a
+  # repo here (e.g. falling back to a hardcoded default) is exactly the
+  # defect this fixes; degrade like every other failure mode below instead.
+  if [ -z "$PR_LOOKUP_REPO" ]; then
+    echo ""
+    return 0
+  fi
+
+  # #1078 — bound the call so an unresponsive forge can't stall a release
+  # cut indefinitely. Prefers GNU `timeout`, then macOS `gtimeout`; degrades
+  # to unbounded (today's pre-#1078 behaviour) if neither is on PATH — same
+  # posture as every other best-effort fallback in this function.
+  to=""
+  if command -v timeout >/dev/null 2>&1; then
+    to="timeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    to="gtimeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
+  fi
+
+  if ! body=$($to gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
     echo ""
     return 0
   fi
