@@ -88,6 +88,11 @@ _tracker_load_config_lib() {
   fi
   local root hook_dir
   hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+  # me2resh/apexyard#1062: under a non-bash shell BASH_SOURCE is empty, so the resolution above
+  # degrades to the CALLER's cwd (dirname "" -> "."). Discard a cwd-derived path so the anchored
+  # git-root check below must validate it; a genuine BASH_SOURCE path is where this file lives and
+  # is kept as-is (#1061 only anchored the git-derived fallback, not this cwd-derived branch).
+  if [ -z "${BASH_SOURCE[0]:-}" ]; then hook_dir=""; fi
   if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-read-config.sh" ]; then
     root=$(git rev-parse --show-toplevel 2>/dev/null)
     # me2resh/apexyard#1033: only accept a git-derived root that is actually
@@ -134,6 +139,11 @@ _tracker_load_portfolio_lib() {
   fi
   local hook_dir root
   hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+  # me2resh/apexyard#1062: under a non-bash shell BASH_SOURCE is empty, so the resolution above
+  # degrades to the CALLER's cwd (dirname "" -> "."). Discard a cwd-derived path so the anchored
+  # git-root check below must validate it; a genuine BASH_SOURCE path is where this file lives and
+  # is kept as-is (#1061 only anchored the git-derived fallback, not this cwd-derived branch).
+  if [ -z "${BASH_SOURCE[0]:-}" ]; then hook_dir=""; fi
   if [ -z "$hook_dir" ] || [ ! -f "$hook_dir/_lib-portfolio-paths.sh" ]; then
     root=$(git rev-parse --show-toplevel 2>/dev/null)
     # me2resh/apexyard#1033: only accept a git-derived root that is actually
