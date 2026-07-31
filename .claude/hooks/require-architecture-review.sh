@@ -275,14 +275,36 @@ MSG
   exit 2
 fi
 
-# SHA consistency check — resolve the PR's real HEAD via GitHub rather than
-# local HEAD (see #55). Falls back to local HEAD with a warning if the
-# gh call fails (network, auth).
+# SHA consistency check — resolve the PR's real HEAD via the forge rather than
+# local HEAD (see #55). If that resolution fails we BLOCK rather than fall back
+# to the local HEAD (#1091) — a local value is agent-controlled, so falling
+# back would silently void the check.
 APPROVED_SHA=$(tr -d '[:space:]' < "$APPROVAL")
 CURRENT_SHA=$(resolve_pr_head "$PR_NUMBER" "$CMD_REPO")
 if [ -z "$CURRENT_SHA" ]; then
-  echo "WARN: Could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD. If this merge fails, run 'gh pr checkout ${PR_NUMBER}' first or re-authenticate gh." >&2
-  CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+  cat >&2 <<MSG
+BLOCKED: could not resolve PR #${PR_NUMBER}'s HEAD from the forge.
+
+This gate compares the recorded approval SHA against the PR's HEAD **as the
+forge reports it** — state that a local file write cannot fabricate. That
+comparison IS the property the gate exists to provide.
+
+Until me2resh/apexyard#1091 this fell back to the LOCAL HEAD
+(\`git rev-parse HEAD\`) with only a warning. That substituted an
+agent-controlled value for the one value in this system an agent cannot
+author, so on any forge hiccup the gate silently stopped meaning anything.
+A gate that cannot evaluate its precondition must BLOCK, not guess — the same
+principle already applied to the jq-unavailable path in #965 (AgDR-0104).
+
+Likely causes: expired or absent forge token, network failure, API rate
+limit, or the forge CLI not installed.
+
+To unblock:
+  1. Check auth — \`gh auth status\` (or \`glab auth status\`), re-login if needed
+  2. Confirm connectivity to the forge
+  3. Retry the merge — no approval needs re-recording; the markers are still valid
+MSG
+  exit 2
 fi
 if [ -n "$APPROVED_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$APPROVED_SHA" != "$CURRENT_SHA" ]; then
   cat >&2 <<MSG

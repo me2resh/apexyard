@@ -226,12 +226,34 @@ CEO_APPROVAL=$(review_marker_path "${CMD_REPO:-unknown}" "$PR_NUMBER" ceo "$MARK
 # branch. Asking gh directly removes the need for `gh pr checkout <N>`
 # before every `gh pr merge <N>`.
 #
-# Fallback to local HEAD if the gh call fails, with a visible warning, so
-# a transient network / auth issue doesn't brick merges entirely.
+# If the forge call fails we BLOCK (#1091). Falling back to the local HEAD
+# would compare markers against an agent-controlled value, which is exactly
+# the property this gate exists to deny.
 CURRENT_SHA=$(resolve_pr_head "$PR_NUMBER" "$CMD_REPO")
 if [ -z "$CURRENT_SHA" ]; then
-  echo "WARN: Could not resolve PR #${PR_NUMBER} HEAD via gh — falling back to local HEAD. If this merge fails, run 'gh pr checkout ${PR_NUMBER}' first or re-authenticate gh." >&2
-  CURRENT_SHA=$(git rev-parse HEAD 2>/dev/null)
+  cat >&2 <<MSG
+BLOCKED: could not resolve PR #${PR_NUMBER}'s HEAD from the forge.
+
+This gate compares the recorded approval SHA against the PR's HEAD **as the
+forge reports it** — state that a local file write cannot fabricate. That
+comparison IS the property the gate exists to provide.
+
+Until me2resh/apexyard#1091 this fell back to the LOCAL HEAD
+(\`git rev-parse HEAD\`) with only a warning. That substituted an
+agent-controlled value for the one value in this system an agent cannot
+author, so on any forge hiccup the gate silently stopped meaning anything.
+A gate that cannot evaluate its precondition must BLOCK, not guess — the same
+principle already applied to the jq-unavailable path in #965 (AgDR-0104).
+
+Likely causes: expired or absent forge token, network failure, API rate
+limit, or the forge CLI not installed.
+
+To unblock:
+  1. Check auth — \`gh auth status\` (or \`glab auth status\`), re-login if needed
+  2. Confirm connectivity to the forge
+  3. Retry the merge — no approval needs re-recording; the markers are still valid
+MSG
+  exit 2
 fi
 
 # --- Rex marker check ---
