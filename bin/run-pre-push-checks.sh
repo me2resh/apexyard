@@ -124,7 +124,38 @@ echo "pre-push checks:" >&2
 
 # 1. markdownlint
 # Uses npx so no global install is required. Missing npx → skip with note.
-MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; npx --yes markdownlint-cli2 '**/*.md' '#node_modules' '#.git' '#workspace' 2>&1"
+#
+# Lints TRACKED markdown only (`git ls-files`), not everything on disk.
+#
+# The mirror in .claude/project-config.example.json has used this form since
+# 8822d05 (#1065); this script never adopted it, though the header above
+# requires the two to stay in sync. Copied from the mirror verbatim.
+#
+# The previous `'**/*.md'` glob walked the whole working tree minus three
+# excluded dirs, which meant:
+#   - untracked scratch (scratchpad/, .apexyard/briefs/) blocked every push,
+#     on files that will never be committed;
+#   - agent worktrees under .claude/worktrees/ were linted too, re-linting the
+#     same content once per live worktree.
+# On this repo that was ~6900 files against 404 tracked.
+#
+# Coverage is unchanged for anything that matters: pre-push runs AFTER commit,
+# so every file being pushed is tracked and therefore still linted. A file that
+# is not tracked is not being pushed, and CI lints the pushed tree regardless.
+# Known limit: `git ls-files` reads the CURRENT checkout's index, so pushing a
+# branch you are not on lints the wrong branch's markdown. The old glob had the
+# same hole and worse (those files are not on disk either); CI is the backstop.
+#
+# NUL-delimited (`tr '\n' '\0' | xargs -0`) so a path containing a space or an
+# apostrophe cannot be word-split or trip xargs' quote handling. Plain `xargs`
+# fails on both.
+#
+# The empty guard is required because `markdownlint-cli2` with no file
+# arguments prints its usage banner and lints nothing — so without the guard an
+# empty repo produces a confusing non-zero rather than a clean skip. (It does
+# NOT fall back to a default glob: .markdownlint.json is a rules-only format
+# and cannot carry `globs`.)
+MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 npx --yes markdownlint-cli2 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
 # 2. shellcheck — .claude/hooks/*.sh, severity=warning
