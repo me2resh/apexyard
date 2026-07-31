@@ -1,7 +1,7 @@
 ---
 name: decide
 description: Make a technical decision with structured reasoning and create an Agent Decision Record (AgDR).
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "<what you're deciding>"
 ---
 
