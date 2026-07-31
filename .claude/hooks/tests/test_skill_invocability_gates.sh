@@ -37,14 +37,23 @@ SKILLS="$REPO_ROOT/.claude/skills"
 PASS=0
 FAIL=0
 
-# Read the frontmatter value. Only the frontmatter block counts, so the key
-# is matched at line-start and only before the closing `---`.
+# Read the frontmatter value, RAW — exactly as written. Only the frontmatter
+# block counts, so the key is matched at line-start and only before the
+# closing `---`.
 #
 # Trailing \r is stripped first: a CRLF-committed SKILL.md would otherwise
 # yield "true\r", which compares unequal to "true" and fails this test for a
 # line-ending reason rather than a real one. This repo has been bitten by
 # exactly that before (#1019, where config_get left an embedded \r on Windows
 # checkouts), so the guard is cheap insurance rather than theory.
+#
+# The value is deliberately NOT normalised here. The per-family assertions
+# below must stay strict: for the three approval skills, only the canonical
+# bare `true` counts as locked. A quoted scalar (`"true"`) is a YAML *string*,
+# not a boolean, and whether the harness coerces it is unverified — accepting
+# it would let this test report "locked" for a value the runtime may treat as
+# unlocked. Strict comparison fails LOUDLY on any unrecognised spelling, the
+# safe direction for the most safety-critical assertion in this file.
 invocation_flag() {
   local file="$1"
   awk '
@@ -57,6 +66,27 @@ invocation_flag() {
       exit
     }
   ' "$file"
+}
+
+# NORMALISED value — trailing `# comment`, surrounding quotes, whitespace and
+# capitalisation removed. Used ONLY by the every-skill sweep at the bottom.
+#
+# The two accessors exist because the same spelling needs opposite treatment at
+# the two call sites (#1094 review, security finding). In the per-family checks
+# an unrecognised spelling fails loudly — annoying but safe. In the sweep it
+# made a LOCKED skill read as unlocked and be skipped SILENTLY, which is exactly
+# the case that assertion exists to catch. Normalising only the sweep closes
+# that fail-open without loosening the strict path.
+invocation_flag_normalised() {
+  local file="$1"
+  invocation_flag "$file" | awk '
+    {
+      sub(/[[:space:]]*#.*$/, "")          # strip a trailing comment
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      gsub(/^["\x27]|["\x27]$/, "")        # strip surrounding quotes
+      print tolower($0)
+    }
+  '
 }
 
 expect_flag() {
@@ -132,6 +162,55 @@ if [ "$REVIEW_UNLOCKED" = "1" ] && [ "$APPROVAL_LOCKED" = "0" ]; then
   FAIL=$((FAIL + 1))
 else
   echo "PASS: no autonomous open -> review -> approve -> merge path"
+  PASS=$((PASS + 1))
+fi
+
+# ---------------------------------------------------------------------------
+# Every LOCKED skill must be justified (#1094).
+#
+# The family checks above pin the six skills someone thought about. They
+# structurally cannot catch a SEVENTH skill acquiring the flag — which is
+# exactly what happened: /decide and /audit-deps were human-only outside
+# AgDR-0110's reasoning and outside this test's coverage, and nobody noticed
+# because nothing asserted over the whole set.
+#
+# /decide's lock was the costly one. `.claude/rules/agdr-decisions.md` opens
+# with "HARD STOP … run /decide" and repeats "→ /decide" four more times, so
+# the framework was ordering an action it had mechanically forbidden. That is
+# the same self-contradiction the review-skill justification above names for
+# auto-code-review.sh — one skill over, and undetected.
+#
+# So assert the inverse: iterate EVERY skill, and require any that is locked to
+# appear in an explicit allow-list. Adding a lock now means editing this list
+# and stating why, which is the point.
+# ---------------------------------------------------------------------------
+
+# Only skills whose INVOCATION IS THE APPROVAL belong here (AgDR-0110).
+# A skill that merely writes a document, reads state, or reports does not.
+LOCK_ALLOWED="approve-merge approve-design approve-architecture"
+
+UNJUSTIFIED=0
+for f in "$SKILLS"/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  name=$(basename "$(dirname "$f")")
+  [ "$(invocation_flag_normalised "$f")" = "true" ] || continue
+  case " $LOCK_ALLOWED " in
+    *" $name "*) ;;
+    *)
+      echo "FAIL: /$name is human-only but is not in the justified lock list."
+      echo "   Only approval skills may be locked — the ones where invoking the"
+      echo "   skill IS the human approval (AgDR-0110). If this lock is"
+      echo "   deliberate, add /$name to LOCK_ALLOWED with a stated reason, AND"
+      echo "   check that no rule instructs the agent to invoke it — a rule that"
+      echo "   does is a contradiction the agent cannot resolve (#1094)."
+      FAIL=$((FAIL + 1))
+      UNJUSTIFIED=1
+      ;;
+  esac
+done
+
+if [ "$UNJUSTIFIED" = "0" ]; then
+  echo "PASS: every human-only skill is in the justified lock list"
   PASS=$((PASS + 1))
 fi
 

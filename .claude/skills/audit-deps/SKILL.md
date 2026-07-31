@@ -1,7 +1,7 @@
 ---
 name: audit-deps
 description: Audit dependencies for vulnerabilities, outdated packages, and license compliance.
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[project-path]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
