@@ -219,6 +219,7 @@ Thanks to everyone who has helped forge ApexYard:
     <td align="center"><a href="https://github.com/HishamM1"><img src="https://github.com/HishamM1.png?size=100" width="64" alt="HishamM1"><br><sub>HishamM1</sub></a></td>
     <td align="center"><a href="https://github.com/tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" alt="tifa64"><br><sub>tifa64</sub></a></td>
     <td align="center"><a href="https://github.com/hossam-96"><img src="https://github.com/hossam-96.png?size=100" width="64" alt="hossam-96"><br><sub>hossam-96</sub></a></td>
+    <td align="center"><a href="https://github.com/aniketshukla1"><img src="https://github.com/aniketshukla1.png?size=100" width="64" alt="aniketshukla1"><br><sub>aniketshukla1</sub></a></td>
   </tr>
 </table>
 
