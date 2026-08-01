@@ -722,6 +722,97 @@ run_case "#1068 round 3: -R (short flag for --repo) must be recognised" \
   "gh issue create -R me2resh/apexyard --title \"T\" --body \"zebrafish leak\""
 
 # ---------------------------------------------------------------------------
+# me2resh/apexyard#1070 — uncovered `gh api` body shapes, and a missing
+# `-F body=@file` fails OPEN unlike `--body-file` (#1039 established fail
+# closed for the identical condition one code path over).
+#
+# Three fixes, all in the IS_GH_API body-extraction block:
+#   1. `-F/--field body=@<path>` now shares the same fail-closed posture as
+#      `--body-file`: a missing/unreadable file BLOCKS instead of silently
+#      falling through to an empty scan (cases 38-39).
+#   2. The LONG forms `--field` (alias of -F) and `--raw-field` (alias of
+#      -f) are now recognised alongside the short forms, closing the same
+#      class of gap `-R`/`--repo` closed above for #1068 round 3 (case 40).
+#   3. `--input <file>` / `--input -` now fail CLOSED outright rather than
+#      being silently unextracted. `--input -` reads STDIN, invisible to a
+#      PreToolUse hook; `--input <file>` hands gh a raw, endpoint-specific
+#      JSON payload rather than one known field, so correctly pulling a
+#      body/title out of it would mean parsing an arbitrary document —
+#      exactly the "enumerate one more shape" treadmill AgDR-0104 says
+#      command-text matching cannot win. Both shapes are refused rather
+#      than published unscanned (cases 41-42); case 42 (`--input -`) is the
+#      one the issue calls out as the case that MUST fail closed, since
+#      there is no readability question to resolve for stdin at all.
+# ---------------------------------------------------------------------------
+
+# 38. The exact first repro from the issue: `-F body=@missing` used to fall
+#     through to the literal-`body=` branch (which cannot match a `body=@`
+#     token either), leaving API_BODY empty and the write open (rc=0) at
+#     the empty-haystack short-circuit. Mirrors case 18's `--body-file`
+#     assertion, one code path over.
+run_case "#1070: gh api -F body=@<missing file> → blocked, not silently open" \
+  2 "gh api body=@file named but not readable" \
+  "gh api repos/me2resh/apexyard/issues -f title=t -F body=@/nonexistent-zzz-1070.md"
+
+# 39. Same shape via the `--field` long form.
+run_case "#1070: gh api --field body=@<missing file> → blocked" \
+  2 "gh api body=@file named but not readable" \
+  "gh api repos/me2resh/apexyard/issues --field body=@/nonexistent-zzz-1070.md"
+
+# 40. `--field` / `--raw-field` long forms — previously unrecognised
+#     entirely, so a leak sent through them went unscanned. Now equivalent
+#     to -F/-f.
+run_case "#1070: gh api --raw-field/--field long forms are recognised" \
+  2 "project name: curios-dog" \
+  "gh api repos/me2resh/apexyard/issues --raw-field title=bug --field body='discovered during curios-dog rebuild'"
+
+# 41. The second repro from the issue: `--input <file>` was not extracted
+#     at all, so a leak sent through it went unscanned (rc=0). Now refused
+#     outright rather than chasing JSON-field parse coverage.
+run_case "#1070: gh api --input <file> → blocked (was unscanned, rc=0)" \
+  2 "gh api --input body cannot be scanned" \
+  "gh api repos/me2resh/apexyard/issues --input /nonexistent-zzz-1070.json"
+
+# 42. `--input -` (STDIN) — the shape the issue singles out as the one that
+#     MUST fail closed: the hook cannot see stdin at PreToolUse time under
+#     any circumstance, so there is no readability question to resolve —
+#     refusal is the only sound answer.
+run_case "#1070: gh api --input - (stdin) → MUST fail closed" \
+  2 "gh api --input body cannot be scanned" \
+  "gh api repos/me2resh/apexyard/issues --input -"
+
+# 43. Regression guard — a public-repo `gh api` write with no --input and a
+#     readable body=@file must still be SCANNED (and blocked on a leak),
+#     not swept up by the new --input refusal.
+LEAK_FILE_1070="$TMPDIR/leak-body-1070.md"
+printf 'Discovered during the curios-dog rebuild.\n' > "$LEAK_FILE_1070"
+run_case "#1070: --field body=@<readable leak file> is still read and scanned" \
+  2 "project name: curios-dog" \
+  "gh api repos/me2resh/apexyard/issues --field body=@$LEAK_FILE_1070"
+
+# 44. False-positive guard for the readable-file path above — a clean body
+#     read from a real file must pass, not be swept up by the new checks.
+CLEAN_FILE_1070="$TMPDIR/clean-body-1070.md"
+printf 'A generic framework bug. No project named.\n' > "$CLEAN_FILE_1070"
+run_case "#1070: --field body=@<readable clean file> → pass (no false positive)" \
+  0 "" \
+  "gh api repos/me2resh/apexyard/issues --field body=@$CLEAN_FILE_1070"
+
+# 45. `--input` on a NON-public target must stay a no-op — the fail-closed
+#     refusal only applies once TARGET_REPO has already resolved to a
+#     public-class repo (step 3, upstream of this block).
+run_case "#1070: --input on a non-public target → still a no-op" \
+  0 "" \
+  "gh api repos/me2resh/curios-dog/issues --input /nonexistent-zzz-1070.json"
+
+# 46. Regression guard — the pre-existing SHORT forms (-f/-F) must still
+#     work exactly as before; #1070 only adds coverage, it does not change
+#     the short-form behaviour case 10 above already pins.
+run_case "#1070: existing -f/-F short forms are unaffected" \
+  2 "project name: curios-dog" \
+  "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during curios-dog rebuild'"
+
+# ---------------------------------------------------------------------------
 # Portability lock: no ERE intervals in the hook's awk program.
 #
 # `{n,m}` support is not universal in awk — mawk 1.3.3 lacks it, BWK awk only
