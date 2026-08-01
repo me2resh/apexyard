@@ -651,31 +651,71 @@ if [ -n "$BODY_FILE" ]; then
 fi
 
 # `gh api` body field: -F body=@file or -f body='text' or -F body='text'.
+#
+# me2resh/apexyard#1070 — this block also now:
+#   1. recognises the LONG forms of -f/-F — `--raw-field` (alias of -f) and
+#      `--field` (alias of -F). `gh api --help` documents both pairs as
+#      exact equivalents; a hook that only knows the short spelling has a
+#      trivially-taken bypass (an operator, or an agent that copies an
+#      example straight out of `gh api --help`, spells it out in full). Same
+#      class of gap `-R`/`--repo` closed in #1068 round 3 above.
+#   2. fails CLOSED on `-F/--field body=@<path>` when the path is not a
+#      readable file, mirroring the `--body-file` fix from #1039 exactly —
+#      that shape used to fall through to the literal-`body=` branch below,
+#      which cannot match a `body=@path` token either, so API_BODY stayed
+#      empty and the write fell open at the empty-haystack short-circuit.
+#   3. fails CLOSED on `--input <file>` / `--input -` outright, rather than
+#      attempting to parse it. `--input` replaces the ENTIRE request body:
+#      `--input -` reads from STDIN, which is invisible to a PreToolUse hook
+#      (it only ever sees the command string), and `--input <file>` hands
+#      gh a raw JSON (or other) payload rather than one known field, so
+#      pulling `body`/`title` out of it correctly means parsing an
+#      arbitrary, endpoint-specific document — exactly the "enumerate one
+#      more shape" treadmill AgDR-0104 says command-text matching cannot
+#      win. No attempt is made to distinguish the two cases; both are
+#      content this hook cannot honestly claim to have scanned, so both
+#      refuse rather than publish unscanned.
 API_BODY=""
+API_BODY_UNREADABLE=0
+API_INPUT_UNPARSEABLE=0
 if [ "$IS_GH_API" -eq 1 ]; then
-  # Handle -F body=@<path> (file ref) and -f/-F body=<literal>.
-  API_BODY_PATH=$(echo "$COMMAND" | sed -nE "s/.*-F[[:space:]]+body=@([^[:space:]\"']+).*/\1/p" | head -1)
-  if [ -n "$API_BODY_PATH" ] && [ -f "$API_BODY_PATH" ]; then
-    API_BODY=$(cat "$API_BODY_PATH" 2>/dev/null)
+  if echo "$COMMAND" | grep -qE -- '(^|[[:space:]])--input([[:space:]]|=)'; then
+    API_INPUT_UNPARSEABLE=1
+  fi
+
+  # Handle -F/--field body=@<path> (file ref) and -f/-F/--raw-field/--field
+  # body=<literal>.
+  API_BODY_PATH=$(echo "$COMMAND" | sed -nE "s/.*(-F|--field)[[:space:]]+body=@([^[:space:]\"']+).*/\2/p" | head -1)
+  if [ -n "$API_BODY_PATH" ]; then
+    if [ -f "$API_BODY_PATH" ]; then
+      API_BODY=$(cat "$API_BODY_PATH" 2>/dev/null)
+      # Readable-but-unslurpable (permissions, race): treat as unreadable,
+      # same guard #1039 uses for BODY_FILE_UNREADABLE below.
+      if [ -z "$API_BODY" ] && [ -s "$API_BODY_PATH" ]; then
+        API_BODY_UNREADABLE=1
+      fi
+    else
+      API_BODY_UNREADABLE=1
+    fi
   else
     # Literal body=... — may be quoted. Strip surrounding quotes.
-    API_BODY=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+body=\"([^\"]*)\".*/\1/p" | head -1)
+    API_BODY=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+body=\"([^\"]*)\".*/\2/p" | head -1)
     if [ -z "$API_BODY" ]; then
-      API_BODY=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+body='([^']*)'.*/\1/p" | head -1)
+      API_BODY=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+body='([^']*)'.*/\2/p" | head -1)
     fi
     if [ -z "$API_BODY" ]; then
-      API_BODY=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+body=([^[:space:]]+).*/\1/p" | head -1)
+      API_BODY=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+body=([^[:space:]]+).*/\2/p" | head -1)
     fi
   fi
 
   # Also pick up a `title` field on api-shape issue creation.
   if [ -z "$TITLE" ]; then
-    API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+title=\"([^\"]*)\".*/\1/p" | head -1)
+    API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+title=\"([^\"]*)\".*/\2/p" | head -1)
     if [ -z "$API_TITLE" ]; then
-      API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+title='([^']*)'.*/\1/p" | head -1)
+      API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+title='([^']*)'.*/\2/p" | head -1)
     fi
     if [ -z "$API_TITLE" ]; then
-      API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*-[fF][[:space:]]+title=([^[:space:]]+).*/\1/p" | head -1)
+      API_TITLE=$(echo "$COMMAND" | sed -nE "s/.*(-f|-F|--field|--raw-field)[[:space:]]+title=([^[:space:]]+).*/\2/p" | head -1)
     fi
     TITLE="$API_TITLE"
   fi
@@ -717,6 +757,73 @@ read out of body content this hook has actually scanned; it cannot be read
 out of a file that could not be opened. There is deliberately no bypass for
 an unreadable body: the marker means "I looked, and this reference is
 intentional", which is not a claim anyone can make about unread bytes.
+======================================================================
+EOF
+  exit 2
+fi
+
+# me2resh/apexyard#1070 — `gh api ... --input <file|->` replaces the ENTIRE
+# request body with content this hook does not parse (see the comment above
+# where API_INPUT_UNPARSEABLE is set, near the top of the IS_GH_API block).
+# Checked BEFORE the empty-haystack short-circuit below, same placement as
+# BODY_FILE_UNREADABLE just above and for the identical reason: an empty
+# HAYSTACK must never read as "scanned clean" when it is actually "never
+# looked at".
+if [ "$API_INPUT_UNPARSEABLE" -eq 1 ]; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: gh api --input body cannot be scanned
+======================================================================
+
+This command targets a PUBLIC framework repo (${TARGET_REPO}) and supplies
+its request body via --input, which this hook does not parse.
+
+  - --input - reads the body from STDIN, which a PreToolUse hook cannot
+    see at all — it only ever sees the command string.
+  - --input <file> reads the body from a file, but the content is a raw
+    JSON (or other) request payload rather than one known field —
+    correctly pulling a body/title string out of it would mean parsing an
+    arbitrary, endpoint-specific document, which this hook does not
+    attempt (see docs/agdr/AgDR-0104-trust-chain-controls-vs-backstops.md:
+    pattern-matching command text cannot be made sound by enumerating ever
+    more shapes).
+
+This command is refused rather than published unscanned. Fix: use
+--title/--body/--body-file, or -f/-F (and their --raw-field/--field long
+forms) instead of --input.
+
+The <!-- private-refs: allow --> skip marker does NOT apply here, for the
+same reason it does not apply to an unreadable --body-file: it can only be
+honoured for content this hook has actually read.
+======================================================================
+EOF
+  exit 2
+fi
+
+# me2resh/apexyard#1070 — a `-F/--field body=@<path>` was named but could not
+# be read. Same fail-closed posture as BODY_FILE_UNREADABLE above (#1039):
+# checked before the empty-haystack short-circuit, so a missing/unreadable
+# file blocks loudly instead of silently scanning nothing (the shape used to
+# fall through to the literal-body branch, which cannot match `body=@path`
+# either, leaving API_BODY empty and the write open at that short-circuit).
+if [ "$API_BODY_UNREADABLE" -eq 1 ]; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: gh api body=@file named but not readable
+======================================================================
+
+  body=@ path: ${API_BODY_PATH}
+
+This command targets a PUBLIC framework repo (${TARGET_REPO}), but the
+referenced body file could not be read, so its contents were never scanned
+for private project references. Allowing the write would mean asserting the
+body is clean without having looked at it.
+
+Fix the path and retry — that is the only way past this block.
+
+The <!-- private-refs: allow --> skip marker does NOT apply here, for the
+same reason it does not apply to an unreadable --body-file (#1039): it can
+only be honoured for content this hook has actually read.
 ======================================================================
 EOF
   exit 2
