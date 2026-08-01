@@ -322,6 +322,131 @@ sb=$(make_sandbox_wrapper failure)
 run_case "wrapper: glab-registered project, pipeline failed -> blocks (forge dispatched via registry, not command text)" 2 "red or unresolvable" "$sb" \
   "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
 
+# ----------------------------------------------------------------------
+# #1121: the registry read inside _forge_kind_for (_lib-tracker.sh's
+# _tracker_project_value) needs `yq` OR `python3`+PyYAML to parse the
+# per-project override; when NEITHER is available it silently falls through
+# to the GLOBAL tracker.kind default ("gh") — wrong for a glab-registered
+# project's wrapper call. The two cases above only caught this by accident
+# of THIS environment happening to lack yq/PyYAML; make it deterministic by
+# stubbing yq/python3 to behave exactly like "no override found here"
+# regardless of what the host actually has installed, so this regression
+# can't silently stop being exercised if the CI image ever gains yq.
+# ----------------------------------------------------------------------
+
+# make_sandbox_wrapper_no_yaml_tools <glab_mode> — same registry/glab stub as
+# make_sandbox_wrapper, PLUS yq/python3 stubs that always fail to produce a
+# per-project override (matching real yq-absent / PyYAML-absent behaviour),
+# forcing block-merge-on-red-ci.sh's registry fallback (_registry_glab_fallback)
+# to be the thing that resolves the forge correctly.
+make_sandbox_wrapper_no_yaml_tools() {
+  local glab_mode="$1"
+  local sb
+  sb=$(make_sandbox_wrapper "$glab_mode")
+  cat > "$sb/bin/yq" <<'EOF'
+#!/bin/bash
+# Simulates yq being unusable for this lookup (matches "yq not installed"
+# from the caller's perspective: no stdout, non-zero exit).
+exit 1
+EOF
+  chmod +x "$sb/bin/yq"
+  cat > "$sb/bin/python3" <<'EOF'
+#!/bin/bash
+# Simulates python3 without PyYAML installed. The real
+# _tracker_project_value heredoc catches the ImportError and exits 0 with
+# no stdout; this stub reproduces that exact observable behaviour.
+exit 0
+EOF
+  chmod +x "$sb/bin/python3"
+  echo "$sb"
+}
+
+sb=$(make_sandbox_wrapper_no_yaml_tools success)
+run_case "#1121: wrapper, glab-registered project, NO yq/PyYAML -> still allows on green pipeline (registry fallback engages)" 0 "" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
+sb=$(make_sandbox_wrapper_no_yaml_tools failure)
+run_case "#1121: wrapper, glab-registered project, NO yq/PyYAML -> still blocks on red pipeline (registry fallback engages)" 2 "red or unresolvable" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
+# make_sandbox_wrapper_gh_no_yaml_tools <gh_mode> — a GENUINELY gh-kind
+# project (no tracker: override at all — relies on the global default),
+# with yq/python3 stubbed the same unusable way. Proves the #1121 fallback
+# never produces a FALSE positive: it must not flip a real gh-kind project
+# to glab just because the registry lookup came back empty for other
+# reasons. `glab` fails loudly if ever invoked, mirroring the existing
+# "gh must NOT be consulted" pattern in reverse.
+make_sandbox_wrapper_gh_no_yaml_tools() {
+  local gh_mode="$1"
+  local sb
+  sb=$(mktemp -d)
+  mkdir -p "$sb/.claude/hooks" "$sb/bin"
+  cp "$HOOK_SRC"      "$sb/.claude/hooks/block-merge-on-red-ci.sh"
+  cp "$LIB_PR"        "$sb/.claude/hooks/_lib-extract-pr.sh"
+  cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
+  cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
+  cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"
+  [ -f "$OPSROOT_LIB" ] && cp "$OPSROOT_LIB" "$sb/.claude/hooks/_lib-ops-root.sh"
+  chmod +x "$sb/.claude/hooks/block-merge-on-red-ci.sh"
+  touch "$sb/onboarding.yaml"
+  cat > "$sb/.claude/project-config.defaults.json" <<'JSON'
+{ "tracker": { "kind": "gh" } }
+JSON
+  cat > "$sb/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: gh-proj
+    repo: g/p2
+    roles:
+      - backend-engineer
+      - platform-engineer
+    tags:
+      - customer-facing
+YAML
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr checks"*)
+    case "$gh_mode" in
+      green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;
+      red)   printf 'build\tfail\t1m\thttps://x\n'; exit 1 ;;
+      *)     exit 0 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+EOF
+  chmod +x "$sb/bin/gh"
+  cat > "$sb/bin/glab" <<'EOF'
+#!/bin/bash
+echo "WRONG: glab should not be called for a gh-registered project" >&2
+exit 1
+EOF
+  chmod +x "$sb/bin/glab"
+  cat > "$sb/bin/yq" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+  chmod +x "$sb/bin/yq"
+  cat > "$sb/bin/python3" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+  chmod +x "$sb/bin/python3"
+  echo "$sb"
+}
+
+WRAPPER_CMD_TMPL2='. "%s/.claude/hooks/_lib-tracker.sh"
+MERGE_RESULT=$(tracker_pr_merge "g/p2" "501" "squash" true)'
+
+sb=$(make_sandbox_wrapper_gh_no_yaml_tools green)
+run_case "#1121: wrapper, gh-kind project (no tracker override), NO yq/PyYAML -> allows on green CI (no false-positive glab)" 0 "" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL2" "$sb")"
+
+sb=$(make_sandbox_wrapper_gh_no_yaml_tools red)
+run_case "#1121: wrapper, gh-kind project (no tracker override), NO yq/PyYAML -> blocks on red CI (no false-positive glab)" 2 "red CI" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL2" "$sb")"
+
 # --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
 #
 # Reuses make_sandbox's green gh mock, then shadows jq with a stub that
