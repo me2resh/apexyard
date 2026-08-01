@@ -13,9 +13,20 @@
 # `core.hooksPath` is a PER-CLONE git config value, not a repo property —
 # it lives in `.git/config`, never committed, so every fresh clone starts
 # unset regardless of how many times a sibling clone has run this script.
-# That's exactly why this needs to be invoked from `/setup` (for the ops
-# fork) and `/handover` (for each newly-cloned managed-project workspace),
-# not run once and forgotten.
+# That's exactly why this needs to be invoked from `/setup`, every time it
+# configures the ops fork's own clone — a config value that isn't repeated
+# per clone doesn't stick.
+#
+# ONLY `/setup` invokes this script. `/handover` deliberately does NOT —
+# running it against an arbitrary, just-cloned managed-project workspace
+# would point core.hooksPath at THAT repo's own tracked .githooks/ (whatever
+# it ships), handing it silent execution with no provenance check (PR #1087
+# review, HIGH-1). See .claude/skills/handover/SKILL.md's "1.5-clone" note
+# for the full reasoning and AgDR-0115 for the accepted-residual decision
+# this leaves in place for a human's terminal `git push` inside a managed
+# project's clone. Do not re-add a `/handover` call to this script without
+# re-reading both first — that is precisely the footgun this comment exists
+# to block.
 #
 # This script is idempotent and safe to re-run: unset -> set, already
 # correct -> no-op, stale (missing dir, or a leftover pointer into a
@@ -27,9 +38,11 @@
 #
 # Options:
 #   --repo-dir <path>   Target repo (default: the repo containing the
-#                       current working directory). Lets /handover call
-#                       this against a freshly-cloned managed-project
-#                       workspace instead of the ops fork.
+#                       current working directory). Exists for tests and
+#                       for pointing the installer at a repo other than
+#                       the cwd's — NOT an invitation to call this against
+#                       a managed-project clone; see the `/handover`
+#                       note above.
 #   --hooks-dir <name>  Tracked hooks dir name, relative to the repo root
 #                       (default: .githooks). Mainly useful for tests.
 #   --force             Overwrite a core.hooksPath an adopter set to a
@@ -62,7 +75,8 @@
 # third-party repo, because doing so points git at THAT repo's own
 # scripts with no operator confirmation. Callers MUST NOT invoke this
 # against an untrusted clone. See .claude/skills/handover/SKILL.md's
-# explicit note on why /handover deliberately does not call this script.
+# explicit note on why /handover deliberately does not call this script,
+# and AgDR-0115 for the residual this leaves accepted.
 #
 # See me2resh/apexyard#1086 for the full driver and the two follow-up
 # steps (enforcement inside .githooks/pre-push; demoting block-main-push.sh
