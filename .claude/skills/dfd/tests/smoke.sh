@@ -279,6 +279,77 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Fixture 2b: workspace/ and .claude/worktrees/ pruned from discovery
+# (me2resh/apexyard#1092)
+#
+# Reuses the ops-fork sandbox ($SB) built for Fixture 2 — it already has
+# onboarding.yaml + apexyard.projects.yaml at its root, which is exactly
+# what discover.sh's ops-fork detection looks for. Plants a distinctive
+# Stripe-SDK marker under workspace/other-project/ (a sibling registered
+# project's clone) and a second marker under .claude/worktrees/ (an agent
+# worktree), then asserts discover.sh run against $SB attributes NEITHER
+# to the target.
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "================================================================"
+echo "Fixture 2b: workspace/ and .claude/worktrees/ pruned from discovery (#1092)"
+echo "================================================================"
+
+mkdir -p "$SB/workspace/other-project/packages/design-system/tests"
+cat > "$SB/workspace/other-project/packages/design-system/tests/Card.test.tsx" <<'JS'
+// belongs to a DIFFERENT registered project's clone — must never be
+// attributed to $SB (the target) as one of its own external actors.
+import Stripe from "stripe";
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+JS
+
+mkdir -p "$SB/.claude/worktrees/some-agent-worktree"
+cat > "$SB/.claude/worktrees/some-agent-worktree/marker.js" <<'JS'
+// distinctive worktree-only marker — an agent worktree is a full checkout,
+// so it must be pruned the same way workspace/ is.
+// marker: WORKTREE_LEAK_MARKER_9f3c
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+JS
+
+OUT2B="$TMPROOT/discover-f2b.yaml"
+bash "$DFD_DIR/discover.sh" "$SB" > "$OUT2B" 2>/dev/null
+
+if grep -q "workspace/other-project" "$OUT2B"; then
+  echo "  FAIL: Fixture 2b: workspace/other-project evidence leaked into discovery output"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: workspace leak"
+else
+  echo "  PASS: Fixture 2b: workspace/other-project pruned from discovery"
+  PASS=$((PASS + 1))
+fi
+
+if grep -q "WORKTREE_LEAK_MARKER_9f3c" "$OUT2B"; then
+  echo "  FAIL: Fixture 2b: .claude/worktrees/ evidence leaked into discovery output"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: worktrees leak"
+else
+  echo "  PASS: Fixture 2b: .claude/worktrees/ pruned from discovery"
+  PASS=$((PASS + 1))
+fi
+
+# classify.sh shares the same pruning — assert it too, using the same
+# stripe/SDK marker's presence as a stand-in for "any evidence at all
+# from the wrong project" (classify.sh doesn't classify SDK imports
+# specifically, so this checks the raw scoped_grep boundary instead).
+CLASSIFY_OUT2B="$TMPROOT/classify-f2b.yaml"
+bash "$DFD_DIR/classify.sh" "$SB" > "$CLASSIFY_OUT2B" 2>/dev/null
+
+if grep -q "other-project\|WORKTREE_LEAK_MARKER_9f3c" "$CLASSIFY_OUT2B"; then
+  echo "  FAIL: Fixture 2b: classify.sh leaked workspace/worktrees evidence"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: classify.sh leak"
+else
+  echo "  PASS: Fixture 2b: classify.sh also prunes workspace/ and .claude/worktrees/"
+  PASS=$((PASS + 1))
+fi
+
+# ---------------------------------------------------------------------------
 # Fixture 3: classification pathways — annotations + env vars + schema
 # ---------------------------------------------------------------------------
 

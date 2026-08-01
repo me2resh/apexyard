@@ -35,11 +35,44 @@ TARGET=$(cd "$TARGET" && pwd -P)
 
 SKIP_DIRS="node_modules vendor .venv venv target dist build coverage .next .nuxt .turbo .cache __pycache__ .git .svn .idea .vscode"
 
-# scoped_grep <pattern>: greps the target dir for <pattern>, pruning vendored dirs.
+# ---------------------------------------------------------------------------
+# Portfolio-workspace exclusion (me2resh/apexyard#1092).
+#
+# When TARGET is an apexyard ops fork itself, `workspace/` holds full clones
+# of OTHER registered projects, and `.claude/worktrees/` holds agent
+# worktrees — both are full checkouts of unrelated (or duplicate) code.
+# Rule 4 of the skill says discovery is "reachability-bounded"; neither of
+# these directories is reachable from the fork's own code, so they must be
+# pruned from the walk. Resolve the CONCRETE paths (rather than an any-depth
+# basename match) so a legitimately-named `workspace/` dir in a non-fork
+# target is never over-pruned.
+# ---------------------------------------------------------------------------
+EXTRA_PRUNE_PATHS=""
+_LIB_PORTFOLIO_PATHS="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/../../hooks/_lib-portfolio-paths.sh"
+
+if { [ -f "$TARGET/.apexyard-fork" ] || { [ -f "$TARGET/onboarding.yaml" ] && [ -f "$TARGET/apexyard.projects.yaml" ]; }; } \
+  && [ -f "$_LIB_PORTFOLIO_PATHS" ]; then
+  # shellcheck source=/dev/null
+  . "$_LIB_PORTFOLIO_PATHS" 2>/dev/null || true
+  if command -v portfolio_workspace_dir >/dev/null 2>&1; then
+    WS_DIR=$(cd "$TARGET" && portfolio_workspace_dir 2>/dev/null) || WS_DIR=""
+    if [ -n "$WS_DIR" ] && [ -d "$WS_DIR" ]; then
+      EXTRA_PRUNE_PATHS="$WS_DIR"
+    fi
+  fi
+  WT_DIR="$TARGET/.claude/worktrees"
+  if [ -d "$WT_DIR" ]; then
+    EXTRA_PRUNE_PATHS="$EXTRA_PRUNE_PATHS $WT_DIR"
+  fi
+fi
+
+# scoped_grep <pattern>: greps the target dir for <pattern>, pruning vendored
+# dirs (by basename) and, on an ops-fork target, the concrete workspace/ and
+# .claude/worktrees/ paths resolved above (by exact path).
 # Outputs `file:line:match` (grep -nH format), capped at 500 lines.
 scoped_grep() {
   local pattern="$1"; shift
-  local prune_args="" first=1 d
+  local prune_args="" first=1 d p
   for d in $SKIP_DIRS; do
     if [ $first -eq 1 ]; then
       prune_args="-name $d"
@@ -47,6 +80,9 @@ scoped_grep() {
     else
       prune_args="$prune_args -o -name $d"
     fi
+  done
+  for p in $EXTRA_PRUNE_PATHS; do
+    prune_args="$prune_args -o -path $p"
   done
   # shellcheck disable=SC2086
   find "$TARGET" \( $prune_args \) -prune -o -type f -print 2>/dev/null \
