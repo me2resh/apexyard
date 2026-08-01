@@ -22,12 +22,19 @@
 #   5. A cache file whose stored fingerprint is deliberately "UNKNOWN" is
 #      NEVER treated as a hit, even if a (buggy) caller passed "UNKNOWN"
 #      as the expected fingerprint
-#   6. An ops-root mismatch is never trusted (fingerprint components are
-#      compared as a whole; forging just the value half is rejected)
+#   6. (F2) The REAL wired fingerprint (via portfolio_registry's actual
+#      call chain, not the low-level function with hand-crafted root
+#      args) has no dead leading root field -- exactly two pipe-delimited
+#      fields, never "|<sig>|<sig>"
 #   7. Unwritable cache directory degrades to current behaviour: correct
 #      value still returned, no error text on stdout, no crash
 #   8. APEXYARD_DISABLE_RESOLUTION_CACHE=1 -> zero cache files ever written
 #   9. No CLAUDE_CODE_SESSION_ID -> zero cache files ever written
+#   10. (F1) The mtime-second stale-serve window is closed: a same-second,
+#       same-byte-size config edit is never served stale, proven via a
+#       frozen `date` shim (no real-time race) through the REAL wired
+#       path (portfolio_workspace_dir) -- fails on unfixed code, passes
+#       once the write-time-settled guard is in place
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -66,6 +73,20 @@ run_case() {
 }
 
 # ---------------------------------------------------------------------------
+# BACKDATE_TS: a fixed, safely-in-the-past `touch -t` timestamp (portable
+# [[CC]YY]MMDDhhmm[.SS] form, accepted by both GNU and BSD/macOS `touch`).
+# Used to pin fixture files' mtimes well clear of "now" so the F1
+# write-time-settled guard (_resolution_cache_write_time_settled) never
+# refuses a write in cases 1-3/7-9 just because a fixture file happened to
+# be created in the same wall-clock second the test then reads it in --
+# those cases are about cache REUSE mechanics, not the mtime-second
+# collision itself (that's case_10's job). Real project-config files are
+# essentially never edited in the exact same second a hook reads them, so
+# backdating fixtures here reflects steady-state reality, not a workaround.
+# ---------------------------------------------------------------------------
+BACKDATE_TS="202001010000.00"
+
+# ---------------------------------------------------------------------------
 # make_fork: build an isolated apexyard-fork sandbox with the libs +
 # defaults file + minimal registry/projects_dir. Optionally an overrides
 # file (project-config.json) so the jq -s merge path is exercised.
@@ -94,6 +115,10 @@ YAML
     cp "$RC_LIB" .claude/hooks/_lib-resolution-cache.sh
     cp "$OPS_ROOT_LIB" .claude/hooks/_lib-ops-root.sh
     cp "$DEFAULTS_SRC" .claude/project-config.defaults.json
+    # See BACKDATE_TS above -- keeps the defaults file's mtime well clear
+    # of "now" so the F1 write-time-settled guard doesn't interfere with
+    # tests that aren't about the mtime-second collision itself.
+    touch -t "$BACKDATE_TS" .claude/project-config.defaults.json
     git add -A
     git commit -q -m "test fixture" >/dev/null
   )
@@ -157,7 +182,14 @@ case_2() {
   local name="second process (same session) does not redo the config jq -s merge"
   local sb pin_dir sess bindir real_jq log
   sb=$(make_fork)
-  (cd "$sb" && echo '{}' > .claude/project-config.json)
+  (
+    cd "$sb" || exit 1
+    echo '{}' > .claude/project-config.json
+    # Backdate -- see BACKDATE_TS: this test is about cross-process cache
+    # REUSE, not the F1 mtime-second collision, so the overrides file must
+    # not appear freshly-touched to the write-time-settled guard.
+    touch -t "$BACKDATE_TS" .claude/project-config.json
+  )
   pin_dir=$(mktemp -d)
   sess="case2-$$"
   bindir=$(mktemp -d)
@@ -349,40 +381,69 @@ case_5() {
 }
 
 # ---------------------------------------------------------------------------
-# Case 6: ops-root mismatch (embedded in the fingerprint) is never trusted
+# Case 6 (rewritten, me2resh/apexyard#1013 follow-up F2): the REAL wired
+# fingerprint has no dead leading root field.
+#
+# The original version of this case tested
+# _resolution_cache_config_fingerprint directly with hand-crafted
+# "/fork/a" / "/fork/b" root arguments -- a fingerprint shape none of the
+# real callers (_config_load, _portfolio_resolve_with_session_cache) ever
+# actually produced: every real call site derived `root` via a command
+# substitution, so the value never survived into the fingerprint-building
+# frame and was ALWAYS the empty string in production. Testing hand-fed
+# root args therefore gave a false green for a protection the real code
+# path never ran. F2 drops the dead `root` parameter entirely rather than
+# wiring it "for real" (there is no genuine within-session ops-root-change
+# threat: resolve_ops_root() already pins the root per session, and every
+# cache file is already scoped into its filename by that same session id).
+# This case now proves the fix landed end-to-end: drive a write through
+# the ACTUAL wired path (portfolio_registry -> _portfolio_resolve_with_
+# session_cache -> _resolution_cache_write) in a real sandbox, then read
+# the fingerprint the write really persisted on disk -- it must be exactly
+# two pipe-delimited fields (defaults-sig|overrides-sig), never a dead
+# leading empty field ("|<defaults-sig>|<overrides-sig>").
 # ---------------------------------------------------------------------------
 case_6() {
-  local name="a fingerprint computed for a different ops root never matches the current one"
-  local pin_dir sess
+  local name="F2: the real wired fingerprint has no dead leading root field (not the low-level function with hand-crafted /fork/a-vs-b args)"
+  local sb pin_dir sess
+
+  sb=$(make_fork)
   pin_dir=$(mktemp -d)
   sess="case6-$$"
 
-  local result
-  result=$(
+  local fp_line
+  fp_line=$(
+    cd "$sb" || exit 1
     export CLAUDE_CODE_SESSION_ID="$sess"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
     unset APEXYARD_OPS_DISABLE_PIN APEXYARD_DISABLE_RESOLUTION_CACHE
     # shellcheck source=/dev/null
-    . "$RC_LIB"
-    fp_root_a=$(_resolution_cache_config_fingerprint "/fork/a" "/nonexistent/defaults.json" "/nonexistent/overrides.json")
-    fp_root_b=$(_resolution_cache_config_fingerprint "/fork/b" "/nonexistent/defaults.json" "/nonexistent/overrides.json")
-    _resolution_cache_write "rootcheck" "$fp_root_a" "value-for-a"
-    # Reading with root b's fingerprint must miss even though both files
-    # are equally (non-)existent -- only the root component differs.
-    out=$(_resolution_cache_read "rootcheck" "$fp_root_b" 2>/dev/null)
-    rc=$?
-    printf 'fp_differ=%s read_rc=%s out=%s' \
-      "$([ "$fp_root_a" != "$fp_root_b" ] && echo yes || echo no)" "$rc" "$out"
+    . .claude/hooks/_lib-read-config.sh
+    # shellcheck source=/dev/null
+    . .claude/hooks/_lib-portfolio-paths.sh
+    portfolio_registry >/dev/null
+    head -n 1 "$(_resolution_cache_file portfolio-registry)" 2>/dev/null
   )
 
-  rm -rf "$pin_dir"
-  case "$result" in
-    "fp_differ=yes read_rc=1 out=")
-      mark_pass "$name"
-      return 0
+  rm -rf "$sb" "$pin_dir"
+
+  if [ -z "$fp_line" ]; then
+    mark_fail "$name" "no cache file was written (fingerprint line empty) -- cannot assert on its shape"
+    return 1
+  fi
+  case "$fp_line" in
+    \|*)
+      mark_fail "$name" "fingerprint still starts with a dead leading pipe: '$fp_line'"
+      return 1
       ;;
   esac
-  mark_fail "$name" "got: $result"
+  local pipe_count
+  pipe_count=$(printf '%s' "$fp_line" | tr -cd '|' | wc -c | tr -d ' ')
+  if [ "$pipe_count" = "1" ]; then
+    mark_pass "$name"
+    return 0
+  fi
+  mark_fail "$name" "expected exactly 2 fields (1 pipe), got '$fp_line' (pipe_count=$pipe_count)"
   return 1
 }
 
@@ -495,8 +556,136 @@ case_9() {
   return 1
 }
 
+# ---------------------------------------------------------------------------
+# Case 10 (new, me2resh/apexyard#1013 follow-up F1): the mtime-second
+# stale-serve window is CLOSED by the write-time-settled guard.
+#
+# Reproduces the reported bug end-to-end through the REAL wired path
+# (portfolio_workspace_dir): a config file edited to a SAME-BYTE-SIZE
+# value within the SAME wall-clock second as a prior cache write produces
+# an IDENTICAL (mtime, size) signature, which a read-side-only comparison
+# cannot distinguish. `date +%s` is shimmed on PATH so the guard's notion
+# of "now" is FROZEN to a captured, real epoch -- this removes any
+# reliance on the test's own steps finishing inside one real wall-clock
+# second (a `touch -t`-only version of this test would be racy at a second
+# boundary); the frozen value is real ("now" at test start), just
+# decoupled from actual clock progression while the test runs. Both the
+# config file's forced mtime (via `touch -t`, converted from that same
+# frozen epoch) and the guard's `date +%s` reads therefore ALWAYS agree,
+# deterministically, every run.
+#
+# On unfixed code (no _resolution_cache_write_time_settled guard at all),
+# the first write succeeds unconditionally, so the second read is a cache
+# HIT and serves the pre-edit value -- this case is expected to FAIL
+# there, proving the bug is real. On fixed code, the guard refuses both
+# same-second writes, so the second read is a cold miss and returns the
+# fresh value. A third phase advances the frozen "now" past the file's
+# (unchanged) mtime and confirms a write succeeds normally once settled --
+# proving the guard delays caching rather than disabling it.
+# ---------------------------------------------------------------------------
+case_10() {
+  local name="F1: same-second same-size config edit is never served stale (write-time-settled guard)"
+  local sb pin_dir sess bindir real_date epoch touch_ts
+
+  sb=$(make_fork)
+  pin_dir=$(mktemp -d)
+  sess="case10-$$"
+  bindir=$(mktemp -d)
+  real_date=$(command -v date)
+  epoch=$("$real_date" +%s)
+
+  write_date_shim() {
+    local ep="$1"
+    cat > "$bindir/date" <<EOF
+#!/bin/bash
+if [ "\$1" = "+%s" ]; then
+  echo "$ep"
+  exit 0
+fi
+exec "$real_date" "\$@"
+EOF
+    chmod +x "$bindir/date"
+  }
+  write_date_shim "$epoch"
+
+  # Portable epoch -> `touch -t` timestamp, using the REAL date binary for
+  # the conversion (GNU syntax first, BSD/macOS fallback -- same
+  # try-then-fallback idiom _resolution_cache_file_sig itself uses).
+  touch_ts=$("$real_date" -d "@$epoch" +%Y%m%d%H%M.%S 2>/dev/null) \
+    || touch_ts=$("$real_date" -r "$epoch" +%Y%m%d%H%M.%S 2>/dev/null)
+
+  read_once() {
+    (
+      cd "$sb" || exit 1
+      export PATH="$bindir:$PATH"
+      export CLAUDE_CODE_SESSION_ID="$sess"
+      export APEXYARD_OPS_PIN_DIR="$pin_dir"
+      unset APEXYARD_OPS_DISABLE_PIN APEXYARD_DISABLE_RESOLUTION_CACHE
+      # shellcheck source=/dev/null
+      . .claude/hooks/_lib-read-config.sh
+      # shellcheck source=/dev/null
+      . .claude/hooks/_lib-portfolio-paths.sh
+      portfolio_workspace_dir
+    )
+  }
+
+  (
+    cd "$sb" || exit 1
+    cat > .claude/project-config.json <<'JSON'
+{ "portfolio": { "workspace_dir": "./ws-AAAAA" } }
+JSON
+    touch -t "$touch_ts" .claude/project-config.json
+  )
+  local first
+  first=$(read_once)
+
+  # Same-byte-size edit, forced to the SAME frozen second -- the exact
+  # collision integer-second `stat` cannot distinguish.
+  (
+    cd "$sb" || exit 1
+    cat > .claude/project-config.json <<'JSON'
+{ "portfolio": { "workspace_dir": "./ws-BBBBB" } }
+JSON
+    touch -t "$touch_ts" .claude/project-config.json
+  )
+  local second
+  second=$(read_once)
+
+  # Bonus phase: advance frozen "now" past the file's (still-unchanged)
+  # mtime and confirm normal caching resumes -- the guard delays, it
+  # doesn't permanently disable.
+  write_date_shim "$((epoch + 2))"
+  local third fourth
+  third=$(read_once)
+  fourth=$(read_once)
+
+  rm -rf "$sb" "$pin_dir" "$bindir"
+  unset -f write_date_shim read_once
+
+  local ok=1
+  case "$second" in
+    */ws-BBBBB) ;;
+    *) ok=0 ;;
+  esac
+  case "$third" in
+    */ws-BBBBB) ;;
+    *) ok=0 ;;
+  esac
+  case "$fourth" in
+    */ws-BBBBB) ;;
+    *) ok=0 ;;
+  esac
+
+  if [ "$ok" = "1" ]; then
+    mark_pass "$name"
+    return 0
+  fi
+  mark_fail "$name" "first='$first' second='$second' third='$third' fourth='$fourth' (expected second/third/fourth to all end in /ws-BBBBB -- a stale value means the mtime-second collision was served from cache)"
+  return 1
+}
+
 echo "Running resolution-cache tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10; do
   run_case "$fn"
 done
 

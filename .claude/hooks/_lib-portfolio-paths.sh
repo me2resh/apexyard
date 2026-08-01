@@ -345,9 +345,18 @@ _portfolio_get() {
 
 # ------------------------------------------------------------------------------
 # Internal: shared session-cache-aware resolution (me2resh/apexyard#1013 /
-# AgDR-0120). Every portfolio_* resolver below is a pure function of
-# (config, ops root) — the SAME fingerprint _lib-read-config.sh's merged
-# config cache uses — so one shared implementation tries the session cache
+# AgDR-0120). Every portfolio_* resolver below RESOLVES to a value that
+# depends on (config, ops root), but the fingerprint that governs the
+# cache's validity — the SAME one _lib-read-config.sh's merged config
+# cache uses — tracks only config (project-config.defaults.json +
+# project-config.json). The ops root is deliberately NOT a fingerprint
+# input (me2resh/apexyard#1013 follow-up, F2): it cannot change within a
+# session (resolve_ops_root(), #381, pins it once per
+# $CLAUDE_CODE_SESSION_ID), and every cache file this library writes is
+# already scoped into its filename by that same session id — so there is
+# no within-session root change for a fingerprint component to guard
+# against. See _lib-resolution-cache.sh's _resolution_cache_config_fingerprint
+# for the full writeup. One shared implementation tries the session cache
 # first, falling through to the existing _portfolio_get + _portfolio_resolve
 # chain (unchanged) on any miss. Callers store the result in THEIR OWN
 # per-process _PORTFOLIO_*_CACHE var, exactly as before — this only changes
