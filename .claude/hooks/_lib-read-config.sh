@@ -67,10 +67,6 @@ _config_repo_root() {
     return 0
   fi
   local root=""
-  # Try the ops-fork resolver first. _lib-ops-root.sh lives next to this
-  # file in .claude/hooks/, so locate it via BASH_SOURCE — not via
-  # `git rev-parse` (which would defeat the whole point of this fix).
-  local lib_dir
   # zsh-safe warning (me2resh/apexyard#950): these helpers are #!/bin/bash and
   # rely on ${BASH_SOURCE[0]} for self-location, which is a bash-only feature —
   # it is EMPTY under zsh, so an operator who `source`s this lib in an
@@ -83,25 +79,77 @@ _config_repo_root() {
   if [ -n "${ZSH_VERSION:-}" ]; then
     printf 'apexyard: source the .claude/hooks/_lib-*.sh helpers under bash, not zsh — path resolution is unreliable under zsh. Wrap manual checks in `bash -c '"'"'...'"'"'`.\n' >&2
   fi
-  # `:-` default (#1025): under zsh, a bare ${BASH_SOURCE[0]} reference is
-  # a hard "parameter not set" error whenever the caller's shell has
-  # nounset active, on top of the already-documented empty-value hazard
-  # above. The `git rev-parse` fallback a few lines below is what actually
-  # recovers root in that case.
-  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
-  if [ -f "$lib_dir/_lib-ops-root.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$lib_dir/_lib-ops-root.sh"
-    if command -v resolve_ops_root >/dev/null 2>&1; then
-      root=$(resolve_ops_root "$PWD")
+
+  # SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / AgDR-0118)
+  # ------------------------------------------------------------
+  # Was `lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" ...)"` with NO
+  # anchor check on the resolved dir at all. Under zsh, BASH_SOURCE is
+  # unset/empty, so `dirname ""` -> `.` and lib_dir silently became the
+  # CALLER's $PWD; if that cwd happened to ship a same-named
+  # `_lib-ops-root.sh`, it would be sourced UNANCHORED. The bootstrap guard
+  # below (raw BASH_SOURCE[0] captured once, empty short-circuits to no
+  # self-location) plus `resolve_anchored_lib_dir` in _lib-ops-root.sh (the
+  # anchor check) are the ONE shared idiom every _lib-*.sh self-location
+  # site now uses — see that function's header for why the very first hop
+  # can never itself be centralized behind a sourced call.
+  local raw_bash_source_0 candidate_dir
+  raw_bash_source_0="${BASH_SOURCE[0]:-}"
+  local lib_dir=""
+  if [ -n "$raw_bash_source_0" ]; then
+    candidate_dir="$(cd "$(dirname "$raw_bash_source_0")" 2>/dev/null && pwd)"
+    if [ -n "$candidate_dir" ] && [ -f "$candidate_dir/_lib-ops-root.sh" ]; then
+      # shellcheck source=/dev/null
+      . "$candidate_dir/_lib-ops-root.sh"
+      if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+        lib_dir="$(resolve_anchored_lib_dir "$raw_bash_source_0")"
+      fi
     fi
   fi
-  # Fallback: legacy behaviour for non-apexyard environments. Lets these
-  # hooks remain usable in bare clones / CI sandboxes that don't ship the
-  # ops-fork anchors.
+  if [ -n "$lib_dir" ] && command -v resolve_ops_root >/dev/null 2>&1; then
+    root=$(resolve_ops_root "$PWD")
+  fi
+
+  # FALLBACK — DELIBERATELY LEFT git-repo-scoped, NOT ops-root-anchored
+  # (me2resh/apexyard#1102 / AgDR-0118 — see the AgDR for the full
+  # divergence-from-brief writeup)
+  # --------------------------------------------------------------------
+  # `root=$(git rev-parse --show-toplevel 2>/dev/null)`, unconditionally,
+  # when the ops-fork resolver above found nothing — UNCHANGED from before
+  # #1102. An earlier draft of this fix additionally required the
+  # git-toplevel fallback to satisfy the SAME ops-root anchor
+  # (.apexyard-fork / onboarding.yaml+apexyard.projects.yaml) the walk-up
+  # above uses, gated behind an APEXYARD_ALLOW_UNANCHORED_CONFIG=1 opt-in
+  # for bare clones / CI. That draft was reverted after empirically
+  # breaking real, already-shipped usage: `_lib-read-config.sh` is sourced
+  # transitively by `_lib-protected-branches.sh`, `validate-branch-name.sh`,
+  # `require-active-ticket.sh`, and the `.githooks/pre-push` install path —
+  # ALL of which run standalone inside every MANAGED project's own git
+  # hooks, not just inside the apexyard ops fork's Claude Code session.
+  # None of those deployments carry `.apexyard-fork` or the onboarding
+  # pair (those markers are ops-fork-specific), so gating this fallback on
+  # them silently degraded every managed project's own
+  # `.claude/project-config.json` (e.g. its own
+  # `.git.protected_branches[]`) to the framework default — proven by
+  # `test_lib_protected_branches.sh` failing 4/16 cases against the
+  # anchored-default draft.
+  #
+  # Why this is still safe without the anchor: `git rev-parse
+  # --show-toplevel` is scoped to the CURRENT repo's real toplevel — it is
+  # not derived from BASH_SOURCE and was never reachable through the
+  # cwd-substitution bug #1102 actually fixes (that bug lived entirely in
+  # the `lib_dir`/self-location step above, now closed by
+  # `resolve_anchored_lib_dir`'s bootstrap guard). Trusting "the repo we
+  # are actually in" for that repo's OWN config is the file's original,
+  # intended, and still-correct behaviour for non-portfolio / standalone
+  # deployments — the same "legacy behaviour for non-apexyard
+  # environments" the pre-#1102 comment already documented. There is no
+  # silent-unanchored-DEFAULT regression here to guard against: this
+  # branch only ever resolves the CALLING repo's own toplevel, and a repo
+  # reading its own config is not an impostor scenario.
   if [ -z "$root" ]; then
     root=$(git rev-parse --show-toplevel 2>/dev/null)
   fi
+
   _CONFIG_ROOT_CACHE="$root"
   echo "$root"
 }

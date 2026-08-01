@@ -33,6 +33,12 @@ set -u
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/check-git-hooks-installed.sh"
 LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-git-hooks-path.sh"
 LIB_PATH_RESOLVE_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-path-resolve.sh"
+# me2resh/apexyard#1102 / AgDR-0118: _lib-git-hooks-path.sh's self-location
+# now sources _lib-ops-root.sh (via the shared resolve_anchored_lib_dir
+# guard) before it can reach _lib-path-resolve.sh — every sandbox that
+# ships the git-hooks-path lib must ship this too, or the bootstrap never
+# gets far enough to hit the (correctly tested) missing-path-resolve case.
+LIB_OPS_ROOT_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-ops-root.sh"
 PASS=0
 FAIL=0
 FAILED=""
@@ -71,6 +77,9 @@ build_repo() {
   fi
   if [ -f "$LIB_PATH_RESOLVE_SRC" ]; then
     cp "$LIB_PATH_RESOLVE_SRC" "$dir/.claude/hooks/_lib-path-resolve.sh"
+  fi
+  if [ -f "$LIB_OPS_ROOT_SRC" ]; then
+    cp "$LIB_OPS_ROOT_SRC" "$dir/.claude/hooks/_lib-ops-root.sh"
   fi
   ( cd "$dir" && git init -q )
 }
@@ -211,6 +220,7 @@ case_correct_but_pathresolve_missing() {
   cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-git-hooks-installed.sh"
   chmod +x "$sandbox/.claude/hooks/check-git-hooks-installed.sh"
   cp "$LIB_SRC" "$sandbox/.claude/hooks/_lib-git-hooks-path.sh"
+  [ -f "$LIB_OPS_ROOT_SRC" ] && cp "$LIB_OPS_ROOT_SRC" "$sandbox/.claude/hooks/_lib-ops-root.sh"
   # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
   ( cd "$sandbox" && git init -q )
   add_githooks "$sandbox"
@@ -227,6 +237,7 @@ case_not_a_repo() {
   chmod +x "$outside/.claude/hooks/check-git-hooks-installed.sh"
   [ -f "$LIB_SRC" ] && cp "$LIB_SRC" "$outside/.claude/hooks/_lib-git-hooks-path.sh"
   [ -f "$LIB_PATH_RESOLVE_SRC" ] && cp "$LIB_PATH_RESOLVE_SRC" "$outside/.claude/hooks/_lib-path-resolve.sh"
+  [ -f "$LIB_OPS_ROOT_SRC" ] && cp "$LIB_OPS_ROOT_SRC" "$outside/.claude/hooks/_lib-ops-root.sh"
   assert_silent "not a git repo -> silent" "$(run_hook_from "$outside")"
   rm -rf "$outside"
 }

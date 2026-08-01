@@ -45,6 +45,13 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REAL_PROTECTED_LIB="$ROOT/.claude/hooks/_lib-protected-branches.sh"
 REAL_READ_CONFIG_LIB="$ROOT/.claude/hooks/_lib-read-config.sh"
+# me2resh/apexyard#1102 / AgDR-0118: protected_branch_regex's self-location
+# now sources _lib-ops-root.sh (via the shared resolve_anchored_lib_dir
+# guard) before it can locate _lib-read-config.sh — the sandbox must ship
+# it too, or hook_dir never resolves and every case below silently falls
+# back to the "main|master|dev|develop" default instead of exercising the
+# configured `.git.protected_branches[]`.
+REAL_OPS_ROOT_LIB="$ROOT/.claude/hooks/_lib-ops-root.sh"
 
 PASS=0
 FAIL=0
@@ -92,6 +99,7 @@ build_sandbox() {
   git -C "$work" init -q -b main >/dev/null 2>&1
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
+  cp "$REAL_OPS_ROOT_LIB" "$work/.claude/hooks/_lib-ops-root.sh"
   if [ -n "$branches_json" ]; then
     printf '{"git": {"protected_branches": %s}}\n' "$branches_json" > "$work/.claude/project-config.defaults.json"
   fi

@@ -62,9 +62,39 @@
 # `$(...)`, which strips trailing newlines regardless).
 # ------------------------------------------------------------------------
 protected_branch_regex() {
-  local hook_dir repo_root regex
+  local hook_dir repo_root regex raw_bash_source_0 candidate_dir
 
-  hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+  # SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / AgDR-0118)
+  # ------------------------------------------------------------
+  # Was `hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" ...)"` -- the
+  # `:-$0` fallback is a FAKE fix: under zsh, $0 in a sourced file is the
+  # sourcing invocation path AS TYPED, not a reliable self-location signal,
+  # so it inherits the exact same "dirname resolves to the caller's cwd"
+  # hazard `:-` alone has. BASH_SOURCE[0] here still refers to THIS file
+  # (bash tracks the currently-executing source file regardless of function
+  # nesting depth), so the guard below is safe to apply inside a function
+  # body the same way it applies at top level. The bootstrap guard (raw
+  # BASH_SOURCE[0] captured once, empty short-circuits to no self-location,
+  # never $0) plus `resolve_anchored_lib_dir` in _lib-ops-root.sh (the
+  # anchor check) are the ONE shared idiom every _lib-*.sh self-location
+  # site now uses -- see that function's header for why the very first hop
+  # can never itself be centralized behind a sourced call.
+  raw_bash_source_0="${BASH_SOURCE[0]:-}"
+  hook_dir=""
+  if [ -n "$raw_bash_source_0" ]; then
+    candidate_dir="$(cd "$(dirname "$raw_bash_source_0")" 2>/dev/null && pwd)"
+  else
+    candidate_dir=""
+  fi
+  if [ -n "$candidate_dir" ] && [ -f "$candidate_dir/_lib-ops-root.sh" ]; then
+    # shellcheck source=./_lib-ops-root.sh
+    # shellcheck disable=SC1091
+    . "$candidate_dir/_lib-ops-root.sh"
+    if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+      hook_dir="$(resolve_anchored_lib_dir "$raw_bash_source_0")"
+    fi
+  fi
+
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 
   regex=""

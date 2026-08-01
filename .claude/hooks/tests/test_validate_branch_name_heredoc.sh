@@ -23,6 +23,12 @@ LIB_SRC="$SRC_ROOT/.claude/hooks/_lib-extract-push-ref.sh"
 LIB_STRIP_HEREDOC_SRC="$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh"
 LIB_CONFIG_SRC="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_PR_REPO_SRC="$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh"
+# me2resh/apexyard#1102 / AgDR-0118: _lib-extract-push-ref.sh's
+# self-location now sources _lib-ops-root.sh (via the shared
+# resolve_anchored_lib_dir guard) before it can reach _lib-strip-heredoc.sh
+# — every sandbox that ships the push-ref lib must ship this too, or the
+# heredoc stripper never gets loaded and heredoc bodies leak into parsing.
+LIB_OPS_ROOT_SRC="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
 
 for f in "$HOOK_SRC" "$LIB_SRC" "$LIB_STRIP_HEREDOC_SRC"; do
   if [ ! -f "$f" ]; then
@@ -51,6 +57,9 @@ make_sandbox_with_wrong_local_branch() {
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-branch-name.sh"
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
+  if [ -f "$LIB_OPS_ROOT_SRC" ]; then
+    cp "$LIB_OPS_ROOT_SRC" "$sb/.claude/hooks/_lib-ops-root.sh"
+  fi
   if [ -f "$LIB_STRIP_HEREDOC_SRC" ]; then
     cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
   fi

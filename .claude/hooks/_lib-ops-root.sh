@@ -143,6 +143,78 @@ _ops_root_anchor_valid() {
   return 1
 }
 
+# ------------------------------------------------------------------------
+# resolve_anchored_lib_dir RAW_BASH_SOURCE_0
+# ------------------------------------------------------------------------
+# THE single self-location entry point every _lib-*.sh sibling-sourcing call
+# site should use, replacing the four independent spellings a #1100 security
+# review found still in the wild (me2resh/apexyard#1102 / AgDR-0118):
+#   - ${BASH_SOURCE[0]:-}          (no anchored fallback for the empty case)
+#   - ${BASH_SOURCE[0]}            (no `:-` guard at all)
+#   - ${BASH_SOURCE[0]:-$0}        (a FAKE fix -- $0 in a sourced file under
+#                                    zsh is the sourcing path AS TYPED, not a
+#                                    reliable self-location signal; it
+#                                    inherits the exact same hazard)
+#
+# RAW_BASH_SOURCE_0 must be the CALLER's own ${BASH_SOURCE[0]:-} value,
+# passed explicitly -- a function defined in a sourced lib cannot see the
+# caller's own array slot 0 (BASH_SOURCE[0] *inside this function* refers to
+# THIS file, not the caller's).
+#
+# The fix is a SINGLE fail-closed guard: when RAW_BASH_SOURCE_0 is empty
+# (the zsh case -- BASH_SOURCE is unset under a non-bash sourcing shell),
+# refuse to derive anything from it. `dirname ""` resolves to `.`, which
+# silently substitutes the CALLER's $PWD for the script's own directory --
+# exactly the hazard #1062/#1100 closed for nine other sites. This layer
+# can never itself be centralized behind a sourced function: to source
+# THIS file safely in the first place you must already have solved the
+# exact problem this layer solves (you can't call a function in a file you
+# haven't located yet). Every call site therefore still computes
+# RAW_BASH_SOURCE_0 = ${BASH_SOURCE[0]:-} inline, once, before it can even
+# reach this function -- see each site's own "SELF-LOCATION BOOTSTRAP"
+# comment. What #1102 removes is the DRIFT: four different (two of them
+# actively broken) spellings of this guard, collapsed into one function.
+#
+# NOT anchored to an ops-root marker (.apexyard-fork / onboarding.yaml +
+# apexyard.projects.yaml) — deliberately. An earlier version of this fix
+# added that as a second "defense in depth" layer, but three of the four
+# #1102 call sites (_lib-protected-branches.sh, _lib-git-hooks-path.sh,
+# _lib-extract-push-ref.sh) are hook libs deployed into EVERY project's own
+# `.claude/hooks/`, including managed projects that are never the apexyard
+# ops fork itself and correctly have neither marker. Requiring an ops-root
+# anchor on those sites silently broke real usage (protected-branches
+# config in a managed project resolved to the framework default instead of
+# the project's own `.git.protected_branches[]`, caught by
+# test_lib_protected_branches.sh) — over-strictness that fails in the
+# UNSAFE direction for a security control (fail-closed-to-a-DIFFERENT-
+# answer is not the same as fail-closed-to-blocked). Only
+# _lib-read-config.sh's OWN portfolio-root resolution genuinely wants the
+# ops-root anchor semantics, and it applies that anchor itself, inline,
+# rather than through this shared function -- see its own "FALLBACK —
+# ANCHORED BY DEFAULT" comment. The bootstrap guard alone (never substitute
+# cwd for an unavailable BASH_SOURCE[0]) is what actually closes the
+# reported bug; the ops-root anchor was scope creep beyond it.
+#
+# Echoes the verified directory and returns 0 on success. Returns 1 with
+# nothing echoed when RAW_BASH_SOURCE_0 is empty or unresolvable -- callers
+# MUST treat empty output as "self-location unavailable" (typically: this
+# script was sourced under a non-bash shell) and skip sourcing the sibling
+# they wanted, never fall back to raw cwd or $0. This trades a rare
+# real-fork-under-zsh miss for closing a real cwd-substitution hole; the
+# already-shipped `_lib-read-config.sh` zsh warning documents the same
+# trade-off ("run these helpers under bash, not zsh").
+resolve_anchored_lib_dir() {
+  local raw="${1:-}"
+  [ -n "$raw" ] || return 1
+
+  local dir
+  dir="$(cd "$(dirname "$raw")" 2>/dev/null && pwd)" || return 1
+  [ -n "$dir" ] || return 1
+
+  printf '%s' "$dir"
+  return 0
+}
+
 # Pin-first resolver. Tries the pin file (when available + valid),
 # falls back to walk-up. See header for the full strategy.
 resolve_ops_root() {
