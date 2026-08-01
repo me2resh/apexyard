@@ -86,6 +86,28 @@ _LIB_OPS_ROOT_SOURCED=1
 # touches the pin.
 resolve_ops_root_walk() {
   local start="${1:-$PWD}"
+
+  # Case-insensitive-filesystem safety (me2resh/apexyard#1104): a literal
+  # $start/$PWD string can carry a different case than the on-disk
+  # directory name — bash's `cd`/`pwd -P` do NOT re-case (verified: `cd
+  # lowercase-path && pwd -P` returns "lowercase-path" unchanged on both
+  # GNU bash 5.x and macOS's stock /bin/bash 3.2), so whatever case the
+  # operator typed or the harness launched with survives untouched.
+  # `_lib-portfolio-paths.sh`'s `_portfolio_root()` anchors on `git
+  # rev-parse --show-toplevel` instead, which resolves via the OS and
+  # always returns the canonical on-disk case regardless of the case used
+  # to invoke it. Anchor THIS walk on the exact same base so the two
+  # independent ops-root resolvers can't disagree purely on case — when
+  # they did, a case-only difference between a pinned/cwd-derived root
+  # and a git-rev-parse-derived portfolio path got misread as "two
+  # distinct repos" (a phantom split-portfolio banner on a plain
+  # single-fork setup). Falls back to the raw (possibly non-canonical)
+  # `start` unchanged when not inside a git repo — same contract as
+  # before; there is nothing to canonicalize against in that case.
+  local canon
+  canon=$(cd "$start" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || canon=""
+  [ -n "$canon" ] && start="$canon"
+
   local r="$start"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
     # v2 anchor (preferred): the explicit .apexyard-fork marker file.
