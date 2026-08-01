@@ -35,6 +35,18 @@
 # the marker now suppresses a spurious warning rather than unblocking a write.
 # Set it anyway: the convention is what keeps a real review distinguishable
 # from an author reviewing their own work, and the merge gate is what enforces.
+#
+# TIER-AWARE NOTE (me2resh/apexyard#1064, AgDR-0116): the banner below keeps
+# "Rex runs on every PR" completely unconditional — that instruction is
+# NEVER softened by tier, because block-unreviewed-merge.sh requires the Rex
+# marker regardless of tier and is not touched by this change. What IS
+# tier-conditional, per .claude/rules/right-size-ceremony.md, is the ROLE
+# CHAIN around Rex (Security Auditor / Solution Architect / UI Designer) —
+# those already only fire on their own diff/path triggers. Do not read the
+# tier note below as license to skip Rex on a Lean diff; it only ever
+# changes Rex's OWN review depth (reduced-scope, per
+# .claude/agents/code-reviewer.md § "Reduced-Scope Review"), never whether
+# Rex runs.
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -121,6 +133,15 @@ build sub-agent just handed this PR back to you):
   warning on Rex's own marker write, but that is a side effect, not the
   reason — the hook warns and never blocks since #1026.)
 --------------------------------------------------------------------------
+
+CEREMONY TIER (.claude/rules/right-size-ceremony.md, AgDR-0116): Rex runs on
+EVERY PR, full stop — that instruction above is unconditional and does not
+change by tier. What varies by tier is the ROLE CHAIN layered around Rex
+(Security Auditor / Solution Architect / UI Designer) — those already only
+activate on their own diff/path triggers, never on a self-declared tier. A
+Lean-tier diff (docs / config-text, small, reversible, no behavior change,
+non-security-path) still gets a Rex pass — in REDUCED SCOPE per
+.claude/agents/code-reviewer.md § "Reduced-Scope Review" — never a bypass.
 
 The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
 file exists at .claude/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
