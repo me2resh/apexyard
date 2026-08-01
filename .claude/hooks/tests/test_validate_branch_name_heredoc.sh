@@ -138,6 +138,48 @@ git push origin feature/GH-1066-heredoc-fix
 CMD
 )" 0
 
+# ---- me2resh/apexyard#1081: decoy tag-push evidence must not hide a real,
+#      non-conforming push from validation --------------------------------
+#
+# The bug (fixed here the same way #1075 fixed it for block-main-push.sh):
+# is_tag_push's TRUE verdict is a WHOLE-COMMAND signal, so decoy tag-push
+# evidence sitting in prose the heredoc stripper correctly declines to
+# strip (an unconfirmed delimiter) made this hook `exit 0` before ever
+# validating the REAL push's destination in the same command. Both cases
+# below are proven RED against the pre-fix code (git stash) before the fix,
+# per this repo's own governance rule for this bug class.
+
+# Shape 1 — the ticket's own repro: dotted-delimiter heredoc carries decoy
+# "--tags" prose, immediately followed by a real, non-conforming push.
+# Pre-fix: is_tag_push("--tags" in decoy) -> true -> exit 0 (ALLOWED, wrong).
+# Post-fix: the real push has no tag evidence of its own and no OTHER
+# occurrence to lean on -> untrusted -> validated -> BLOCKS.
+run_case "#1081: decoy --tags in unconfirmed heredoc must not hide a non-conforming push" \
+"$(cat <<'CMD'
+cat > /tmp/m.txt <<END.OF
+we always use git push --tags for releases
+END.OF
+git push origin bogus-branch
+CMD
+)" 2
+
+# Shape 2 — same decoy shape, but the real push IS conforming. Must still
+# pass (the fix must not over-block a legitimate push just because a decoy
+# is present elsewhere in the command).
+run_case "#1081: decoy --tags in unconfirmed heredoc, real push conforms -> still passes" \
+"$(cat <<'CMD'
+cat > /tmp/m.txt <<END.OF
+we always use git push --tags for releases
+END.OF
+git push origin feature/GH-1081-decoy-fix
+CMD
+)" 0
+
+# Control: a genuine tag push with NO decoy and no heredoc must remain
+# exempt (the fix must not make is_tag_push untrustworthy in general).
+run_case "#1081 control: genuine tag push, no decoy -> still a no-op" \
+  "git push origin --tags" 0
+
 # ---- Regression: plain (no heredoc) cases from #194/#547 must be intact --
 run_case "regression: plain conforming push still passes" \
   "git push origin feature/GH-194-worktree-cwd-hooks" 0

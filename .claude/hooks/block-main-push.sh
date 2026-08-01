@@ -1,8 +1,45 @@
 #!/bin/bash
-# Blocks direct pushes and commits to long-lived integration branches.
-# All changes must go through pull requests.
+# CLASS: BACKSTOP — blocking, but not the primary control (AgDR-0114).
 #
-# Protected branches (default): main / master / dev / develop.
+# Blocks direct pushes and commits to long-lived integration branches from
+# Claude Code sessions (a PreToolUse hook, evaluated before the shell ever
+# runs). All changes must go through pull requests.
+#
+# THE controls for protected-branch enforcement are the git-native hooks:
+#   .githooks/pre-push     — terminal `git push`, ground truth via git's own
+#                             stdin ref resolution (me2resh/apexyard#1086
+#                             step 2)
+#   .githooks/pre-commit    — terminal `git commit`, ground truth via
+#                             `git symbolic-ref --short HEAD` (step 3,
+#                             AgDR-0114)
+# Both need no command-text parsing at all — immune by construction to every
+# heredoc/decoy/quoting shape docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md
+# catalogues for THIS file's text-matching approach.
+#
+# THIS file stays a BLOCKING backstop (AgDR-0114 — relabel + keep blocking,
+# not demote to advisory), because it is the only layer that covers two
+# gaps the git-native hooks structurally cannot close:
+#
+#   1. `--no-verify` bypasses every git-native hook by git's own design.
+#      This file is a Claude Code PreToolUse hook — it intercepts the Bash
+#      tool call BEFORE the shell (and therefore before git, and therefore
+#      before --no-verify's effect) ever runs, so it stays effective
+#      regardless of that flag. See the "--no-verify" note attached to
+#      each blocked-push/blocked-commit message below.
+#   2. `core.hooksPath` is not installed by default on managed-project
+#      clones (me2resh/apexyard#1088, deliberately unresolved) — this file
+#      fires process-wide regardless of which repo's clone the command's
+#      cwd targets, where the git-native hooks never fire at all.
+#
+# See docs/agdr/AgDR-0114-block-main-push-honest-naming-blocking-backstop.md
+# for the full decision record and docs/agdr/AgDR-0104-trust-chain-controls-vs-backstops.md
+# for the "control vs backstop, honestly named" framing this file follows.
+#
+# Protected branches (default): main / master / dev / develop, resolved via
+# the shared `.claude/hooks/_lib-protected-branches.sh` predicate
+# (`is_protected_branch`) — the same lib `.githooks/pre-push` and
+# `.githooks/pre-commit` use, so all three layers agree on one source of
+# truth instead of three copies that have to be trusted to stay in sync.
 # `dev` was added in apexyard#116 (release-cut model — see AgDR-0007). Forks
 # that legitimately use `dev` as a daily-work trunk under their own
 # convention can override the protected list via
@@ -61,16 +98,59 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # _lib-strip-heredoc.sh's governance comment and
 # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md.
 
-# Resolve protected-branch list from project config (shared reader, #109).
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-PROTECTED=""
-if [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+# Resolve the protected-branch predicate from the shared lib (me2resh/apexyard#1086
+# step 2/3, AgDR-0114) instead of resolving `.git.protected_branches[]` a
+# second time inline. This file previously carried its own copy of the same
+# three lines `_lib-protected-branches.sh` already implements — the
+# "duplicate that has to be trusted to agree" pattern AgDR-0113 catalogues as
+# this file family's dominant defect generator. Sourcing the lib means this
+# file, .githooks/pre-push, and .githooks/pre-commit all resolve the SAME
+# list, and all three inherit is_protected_branch()'s fail-closed hardening
+# (a malformed `.git.protected_branches[]` entry, or a renamed/missing
+# protected_branch_regex function, is treated as PROTECTED, never as a
+# silent allow).
+PROTECTED_LIB="$HOOK_DIR/_lib-protected-branches.sh"
+if [ -f "$PROTECTED_LIB" ]; then
   # shellcheck disable=SC1090,SC1091
-  . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
-  PROTECTED=$(config_get '.git.protected_branches[]' 2>/dev/null | paste -sd'|' -)
+  . "$PROTECTED_LIB"
 fi
-if [ -z "$PROTECTED" ]; then
-  PROTECTED="main|master|dev|develop"
+if ! declare -F is_protected_branch > /dev/null 2>&1; then
+  # Old clone that hasn't pulled the lib file yet (or it's syntactically
+  # broken). Fail closed on the documented default list rather than
+  # skipping protected-branch enforcement entirely — this file is a
+  # blocking backstop; a missing lib must not turn it into a no-op.
+  echo "WARN: $PROTECTED_LIB not found or is_protected_branch unavailable -- falling back to the default protected-branch list (main/master/dev/develop only; .git.protected_branches[] override not applied)." >&2
+  is_protected_branch() {
+    local b="$1"
+    [ -n "$b" ] && echo "$b" | grep -qE '^(main|master|dev|develop)$'
+  }
+  protected_branch_regex() { echo "main|master|dev|develop"; }
+fi
+
+# Display-only rendering of the protected list for BLOCKED messages below
+# (e.g. "Protected branches: main, master, dev, develop").
+PROTECTED_DISPLAY=$(protected_branch_regex 2>/dev/null)
+if [ -z "$PROTECTED_DISPLAY" ]; then
+  PROTECTED_DISPLAY="main|master|dev|develop"
+fi
+
+# --no-verify note (me2resh/apexyard#1086 step 3, AgDR-0114): --no-verify
+# does not bypass THIS file (a PreToolUse hook, not a git hook), but an
+# operator seeing a block after passing --no-verify may reasonably wonder
+# why the flag "didn't work". Detected once, appended to every BLOCKED
+# message below so the reason is explicit rather than left to be
+# rediscovered. Detection is deliberately simple (a whitespace-bounded
+# literal match) -- this is an explanatory note, not a new gate; the
+# existing push/commit checks above and below already block the command
+# regardless of --no-verify, with or without this note.
+NO_VERIFY_NOTE=""
+if echo "$COMMAND" | grep -qE '(^|[[:space:]])--no-verify([[:space:]]|$)'; then
+  NO_VERIFY_NOTE="
+NOTE: --no-verify does not bypass this check. This hook is a Claude Code
+PreToolUse hook (AgDR-0114) that runs BEFORE the shell -- and therefore
+before git, and therefore before --no-verify's effect -- ever executes.
+The git-native .githooks/pre-push and .githooks/pre-commit hooks WOULD be
+skipped by --no-verify; this backstop is not."
 fi
 
 # ---------------------------------------------------------------------------
@@ -112,12 +192,12 @@ if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
     if declare -F _extract_all_push_refs_core > /dev/null 2>&1; then
       while IFS= read -r ANY_PUSH_DST; do
         [ -z "$ANY_PUSH_DST" ] && continue
-        if echo "$ANY_PUSH_DST" | grep -qE "^(${PROTECTED})$"; then
+        if is_protected_branch "$ANY_PUSH_DST"; then
           cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${ANY_PUSH_DST}').
 
 All changes must go through a PR (.claude/rules/git-conventions.md
-§ "No Direct Main"). Protected branches: ${PROTECTED//|/, }.
+§ "No Direct Main"). Protected branches: ${PROTECTED_DISPLAY//|/, }.
 
 This command contains more than one push-shaped occurrence of text, and
 at least one names a protected branch. If that text is inside a heredoc
@@ -131,6 +211,7 @@ To unblock a genuine push:
        git checkout -b feature/GH-<ticket>-<short-description>
   2. Push the feature branch:
        git push -u origin feature/GH-<ticket>-<short-description>
+${NO_VERIFY_NOTE}
 MSG
           exit 2
         fi
@@ -282,12 +363,12 @@ MSG
       fi
     fi
 
-    if [ -n "$TARGET_PUSH_BRANCH" ] && echo "$TARGET_PUSH_BRANCH" | grep -qE "^(${PROTECTED})$"; then
+    if is_protected_branch "$TARGET_PUSH_BRANCH"; then
       cat >&2 <<MSG
 BLOCKED: Cannot push directly to a protected branch ('${TARGET_PUSH_BRANCH}').
 
 All changes must go through a PR (.claude/rules/git-conventions.md
-§ "No Direct Main"). Protected branches: ${PROTECTED//|/, }.
+§ "No Direct Main"). Protected branches: ${PROTECTED_DISPLAY//|/, }.
 
 To unblock:
   1. Create a feature branch from your current work:
@@ -303,6 +384,7 @@ protection from a default-protected branch (e.g. you legitimately use
 'dev' as your trunk), write the array with that branch OMITTED. To ADD
 protection to a new branch, write the array INCLUDING it. The hook
 trusts whichever list you provide — get the direction right.
+${NO_VERIFY_NOTE}
 MSG
       exit 2
     fi
@@ -354,7 +436,7 @@ if echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
   fi
 
-  if [ -n "$CURRENT_BRANCH" ] && echo "$CURRENT_BRANCH" | grep -qE "^(${PROTECTED})$"; then
+  if is_protected_branch "$CURRENT_BRANCH"; then
     cat >&2 <<MSG
 BLOCKED: Cannot commit directly on protected branch '${CURRENT_BRANCH}'.
 
@@ -377,6 +459,7 @@ locally, then check out the recovery branch.
        git branch feature/GH-<ticket>-recovery
        git reset --hard HEAD~1   # drops the commit from ${CURRENT_BRANCH}
        git checkout feature/GH-<ticket>-recovery
+${NO_VERIFY_NOTE}
 MSG
     exit 2
   fi
