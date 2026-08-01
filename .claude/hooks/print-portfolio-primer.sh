@@ -102,11 +102,17 @@ ONBOARDING=$(portfolio_onboarding_path)
 # this matches portfolio_validate's own outside-fork check.
 ROOT_REAL=$(cd "$ROOT" 2>/dev/null && pwd -P) || ROOT_REAL="$ROOT"
 
+# Case-insensitive-filesystem-aware containment check (me2resh/apexyard#1104).
+# $ROOT can come from the pin-first resolve_ops_root() (see
+# _lib-ops-root.sh), which on a case-insensitive filesystem may carry a
+# different case than $REGISTRY/$WORKSPACE_DIR/$ONBOARDING (resolved via
+# _lib-portfolio-paths.sh, which anchors on git rev-parse's always-canonical
+# case). A plain string prefix match then misreads a case-only difference
+# as "outside the fork" — see portfolio_path_under's header comment in
+# _lib-portfolio-paths.sh for the full mechanism. portfolio_path_under is
+# defined by $PORTFOLIO_LIB, already sourced above.
 _outside_root() {
-  case "$1" in
-    "$ROOT_REAL"|"$ROOT_REAL"/*) return 1 ;;
-  esac
-  return 0
+  ! portfolio_path_under "$1" "$ROOT_REAL"
 }
 
 IS_SPLIT=1

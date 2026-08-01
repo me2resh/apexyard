@@ -449,6 +449,102 @@ portfolio_agent_routing() {
 }
 
 # ------------------------------------------------------------------------------
+# Public: portfolio_path_eq <a> <b>
+#   Case-insensitive-filesystem-aware equality check for two absolute
+#   paths — do they name the SAME filesystem entry?
+#
+#   Why this exists (me2resh/apexyard#1104): on a case-insensitive
+#   filesystem (macOS/APFS default, Windows), two path strings that
+#   differ only in letter-case can be the identical on-disk directory.
+#   `git rev-parse --show-toplevel` resolves via the OS and always
+#   returns the canonical on-disk case (verified: `git -C
+#   /path/to/lowercase rev-parse --show-toplevel` still returns the
+#   canonical-cased path), but bash's `cd`/`pwd -P` do NOT re-case —
+#   verified empirically: `cd lowercase-path && pwd -P` returns
+#   "lowercase-path" unchanged, not the on-disk canonical case, on both
+#   GNU bash 5.x and macOS's stock `/bin/bash` 3.2. So a path resolved
+#   via `git rev-parse` (canonical) and a path resolved via a raw
+#   `$PWD`-derived string (whatever case the operator or harness
+#   originally typed) can be the SAME directory yet compare unequal with
+#   a plain `=`/`case` string match — which is exactly how a case-only
+#   difference between the ops-fork root and a portfolio path used to
+#   get misread as "two distinct repos" (a phantom split-portfolio /
+#   broken-config banner on a plain single-fork setup).
+#
+#   Strategy: prefer `-ef` (device+inode identity — the POSIX `test`
+#   operator, immune to case entirely) when both paths exist. Fall back
+#   to a case-folded string comparison when one/both don't exist yet
+#   (e.g. a workspace_dir that hasn't been created) — `-ef` needs a
+#   stat(2) on both sides. The fallback intentionally folds case
+#   UNCONDITIONALLY rather than trying to detect "is this filesystem
+#   case-insensitive": a false-positive fold on a case-SENSITIVE
+#   filesystem (treating two genuinely-different directories as equal)
+#   is the rarer, lower-cost failure mode next to the false "split
+#   portfolio" this helper exists to eliminate on every case-insensitive
+#   Mac/Windows setup — and the fold only ever applies to the
+#   non-existent-path fallback, where there is no inode to be wrong
+#   about in the first place.
+# ------------------------------------------------------------------------------
+portfolio_path_eq() {
+  local a="$1" b="$2"
+
+  [ "$a" = "$b" ] && return 0
+
+  if [ -e "$a" ] && [ -e "$b" ] && [ "$a" -ef "$b" ]; then
+    return 0
+  fi
+
+  local a_lc b_lc
+  a_lc=$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')
+  b_lc=$(printf '%s' "$b" | tr '[:upper:]' '[:lower:]')
+  [ "$a_lc" = "$b_lc" ]
+}
+
+# ------------------------------------------------------------------------------
+# Public: portfolio_path_under <path> <dir>
+#   Case-insensitive-filesystem-aware containment check — is <path> equal
+#   to <dir>, or does it live somewhere under <dir>? The prefix-match
+#   sibling of portfolio_path_eq, for the same reason (see its header
+#   comment above).
+#
+#   Strategy: walk UP from <path> (via dirname) to each ancestor that
+#   actually exists, and -ef-compare it against <dir> — this correctly
+#   handles <path> not existing yet (a file/dir that hasn't been created)
+#   by climbing past the non-existent tail, the same existing-ancestor
+#   pattern _portfolio_canonicalize already uses. Falls back to a
+#   case-folded string prefix match when <dir> itself doesn't exist
+#   (nothing to -ef against) or no existing ancestor of <path> matched.
+# ------------------------------------------------------------------------------
+portfolio_path_under() {
+  local path="$1" dir="$2"
+
+  [ -z "$dir" ] && return 1
+
+  portfolio_path_eq "$path" "$dir" && return 0
+
+  if [ -e "$dir" ]; then
+    local cur="$path"
+    while [ -n "$cur" ] && [ "$cur" != "/" ]; do
+      if [ -e "$cur" ] && [ "$cur" -ef "$dir" ]; then
+        return 0
+      fi
+      local parent
+      parent=$(dirname "$cur")
+      [ "$parent" = "$cur" ] && break
+      cur="$parent"
+    done
+  fi
+
+  local path_lc dir_lc
+  path_lc=$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')
+  dir_lc=$(printf '%s' "$dir" | tr '[:upper:]' '[:lower:]')
+  case "$path_lc" in
+    "$dir_lc"|"$dir_lc"/*) return 0 ;;
+  esac
+  return 1
+}
+
+# ------------------------------------------------------------------------------
 # Public: portfolio_validate
 #   Sanity-check that resolved paths are actually usable.
 #   On success: prints nothing, returns 0.
@@ -537,11 +633,13 @@ portfolio_validate() {
   root_real=$(cd "$root" 2>/dev/null && pwd -P) || root_real="$root"
   wd_real=$(cd "$workspace_dir" 2>/dev/null && pwd -P) || wd_real="$workspace_dir"
 
+  # Case-insensitive-filesystem-aware containment check (me2resh/apexyard#1104).
+  # A plain string prefix match here misreads a case-only difference (e.g.
+  # $root resolved via git rev-parse's canonical case vs a path built from
+  # a raw, differently-cased cwd) as "outside the fork" — see
+  # portfolio_path_under's header comment for the full mechanism.
   _outside_fork() {
-    case "$1" in
-      "$root_real"|"$root_real"/*) return 1 ;;
-    esac
-    return 0
+    ! portfolio_path_under "$1" "$root_real"
   }
 
   if _outside_fork "$registry" || _outside_fork "$projects_dir"; then
@@ -578,50 +676,44 @@ portfolio_validate() {
   # needs no (root-resolution-sensitive) config-key read.
   local pd_real
   pd_real=$(cd "$projects_dir" 2>/dev/null && pwd -P) || pd_real="$projects_dir"
-  if ! _outside_fork "$pd_real" && [ "$pd_real" != "$root_real/projects" ]; then
+  if ! _outside_fork "$pd_real" && ! portfolio_path_eq "$pd_real" "$root_real/projects"; then
     echo "broken: split-portfolio v2 misconfig — portfolio.projects_dir resolved to $projects_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch (or a missing leading '../') in .claude/project-config.json's portfolio.projects_dir override. See me2resh/apexyard#951."
     return 1
   fi
 
-  if ! _outside_fork "$wd_real" && [ "$wd_real" != "$root_real/workspace" ]; then
+  if ! _outside_fork "$wd_real" && ! portfolio_path_eq "$wd_real" "$root_real/workspace"; then
     echo "broken: split-portfolio v2 misconfig — portfolio.workspace_dir resolved to $workspace_dir, which is INSIDE the ops fork ($root_real) rather than the sibling private-portfolio repo. Check for a '../' depth mismatch (or a missing leading '../') in .claude/project-config.json's portfolio.workspace_dir override. See me2resh/apexyard#951."
     return 1
   fi
 
-  case "$onboarding" in
-    "$root"/*|"$root")
-      # In-fork path — leave it to onboarding-check.sh.
-      ;;
-    *)
-      if [ ! -f "$onboarding" ]; then
-        echo "broken: portfolio.onboarding resolved to $onboarding — file does not exist"
-        return 1
-      fi
-      ;;
-  esac
+  if portfolio_path_under "$onboarding" "$root"; then
+    : # In-fork path — leave it to onboarding-check.sh.
+  else
+    if [ ! -f "$onboarding" ]; then
+      echo "broken: portfolio.onboarding resolved to $onboarding — file does not exist"
+      return 1
+    fi
+  fi
 
   # workspace_dir: same shape — only validate explicit overrides. The
   # in-fork default may legitimately not exist yet (no managed projects
   # cloned). Callers that need the dir should mkdir on demand.
-  case "$workspace_dir" in
-    "$root"/*|"$root")
-      # In-fork path — optional; skip.
-      ;;
-    *)
-      if [ ! -d "$workspace_dir" ]; then
-        echo "broken: portfolio.workspace_dir resolved to $workspace_dir — directory does not exist"
-        return 1
-      fi
-      # Writability check — read-only mounts (NFS / SMB / nested-container
-      # bind-mounts that drop write perms) would otherwise silent-fail when
-      # /handover or the v2 migration tries to write into workspace/.
-      # Surface the failure here so SessionStart catches it.
-      if [ ! -w "$workspace_dir" ]; then
-        echo "broken: portfolio.workspace_dir at $workspace_dir is not writable"
-        return 1
-      fi
-      ;;
-  esac
+  if portfolio_path_under "$workspace_dir" "$root"; then
+    : # In-fork path — optional; skip.
+  else
+    if [ ! -d "$workspace_dir" ]; then
+      echo "broken: portfolio.workspace_dir resolved to $workspace_dir — directory does not exist"
+      return 1
+    fi
+    # Writability check — read-only mounts (NFS / SMB / nested-container
+    # bind-mounts that drop write perms) would otherwise silent-fail when
+    # /handover or the v2 migration tries to write into workspace/.
+    # Surface the failure here so SessionStart catches it.
+    if [ ! -w "$workspace_dir" ]; then
+      echo "broken: portfolio.workspace_dir at $workspace_dir is not writable"
+      return 1
+    fi
+  fi
 
   return 0
 }
