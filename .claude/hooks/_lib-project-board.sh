@@ -63,6 +63,11 @@ _LIB_PROJECT_BOARD_SOURCED=1
 # under any shell because it depends on `git`, not on a bash-only parameter.
 # ---------------------------------------------------------------------------
 _lib_board_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+# me2resh/apexyard#1062: under a non-bash shell BASH_SOURCE is empty, so the resolution above
+# degrades to the CALLER's cwd (dirname "" -> "."). Discard a cwd-derived path so the anchored
+# git-root check below must validate it; a genuine BASH_SOURCE path is where this file lives and
+# is kept as-is (#1061 only anchored the git-derived fallback, not this cwd-derived branch).
+if [ -z "${BASH_SOURCE[0]:-}" ]; then _lib_board_dir=""; fi
 if [ -z "$_lib_board_dir" ] || [ ! -f "$_lib_board_dir/_lib-ops-root.sh" ]; then
   _lib_board_root="$(git rev-parse --show-toplevel 2>/dev/null)"
   # me2resh/apexyard#1033: only accept a git-derived root that is actually

@@ -54,6 +54,11 @@ _LIB_AUDIT_HISTORY_SOURCED=1
 # is the actual portability fix (works under any shell, since it only depends
 # on `git`, not on a bash-only parameter).
 _AUDIT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
+# me2resh/apexyard#1062: under a non-bash shell BASH_SOURCE is empty, so the resolution above
+# degrades to the CALLER's cwd (dirname "" -> "."). Discard a cwd-derived path so the anchored
+# git-root check below must validate it; a genuine BASH_SOURCE path is where this file lives and
+# is kept as-is (#1061 only anchored the git-derived fallback, not this cwd-derived branch).
+if [ -z "${BASH_SOURCE[0]:-}" ]; then _AUDIT_LIB_DIR=""; fi
 if [ -z "$_AUDIT_LIB_DIR" ] || [ ! -f "$_AUDIT_LIB_DIR/_lib-read-config.sh" ]; then
   _audit_root="$(git rev-parse --show-toplevel 2>/dev/null)"
   # me2resh/apexyard#1033: only accept a git-derived root that is actually
