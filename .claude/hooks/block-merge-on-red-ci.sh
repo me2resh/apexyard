@@ -38,6 +38,25 @@
 # Pending checks (IN_PROGRESS | QUEUED): BLOCKED. The rule says all checks
 # must be green; pending is not green. Wait for CI to finish, then retry.
 #
+# WRAPPER-SHAPE FORGE FALLBACK (#1121)
+# -------------------------------------
+# The `tracker_pr_merge` wrapper (#759) resolves its forge from the registry
+# via `_forge_kind_for` -> `tracker_kind` -> `_lib-tracker.sh`'s
+# `_tracker_project_value`, which reads the per-project `tracker.kind`
+# override with `yq` (preferred) or a `python3` + PyYAML fallback. When
+# NEITHER tool is installed, that read silently returns nothing and
+# `tracker_kind` falls through to the GLOBAL `.tracker.kind` default (`gh`)
+# — exactly wrong for a glab-registered project's wrapper call, since the
+# wrapper's own text never says which CLI it drives. `_registry_glab_fallback`
+# below is a dependency-free (grep/awk only, no yq/PyYAML) second check used
+# ONLY when the primary resolver answers "gh" for a wrapper-shape command: it
+# scans the registry file directly for an explicit `tracker: kind: glab` on
+# the target repo. It can only ever upgrade an ambiguous "gh" to a confirmed
+# "glab" — it never downgrades a "glab" answer and never fires for the
+# non-wrapper shapes (those dispatch on command text, which is always
+# trustworthy). The real fix for the underlying yq/PyYAML-optional gap
+# belongs to the shared resolver libs, out of scope here.
+#
 # GLAB PATH (new, #790)
 # ----------------------
 # `resolve_ci_status_glab` (see _lib-extract-pr.sh) resolves the GitLab MR's
@@ -60,6 +79,104 @@ INPUT=$(cat)
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
 . "$(dirname "$0")/_lib-extract-pr.sh"
+
+# _registry_glab_fallback <owner/repo>
+# -------------------------------------
+# Dependency-free (grep/awk only — no yq, no python3/PyYAML) second check for
+# whether the registry EXPLICITLY marks <owner/repo> as `tracker: kind: glab`
+# (#1121 — see the WRAPPER-SHAPE FORGE FALLBACK header comment above for why
+# this exists). Hook-local by design: it duplicates a narrow slice of
+# `_lib-tracker.sh`'s `_tracker_project_value` on purpose, rather than
+# touching that shared resolver, so this fix stays scoped to this one hook.
+#
+# Scans project blocks the same way apexyard.projects.yaml is documented to
+# be shaped (apexyard.projects.yaml.example): a top-level `projects:` list
+# where each entry is a `- name: ...` block containing a `repo:` field and,
+# optionally, a `tracker:` sub-block with a `kind:` field. A block boundary
+# is any `- ` list-item line at the SAME indentation as the first one seen —
+# this is what keeps a NESTED list (`roles:`, `tags:`) from being mistaken
+# for a new project entry, since nested items are always more indented than
+# the top-level `- name:` marker.
+#
+# Echoes "glab" and exits 0 only when the target repo's block contains an
+# explicit `kind: glab`; otherwise echoes nothing and exits 1. This can only
+# ever confirm "glab" — it never asserts "gh" — so a caller should treat a
+# miss as "no additional information", not as "confirmed gh".
+_registry_glab_fallback() {
+  local repo="${1:-}" registry=""
+  [ -n "$repo" ] || return 1
+
+  if command -v portfolio_registry >/dev/null 2>&1; then
+    registry=$(portfolio_registry 2>/dev/null)
+  fi
+  [ -n "$registry" ] || registry="./apexyard.projects.yaml"
+  [ -f "$registry" ] || return 1
+
+  local found
+  found=$(awk -v target="$repo" '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function unquote(s,    t, n, c1, cn, sq) {
+      sq = sprintf("%c", 39)
+      t = s
+      sub(/[ \t]*#.*$/, "", t)
+      t = trim(t)
+      n = length(t)
+      if (n >= 2) {
+        c1 = substr(t, 1, 1)
+        cn = substr(t, n, 1)
+        if ((c1 == "\"" && cn == "\"") || (c1 == sq && cn == sq)) {
+          t = substr(t, 2, n - 2)
+        }
+      }
+      return t
+    }
+    BEGIN { item_indent = -1; emitted = 0 }
+    {
+      raw = $0
+      match(raw, /^[ \t]*/)
+      ind = RLENGTH
+      is_item = (raw ~ /^[ \t]*-[ \t]/)
+
+      if (is_item) {
+        if (item_indent == -1) { item_indent = ind }
+        if (ind == item_indent) {
+          # Flush the block that just ended. When the target glab block is NOT
+          # the last registry entry, the match fires here (mid-stream). We must
+          # exit WITHOUT letting the END block re-print: awk exit jumps to END,
+          # so a bare "print glab; exit" re-satisfies the END condition (block_repo
+          # and block_kind are still set) and emits a SECOND glab line, making the
+          # caller compare found against "glab\nglab" and MISS. The emitted flag
+          # makes END a no-op after a mid-stream hit (the #1121 position fix).
+          # NOTE: no apostrophes in these comments — the whole awk program is a
+          # single-quoted shell string, so an apostrophe would terminate it.
+          if (block_repo == target && block_kind == "glab") { print "glab"; emitted = 1; exit }
+          block_repo = ""; block_kind = ""
+        }
+      }
+
+      line = raw
+      sub(/^[ \t]*-[ \t]*/, "", line)
+      line = trim(line)
+      if (line ~ /^repo:[ \t]*/) {
+        v = line; sub(/^repo:[ \t]*/, "", v); block_repo = unquote(v)
+      }
+      if (line ~ /^kind:[ \t]*/) {
+        v = line; sub(/^kind:[ \t]*/, "", v); block_kind = unquote(v)
+      }
+    }
+    END {
+      # Only fires for the LAST block (no later item boundary flushed it). The
+      # `!emitted` guard prevents a double-print after a mid-stream hit above.
+      if (!emitted && block_repo == target && block_kind == "glab") print "glab"
+    }
+  ' "$registry" 2>/dev/null)
+
+  if [ "$found" = "glab" ]; then
+    echo "glab"
+    return 0
+  fi
+  return 1
+}
 
 # Parse .tool_input.command via jq. #965: this used to be the ONLY parse
 # path, and an empty/failed result — jq missing from PATH, or jq erroring
@@ -170,6 +287,21 @@ fi
 # existing #790 test behaviour exactly.
 if echo "$COMMAND" | grep -qE '\btracker_pr_merge\b'; then
   FORGE=$(_forge_kind_for "$CMD_REPO")
+  # #1121: _forge_kind_for's registry read needs yq or python3+PyYAML; when
+  # NEITHER is installed it silently falls through to the global "gh"
+  # default. That default is ambiguous here — it could be a genuine gh-kind
+  # project, or a glab-kind project whose registry entry just couldn't be
+  # read. Cross-check with the dependency-free scan (see
+  # _registry_glab_fallback above) whenever the primary answer is "gh": it
+  # can only ever confirm "glab", never override a real "glab" result or
+  # invent a false positive for a project the registry doesn't explicitly
+  # mark as glab.
+  if [ "$FORGE" = "gh" ]; then
+    REGISTRY_FORGE=$(_registry_glab_fallback "$CMD_REPO")
+    if [ "$REGISTRY_FORGE" = "glab" ]; then
+      FORGE="glab"
+    fi
+  fi
 else
   FORGE=$(_forge_from_command "$COMMAND")
 fi
