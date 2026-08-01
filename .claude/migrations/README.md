@@ -13,7 +13,7 @@ v<from>-to-v<to>.sh
 `<from>` and `<to>` are semver-core (`vMAJOR.MINOR.PATCH`, no pre-release suffix). Examples:
 
 - `v1.2.0-to-v1.3.0.sh` — runs when an adopter on v1.2.0 syncs past v1.3.0
-- `v1.3.0-to-v1.4.0.sh` — runs when an adopter on v1.3.0 syncs past v1.4.0
+- `v5.2.0-to-v5.3.0.sh` — runs when an adopter on v5.2.0 syncs past v5.3.0
 
 The chain walker (`.claude/hooks/_lib-migration-chain.sh`) discovers pair scripts by globbing this directory; the filenames ARE the chain.
 
@@ -54,4 +54,28 @@ When cutting a release that needs a per-adopter migration:
 3. Add a row to `docs/upgrading.md`'s "What each migration does" table.
 4. The release PR's CHANGELOG entry calls out the new migration.
 
-If the new release has **no** per-adopter migration, **still create the script as a no-op** (the `v1.3.0-to-v1.4.0.sh` placeholder is the template). Skipping a release in the chain would force a v1.2.0 adopter to jump directly to v1.4.0 — `migration_chain` refuses that gap and emits empty output, defeating the whole walk.
+If the new release has **no** per-adopter migration, **still create the script as a no-op** (`v5.2.0-to-v5.3.0.sh` is the template — see also the `/release` skill's step 3b migration-script check, which warns if you forget). Skipping a release in the chain would force an earlier adopter to jump over the gap — `migration_chain` refuses that and emits empty output, defeating the whole walk.
+
+## Orphaned hop scripts (target never tagged)
+
+If a release you were planning gets renamed, folded into another version, or
+cancelled before it ships, its `v<current>-to-v<planned>.sh` placeholder
+becomes an **orphan** — a script naming a `<to>` version that will never
+exist as a git tag. `migration_known_versions` (used to build the
+"unknown anchor" interactive menu) reads pair filenames literally, so an
+orphaned script silently offers a nonexistent version as a menu choice, and
+`migration_chain` walks *into* the fake version and then reports the wrong
+version as the point where the chain broke.
+
+When you discover an orphan (a script whose `<to>` side has no matching git
+tag): **remove it**, don't rename it forward to whatever tag actually shipped
+next. A no-op placeholder for `vA-to-vB` is a claim that nothing needed doing
+between `vA` and `vB`; renaming an orphan to `vA-to-v<real-next>` reuses that
+claim for a hop it was never written to describe, and — especially across a
+MAJOR bump — that's not a claim you can make without checking the actual
+release. Removing the orphan leaves a real gap (chain refuses at `vA`, per
+the missing-link edge case above) instead of a false all-clear; back-fill the
+real hop with its own reviewed no-op or real script once you've checked what
+that release actually needed. See me2resh/apexyard#1105 for the case that
+prompted this — `v1.3.0-to-v1.4.0.sh` outlived a v1.4.0 that was never
+tagged (v2.0.0 shipped in its place).

@@ -10,8 +10,11 @@
 #
 # Sandbox-based: builds synthetic ops-fork layouts under mktemp dirs, with
 # stub migration scripts that count their own invocations. The real
-# v1.2.0-to-v1.3.0.sh + v1.3.0-to-v1.4.0.sh ship in the framework root
-# and are copied in for the "real scripts execute idempotently" case.
+# v1.2.0-to-v1.3.0.sh ships in the framework root and is copied in for the
+# "real script executes idempotently" case (Case 5). v5.2.0-to-v5.3.0.sh is
+# a second real script (a no-op placeholder, backfilled by #1105) checked
+# for presence only, as a sanity check that the shipped chain has more than
+# one real link.
 #
 # Exit 0 if every case passes; 1 on first failure.
 
@@ -20,9 +23,9 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 LIB_CHAIN="$SRC_ROOT/.claude/hooks/_lib-migration-chain.sh"
 REAL_V1_V2="$SRC_ROOT/.claude/migrations/v1.2.0-to-v1.3.0.sh"
-REAL_V2_V3="$SRC_ROOT/.claude/migrations/v1.3.0-to-v1.4.0.sh"
+REAL_NOOP_PLACEHOLDER="$SRC_ROOT/.claude/migrations/v5.2.0-to-v5.3.0.sh"
 
-for f in "$LIB_CHAIN" "$REAL_V1_V2" "$REAL_V2_V3"; do
+for f in "$LIB_CHAIN" "$REAL_V1_V2" "$REAL_NOOP_PLACEHOLDER"; do
   [ -f "$f" ] || { echo "FAIL: missing $f" >&2; exit 1; }
 done
 

@@ -64,9 +64,16 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | Migration | Adds / changes | Affects |
 |-----------|---------------|---------|
 | `v1.2.0-to-v1.3.0.sh` | Moves `onboarding.yaml` and `workspace/<name>/` from the public fork to the private sibling repo (split-portfolio v2). Writes the `.apexyard-fork` anchor. Adds the `portfolio.{onboarding,workspace_dir}` keys to `.claude/project-config.json`. Updates `.gitignore`. | Split-portfolio adopters on the v1 layout. No-op for single-fork adopters. |
-| `v1.3.0-to-v1.4.0.sh` | Currently a no-op placeholder. v1.4.0-cycle tickets that need per-adopter migrations (e.g. templates/tickets reorg) will populate the body before release-cut. | TBD when v1.4.0 ships. |
+| `v4.4.0-to-v5.0.0.sh` | No-op placeholder — v5.0.0's major bump carried no per-adopter file/config migration. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.0.0-to-v5.1.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.1.0-to-v5.2.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.2.0-to-v5.3.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
+
+> **Known residual gap (#1105).** The chain between `v1.3.0` and `v4.4.0` (roughly 15 releases, including the v2.x and v3.x majors) still has no migration scripts — same silent-skip failure this table's `v4.4.0`+ rows just fixed, just not backfilled yet. An adopter anchored in that range hits the same "chain refuses, anchor still advances" edge case described above. Backfilling it accurately means checking each release's actual changes rather than assuming no-op, so it's left as follow-up work rather than bundled into #1105's fix.
+>
+> Also note: `v1.3.0-to-v1.4.0.sh` no longer exists. `v1.4.0` was never tagged — v2.0.0 shipped in its place — so that script was an orphan pointing at a version the chain could never reach. It's been removed rather than renamed; see `.claude/migrations/README.md` § "Orphaned hop scripts" for why.
 
 ---
 
