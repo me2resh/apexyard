@@ -216,7 +216,46 @@ case9() {
   rm -rf "$sb"
 }
 
-case1; case2; case3; case4; case5; case6; case7; case8; case9
+# -------------------- CASE 10: marker MENTIONED in prose → does NOT bypass --------------------
+# Regression guard for #1097: the skip marker used to be grep-matched
+# unanchored, so a commit message that merely *discusses* the marker
+# (documentation, a review comment quoted verbatim, a revert body) matched
+# too and silently disabled every check. The match must be whole-line
+# (grep -x): a sentence that contains the marker string inline is NOT a
+# deliberate bypass, so the check must still run (and still block on a
+# failing command).
+case10() {
+  local sb; sb=$(make_sandbox)
+  cat > "$sb/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "should-not-skip", "run": "echo oops; exit 1"}]}}
+EOF
+  # The marker appears INSIDE a sentence, not as its own line — this must
+  # NOT be treated as a deliberate bypass.
+  (cd "$sb" && git commit --amend -q -m "docs: explain the escape hatch
+
+This documents the <!-- pre-push: skip --> marker so contributors know
+it exists. It should not itself act as a bypass.")
+  run_hook "$sb" "$(push_json)" 2 "should-not-skip: FAILED" "marker-mentioned-in-prose-does-not-bypass"
+  rm -rf "$sb"
+}
+
+# -------------------- CASE 11: marker on its OWN LINE → still bypasses --------------------
+# The other direction of #1097's fix: a deliberate bypass — the marker as
+# a line by itself, exactly the shape the documented amend snippet emits —
+# must keep working after anchoring the match to -x.
+case11() {
+  local sb; sb=$(make_sandbox)
+  cat > "$sb/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "should-skip", "run": "exit 1"}]}}
+EOF
+  (cd "$sb" && git commit --amend -q -m "fix: emergency hotfix
+
+<!-- pre-push: skip -->")
+  run_hook "$sb" "$(push_json)" 0 "pre-push gate bypassed by skip marker" "marker-own-line-still-bypasses"
+  rm -rf "$sb"
+}
+
+case1; case2; case3; case4; case5; case6; case7; case8; case9; case10; case11
 
 echo ""
 echo "==================================="

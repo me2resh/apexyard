@@ -46,9 +46,12 @@
 #   1 — one or more checks failed
 #
 # Skip marker:
-#   Include the literal string <!-- pre-push: skip --> in the HEAD commit
-#   message (subject or body) to bypass for a genuine emergency.
-#   The bypass is printed to stderr so it's visible and grep-able.
+#   Include the literal string <!-- pre-push: skip --> as its OWN LINE in
+#   the HEAD commit message (subject or body) to bypass for a genuine
+#   emergency. The match is whole-line (grep -x), so a sentence that merely
+#   mentions the marker does NOT bypass — only a line consisting of exactly
+#   the marker does. The bypass is printed to stderr so it's visible and
+#   grep-able.
 #
 # Usage:
 #   bash bin/run-pre-push-checks.sh
@@ -76,7 +79,10 @@ fi
 
 SKIP_MARKER='<!-- pre-push: skip -->'
 HEAD_MSG=$(cd "$REPO_ROOT" && git log -1 --format='%B' 2>/dev/null)
-if echo "$HEAD_MSG" | grep -qF -- "$SKIP_MARKER"; then
+# -x: whole-line match only, so prose that mentions the marker inline
+# (e.g. a commit that documents the escape hatch) does not trigger it —
+# only a line consisting of exactly the marker does. See #1097.
+if printf '%s\n' "$HEAD_MSG" | grep -qxF -- "$SKIP_MARKER"; then
   echo "WARN: pre-push checks bypassed by skip marker in HEAD commit message." >&2
   echo "      All skipped checks will still run in CI — fix before merging." >&2
   exit 0
