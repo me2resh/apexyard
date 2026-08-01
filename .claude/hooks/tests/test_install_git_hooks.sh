@@ -26,6 +26,10 @@
 #   7. --repo-dir target is not a git repository at all     -> exit 2, loud error
 #   8. Target repo has no tracked hooks dir to install       -> exit 3, config
 #                                                               UNCHANGED
+#   15. Installer's OWN _lib-path-resolve.sh missing, target has a
+#       deliberate third-party core.hooksPath (#1089, closing #1087's
+#       LOW-3 + LOW-2)                                     -> non-zero exit,
+#                                                               config UNCHANGED
 #
 # Exit 0 if all cases pass; 1 on first failure tally.
 
@@ -388,6 +392,65 @@ case_config_lock_fails_closed() {
   rm -rf "$sandbox"
 }
 
+# ---------------------------------------------------------------------------
+# CASE 15 (#1089, closing #1087's LOW-3 + LOW-2): the installer's OWN copy
+# of _lib-path-resolve.sh missing (genuine corruption — not the TARGET
+# repo's state, which every case above exercises) must NOT clobber a
+# deliberate third-party core.hooksPath. Builds a standalone scratch
+# "install root" at bin/install-git-hooks.sh + .claude/hooks/
+# _lib-git-hooks-path.sh (mirroring the real repo's relative layout so
+# $SCRIPT_DIR/../.claude/hooks/... resolves the same way it does for a
+# real clone), deliberately WITHOUT .claude/hooks/_lib-path-resolve.sh
+# next to it, then runs THAT copy (not $SCRIPT_SRC) against an ordinary
+# target repo with a real, existing, external core.hooksPath already set
+# — invoked with NO --repo-dir (cwd-based, the /setup call shape) so the
+# LOW-4 hooks-dir containment check is what actually resolves
+# _resolve_real_path first, matching the exact ordering the "load-bearing
+# ordering" comment in bin/install-git-hooks.sh describes. Pins: exit
+# non-zero, no false-success message, config UNCHANGED — the LOW-4 check
+# refuses before ghp_classify's auto-repair branch is ever reached.
+# Discriminating: reordering the LOW-4 check to run AFTER
+# `STATE=$(ghp_classify ...)` — the exact regression the ordering comment
+# warns against — makes ghp_classify report "missing:<raw>" for this
+# real, deliberate third-party value, and the installer would then
+# AUTO-REPAIR it with no --force (traced by hand against the shipped
+# ghp_classify logic while developing this test; the shipped ordering,
+# unmodified, keeps this case green).
+# ---------------------------------------------------------------------------
+case_installer_own_lib_missing_no_clobber() {
+  local sandbox; sandbox=$(mktemp -d)
+  local install_root="$sandbox/install-root"
+  local repo="$sandbox/repo"
+  local external="$sandbox/company-wide-hooks"
+
+  # Standalone install root: bin/install-git-hooks.sh + the one lib it
+  # requires ($LIB in the script), WITHOUT _lib-path-resolve.sh.
+  mkdir -p "$install_root/bin" "$install_root/.claude/hooks"
+  cp "$SCRIPT_SRC" "$install_root/bin/install-git-hooks.sh"
+  local repo_root_for_script
+  repo_root_for_script="$(cd "$(dirname "$SCRIPT_SRC")/.." && pwd)"
+  cp "$repo_root_for_script/.claude/hooks/_lib-git-hooks-path.sh" "$install_root/.claude/hooks/_lib-git-hooks-path.sh"
+  # NOTE: _lib-path-resolve.sh intentionally NOT copied into install_root.
+
+  build_repo "$repo"
+  mkdir -p "$external"
+  git -C "$repo" config core.hooksPath "$external"
+
+  local out rc
+  out=$(cd "$repo" && bash "$install_root/bin/install-git-hooks.sh" 2>&1); rc=$?
+
+  if [ "$rc" = "0" ]; then
+    echo "FAIL [installer's own lib missing: must NOT report success] — rc=0, out: $out" >&2
+    FAIL=$((FAIL+1)); FAILED="${FAILED}installer-lib-missing-no-false-success "
+  else
+    echo "PASS [installer's own lib missing: non-zero exit, no false success]"
+    PASS=$((PASS+1))
+  fi
+  assert_eq "installer's own lib missing: deliberate third-party config UNCHANGED" "$external" "$(git -C "$repo" config --get core.hooksPath)"
+
+  rm -rf "$sandbox"
+}
+
 if [ ! -f "$SCRIPT_SRC" ]; then
   echo "FAIL: bin/install-git-hooks.sh not found at $SCRIPT_SRC" >&2
   exit 1
@@ -407,6 +470,7 @@ case_repo_dir_retarget_refused
 case_hooks_dir_traversal_refused
 case_symlinked_hooks_dir_refused
 case_config_lock_fails_closed
+case_installer_own_lib_missing_no_clobber
 
 echo ""
 echo "==================================="

@@ -69,6 +69,45 @@ _RATC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$_RATC_HOOK_DIR/_lib-path-resolve.sh" ]; then
   # shellcheck source=/dev/null
   . "$_RATC_HOOK_DIR/_lib-path-resolve.sh"
+else
+  # DELIBERATE DEGRADE, not an oversight (#1089 — closing #1087's LOW-2).
+  # _lib-path-resolve.sh is tracked right next to this file, so this branch
+  # only fires on genuine corruption (a partial checkout, a stray deletion) —
+  # it should never happen in a normal clone. Both the code review and the
+  # security review on PR #1087 independently verified that WITHOUT this
+  # else branch (i.e. _resolve_real_path simply undefined), every call site
+  # below still fails toward the SAFE outcome: an undefined-function call
+  # substitutes an empty string, `_og_real_target` stays empty, the
+  # `[ -n "$_og_real_target" ]` guard a few lines down is never satisfied,
+  # and the out-of-governance exemption block is skipped entirely — the
+  # target falls straight through to the ordinary ticket gate below
+  # (GATED, never silently exempted). See #883 for why an unresolved/empty
+  # target must never be treated as exempt.
+  #
+  # This is the deliberate asymmetry with bin/install-git-hooks.sh, which
+  # HARD-FAILS (exit 2) when ITS required lib is missing: that script's
+  # whole job is telling the operator "this clone IS protected," so a false
+  # positive there is actively harmful. This hook is a safety GATE — the
+  # safe direction for a gate that can't resolve a path is to keep gating,
+  # not to wave it through — so a hard failure here would be strictly worse
+  # than the silent degrade this else branch documents and pins.
+  #
+  # What this branch actually changes: nothing about the pass/fail outcome
+  # above (that was already correct) — only the diagnostic. Without a
+  # defined `_resolve_real_path`, bash prints a raw, unhelpful
+  # "command not found" to stderr on every call. Defining a stand-in that
+  # always echoes nothing (the same "unresolvable" contract the real
+  # function's own header comment describes) replaces that with a named,
+  # actionable message — printed once per hook invocation, not once per
+  # call site, so a single Bash command naming several targets doesn't
+  # spam the operator.
+  _resolve_real_path() {
+    if [ -z "${_RATC_PATH_RESOLVE_WARNED:-}" ]; then
+      echo "ApexYard: _lib-path-resolve.sh is missing next to require-active-ticket.sh — path resolution is degrading to fail-closed (gated), not exempt. This should not happen in a normal clone; see me2resh/apexyard#1089." >&2
+      _RATC_PATH_RESOLVE_WARNED=1
+    fi
+    return 0
+  }
 fi
 
 # ------------------------------------------------------------------------------

@@ -79,7 +79,7 @@ See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 bash bin/install-git-hooks.sh
 ```
 
-Idempotent — a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force` — overriding a deliberate adopter choice isn't this step's call to make silently. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party).
+Idempotent — a re-run on an already-configured clone reports "no change" and exits 0. If it exits 1 (a real, different `core.hooksPath` the operator configured on purpose), report that plainly and move on without `--force` — overriding a deliberate adopter choice isn't this step's call to make silently. **If it exits 4, treat this as a hard failure of the step, not a warning**: exit 4 means the `git config core.hooksPath` write did not take effect (a stale `.git/config.lock`, a multi-valued key) and the installer is refusing to report success on an unverified write — this clone is **NOT** protected. Show the operator the installer's own error output verbatim and ask them to retry (`bash bin/install-git-hooks.sh`) before continuing `/setup`; do not silently proceed as if the clone were covered. See `bin/install-git-hooks.sh --help` and me2resh/apexyard#1086 for the full state machine (fresh / idempotent / stale-repair / deliberate-third-party / write-failed).
 
 ### Step 1: Check current state
 

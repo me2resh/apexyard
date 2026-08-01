@@ -21,6 +21,9 @@
 #   5. No tracked .githooks/ dir in the repo at all      -> silent (nothing
 #      to advise on — a managed-project clone that hasn't adopted the
 #      framework's git hooks yet)
+#   6b. _lib-path-resolve.sh missing, core.hooksPath already correct
+#      (#1089, closing #1087's LOW-2)                     -> banner STILL
+#      fires (fails toward over-warning, never silently passes)
 #   6. Not inside a git repo at all                       -> silent
 #
 # Exit 0 if all cases pass; 1 on first failure tally.
@@ -188,6 +191,34 @@ case_no_githooks_dir() {
   rm -rf "$sandbox"
 }
 
+# CASE 6b (#1089, closing #1087's LOW-2): _lib-path-resolve.sh missing —
+# the deliberate degrade must fail TOWARD over-warning, never silently
+# pass. With core.hooksPath already CORRECTLY configured but the resolver
+# unavailable, _resolve_real_path's stand-in echoes nothing for both the
+# target and the current value, so ghp_classify can no longer confirm they
+# match and reports "missing" instead of "correct" — the advisory banner
+# fires with a spurious nudge on a clone that's actually fine. Annoying,
+# but the safe direction: staying silent here would risk masking a
+# genuinely broken clone the next time this exact code path is hit for
+# real. Discriminating: a hypothetical "fix" that made the stand-in return
+# some non-empty placeholder instead of empty could make this classify as
+# "correct" and go silent — this case would catch that regression.
+case_correct_but_pathresolve_missing() {
+  local sandbox; sandbox=$(mktemp -d)
+  # Build the repo WITHOUT copying _lib-path-resolve.sh (build_repo copies
+  # it conditionally; skip straight to the pieces we DO want).
+  mkdir -p "$sandbox/.claude/hooks"
+  cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-git-hooks-installed.sh"
+  chmod +x "$sandbox/.claude/hooks/check-git-hooks-installed.sh"
+  cp "$LIB_SRC" "$sandbox/.claude/hooks/_lib-git-hooks-path.sh"
+  # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
+  ( cd "$sandbox" && git init -q )
+  add_githooks "$sandbox"
+  git -C "$sandbox" config core.hooksPath .githooks
+  assert_fires "lib missing + already correct -> still banners (fail toward over-warn)" "doesn't exist" "$(run_hook_from "$sandbox")"
+  rm -rf "$sandbox"
+}
+
 # CASE 6: not inside a git repo -> silent
 case_not_a_repo() {
   local outside; outside=$(mktemp -d)
@@ -206,6 +237,7 @@ case_missing_dir
 case_foreign_clone
 case_third_party
 case_no_githooks_dir
+case_correct_but_pathresolve_missing
 case_not_a_repo
 
 echo ""
