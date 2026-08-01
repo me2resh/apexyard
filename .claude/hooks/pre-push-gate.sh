@@ -50,7 +50,10 @@ fi
 
 SKIP_MARKER='<!-- pre-push: skip -->'
 HEAD_MSG=$(cd "$REPO_ROOT" && git log -1 --format='%B' 2>/dev/null)
-if echo "$HEAD_MSG" | grep -qF -- "$SKIP_MARKER"; then
+# -x: whole-line match only, so prose that mentions the marker inline
+# (e.g. a commit that documents the escape hatch) does not trigger it —
+# only a line consisting of exactly the marker does. See #1097.
+if printf '%s\n' "$HEAD_MSG" | grep -qxF -- "$SKIP_MARKER"; then
   echo "WARN: pre-push gate bypassed by skip marker in HEAD commit message." >&2
   echo "      Skipped commands will run in CI regardless — fix broken state before merging." >&2
   exit 0
