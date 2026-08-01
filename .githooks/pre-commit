@@ -1,0 +1,155 @@
+#!/bin/bash
+# .githooks/pre-commit — git-native, BLOCKING enforcement layer for "no
+# direct commits to a protected branch" on terminal `git commit`.
+# me2resh/apexyard#1086 step 3 / AgDR-0114.
+#
+# Opt-in once per clone (or run bin/install-git-hooks.sh, which does this
+# for you and is now invoked by /setup and /handover — #1086 step 1):
+#   git config core.hooksPath .githooks
+#
+# `core.hooksPath` is a directory-level git config — pointing it at
+# .githooks/ picks up EVERY hook filename git knows how to invoke that
+# exists in that directory, including this one, with no separate per-hook
+# registration step. bin/install-git-hooks.sh does not enumerate hook
+# filenames anywhere in its own logic (it only checks that the target
+# directory exists), so this file needed no installer change to be picked
+# up by any clone that already has core.hooksPath set to .githooks — see
+# .claude/hooks/tests/test_githooks_pre_commit_protected_branch.sh, which
+# proves this end-to-end by running the real installer and then committing.
+#
+# ---------------------------------------------------------------------------
+# PROTECTED-BRANCH ENFORCEMENT — why this hook needs no command-text parsing
+# ---------------------------------------------------------------------------
+# `.claude/hooks/block-main-push.sh` has blocked protected-branch commits
+# since apexyard#109, but it does so by pattern-matching the raw Bash
+# command text: it greps for `\bgit\s+commit\b`, then resolves the LAST
+# `cd <path>` in the compound command to work out which repo is being
+# committed to (worktree-safety fix, #549/#727), and its own comments record
+# a false-negative from exactly that parsing (a quoted `cd "path"` yielding
+# an empty branch and skipping the check — #580's review of #549). See
+# docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the wider bug
+# class this family of parsing is exposed to.
+#
+# A git-native `pre-commit` hook needs none of that. Git invokes this
+# script from INSIDE the checkout the commit is actually happening in — for
+# an ordinary checkout that's this repo's own working tree; for a linked
+# worktree, git invokes it from that worktree's own working tree — so
+# `git symbolic-ref --short HEAD` always answers "which branch is THIS
+# commit landing on", correctly, for free, with no `cd`-prefix detection to
+# get right or wrong. There is no command string here to misparse: no
+# heredocs, no decoys, no quoting, no `cd` compounds — none of the shapes
+# AgDR-0113 catalogues exist at this layer, because there is no command
+# text being scanned at all.
+#
+# `.githooks/pre-push` (me2resh/apexyard#1086 step 2, AgDR-0114) is this
+# hook's push-time sibling — same ground-truth approach (git's own stdin
+# ref lines instead of command text), same shared `is_protected_branch()`
+# predicate from _lib-protected-branches.sh. `block-main-push.sh` remains a
+# separate, still-BLOCKING backstop for both commits and pushes — see
+# AgDR-0114 for why it is relabelled a backstop rather than demoted to
+# advisory now that git-native controls exist for both.
+#
+# RESIDUALS, STATED RATHER THAN PAPERED OVER
+# ---------------------------------------------------------------------------
+# `git commit --no-verify` skips this hook entirely — that is how
+# `--no-verify` works, not a bug in this file. `block-main-push.sh` is the
+# layer that stays effective against `--no-verify` for agent-driven
+# commands, because it is a Claude Code PreToolUse hook that decides BEFORE
+# the shell (and therefore before git, and therefore before `--no-verify`'s
+# effect) ever runs — see AgDR-0114.
+#
+# This hook also does not fire in any clone where `core.hooksPath` was
+# never pointed at .githooks/ — including every managed-project workspace
+# clone today (me2resh/apexyard#1088, deliberately unresolved; #1087's
+# security review found auto-installing this against an arbitrary
+# third-party clone unsafe). `block-main-push.sh` covers that gap too,
+# because it fires from the agent's own session regardless of which repo
+# the Bash tool call's cwd targets.
+# ---------------------------------------------------------------------------
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  # Not a git repo — nothing to do. Defensive; git never invokes a hook
+  # outside a repository in practice.
+  exit 0
+fi
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+if [ -z "$BRANCH" ]; then
+  # Detached HEAD (a rebase, a bisect, a `git commit` onto no branch at
+  # all) — there is no branch name for this commit to land on, so there is
+  # nothing for this check to protect. Not an error; not logged, to avoid
+  # noise on ordinary rebase/bisect workflows that commit repeatedly.
+  exit 0
+fi
+
+PROTECTED_LIB="$REPO_ROOT/.claude/hooks/_lib-protected-branches.sh"
+if [ ! -f "$PROTECTED_LIB" ]; then
+  # Old clone that hasn't pulled the lib file yet. Fail open, same shape as
+  # .githooks/pre-push's identical case — visible, not silent.
+  echo "WARN: $PROTECTED_LIB not found — protected-branch commit gate skipped at the git layer for this commit. Pull latest to enable it." >&2
+  exit 0
+fi
+# shellcheck disable=SC1090,SC1091
+. "$PROTECTED_LIB"
+
+# is_protected_branch (me2resh/apexyard#1086 step 3 / AgDR-0114) is the
+# single fail-closed predicate shared with .githooks/pre-push — see its
+# definition in $PROTECTED_LIB for the two hardenings this hook relies on:
+# a malformed .git.protected_branches[] entry that makes the regex fail to
+# evaluate is treated as "protected" (never silently "not protected"), and
+# a renamed/missing protected_branch_regex function is treated as
+# "protected" with a visible WARN (never a silent allow).
+if is_protected_branch "$BRANCH"; then
+  # ---------------------------------------------------------------------
+  # Forge-aware remediation (me2resh/apexyard#1086 step 3 / AgDR-0114): the
+  # "how do I open a PR/MR instead" line dispatches on the configured
+  # tracker kind rather than hardcoding `gh`, the same abstraction
+  # tracker_review_submit (#758) / tracker_pr_merge (#759) already use for
+  # exactly this reason — a GitLab-forge adopter blocked here should not be
+  # told to run a CLI they don't have installed. _lib-tracker.sh is an
+  # OPTIONAL dependency: if it's missing (old clone) or tracker_kind can't
+  # be resolved, the remediation text degrades to a forge-generic
+  # instruction rather than failing the commit gate over a missing doc lib.
+  # ---------------------------------------------------------------------
+  PR_HINT="Open a pull/merge request against ${BRANCH} using your team's tracker."
+  TRACKER_LIB="$REPO_ROOT/.claude/hooks/_lib-tracker.sh"
+  if [ -f "$TRACKER_LIB" ]; then
+    # shellcheck disable=SC1090,SC1091
+    . "$TRACKER_LIB" 2>/dev/null
+    if command -v tracker_kind >/dev/null 2>&1; then
+      TRACKER_KIND=$(tracker_kind 2>/dev/null)
+      case "$TRACKER_KIND" in
+        gh)
+          PR_HINT="gh pr create --base ${BRANCH} --head <feature-branch>"
+          ;;
+        glab)
+          PR_HINT="glab mr create --target-branch ${BRANCH}"
+          ;;
+        *)
+          PR_HINT="Open a pull/merge request against ${BRANCH} using your team's tracker${TRACKER_KIND:+ (${TRACKER_KIND})}."
+          ;;
+      esac
+    fi
+  fi
+
+  cat >&2 <<MSG
+BLOCKED: Committing directly to protected branch '${BRANCH}' is not allowed.
+
+All changes must go through a PR (.claude/rules/git-conventions.md
+§ "No Direct Main"). This was decided from git's own current-branch
+resolution (git symbolic-ref --short HEAD) — no command text was parsed to
+reach this decision.
+
+To unblock:
+  1. Create a feature branch from your current work:
+       git checkout -b feature/GH-<ticket>-<short-description>
+  2. Commit there instead, then push and open a PR:
+       ${PR_HINT}
+
+Customise (rare): .claude/project-config.json → .git.protected_branches[]
+MSG
+  exit 1
+fi
+
+exit 0
