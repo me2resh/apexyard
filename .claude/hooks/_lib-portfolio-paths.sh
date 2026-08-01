@@ -42,7 +42,42 @@
 #   agent_routing → ./agent-routing.yaml        (#351, may not exist)
 #
 # Caching: results cached per-process in shell vars to avoid repeat jq
-# calls. Same pattern as _CONFIG_CACHE in _lib-read-config.sh.
+# calls. Same pattern as _CONFIG_CACHE in _lib-read-config.sh. On top of
+# that, each resolver ALSO consults a session-scoped, CROSS-PROCESS cache
+# (me2resh/apexyard#1013 / AgDR-0120) via
+# _portfolio_resolve_with_session_cache — see that function and
+# _lib-resolution-cache.sh's header for the full design. Falls through to
+# the unchanged per-process logic on any miss; never changes what gets
+# computed, only how often.
+
+# ------------------------------------------------------------------------------
+# Load _lib-ops-root.sh (for resolve_ops_root, consulted by _portfolio_root
+# below) and the shared resolution-cache helpers (me2resh/apexyard#1013),
+# if available, so the portfolio_* resolvers can consult the session-scoped
+# cross-process cache. Best-effort: on any self-location failure this
+# simply leaves the relevant functions undefined, and every call site below
+# already treats "helper not defined" as "compute fresh, exactly as before
+# this file existed" — see _portfolio_root and
+# _portfolio_resolve_with_session_cache.
+# ------------------------------------------------------------------------------
+if ! command -v resolve_ops_root >/dev/null 2>&1 || ! command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
+  _PORTFOLIO_PATHS_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+  if [ -n "$_PORTFOLIO_PATHS_RAW_BASH_SOURCE_0" ]; then
+    _portfolio_paths_lib_dir="$(cd "$(dirname "$_PORTFOLIO_PATHS_RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+    if [ -n "$_portfolio_paths_lib_dir" ]; then
+      if ! command -v resolve_ops_root >/dev/null 2>&1 && [ -f "$_portfolio_paths_lib_dir/_lib-ops-root.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$_portfolio_paths_lib_dir/_lib-ops-root.sh"
+      fi
+      if ! command -v _resolution_cache_current_fingerprint >/dev/null 2>&1 && [ -f "$_portfolio_paths_lib_dir/_lib-resolution-cache.sh" ]; then
+        # shellcheck source=/dev/null
+        . "$_portfolio_paths_lib_dir/_lib-resolution-cache.sh"
+      fi
+    fi
+    unset _portfolio_paths_lib_dir
+  fi
+  unset _PORTFOLIO_PATHS_RAW_BASH_SOURCE_0
+fi
 
 # ------------------------------------------------------------------------------
 # Internal: resolve the ops-fork root. Walks up from the git toplevel
@@ -62,6 +97,32 @@ _portfolio_root() {
   if [ -z "$r" ]; then
     # Outside any git repo — caller decides what to do.
     return 0
+  fi
+
+  # Prefer the shared, pin-aware resolver when available
+  # (me2resh/apexyard#1013): resolve_ops_root() already has its own
+  # cross-process cache (the ops-root-<session> pin, #381), so consulting
+  # it here avoids redoing the walk-up below on every process when a pin
+  # already answers the question. This is a consolidation, not a second
+  # resolver — same anchor conditions as the walk below, so it can only
+  # agree with what that walk would have found, never diverge from it
+  # (the exact "two hand-maintained resolvers disagree" failure mode this
+  # issue's own "Related" section warns about, apexyard-premium#537).
+  #
+  # Deliberately does NOT short-circuit on a resolve_ops_root() MISS:
+  # unlike resolve_ops_root() (which returns empty when no anchor is
+  # found above $start), _portfolio_root()'s own contract falls back to
+  # the git toplevel itself for un-anchored managed-project clones (see
+  # below) — a real, load-bearing behavioural difference this
+  # consolidation must not erase.
+  if command -v resolve_ops_root >/dev/null 2>&1; then
+    local pinned
+    pinned=$(resolve_ops_root "$r")
+    if [ -n "$pinned" ]; then
+      _PORTFOLIO_ROOT_CACHE="$pinned"
+      echo "$pinned"
+      return 0
+    fi
   fi
 
   local cur="$r"
@@ -283,8 +344,49 @@ _portfolio_get() {
 }
 
 # ------------------------------------------------------------------------------
+# Internal: shared session-cache-aware resolution (me2resh/apexyard#1013 /
+# AgDR-0120). Every portfolio_* resolver below is a pure function of
+# (config, ops root) — the SAME fingerprint _lib-read-config.sh's merged
+# config cache uses — so one shared implementation tries the session cache
+# first, falling through to the existing _portfolio_get + _portfolio_resolve
+# chain (unchanged) on any miss. Callers store the result in THEIR OWN
+# per-process _PORTFOLIO_*_CACHE var, exactly as before — this only changes
+# HOW a per-process cache miss gets computed, never what gets computed or
+# how a per-process HIT is served.
+#
+# <cache_name> is a short, hardcoded literal used as the session cache
+# file's suffix (see _lib-resolution-cache.sh's _resolution_cache_file) —
+# never derived from tool input.
+# ------------------------------------------------------------------------------
+_portfolio_resolve_with_session_cache() {
+  local cache_name="$1" config_key="$2" default="$3"
+
+  local fp cached
+  if command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
+    fp=$(_resolution_cache_current_fingerprint)
+    if [ "$fp" != "UNKNOWN" ]; then
+      if cached=$(_resolution_cache_read "$cache_name" "$fp" 2>/dev/null) && [ -n "$cached" ]; then
+        printf '%s' "$cached"
+        return 0
+      fi
+    fi
+  fi
+
+  local raw resolved
+  raw=$(_portfolio_get "$config_key" "$default")
+  resolved=$(_portfolio_resolve "$raw")
+
+  if [ -n "${fp:-}" ] && [ "$fp" != "UNKNOWN" ]; then
+    _resolution_cache_write "$cache_name" "$fp" "$resolved" 2>/dev/null || true
+  fi
+
+  printf '%s' "$resolved"
+}
+
+# ------------------------------------------------------------------------------
 # Public resolvers — each outputs an absolute path.
-# Cached per-process.
+# Cached per-process, and (me2resh/apexyard#1013) cross-process via
+# _portfolio_resolve_with_session_cache above.
 # ------------------------------------------------------------------------------
 _PORTFOLIO_REGISTRY_CACHE=""
 portfolio_registry() {
@@ -292,9 +394,7 @@ portfolio_registry() {
     echo "$_PORTFOLIO_REGISTRY_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.registry' './apexyard.projects.yaml')
-  _PORTFOLIO_REGISTRY_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_REGISTRY_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-registry" '.portfolio.registry' './apexyard.projects.yaml')
   echo "$_PORTFOLIO_REGISTRY_CACHE"
 }
 
@@ -304,9 +404,7 @@ portfolio_projects_dir() {
     echo "$_PORTFOLIO_PROJECTS_DIR_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.projects_dir' './projects')
-  _PORTFOLIO_PROJECTS_DIR_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_PROJECTS_DIR_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-projects-dir" '.portfolio.projects_dir' './projects')
   echo "$_PORTFOLIO_PROJECTS_DIR_CACHE"
 }
 
@@ -316,9 +414,7 @@ portfolio_ideas_backlog() {
     echo "$_PORTFOLIO_IDEAS_BACKLOG_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.ideas_backlog' './projects/ideas-backlog.md')
-  _PORTFOLIO_IDEAS_BACKLOG_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_IDEAS_BACKLOG_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-ideas-backlog" '.portfolio.ideas_backlog' './projects/ideas-backlog.md')
   echo "$_PORTFOLIO_IDEAS_BACKLOG_CACHE"
 }
 
@@ -336,9 +432,7 @@ portfolio_onboarding_path() {
     echo "$_PORTFOLIO_ONBOARDING_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.onboarding' './onboarding.yaml')
-  _PORTFOLIO_ONBOARDING_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_ONBOARDING_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-onboarding" '.portfolio.onboarding' './onboarding.yaml')
   echo "$_PORTFOLIO_ONBOARDING_CACHE"
 }
 
@@ -357,9 +451,7 @@ portfolio_workspace_dir() {
     echo "$_PORTFOLIO_WORKSPACE_DIR_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.workspace_dir' './workspace')
-  _PORTFOLIO_WORKSPACE_DIR_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_WORKSPACE_DIR_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-workspace-dir" '.portfolio.workspace_dir' './workspace')
   echo "$_PORTFOLIO_WORKSPACE_DIR_CACHE"
 }
 
@@ -383,9 +475,7 @@ portfolio_custom_skills_dir() {
     echo "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.custom_skills_dir' './custom-skills')
-  _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-custom-skills-dir" '.portfolio.custom_skills_dir' './custom-skills')
   echo "$_PORTFOLIO_CUSTOM_SKILLS_DIR_CACHE"
 }
 
@@ -404,9 +494,7 @@ portfolio_custom_handbooks_dir() {
     echo "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.custom_handbooks_dir' './custom-handbooks')
-  _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-custom-handbooks-dir" '.portfolio.custom_handbooks_dir' './custom-handbooks')
   echo "$_PORTFOLIO_CUSTOM_HANDBOOKS_DIR_CACHE"
 }
 
@@ -442,9 +530,7 @@ portfolio_agent_routing() {
     echo "$_PORTFOLIO_AGENT_ROUTING_CACHE"
     return 0
   fi
-  local raw
-  raw=$(_portfolio_get '.portfolio.agent_routing' './agent-routing.yaml')
-  _PORTFOLIO_AGENT_ROUTING_CACHE=$(_portfolio_resolve "$raw")
+  _PORTFOLIO_AGENT_ROUTING_CACHE=$(_portfolio_resolve_with_session_cache "portfolio-agent-routing" '.portfolio.agent_routing' './agent-routing.yaml')
   echo "$_PORTFOLIO_AGENT_ROUTING_CACHE"
 }
 

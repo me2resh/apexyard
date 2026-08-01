@@ -24,6 +24,32 @@
 #   - jq not installed: emit '{}' and a one-time warning on stderr.
 
 # ------------------------------------------------------------------------------
+# Session-scoped, CROSS-PROCESS cache (me2resh/apexyard#1013 / AgDR-0120).
+# ------------------------------------------------------------------------------
+# The per-process cache below (_CONFIG_CACHE) is invisible across the many
+# separate bash processes the harness spawns per Bash tool call — each one
+# starts cold. _lib-resolution-cache.sh adds a session-scoped file cache
+# that _config_load() consults before doing the disk-read + jq-merge work,
+# with a cheap staleness check (see that file's header for the full design
+# and the fail-safe contract). Best-effort: on any self-location failure
+# this simply leaves the _resolution_cache_* functions undefined, and every
+# call site below already treats "helper not defined" as "compute fresh,
+# exactly as before this file existed."
+# ------------------------------------------------------------------------------
+if ! command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
+  _READ_CONFIG_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+  if [ -n "$_READ_CONFIG_RAW_BASH_SOURCE_0" ]; then
+    _read_config_lib_dir="$(cd "$(dirname "$_READ_CONFIG_RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+    if [ -n "$_read_config_lib_dir" ] && [ -f "$_read_config_lib_dir/_lib-resolution-cache.sh" ]; then
+      # shellcheck source=/dev/null
+      . "$_read_config_lib_dir/_lib-resolution-cache.sh"
+    fi
+    unset _read_config_lib_dir
+  fi
+  unset _READ_CONFIG_RAW_BASH_SOURCE_0
+fi
+
+# ------------------------------------------------------------------------------
 # Internal state: cache merged config per-process so repeated reads are cheap.
 # ------------------------------------------------------------------------------
 # `_CR` holds a literal carriage return, used by config_get to strip the CRLF
@@ -187,12 +213,35 @@ _config_load() {
     return 0
   fi
 
+  # Session-scoped cross-process cache (me2resh/apexyard#1013): every
+  # separate hook process pays this same disk-read + jq-merge cost cold.
+  # Try the session cache first; ANY miss (disabled, absent, fingerprint
+  # mismatch) falls through to the unchanged logic below — see
+  # _lib-resolution-cache.sh's header for the fail-safe contract.
+  local _rc_fp _rc_cached
+  if command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
+    _rc_fp=$(_resolution_cache_current_fingerprint)
+    if [ "$_rc_fp" != "UNKNOWN" ]; then
+      if _rc_cached=$(_resolution_cache_read_json "$_rc_fp" 2>/dev/null) && [ -n "$_rc_cached" ]; then
+        printf '%s\n' "$_rc_cached"
+        return 0
+      fi
+    fi
+  fi
+
+  local _rc_merged
   if [ -f "$overrides" ]; then
     # Shallow merge: user overrides win at top-level keys.
-    jq -s '.[0] * .[1]' "$defaults" "$overrides" 2>/dev/null || cat "$defaults"
+    _rc_merged=$(jq -s '.[0] * .[1]' "$defaults" "$overrides" 2>/dev/null) || _rc_merged=$(cat "$defaults")
   else
-    cat "$defaults"
+    _rc_merged=$(cat "$defaults")
   fi
+
+  if [ -n "${_rc_fp:-}" ] && [ "$_rc_fp" != "UNKNOWN" ]; then
+    _resolution_cache_write_json "$_rc_fp" "$_rc_merged" 2>/dev/null || true
+  fi
+
+  printf '%s\n' "$_rc_merged"
 }
 
 # ------------------------------------------------------------------------------
