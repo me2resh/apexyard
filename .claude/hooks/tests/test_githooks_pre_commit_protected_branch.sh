@@ -43,6 +43,11 @@ REAL_TRACKER_LIB="$ROOT/.claude/hooks/_lib-tracker.sh"
 REAL_INSTALLER="$ROOT/bin/install-git-hooks.sh"
 REAL_GIT_HOOKS_PATH_LIB="$ROOT/.claude/hooks/_lib-git-hooks-path.sh"
 REAL_PATH_RESOLVE_LIB="$ROOT/.claude/hooks/_lib-path-resolve.sh"
+# me2resh/apexyard#1102 / AgDR-0118: _lib-protected-branches.sh's and
+# _lib-git-hooks-path.sh's self-location now sources _lib-ops-root.sh (via
+# the shared resolve_anchored_lib_dir guard) before reaching their own
+# sibling libs — every sandbox that ships either must ship this too.
+REAL_OPS_ROOT_LIB="$ROOT/.claude/hooks/_lib-ops-root.sh"
 
 PASS=0
 FAIL=0
@@ -110,6 +115,7 @@ build_sandbox() {
   mkdir -p "$work/.claude/hooks"
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
+  cp "$REAL_OPS_ROOT_LIB" "$work/.claude/hooks/_lib-ops-root.sh"
   cp "$REAL_TRACKER_LIB" "$work/.claude/hooks/_lib-tracker.sh"
 
   if [ -n "$tracker_kind" ]; then
@@ -329,6 +335,7 @@ case_installer_autopickup_blocks_main() {
   mkdir -p "$work/.claude/hooks" "$work/bin"
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
+  cp "$REAL_OPS_ROOT_LIB" "$work/.claude/hooks/_lib-ops-root.sh"
   cp "$REAL_GIT_HOOKS_PATH_LIB" "$work/.claude/hooks/_lib-git-hooks-path.sh"
   cp "$REAL_PATH_RESOLVE_LIB" "$work/.claude/hooks/_lib-path-resolve.sh"
   cp "$REAL_INSTALLER" "$work/bin/install-git-hooks.sh"

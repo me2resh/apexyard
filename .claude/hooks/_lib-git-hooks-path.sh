@@ -18,8 +18,35 @@
 # _lib-path-resolve.sh's header comment for the full rationale, including
 # why it is NOT the same thing as _lib-portfolio-paths.sh's
 # `_portfolio_canonicalize` (a deliberately different, fail-soft sibling).
-_LGHP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-if [ -f "$_LGHP_LIB_DIR/_lib-path-resolve.sh" ]; then
+# SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / AgDR-0118)
+# ------------------------------------------------------------
+# Was `_LGHP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"` --
+# the `:-$0` fallback is a FAKE fix: under zsh, $0 in a sourced file is the
+# sourcing invocation path AS TYPED, not a reliable self-location signal, so
+# it inherits the exact same "dirname resolves to the caller's cwd" hazard
+# `:-` alone has. The bootstrap guard below (raw BASH_SOURCE[0] captured
+# once, empty short-circuits to no self-location, never $0) plus
+# `resolve_anchored_lib_dir` in _lib-ops-root.sh (the anchor check) are the
+# ONE shared idiom every _lib-*.sh self-location site now uses -- see that
+# function's header for why the very first hop can never itself be
+# centralized behind a sourced call.
+_LGHP_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+_LGHP_LIB_DIR=""
+if [ -n "$_LGHP_RAW_BASH_SOURCE_0" ]; then
+  _LGHP_CANDIDATE_DIR="$(cd "$(dirname "$_LGHP_RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+  if [ -n "$_LGHP_CANDIDATE_DIR" ] && [ -f "$_LGHP_CANDIDATE_DIR/_lib-ops-root.sh" ]; then
+    # shellcheck source=./_lib-ops-root.sh
+    # shellcheck disable=SC1091
+    . "$_LGHP_CANDIDATE_DIR/_lib-ops-root.sh"
+    if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+      _LGHP_LIB_DIR="$(resolve_anchored_lib_dir "$_LGHP_RAW_BASH_SOURCE_0")"
+    fi
+  fi
+  unset _LGHP_CANDIDATE_DIR
+fi
+unset _LGHP_RAW_BASH_SOURCE_0
+
+if [ -n "$_LGHP_LIB_DIR" ] && [ -f "$_LGHP_LIB_DIR/_lib-path-resolve.sh" ]; then
   # shellcheck source=/dev/null
   . "$_LGHP_LIB_DIR/_lib-path-resolve.sh"
 else

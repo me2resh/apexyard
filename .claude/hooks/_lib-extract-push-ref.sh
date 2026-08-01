@@ -59,9 +59,36 @@
 #
 # Refs: me2resh/apexyard#194, me2resh/apexyard#547, me2resh/apexyard#1066
 
-HOOK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / AgDR-0118)
+# ------------------------------------------------------------
+# Was `HOOK_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` -- no
+# `:-` guard at all. Under a non-bash sourcing shell (zsh), BASH_SOURCE is
+# unset/empty, so `dirname ""` -> `.` and HOOK_LIB_DIR silently became the
+# CALLER's $PWD. If that cwd happened to ship a same-named
+# `_lib-strip-heredoc.sh`, it would be sourced UNANCHORED. The bootstrap
+# guard below (raw BASH_SOURCE[0] captured once, empty short-circuits to no
+# self-location) plus `resolve_anchored_lib_dir` in _lib-ops-root.sh (the
+# anchor check) are the ONE shared idiom every _lib-*.sh self-location site
+# now uses -- see that function's header for why the very first hop can
+# never itself be centralized behind a sourced call.
+_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+HOOK_LIB_DIR=""
+if [ -n "$_RAW_BASH_SOURCE_0" ]; then
+  _CANDIDATE_LIB_DIR="$(cd "$(dirname "$_RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+  if [ -n "$_CANDIDATE_LIB_DIR" ] && [ -f "$_CANDIDATE_LIB_DIR/_lib-ops-root.sh" ]; then
+    # shellcheck source=./_lib-ops-root.sh
+    # shellcheck disable=SC1091
+    . "$_CANDIDATE_LIB_DIR/_lib-ops-root.sh"
+    if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+      HOOK_LIB_DIR="$(resolve_anchored_lib_dir "$_RAW_BASH_SOURCE_0")"
+    fi
+  fi
+  unset _CANDIDATE_LIB_DIR
+fi
+unset _RAW_BASH_SOURCE_0
+
 # shellcheck source=./_lib-strip-heredoc.sh
-if [ -f "$HOOK_LIB_DIR/_lib-strip-heredoc.sh" ]; then
+if [ -n "$HOOK_LIB_DIR" ] && [ -f "$HOOK_LIB_DIR/_lib-strip-heredoc.sh" ]; then
   # shellcheck disable=SC1091
   . "$HOOK_LIB_DIR/_lib-strip-heredoc.sh"
 fi
