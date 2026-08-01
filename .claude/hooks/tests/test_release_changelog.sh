@@ -402,14 +402,14 @@ contains "stderr range is anchored on the trailer sha" "RELEASE_CHANGELOG_RANGE=
 #   STUB_GH_EXIT      — non-zero to simulate a `gh` failure — auth, rate
 #                       limit, or an unreachable forge, the exact failure
 #                       mode hit live during the v5.3.0 cut
-#   STUB_GH_SLEEP     — (#1078) seconds to sleep before responding, to
-#                       simulate a hung/unresponsive forge — the exact
-#                       failure mode verified live: no error, no output,
-#                       just silence until an external `timeout` killed it
-#   STUB_GH_CALL_LOG  — (#1077) a file path; every invocation appends its
-#                       full argument list here, so tests can assert on
-#                       exactly which --repo the script queried (or that it
-#                       never queried at all)
+#   STUB_GH_SLEEP     — seconds to sleep before responding, to simulate a
+#                       hung/unresponsive forge
+#   STUB_GH_CALL_LOG  — a file path; every invocation appends its full
+#                       argument list here, so tests can assert on exactly
+#                       what the script queried (or, since #1076, that it
+#                       never queried at all — the log staying EMPTY is now
+#                       the expected outcome for every unscoped/cross-repo
+#                       commit, not the presence of a particular --repo)
 # Every `$` in the heredoc body is backslash-escaped so it survives heredoc
 # creation literally and only expands when the stub itself runs later,
 # inside the test's own subshell.
@@ -471,11 +471,18 @@ out=$(run_test '
 contains     "closes the ISSUE number from the scope" "Closes #1600" "$out"
 not_contains "does not close the trailing PR number instead" "Closes #1601" "$out"
 
-# ── Test: #1056 defect 2 — unscoped subject resolves via the PR's own body ──
-# `docs: ... (#2001)` has no `type(#N):` scope — the only "(#N)" present is
-# the trailing squash-merge PR number, not an issue. The generator must look
-# up PR #2001's body, find its "Refs #2000", and close #2000 — not #2001.
-echo "--- #1056 unscoped subject resolves issue from PR body (Refs #N) ---"
+# ── Test: #1076 — unscoped subject never gets a Closes, even when a PR-body
+#    lookup WOULD resolve one. `docs: ... (#2001)` has no `type(#N):` scope —
+#    the only "(#N)" present is the trailing squash-merge PR number, not an
+#    issue. Before #1076 this was resolved via a best-effort `gh pr view`
+#    lookup of PR #2001's own body; that mechanism is gone entirely — the
+#    governing rule is "prefer a MISSING close over a WRONG close", and an
+#    unscoped ref is never confidently an issue number. `gh` is stubbed to
+#    RESOLVE SUCCESSFULLY (a legitimate "Refs #2000" in the body) to prove
+#    the generator doesn't even attempt the lookup anymore, not merely that
+#    it degrades gracefully when the lookup would fail.
+echo "--- #1076 unscoped subject: no Closes, no gh call, even when the body would resolve ---"
+call_log=$(mktemp)
 out=$(run_test '
   mc "chore: initial"
   git tag v17.0.0
@@ -483,37 +490,25 @@ out=$(run_test '
   git remote add upstream https://github.com/testowner/testrepo.git
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_BODY="See also. Refs #2000" \
+  PATH="$fakebin:$PATH" STUB_GH_BODY="See also. Refs #2000" STUB_GH_CALL_LOG="'"$call_log"'" \
     PREV_TAG="v17.0.0" HEAD_REF="HEAD" VERSION="v17.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
-contains     "resolves to the referenced issue" "Closes #2000" "$out"
-not_contains "does not close the PR number itself" "Closes #2001" "$out"
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+not_contains "does not close the resolvable issue (no lookup attempted)" "Closes #2000" "$out"
+not_contains "does not close the PR number either" "Closes #2001" "$out"
+not_contains "no Closes section at all" "### Closes" "$out"
 contains     "display line still shows the PR number" "(#2001)" "$out"
+eq           "gh is never invoked for an unscoped commit" "" "$call_log_contents"
 
-# ── Test: #1056 defect 2 — unscoped subject whose PR resolves to nothing ────
-# The PR body carries no Closes/Fixes/Resolves/Refs reference at all — the
-# generator must degrade to the PR number (today'"'"'s behaviour), not drop the
-# entry or crash.
-echo "--- #1056 unscoped subject, PR body has no closing reference (falls back to PR number) ---"
-out=$(run_test '
-  mc "chore: initial"
-  git tag v18.0.0
-  mc "docs: fix a typo in the README (#2101)"
-  git remote add upstream https://github.com/testowner/testrepo.git
-  fakebin="$PWD/fakebin"
-  make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_BODY="Just a typo fix, no issue linked." \
-    PREV_TAG="v18.0.0" HEAD_REF="HEAD" VERSION="v18.1.0" DATE="2026-07-29" \
-    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
-')
-contains "falls back to the PR number when nothing resolves" "Closes #2101" "$out"
-
-# ── Test: #1056 fail-soft — an unreachable forge never aborts the release ───
-# Simulates the exact failure hit live during the v5.3.0 cut: `gh` errors out
-# (DNS blip on api.github.com). The generator must degrade to the PR number
-# and exit 0 — a release cut must never abort because the forge was down.
-echo "--- #1056 fail-soft: gh failure degrades to PR number, script still exits 0 ---"
+# ── Test: #1076 — a broken/unreachable `gh` never aborts the release either
+#    (moot mechanically, since gh is never called for an unscoped commit —
+#    this asserts the "never called" property holds even under the exact
+#    failure mode that motivated #1056's original fail-soft handling: a `gh`
+#    that errors out, as if from a DNS blip on api.github.com).
+echo "--- #1076 unscoped subject: broken gh is still never invoked, script still exits 0 ---"
+call_log=$(mktemp)
 out=$(run_test '
   mc "chore: initial"
   git tag v19.0.0
@@ -521,111 +516,22 @@ out=$(run_test '
   git remote add upstream https://github.com/testowner/testrepo.git
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_EXIT=1 \
+  PATH="$fakebin:$PATH" STUB_GH_EXIT=1 STUB_GH_CALL_LOG="'"$call_log"'" \
     PREV_TAG="v19.0.0" HEAD_REF="HEAD" VERSION="v19.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
   echo "EXIT_CODE=$?"
 ')
-contains "degrades to the PR number when gh is unreachable" "Closes #2201" "$out"
-contains "script still exits cleanly (no abort on forge failure)" "EXIT_CODE=0" "$out"
-
-# ── Test: #1077 — repo is derived from the ACTUAL remote, not hardcoded ─────
-# An adopter fork cutting its OWN release must resolve its own PR numbers
-# against its OWN repo. REPO_REMOTE="origin" (an adopter fork's own remote,
-# not "upstream") points at a repo that is NOT me2resh/apexyard — assert the
-# stub actually received --repo testadopter/theirfork, proving derivation
-# reads the configured remote instead of a hardcoded default.
-echo "--- #1077 repo derived from the actual (non-upstream) remote ---"
-call_log=$(mktemp)
-out=$(run_test '
-  mc "chore: initial"
-  git tag v20.0.0
-  mc "docs: rework the release notes template (#2301)"
-  git remote add origin https://github.com/testadopter/theirfork.git
-  fakebin="$PWD/fakebin"
-  make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #2300" STUB_GH_CALL_LOG="'"$call_log"'" \
-    REPO_REMOTE="origin" \
-    PREV_TAG="v20.0.0" HEAD_REF="HEAD" VERSION="v20.1.0" DATE="2026-07-30" \
-    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
-')
 call_log_contents=$(cat "$call_log")
 rm -f "$call_log"
-contains     "resolves via the derived (fork) repo" "Closes #2300" "$out"
-contains     "gh was actually invoked" "GH_CALLED_WITH:" "$call_log_contents"
-contains     "queried the fork's own repo (from origin), not upstream" "--repo testadopter/theirfork" "$call_log_contents"
-not_contains "never queried the hardcoded upstream default" "--repo me2resh/apexyard" "$call_log_contents"
+not_contains "no Closes for the unscoped commit" "Closes #2201" "$out"
+contains     "script still exits cleanly" "EXIT_CODE=0" "$out"
+eq           "gh is never invoked (nothing to degrade from)" "" "$call_log_contents"
 
-# ── Test: #1077 — the DEFAULT-CONFIG adopter fork case, zero REPO_REMOTE ────
-# The exact topology the ticket was filed against, with NO explicit
-# REPO_REMOTE override at all: an adopter fork that followed apexyard's own
-# docs and ran `git remote add upstream ...` (for /update) ALSO has "origin"
-# pointing at their own fork, and cuts their OWN release with HEAD_REF
-# pointing at their OWN dev branch ("origin/dev") rather than "upstream/dev".
-# `refs/remotes/origin/dev` is created directly via update-ref (no real
-# network fetch needed) so HEAD_REF resolves to a real ref, exactly mirroring
-# a fetched remote-tracking branch.
-#
-# Before the HEAD_REF-derived REPO_REMOTE fix, REPO_REMOTE defaulted to
-# "upstream" unconditionally — which resolves to me2resh/apexyard in this
-# topology regardless of which branch is actually being released, byte-
-# identical to the hardcode #1077 was filed to remove. This is the case
-# that must be fixed with ZERO configuration, not by telling every adopter
-# to discover and set REPO_REMOTE=origin by hand.
-echo "--- #1077 default-config adopter fork: zero-config derivation via HEAD_REF ---"
+# ── Test: #1076 — a hung `gh` is likewise never invoked; the script never
+#    waits on it at all (previously bounded by PR_LOOKUP_TIMEOUT — now there
+#    is nothing to bound, because the call never happens).
+echo "--- #1076 unscoped subject: hung gh is never invoked, script returns immediately ---"
 call_log=$(mktemp)
-out=$(run_test '
-  mc "chore: initial"
-  git tag v23.0.0
-  mc "docs: rework the release checklist (#2601)"
-  git remote add upstream https://github.com/me2resh/apexyard.git
-  git remote add origin https://github.com/testadopter2/theirfork.git
-  git update-ref refs/remotes/origin/dev HEAD
-  fakebin="$PWD/fakebin"
-  make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #2600" STUB_GH_CALL_LOG="'"$call_log"'" \
-    PREV_TAG="v23.0.0" HEAD_REF="origin/dev" VERSION="v23.1.0" DATE="2026-07-30" \
-    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
-')
-call_log_contents=$(cat "$call_log")
-rm -f "$call_log"
-contains     "resolves via the fork's own repo, derived from HEAD_REF alone (no REPO_REMOTE set)" "Closes #2600" "$out"
-contains     "queried origin's own repo (HEAD_REF's remote prefix)" "--repo testadopter2/theirfork" "$call_log_contents"
-not_contains "never queried upstream despite it being configured too (the #1077 regression case)" "--repo me2resh/apexyard" "$call_log_contents"
-
-# ── Test: #1077 — underivable remote emits no gh call and no wrong close ────
-# No remote at all is configured (no "upstream", no "origin") and REPO_REMOTE
-# is left at its default. The repo cannot be derived confidently — per the
-# "missing over wrong" principle, the script must NOT fall back to a
-# hardcoded repo guess. It should never even invoke `gh`, and the emitted
-# Closes bullet is only the PR's own number (a same-repo no-op), never a
-# cross-repo guess.
-echo "--- #1077 underivable remote: no gh call, no wrong-repo guess ---"
-call_log=$(mktemp)
-out=$(run_test '
-  mc "chore: initial"
-  git tag v21.0.0
-  mc "docs: another unscoped change (#2401)"
-  fakebin="$PWD/fakebin"
-  make_stub_gh "$fakebin"
-  PATH="$fakebin:$PATH" STUB_GH_BODY="Refs #9999" STUB_GH_CALL_LOG="'"$call_log"'" \
-    PREV_TAG="v21.0.0" HEAD_REF="HEAD" VERSION="v21.1.0" DATE="2026-07-30" \
-    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
-  echo "EXIT_CODE=$?"
-')
-call_log_contents=$(cat "$call_log")
-rm -f "$call_log"
-eq          "gh is never invoked when the repo can't be derived" "" "$call_log_contents"
-contains    "falls back to the PR's own number (same-repo no-op)" "Closes #2401" "$out"
-not_contains "never guesses the unrelated issue from a wrong-repo lookup" "Closes #9999" "$out"
-contains    "script still exits cleanly" "EXIT_CODE=0" "$out"
-
-# ── Test: #1078 — a hung `gh` call times out instead of blocking forever ───
-# The stub sleeps well past a short PR_LOOKUP_TIMEOUT, simulating exactly the
-# verified live failure: no error, no output, just silence. The call must be
-# bounded — the generator degrades to the PR number and the whole script
-# still exits 0, instead of hanging indefinitely.
-echo "--- #1078 hung gh call is bounded by PR_LOOKUP_TIMEOUT ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v22.0.0
@@ -634,7 +540,7 @@ out=$(run_test '
   fakebin="$PWD/fakebin"
   make_stub_gh "$fakebin"
   START=$(date +%s)
-  PATH="$fakebin:$PATH" STUB_GH_SLEEP=30 PR_LOOKUP_TIMEOUT=2 \
+  PATH="$fakebin:$PATH" STUB_GH_SLEEP=30 STUB_GH_CALL_LOG="'"$call_log"'" \
     PREV_TAG="v22.0.0" HEAD_REF="HEAD" VERSION="v22.1.0" DATE="2026-07-30" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
   EXIT_CODE=$?
@@ -642,16 +548,118 @@ out=$(run_test '
   echo "EXIT_CODE=$EXIT_CODE"
   echo "ELAPSED=$((END - START))"
 ')
-contains "degrades to the PR number when gh hangs" "Closes #2501" "$out"
-contains "script still exits cleanly (no hang-induced abort)" "EXIT_CODE=0" "$out"
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+not_contains "no Closes for the unscoped commit" "Closes #2501" "$out"
+contains     "script still exits cleanly" "EXIT_CODE=0" "$out"
+eq           "gh is never invoked (the 30s stub sleep never runs)" "" "$call_log_contents"
 elapsed=$(echo "$out" | grep -oE 'ELAPSED=[0-9]+' | cut -d= -f2)
-if [ -n "$elapsed" ] && [ "$elapsed" -lt 15 ]; then
-  echo "  ok: bounded by the timeout, not the 30s sleep (elapsed=${elapsed}s)"
+if [ -n "$elapsed" ] && [ "$elapsed" -lt 5 ]; then
+  echo "  ok: returns near-instantly, no gh call to wait on (elapsed=${elapsed}s)"
   pass=$((pass + 1))
 else
-  echo "  FAIL: bounded by the timeout, not the 30s sleep — elapsed=${elapsed}s (expected < 15s)"
+  echo "  FAIL: expected a near-instant return with no gh call - elapsed=${elapsed}s (expected < 5s)"
   fail=$((fail + 1))
 fi
+
+# ── #1076 — the five WRONG-close shapes from the issue's own table ─────────
+# Each of these produced a live wrong close before #1076. All five must now
+# emit NO Closes line (missing is safe; wrong is not).
+
+# Shape 1: a design-doc commit that only DISCUSSES several issues in prose,
+# with the real (unscoped) squash PR number trailing at the very end. The old
+# "first #N anywhere in the subject" extraction picked up the FIRST discussed
+# issue (#347) instead of the actual PR (#352) - and then treated #347 as a
+# closeable ref. Unscoped, so no Closes at all now; the display line still
+# anchors on the real trailing PR number.
+echo "--- #1076 shape 1: design-doc prose mentions are never picked up as Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v24.0.0
+  mc "docs: write the design for the export epic (design for #347 + #348 + #351) (#352)"
+  PREV_TAG="v24.0.0" HEAD_REF="HEAD" VERSION="v24.1.0" DATE="2026-08-01" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+not_contains "does not close the first prose-mentioned issue" "Closes #347" "$out"
+not_contains "does not close the other prose-mentioned issues either" "Closes #348" "$out"
+not_contains "no Closes section at all (unscoped commit)" "### Closes" "$out"
+contains     "display line anchors on the real trailing PR number" "(#352)" "$out"
+
+# Shape 2: an unscoped commit whose prose mentions a FOREIGN repo's issue
+# number ("other-repo#12") ahead of its own trailing squash PR ref. The old
+# unanchored extraction grabbed "#12" as if it were local - the #207 lesson,
+# reintroduced. Unscoped, so no Closes either way now.
+echo "--- #1076 shape 2: a foreign-repo mention in prose is never picked up as a local Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v25.0.0
+  mc "fix: mirror other-repo#12 behaviour (#1046)"
+  PREV_TAG="v25.0.0" HEAD_REF="HEAD" VERSION="v25.0.1" DATE="2026-08-01" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+not_contains "does not close the foreign-repo issue number as if local" "Closes #12" "$out"
+not_contains "no Closes section at all (unscoped commit)" "### Closes" "$out"
+
+# Shape 3: a revert of a scoped commit must not re-close the issue the
+# reverted commit closed.
+echo "--- #1076 shape 3: Revert commits never emit a Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v26.0.0
+  mc "Revert \"fix(#1042): apply the bad migration\""
+  PREV_TAG="v26.0.0" HEAD_REF="HEAD" VERSION="v26.0.1" DATE="2026-08-01" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+not_contains "does not re-close what the revert undid" "Closes #1042" "$out"
+not_contains "no Closes section at all (revert)" "### Closes" "$out"
+
+# Shape 4: a CROSS-REPO scope. `docs(me2resh/apexyard#148): ...` names an
+# issue in a DIFFERENT repo - a bare "Closes #148" would auto-close THIS
+# repo's own #148 if it has one, which is the #207 lesson reintroduced. No
+# `gh` call should happen either (the old code accidentally reached `gh pr
+# view 148`, which only "worked" because 148 happened to be an issue, not a
+# PR, and the failure fell back to the same number by coincidence).
+echo "--- #1076 shape 4: a cross-repo scope never emits a bare local Closes, and never calls gh ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v27.0.0
+  mc "docs(me2resh/apexyard#148): document the cross-repo scope shape (#149)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_CALL_LOG="'"$call_log"'" \
+    PREV_TAG="v27.0.0" HEAD_REF="HEAD" VERSION="v27.0.1" DATE="2026-08-01" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+not_contains "does not emit a bare local Closes for the cross-repo scope" "Closes #148" "$out"
+not_contains "no Closes section at all (cross-repo scope)" "### Closes" "$out"
+eq          "gh is never invoked for a cross-repo scope" "" "$call_log_contents"
+
+# Shape 5: an unscoped commit whose PR body merely DISCUSSES a closing
+# keyword in prose (not an actual resolution) - the old resolve-via-gh-body
+# mechanism would have matched it. Since the lookup is gone entirely, gh is
+# never even asked, so the prose can never be mistaken for a real reference.
+echo "--- #1076 shape 5: prose in a PR body can never be mistaken for a Closes (lookup removed) ---"
+call_log=$(mktemp)
+out=$(run_test '
+  mc "chore: initial"
+  git tag v28.0.0
+  mc "docs: mention the old bug in passing (#2701)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  PATH="$fakebin:$PATH" STUB_GH_BODY="We used to say this Fixes #999, but it does not." STUB_GH_CALL_LOG="'"$call_log"'" \
+    PREV_TAG="v28.0.0" HEAD_REF="HEAD" VERSION="v28.0.1" DATE="2026-08-01" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+call_log_contents=$(cat "$call_log")
+rm -f "$call_log"
+not_contains "never picks up the prose-mentioned issue" "Closes #999" "$out"
+not_contains "no Closes section at all (unscoped commit)" "### Closes" "$out"
+eq          "gh is never invoked for an unscoped commit" "" "$call_log_contents"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
