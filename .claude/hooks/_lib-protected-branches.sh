@@ -41,6 +41,18 @@
 #   . "$(dirname "$0")/_lib-protected-branches.sh"
 #   REGEX=$(protected_branch_regex)
 #   echo "$branch" | grep -qE "^(${REGEX})$" && echo "protected"
+#
+# Prefer is_protected_branch() (below) over hand-rolling the grep yourself.
+# me2resh/apexyard#1086 step 3 / AgDR-0114: a caller that does its own
+# `command -v protected_branch_regex` guard and its own `grep -qE` silently
+# ALLOWS whenever either check misbehaves — a renamed/missing function skips
+# the guard with no warning, and a malformed `.git.protected_branches[]`
+# entry (e.g. an unbalanced-paren fragment like `"ma(in"`) makes `grep -qE`
+# exit non-zero for EVERY branch, which an `if grep ...; then BLOCK; fi`
+# reads as "never protected". Both are real, both were found on
+# `.githooks/pre-push` before this function existed. is_protected_branch()
+# is the single place both hardenings live, so every caller inherits them
+# by construction instead of by each caller remembering to reimplement them.
 
 # ------------------------------------------------------------------------
 # protected_branch_regex
@@ -67,4 +79,58 @@ protected_branch_regex() {
   fi
 
   echo "$regex"
+}
+
+# ------------------------------------------------------------------------
+# is_protected_branch BRANCH
+#
+# Fail-closed predicate: returns 0 (shell-true, "protected") when BRANCH
+# should be blocked, 1 (shell-false, "not protected") when it's safe to
+# proceed. Callers use it as `if is_protected_branch "$BRANCH"; then BLOCK;
+# fi`.
+#
+# Two fail-closed hardenings, both me2resh/apexyard#1086 step 3 / AgDR-0114
+# (MEDIUMs found reviewing the issue's step-3 proposal):
+#
+#   1. protected_branch_regex missing after a successful `source` (a
+#      renamed function, a partially-corrupted lib file) -> WARN + treat as
+#      protected, instead of the silent `command -v` allow a caller doing
+#      its own guard would fall into.
+#   2. The composed regex fails to evaluate at all (grep exits > 1 — a
+#      malformed `.git.protected_branches[]` entry, e.g. an unbalanced-paren
+#      fragment like "ma(in", produces invalid ERE syntax) -> WARN + treat
+#      as protected, instead of reading grep's non-zero exit as "no match".
+#      grep -qE's exit codes: 0 = match, 1 = no match, >1 = usage/regex
+#      error — only 1 means "genuinely not protected".
+#
+# Both hardenings live HERE, once, so every caller (`.githooks/pre-push`,
+# `.githooks/pre-commit`) inherits them by construction rather than by each
+# caller separately remembering to guard against the same two failure
+# shapes — the exact "two copies that have to be trusted to agree" pattern
+# this lib's header comment already warns is this file family's dominant
+# defect generator.
+# ------------------------------------------------------------------------
+is_protected_branch() {
+  local branch="$1" regex rc
+
+  if [ -z "$branch" ]; then
+    return 1
+  fi
+
+  if ! command -v protected_branch_regex >/dev/null 2>&1; then
+    echo "WARN: protected_branch_regex is unavailable (renamed, or _lib-protected-branches.sh only partially sourced?) — cannot determine whether '${branch}' is protected. Failing CLOSED (treating it as protected)." >&2
+    return 0
+  fi
+
+  regex=$(protected_branch_regex)
+
+  echo "$branch" | grep -qE "^(${regex})$" 2>/dev/null
+  rc=$?
+  case "$rc" in
+    0) return 0 ;;  # matched: protected
+    1) return 1 ;;  # no match: not protected
+    *)
+      echo "WARN: protected-branch pattern evaluation failed (grep exit ${rc}) for pattern derived from .git.protected_branches[] — likely a malformed entry (e.g. unbalanced parentheses). Failing CLOSED (treating '${branch}' as protected)." >&2
+      return 0 ;;
+  esac
 }

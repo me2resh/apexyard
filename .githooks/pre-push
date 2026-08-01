@@ -34,6 +34,14 @@
 # docs/agdr/AgDR-0113-heredoc-stripper-additive-only.md for the class of bug
 # this design sidesteps entirely rather than patches further.
 #
+# `.githooks/pre-commit` (me2resh/apexyard#1086 step 3 / AgDR-0114) is this
+# hook's commit-time sibling — same ground-truth approach
+# (`git symbolic-ref --short HEAD` instead of a stdin ref list), same shared
+# `is_protected_branch()` predicate from _lib-protected-branches.sh.
+# `.claude/hooks/block-main-push.sh` remains a separate, still-BLOCKING
+# backstop for both commits and pushes — see AgDR-0114 for why it is not
+# demoted to advisory now that git-native controls exist for both.
+#
 # Deletion (local sha1 = 40 zeroes): the remote ref named on the line is
 # being DELETED, not updated. Deleting a protected branch is at least as
 # destructive as pushing to one — arguably more, since there's no single
@@ -92,44 +100,46 @@ else
   # shellcheck disable=SC1090,SC1091
   . "$PROTECTED_LIB"
 
-  if [ -n "$STDIN_REFS" ] && command -v protected_branch_regex >/dev/null 2>&1; then
-    PROTECTED_REGEX=$(protected_branch_regex)
+  if [ -n "$STDIN_REFS" ]; then
+    # Process substitution (not a pipe) so `exit 1` inside the loop exits
+    # THIS script, not a subshell — a pipe (`cmd | while read; do ...;
+    # done`) runs the loop body in a subshell in bash, and `exit` there
+    # would only terminate the subshell, silently letting the push
+    # through. `printf '%s\n'` guarantees a trailing newline regardless of
+    # whether $STDIN_REFS had one — `$(cat)` above already stripped any
+    # trailing newline from the real input, and `read` does NOT execute
+    # the loop body for a final line that arrives without one (it fills
+    # the read variables but returns non-zero, which is also the while
+    # condition, so the loop exits before running the body). Almost every
+    # real push has exactly ONE ref line — silently skipping it would be
+    # the single worst way this hook could fail.
+    # shellcheck disable=SC2034  # LOCAL_REF/REMOTE_SHA kept named (not
+    # read into `_`) for readability — this is the security-critical
+    # decision loop and a future reader debugging it benefits from every
+    # field of git's own stdin line being visible by name, even the two
+    # this particular check doesn't need.
+    while IFS=' ' read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+      [ -z "$REMOTE_REF" ] && continue
 
-    if [ -n "$PROTECTED_REGEX" ]; then
-      # Process substitution (not a pipe) so `exit 1` inside the loop exits
-      # THIS script, not a subshell — a pipe (`cmd | while read; do ...;
-      # done`) runs the loop body in a subshell in bash, and `exit` there
-      # would only terminate the subshell, silently letting the push
-      # through. `printf '%s\n'` guarantees a trailing newline regardless of
-      # whether $STDIN_REFS had one — `$(cat)` above already stripped any
-      # trailing newline from the real input, and `read` does NOT execute
-      # the loop body for a final line that arrives without one (it fills
-      # the read variables but returns non-zero, which is also the while
-      # condition, so the loop exits before running the body). Almost every
-      # real push has exactly ONE ref line — silently skipping it would be
-      # the single worst way this hook could fail.
-      # shellcheck disable=SC2034  # LOCAL_REF/REMOTE_SHA kept named (not
-      # read into `_`) for readability — this is the security-critical
-      # decision loop and a future reader debugging it benefits from every
-      # field of git's own stdin line being visible by name, even the two
-      # this particular check doesn't need.
-      while IFS=' ' read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
-        [ -z "$REMOTE_REF" ] && continue
+      case "$REMOTE_REF" in
+        refs/heads/*) BRANCH="${REMOTE_REF#refs/heads/}" ;;
+        *) continue ;;  # tags, notes, anything else: never subject to this check
+      esac
 
-        case "$REMOTE_REF" in
-          refs/heads/*) BRANCH="${REMOTE_REF#refs/heads/}" ;;
-          *) continue ;;  # tags, notes, anything else: never subject to this check
-        esac
-
-        if echo "$BRANCH" | grep -qE "^(${PROTECTED_REGEX})$"; then
-          if [ "$LOCAL_SHA" = "$ALL_ZERO_SHA" ]; then
-            ACTION_VERB="Deleting"
-            ACTION_NAME="delete"
-          else
-            ACTION_VERB="Pushing to"
-            ACTION_NAME="update"
-          fi
-          cat >&2 <<MSG
+      # is_protected_branch (me2resh/apexyard#1086 step 3 / AgDR-0114) is
+      # the single fail-closed predicate shared with .githooks/pre-commit —
+      # see its definition in $PROTECTED_LIB for the two hardenings this
+      # replaces (a malformed regex no longer reads as "not protected"; a
+      # renamed/missing protected_branch_regex no longer silently allows).
+      if is_protected_branch "$BRANCH"; then
+        if [ "$LOCAL_SHA" = "$ALL_ZERO_SHA" ]; then
+          ACTION_VERB="Deleting"
+          ACTION_NAME="delete"
+        else
+          ACTION_VERB="Pushing to"
+          ACTION_NAME="update"
+        fi
+        cat >&2 <<MSG
 BLOCKED: ${ACTION_VERB} protected branch '${BRANCH}' on the remote is not allowed.
 
 All changes must go through a PR (.claude/rules/git-conventions.md
@@ -147,10 +157,9 @@ To unblock:
 
 Customise (rare): .claude/project-config.json → .git.protected_branches[]
 MSG
-          exit 1
-        fi
-      done < <(printf '%s\n' "$STDIN_REFS")
-    fi
+        exit 1
+      fi
+    done < <(printf '%s\n' "$STDIN_REFS")
   fi
 fi
 
