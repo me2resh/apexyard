@@ -53,3 +53,15 @@ Concretely, in order:
 
 - Challenged by Naqid (The Contrarian) — verdict **proceed-with-changes**; three HIGH findings absorbed: (1) test the wrong layer → narrow trust to the server-side gate; (2) anti-rot column would itself rot → CI meta-gate (deferred); (3) SoD over-claim in single-account mode → scope the claim to a separate-identity config. The GitLab forge-awareness refinement was added on top during ratification.
 - Related: #962, #964, #965 (the concrete holes/drift), AgDR-0062 (author-independence deferred in single-account setups), AgDR-0038 (jq as hard dependency).
+
+## Update (me2resh/apexyard#1086, AgDR-0114) — first executed protected-branch application
+
+This record's "narrow what's trusted, label each hook THE control or a backstop, then say so" framing sat as labeling guidance until #1086 gave it a concrete, executed case: protected-branch enforcement (`.claude/hooks/block-main-push.sh` vs the git-native `.githooks/pre-push` / `.githooks/pre-commit` pair).
+
+[AgDR-0114](AgDR-0114-block-main-push-honest-naming-blocking-backstop.md) resolves that case in three PRs:
+
+1. **#1090 (step 2, merged)** — `.githooks/pre-push` ships as the git-native, ground-truth control for terminal `git push`, reading git's own resolved stdin refs instead of parsing command text.
+2. **#1117 (step 3, PR-1, merged)** — `.githooks/pre-commit` ships as the git-native control for terminal `git commit` (`git symbolic-ref --short HEAD`, no parsing at all), and the shared `_lib-protected-branches.sh` gains a fail-closed `is_protected_branch()` predicate both git-native hooks call.
+3. **#1086 step 3, PR-2 (this update)** — `block-main-push.sh` migrates onto the same shared predicate (removing the inline duplicate this AgDR's "narrow trust" framing would otherwise leave standing as a second, drift-prone copy), gains a `--no-verify`-aware blocking check (the one shape with no git-native replacement — see AgDR-0114's Context), and is relabelled in its own header comment as a **blocking backstop**, honestly, per this record's original vocabulary.
+
+This is the first case where this AgDR's "control vs backstop" distinction was applied to a NEW hook family rather than to the two originating bypasses (#962, #965). It is also the case AgDR-0114 uses to **narrow** this record's own "backstop → advisory" leap: that step is only safe when a strictly *stronger* control already covers everything the backstop covered (true for `block-unreviewed-merge.sh` leaning on the forge's branch protection, the case this record was written for). It is not true here — `--no-verify` and unconfigured `core.hooksPath` on managed-project clones are real gaps the git-native hooks cannot close — so `block-main-push.sh` stays blocking rather than following the merge-gate precedent all the way to advisory. See AgDR-0114's Context section for the full reasoning.

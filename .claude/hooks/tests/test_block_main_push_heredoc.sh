@@ -42,8 +42,9 @@ LIB_SRC="$SRC_ROOT/.claude/hooks/_lib-extract-push-ref.sh"
 LIB_STRIP_HEREDOC_SRC="$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh"
 LIB_CONFIG_SRC="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_OPS_ROOT_SRC="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
+LIB_PROTECTED_SRC="$SRC_ROOT/.claude/hooks/_lib-protected-branches.sh"
 
-for f in "$HOOK_SRC" "$LIB_SRC" "$LIB_STRIP_HEREDOC_SRC"; do
+for f in "$HOOK_SRC" "$LIB_SRC" "$LIB_STRIP_HEREDOC_SRC" "$LIB_PROTECTED_SRC"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -77,6 +78,7 @@ make_sandbox() {
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/block-main-push.sh"
   cp "$LIB_SRC"  "$sb/.claude/hooks/_lib-extract-push-ref.sh"
+  cp "$LIB_PROTECTED_SRC" "$sb/.claude/hooks/_lib-protected-branches.sh"
   if [ -f "$LIB_STRIP_HEREDOC_SRC" ]; then
     cp "$LIB_STRIP_HEREDOC_SRC" "$sb/.claude/hooks/_lib-strip-heredoc.sh"
   fi
