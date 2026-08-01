@@ -279,6 +279,107 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Fixture 2b: workspace/ and .claude/worktrees/ pruned from discovery
+# (me2resh/apexyard#1092)
+#
+# Reuses the ops-fork sandbox ($SB) built for Fixture 2 — it already has
+# onboarding.yaml + apexyard.projects.yaml at its root, which is exactly
+# what discover.sh's ops-fork detection looks for. Plants an SDK marker
+# under workspace/other-project/ (a sibling registered project's clone)
+# and a DIFFERENT SDK marker under .claude/worktrees/ (an agent worktree)
+# — deliberately different vendors, because discover.sh emits only the
+# FIRST evidence line per vendor key (see the TP_SEEN_FILE dedup in
+# discover.sh); if both fixtures used the same vendor, one hit could mask
+# the other and the assertion would pass for the wrong reason.
+#
+# The two vendors are scoped npm-style imports (@sendgrid/mail, @sentry/)
+# rather than bare words (stripe, twilio, ...) on purpose: $SB/.claude/hooks
+# already carries a real copy of _lib-multi-repo-trace.sh (copied in by
+# Fixture 2 above), whose known-third-party-hostname table literally
+# contains "api.stripe.com", "api.twilio.com", etc. — a bare-word vendor
+# pattern matches those hostname strings too, so ext_stripe or ext_twilio
+# gets "first evidence"-deduped against a hit in that legitimate file
+# instead of the fixture, silently defeating the assertion. The scoped
+# `@vendor/...` patterns don't collide with anything in that hostname
+# table (confirmed by grep), so they can't be masked the same way.
+#
+# IMPORTANT: discover.sh's and classify.sh's `evidence:` field is always
+# `<rel-path>:<line>` — the matched line's PATH, never its file CONTENT.
+# An earlier version of this fixture asserted on a content-only marker
+# comment, which could never appear in the output regardless of whether
+# pruning worked, making that assertion pass even against the unfixed
+# scripts (caught in Rex's #1107 review). Assert on the PATH substring
+# instead, which is what pruning actually controls.
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "================================================================"
+echo "Fixture 2b: workspace/ and .claude/worktrees/ pruned from discovery (#1092)"
+echo "================================================================"
+
+mkdir -p "$SB/workspace/other-project/packages/design-system/tests"
+cat > "$SB/workspace/other-project/packages/design-system/tests/Card.test.tsx" <<'JS'
+// belongs to a DIFFERENT registered project's clone — must never be
+// attributed to $SB (the target) as one of its own external actors or
+// classified data elements.
+// @PII — belongs to other-project, not the target
+import sgMail from "@sendgrid/mail";
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+JS
+
+mkdir -p "$SB/.claude/worktrees/some-agent-worktree"
+cat > "$SB/.claude/worktrees/some-agent-worktree/marker.js" <<'JS'
+// an agent worktree is a full checkout of unrelated code; must be pruned
+// the same way workspace/ is. Uses a DIFFERENT third-party vendor than the
+// workspace/other-project fixture (@sentry/node, not @sendgrid/mail) so
+// discovery's per-vendor dedup (first evidence wins) can't mask this hit
+// behind the workspace hit above.
+// @Sensitive — belongs to the worktree, not the target
+import * as Sentry from "@sentry/node";
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+JS
+
+OUT2B="$TMPROOT/discover-f2b.yaml"
+bash "$DFD_DIR/discover.sh" "$SB" > "$OUT2B" 2>/dev/null
+
+if grep -qF "workspace/other-project" "$OUT2B"; then
+  echo "  FAIL: Fixture 2b: workspace/other-project evidence (path) leaked into discovery output"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: workspace leak"
+else
+  echo "  PASS: Fixture 2b: workspace/other-project pruned from discovery"
+  PASS=$((PASS + 1))
+fi
+
+if grep -qF ".claude/worktrees" "$OUT2B"; then
+  echo "  FAIL: Fixture 2b: .claude/worktrees evidence (path) leaked into discovery output"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: worktrees leak"
+else
+  echo "  PASS: Fixture 2b: .claude/worktrees pruned from discovery"
+  PASS=$((PASS + 1))
+fi
+
+# classify.sh shares the same EXTRA_PRUNE_PATHS pruning, but only its
+# annotation pathway (@PII / @Sensitive / CLASSIFIED: / classification:)
+# runs through scoped_grep — the env-var and schema pathways use unguarded
+# `find -maxdepth N` calls that don't go through scoped_grep (or
+# EXTRA_PRUNE_PATHS) at all, a separate pre-existing gap out of scope for
+# #1092. Re-use the @PII / @Sensitive annotations already planted above so
+# this exercises the pathway the fix actually touches.
+CLASSIFY_OUT2B="$TMPROOT/classify-f2b.yaml"
+bash "$DFD_DIR/classify.sh" "$SB" > "$CLASSIFY_OUT2B" 2>/dev/null
+
+if grep -qF "workspace/other-project" "$CLASSIFY_OUT2B" || grep -qF ".claude/worktrees" "$CLASSIFY_OUT2B"; then
+  echo "  FAIL: Fixture 2b: classify.sh leaked workspace/worktrees evidence (path)"
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  Fixture 2b: classify.sh leak"
+else
+  echo "  PASS: Fixture 2b: classify.sh also prunes workspace/ and .claude/worktrees/"
+  PASS=$((PASS + 1))
+fi
+
+# ---------------------------------------------------------------------------
 # Fixture 3: classification pathways — annotations + env vars + schema
 # ---------------------------------------------------------------------------
 
