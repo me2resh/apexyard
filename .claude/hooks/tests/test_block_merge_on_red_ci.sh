@@ -447,6 +447,76 @@ sb=$(make_sandbox_wrapper_gh_no_yaml_tools red)
 run_case "#1121: wrapper, gh-kind project (no tracker override), NO yq/PyYAML -> blocks on red CI (no false-positive glab)" 2 "red CI" "$sb" \
   "$(printf "$WRAPPER_CMD_TMPL2" "$sb")"
 
+# ----------------------------------------------------------------------
+# #1121 (position-dependence): _registry_glab_fallback's awk emitted the
+# match BOTH mid-stream (`print "glab"; exit`) AND again in its END block
+# (awk's `exit` runs END, and block_repo/block_kind were still set), so
+# `found` became "glab\nglab" and the caller's exact `= "glab"` compare
+# FAILED — a false miss whenever the glab target block was NOT the last
+# registry entry. The single-project registry in make_sandbox_wrapper only
+# ever exercised the "sole/last entry" shape, hiding the bug. These cases
+# put a gh-kind block AFTER the glab target (g/p) so the mid-stream branch
+# fires; on the buggy code the fallback misses -> forge stays gh -> the
+# loud `gh` stub is (wrongly) consulted -> unresolvable -> BLOCK even on a
+# green glab pipeline. On the fixed code the fallback resolves glab and the
+# green pipeline ALLOWS / a red one BLOCKS, position-independently.
+# ----------------------------------------------------------------------
+
+# make_sandbox_wrapper_no_yaml_tools_glab_not_last <glab_mode> <position>
+# Same yq/PyYAML-absent glab sandbox as make_sandbox_wrapper_no_yaml_tools,
+# but the glab target (g/p) is NOT the last registry entry. position:
+# "first"  = glab first of two (gh-kind block after it);
+# "middle" = glab middle of three (gh-kind block before AND after it).
+make_sandbox_wrapper_no_yaml_tools_glab_not_last() {
+  local glab_mode="$1" position="$2"
+  local sb
+  sb=$(make_sandbox_wrapper_no_yaml_tools "$glab_mode")
+  if [ "$position" = "middle" ]; then
+    cat > "$sb/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: gh-before
+    repo: g/before
+    tracker:
+      kind: gh
+  - name: gl
+    repo: g/p
+    tracker:
+      kind: glab
+  - name: gh-after
+    repo: g/after
+    tracker:
+      kind: gh
+YAML
+  else
+    cat > "$sb/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: gl
+    repo: g/p
+    tracker:
+      kind: glab
+  - name: gh-after
+    repo: g/after
+    tracker:
+      kind: gh
+YAML
+  fi
+  echo "$sb"
+}
+
+sb=$(make_sandbox_wrapper_no_yaml_tools_glab_not_last success first)
+run_case "#1121: wrapper, glab project FIRST of two, NO yq/PyYAML -> allows on green pipeline (fallback position-independent)" 0 "" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
+sb=$(make_sandbox_wrapper_no_yaml_tools_glab_not_last failure first)
+run_case "#1121: wrapper, glab project FIRST of two, NO yq/PyYAML -> blocks on red pipeline (fallback position-independent)" 2 "red or unresolvable" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
+sb=$(make_sandbox_wrapper_no_yaml_tools_glab_not_last success middle)
+run_case "#1121: wrapper, glab project MIDDLE of three, NO yq/PyYAML -> allows on green pipeline (fallback position-independent)" 0 "" "$sb" \
+  "$(printf "$WRAPPER_CMD_TMPL" "$sb")"
+
 # --- Fail-closed on jq-unavailable/unparseable input (#965) ------------
 #
 # Reuses make_sandbox's green gh mock, then shadows jq with a stub that

@@ -130,7 +130,7 @@ _registry_glab_fallback() {
       }
       return t
     }
-    BEGIN { item_indent = -1 }
+    BEGIN { item_indent = -1; emitted = 0 }
     {
       raw = $0
       match(raw, /^[ \t]*/)
@@ -140,7 +140,16 @@ _registry_glab_fallback() {
       if (is_item) {
         if (item_indent == -1) { item_indent = ind }
         if (ind == item_indent) {
-          if (block_repo == target && block_kind == "glab") { print "glab"; exit }
+          # Flush the block that just ended. When the target glab block is NOT
+          # the last registry entry, the match fires here (mid-stream). We must
+          # exit WITHOUT letting the END block re-print: awk exit jumps to END,
+          # so a bare "print glab; exit" re-satisfies the END condition (block_repo
+          # and block_kind are still set) and emits a SECOND glab line, making the
+          # caller compare found against "glab\nglab" and MISS. The emitted flag
+          # makes END a no-op after a mid-stream hit (the #1121 position fix).
+          # NOTE: no apostrophes in these comments — the whole awk program is a
+          # single-quoted shell string, so an apostrophe would terminate it.
+          if (block_repo == target && block_kind == "glab") { print "glab"; emitted = 1; exit }
           block_repo = ""; block_kind = ""
         }
       }
@@ -156,7 +165,9 @@ _registry_glab_fallback() {
       }
     }
     END {
-      if (block_repo == target && block_kind == "glab") print "glab"
+      # Only fires for the LAST block (no later item boundary flushed it). The
+      # `!emitted` guard prevents a double-print after a mid-stream hit above.
+      if (!emitted && block_repo == target && block_kind == "glab") print "glab"
     }
   ' "$registry" 2>/dev/null)
 
