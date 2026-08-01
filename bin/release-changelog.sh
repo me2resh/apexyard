@@ -11,67 +11,6 @@
 #   VERSION    — the new version string (e.g. v3.3.0)
 #   DATE       — the release date in YYYY-MM-DD format
 #
-# Optional:
-#   REPO_REMOTE    — which remote's repo PR_LOOKUP_REPO derives from (see
-#                    below). This is its ONLY effect — it does NOT affect
-#                    the git log range; that range is controlled entirely by
-#                    PREV_TAG/HEAD_REF (see "Build the git log range" below).
-#
-#                    Default (#1077, zero-config): derived from HEAD_REF
-#                    itself. HEAD_REF is already a required input and, by
-#                    convention, is remote-qualified — "upstream/dev" in a
-#                    contributor fork, "origin/dev" in an adopter's own fork
-#                    cutting an independent release. Whichever remote it
-#                    names IS the repo the release is being cut for, so that
-#                    prefix is used automatically WHEN it names a remote
-#                    that actually exists (guards against a plain branch
-#                    name that happens to contain a "/", e.g. "release/v2").
-#                    Falls back to "upstream" for a bare HEAD_REF (no remote
-#                    prefix, e.g. "HEAD" or a local branch name) — today's
-#                    pre-#1077 default, unchanged for that case. Set
-#                    REPO_REMOTE explicitly to override either derivation.
-#   PR_LOOKUP_REPO — owner/repo used to resolve an UNSCOPED commit's trailing
-#                    PR number back to the issue it actually closes. Only
-#                    consulted for commits with no `type(#N):` scope (#1056)
-#                    — see "Closes resolution" below. Best-effort: a `gh`
-#                    failure of any kind (missing binary, auth, rate limit,
-#                    or an unreachable forge) always falls back to today's
-#                    behaviour and never aborts.
-#
-#                    Default (#1077): derived from REPO_REMOTE's own git
-#                    remote URL, NOT hardcoded — apexyard is built to be
-#                    forked, and every fork's own PR numbers must be resolved
-#                    against ITS OWN repo, not upstream's (a fork resolving
-#                    its own PR #12 against me2resh/apexyard's PR #12 would
-#                    emit whatever unrelated issue upstream's #12 happens to
-#                    close). Combined with the zero-config REPO_REMOTE
-#                    derivation above, this resolves correctly with NO
-#                    configuration for both populations: a contributor fork
-#                    (HEAD_REF=upstream/dev -> upstream -> me2resh/apexyard,
-#                    unchanged) and an adopter fork with an upstream remote
-#                    configured too, cutting its own release (HEAD_REF=
-#                    origin/dev -> origin -> the fork's own repo, fixed —
-#                    this is the exact topology #1077 was filed against; a
-#                    fork with only "upstream" pointed at me2resh/apexyard
-#                    and no remote-qualified HEAD_REF would previously have
-#                    derived me2resh/apexyard regardless of REPO_REMOTE's
-#                    default). If neither derivation resolves to an
-#                    owner/repo shape at all, PR_LOOKUP_REPO is left EMPTY
-#                    and the lookup is skipped entirely — "prefer a missing
-#                    close over a wrong close": a missing close is an
-#                    annoyance fixed by hand; a wrong close silently reaches
-#                    into an unrelated issue. Set PR_LOOKUP_REPO explicitly
-#                    to override derivation entirely.
-#
-#                    PR_LOOKUP_TIMEOUT — seconds to bound each `gh pr view`
-#                    call (default: 10). Prefers GNU `timeout`, falls back to
-#                    macOS `gtimeout`; if neither is on PATH (stock macOS,
-#                    notably) the call degrades to unbounded — never worse
-#                    than pre-#1078, but surfaced with a one-time stderr
-#                    warning rather than degrading silently, since that's
-#                    the one failure mode an operator can least guess the
-#                    cause of by symptom alone.
-#
 # Output format (matches the existing CHANGELOG.md convention):
 #
 #   ## [VERSION] — DATE
@@ -95,19 +34,34 @@
 #   - Closes #M
 #   ...
 #
-# Closes resolution (#1056):
+# Closes resolution (#1056, #1076):
 #   GitHub's `Closes` keyword only auto-closes the reference IMMEDIATELY
 #   FOLLOWING it — a single "Closes #A, #B, #C" line only ever closes #A, so
 #   the section above emits one "- Closes #N" bullet per reference instead.
 #
-#   Which number goes in that bullet depends on whether the commit subject
-#   carries a conventional-commit SCOPE: `fix(#1042): ...` — by apexyard
-#   convention the scope IS the issue number, used directly. A subject with
-#   no scope, e.g. `docs: ... (#1045)`, only has GitHub's squash-appended
-#   trailing PR number — that is NOT an issue, so it is resolved via a
-#   best-effort `gh pr view` lookup of the PR's own body for a closing-keyword
-#   reference (Closes/Fixes/Resolves/Refs #N), falling back to the PR number
-#   itself if nothing resolves or the forge can't be reached.
+#   Governing rule (#1076): PREFER A MISSING CLOSE OVER A WRONG CLOSE. A
+#   `- Closes #N` bullet is emitted ONLY when the commit subject carries a
+#   recognised, SAME-REPO conventional-commit SCOPE holding the issue number
+#   — `fix(#1042): ...` — by apexyard convention the scope IS the issue
+#   number, used directly, no lookup needed.
+#
+#   Everything else emits NO Closes line at all:
+#     - an UNSCOPED subject (`docs: ... (#1045)`) — the only "(#N)" present
+#       is GitHub's squash-appended trailing PR number, which is not an
+#       issue and is never resolved into one (#1076; previously resolved via
+#       a best-effort `gh pr view` lookup of the PR's own body — removed
+#       because that lookup could itself resolve to a WRONG close: a PR body
+#       that merely *mentions* a closing keyword in prose, e.g. discussing
+#       but not fixing #N, would still match)
+#     - a CROSS-REPO scope (`docs(owner/repo#148): ...`) — the scope names an
+#       issue in a DIFFERENT repo; a bare "Closes #148" would auto-close the
+#       WRONG repo's issue #148 if this repo happens to have one too (the
+#       #207 lesson, reintroduced by treating a cross-repo ref as local)
+#     - a REVERT commit (`Revert "fix(#1042): ..."`) — closing the same issue
+#       the reverted commit closed would re-close something the revert just
+#       undid
+#     - a "Merge pull request #NN from ..." merge commit whose OWN subject
+#       has no scope — same unscoped rule as above
 #
 # Exit codes:
 #   0 — success (even if the commit list is empty; that is a valid patch release)
@@ -124,43 +78,6 @@ for var in PREV_TAG HEAD_REF VERSION DATE; do
     exit 1
   fi
 done
-
-# ── Resolve which remote this release is being cut for (#1077) ─────────────
-# An explicit REPO_REMOTE always wins. Otherwise derive it from HEAD_REF's
-# own remote prefix (up to the first "/") WHEN that prefix names a remote
-# that actually exists — "upstream/dev" -> upstream, "origin/dev" -> origin.
-# This is what makes the PR_LOOKUP_REPO fix below zero-config: HEAD_REF is
-# already required, and its remote qualifier IS where the trailing PR
-# numbers in that range actually came from — cutting from upstream/dev
-# means those PR numbers really are upstream's, so resolving against
-# me2resh/apexyard from that branch is correct, not a bug the fork needs
-# to route around. This is the invariant to hold onto: derive from where
-# the commits came from, not from "whichever repo happens to be the fork".
-#
-# A bare HEAD_REF (no "/" at all — "dev", "HEAD", "refs/heads/dev" (whose
-# "/"-prefix is "refs", never a remote), "release/v2", or a raw SHA) falls
-# back to "upstream" — today's pre-#1077 default, unchanged for that case.
-# This is the ONE branch in this file that still guesses instead of
-# skipping (contrast every path inside resolve_issue_from_pr(), which
-# prefers a missing close over a wrong one). That's deliberate, not an
-# oversight: /release always passes a remote-qualified HEAD_REF
-# ("upstream/dev"), so this fallback is unreachable through the sanctioned
-# path — it only bites hand-invocation with a bare ref. Making it skip
-# instead of guessing would also silently regress the common, CORRECT
-# hand-invocation case (running this script directly inside the very repo
-# being released, e.g. this contributor fork, where "upstream" genuinely
-# is the right target regardless of whether the caller bothered to
-# qualify HEAD_REF) — trading a real, working case for a narrow misuse
-# scenario that already has a one-argument fix: pass a remote-qualified
-# HEAD_REF, or set REPO_REMOTE explicitly (both already supported).
-if [ -z "${REPO_REMOTE:-}" ]; then
-  _head_ref_remote="${HEAD_REF%%/*}"
-  if [ "$_head_ref_remote" != "$HEAD_REF" ] && git remote get-url "$_head_ref_remote" >/dev/null 2>&1; then
-    REPO_REMOTE="$_head_ref_remote"
-  else
-    REPO_REMOTE="upstream"
-  fi
-fi
 
 # ── Build the git log range ──────────────────────────────────────────────────
 
@@ -240,102 +157,61 @@ changed_lines=()
 breaking_lines=()
 closes_nums=()
 
-# Extract PR number from subject: "Merge pull request #NN from ..." or "(#NN)" in subject
+# Extract the conventional-commit SCOPE's issue ref, if any — the ONLY
+# source a Closes bullet is ever derived from (#1076):
+#   "fix(#1042): ..."                    -> "#1042"
+#   "docs(me2resh/apexyard#148): ..."    -> "me2resh/apexyard#148"
+#   anything without a `type(...):` scope at the very start -> "" (empty)
+# Accepting the "owner/repo#N" shape (#1076) lets the caller recognise a
+# cross-repo scope explicitly, rather than falling through to the unscoped
+# path and misreading it as a bare, same-repo issue number (the #207 lesson).
+#
+# NB: the "no match" case is the COMMON case (most commits carry no scope at
+# all), and under `set -euo pipefail` a grep pipeline that finds nothing
+# exits non-zero. The trailing `|| true` is load-bearing, not decorative —
+# without it, `scope_ref=$(extract_scope_ref "$subject")` at a top-level call
+# site (not nested inside another function) aborts the whole script the
+# first time it hits an unscoped commit, because the command substitution's
+# exit status becomes the assignment's exit status under `set -e`.
+extract_scope_ref() {
+  local subject="$1"
+  echo "$subject" \
+    | grep -oE '^[a-z]+\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+\)!?:' \
+    | grep -oE '\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+\)' \
+    | sed -E 's/^\(//; s/\)$//' \
+    || true
+}
+
+# Extract the DISPLAY ref shown in "($N) <subject>" — anchored, never "the
+# first #N anywhere in the subject" (#1076). In priority order:
+#   1. "Merge pull request #NNN from ..." — the number immediately following
+#      that fixed phrase
+#   2. a trailing "(#NNN)" at the very END of the subject — GitHub's
+#      squash-merge append position
+#   3. the conventional-commit SCOPE ref (extract_scope_ref), for a scoped
+#      commit that carries no separate trailing squash number (e.g. a single,
+#      un-squashed "fix(#1042): ..." commit) — this is DISPLAY only; it does
+#      NOT change which numbers are eligible for a Closes bullet
+# A "#N" appearing anywhere else in the subject (e.g. prose incidentally
+# mentioning another issue, or a cross-repo "other-repo#12" reference) is
+# NEVER picked up — that was the root cause of #1076's wrong-close shapes.
 extract_pr_num() {
   local subject="$1"
-  # Merge commit format: "Merge pull request #NNN from ..."
   if echo "$subject" | grep -qE 'Merge pull request #[0-9]+'; then
-    echo "$subject" | grep -oE '#[0-9]+' | head -1
+    echo "$subject" | grep -oE 'Merge pull request #[0-9]+' | grep -oE '#[0-9]+' | head -1
     return
   fi
-  # Conventional commit with PR ref: "feat(#NNN): ..." or "feat: something (#NNN)"
-  if echo "$subject" | grep -qE '\(#[0-9]+\)'; then
-    echo "$subject" | grep -oE '#[0-9]+' | head -1
+  if echo "$subject" | grep -qE '\(#[0-9]+\)$'; then
+    echo "$subject" | grep -oE '\(#[0-9]+\)$' | grep -oE '#[0-9]+'
+    return
+  fi
+  local scope_ref
+  scope_ref=$(extract_scope_ref "$subject")
+  if [ -n "$scope_ref" ]; then
+    echo "#${scope_ref##*#}"
     return
   fi
   echo ""
-}
-
-# Does the subject carry a conventional-commit SCOPE holding the issue
-# number, i.e. "type(#N): ..." (optionally with a breaking "!") right at the
-# start? By apexyard convention (git-conventions.md) that scope IS the issue
-# number — nothing to resolve. Anything else — no scope at all, or only a
-# trailing "(#N)" GitHub appends on squash-merge — is a PR number, not an
-# issue (#1056).
-has_scope_issue() {
-  local subject="$1"
-  echo "$subject" | grep -qE '^[a-z]+\(#[0-9]+\)!?:'
-}
-
-# Best-effort: resolve a trailing PR number back to the ISSUE it actually
-# closes/references, by reading the PR's own body for a closing-keyword
-# reference (#1056). Every failure path — no `gh` on PATH, auth failure, rate
-# limit, an unresolvable/underivable target repo (#1077), a hung request
-# (#1078), or (the exact live failure that motivated this) a DNS blip on
-# api.github.com — degrades to printing nothing, so the caller falls back to
-# the PR number itself. A release cut must never abort because the forge
-# was briefly unreachable, or hang because it never answered at all. Always
-# returns 0 so `set -e` can never trip on it.
-
-# Derive PR_LOOKUP_REPO from the ACTUAL remote this release is being cut for
-# (#1077), rather than hardcoding it. See the file header for the full
-# rationale. An explicit PR_LOOKUP_REPO (env var already set by the caller)
-# always wins over derivation.
-_derive_pr_lookup_repo() {
-  local url
-  url=$(git remote get-url "$REPO_REMOTE" 2>/dev/null) || return 0
-  echo "$url" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1
-}
-
-if [ -z "${PR_LOOKUP_REPO:-}" ]; then
-  PR_LOOKUP_REPO=$(_derive_pr_lookup_repo)
-fi
-
-# ── Resolve the gh-call timeout wrapper once (#1078) ────────────────────────
-# Computed once here — NOT per-call inside resolve_issue_from_pr() — so the
-# "no timeout binary" warning below can fire at most once per release cut,
-# not once per unscoped commit needing resolution. Only bothers checking at
-# all when a lookup could actually happen (gh present AND a repo was
-# resolved); otherwise resolve_issue_from_pr() short-circuits before ever
-# reaching a gh call, so a wrapper decision here would be moot noise.
-PR_LOOKUP_TO=""
-if command -v gh >/dev/null 2>&1 && [ -n "$PR_LOOKUP_REPO" ]; then
-  if command -v timeout >/dev/null 2>&1; then
-    PR_LOOKUP_TO="timeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    PR_LOOKUP_TO="gtimeout -k 2 ${PR_LOOKUP_TIMEOUT:-10}"
-  else
-    echo "WARN: neither 'timeout' nor 'gtimeout' found on PATH — gh pr view calls in resolve_issue_from_pr() are UNBOUNDED; a hung forge could stall this release cut indefinitely (#1078). On macOS: brew install coreutils for gtimeout." >&2
-  fi
-fi
-
-resolve_issue_from_pr() {
-  local pr_num="$1"  # numeric, no leading '#'
-  local body ref
-
-  if ! command -v gh >/dev/null 2>&1; then
-    echo ""
-    return 0
-  fi
-
-  # #1077 — no confidently-derived repo means no query at all. Guessing a
-  # repo here (e.g. falling back to a hardcoded default) is exactly the
-  # defect this fixes; degrade like every other failure mode below instead.
-  if [ -z "$PR_LOOKUP_REPO" ]; then
-    echo ""
-    return 0
-  fi
-
-  # #1078 — PR_LOOKUP_TO (resolved once above) bounds the call so an
-  # unresponsive forge can't stall a release cut indefinitely.
-  if ! body=$($PR_LOOKUP_TO gh pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body -q .body 2>/dev/null); then
-    echo ""
-    return 0
-  fi
-
-  ref=$(echo "$body" | grep -oiE '(Closes|Fixes|Resolves|Refs) #[0-9]+' | head -1 | grep -oE '#[0-9]+' || true)
-  echo "$ref"
-  return 0
 }
 
 # Strip conventional-commit prefix from a subject for cleaner display
@@ -366,6 +242,17 @@ while IFS= read -r line; do
     continue
   fi
 
+  # #1076 — a revert commit must never re-derive a Closes from the subject it
+  # reverted: closing the issue the reverted commit closed would re-close
+  # something the revert just undid. Detected before any Closes decision
+  # below; the commit itself still gets a display entry (in whichever bucket
+  # its own subject classifies into further down), it just never gets a
+  # closes_num.
+  is_revert=0
+  if echo "$subject" | grep -qE '^Revert '; then
+    is_revert=1
+  fi
+
   pr_num=$(extract_pr_num "$subject")
   display_subject=$(strip_cc_prefix "$subject")
 
@@ -375,28 +262,30 @@ while IFS= read -r line; do
   # Build the display line
   if [ -n "$pr_num" ]; then
     entry="- ($pr_num) $display_subject — $short_sha"
-    num_only="${pr_num#\#}"
-
-    # #1056 — the DISPLAY line always shows $pr_num as extracted above (a
-    # scoped commit's issue number, or an unscoped commit's trailing PR
-    # number) unchanged. The Closes section is different: an unscoped
-    # commit's only "(#N)" is a PR number, not an issue, and must be resolved
-    # back to the issue that PR actually references before it goes in Closes
-    # — otherwise the release closes a PR (a no-op) and leaves the real issue
-    # open, which is exactly the defect this fixes.
-    if has_scope_issue "$subject"; then
-      closes_num="$num_only"
-    else
-      resolved=$(resolve_issue_from_pr "$num_only")
-      if [ -n "$resolved" ]; then
-        closes_num="${resolved#\#}"
-      else
-        closes_num="$num_only"
-      fi
-    fi
-    closes_nums+=("$closes_num")
   else
     entry="- $display_subject — $short_sha"
+  fi
+
+  # #1076 — Closes decision. Governing rule: prefer a MISSING close over a
+  # WRONG close. A Closes bullet is emitted ONLY when the subject carries a
+  # recognised, SAME-REPO conventional-commit scope. Every other case —
+  # unscoped, cross-repo scoped, or a revert — emits nothing.
+  if [ "$is_revert" -eq 0 ]; then
+    scope_ref=$(extract_scope_ref "$subject")
+    if [ -n "$scope_ref" ]; then
+      case "$scope_ref" in
+        */*)
+          # Cross-repo scope (owner/repo#N) — never emit a bare #N derived
+          # from a foreign-repo reference (#207 lesson, reintroduced).
+          ;;
+        *)
+          closes_nums+=("${scope_ref#\#}")
+          ;;
+      esac
+    fi
+    # No scope at all -> no Closes line, regardless of any trailing "(#N)"
+    # squash-merge PR number — that number is a PR, not an issue, and is
+    # never resolved into one anymore (#1076).
   fi
 
   # Classify by conventional-commit type
