@@ -107,7 +107,10 @@ _portfolio_root() {
 # (Tier 0/1) was ignored — legitimate edits got blocked (or fell through
 # to the wrong tier).
 #
-# Algorithm mirrors `_resolve_real_path()` in require-active-ticket.sh:
+# Algorithm mirrors `_resolve_real_path()` in _lib-path-resolve.sh (moved
+# there from require-active-ticket.sh by PR #1087, Rex finding #4 — see
+# that file's own header comment for why there is now exactly ONE
+# definition instead of near-duplicate copies):
 # walk up to the nearest EXISTING ancestor, physically resolve it via
 # `cd ... && pwd -P` (which both collapses ".." and follows symlinks),
 # then re-append whatever tail doesn't exist yet literally — a tail that

@@ -82,6 +82,15 @@ if [ ! -f "$LIB" ]; then
 fi
 # shellcheck source=/dev/null
 . "$LIB"
+# _resolve_real_path (used below and inside ghp_classify) comes from
+# _lib-path-resolve.sh, sourced TRANSITIVELY here via $LIB above — this
+# script never sources it directly. If that deeper lib is itself missing
+# (genuine corruption; it ships right next to $LIB), $LIB's own else
+# branch defines a stand-in that always echoes nothing and prints a named
+# diagnostic once. See that else branch's comment for the full "deliberate
+# degrade, not an oversight" rationale (#1089 — closing #1087's LOW-2),
+# and the "load-bearing ordering" comment below for what an empty resolve
+# means for THIS script's own safety property.
 
 usage() {
   cat <<'USAGE'
@@ -238,6 +247,24 @@ fi
 # the target repo (e.g. `--hooks-dir ../evil-hooks`). The classifier lib
 # already reasons carefully about "outside REPO_ROOT" when DETECTING state;
 # this is the matching check on the value we're about to WRITE.
+#
+# LOAD-BEARING ORDERING (#1089 — closing #1087's LOW-4 finding, the
+# reviewer's own words): this check MUST run BEFORE `STATE=$(ghp_classify
+# ...)` below, and that ordering is doing more work than the comment above
+# alone suggests. If _lib-path-resolve.sh (see the `. "$LIB"` comment
+# above) is ever missing, _resolve_real_path echoes nothing, so
+# $HOOKS_DIR_RESOLVED is empty here — an empty string never matches
+# `"$TARGET_ROOT"/*` or `"$TARGET_ROOT"`, so this check exits 2 BEFORE
+# ghp_classify ever runs. That matters because ghp_classify has the SAME
+# empty-resolve problem: with a missing lib, it would report a real,
+# existing, deliberate third-party core.hooksPath as "missing:<raw>" —
+# the STATE branch below that AUTO-REPAIRS with no --force. Running this
+# check first is what keeps a corrupted clone from silently clobbering an
+# adopter's deliberate choice; reordering these two blocks (e.g. moving
+# ghp_classify earlier for readability) would remove that protection
+# without anything else in the script noticing. See
+# .claude/hooks/tests/test_install_git_hooks.sh's "installer's own lib
+# missing" case for the pinned regression test.
 # ---------------------------------------------------------------------------
 HOOKS_DIR_RESOLVED=$(_resolve_real_path "$TARGET_ROOT/$HOOKS_DIR_NAME")
 case "$HOOKS_DIR_RESOLVED" in
@@ -248,6 +275,10 @@ case "$HOOKS_DIR_RESOLVED" in
     ;;
 esac
 
+# #1089: reaching this line at all already proves _resolve_real_path
+# resolved a real path above — see the LOAD-BEARING ORDERING comment on
+# the LOW-4 check just above for why that ordering is what keeps a
+# missing-lib degrade from reaching ghp_classify's auto-repair branch.
 STATE=$(ghp_classify "$TARGET_ROOT" "$HOOKS_DIR_NAME")
 
 case "$STATE" in

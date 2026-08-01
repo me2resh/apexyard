@@ -22,6 +22,36 @@ _LGHP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 if [ -f "$_LGHP_LIB_DIR/_lib-path-resolve.sh" ]; then
   # shellcheck source=/dev/null
   . "$_LGHP_LIB_DIR/_lib-path-resolve.sh"
+else
+  # DELIBERATE DEGRADE, not an oversight (#1089 — closing #1087's LOW-2).
+  # Mirrors require-active-ticket.sh's own else-branch (see that file for
+  # the long version of this reasoning). This lib is sourced by TWO
+  # different consumers, and the missing-lib degrade is safe for both:
+  #
+  #   - check-git-hooks-installed.sh (SessionStart, advisory, exit 0
+  #     always): an empty resolve here makes ghp_classify report "missing"
+  #     even for an already-correct core.hooksPath, so the advisory banner
+  #     fires with a spurious "doesn't exist" nudge on a clone that's
+  #     actually fine. Over-warning, never silent — the safe direction for
+  #     an advisory that exists to make sure nobody's terminal `git push`
+  #     is silently unprotected.
+  #   - bin/install-git-hooks.sh: that script has its OWN direct calls to
+  #     _resolve_real_path (see the comment at its `. "$LIB"` line for how
+  #     this same stand-in ends up covering those too) and its OWN
+  #     "load-bearing ordering" comment explaining why it fails closed
+  #     rather than clobbering a deliberate third-party core.hooksPath.
+  #
+  # Stand-in always echoes nothing — the same "unresolvable" contract the
+  # real _resolve_real_path's own header comment describes — printed as a
+  # named diagnostic once per process rather than bash's raw
+  # "command not found" on every call.
+  _resolve_real_path() {
+    if [ -z "${_LGHP_PATH_RESOLVE_WARNED:-}" ]; then
+      echo "ApexYard: _lib-path-resolve.sh is missing next to _lib-git-hooks-path.sh — path resolution is degrading (fail-closed / over-warn, never silently exempt). This should not happen in a normal clone; see me2resh/apexyard#1089." >&2
+      _LGHP_PATH_RESOLVE_WARNED=1
+    fi
+    return 0
+  }
 fi
 
 # ------------------------------------------------------------------------
