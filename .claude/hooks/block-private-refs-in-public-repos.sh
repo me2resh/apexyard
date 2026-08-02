@@ -919,11 +919,11 @@ PARSED=$(awk '
     current_list = ""
     next
   }
-  /^[[:space:]]*repos:[[:space:]]*$/ {
+  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
     current_list = "repos"
     next
   }
-  /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:/ {
+  /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/ {
     current_list = ""
     next
   }

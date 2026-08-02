@@ -81,6 +81,30 @@ projects:
       - acme/one-elem-repo
     workspace: workspace/one-elem
     status: active
+  - name: meridian-svc
+    repos:  # payments platform services
+      - corp/nightshade-api
+    workspace: workspace/meridian-svc
+    status: active
+  - name: both-forms
+    repo: acme/both-forms-primary
+    repos:
+      - acme/both-forms-extra
+    workspace: workspace/both-forms
+    status: active
+  - name: other-key-comment
+    tags:  # customer facing, high priority
+      - should-not-leak-as-repo
+    repo: acme/other-key-comment-repo
+    workspace: workspace/other-key-comment
+    status: active
+  - name: hyphen-key-proj
+    repos:
+      - acme/hyphen-key-proj-svc
+    custom-flag:
+      - should-not-leak-via-hyphenated-key
+    workspace: workspace/hyphen-key-proj
+    status: active
 YAML
 
 make_payload() {
@@ -90,9 +114,10 @@ make_payload() {
 
 run_leak_case() {
   local name="$1" expected_exit="$2" expected_stderr_substr="$3" cmd="$4"
+  local workdir="${5:-$LEAK_TMPDIR/fork/subdir}"
   local stderr_file
   stderr_file=$(mktemp)
-  ( cd "$LEAK_TMPDIR/fork/subdir" && echo "$(make_payload "$cmd")" | "$LEAK_HOOK" ) 2> "$stderr_file"
+  ( cd "$workdir" && echo "$(make_payload "$cmd")" | "$LEAK_HOOK" ) 2> "$stderr_file"
   local actual_exit=$? stderr_content
   stderr_content=$(cat "$stderr_file")
   rm -f "$stderr_file"
@@ -139,6 +164,62 @@ run_leak_case "multi-repo: clean body naming none of the repos → pass" \
   0 "" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'a generic framework issue, no project named'"
 
+# 1f. THE LEAK REGRESSION this fix closes — a `repos:` block header with a
+#     trailing inline comment (`repos:  # payments platform services`) is
+#     valid YAML (yq parses it fine), but the awk-only leak-scrub parser
+#     used to require a BARE `repos:` line (nothing else on it) to arm its
+#     `current_list` state tracker. A commented header fell through to the
+#     generic `key:` rule and disarmed tracking before the first `- slug`
+#     line, so every repo under it reached a public write UNSCRUBBED —
+#     exactly the disclosure gap this whole file exists to close. This
+#     case MUST leak (exit 0) against the pre-fix parser and MUST block
+#     (exit 2) against the fix — verified both directions manually (see
+#     the fix PR's report), not just asserted here.
+run_leak_case "leak regression: repos: block header WITH a trailing comment still scrubs its slug" \
+  2 "project repo: corp/nightshade-api" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in corp/nightshade-api, no other identifier mentioned'"
+
+# 1g. A project declaring BOTH singular `repo:` and plural `repos:` scrubs
+#     the UNION of both — the leak-scrub parser accumulates every REPO=
+#     emitted anywhere in the file into one running scrub list, it never
+#     resets per-project. Pre-existing behaviour, unaffected by the
+#     comment-tolerance fix; pinned here so a future change doesn't
+#     silently narrow it.
+run_leak_case "multi-repo: project with BOTH repo: and repos: scrubs the repos: entry too (union)" \
+  2 "project repo: acme/both-forms-extra" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/both-forms-extra'"
+
+# 1h/1i. Over-arm safety — the fix's new `(#.*)?` comment tolerance must
+#     apply ONLY to a `repos:` header, never to some OTHER key (`tags:`)
+#     that happens to carry a trailing comment too. If the regex were
+#     written too loosely, `tags:  # customer facing` would arm the same
+#     tracker and leak `should-not-leak-as-repo` as though it were a repo
+#     slug. 1h proves that does NOT happen; 1i is the companion control
+#     proving the project's real `repo:` field still scrubs normally (so
+#     1h's clean result means "not a repo", not "parsing broke").
+run_leak_case "over-arm safety: tags: header with a trailing comment is NOT treated as repos:" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'mentions should-not-leak-as-repo, nothing else'"
+
+run_leak_case "over-arm safety companion: other-key-comment project's repo: still scrubs" \
+  2 "project repo: acme/other-key-comment-repo" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/other-key-comment-repo'"
+
+# 1j. Hardening nit (Rex, non-blocking, fails SAFE — over-capture not a leak)
+#     — the generic `key:` disarm rule only matched keys made of
+#     [a-zA-Z0-9_], so a HYPHENATED custom key (`custom-flag:`) right
+#     after a `repos:` block didn't disarm `current_list`, and the next
+#     `- item` under the unrelated hyphenated key got misread as a repo.
+#     Widened the character class to `[a-zA-Z0-9_-]` so hyphenated keys
+#     disarm correctly too.
+run_leak_case "hardening: hyphenated custom key after repos: disarms tracking (no over-capture)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'mentions should-not-leak-via-hyphenated-key, nothing else'"
+
+run_leak_case "hardening companion: hyphen-key-proj's real repos: entry still scrubs" \
+  2 "project repo: acme/hyphen-key-proj-svc" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/hyphen-key-proj-svc'"
+
 # 2. Backwards compatibility — singular `repo:` project (solo-app) behaves
 #    exactly as it did before this change: bare slug leak still blocks.
 run_leak_case "backwards-compat: singular repo: project still scrubs its slug" \
@@ -151,6 +232,49 @@ run_leak_case "backwards-compat: singular repo: project still scrubs its slug" \
 run_leak_case "equivalence: one-element repos: list scrubs its sole slug" \
   2 "project repo: acme/one-elem-repo" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/one-elem-repo'"
+
+# 4. Explicit backward-compat proof — an ALL-singular-`repo:` registry (the
+#    shape every existing adopter has today; no `repos:` line anywhere) is
+#    exercised on a FRESH, separate fixture so nothing above it (which does
+#    use `repos:`) can mask a regression. The comment-tolerance fix only
+#    changes the awk arm that fires on a line starting with `repos:` — a
+#    registry with no such line never reaches that arm at all, so a clean
+#    pass here is the strongest available proof the fix does not disturb
+#    the common case.
+SINGULAR_TMPDIR=$(mktemp -d -t multi-repo-singular.XXXXXX)
+mkdir -p "$SINGULAR_TMPDIR/subdir"
+cat > "$SINGULAR_TMPDIR/onboarding.yaml" <<'YAML'
+company: test
+YAML
+cat > "$SINGULAR_TMPDIR/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: alpha-app
+    repo: acme/alpha-app
+    workspace: workspace/alpha-app
+    status: active
+  - name: beta-service
+    repo: acme/beta-service
+    workspace: workspace/beta-service
+    status: active
+YAML
+
+run_leak_case "backward-compat: all-singular repo: registry — first project's slug scrubs" \
+  2 "project repo: acme/alpha-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/alpha-app'" \
+  "$SINGULAR_TMPDIR/subdir"
+
+run_leak_case "backward-compat: all-singular repo: registry — second project's slug scrubs" \
+  2 "project repo: acme/beta-service" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme/beta-service'" \
+  "$SINGULAR_TMPDIR/subdir"
+
+run_leak_case "backward-compat: all-singular repo: registry — clean body → pass" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'a generic framework issue, no project named'" \
+  "$SINGULAR_TMPDIR/subdir"
+
+rm -rf "$SINGULAR_TMPDIR"
 
 # =============================================================================
 # Part 2 — tracker resolution defaults to primary, accepts --repo for others
@@ -322,6 +446,74 @@ else
 fi
 
 rm -rf "$TRACE_TMPDIR"
+
+# =============================================================================
+# Part 3b — _lib-multi-repo-trace.sh awk fallback: same comment-header defect
+# shape as Part 1's leak-hook case, lower severity (resolution, not
+# disclosure) and only ever reachable when yq is ABSENT (_mrt_parse_registry
+# prefers yq when installed). Force the fallback by stripping every
+# yq-bearing directory out of PATH for this subshell only, so the case is
+# meaningful on a machine that happens to have yq installed too. Degrades to
+# a SKIP (not a failure) if that stripping can't hide yq on this machine.
+# =============================================================================
+
+TRACE_NOYQ_TMPDIR=$(mktemp -d -t multi-repo-trace-noyq.XXXXXX)
+mkdir -p "$TRACE_NOYQ_TMPDIR/.claude/hooks"
+touch "$TRACE_NOYQ_TMPDIR/onboarding.yaml"
+cp "$CONFIG_LIB"    "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-read-config.sh"
+cp "$PORTFOLIO_LIB" "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-portfolio-paths.sh"
+cp "$TRACE_LIB"     "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-multi-repo-trace.sh"
+[ -f "$OPSROOT_LIB" ] && cp "$OPSROOT_LIB" "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-ops-root.sh"
+
+cat > "$TRACE_NOYQ_TMPDIR/apexyard.projects.yaml" <<'YAML'
+version: 1
+projects:
+  - name: meridian-svc
+    repos:  # payments platform services
+      - corp/nightshade-api
+    workspace: workspace/meridian-svc
+YAML
+
+# Rebuild PATH with every directory that contains an executable `yq`
+# removed, so `command -v yq` fails inside the sourced lib regardless of
+# where yq happens to live on this machine.
+NOYQ_PATH=""
+OLD_IFS="$IFS"
+IFS=':'
+for d in $PATH; do
+  if [ -n "$d" ] && [ ! -x "$d/yq" ]; then
+    NOYQ_PATH="${NOYQ_PATH:+$NOYQ_PATH:}$d"
+  fi
+done
+IFS="$OLD_IFS"
+
+(
+  cd "$TRACE_NOYQ_TMPDIR" || exit 1
+  unset APEXYARD_OPS_PIN_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
+  PATH="$NOYQ_PATH"
+  export PATH
+  if command -v yq >/dev/null 2>&1; then
+    echo "SKIP:could-not-hide-yq"
+    exit 0
+  fi
+  # shellcheck source=/dev/null
+  . "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-read-config.sh"
+  # shellcheck source=/dev/null
+  . "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-portfolio-paths.sh"
+  # shellcheck source=/dev/null
+  . "$TRACE_NOYQ_TMPDIR/.claude/hooks/_lib-multi-repo-trace.sh"
+  echo "resolve_commented=$(mrt_resolve_target 'github.com/corp/nightshade-api')"
+) > "$TRACE_NOYQ_TMPDIR/results.txt" 2>/dev/null
+
+if grep -q "^SKIP:could-not-hide-yq$" "$TRACE_NOYQ_TMPDIR/results.txt"; then
+  echo "SKIP: trace-lib awk-fallback comment-header case (could not hide yq on this machine)"
+elif grep -q "^resolve_commented=meridian-svc$" "$TRACE_NOYQ_TMPDIR/results.txt"; then
+  pass_case "trace-lib awk fallback: repos: block header WITH a trailing comment resolves (leak-fix parity)"
+else
+  fail_case "trace-lib awk fallback: repos: block header WITH a trailing comment resolves (leak-fix parity)" "$(cat "$TRACE_NOYQ_TMPDIR/results.txt")"
+fi
+
+rm -rf "$TRACE_NOYQ_TMPDIR"
 
 # =============================================================================
 # Result

@@ -124,8 +124,8 @@ _mrt_parse_registry() {
       /^[[:space:]]*hostnames:[[:space:]]*\[/ { hostnames = inline_list($0); current_list = ""; next }
       /^[[:space:]]*topics:[[:space:]]*\[/    { topics    = inline_list($0); current_list = ""; next }
       /^[[:space:]]*repos:[[:space:]]*\[/     { repos_list = inline_list($0); current_list = ""; next }
-      /^[[:space:]]*repos:[[:space:]]*$/      { current_list = "repos"; next }
-      /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*:/  { current_list = ""; next }
+      /^[[:space:]]*repos:[[:space:]]*(#.*)?$/      { current_list = "repos"; next }
+      /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/  { current_list = ""; next }
       /^[[:space:]]*-[[:space:]]+/ {
         if (current_list == "repos") {
           item = $0
