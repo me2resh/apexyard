@@ -857,23 +857,85 @@ fi
 
 # ---------------------------------------------------------------------------
 # 7. Extract the scrub list from apexyard.projects.yaml — per-project
-#    `name`, `repo`, and `workspace`. awk fallback mirrors the one used
-#    by /start-ticket (see .claude/skills/start-ticket/SKILL.md) — we do
-#    not depend on yq because many forks won't have it installed.
+#    `name`, `repo`/`repos`, and `workspace`. awk fallback mirrors the one
+#    used by /start-ticket (see .claude/skills/start-ticket/SKILL.md) — we
+#    do not depend on yq because many forks won't have it installed.
+#
+#    me2resh/apexyard#1123 — a project may declare a PLURAL `repos:` list
+#    (a product split across several repos, governed as one thing) instead
+#    of the singular `repo:`. Before this fix, only `repo:` was read, so a
+#    multi-repo project's non-primary repos were silently absent from the
+#    scrub list — exactly the disclosure gap #1123 exists to close. Every
+#    repo in a project's `repos:` list is now scrubbed, on the same footing
+#    as `repo:`. `primary:` is irrelevant here on purpose: leak protection
+#    must not privilege one repo over the others — ALL of them are private
+#    identifiers that must not leak onto a public tracker.
+#
+#    The awk state machine below distinguishes a `repos:` block list from
+#    OTHER block lists in the same entry (`tags:`, `roles:`) via a
+#    `current_list` tracker: a `repos:` header (with no inline value) arms
+#    it, any OTHER `key:` line (scalar or another list header) disarms it.
+#    Without this, `tags:\n  - customer-facing` would be misread as a repo.
+#    Both YAML shapes are supported: a block list (repos:\n  - a\n  - b)
+#    and a flow list (repos: [a, b]), the latter for parity with the
+#    existing hostnames:/topics: flow-list convention in
+#    _lib-multi-repo-trace.sh.
 # ---------------------------------------------------------------------------
 
 NAMES=""
 REPOS=""
 WORKSPACES=""
 
-# awk parser: walk each `- name:` block and pull out `name`, `repo`,
-# `workspace`. Strips surrounding quotes. Assumes `- name:` is the first
-# key in each project entry (same assumption as /start-ticket).
+# awk parser: walk each `- name:` block and pull out `name`, every `repo`/
+# `repos[]` entry, and `workspace`. Strips surrounding quotes. Assumes
+# `- name:` is the first key in each project entry (same assumption as
+# /start-ticket).
 PARSED=$(awk '
   function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
-  /^[[:space:]]*- name:/       { print "NAME=" unquote($3) }
-  /^[[:space:]]*repo:/         { print "REPO=" unquote($2) }
-  /^[[:space:]]*workspace:/    { print "WORKSPACE=" unquote($2) }
+  /^[[:space:]]*- name:/ {
+    print "NAME=" unquote($3)
+    current_list = ""
+    next
+  }
+  /^[[:space:]]*repo:/ {
+    print "REPO=" unquote($2)
+    current_list = ""
+    next
+  }
+  /^[[:space:]]*workspace:/ {
+    print "WORKSPACE=" unquote($2)
+    current_list = ""
+    next
+  }
+  /^[[:space:]]*repos:[[:space:]]*\[/ {
+    line = $0
+    sub(/^[^\[]*\[/, "", line); sub(/\].*$/, "", line)
+    n = split(line, parts, ",")
+    for (i = 1; i <= n; i++) {
+      item = parts[i]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+      if (item != "") print "REPO=" unquote(item)
+    }
+    current_list = ""
+    next
+  }
+  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
+    current_list = "repos"
+    next
+  }
+  /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/ {
+    current_list = ""
+    next
+  }
+  /^[[:space:]]*-[[:space:]]+/ {
+    if (current_list == "repos") {
+      item = $0
+      sub(/^[[:space:]]*-[[:space:]]+/, "", item)
+      gsub(/[[:space:]]+$/, "", item)
+      print "REPO=" unquote(item)
+    }
+    next
+  }
 ' "$REGISTRY")
 
 while IFS= read -r line; do

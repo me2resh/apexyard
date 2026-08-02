@@ -30,9 +30,22 @@
 
 # ------------------------------------------------------------------------------
 # Internal: parse projects from the registry. Outputs one line per project:
-#   <name>|<repo>|<workspace>|<hostnames>|<topics>
+#   <name>|<primary_repo>|<workspace>|<hostnames>|<topics>|<all_repos>
 # where <hostnames> and <topics> are comma-lists of optional `hostnames:` /
-# `topics:` fields the project entry may declare for cross-repo matching.
+# `topics:` fields the project entry may declare for cross-repo matching, and
+# <all_repos> is a comma-list of EVERY repo the project declares.
+#
+# me2resh/apexyard#1123 — a project may declare a PLURAL `repos:` list (a
+# product split across several repos, governed as one thing) instead of the
+# singular `repo:`. <primary_repo> (field 2, UNCHANGED position from before
+# this fix) is the explicit `primary:` field if set, else the singular
+# `repo:` value, else the first entry of `repos:` — so every existing caller
+# reading field 2 as "the repo" keeps working unchanged for a project that
+# still uses `repo:`. <all_repos> (the new field 6, additive) is what a
+# caller that must not miss a non-primary repo — e.g. cross-repo URL/slug
+# matching in mrt_resolve_target's tier 4 below — should iterate instead.
+# Singular `repo: X` is exactly equivalent to `repos: [X]` with no `primary:`
+# set: both produce primary=X and all_repos=X.
 #
 # Tolerant of missing fields — only `name` is required to produce a line.
 # ------------------------------------------------------------------------------
@@ -43,20 +56,34 @@ _mrt_parse_registry() {
 
   if command -v yq >/dev/null 2>&1; then
     # yq path: structured extraction, handles both bare and quoted scalars.
+    # `.repos // [.repo]` normalises singular `repo:` to a one-element list
+    # so $all_repos is always "every repo" regardless of which form the
+    # project entry uses (verified against mikefarah yq v4.53.3 — its `//`
+    # operator falls through on a missing/null LHS the same way jq's does).
     yq eval '
       .projects[]? |
-      [
-        .name // "",
-        .repo // "",
-        .workspace // "",
-        (.hostnames // [] | join(",")),
-        (.topics // [] | join(","))
-      ] | join("|")
+        (.repos // [.repo]) as $all_repos |
+        (.primary // .repo // ($all_repos[0] // "")) as $primary |
+        [
+          .name // "",
+          $primary,
+          .workspace // "",
+          (.hostnames // [] | join(",")),
+          (.topics // [] | join(",")),
+          ($all_repos | join(","))
+        ] | join("|")
     ' "$registry" 2>/dev/null
   else
     # Greppy fallback — same shape as start-ticket's awk fallback. Assumes
-    # `- name:` is the first key in each entry; `repo:`, `workspace:`,
-    # `hostnames:` (inline list), `topics:` (inline list) follow.
+    # `- name:` is the first key in each entry; `repo:`, `primary:`,
+    # `workspace:`, `hostnames:` (inline list), `topics:` (inline list),
+    # `repos:` (block list OR inline list) follow.
+    #
+    # `current_list` distinguishes a `repos:` BLOCK list from any OTHER
+    # block list the entry may also declare (`tags:`, `roles:`) — a bare
+    # `repos:` header (no inline value) arms it; any other `key:` line,
+    # scalar or list-header alike, disarms it. Without this a project's
+    # `tags:\n  - customer-facing` would be misread as a repo.
     awk '
       function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
       function inline_list(line,    out, n, i, parts) {
@@ -71,16 +98,44 @@ _mrt_parse_registry() {
         }
         return out
       }
+      function flush(   all_repos, primary, rp_n, rp_parts) {
+        if (name == "") return
+        all_repos = repos_list
+        if (all_repos == "" && repo != "") all_repos = repo
+        primary = primary_field
+        if (primary == "") primary = repo
+        if (primary == "" && all_repos != "") {
+          rp_n = split(all_repos, rp_parts, ",")
+          primary = rp_parts[1]
+        }
+        print name "|" primary "|" workspace "|" hostnames "|" topics "|" all_repos
+      }
+      BEGIN { current_list = "" }
       /^[[:space:]]*-[[:space:]]*name:/ {
-        if (name != "") print name "|" repo "|" workspace "|" hostnames "|" topics
+        flush()
         name = unquote($3); repo = ""; workspace = ""; hostnames = ""; topics = ""
+        primary_field = ""; repos_list = ""
+        current_list = ""
         next
       }
-      /^[[:space:]]*repo:/      { repo = unquote($2); next }
-      /^[[:space:]]*workspace:/ { workspace = unquote($2); next }
-      /^[[:space:]]*hostnames:[[:space:]]*\[/ { hostnames = inline_list($0); next }
-      /^[[:space:]]*topics:[[:space:]]*\[/    { topics    = inline_list($0); next }
-      END { if (name != "") print name "|" repo "|" workspace "|" hostnames "|" topics }
+      /^[[:space:]]*repo:/      { repo = unquote($2); current_list = ""; next }
+      /^[[:space:]]*primary:/   { primary_field = unquote($2); current_list = ""; next }
+      /^[[:space:]]*workspace:/ { workspace = unquote($2); current_list = ""; next }
+      /^[[:space:]]*hostnames:[[:space:]]*\[/ { hostnames = inline_list($0); current_list = ""; next }
+      /^[[:space:]]*topics:[[:space:]]*\[/    { topics    = inline_list($0); current_list = ""; next }
+      /^[[:space:]]*repos:[[:space:]]*\[/     { repos_list = inline_list($0); current_list = ""; next }
+      /^[[:space:]]*repos:[[:space:]]*(#.*)?$/      { current_list = "repos"; next }
+      /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/  { current_list = ""; next }
+      /^[[:space:]]*-[[:space:]]+/ {
+        if (current_list == "repos") {
+          item = $0
+          sub(/^[[:space:]]*-[[:space:]]+/, "", item)
+          gsub(/[[:space:]]+$/, "", item)
+          repos_list = (repos_list == "" ? unquote(item) : repos_list "," unquote(item))
+        }
+        next
+      }
+      END { flush() }
     ' "$registry"
   fi
 }
@@ -104,7 +159,11 @@ _mrt_lower() {
 #      (so `https://billing.internal.example.com/foo` matches a project
 #       named `billing`)
 #   4. Repo-slug match in the URL path (so `github.com/me2resh/billing-api`
-#      matches a project with `repo: me2resh/billing-api`)
+#      matches a project with `repo: me2resh/billing-api` — OR, for a
+#      multi-repo project (#1123), ANY of its `repos:` entries, not only
+#      the `primary:` one. A cross-repo call landing on a project's
+#      gateway/worker repo must resolve just as reliably as one landing on
+#      its primary repo.)
 # ------------------------------------------------------------------------------
 mrt_resolve_target() {
   local input="$1"
@@ -123,13 +182,12 @@ mrt_resolve_target() {
   input_lc=$(_mrt_lower "$input")
   host_lc=$(_mrt_lower "$host")
 
-  local name repo workspace hostnames topics
-  local name_lc repo_lc
+  local name repo workspace hostnames topics all_repos
+  local name_lc
   local IFS_save="$IFS"
-  while IFS='|' read -r name repo workspace hostnames topics; do
+  while IFS='|' read -r name repo workspace hostnames topics all_repos; do
     [ -z "$name" ] && continue
     name_lc=$(_mrt_lower "$name")
-    repo_lc=$(_mrt_lower "$repo")
 
     # Tier 1: declared hostnames (comma-separated)
     if [ -n "$hostnames" ]; then
@@ -174,15 +232,23 @@ EOF
       esac
     fi
 
-    # Tier 4: repo slug in URL
-    if [ -n "$repo_lc" ]; then
-      case "$input_lc" in
-        *"$repo_lc"*)
-          IFS="$IFS_save"
-          echo "$name"
-          return 0
-          ;;
-      esac
+    # Tier 4: repo slug in URL — checked against EVERY repo the project
+    # declares (all_repos), not only its primary repo (#1123).
+    if [ -n "$all_repos" ]; then
+      IFS=',' read -r -a r_array <<EOF
+$all_repos
+EOF
+      local r r_lc
+      for r in "${r_array[@]}"; do
+        r_lc=$(_mrt_lower "$r")
+        case "$input_lc" in
+          *"$r_lc"*)
+            IFS="$IFS_save"
+            echo "$name"
+            return 0
+            ;;
+        esac
+      done
     fi
   done < <(_mrt_parse_registry)
 
@@ -203,8 +269,8 @@ mrt_workspace_for() {
   local target="$1"
   [ -z "$target" ] && return 1
 
-  local name repo workspace hostnames topics
-  while IFS='|' read -r name repo workspace hostnames topics; do
+  local name repo workspace hostnames topics all_repos
+  while IFS='|' read -r name repo workspace hostnames topics all_repos; do
     if [ "$name" = "$target" ]; then
       local candidate=""
       if [ -n "$workspace" ]; then
@@ -304,19 +370,72 @@ mrt_list_projects() {
 # Prints a suggested clone command on stdout for the caller to either
 # show to the operator or execute after confirmation. Caller is
 # responsible for actually running `git clone` (this helper is read-only).
+#
+# For a multi-repo project (#1123) this clones the PRIMARY repo — the one
+# tracker/board operations default to — not the whole set. Cloning every
+# repo of a multi-repo project is a caller-level decision (see
+# mrt_repos_for below to enumerate the rest), not this helper's job.
 # ------------------------------------------------------------------------------
 mrt_offer_clone() {
   local target="$1"
   [ -z "$target" ] && return 1
 
-  local name repo workspace hostnames topics
-  while IFS='|' read -r name repo workspace hostnames topics; do
+  local name repo workspace hostnames topics all_repos
+  while IFS='|' read -r name repo workspace hostnames topics all_repos; do
     if [ "$name" = "$target" ]; then
       [ -z "$repo" ] && return 1
       local ws_dir candidate
       ws_dir=$(portfolio_workspace_dir 2>/dev/null) || ws_dir="./workspace"
       candidate="$ws_dir/$name"
       echo "git clone https://github.com/$repo $candidate"
+      return 0
+    fi
+  done < <(_mrt_parse_registry)
+  return 1
+}
+
+# ------------------------------------------------------------------------------
+# Public: mrt_primary_repo_for <project-name>
+#
+# Echoes the project's primary repo (#1123) — explicit `primary:` if set,
+# else the singular `repo:`, else the first entry of `repos:`. Empty +
+# exit 1 if the project isn't found or declares no repo at all.
+#
+# This is the resolver a caller should use when it has a project NAME and
+# needs to pick ONE repo to act on by default (tracker/board operations,
+# for instance) without the caller having to know the multi-repo schema.
+# ------------------------------------------------------------------------------
+mrt_primary_repo_for() {
+  local target="$1"
+  [ -z "$target" ] && return 1
+
+  local name repo workspace hostnames topics all_repos
+  while IFS='|' read -r name repo workspace hostnames topics all_repos; do
+    if [ "$name" = "$target" ]; then
+      [ -z "$repo" ] && return 1
+      echo "$repo"
+      return 0
+    fi
+  done < <(_mrt_parse_registry)
+  return 1
+}
+
+# ------------------------------------------------------------------------------
+# Public: mrt_repos_for <project-name>
+#
+# Echoes EVERY repo the project declares, one per line (singular `repo:`
+# normalises to a single line, same as `repos: [X]`). Empty + exit 1 if the
+# project isn't found or declares no repo at all.
+# ------------------------------------------------------------------------------
+mrt_repos_for() {
+  local target="$1"
+  [ -z "$target" ] && return 1
+
+  local name repo workspace hostnames topics all_repos
+  while IFS='|' read -r name repo workspace hostnames topics all_repos; do
+    if [ "$name" = "$target" ]; then
+      [ -z "$all_repos" ] && return 1
+      printf '%s\n' "$all_repos" | tr ',' '\n'
       return 0
     fi
   done < <(_mrt_parse_registry)

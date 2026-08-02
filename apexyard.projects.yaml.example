@@ -28,7 +28,23 @@ version: 1
 #   name        Short identifier. Lowercase, kebab-case. Must be unique.
 #               This is also the folder name under workspace/ and projects/.
 #   repo        GitHub repo in `owner/name` form. Source of truth for PRs
-#               and issues.
+#               and issues. Use this for a project backed by a SINGLE repo.
+#   repos       PLURAL alternative to `repo`, for a project split across
+#               several repos (backend + gateway + workers, say) that deploy
+#               together and are governed as one thing (me2resh/apexyard#1123).
+#               A block list of `owner/name` slugs:
+#                 repos:
+#                   - owner/backend
+#                   - owner/gateway
+#               Backwards compatible by construction: `repo: X` is exactly
+#               equivalent to `repos: [X]` with no explicit `primary:` — every
+#               registry consumer (leak protection, tracker resolution, board
+#               automation, cross-repo trace) treats the two forms identically.
+#               Use ONE of `repo` / `repos` per project, not both.
+#   primary     Only meaningful alongside `repos:`. Which of the project's
+#               repos tracker/board operations default to when the caller
+#               doesn't name one explicitly. Optional — defaults to the first
+#               entry in `repos:` if omitted.
 #   workspace   Local clone path, relative to the ops repo root.
 #               Use `workspace/<name>` by convention. Optional — if you
 #               haven't cloned it locally yet, leave this off and skills
@@ -143,6 +159,33 @@ projects:
       view_command: "glab issue view {id} -R {owner_repo} --output json"
       # create_command lands in Part B (tracker_create); until then, creation
       # on this project still uses the global path.
+
+  # ---------------------------------------------------------------------------
+  # Example 5: a product split across several repos — plural `repos:` (#1123)
+  # One product, four services, governed as ONE project. `primary` picks which
+  # repo tracker/board operations default to when the caller doesn't name one
+  # explicitly. Every registry consumer (leak protection, tracker resolution,
+  # board automation, cross-repo trace) reads the FULL repos list — not just
+  # `primary` — so none of the non-primary repos are invisible to the
+  # mechanisms that matter (leak-scrub in particular; me2resh/apexyard#1123).
+  # ---------------------------------------------------------------------------
+  - name: some-platform
+    repos:
+      - your-org/some-platform-backend
+      - your-org/some-platform-gateway
+      - your-org/some-platform-worker-a
+      - your-org/some-platform-worker-b
+    primary: your-org/some-platform-backend
+    workspace: workspace/some-platform
+    docs: projects/some-platform
+    status: active
+    tier: P1
+    roles:
+      - tech-lead
+      - backend-engineer
+      - platform-engineer
+    tags:
+      - customer-facing
 
 # -----------------------------------------------------------------------------
 # Defaults
