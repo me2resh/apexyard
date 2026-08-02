@@ -81,7 +81,46 @@ fi
 
 # Resolve the hook's own directory so we can source sibling libs reliably
 # regardless of the harness's $PWD.
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+#
+# SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / #1126, AgDR-0118)
+# ------------------------------------------------------------
+# Was `HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` with no
+# anchor check on the resolved dir -- an unset/empty BASH_SOURCE[0]
+# (non-bash shell) makes `dirname ""` resolve to ".", silently substituting
+# the caller's cwd for this file's real location. That matters MORE here
+# than on the other sites migrated alongside this one: HOOK_DIR below is
+# used to locate PROTECTED_LIB="$HOOK_DIR/_lib-protected-branches.sh", and
+# this file is the protected-branch BLOCKING backstop (AgDR-0114) — a
+# cwd-substituted HOOK_DIR pointed at an attacker-controlled directory
+# could source an impostor lib defining a permissive is_protected_branch().
+# The bootstrap guard (raw BASH_SOURCE[0] captured once, empty
+# short-circuits to no self-location, never $0) plus
+# `resolve_anchored_lib_dir` in _lib-ops-root.sh (the anchor check) are the
+# ONE shared idiom every _lib-*.sh / hook self-location site now uses --
+# see that function's header for why the very first hop can never itself
+# be centralized behind a sourced call. When self-location is unavailable,
+# HOOK_DIR stays empty, PROTECTED_LIB resolves to a nonexistent path, and
+# the existing "declare -F is_protected_branch" fallback below fails
+# CLOSED to the hardcoded default list — the same fail-closed behaviour
+# this file already had for "lib file missing/broken", now also covering
+# "self-location unavailable". No behaviour change for the normal case
+# (bash, BASH_SOURCE[0] populated): HOOK_DIR resolves exactly as before.
+RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+HOOK_DIR=""
+if [ -n "$RAW_BASH_SOURCE_0" ]; then
+  _CANDIDATE_DIR="$(cd "$(dirname "$RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+else
+  _CANDIDATE_DIR=""
+fi
+if [ -n "$_CANDIDATE_DIR" ] && [ -f "$_CANDIDATE_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=./_lib-ops-root.sh
+  # shellcheck disable=SC1091
+  . "$_CANDIDATE_DIR/_lib-ops-root.sh"
+  if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+    HOOK_DIR="$(resolve_anchored_lib_dir "$RAW_BASH_SOURCE_0")"
+  fi
+fi
+unset _CANDIDATE_DIR
 
 # NOTE on heredoc bodies (me2resh/apexyard#1066, #1075): every presence
 # check and cd-target extraction below runs against the RAW $COMMAND, never
