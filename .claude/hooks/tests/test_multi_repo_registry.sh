@@ -474,23 +474,36 @@ projects:
     workspace: workspace/meridian-svc
 YAML
 
-# Rebuild PATH with every directory that contains an executable `yq`
-# removed, so `command -v yq` fails inside the sourced lib regardless of
-# where yq happens to live on this machine.
-NOYQ_PATH=""
+# Build a "no-yq" bin dir: symlink every executable currently on PATH EXCEPT
+# `yq` into a temp dir, then point PATH at just that dir so `command -v yq`
+# fails inside the sourced lib (forcing its awk fallback) WITHOUT removing any
+# other tool.
+#
+# The naive approach — dropping every PATH directory that contains yq — silently
+# wipes `awk` too on systems where yq and awk share a directory (Ubuntu CI's
+# /usr/bin holds both). That left the awk fallback with no `awk` to run, so it
+# produced nothing and this exact case failed on CI while passing on macOS
+# (where brew's yq lives in a different dir than /usr/bin/awk). Symlinking every
+# binary except yq keeps awk (and grep/sed/etc.) reachable regardless of layout.
+NOYQ_BIN=$(mktemp -d)
 OLD_IFS="$IFS"
 IFS=':'
 for d in $PATH; do
-  if [ -n "$d" ] && [ ! -x "$d/yq" ]; then
-    NOYQ_PATH="${NOYQ_PATH:+$NOYQ_PATH:}$d"
-  fi
+  [ -n "$d" ] && [ -d "$d" ] || continue
+  for exe in "$d"/*; do
+    { [ -x "$exe" ] && [ ! -d "$exe" ]; } || continue
+    base=${exe##*/}
+    [ "$base" = yq ] && continue
+    [ -e "$NOYQ_BIN/$base" ] && continue   # first on PATH wins (preserve precedence)
+    ln -s "$exe" "$NOYQ_BIN/$base" 2>/dev/null || true
+  done
 done
 IFS="$OLD_IFS"
 
 (
   cd "$TRACE_NOYQ_TMPDIR" || exit 1
   unset APEXYARD_OPS_PIN_DIR CLAUDE_CODE_SESSION_ID 2>/dev/null || true
-  PATH="$NOYQ_PATH"
+  PATH="$NOYQ_BIN"
   export PATH
   if command -v yq >/dev/null 2>&1; then
     echo "SKIP:could-not-hide-yq"
@@ -513,7 +526,7 @@ else
   fail_case "trace-lib awk fallback: repos: block header WITH a trailing comment resolves (leak-fix parity)" "$(cat "$TRACE_NOYQ_TMPDIR/results.txt")"
 fi
 
-rm -rf "$TRACE_NOYQ_TMPDIR"
+rm -rf "$TRACE_NOYQ_TMPDIR" "$NOYQ_BIN"
 
 # =============================================================================
 # Result
