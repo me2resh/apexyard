@@ -68,6 +68,7 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | `v5.0.0-to-v5.1.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.1.0-to-v5.2.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.2.0-to-v5.3.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.3.0-to-v5.4.0.sh` | **Real migration.** Untracks `.claude/project-config.json` (`git rm --cached`, working-tree file and its content preserved, untrack staged not committed) so the long-inert `.gitignore` entry finally applies. Closes the #1065 data-loss window: while the file was tracked, a plain `git checkout` could silently overwrite it and destroy a split-portfolio adopter's private `portfolio` block (never in git to restore from). Idempotent — no-op if the file is already untracked; defers to the operator (exit 1) rather than force past an unexpected staged state. | Every adopter whose fork still tracks `.claude/project-config.json` (anyone upgrading from ≤ v5.3.0). No-op once untracked. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
 
