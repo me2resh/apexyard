@@ -28,6 +28,15 @@ set -uo pipefail
 # per-case, so the suite-level default doesn't interfere.
 export APEXYARD_OPS_DISABLE_PIN=1
 
+# Same isolation rationale, for the session-scoped resolution cache added in
+# me2resh/apexyard#1013 (AgDR-0120): _lib-resolution-cache.sh keys its cache
+# files on $CLAUDE_CODE_SESSION_ID, which (when this suite runs inside a live
+# Claude Code session) would otherwise be the REAL session id -- a
+# sandbox-based test would read stale fixtures back into the real session's
+# cache, or pollute it with sandbox values. Tests that specifically exercise
+# the cache (test_resolution_cache.sh) set/unset this per-case.
+export APEXYARD_DISABLE_RESOLUTION_CACHE=1
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
 
