@@ -117,7 +117,61 @@ else
   mark_fail "case4 build" "build_fork failed"
 fi
 
-rm -rf "$SB" "$SB2" 2>/dev/null
+# ---------------------------------------------------------------------------
+# Case 5: v1-anchor fork (legacy onboarding.yaml + apexyard.projects.yaml pair,
+#         no .apexyard-fork) → find_ops_root resolves via the legacy branch and
+#         the untrack still works. Gives find_ops_root's non-v2 path coverage.
+# ---------------------------------------------------------------------------
+SB3=$(mktemp -d) && SB3=$(cd "$SB3" && pwd -P)
+mkdir -p "$SB3/.claude"
+: > "$SB3/onboarding.yaml"
+: > "$SB3/apexyard.projects.yaml"
+printf '%s\n' '.claude/project-config.json' > "$SB3/.gitignore"
+printf '%s\n' "$CONFIG_CONTENT" > "$SB3/.claude/project-config.json"
+if (
+    cd "$SB3" || exit 99
+    git init -q && git config user.email t@t.t && git config user.name t || exit 99
+    git add onboarding.yaml apexyard.projects.yaml .gitignore >/dev/null 2>&1 || exit 99
+    git add -f .claude/project-config.json >/dev/null 2>&1 || exit 99
+    git commit -q -m fixture >/dev/null 2>&1 || exit 99
+  ); then
+  is_tracked "$SB3" || mark_fail "case5 precondition" "config should start tracked"
+  ( cd "$SB3" && APEXYARD_MIGRATION_QUIET=1 bash "$MIGRATION" ); rc=$?
+  if [ "$rc" -eq 0 ] && ! is_tracked "$SB3" && [ -f "$SB3/.claude/project-config.json" ]; then
+    mark_pass "v1-anchor fork (legacy pair) → find_ops_root resolves, untrack works"
+  else
+    mark_fail "case5 v1anchor" "rc=$rc tracked=$(is_tracked "$SB3" && echo y || echo n)"
+  fi
+else
+  mark_fail "case5 build" "build failed"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 6: defer-not-force. Staged content differs from BOTH HEAD and the working
+#         tree → `git rm --cached` refuses (no -f), the migration exits 1, the
+#         file stays tracked, and the working-tree content is untouched. Locks
+#         the "never discard a staged change" safety contract.
+# ---------------------------------------------------------------------------
+SB4=$(mktemp -d) && SB4=$(cd "$SB4" && pwd -P)
+if build_fork "$SB4" yes; then
+  (
+    cd "$SB4" || exit 99
+    printf '%s\n' '{"_adopter":"STAGED-version-B"}' > .claude/project-config.json
+    git add -f .claude/project-config.json >/dev/null 2>&1   # index (staged) = B, differs from HEAD
+    printf '%s\n' '{"_adopter":"WORKTREE-version-C"}' > .claude/project-config.json  # working tree = C
+  )
+  ( cd "$SB4" && APEXYARD_MIGRATION_QUIET=1 bash "$MIGRATION" ); rc=$?
+  wt=$(cat "$SB4/.claude/project-config.json")
+  if [ "$rc" -eq 1 ] && is_tracked "$SB4" && [ "$wt" = '{"_adopter":"WORKTREE-version-C"}' ]; then
+    mark_pass "unexpected staged state → exit 1 defer-not-force, still tracked, worktree preserved"
+  else
+    mark_fail "case6 defer" "rc=$rc (want 1), tracked=$(is_tracked "$SB4" && echo y || echo n), wt=$wt"
+  fi
+else
+  mark_fail "case6 build" "build_fork failed"
+fi
+
+rm -rf "$SB" "$SB2" "$SB3" "$SB4" 2>/dev/null
 
 echo ""
 echo "v5.4.0 migration test: PASS=$PASS FAIL=$FAIL"
