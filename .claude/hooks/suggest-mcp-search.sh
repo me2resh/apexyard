@@ -29,8 +29,41 @@
 
 set -u
 
-# shellcheck source=/dev/null
-. "$(dirname "${BASH_SOURCE[0]}")/_lib-read-config.sh" 2>/dev/null || true
+# SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / #1126, AgDR-0118)
+# ------------------------------------------------------------
+# Was two separate unanchored self-location sites in this file:
+#   . "$(dirname "${BASH_SOURCE[0]}")/_lib-read-config.sh" 2>/dev/null || true
+#   ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)"
+# Neither guarded against an unset/empty BASH_SOURCE[0] (non-bash shell),
+# which makes `dirname ""` resolve to ".", silently substituting the
+# caller's cwd for this file's real location. Resolved ONCE here and
+# reused by both downstream sites so they can't drift. The bootstrap
+# guard (raw BASH_SOURCE[0] captured once, empty short-circuits to no
+# self-location) plus `resolve_anchored_lib_dir` in _lib-ops-root.sh (the
+# anchor check) are the ONE shared idiom every _lib-*.sh / hook
+# self-location site now uses -- see that function's header for why the
+# very first hop can never itself be centralized behind a sourced call.
+RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+HOOK_DIR=""
+if [ -n "$RAW_BASH_SOURCE_0" ]; then
+  _CANDIDATE_DIR="$(cd "$(dirname "$RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+else
+  _CANDIDATE_DIR=""
+fi
+if [ -n "$_CANDIDATE_DIR" ] && [ -f "$_CANDIDATE_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=./_lib-ops-root.sh
+  # shellcheck disable=SC1091
+  . "$_CANDIDATE_DIR/_lib-ops-root.sh"
+  if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+    HOOK_DIR="$(resolve_anchored_lib_dir "$RAW_BASH_SOURCE_0")"
+  fi
+fi
+unset _CANDIDATE_DIR
+
+if [ -n "$HOOK_DIR" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-read-config.sh" 2>/dev/null || true
+fi
 
 INPUT=$(cat)
 
@@ -149,7 +182,13 @@ fi
 # stay silent — the adopter doesn't have the premium search component, so the
 # nudge would be noise. (#469)
 
-ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)"
+# Reuses the anchored HOOK_DIR resolved at the top of this file (the
+# bootstrap self-location for _lib-read-config.sh) rather than
+# re-deriving it from BASH_SOURCE a second time here.
+ops_root=""
+if [ -n "$HOOK_DIR" ]; then
+  ops_root="$(cd "$HOOK_DIR/../.." 2>/dev/null && pwd)"
+fi
 
 mcp_has_search=false
 for mcp_json in "$ops_root/.mcp.json" "${APEXYARD_PORTFOLIO_ROOT:-}/.mcp.json"; do

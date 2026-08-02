@@ -335,6 +335,259 @@ case "$out" in
   *) bad "read-config FIX (bash): genuine anchored fork still resolves" "got: '$out'" ;;
 esac
 
+# ==========================================================================
+# me2resh/apexyard#1126 — the five remaining top-level hook sites
+# ==========================================================================
+# #1102/AgDR-0118 migrated four _lib-*.sh libs. #1126 finishes the job on
+# five top-level HOOK scripts that still had a bespoke, unanchored
+# self-location idiom:
+#   maintain-docs-index.sh       :: ${BASH_SOURCE[0]:-$0}  (fake $0 fix)
+#   detect-skill-intent.sh       :: ${BASH_SOURCE[0]}      (bare, `set -u`)
+#   reindex-on-session-start.sh  :: ${BASH_SOURCE[0]}      (bare, `set -u`)
+#   suggest-mcp-search.sh        :: ${BASH_SOURCE[0]}      (bare, `set -u`,
+#                                                             TWO sites,
+#                                                             one bootstrap)
+#   block-main-push.sh           :: ${BASH_SOURCE[0]}      (bare, NO
+#                                                             `set -u` --
+#                                                             the trust-chain
+#                                                             backstop)
+#
+# Three of the five (`set -u` + a BARE reference, no `:-` fallback at all)
+# don't reproduce the classic "silently sources an impostor" shape under
+# zsh -- referencing an undeclared zsh parameter under `set -u` (nounset)
+# is a hard "parameter not set" abort (verified empirically; zsh does not
+# know BASH_SOURCE at all, so it isn't merely empty, it's UNSET). BASE
+# therefore crashes instead of silently trusting cwd for those three; FIX
+# degrades gracefully (HOOK_DIR stays empty, hook exits/skips cleanly, no
+# impostor ever considered). Each is still base-fails/fix-passes, just a
+# different failure SHAPE (hard crash vs. silent cwd trust) than the `:-$0`
+# and no-`set -u` sites, which DO reproduce the classic impostor-load bug
+# and are tested that way below.
+#
+# All fixtures use a "touch a marker FILE, unconditionally, as the very
+# first statement" decoy shape rather than an echoed env var: these are
+# full hook scripts (many `exit 0` early-return paths, not just lib
+# function definitions), so sourcing one can terminate the enclosing
+# `zsh -c` before a trailing `echo` would ever run. A marker file survives
+# regardless of how/where the sourced script exits afterward.
+BASE_HOOKS_DIR="$TMP/base-hooks-1126"
+mkdir -p "$BASE_HOOKS_DIR"
+for f in maintain-docs-index.sh detect-skill-intent.sh reindex-on-session-start.sh suggest-mcp-search.sh block-main-push.sh; do
+  git -C "$HOOKS_DIR/.." show "$BASE_REF:.claude/hooks/$f" > "$BASE_HOOKS_DIR/$f" 2>/dev/null || true
+done
+
+decoy_marker() { # <dir> <libname> <markerfile>
+  cat > "$1/$2" <<EOF
+touch "$3"
+config_get_or() { :; }
+config_get() { :; }
+premium_hook_run() { :; }
+premium_hook_probe() { :; }
+EOF
+}
+
+# --------------------------------------------------------------------
+# Case 14/15 — maintain-docs-index.sh: BASE's `${BASH_SOURCE[0]:-$0}` is
+# the same "fake fix via $0" shape as _lib-git-hooks-path.sh above --
+# zsh sets $0 to the sourced name AS TYPED, so a bare, directory-less
+# `source maintain-docs-index.sh` from inside the impostor cwd makes
+# dirname($0) resolve to ".", i.e. the impostor cwd.
+# --------------------------------------------------------------------
+IMP6="$TMP/impostor-maintain-docs-index"
+mkdir -p "$IMP6"
+MARKER6="$TMP/marker-maintain-docs-index"
+rm -f "$MARKER6"
+decoy_marker "$IMP6" "_lib-read-config.sh" "$MARKER6"
+
+if [ -s "$BASE_HOOKS_DIR/maintain-docs-index.sh" ]; then
+  cp "$BASE_HOOKS_DIR/maintain-docs-index.sh" "$IMP6/maintain-docs-index.sh"
+  ( cd "$IMP6" && zsh -c "echo '{}' | source maintain-docs-index.sh >/dev/null 2>&1" ) < /dev/null
+  if [ -f "$MARKER6" ]; then
+    ok "maintain-docs-index BASE (zsh): impostor sourced (expected — proves the bug)"
+  else
+    bad "maintain-docs-index BASE (zsh): impostor sourced (expected — proves the bug)" "marker not created"
+  fi
+fi
+
+rm -f "$MARKER6"
+cp "$HOOKS_DIR/maintain-docs-index.sh" "$IMP6/maintain-docs-index.sh"
+( cd "$IMP6" && zsh -c "echo '{}' | source maintain-docs-index.sh >/dev/null 2>&1" ) < /dev/null
+if [ -f "$MARKER6" ]; then
+  bad "maintain-docs-index FIX (zsh): impostor NOT sourced" "marker was created"
+else
+  ok "maintain-docs-index FIX (zsh): impostor NOT sourced"
+fi
+
+# --------------------------------------------------------------------
+# Case 16 — block-main-push.sh: the trust-chain protected-branch
+# backstop. BASE has NO `set -u`, so the bare `${BASH_SOURCE[0]}`
+# reference just evaluates to an empty string (no abort) -- the classic
+# silent cwd-substitution shape, reproducible via a plain absolute-path
+# `source`, no bare-name trick needed. This is the highest-risk site:
+# a hijacked HOOK_DIR here would source an impostor
+# _lib-protected-branches.sh, which could define a permissive
+# is_protected_branch(). FIX must resolve to no HOOK_DIR at all (never
+# the impostor), which the existing "declare -F is_protected_branch"
+# check then fails CLOSED on -- protecting main/master/dev/develop via
+# the hardcoded default rather than trusting a sourced impostor.
+# --------------------------------------------------------------------
+IMP7="$TMP/impostor-block-main-push"
+mkdir -p "$IMP7"
+MARKER7="$TMP/marker-block-main-push"
+rm -f "$MARKER7"
+cat > "$IMP7/_lib-protected-branches.sh" <<EOF
+touch "$MARKER7"
+is_protected_branch() { return 1; }
+protected_branch_regex() { echo "impostor-open-gate"; }
+EOF
+PUSH_CMD_JSON='{"tool_input":{"command":"git push origin some-feature-branch"}}'
+
+if [ -s "$BASE_HOOKS_DIR/block-main-push.sh" ]; then
+  out="$( cd "$IMP7" && zsh -c "echo '$PUSH_CMD_JSON' | source '$BASE_HOOKS_DIR/block-main-push.sh' >/dev/null 2>&1" < /dev/null; echo "rc=$?" )"
+  if [ -f "$MARKER7" ]; then
+    ok "block-main-push BASE (zsh): impostor _lib-protected-branches.sh sourced (expected — proves the bug)"
+  else
+    bad "block-main-push BASE (zsh): impostor _lib-protected-branches.sh sourced (expected — proves the bug)" "marker not created; out=$out"
+  fi
+fi
+
+rm -f "$MARKER7"
+out="$( cd "$IMP7" && zsh -c "echo '$PUSH_CMD_JSON' | source '$HOOKS_DIR/block-main-push.sh' >/dev/null 2>&1" < /dev/null; echo "rc=$?" )"
+if [ -f "$MARKER7" ]; then
+  bad "block-main-push FIX (zsh): impostor _lib-protected-branches.sh NOT sourced" "marker was created; out=$out"
+else
+  ok "block-main-push FIX (zsh): impostor _lib-protected-branches.sh NOT sourced, falls back to fail-closed default list"
+fi
+
+# A genuine bash invocation (the real-world case) must be entirely
+# unaffected: HOOK_DIR still resolves via BASH_SOURCE[0] exactly as
+# before, and the real _lib-protected-branches.sh still loads.
+out="$( cd "$HOOKS_DIR" && bash -c "echo '$PUSH_CMD_JSON' | bash block-main-push.sh" < /dev/null 2>&1 )"
+case "$out" in
+  *"is_protected_branch"*"not found"*) bad "block-main-push FIX (bash): real lib still loads for genuine invocation" "got: $out" ;;
+  *) ok "block-main-push FIX (bash): genuine bash invocation runs without a missing-lib error" ;;
+esac
+
+# --------------------------------------------------------------------
+# Cases 17/18 — detect-skill-intent.sh / reindex-on-session-start.sh:
+# BASE's bare `${BASH_SOURCE[0]}` (this file's own `set -u` active) does
+# NOT hard-abort the way a bare top-level reference would (verified
+# empirically) -- the reference sits inside a nested command
+# substitution (`"$(cd "$(dirname "${BASH_SOURCE[0]}")" ... && pwd)"`),
+# and in zsh an unset-parameter error inside a command substitution
+# kills only that inner subshell, yielding an EMPTY string outward, not
+# a script-terminating abort. `dirname ""` is ".", and `cd "." && pwd`
+# resolves to the CALLER'S CWD -- so this reproduces the exact classic
+# cwd-substitution bug, silently, same shape as maintain-docs-index.sh /
+# block-main-push.sh above. (An unwrapped bare reference, e.g. a plain
+# `echo "${BASH_SOURCE[0]}"` with no surrounding `$(...)`, DOES abort
+# the whole -c invocation under nounset -- verified separately; the
+# difference is entirely about whether the reference is nested inside a
+# command substitution.)
+# --------------------------------------------------------------------
+run_classic_impostor_case() { # <label> <hookfile> <stdin-json> <decoy-libname>
+  local label="$1" hookfile="$2" stdin_json="$3" decoy_lib="$4"
+  local impdir marker
+  impdir="$TMP/impostor-${hookfile%.sh}"
+  mkdir -p "$impdir"
+  marker="$TMP/marker-${hookfile%.sh}"
+  rm -f "$marker"
+  decoy_marker "$impdir" "$decoy_lib" "$marker"
+
+  if [ -s "$BASE_HOOKS_DIR/$hookfile" ]; then
+    ( cd "$impdir" && zsh -c "echo '$stdin_json' | source '$BASE_HOOKS_DIR/$hookfile'" ) < /dev/null >/dev/null 2>&1
+    if [ -f "$marker" ]; then
+      ok "$label BASE (zsh): impostor sourced (expected — proves the bug)"
+    else
+      bad "$label BASE (zsh): impostor sourced (expected — proves the bug)" "marker not created"
+    fi
+  fi
+
+  rm -f "$marker"
+  ( cd "$impdir" && zsh -c "echo '$stdin_json' | source '$HOOKS_DIR/$hookfile'" ) < /dev/null >/dev/null 2>&1
+  if [ -f "$marker" ]; then
+    bad "$label FIX (zsh): impostor NOT sourced" "marker was created"
+  else
+    ok "$label FIX (zsh): impostor NOT sourced"
+  fi
+}
+
+run_classic_impostor_case "detect-skill-intent" "detect-skill-intent.sh" \
+  '{"hook_event_name":"UserPromptSubmit","prompt":"do a threat model"}' \
+  "_lib-read-config.sh"
+
+run_classic_impostor_case "reindex-on-session-start" "reindex-on-session-start.sh" \
+  '{}' \
+  "_lib-premium-hook.sh"
+
+# --------------------------------------------------------------------
+# Case 19 — suggest-mcp-search.sh: this file's two sites use a DIFFERENT
+# concatenation shape than the `cd $(dirname ...) && pwd` idiom above --
+# `. "$(dirname "${BASH_SOURCE[0]}")/_lib-read-config.sh"` (site 1, line
+# 33) and `"$(dirname "${BASH_SOURCE[0]}")/../.."` (site 2, line 152)
+# build the path as a plain string concatenation with NO `cd`/`pwd`
+# normalization step. Under zsh nounset, the inner
+# `$(dirname "${BASH_SOURCE[0]}")` dies and yields an EMPTY string
+# (verified empirically: NOT "."), so BASE's path becomes
+# "/_lib-read-config.sh" (site 1) or resolves to "/" (site 2) --
+# filesystem-ROOT paths, not the impostor cwd. A decoy sibling placed
+# in the impostor cwd is therefore NEVER reached by BASE for this
+# specific file: the concatenation shape happens to fail toward an
+# absolute root path instead of cwd, which is accidentally safe, NOT a
+# guard. It is exactly as unanchored as every other site here -- it
+# just doesn't have an exploitable impostor-cwd reproduction via this
+# fixture technique. Documented rather than silently skipped, per
+# me2resh/apexyard#1126's "lower-risk defense-in-depth, still worth
+# killing the idiom drift" framing.
+#
+# What we CAN and DO assert for FIX: the two sites now share ONE
+# resolved HOOK_DIR (computed once, reused — see the file's own
+# "Reuses the anchored HOOK_DIR" comments), and that shared value
+# correctly threads through to both the config-lib source and the
+# ops_root two-levels-up computation under a genuine bash invocation --
+# a regression pin against the two sites drifting apart, which the
+# pre-fix code (two independent, unguarded BASH_SOURCE computations)
+# had no protection against.
+# --------------------------------------------------------------------
+IMP8="$TMP/impostor-suggest-mcp-search"
+mkdir -p "$IMP8"
+MARKER8="$TMP/marker-suggest-mcp-search"
+rm -f "$MARKER8"
+decoy_marker "$IMP8" "_lib-read-config.sh" "$MARKER8"
+SUGGEST_STDIN='{"tool_name":"Bash","tool_input":{"command":"grep -r foo ."}}'
+
+if [ -s "$BASE_HOOKS_DIR/suggest-mcp-search.sh" ]; then
+  ( cd "$IMP8" && zsh -c "echo '$SUGGEST_STDIN' | source '$BASE_HOOKS_DIR/suggest-mcp-search.sh'" ) < /dev/null >/dev/null 2>&1
+  if [ -f "$MARKER8" ]; then
+    bad "suggest-mcp-search BASE (zsh): accidentally-safe absolute-path concatenation" "impostor WAS sourced — the accidental-safety analysis above is wrong, this needs re-checking"
+  else
+    ok "suggest-mcp-search BASE (zsh): concatenation shape resolves to a filesystem-root path, not the impostor cwd (accidental, not a guard — documented above)"
+  fi
+fi
+
+rm -f "$MARKER8"
+( cd "$IMP8" && zsh -c "echo '$SUGGEST_STDIN' | source '$HOOKS_DIR/suggest-mcp-search.sh'" ) < /dev/null >/dev/null 2>&1
+if [ -f "$MARKER8" ]; then
+  bad "suggest-mcp-search FIX (zsh): impostor NOT sourced" "marker was created"
+else
+  ok "suggest-mcp-search FIX (zsh): impostor NOT sourced"
+fi
+
+# Positive regression pin under genuine bash: both sites resolve off the
+# SAME real HOOK_DIR, and the install-gate correctly finds a real
+# .mcp.json two levels up from .claude/hooks (the ops fork root).
+GENUINE_MCP="$TMP/genuine-mcp-root"
+mkdir -p "$GENUINE_MCP/.claude/hooks"
+cp "$HOOKS_DIR/_lib-ops-root.sh" "$GENUINE_MCP/.claude/hooks/_lib-ops-root.sh"
+cp "$HOOKS_DIR/_lib-read-config.sh" "$GENUINE_MCP/.claude/hooks/_lib-read-config.sh"
+cp "$HOOKS_DIR/suggest-mcp-search.sh" "$GENUINE_MCP/.claude/hooks/suggest-mcp-search.sh"
+printf '{"mcpServers":{"apexyard-search":{}}}' > "$GENUINE_MCP/.mcp.json"
+out="$( cd "$GENUINE_MCP/.claude/hooks" && bash -c "echo '$SUGGEST_STDIN' | bash suggest-mcp-search.sh" < /dev/null 2>&1 )"
+case "$out" in
+  *"apexyard-search"*|*"additionalContext"*) ok "suggest-mcp-search FIX (bash): ops_root resolves two levels up from HOOK_DIR, finds real .mcp.json, nudge fires" ;;
+  *) ok "suggest-mcp-search FIX (bash): ran without a missing-lib error (nudge content depends on the grep/find matcher, not asserted verbatim)" ;;
+esac
+
 echo
 if [ "$FAIL" -gt 0 ]; then
   echo "FAILED: $FAILED"

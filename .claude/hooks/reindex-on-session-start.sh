@@ -59,7 +59,34 @@ if [ -n "${APEXYARD_SEARCH_REINDEX_DISABLE:-}" ]; then
   exit 0
 fi
 
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SELF-LOCATION BOOTSTRAP (me2resh/apexyard#1102 / #1126, AgDR-0118)
+# ------------------------------------------------------------
+# Was `HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` with no
+# anchor check on the resolved dir -- an unset/empty BASH_SOURCE[0]
+# (non-bash shell) makes `dirname ""` resolve to ".", silently substituting
+# the caller's cwd for this file's real location. The bootstrap guard (raw
+# BASH_SOURCE[0] captured once, empty short-circuits to no self-location)
+# plus `resolve_anchored_lib_dir` in _lib-ops-root.sh (the anchor check)
+# are the ONE shared idiom every _lib-*.sh / hook self-location site now
+# uses -- see that function's header for why the very first hop can never
+# itself be centralized behind a sourced call.
+RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+HOOK_DIR=""
+if [ -n "$RAW_BASH_SOURCE_0" ]; then
+  _CANDIDATE_DIR="$(cd "$(dirname "$RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
+else
+  _CANDIDATE_DIR=""
+fi
+if [ -n "$_CANDIDATE_DIR" ] && [ -f "$_CANDIDATE_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck source=./_lib-ops-root.sh
+  # shellcheck disable=SC1091
+  . "$_CANDIDATE_DIR/_lib-ops-root.sh"
+  if command -v resolve_anchored_lib_dir >/dev/null 2>&1; then
+    HOOK_DIR="$(resolve_anchored_lib_dir "$RAW_BASH_SOURCE_0")"
+  fi
+fi
+unset _CANDIDATE_DIR
+[ -n "$HOOK_DIR" ] || exit 0
 # shellcheck source=/dev/null
 . "$HOOK_DIR/_lib-premium-hook.sh"
 
