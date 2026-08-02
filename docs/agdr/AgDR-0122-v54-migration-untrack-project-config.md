@@ -6,9 +6,9 @@
 
 The last four release hops (`v4.4.0`→`v5.3.0`) are all no-op placeholders backfilled by #1105. v5.4.0 is different: it carries the adopter-side completion of **#1065**.
 
-#1065's finding: `.gitignore` listed `.claude/project-config.json`, but the file was **also tracked in the index**, and git ignores `.gitignore` for already-tracked files — so the ignore rule was inert on every adopter fork. Because the file was tracked, a plain `git checkout <branch>` silently overwrites the working copy with the indexed version. For a split-portfolio adopter that destroys the private `portfolio` block, which is config-only (no convention-based sibling discovery) and never committed to git, so it is unrecoverable. This happened on a real fork.
+What #1065 found: `.gitignore` listed `.claude/project-config.json`, but the file was **also tracked in the index**, and git ignores `.gitignore` for already-tracked files — so the ignore rule was inert on every adopter fork. Because the file was tracked, a plain `git checkout <branch>` silently overwrites the working copy with the indexed version. For a split-portfolio adopter that destroys the private `portfolio` block, which is config-only (no convention-based sibling discovery) and never committed to git, so it is unrecoverable. This happened on a real fork.
 
-#1065 fixed the **framework** repo (untracked the file, shipped a tracked `project-config.example.json`). But an adopter sitting on v5.3.0 still has the file tracked in **their own** fork — the data-loss window stays open for them until the file is untracked there too. A framework-side untrack does not propagate to an adopter's index through a normal sync (modify/delete merge semantics are unreliable here), so the release needs an explicit migration.
+In #1065 the **framework** repo was fixed (untracked the file, shipped a tracked `project-config.example.json`). But an adopter sitting on v5.3.0 still has the file tracked in **their own** fork — the data-loss window stays open for them until the file is untracked there too. A framework-side untrack does not propagate to an adopter's index through a normal sync (modify/delete merge semantics are unreliable here), so the release needs an explicit migration.
 
 ## Options Considered
 
