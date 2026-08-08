@@ -50,3 +50,6 @@ workspace/*/
 # `git status` shows them as untracked symlinks — leave them alone.
 # If you absolutely want to suppress the untracked-symlink line, add the
 # specific name to .git/info/exclude on each clone.
+
+# Local Obsidian vault config, per-machine editor state — never committed.
+.obsidian/
