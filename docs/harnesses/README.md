@@ -60,7 +60,7 @@ The headline stays **"for Claude Code"** until this condition is met, verbatim:
 
 "Live end-to-end conformance proof" means the credentialed run described above: a real model turn under that harness actually blocked by a gate (e.g. a `git add -A` refused by the unmodified bash hook), not a mock or a by-construction test.
 
-**As of 2026-07-09 the trigger condition is MET** — three adapters (**opencode**, **pi**, and **Codex**) have recorded that proof. That does **not** auto-flip the headline: the flip is a **separate, deliberate decision** that moves the site (yard.apexscript.com) and channel positioning in one coordinated pass, and it hasn't been taken. Until it is, the framework keeps the Claude-Code tagline and describes multi-harness support in the precise, per-harness terms above rather than as a blanket claim. (Cursor remains below the bar — it fails closed rather than running the delegated gate — so the count is opencode + pi + Codex, not all four.)
+**As of 2026-07-09 the trigger condition is MET** — three adapters (**opencode**, **pi**, and **Codex**) have recorded that proof. That does **not** auto-flip the headline: the flip is a **separate, deliberate decision** that moves the site (apexyard.ai) and channel positioning in one coordinated pass, and it hasn't been taken. Until it is, the framework keeps the Claude-Code tagline and describes multi-harness support in the precise, per-harness terms above rather than as a blanket claim. (Cursor remains below the bar — it fails closed rather than running the delegated gate — so the count is opencode + pi + Codex, not all four.)
 
 ---
 

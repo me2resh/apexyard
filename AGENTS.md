@@ -111,7 +111,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 - `docs/` — adopter docs (`getting-started.md`, `multi-project.md`, `release-process.md`, `agdr/`, `harnesses/`)
 - `projects/<name>/` — per-managed-project docs (committed to the ops fork)
 - `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote)
-- `site/` — **moved** to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site); live at yard.apexscript.com
+- `site/` — **moved** to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site); live at apexyard.ai
 - `golden-paths/pipelines/` — reusable GitHub Actions workflows for adopter projects
 - `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing)
 
@@ -176,9 +176,9 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 
 ### Related entry-point conventions
 
-- **[yard.apexscript.com/skill.md](https://yard.apexscript.com/skill.md)** — capability manifest for AI coding agents (served from me2resh/apexyard-site)
-- **[yard.apexscript.com/llms.txt](https://yard.apexscript.com/llms.txt)** — llmstxt.org manifest; index for AI crawlers (served from me2resh/apexyard-site)
-- **[yard.apexscript.com/llms-full.txt](https://yard.apexscript.com/llms-full.txt)** — full content concatenation for one-shot LLM consumption (served from me2resh/apexyard-site)
+- **[apexyard.ai/skill.md](https://apexyard.ai/skill.md)** — capability manifest for AI coding agents (served from me2resh/apexyard-site)
+- **[apexyard.ai/llms.txt](https://apexyard.ai/llms.txt)** — llmstxt.org manifest; index for AI crawlers (served from me2resh/apexyard-site)
+- **[apexyard.ai/llms-full.txt](https://apexyard.ai/llms-full.txt)** — full content concatenation for one-shot LLM consumption (served from me2resh/apexyard-site)
 - **`README.md`** — public-facing intro (humans + agents)
 - **`SYSTEM.md`** — optional custom system prompt pi reads alongside `AGENTS.md`; a short operating-posture primer, not a duplicate of this file
 - **`docs/harnesses/pi.md`** — what works / doesn't yet for pi specifically
