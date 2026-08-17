@@ -1054,7 +1054,7 @@ If your tracker has no CLI, use `kind: "custom"` with a `view_command` that call
 
 **What if I only have one repo?** Fork apexyard anyway and register that one repo. The skills work the same way. When you add a second project, just append to the registry — no migration, no re-setup.
 
-**Where is the marketing site?** The landing page that used to live in `site/` has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed at yard.apexscript.com. It is no longer bundled in the framework fork.
+**Where is the marketing site?** The landing page that used to live in `site/` has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed at apexyard.ai. It is no longer bundled in the framework fork.
 
 **Can I rename my fork?** Yes. GitHub handles rename redirects cleanly. Your local clone will need `git remote set-url origin` after the rename.
 

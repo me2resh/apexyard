@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://yard.apexscript.com"><img src="https://yard.apexscript.com/brand/apexyard-avatar-512.png" alt="ApexYard" width="88"></a>
+  <a href="https://apexyard.ai"><img src="https://apexyard.ai/brand/apexyard-avatar-512.png" alt="ApexYard" width="88"></a>
 </p>
 
 <h1 align="center">ApexYard</h1>
@@ -12,7 +12,7 @@
   <a href="https://github.com/me2resh/apexyard/releases"><img src="https://img.shields.io/github/v/release/me2resh/apexyard?color=2F6DF6&label=release" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2" alt="Built for Claude Code"></a>
-  <a href="https://yard.apexscript.com"><img src="https://img.shields.io/badge/site-yard.apexscript.com-2F6DF6" alt="Site"></a>
+  <a href="https://apexyard.ai"><img src="https://img.shields.io/badge/site-apexyard.ai-2F6DF6" alt="Site"></a>
   <a href="https://github.com/me2resh/apexyard/stargazers"><img src="https://img.shields.io/github/stars/me2resh/apexyard?style=social" alt="Stars"></a>
 </p>
 
@@ -55,7 +55,7 @@ ApexYard is a set of plain-text primitives Claude Code reads automatically — n
 
 **Full directory tree and the complete role / hook / skill / agent breakdown → [`docs/whats-inside.md`](docs/whats-inside.md).**
 
-> **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [yard.apexscript.com](https://yard.apexscript.com).
+> **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [apexyard.ai](https://apexyard.ai).
 >
 > **Built for Claude Code first**, but opencode, pi, and Codex run the same enforcement through a small adapter (Cursor partially) — see [Using another AI coding tool?](#using-another-ai-coding-tool) below.
 >
