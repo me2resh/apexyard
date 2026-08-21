@@ -1,0 +1,211 @@
+version: 1
+feature: dailyxp-v1
+project: dailyxp
+title: DailyXP V1 — Play → Journey → World
+description: Omarchy-first life-gamification journey from setup through focused Sessions, habits, recovery, progression, competition, and sharing — grounded in docs/design/dailyxp-v1.md and .scratch/wayfinder/map.md
+generated_at: 2026-08-21T23:55:00+03:00
+generated_by: /handover (All docs) — via /journey grounding
+
+personas: []
+
+pages:
+  - id: setup
+    title: First Run Setup
+    description: New user lands on Play with empty state + short setup path
+    contents:
+      - One Goal prompt (name + target date + Skill)
+      - One suggested daily Routine (previewable, editable)
+      - Up to 3 optional Habits (previewable)
+      - Start-first-Session CTA — everything editable or skippable
+      - Templates preview (study/build/reading/recovery/custom) — never creates public memberships implicitly
+    success_state: User has 1 Goal + 1 Routine + optionally habits; ready to select work
+    error_state: User skips everything — stays local, empty Play with "Add your first Goal" CTA
+
+  - id: play
+    title: Play — Today's Work
+    description: Dominant daily surface — selected Task + Session controls + today's occurrences/habits
+    contents:
+      - Selected Task (or free Session) card with Skill tag
+      - Session controls: Start (with plannedMinutes?)/Pause/Resume/Finish/Discard/Change Task (only one Session account-wide)
+      - Today's Routine Task Occurrences + one-shot Tasks
+      - Habits — completion/count chips (Streak visible, caps noted)
+      - Protected Recovery Tracks (collapsed by default, explicit open)
+      - Daily Target ring + collapsed overdue area (carryover)
+      - Fixture / nearby-rank strip (World preview)
+    success_state: One clear next action visible; bar widget mirrors selected Task / elapsed time without duplicating the panel
+    error_state: Empty today — shows "No occurrences today" + rest-day affordance; overdue collapsed not intimidating
+
+  - id: running
+    title: Session — Running
+    description: One timed focused period is running — the dominant interaction
+    contents:
+      - Elapsed / planned time + pause button
+      - Attached Task + Skill tag (changeable)
+      - Inactivity prompt when idle (no keys/screens/URLs captured) → confirm/include or exclude
+      - Beyond-planned requires confirmation before further competitive XP accrues
+      - 12h DailyXP-day competitive cap indicator
+    success_state: Focus stays on the timer; interruptions handled via confirm, not surveillance
+    error_state: Wall-clock jump backward cannot subtract/double-count focused time (invariant); cross-boundary slices to majority day
+
+  - id: paused
+    title: Session — Paused
+    description: Session paused — user can resume or finish
+    contents:
+      - Paused elapsed + Resume CTA
+      - Keep Task or Change Task on resume
+      - Finish / Discard options
+    success_state: Resume continues same Session; wall-clock pause time not counted as focused
+    error_state: Long pause without action — reminder reappears (Start/Change Task/Dismiss via notify-send)
+
+  - id: after-session
+    title: After Session — Planning & Carryover
+    description: Finished Session lands back in Play; planning day handles overdue/idle
+    contents:
+      - Focused minutes attributed to DailyXP day (majority-day rule for cross-boundary)
+      - XP Ledger entry preview (1 XP/min + bonuses — transparent, pending ledger commit)
+      - Overdue occurrences from unfinished Routines → collapsed area; actions: complete/reschedule/skip/dismiss/archive/merge into today
+      - Repeated misses → smaller rescheduling proposal (not a backlog avalanche)
+      - 24h free edit on finished Session; later → auditable adjustment
+    success_state: User sees what to do next without calendar overhead
+    error_state: Duplicate occurrenceKey keeps one record; completed history never changes on Routine edit (today/today+future/all scope)
+
+  - id: habits
+    title: Habits — Schedule & Streaks
+    description: Repeated behavior recorded by completion or count
+    contents:
+      - Habit cards — schedule, today's completion/count input, Streak (uninterrupted sequence)
+      - Each Habit 20 Lifetime XP; up to 7/day count toward Season XP (cap surfaced)
+      - Full-set bonus 50 Lifetime XP — explainable
+    success_state: Streak explainable; streak bonus capped non-exponential
+    error_state: No Habits yet — empty state links to "Add Habit" sheet
+
+  - id: recovery
+    title: Recovery — Private Tracks
+    description: Privacy-sensitive practice — start/ongoing/relapse events, not ordinarily counted
+    contents:
+      - Recovery Tracks — start, ongoing, relapse (explicit only); Recovery Attempts end only on explicit relapse
+      - Personal board always allowed; share is explicit
+      - Support Circles (private, congratulations) vs opt-in global/country/region Recovery Leagues (category-moderated, ranking, Recovery XP)
+      - Relapse history & safety note — never insulting (Hollow King only occupies unfinished territory)
+    success_state: Recovery never made public implicitly; sensitive-by-design invariant holds
+    error_state: Attempting to share Recovery — requires explicit opt-in; no auto-post
+
+  - id: journey
+    title: Journey — Progression & Kingdom
+    description: Permanent progress made emotionally legible
+    contents:
+      - Crest, Level (unbounded, next cost 500+50×level), Story Rank (Wanderer 1 → Sovereign 150)
+      - XP progress bar + Momentum (Dormant/Stirring/Steady/Blazing/Legendary from last 7 eligible days; rest days harmless)
+      - Current Province (Goal) + kingdom map: Provinces, landmarks (Milestones), Ruins (abandoned) — permanent progress never erased
+      - Achievements (focus/Habits/Recovery/Goals/comebacks/Skills) + XP Ledger (every award/correction explainable)
+      - Hollow King states (Drift/Distraction/Doubt/Apathy) — concrete cause, neutral language
+      - Comeback Quest after 7 inactive eligible days: 3 steps → reclaim Province + Achievement
+    success_state: Momentum loss never erases Lifetime XP/Levels/Achievements/Provinces — only occupies unfinished territory
+    error_state: Zero Goals — Journey shows empty kingdom with "Create your first Province" CTA
+
+  - id: world
+    title: World — Competition & Discovery
+    description: Leagues, Fixtures, Groups, Guilds, Circles — discovered as competition becomes relevant
+    contents:
+      - Current Fixture + Division (promote/relegate after Season)
+      - Nearby ranks: global / country / region + Skill Leagues
+      - Head-to-Head Leagues (3/1/0 per Fixture) + standard Leagues
+      - Private Groups + Guilds (normalized member contributions) — explicit membership, discovery, capacity, privacy
+      - Support Circles + Recovery Circles + congratulations (bounded, supportive)
+      - Discovery — Group/Guild/skill suggestions with explicit consent for identity/geo
+    success_state: Healthy competition — nearby ranks, comparable cohorts, caps, rest, comeback over unreachable global top
+    error_state: No competition yet — World shows "Join your first League" with explicit geo/identity consent (not auto-joined)
+
+  - id: share
+    title: Share Card
+    description: User-reviewed image for sharing selected progress outside the product
+    contents:
+      - Selected stats/achievement/kingdom snapshot → preview card
+      - Review step — never auto-posts; no automatic publishing
+      - Export image
+    success_state: Card reviewed before export — no accidental disclosure, especially of Recovery
+    error_state: No selectable progress yet — empty preview with link back to Journey
+
+  - id: settings
+    title: Settings & Profile (behind avatar)
+    description: Configuration and identity — opened via avatar, not the main flow
+    contents:
+      - Day Boundary (default 04:00, configurable) — affects future events only; history frozen
+      - Timezone handling (IANA zone via /etc/localtime readlink)
+      - Daily Target, skill hierarchy, template preferences
+      - Data & removal — $XDG_STATE_HOME/dailyxp/ location, "remove leaves state intact, delete separately"
+      - Account (future): sync + hosted service (when da5ater/dailyxp-api lands)
+    success_state: Changing Day Boundary never rewrites history; settings are previewable before commit
+    error_state: Unprovable IANA zone — recording refused with actionable error until resolved
+
+entry: setup
+
+transitions:
+  - from: setup
+    to: play
+    trigger: completes or skips setup
+
+  - from: play
+    to: running
+    trigger: taps Start (or Start on notify-send reminder)
+  - from: running
+    to: paused
+    trigger: taps Pause (or system pause)
+  - from: paused
+    to: running
+    trigger: taps Resume
+  - from: paused
+    to: after-session
+    trigger: Finish / Discard
+  - from: running
+    to: after-session
+    trigger: Finish / Discard (without pausing)
+  - from: after-session
+    to: play
+    trigger: returns to Play (or auto-return)
+
+  - from: play
+    to: habits
+    trigger: opens Habits (section or sheet)
+  - from: habits
+    to: play
+    trigger: completes/records → back to Play
+
+  - from: play
+    to: recovery
+    trigger: opens Recovery Track (explicit)
+  - from: recovery
+    to: play
+    trigger: back to Play
+  - from: recovery
+    to: world
+    trigger: opens Recovery Circle / opt-in Recovery League
+
+  - from: play
+    to: journey
+    trigger: switches to Journey (revealed as progress accrues)
+  - from: journey
+    to: world
+    trigger: switches to World
+  - from: world
+    to: journey
+    trigger: back to Journey
+  - from: journey
+    to: share
+    trigger: Create Share Card
+  - from: share
+    to: journey
+    trigger: dismisses share preview
+
+  - from: play
+    to: settings
+    trigger: taps avatar → Settings
+  - from: settings
+    to: play
+    trigger: back to Play
+  - from: settings
+    to: journey
+    trigger: opens Journey via nav
+
+notes: |
+  Grounded in docs/design/dailyxp-v1.md (Revised) — 3 surfaces (Play/Journey/World), focused sheets, bar widget without full panel duplication, frozen event time (not current clock), permanent earned progress (Momentum may fall, Lifetime XP never), sensitive-by-design Recovery, portable cheapest-efficient hosted design (AWS Free Plan vs home-server deferred to 2026-10-20 #13). First client is an Omarchy 4/Quattro plugin; contracts are platform-neutral for future non-Omarchy clients. Local-first: record locally, respond immediately, sync later — sync not yet implemented. Horizontal nav between Play/Journey/World; settings behind avatar; new users see Play first, Journey/World reveal as progress/competition become relevant.

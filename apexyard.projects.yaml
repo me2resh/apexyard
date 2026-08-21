@@ -1,0 +1,40 @@
+# =============================================================================
+# ApexYard Portfolio Registry
+# =============================================================================
+# Skills like /projects, /inbox, /status, /tasks, and /stakeholder-update
+# aggregate across every project listed below. See apexyard.projects.yaml.example
+# for the full schema + example entries.
+
+version: 1
+
+projects:
+  # DailyXP — Omarchy-first life-gamification (adopted 2026-08-21 via /handover --all)
+  # Two-repo topology: da5ater/dailyxp (plugin) + da5ater/dailyxp-api (Rails). See gap-report.md.
+  - name: dailyxp
+    repo: da5ater/dailyxp
+    workspace: workspace/dailyxp
+    docs: projects/dailyxp
+    status: handover
+    roles:
+      - tech-lead
+      - backend-engineer
+      - frontend-engineer
+      - sre
+  # DailyXP API — portable Rails/PostgreSQL (scaffolded 2026-08-22, unprovisioned until #13 re-audit 2026-10-20)
+  - name: dailyxp-api
+    repo: da5ater/dailyxp-api
+    workspace: workspace/dailyxp-api
+    docs: projects/dailyxp-api
+    status: handover
+    roles:
+      - tech-lead
+      - backend-engineer
+      - sre
+      - security-auditor
+
+defaults:
+  status: active
+  tier: P1
+  ticket_prefix: GH
+  roles:
+    - tech-lead

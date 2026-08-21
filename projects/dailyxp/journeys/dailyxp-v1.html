@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DailyXP V1 — Play → Journey → World — User Journey</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;margin:0;color:#1f2937;background:#f9fafb}
+header{padding:24px 32px;background:#fff;border-bottom:1px solid #e5e7eb}
+header h1{margin:0 0 4px;font-size:1.5rem}
+header .project{font-size:.85rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+header .description{color:#4b5563;margin-top:6px}
+header .disclaimer{display:inline-block;margin-top:12px;padding:4px 10px;background:#fef3c7;color:#92400e;font-size:.8rem;border-radius:4px;font-weight:600}
+header .timestamp{font-size:.75rem;color:#9ca3af;margin-top:8px}
+header .meta-links{font-size:.8rem;color:#6b7280;margin-top:8px}
+header .meta-links code{background:#f3f4f6;padding:2px 6px;border-radius:3px;font-size:.85em}
+main{padding:32px}
+section.graph{display:flex;justify-content:center;overflow-x:auto}
+svg{max-width:100%;height:auto}
+.page-box rect{fill:#fff;stroke:#6366f1;stroke-width:2;cursor:pointer;transition:fill .15s,stroke .15s}
+.page-box:hover rect,.page-box:focus rect{fill:#eef2ff;stroke:#4338ca}
+.page-box text{font-size:13px;pointer-events:none}
+.page-title{font-weight:600}
+.transition-arrow{fill:none;stroke:#9ca3af;stroke-width:1.5}
+.transition-label{font-size:10px;fill:#4b5563;pointer-events:none}
+.modal[hidden]{display:none}
+.modal{position:fixed;inset:0;z-index:1000}
+.modal-backdrop{position:absolute;inset:0;background:rgba(17,24,39,.5)}
+.modal-content{position:relative;max-width:640px;margin:5vh auto;max-height:90vh;overflow-y:auto;background:#fff;border-radius:8px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,.2)}
+.modal-content header{display:flex;align-items:center;gap:12px;padding:0 0 16px;border-bottom:1px solid #e5e7eb;background:transparent}
+.modal-content header h2{margin:0;font-size:1.25rem;flex:1}
+.modal-close{background:none;border:0;font-size:1.5rem;cursor:pointer;color:#6b7280}
+.modal-close:hover{color:#1f2937}
+.modal-content section{margin-top:16px}
+.modal-content h3{font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 8px}
+.modal-content ul{padding-left:20px;margin:0}
+.modal-content p{margin:0 0 8px;line-height:1.5}
+.state{padding:8px 12px;border-radius:6px;margin-top:6px;font-size:.9rem}
+.state.success{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+.state.error{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d}
+footer{padding:24px 32px;font-size:.8rem;color:#6b7280;border-top:1px solid #e5e7eb;background:#fff}
+footer code{background:#f3f4f6;padding:2px 6px;border-radius:3px;font-size:.85em}
+.badge{display:inline-block;padding:2px 8px;font-size:.7rem;background:#eef2ff;color:#4338ca;border-radius:999px;margin-left:6px}
+.legend{display:flex;gap:12px;justify-content:center;margin-top:12px;font-size:.8rem;color:#6b7280}
+.legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block;vertical-align:middle;margin-right:4px}
+</style>
+</head>
+<body>
+<header>
+<div class="meta">
+<div class="project">dailyxp</div>
+<h1>DailyXP V1 — Play → Journey → World</h1>
+<div class="description">Omarchy-first life-gamification journey from setup through focused Sessions, habits, recovery, progression, competition, and sharing — grounded in docs/design/dailyxp-v1.md and .scratch/wayfinder/map.md</div>
+<div class="disclaimer">DRAFT — preview before implementation. Not a production deliverable.</div>
+<div class="timestamp">Generated 2026-08-21T23:55:00+03:00 via /handover (All docs)</div>
+<div class="meta-links">Source: <code>projects/dailyxp/journeys/dailyxp-v1.yaml</code> · Regenerate: <code>/journey dailyxp-v1 --update</code></div>
+</div>
+</header>
+<main>
+<section class="graph">
+<svg viewBox="0 0 1000 1180" width="1000" height="1180" role="img" aria-label="DailyXP V1 user journey graph">
+<defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker></defs>
+<!-- Row 0: Setup -->
+<g class="page-box" id="page-setup" data-page-id="setup" tabindex="0" role="button" aria-label="Open details for First Run Setup"><rect x="390" y="20" width="220" height="80" rx="8"/><text x="500" y="52" text-anchor="middle"><tspan class="page-title" x="500">First Run Setup</tspan><tspan x="500" dy="16" font-size="11" fill="#6b7280">entry</tspan></text></g>
+<!-- Row 1: Play -->
+<g class="page-box" id="page-play" data-page-id="play" tabindex="0" role="button" aria-label="Open details for Play"><rect x="390" y="160" width="220" height="80" rx="8"/><text x="500" y="205" text-anchor="middle"><tspan class="page-title" x="500">Play — Today's Work</tspan></text></g>
+<!-- Row 2: Running + Habits + Recovery + Journey + Settings -->
+<g class="page-box" id="page-running" data-page-id="running" tabindex="0" role="button" aria-label="Open details for Session Running"><rect x="30" y="300" width="220" height="80" rx="8"/><text x="140" y="345" text-anchor="middle"><tspan class="page-title" x="140">Session — Running</tspan></text></g>
+<g class="page-box" id="page-habits" data-page-id="habits" tabindex="0" role="button" aria-label="Open details for Habits"><rect x="270" y="300" width="220" height="80" rx="8"/><text x="380" y="345" text-anchor="middle"><tspan class="page-title" x="380">Habits</tspan></text></g>
+<g class="page-box" id="page-recovery" data-page-id="recovery" tabindex="0" role="button" aria-label="Open details for Recovery"><rect x="510" y="300" width="220" height="80" rx="8"/><text x="620" y="345" text-anchor="middle"><tspan class="page-title" x="620">Recovery — Private</tspan></text></g>
+<g class="page-box" id="page-journey" data-page-id="journey" tabindex="0" role="button" aria-label="Open details for Journey"><rect x="750" y="300" width="220" height="80" rx="8"/><text x="860" y="335" text-anchor="middle"><tspan class="page-title" x="860">Journey — Kingdom</tspan><tspan x="860" dy="14" font-size="11" fill="#6b7280">Progression &amp; Story</tspan></text></g>
+<!-- Row 3: Paused + Settings detail row -->
+<g class="page-box" id="page-paused" data-page-id="paused" tabindex="0" role="button" aria-label="Open details for Paused"><rect x="30" y="440" width="220" height="80" rx="8"/><text x="140" y="485" text-anchor="middle"><tspan class="page-title" x="140">Session — Paused</tspan></text></g>
+<g class="page-box" id="page-settings" data-page-id="settings" tabindex="0" role="button" aria-label="Open details for Settings"><rect x="750" y="440" width="220" height="80" rx="8"/><text x="860" y="485" text-anchor="middle"><tspan class="page-title" x="860">Settings &amp; Profile</tspan></text></g>
+<!-- Row 4: After Session + World + Share -->
+<g class="page-box" id="page-after-session" data-page-id="after-session" tabindex="0" role="button" aria-label="Open details for After Session"><rect x="30" y="580" width="220" height="80" rx="8"/><text x="140" y="625" text-anchor="middle"><tspan class="page-title" x="140">After Session</tspan></text></g>
+<g class="page-box" id="page-world" data-page-id="world" tabindex="0" role="button" aria-label="Open details for World"><rect x="510" y="580" width="220" height="80" rx="8"/><text x="620" y="625" text-anchor="middle"><tspan class="page-title" x="620">World — Competition</tspan></text></g>
+<g class="page-box" id="page-share" data-page-id="share" tabindex="0" role="button" aria-label="Open details for Share Card"><rect x="750" y="580" width="220" height="80" rx="8"/><text x="860" y="625" text-anchor="middle"><tspan class="page-title" x="860">Share Card</tspan></text></g>
+<!-- Arrows: setup->play -->
+<path class="transition-arrow" d="M500,100 C500,120 500,140 500,160" marker-end="url(#arrowhead)"/><text class="transition-label" x="512" y="132">completes/skips setup</text>
+<!-- play->running, habits, recovery, journey, settings -->
+<path class="transition-arrow" d="M420,240 C300,270 200,280 140,300" marker-end="url(#arrowhead)"/><text class="transition-label" x="220" y="275">Start</text>
+<path class="transition-arrow" d="M460,240 C460,260 380,280 380,300" marker-end="url(#arrowhead)"/><text class="transition-label" x="385" y="285">Habits</text>
+<path class="transition-arrow" d="M540,240 C540,260 620,280 620,300" marker-end="url(#arrowhead)"/><text class="transition-label" x="565" y="285">Recovery</text>
+<path class="transition-arrow" d="M560,240 C700,270 800,280 860,300" marker-end="url(#arrowhead)"/><text class="transition-label" x="700" y="275">Journey</text>
+<path class="transition-arrow" d="M580,240 C680,320 780,360 860,440" marker-end="url(#arrowhead)"/><text class="transition-label" x="745" y="345">avatar → Settings</text>
+<!-- running->paused -->
+<path class="transition-arrow" d="M140,380 C140,400 140,420 140,440" marker-end="url(#arrowhead)"/><text class="transition-label" x="152" y="415">Pause</text>
+<!-- paused->running (curved left) -->
+<path class="transition-arrow" d="M30,480 C-10,420 -10,360 30,360" marker-end="url(#arrowhead)"/><text class="transition-label" x="2" y="425">Resume</text>
+<!-- running->after-session, paused->after-session -->
+<path class="transition-arrow" d="M140,380 C140,460 140,500 140,580" marker-end="url(#arrowhead)"/><text class="transition-label" x="152" y="500">Finish</text>
+<!-- after-session->play (back edge curved) -->
+<path class="transition-arrow" d="M30,620 C-20,500 -20,200 390,200" marker-end="url(#arrowhead)"/><text class="transition-label" x="8" y="380">back to Play</text>
+<!-- habits->play -->
+<path class="transition-arrow" d="M380,380 C380,360 420,280 460,240" marker-end="url(#arrowhead)"/><text class="transition-label" x="395" y="310">complete → Play</text>
+<!-- recovery->play and recovery->world -->
+<path class="transition-arrow" d="M540,360 C480,300 430,260 420,240" marker-end="url(#arrowhead)"/><text class="transition-label" x="430" y="310">back</text>
+<path class="transition-arrow" d="M620,380 C620,460 620,520 620,580" marker-end="url(#arrowhead)"/><text class="transition-label" x="632" y="500">Circle → World</text>
+<!-- journey->world, world->journey, journey->share -->
+<path class="transition-arrow" d="M780,360 C720,420 660,500 620,580" marker-end="url(#arrowhead)"/><text class="transition-label" x="655" y="445">to World</text>
+<path class="transition-arrow" d="M620,580 C660,500 720,420 780,360" marker-end="url(#arrowhead)"/><text class="transition-label" x="710" y="485">back</text>
+<path class="transition-arrow" d="M860,380 C860,440 860,520 860,580" marker-end="url(#arrowhead)"/><text class="transition-label" x="872" y="500">Share Card</text>
+<path class="transition-arrow" d="M860,580 C860,500 860,420 860,380" marker-end="url(#arrowhead)"/><text class="transition-label" x="872" y="470">dismiss</text>
+<!-- settings->play and settings->journey -->
+<path class="transition-arrow" d="M860,520 C860,400 600,260 500,240" marker-end="url(#arrowhead)"/><text class="transition-label" x="690" y="360">back to Play</text>
+</svg>
+</section>
+<div class="legend"><span><span class="dot" style="background:#6366f1"></span>Tap any box to see detail</span><span><span class="dot" style="background:#fef3c7;border:1px solid #f59e0b"></span>DRAFT — preview</span><span>Day Boundary 04:00 · single active Session · 12h/d cap · 24h edit</span></div>
+<!-- Modals -->
+<div class="modal" id="modal-setup" role="dialog" aria-modal="true" aria-labelledby="modal-title-setup" hidden><div class="modal-backdrop" data-close-modal="setup"></div><div class="modal-content"><header><h2 id="modal-title-setup">First Run Setup</h2><button class="modal-close" data-close-modal="setup" aria-label="Close">×</button></header><section class="modal-description">New user lands on Play with empty state + short setup path</section><section><h3>Page contents</h3><ul><li>One Goal prompt (name + target date + Skill)</li><li>One suggested daily Routine (previewable, editable)</li><li>Up to 3 optional Habits (previewable)</li><li>Start-first-Session CTA — everything editable or skippable</li><li>Templates preview (study/build/reading/recovery/custom) — never creates public memberships implicitly</li></ul></section><div class="state success"><strong>Success:</strong> User has 1 Goal + 1 Routine + optionally habits; ready to select work</div><div class="state error"><strong>Empty/edge:</strong> User skips everything — stays local, empty Play with "Add your first Goal" CTA</div><section><h3>Transitions out</h3><ul><li>to Play — completes or skips setup</li></ul></section></div></div>
+<div class="modal" id="modal-play" role="dialog" aria-modal="true" aria-labelledby="modal-title-play" hidden><div class="modal-backdrop" data-close-modal="play"></div><div class="modal-content"><header><h2 id="modal-title-play">Play — Today's Work</h2><button class="modal-close" data-close-modal="play" aria-label="Close">×</button></header><section class="modal-description">Dominant daily surface — selected Task + Session controls + today's occurrences/habits</section><section><h3>Page contents</h3><ul><li>Selected Task (or free Session) card with Skill tag</li><li>Session controls: Start (with plannedMinutes?)/Pause/Resume/Finish/Discard/Change Task</li><li>Today's Routine Task Occurrences + one-shot Tasks</li><li>Habits — completion/count chips (Streak visible, caps noted)</li><li>Protected Recovery Tracks (collapsed by default, explicit open)</li><li>Daily Target ring + collapsed overdue area (carryover)</li><li>Fixture / nearby-rank strip (World preview)</li></ul></section><div class="state success"><strong>Success:</strong> One clear next action visible; bar widget mirrors selected Task / elapsed time</div><div class="state error"><strong>Empty:</strong> "No occurrences today" + rest-day affordance; overdue collapsed</div><section><h3>Transitions</h3><ul><li>in: from Setup, After Session, Habits, Recovery, Settings</li><li>out: to Running (Start), Habits, Recovery, Journey, Settings (avatar)</li></ul></section></div></div>
+<div class="modal" id="modal-running" role="dialog" aria-modal="true" aria-labelledby="modal-title-running" hidden><div class="modal-backdrop" data-close-modal="running"></div><div class="modal-content"><header><h2 id="modal-title-running">Session — Running</h2><button class="modal-close" data-close-modal="running" aria-label="Close">×</button></header><section class="modal-description">One timed focused period is running — the dominant interaction</section><section><h3>Page contents</h3><ul><li>Elapsed / planned time + pause button</li><li>Attached Task + Skill tag (changeable)</li><li>Inactivity prompt when idle (no keys/screens/URLs captured) → confirm/include or exclude</li><li>Beyond-planned requires confirmation before further competitive XP</li><li>12h DailyXP-day competitive cap indicator</li></ul></section><div class="state success"><strong>Success:</strong> Focus stays on the timer; interruptions handled via confirm, not surveillance</div><div class="state error"><strong>Failure:</strong> Wall-clock jump backward cannot subtract/double-count (invariant); cross-boundary slices to majority day</div><section><h3>Transitions</h3><ul><li>in: from Play (Start), Paused (Resume)</li><li>out: to Paused (Pause), After Session (Finish)</li></ul></section></div></div>
+<div class="modal" id="modal-paused" role="dialog" aria-modal="true" aria-labelledby="modal-title-paused" hidden><div class="modal-backdrop" data-close-modal="paused"></div><div class="modal-content"><header><h2 id="modal-title-paused">Session — Paused</h2><button class="modal-close" data-close-modal="paused" aria-label="Close">×</button></header><section class="modal-description">Session paused — user can resume or finish</section><section><h3>Page contents</h3><ul><li>Paused elapsed + Resume CTA</li><li>Keep Task or Change Task on resume</li><li>Finish / Discard options</li></ul></section><div class="state success"><strong>Success:</strong> Resume continues same Session; pause time not counted as focused</div><div class="state error"><strong>Edge:</strong> Long pause — reminder reappears via notify-send (Start/Change Task/Dismiss)</div><section><h3>Transitions</h3><ul><li>in: from Running (Pause)</li><li>out: to Running (Resume), After Session (Finish/Discard)</li></ul></section></div></div>
+<div class="modal" id="modal-after-session" role="dialog" aria-modal="true" aria-labelledby="modal-title-after-session" hidden><div class="modal-backdrop" data-close-modal="after-session"></div><div class="modal-content"><header><h2 id="modal-title-after-session">After Session — Planning &amp; Carryover</h2><button class="modal-close" data-close-modal="after-session" aria-label="Close">×</button></header><section class="modal-description">Finished Session lands back in Play; planning day handles overdue/idle</section><section><h3>Page contents</h3><ul><li>Focused minutes attributed to DailyXP day (majority-day rule)</li><li>XP Ledger entry preview (1 XP/min + bonuses)</li><li>Overdue occurrences (carryover) → collapsed area: complete/reschedule/skip/dismiss/archive/merge</li><li>Repeated misses → smaller rescheduling proposal</li><li>24h free edit on finished Session; later → auditable adjustment</li></ul></section><div class="state success"><strong>Success:</strong> User sees what to do next without calendar overhead</div><div class="state error"><strong>Invariant:</strong> Duplicate occurrenceKey → one record; completed history never changes on Routine edit</div><section><h3>Transitions</h3><ul><li>in: from Running, Paused</li><li>out: to Play (returns)</li></ul></section></div></div>
+<div class="modal" id="modal-habits" role="dialog" aria-modal="true" aria-labelledby="modal-title-habits" hidden><div class="modal-backdrop" data-close-modal="habits"></div><div class="modal-content"><header><h2 id="modal-title-habits">Habits — Schedule &amp; Streaks</h2><button class="modal-close" data-close-modal="habits" aria-label="Close">×</button></header><section class="modal-description">Repeated behavior recorded by completion or count</section><section><h3>Page contents</h3><ul><li>Habit cards — schedule, today's completion/count input, Streak</li><li>Each Habit 20 Lifetime XP; up to 7/day count toward Season XP (cap surfaced)</li><li>Full-set bonus 50 Lifetime XP — explainable</li></ul></section><div class="state success"><strong>Success:</strong> Streak explainable; bonus capped non-exponential</div><div class="state error"><strong>Empty:</strong> No Habits yet — empty state links to "Add Habit" sheet</div><section><h3>Transitions</h3><ul><li>in: from Play</li><li>out: to Play</li></ul></section></div></div>
+<div class="modal" id="modal-recovery" role="dialog" aria-modal="true" aria-labelledby="modal-title-recovery" hidden><div class="modal-backdrop" data-close-modal="recovery"></div><div class="modal-content"><header><h2 id="modal-title-recovery">Recovery — Private Tracks</h2><button class="modal-close" data-close-modal="recovery" aria-label="Close">×</button></header><section class="modal-description">Privacy-sensitive practice — start/ongoing/relapse events, not ordinarily counted</section><section><h3>Page contents</h3><ul><li>Recovery Tracks — start, ongoing, relapse (explicit only); Attempts end only on explicit relapse</li><li>Personal board always allowed; share is explicit</li><li>Support Circles (private, congratulations) vs opt-in global/country/region Recovery Leagues (category-moderated, Recovery XP)</li><li>Relapse history &amp; safety note — never insulting</li></ul></section><div class="state success"><strong>Success:</strong> Recovery never made public implicitly — sensitive-by-design</div><div class="state error"><strong>Guard:</strong> Attempting to share Recovery requires explicit opt-in; no auto-post</div><section><h3>Transitions</h3><ul><li>in: from Play</li><li>out: to Play, World (Circle / League)</li></ul></section></div></div>
+<div class="modal" id="modal-journey" role="dialog" aria-modal="true" aria-labelledby="modal-title-journey" hidden><div class="modal-backdrop" data-close-modal="journey"></div><div class="modal-content"><header><h2 id="modal-title-journey">Journey — Progression &amp; Kingdom</h2><button class="modal-close" data-close-modal="journey" aria-label="Close">×</button></header><section class="modal-description">Permanent progress made emotionally legible</section><section><h3>Page contents</h3><ul><li>Crest, Level (next cost 500+50×level), Story Rank Wanderer 1 → Sovereign 150</li><li>XP progress bar + Momentum (Dormant→Legendary, last 7 eligible days; rest days harmless)</li><li>Current Province (Goal) + kingdom map: Provinces, landmarks, Ruins</li><li>Achievements (focus/Habits/Recovery/Goals/comebacks/Skills) + XP Ledger</li><li>Hollow King states (Drift/Distraction/Doubt/Apathy) — concrete cause, neutral language</li><li>Comeback Quest after 7 inactive eligible days: 3 steps → reclaim Province</li></ul></section><div class="state success"><strong>Success:</strong> Momentum loss never erases Lifetime XP/Levels/Achievements — only unfinished territory</div><div class="state error"><strong>Empty:</strong> Zero Goals — "Create your first Province" CTA</div><section><h3>Transitions</h3><ul><li>in: from Play, Settings, World</li><li>out: to World, Share Card</li></ul></section></div></div>
+<div class="modal" id="modal-world" role="dialog" aria-modal="true" aria-labelledby="modal-title-world" hidden><div class="modal-backdrop" data-close-modal="world"></div><div class="modal-content"><header><h2 id="modal-title-world">World — Competition &amp; Discovery</h2><button class="modal-close" data-close-modal="world" aria-label="Close">×</button></header><section class="modal-description">Leagues, Fixtures, Groups, Guilds, Circles — discovered as competition becomes relevant</section><section><h3>Page contents</h3><ul><li>Current Fixture + Division (promote/relegate after Season)</li><li>Nearby ranks: global / country / region + Skill Leagues</li><li>Head-to-Head (3/1/0 per Fixture) + standard Leagues</li><li>Private Groups + Guilds (normalized contributions)</li><li>Support Circles + Recovery Circles + congratulations (bounded)</li><li>Discovery — Group/Guild/skill suggestions with explicit geo/identity consent</li></ul></section><div class="state success"><strong>Success:</strong> Healthy competition — nearby ranks, comparable cohorts, caps, rest, comeback</div><div class="state error"><strong>Empty:</strong> "Join your first League" with explicit consent — not auto-joined</div><section><h3>Transitions</h3><ul><li>in: from Journey, Recovery</li><li>out: to Journey</li></ul></section></div></div>
+<div class="modal" id="modal-share" role="dialog" aria-modal="true" aria-labelledby="modal-title-share" hidden><div class="modal-backdrop" data-close-modal="share"></div><div class="modal-content"><header><h2 id="modal-title-share">Share Card</h2><button class="modal-close" data-close-modal="share" aria-label="Close">×</button></header><section class="modal-description">User-reviewed image for sharing selected progress outside the product</section><section><h3>Page contents</h3><ul><li>Selected stats/achievement/kingdom snapshot → preview card</li><li>Review step — never auto-posts</li><li>Export image</li></ul></section><div class="state success"><strong>Success:</strong> Card reviewed before export — no accidental disclosure</div><div class="state error"><strong>Empty:</strong> No selectable progress yet — link back to Journey</div><section><h3>Transitions</h3><ul><li>in: from Journey</li><li>out: to Journey (dismiss)</li></ul></section></div></div>
+<div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="modal-title-settings" hidden><div class="modal-backdrop" data-close-modal="settings"></div><div class="modal-content"><header><h2 id="modal-title-settings">Settings &amp; Profile (behind avatar)</h2><button class="modal-close" data-close-modal="settings" aria-label="Close">×</button></header><section class="modal-description">Configuration and identity — opened via avatar, not the main flow</section><section><h3>Page contents</h3><ul><li>Day Boundary (default 04:00, configurable) — future events only; history frozen</li><li>Timezone handling (IANA zone via /etc/localtime readlink)</li><li>Daily Target, skill hierarchy, template preferences</li><li>Data &amp; removal — $XDG_STATE_HOME/dailyxp/; remove leaves state intact</li><li>Account (future): sync + hosted service</li></ul></section><div class="state success"><strong>Success:</strong> Changing Day Boundary never rewrites history</div><div class="state error"><strong>Failure:</strong> Unprovable IANA zone — recording refused with actionable error</div><section><h3>Transitions</h3><ul><li>in: from Play (avatar)</li><li>out: to Play, Journey</li></ul></section></div></div>
+</main>
+<footer>
+<div>Source: <code>projects/dailyxp/journeys/dailyxp-v1.yaml</code> · Regenerate: <code>/journey dailyxp-v1 --update</code></div>
+<div style="margin-top:6px">Grounded in <code>docs/design/dailyxp-v1.md</code> + <code>.scratch/wayfinder/map.md</code> + <code>CONTEXT.md</code> · Single active Session · Frozen time · Honest releases · Zero-spend guardrail (issue #13)</div>
+</footer>
+<script>
+(function(){
+  const pages=document.querySelectorAll('.page-box');
+  const modals=document.querySelectorAll('.modal');
+  function openModal(id){const m=document.getElementById('modal-'+id);if(!m)return;m.hidden=false;document.body.style.overflow='hidden';const b=m.querySelector('.modal-close');if(b)b.focus();}
+  function closeModal(id){const m=document.getElementById('modal-'+id);if(!m)return;m.hidden=true;document.body.style.overflow='';const t=document.getElementById('page-'+id);if(t)t.focus();}
+  pages.forEach(p=>{const id=p.dataset.pageId;p.addEventListener('click',()=>openModal(id));p.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal(id);}});});
+  document.querySelectorAll('[data-close-modal]').forEach(el=>{el.addEventListener('click',()=>closeModal(el.dataset.closeModal));});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){modals.forEach(m=>{if(!m.hidden)closeModal(m.id.replace(/^modal-/,""));});}});
+})();
+</script>
+</body>
+</html>
