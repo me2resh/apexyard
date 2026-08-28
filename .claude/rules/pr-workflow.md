@@ -138,8 +138,8 @@ The `block-unreviewed-merge.sh` hook enforces this rule at the shell level. It r
 
 | Marker | Written by | Format | Semantics |
 |--------|------------|--------|-----------|
-| `<pr>-rex.approved` | the `code-reviewer` agent after a successful review | Bare 40-char SHA | Code reviewed, no blocking issues |
-| `<pr>-ceo.approved` | the `/approve-merge <pr>` skill, **only** on explicit user invocation | Structured key/value (see below) | CEO has looked at this specific PR and said ship it |
+| `<owner>__<repo>__<pr>-rex.approved` | the `code-reviewer` agent after a successful review | Bare 40-char SHA | Code reviewed, no blocking issues |
+| `<owner>__<repo>__<pr>-ceo.approved` | the `/approve-merge <pr>` skill, **only** on explicit user invocation | Structured key/value (see below) | CEO has looked at this specific PR and said ship it |
 
 The CEO marker is **structured** (key/value format) so the model cannot pass the gate by writing a bare SHA via `echo SHA > file`. Required fields:
 
@@ -150,6 +150,33 @@ skill_version=2
 ```
 
 Optional audit fields the skill writes but the gate doesn't validate: `approved_at=<ISO>`, `approval_summary="..."`. See me2resh/apexyard#48 for the design rationale — the structured format makes a forged marker a deliberate, visible rule violation rather than a one-line accident.
+
+### Never put a marker path in a reviewer's spawn prompt (me2resh/apexyard#1144)
+
+Marker filenames are **repo-qualified** — `<owner>__<repo>__<pr>-<role>.approved`
+(AgDR-0060) — and every gate resolves that exact path through
+`review_marker_path`. There is no bare-number fallback on any on-disk marker
+lookup.
+
+So when an orchestrator includes a literal path in the prompt it hands a
+reviewer — *"on APPROVED, write `.claude/session/reviews/<N>-rex.approved`"* — <!-- bare-marker-example: this quotes the anti-pattern on purpose -->
+the agent obeys the prompt over its own (correct) resolution, and the marker
+lands where nothing reads it. **Say what to write, never where.** The reviewer
+already knows.
+
+This fails closed: a gate-invisible marker cannot cause an unreviewed merge, only
+a blocked one. The cost is the second-order effect. `ls .claude/session/reviews/`
+shows a file that reads like a valid approval, so the mismatch only surfaces at
+the merge attempt — and the obvious repair in that moment, moving the file into
+place, is exactly the marker forging the section above forbids. An orchestrator
+that has blocked itself on a path typo, and knows the review genuinely passed, is
+one rationalisation away from writing a gate signal by hand. The clean recovery
+is the unobvious one: **delete the file and re-run a real review.**
+
+Two advisory backstops name the problem before that pressure builds —
+`warn-unqualified-review-marker.sh` warns when a bare-number marker appears, and
+the three merge gates print the near-miss path in their refusal message instead
+of a bare "marker missing". Neither blocks; the cheap fix is upstream of both.
 
 Both markers' SHAs must match the PR's HEAD as reported by GitHub (`gh pr view <N> --json headRefOid`). New commits after approval invalidate both — you must re-review and re-approve.
 

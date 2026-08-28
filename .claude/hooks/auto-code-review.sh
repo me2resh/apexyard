@@ -10,7 +10,12 @@
 #
 # The marker file at .claude/session/pending-reviews/<pr> is also read by
 # the merge-gate hook so a PR cannot be merged without a corresponding Rex
-# approval file at .claude/session/reviews/<pr>-rex.approved.
+# approval file at .claude/session/reviews/<owner>__<repo>__<pr>-rex.approved
+# (repo-qualified, AgDR-0060). This banner deliberately does NOT print that
+# path: quoting a literal marker path at an agent is the #1144 vector — the
+# reviewer obeys the path it is handed instead of resolving its own, and the
+# marker lands bare-number where no gate reads it. Name the review, never the
+# path.
 #
 # SUBAGENT-AWARE BANNER (me2resh/apexyard#843): this hook fires on ANY
 # `gh pr create`, regardless of which agent ran it. Twice (PRs #835, #842) a
@@ -143,8 +148,11 @@ Lean-tier diff (docs / config-text, small, reversible, no behavior change,
 non-security-path) still gets a Rex pass — in REDUCED SCOPE per
 .claude/agents/code-reviewer.md § "Reduced-Scope Review" — never a bypass.
 
-The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
-file exists at .claude/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
+The merge-gate hook will block \`gh pr merge\` for this PR until Rex's approval
+marker exists. Do NOT quote a marker path when you invoke the review — the
+reviewer resolves its own repo-qualified path (me2resh/apexyard#1144); a path
+handed to it in a prompt overrides that and lands the marker where no gate
+reads it.
 
 This message is a reminder from the PostToolUse hook, not a tool error. The PR
 was created successfully.

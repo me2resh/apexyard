@@ -142,6 +142,22 @@ REX=$(review_marker_path "$PR_HOST_REPO" <pr> rex "$MARKER_HOME")
 
 If Rex's marker is missing or its SHA doesn't match the PR HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
 
+**On a MISSING marker, check for the gate-invisible near-miss before reporting it (me2resh/apexyard#1144).** A reviewer handed a literal marker path in its spawn prompt writes the bare-number form instead of the repo-qualified one. That file is read by no gate, but `ls .claude/session/reviews/` makes it look like a perfectly good approval — so "marker missing" is true of the path you looked at and false of what the operator can see on disk. Name the discrepancy:
+
+```bash
+NEAR_MISS=$(unqualified_marker_path "$MARKER_HOME" <pr> rex)
+if [ ! -f "$REX" ] && [ -f "$NEAR_MISS" ]; then
+  # Refuse, and say WHY it isn't the marker:
+  #   found:    $NEAR_MISS          (bare-number — no gate reads this)
+  #   expected: $REX                (repo-qualified, AgDR-0060)
+  # Then state the recovery explicitly, because the wrong one is the obvious one.
+fi
+```
+
+Tell the user, in these terms: **do not move, rename, or copy that file into place.** Relocating a file to satisfy a gate records a review this session cannot vouch for — the behaviour `.claude/rules/pr-workflow.md` § "Build agents cannot self-review" exists to prevent. The correct recovery is `rm` the gate-invisible file and re-run `/code-review <pr>`, passing it no marker path.
+
+This is the same diagnosis `block-unreviewed-merge.sh` now prints via `unqualified_marker_hint`; surfacing it here means the operator sees it at `/approve-merge` time rather than one failed merge later.
+
 ### 5. Write the structured CEO marker
 
 The marker is a key/value file with required fields. The format:

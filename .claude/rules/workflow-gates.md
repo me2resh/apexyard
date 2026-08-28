@@ -6,7 +6,7 @@
 | 2 | Tech Design → Build | Design approved, story tickets exist, **AgDR for key decisions** |
 | 3 | Starting code | Ticket exists, branch created, design review if UI work |
 | 3a | Starting a **migration** edit | Active ticket has the `migration` label **and** its body references a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`. Enforced by `require-migration-ticket.sh`. Use `/migration` to produce both artefacts in one flow. |
-| 3b | Design → Build (merging a **design-artifact** PR) | A PR carrying a technical design / migration AgDR / feature spec has a Solution Architect (Tariq) sign-off marker at `.claude/session/reviews/<pr>-architecture.approved` with a matching HEAD SHA. Enforced by `require-architecture-review.sh`. Produce the sign-off via `/design-review` (Tariq writes it on APPROVED) or `/approve-architecture`. |
+| 3b | Design → Build (merging a **design-artifact** PR) | A PR carrying a technical design / migration AgDR / feature spec has a Solution Architect (Tariq) sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` with a matching HEAD SHA. Enforced by `require-architecture-review.sh`. Produce the sign-off via `/design-review` (Tariq writes it on APPROVED) or `/approve-architecture`. |
 | 4 | Creating PR | Tests pass, checks pass, **> 80% coverage**, **AgDR linked if decisions made** |
 | 5 | Merging PR | 2 reviews (agent + human), CI green, **commit SHA matches review** |
 | 6 | Ticket → Done | QA verified, signed off |
@@ -92,7 +92,7 @@ In the ApexYard SDLC a technical design lands as a **committed document** — a 
 
 Any merge of a PR whose diff carries a design artifact requires:
 
-1. A Solution Architect sign-off marker at `.claude/session/reviews/<pr>-architecture.approved`
+1. A Solution Architect sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified, AgDR-0060 — the bare-number form is read by no gate)
 2. Whose SHA matches the PR's HEAD on GitHub
 
 Default design-artifact patterns (configurable via `.claude/project-config.json` → `design_paths` to REPLACE, `design_paths_exclude` to additively carve out):
