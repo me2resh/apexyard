@@ -149,7 +149,8 @@ run_migration() {
     # Update .gitignore
     NEEDS=()
     grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
-    grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+    grep -qxF 'workspace/*' .gitignore 2>/dev/null || NEEDS+=('workspace/*')
+    grep -qxF '!workspace/README.md' .gitignore 2>/dev/null || NEEDS+=('!workspace/README.md')
     if [ "${#NEEDS[@]}" -gt 0 ]; then
       {
         echo ""
@@ -236,9 +237,13 @@ grep -qxF onboarding.yaml "$SB/public/.gitignore" \
   && mark_pass "onboarding.yaml added to public-fork .gitignore" \
   || mark_fail "gitignore onboarding" "not added"
 
-grep -qxF workspace "$SB/public/.gitignore" \
-  && mark_pass "workspace added to public-fork .gitignore" \
-  || mark_fail "gitignore workspace" "not added"
+grep -qxF 'workspace/*' "$SB/public/.gitignore" \
+  && mark_pass "workspace entries added to public-fork .gitignore" \
+  || mark_fail "gitignore workspace entries" "not added"
+
+grep -qxF '!workspace/README.md' "$SB/public/.gitignore" \
+  && mark_pass "workspace README exception added to public-fork .gitignore" \
+  || mark_fail "gitignore workspace README" "exception not added"
 
 ONB_KEY=$(jq -r '.portfolio.onboarding // empty' "$SB/public/.claude/project-config.json")
 WS_KEY=$(jq -r '.portfolio.workspace_dir // empty' "$SB/public/.claude/project-config.json")
@@ -280,12 +285,13 @@ run_migration "$SB/public"
 POST_LIST=$(find "$SB/public" "$SB/private" -type f 2>/dev/null | sort)
 
 # .gitignore should have exactly one entry per v2 file class even after re-run.
-GI_ONB=$(grep -cxF onboarding.yaml "$SB/public/.gitignore" 2>/dev/null || echo 0)
-GI_WS=$(grep -cxF workspace "$SB/public/.gitignore" 2>/dev/null || echo 0)
-if [ "$GI_ONB" -eq 1 ] && [ "$GI_WS" -eq 1 ]; then
+GI_ONB=$(grep -cxF onboarding.yaml "$SB/public/.gitignore" 2>/dev/null || true)
+GI_WS=$(grep -cxF 'workspace/*' "$SB/public/.gitignore" 2>/dev/null || true)
+GI_README=$(grep -cxF '!workspace/README.md' "$SB/public/.gitignore" 2>/dev/null || true)
+if [ "${GI_ONB:-0}" -eq 1 ] && [ "${GI_WS:-0}" -eq 1 ] && [ "${GI_README:-0}" -eq 1 ]; then
   mark_pass "idempotence: .gitignore has exactly one entry per file class"
 else
-  mark_fail "idempotence gitignore" "got onboarding=$GI_ONB workspace=$GI_WS (expected 1 each)"
+  mark_fail "idempotence gitignore" "got onboarding=${GI_ONB:-0} workspace=${GI_WS:-0} readme=${GI_README:-0} (expected 1 each)"
 fi
 
 if [ "$PRE_LIST" = "$POST_LIST" ]; then

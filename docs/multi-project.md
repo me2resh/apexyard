@@ -284,8 +284,8 @@ The recommended path is the **config block** (framework version ≥ #145). The s
 ```bash
 cd ~/ops/apexyard
 
-# Tell the fork to ignore everything that lives in the private repo:
-# registry, per-project docs, onboarding config, and the workspace dir.
+# Tell the fork to ignore everything that lives in the private repo.
+# Keep workspace/ itself visible so the framework README can stay public.
 cat >> .gitignore <<'EOF'
 
 # Portfolio data lives in a separate private repo (split-portfolio v2).
@@ -293,12 +293,14 @@ cat >> .gitignore <<'EOF'
 apexyard.projects.yaml
 projects
 onboarding.yaml
-workspace
+workspace/*
+!workspace/README.md
 EOF
 
 # If any of these are currently tracked from the upstream framework,
 # untrack them so the config-block resolution can take their place:
-git rm -r --cached projects onboarding.yaml workspace 2>/dev/null || true
+git rm -r --cached projects onboarding.yaml 2>/dev/null || true
+# workspace/README.md deliberately stays tracked (AgDR-0021 § G).
 
 # Write the v2 portfolio: config block pointing at the sibling repo.
 # Paths resolve relative to the ops-fork root (this directory).
@@ -707,7 +709,8 @@ cat >> .gitignore <<'IGNORE'
 
 # Split-portfolio v2 (framework ≥ #242)
 onboarding.yaml
-workspace
+workspace/*
+!workspace/README.md
 IGNORE
 
 # Write the v2 anchor

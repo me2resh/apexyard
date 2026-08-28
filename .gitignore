@@ -36,7 +36,7 @@ onboarding.yaml
 
 # Live working copies of managed projects. Each is its own git repo — they
 # must not be double-tracked from the ops repo.
-workspace/*/
+workspace/*
 !workspace/README.md
 
 # Adopter-specific agent routing (single-fork mode; split-portfolio mode
