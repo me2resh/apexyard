@@ -114,39 +114,13 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
-# Resolve the PR's repo. Each step runs only if the prior left CMD_REPO empty:
-#   1. --repo flag      (`gh pr merge --repo owner/repo`)
-#   2. gh api URL path  (`gh api repos/<owner>/<repo>/pulls/<N>/merge`)
-#   3. cd-target origin (`cd <portfolio> && gh pr merge <N>` with NO --repo —
-#                        the split-portfolio v2 pattern; the hook fires BEFORE
-#                        the in-command `cd`, so its own cwd is the ops fork,
-#                        not the PR's repo. me2resh/apexyard#687, the merge-time
-#                        sibling of the create-time fix #669.)
-#   4. extract_repo_from_command fallback (current-branch `gh pr view`)
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-fi
-if [ -z "$CMD_REPO" ]; then
-  # Recover the repo from a leading `cd <path> &&` prefix — only when the path
-  # resolves to a real git tree (relative paths resolve against the hook's cwd,
-  # which is correct: the hook runs pre-`cd`). Otherwise fall through.
-  CD_TARGET=$(pr_cmd_cd_target "$COMMAND")
-  if [ -n "$CD_TARGET" ] && git -C "$CD_TARGET" rev-parse --git-dir >/dev/null 2>&1; then
-    CMD_REPO=$(git_origin_repo "$CD_TARGET")
-  fi
+if merge_command_uses_variable "$COMMAND"; then
+  echo "BLOCKED: architecture-review gate cannot resolve a merge command containing an unexpanded PR or repo variable. Re-run with literal values." >&2
+  exit 2
 fi
 
 PR_NUMBER=$(extract_pr_number "$COMMAND")
-# Resolve the repo for qualified marker paths (#485).
-# CMD_REPO already resolved above; fall back via helper if still blank.
-# NOTE (#765): the architecture marker is keyed on the BASE repo. CMD_REPO is the base via
-# --repo / API-path / cd-target origin; the extract_repo_from_command fallback below resolves
-# headRepository (the FORK) on a no---repo current-branch merge — a residual edge affecting
-# unsanctioned merges only (/design-review + /approve-architecture thread the base repo). Left as-is.
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(extract_repo_from_command "$COMMAND")
-fi
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 
 # Derive REPO_FLAG from the FULLY-resolved CMD_REPO (#687) so the `gh pr diff`
 # below targets the PR's real repo. If this were set before the cd-target /
@@ -194,9 +168,10 @@ fi
 
 # Get the PR's changed files
 CHANGED=$(gh pr diff "$PR_NUMBER" $REPO_FLAG --name-only 2>/dev/null)
-if [ -z "$CHANGED" ]; then
-  # Couldn't determine files — skip rather than false-positive
-  exit 0
+CHANGED_RC=$?
+if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ]; then
+  echo "BLOCKED: architecture-review gate could not determine the PR's changed files. Refusing to merge until the diff can be verified." >&2
+  exit 2
 fi
 
 TOUCHED_DESIGN=""

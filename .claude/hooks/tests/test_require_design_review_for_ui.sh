@@ -353,6 +353,32 @@ assert_eq "#1091 control: gh healthy, marker at forge HEAD -> still ALLOWED" "0"
 rm -rf "$sb"
 
 echo ""
+echo "F) #1151 explicit wrapper repo outranks a leading cd target"
+sb=$(make_sandbox); pf=$(make_portfolio "me2resh/wrong-ops-repo")
+install_mock_gh_splitportfolio "$sb" '"src/components/Button.tsx"' "$SHA" "$PF_SLUG"
+code=$(run_gate "$sb" "cd $pf && tracker_pr_merge \"$PF_SLUG\" \"77\" \"squash\" true")
+assert_eq "#1151 wrapper repo wins over cd-target and blocks" "2" "$code"
+rm -rf "$sb" "$pf"
+
+echo ""
+echo "F) #1151 unexpanded wrapper repo fails closed"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" 'tracker_pr_merge "$PR_HOST_REPO" "77" "squash" true')
+assert_eq "#1151 variable wrapper target blocks" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "F) #1151 unavailable diff fails closed"
+sb=$(make_sandbox)
+mkdir -p "$sb/bin"
+printf '%s\n' '#!/bin/bash' 'exit 1' > "$sb/bin/gh"
+chmod +x "$sb/bin/gh"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1151 unresolvable diff blocks" "2" "$code"
+rm -rf "$sb"
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

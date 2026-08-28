@@ -63,6 +63,11 @@ INPUT=$(cat)
 . "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 . "$(dirname "$0")/_lib-review-markers.sh"
+# Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
+# Optional only for standalone hook-test sandboxes that copy a minimal lib set.
+if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
+  . "$(dirname "$0")/_lib-pr-repo.sh"
+fi
 
 # Parse .tool_input.command via jq. #965: this used to be the ONLY parse
 # path, and an empty/failed result — jq missing from PATH, or jq erroring
@@ -120,6 +125,11 @@ if ! is_merge_command "$COMMAND"; then
   exit 0
 fi
 
+if merge_command_uses_variable "$COMMAND"; then
+  echo "BLOCKED: merge gate cannot resolve a merge command containing an unexpanded PR or repo variable. Re-run with literal values." >&2
+  exit 2
+fi
+
 # --- Configurable human-approver DISPLAY title (me2resh/apexyard#957) ---
 # DISPLAY ONLY: this substitutes the printed word for the human per-PR
 # merge approver in the messages below. It does NOT affect the marker
@@ -136,28 +146,8 @@ else
 fi
 [ -z "$APPROVER_TITLE" ] && APPROVER_TITLE="CEO"
 
-# Parse --repo (for `gh pr merge --repo owner/repo`). The API-shape encodes
-# the repo in its URL path so we don't need the flag there — downstream
-# `gh pr view` / `gh pr checks` calls still benefit when the flag was passed.
-CMD_REPO=$(echo "$COMMAND" | sed -nE 's/.*--repo[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
-# If the command uses the API shape, recover owner/repo from the URL path
-# so other gh calls below can still be scoped correctly.
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(echo "$COMMAND" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-fi
-
 PR_NUMBER=$(extract_pr_number "$COMMAND")
-# Also extract the repo so markers are scoped to (repo, pr) — #485.
-# CMD_REPO already parsed above; resolve via helper if blank (e.g. current-branch fallback).
-# NOTE (#765): approval markers are keyed on the PR's BASE repo. CMD_REPO is the base
-# for the sanctioned paths — the --repo value of `gh pr merge --repo` (you cannot merge
-# a fork's copy) and the `gh api .../pulls/N/merge` path. The extract_repo_from_command
-# fallback below resolves headRepository (the FORK) for a no---repo current-branch merge;
-# that residual path is NOT produced by /approve-merge (which always passes --repo), so it
-# only affects unsanctioned manual merges. Left as-is to keep the gate core untouched.
-if [ -z "$CMD_REPO" ]; then
-  CMD_REPO=$(extract_repo_from_command "$COMMAND")
-fi
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 
 if [ -z "$PR_NUMBER" ]; then
   echo "BLOCKED: Could not determine PR number for merge. Run from a PR branch or pass an explicit PR number." >&2

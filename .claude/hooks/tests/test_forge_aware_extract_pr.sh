@@ -234,6 +234,14 @@ assert_true  merge_command_uses_variable 'MERGE_RESULT=$(tracker_pr_merge "$REPO
 assert_true  merge_command_uses_variable 'MERGE_RESULT=$(tracker_pr_merge "me2resh/apexyard" "$PR" "squash" true)'
 assert_false merge_command_uses_variable "$WRAPPER_CMD_REAL"
 
+# #1151: every gate now consumes resolve_merge_repo's single precedence.
+# A literal wrapper repo must win before the leading-cd heuristic is even
+# consulted; these stubs make any accidental cd lookup return the wrong repo.
+pr_cmd_cd_target() { echo "/wrong/ops"; }
+git_origin_repo() { echo "wrong/ops"; }
+assert_eq "#1151 explicit wrapper repo outranks cd-target" "me2resh/apexyard" \
+  "$(resolve_merge_repo "cd /wrong/ops && $WRAPPER_CMD_REAL")"
+
 # The wrapper form correctly resolves the FORGE via the registry (tracker_kind),
 # not the command text — this is the whole point of the wrapper: its own text
 # never says "gh" or "glab". resolve_pr_head / resolve_pr_head_branch already
