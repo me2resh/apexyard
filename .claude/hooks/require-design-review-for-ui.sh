@@ -7,7 +7,7 @@
 #
 # PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: when the
 # PR's diff touches UI files, require a design approval marker at
-# .claude/session/reviews/<pr>-design.approved (with a matching HEAD SHA) before
+# .claude/session/reviews/<owner>__<repo>__<pr>-design.approved (matching HEAD SHA) before
 # letting the merge through.
 #
 # Both merge shapes are covered — see _lib-extract-pr.sh for the parser and
@@ -295,6 +295,12 @@ internal dashboards), touch the marker file manually — that's a visible,
 auditable "we decided to skip design review" artifact rather than an
 invisible omission.
 MSG
+  # Name the gate-invisible near-miss, if one is sitting on disk under the
+  # bare-number filename. Silent when there is nothing to report. See
+  # _lib-review-markers.sh :: unqualified_marker_hint and me2resh/apexyard#1144.
+  if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" design "$APPROVAL" 2>/dev/null); then
+    printf '%s\n' "$_NEAR_MISS_HINT" >&2
+  fi
   exit 2
 fi
 

@@ -8,7 +8,7 @@
 # PreToolUse hook on `gh pr merge` AND `gh api .../pulls/<N>/merge`: when the
 # PR's diff carries a DESIGN ARTIFACT (technical design doc, migration AgDR, or
 # feature spec / PRD), require an architecture-review approval marker at
-# .claude/session/reviews/<pr>-architecture.approved (with a matching HEAD SHA)
+# .claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved (matching HEAD SHA)
 # before letting the merge through.
 #
 # This is the Design->Build gate: a technical design lands as a committed doc
@@ -272,6 +272,12 @@ For PRs that deliberately ship a design without architecture review, record
 the marker manually — that's a visible, auditable "we decided to skip the
 architecture review" artifact rather than an invisible omission.
 MSG
+  # Name the gate-invisible near-miss, if one is sitting on disk under the
+  # bare-number filename. Silent when there is nothing to report. See
+  # _lib-review-markers.sh :: unqualified_marker_hint and me2resh/apexyard#1144.
+  if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" architecture "$APPROVAL" 2>/dev/null); then
+    printf '%s\n' "$_NEAR_MISS_HINT" >&2
+  fi
   exit 2
 fi
 

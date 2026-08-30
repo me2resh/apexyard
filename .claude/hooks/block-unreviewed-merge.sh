@@ -15,11 +15,11 @@
 # commit SHA matches review") at the merge boundary, mechanically. Two
 # markers are required:
 #
-#   .claude/session/reviews/<pr>-rex.approved
+#   .claude/session/reviews/<owner>__<repo>__<pr>-rex.approved
 #     Written by the code-reviewer agent (Rex) after a successful review.
 #     Contents: the commit SHA Rex reviewed.
 #
-#   .claude/session/reviews/<pr>-ceo.approved
+#   .claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved
 #     Written ONLY by the /approve-merge <pr> skill on explicit user
 #     invocation. Contents: the commit SHA the CEO approved.
 #
@@ -278,6 +278,12 @@ To unblock:
 
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
 MSG
+  # Name the gate-invisible near-miss, if one is sitting on disk under the
+  # bare-number filename. Silent when there is nothing to report. See
+  # _lib-review-markers.sh :: unqualified_marker_hint and me2resh/apexyard#1144.
+  if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" rex "$REX_APPROVAL" 2>/dev/null); then
+    printf '%s\n' "$_NEAR_MISS_HINT" >&2
+  fi
   exit 2
 fi
 
