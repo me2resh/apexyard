@@ -1,7 +1,7 @@
 <!-- Source: ApexYard · templates/prd.md · github.com/me2resh/apexyard · MIT -->
 <!--
-Required: Summary, Problem Statement, Target User, Goals, Non-Goals, Success Metrics, User Stories, Functional Requirements, Approvals.
-Conditional: Edge Cases, Non-Functional Requirements, Design, Technical Notes, Launch Plan, Open Questions, Timeline.
+Required: Summary; Overview (Problem Statement, Target User, Goals, Non-Goals, Success Metrics); User Stories; Requirements (Functional Requirements); Approvals.
+Conditional: Edge Cases (under User Stories); Non-Functional Requirements (under Requirements); Design; Technical Notes; Launch Plan; Open Questions; Timeline.
 Delete a conditional section that has no content. Do not write "N/A". Replace every [placeholder] or write TBD. Delete this comment before the PRD leaves Draft.
 Rule: .claude/rules/writing-standard.md
 -->
