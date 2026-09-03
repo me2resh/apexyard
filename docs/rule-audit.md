@@ -139,6 +139,13 @@ Columns:
 |------|--------|-------------|---------------|---------------------------------|
 | Factual claims must not exceed their evidence; observations stay scoped to their environment and time; mutable state is re-checked; uncertainty is preserved; identifiers, results, and completion are never invented | `.claude/rules/evidence-grounding.md § The rule`, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | Reasoning provenance is not observable to a shell hook. Text matching would create false blocks and false confidence; static tests verify wiring only (AgDR-0124, [#1162][1162]) [^self-discipline] |
 
+### 5b. Proportionate work and ceremony
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Classify a change as Lean / Standard / Heavy by path class, blast radius, and behavior surface; run only the review chain that tier needs; security, trust chain, and migrations never go Lean; ambiguity rounds up | `.claude/rules/right-size-ceremony.md § The tiers`, `CLAUDE.md § Quality Rules` | prose (self-discipline) + the existing Heavy gates | no | The `Agent`-spawn boundary has no `PreToolUse` matcher (AgDR-0056) and a blocking tier classifier would reintroduce the rigidity the rule removes (AgDR-0107). The Heavy gates stay mechanical. Rex runs at every tier (AgDR-0116) [^self-discipline] |
+| The same tier sizes planning, implementation, and artifact creation: smallest change that meets the acceptance criteria; reuse before adding; a demonstrated need for every new dependency, abstraction, service, or durable artifact; advice stays conversational | `.claude/rules/right-size-ceremony.md § Proportionate work`, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | A hook can count files but cannot judge whether a new module or document was needed; static tests verify wiring only (AgDR-0125, [#1163][1163]) [^self-discipline] |
+
 ### 6. Code standards
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
@@ -245,5 +252,6 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [110]: https://github.com/me2resh/apexyard/issues/110
 [112]: https://github.com/me2resh/apexyard/issues/112
 [1162]: https://github.com/me2resh/apexyard/issues/1162
+[1163]: https://github.com/me2resh/apexyard/issues/1163
 [995]: https://github.com/me2resh/apexyard/issues/995
 [997]: https://github.com/me2resh/apexyard/issues/997
