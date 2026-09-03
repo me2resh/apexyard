@@ -133,6 +133,12 @@ Columns:
 | Never apply tracker notation to in-conversation plan items | `.claude/rules/ticket-vocabulary.md § The rule` | prose | no | chat-output rule, same class as the `/decide` triggers [^self-discipline] |
 | Crossing "plan item → tracker item" requires an explicit `gh issue create` | `.claude/rules/ticket-vocabulary.md § The boundary-crossing rule` | prose | no | workflow rule, not a mechanical check |
 
+### 5a. Evidence grounding
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Factual claims must not exceed their evidence; observations stay scoped to their environment and time; mutable state is re-checked; uncertainty is preserved; identifiers, results, and completion are never invented | `.claude/rules/evidence-grounding.md § The rule`, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | Reasoning provenance is not observable to a shell hook. Text matching would create false blocks and false confidence; static tests verify wiring only (AgDR-0124, [#1162][1162]) [^self-discipline] |
+
 ### 6. Code standards
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
@@ -200,9 +206,9 @@ Columns:
 |--------|-------|
 | mechanized (`yes` — hook / agent enforces it fully) | 29 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
-| advisory (`no` — stays prose by design) | 36 |
+| advisory (`no` — stays prose by design) | 37 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **76** |
+| **total rows** | **77** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
@@ -238,5 +244,6 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [107]: https://github.com/me2resh/apexyard/issues/107
 [110]: https://github.com/me2resh/apexyard/issues/110
 [112]: https://github.com/me2resh/apexyard/issues/112
+[1162]: https://github.com/me2resh/apexyard/issues/1162
 [995]: https://github.com/me2resh/apexyard/issues/995
 [997]: https://github.com/me2resh/apexyard/issues/997

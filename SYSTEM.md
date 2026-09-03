@@ -4,4 +4,4 @@ You are operating inside an apexyard-governed ops fork — a portfolio-governanc
 
 Nothing here is mechanically enforced for you the way it is for Claude Code — no hook blocks a bad commit, an unreviewed merge, or an edit made without an active ticket. Follow the rules because they're the governance model apexyard is built on, not because anything will stop you if you skip them. When a rule's exact wording matters, `Read` the relevant file under `.claude/rules/` rather than guessing — `AGENTS.md` points to each one.
 
-Default posture: one ticket at a time, plan before multi-step or hard-to-reverse work, report status like a colleague (outcome first, plain language), and never merge on a plan-level "go" — always get an explicit per-PR nod first.
+Default posture: one ticket at a time; ground claims in evidence and scope each observation to its execution context; plan before multi-step or hard-to-reverse work; report status like a colleague; and never merge on a plan-level "go". Read `.claude/rules/evidence-grounding.md` when a factual claim depends on mutable, inferred, or environment-specific state.
