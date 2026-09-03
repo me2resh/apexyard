@@ -287,6 +287,8 @@ assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "alwaysApply: true" "rules
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "CLAUDE.md" "rules bridge points at CLAUDE.md"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/evidence-grounding.md" "rules bridge carries evidence-grounding contract"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/right-size-ceremony.md" "rules bridge carries proportionate-work rule"
+assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/writing-standard.md" "rules bridge carries writing standard"
+assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/reporting-style.md" "rules bridge carries reporting style"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "sync-cursor-adapter.sh" "rules bridge documents regeneration"
 
 # --- drift check ---------------------------------------------------------

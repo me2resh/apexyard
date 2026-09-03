@@ -264,6 +264,8 @@ under `.claude/rules/*.md`. Load-bearing ones to know before you start:
 - Every PR needs a Glossary + narrative Summary bullets (`.claude/rules/pr-quality.md`)
 - Merges need an explicit per-PR human nod — no plan-level "go" (`.claude/rules/pr-workflow.md`)
 - Technical decisions get an AgDR before Build (`.claude/rules/agdr-decisions.md`)
+- Report status like a colleague — outcome first, why it matters, format matched to content (`.claude/rules/reporting-style.md`)
+- Open durable artifacts with outcome + next action, delete empty template sections, write machine text as one imperative instruction per sentence (`.claude/rules/writing-standard.md`)
 
 Regenerate this adapter after any `.claude/settings.json` or
 `.claude/hooks/*.sh` change: `bin/sync-cursor-adapter.sh`. Drift check:

@@ -207,6 +207,13 @@ Columns:
 
 ---
 
+### 11a. Writing standard
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Durable artifacts open with the outcome, reason, decision, and next action when they exist; templates keep a required core and drop empty conditional sections; no placeholder or "N/A" survives | `.claude/rules/writing-standard.md § Rule 1–2`, `templates/*` guidance comments, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | A hook can detect a literal `{{placeholder}}` in an issue body but cannot judge whether a section was needed or an opening is clear; static tests verify wiring and template comments only (AgDR-0126, [#1164][1164]) [^self-discipline] |
+| Machine-consumed text (hook messages, skill steps, spawn briefs, handoff reports) is Strict: one instruction per sentence, imperative, condition first, exact modality; durable artifacts are Flavored and keep hedges, numbers, names, and voice | `.claude/rules/writing-standard.md § Rule 3–4` | prose | no | A sentence-length or word-list lint blocks valid precision and passes empty clarity; the kill criterion in [#1164][1164] keeps Strict mode off human-facing prose [^self-discipline] |
+
 ## Summary
 
 | bucket | count |
@@ -255,3 +262,4 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [1163]: https://github.com/me2resh/apexyard/issues/1163
 [995]: https://github.com/me2resh/apexyard/issues/995
 [997]: https://github.com/me2resh/apexyard/issues/997
+[1164]: https://github.com/me2resh/apexyard/issues/1164
