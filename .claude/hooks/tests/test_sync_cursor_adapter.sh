@@ -285,6 +285,7 @@ fi
 # --- rules bridge sanity -----------------------------------------------
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "alwaysApply: true" "rules bridge sets alwaysApply"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "CLAUDE.md" "rules bridge points at CLAUDE.md"
+assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/evidence-grounding.md" "rules bridge carries evidence-grounding contract"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "sync-cursor-adapter.sh" "rules bridge documents regeneration"
 
 # --- drift check ---------------------------------------------------------

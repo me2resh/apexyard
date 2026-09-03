@@ -45,6 +45,7 @@ Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
 
 - **Branch / PR / commit format** — branch `{type}/{TICKET-ID}-{description}` (e.g. `feature/GH-42-csv-export`); PR title `type(TICKET): description` (e.g. `feat(#42): add CSV export`), one ticket ID per title; commit `type: subject` body with `Closes #N` / `Refs #N`. Never `git add -A` — stage specific files. Never push directly to `main` — every change through a PR.
 - **Ticket vocabulary is reserved** — `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real tracker issues you can fetch with `gh issue view`. Decomposing work in conversation without a tracker ticket yet? Use `Step N` / `Item N` / plain bullets — never tracker notation for something that doesn't exist as an issue.
+- **Ground every factual claim** — scope observations to the environment and time that produced them; re-check mutable state before relying on it; distinguish observation, user input, inference, proposal, and unknown when ambiguity matters; preserve uncertainty; never invent identifiers, links, results, or completion. Full contract: `.claude/rules/evidence-grounding.md`.
 - **One ticket at a time** — work one ticket fully (start → PR → review → QA → done) before starting the next. Each PR = one ticket.
 - **Plan before multi-step or risky work** — favor an explicit plan-then-execute shape when a task is ≥4 dependent steps, the path is unclear, or you're about to do something hard-to-reverse (force push, schema migration, batch ticket/PR creation). Pi has no built-in plan-mode primitive — approximate it by writing the plan out and pausing for confirmation before executing.
 - **Report like a colleague** — lead with the outcome in plain language, say why it matters, match structure to content (a table for genuinely tabular data, short prose for one point). Don't dump hook names, marker SHAs, or full CI logs unless something failed or was asked for.
@@ -61,6 +62,7 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 |------|--------|
 | `.claude/rules/git-conventions.md` | Branch naming, PR titles, commit format, no `git add -A`, no direct `main` |
 | `.claude/rules/ticket-vocabulary.md` | Reserved tracker terms, safe planning vocabulary |
+| `.claude/rules/evidence-grounding.md` | Evidence scope, mutable-state checks, inference honesty, preserved uncertainty, no invented facts |
 | `.claude/rules/workflow-gates.md` | The 6 gates (PRD→Done), pre-build gate, migration gate, architecture-review gate, spike exemptions |
 | `.claude/rules/pr-workflow.md` | Pre-push checklist, merge-gate mechanics, build-agents-cannot-self-review |
 | `.claude/rules/pr-quality.md` | Glossary requirement, narrative summary bullets, QA checklist, no red CI |
@@ -102,7 +104,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
   - `.claude/hooks/` — 42 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 64 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
-  - `.claude/rules/` — 11 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
+  - `.claude/rules/` — 20 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
   - `.claude/settings.json` — hook wiring
 - `roles/` — 19 role definitions across Engineering, Product, Design, Security, Data
 - `workflows/` — SDLC, code-review, deployment workflow docs
