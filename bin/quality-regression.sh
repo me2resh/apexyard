@@ -120,7 +120,7 @@ severity_for() {
 # ---------------------------------------------------------------------------
 mech_check() {
   local id="$1" out="$2" changed="$3" n
-  n=$(grep -c . "$changed" 2>/dev/null || echo 0)
+  n=$(grep -c . "$changed" 2>/dev/null) || n=0
   case "$id" in
     EG-01)
       if grep -qiE "(you are|we are|you're|we're|host is) not logged in" "$out"; then echo "FAIL claims host/user is not logged in"
