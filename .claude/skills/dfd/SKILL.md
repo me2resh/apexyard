@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 # /dfd — Data Flow Diagram Extractor
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the DFD
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the DFD
 and accompanying explanation. Keep classifications and uncertainty explicit.
 
 Reads a codebase (or a portfolio of codebases for system-wide DFDs) and produces a Data Flow Diagram showing external actors, processes, data stores, data flows, trust boundaries, and per-element data classifications. The DFD is the **input to STRIDE threat modelling** and to GDPR cross-border / DPA-coverage analysis.

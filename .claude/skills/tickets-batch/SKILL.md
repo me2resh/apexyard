@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /tickets-batch — Bulk-File Structured Tickets
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for every
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for every
 filed ticket. Keep each ticket self-contained and concise.
 
 The fast happy path for filing 5–20 tickets in one intent (project kickoff, roadmap decomposition, handover integration plan). Use this **instead of** raw `gh issue create` (non-conformant) or running `/feature` / `/task` / `/bug` N times serially (~10 questions × N tickets).

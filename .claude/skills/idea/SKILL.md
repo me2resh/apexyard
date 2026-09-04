@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Edit, Write
 
 # /idea — Submit a New Product Idea
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the idea
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the idea
 record: state the opportunity plainly and preserve uncertainty.
 
 Capture a new product, feature, or internal-tool idea so it lands somewhere durable instead of evaporating in chat. This skill is intentionally lightweight: it adds an entry to the ideas backlog and (optionally) creates a tracking GitHub Issue. It does **not** replace `/write-spec` — that comes later, after the idea has been triaged.

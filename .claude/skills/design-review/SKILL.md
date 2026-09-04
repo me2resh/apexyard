@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /design-review — Solution Architecture Review
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 architecture review. Lead with the verdict and next action, then provide evidence.
 
 Review a **design artifact** — a technical design doc, a migration AgDR, or a feature spec / PRD — for architectural soundness before any code is built against it. This is the non-code analog of `/code-review`: where Rex reviews a code PR, **Tariq (the Solution Architect)** reviews the design.

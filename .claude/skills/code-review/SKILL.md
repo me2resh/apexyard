@@ -36,8 +36,8 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
-Before drafting or posting the review, read `.claude/rules/writing-standard.md`
-and apply **Flavored mode**. The review is a durable, human-facing artefact:
+Before drafting or posting the review, read `.claude/rules/writing-standard.md`.
+Apply **Flavored mode**. The review is a durable, human-facing artefact:
 open with the verdict and next action, then give the reason and supporting
 evidence. Do not turn the review into a process transcript.
 

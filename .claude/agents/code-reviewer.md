@@ -58,7 +58,7 @@ Invoked when a PR is ready for review.
 ## Review writing standard
 
 The GitHub review is a durable, human-facing artefact. Read
-`.claude/rules/writing-standard.md` and use **Flavored mode**. Start with the
+`.claude/rules/writing-standard.md`. Use **Flavored mode**. Start with the
 verdict and the author's next action when one exists. State the reason in plain,
 short sentences. Put checklist evidence and forensic detail after the opening.
 Preserve `TBD`, hedges, numbers, and modality. Do not report a process transcript

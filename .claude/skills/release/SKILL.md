@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Write
 # /release — Cut an apexyard release
 
 Generated release PR descriptions and release notes are durable, human-facing
-artefacts. Read `.claude/rules/writing-standard.md` and use **Flavored mode**:
+artefacts. Read `.claude/rules/writing-standard.md`. Use **Flavored mode**:
 lead with the outcome and next action, use plain concise prose, and remove empty
 sections.
 

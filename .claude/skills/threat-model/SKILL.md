@@ -8,7 +8,7 @@ effort: high
 
 # /threat-model — STRIDE Threat Modelling
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 threat model and its findings: lead with the outcome, preserve uncertainty, and
 remove empty sections.
 

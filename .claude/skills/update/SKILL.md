@@ -18,7 +18,7 @@ allowed-tools: Bash, Read, Write, Edit
 
 # /update — Sync ApexYard Fork from Upstream
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the sync
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the sync
 PR body and migration notes. Lead with the outcome and next action.
 
 Single-command replacement for the manual "fetch → branch → merge → push → PR" dance that fork maintainers do to pull upstream apexyard changes into their ops fork.

@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /report-apexyard-bug — Report a Framework Bug Upstream
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 upstream bug report: lead with the observed outcome and reproducible next action.
 
 Files a structured GitHub Issue **about the apexyard framework itself** to the

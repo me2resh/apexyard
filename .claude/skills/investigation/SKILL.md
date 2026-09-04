@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /investigation — Create an Investigation Ticket + Live-Doc
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 ticket and live document: state the outcome and next action first, then evidence.
 
 Creates a structured GitHub Issue + a sibling live-doc markdown file for an **investigation** — sustained root-cause work whose deliverable is a *written artefact* of what was observed, what we concluded, and what's next. Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix) — see the comparison block at the top of `templates/tickets/investigation.md`.

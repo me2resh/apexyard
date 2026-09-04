@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Write
 
 # /spike — Create a Spike Ticket
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the spike
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the spike
 ticket and disposition record. Keep the hypothesis and kill criteria concise.
 
 Creates a structured GitHub Issue for a **spike** — a 1-3 day hypothesis-driven exploration whose goal is to answer a technical question with minimum investment, with the explicit understanding that the code will be discarded or substantially rewritten once the answer is clear.

@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob
 
 # /roadmap — Product Roadmap
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for roadmap
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for roadmap
 artefacts: keep decisions, uncertainty, and next actions clear and concise.
 
 Manage the product roadmap as a single durable file. The skill is intentionally low-ceremony: a roadmap is a markdown file with milestones, each containing a table of items. `/roadmap` reads it, edits it, and renders it.

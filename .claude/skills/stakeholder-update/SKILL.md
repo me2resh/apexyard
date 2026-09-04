@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # /stakeholder-update — Stakeholder Update Generator
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 stakeholder update: open with the outcome, impact, and next action.
 
 Synthesises recent activity into a stakeholder-facing update. The skill is audience-aware: weekly is dense and tactical for the team, monthly is strategic for leadership, launch is celebratory and metrics-heavy for the broader org or external stakeholders.

@@ -6,7 +6,7 @@ argument-hint: "<slug>"
 
 # /plan-initiative — Initiative → Milestones → Tasks (dependency-aware)
 
-Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
 initiative document and filed milestones. Open with the outcome and remove empty
 conditional sections.
 

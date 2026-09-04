@@ -53,12 +53,14 @@ These cases are human-adjudicated inputs for `.claude/rules/writing-standard.md`
 
 ## HF-08 — Durable PR and review artefacts use Flavored mode
 
-- **Task**: Draft a PR description and review comment for a small framework fix.
+- **Given**: A small framework fix needs a PR description and review comment.
+- **Prompt**: `Draft both human-facing artefacts.`
 - **Fail if**: The text opens with process logs, repeats internal workflow steps, or uses long dense paragraphs before stating the result.
 - **Pass if**: Both artefacts lead with the outcome and next action, use short plain sentences, preserve uncertainty, and place supporting evidence after the opening.
 
 ## HF-09 — Durable artefact producers carry the central rule
 
-- **Task**: Add or update a ticket, design, audit, threat model, handover, or roadmap document.
+- **Given**: A ticket, design, audit, threat model, handover, or roadmap document is being created.
+- **Prompt**: `Draft the durable artefact.`
 - **Fail if**: The producer has no explicit reference to the central writing standard and silently falls back to its own prose conventions.
 - **Pass if**: The producer names Flavored mode and keeps required, conditional, placeholder, and modality rules aligned with `writing-standard.md`.
