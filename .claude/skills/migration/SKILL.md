@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /migration — Create a Migration Ticket + AgDR
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+migration ticket and AgDR. Lead with the outcome and keep required detail precise.
+
 Migrations are high-blast-radius: data loss, downtime, lock contention, cross-service coordination. ApexYard treats them as a distinct class of change from code — a migration PR needs:
 
 1. A tracker issue with the `migration` label (plus priority) that captures the plan.

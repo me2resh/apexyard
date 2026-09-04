@@ -6,6 +6,10 @@ argument-hint: "<slug>"
 
 # /plan-initiative — Initiative → Milestones → Tasks (dependency-aware)
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+initiative document and filed milestones. Open with the outcome and remove empty
+conditional sections.
+
 The orchestrator surface above `/write-spec` and `/feature`. Quarter-shape planning for the strategic unit above features — usually 1-3 per quarter, multi-feature, multi-week — that decomposes deterministically into the existing ticket primitives the framework already governs.
 
 Slot relative to existing skills:

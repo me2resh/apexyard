@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /prototype — Create a Throwaway Prototype Ticket
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for prototype
+artefacts: lead with the learning goal and next action.
+
 Creates a structured GitHub Issue for a **prototype** — a disposable UX/demo artifact (clickable mockup, demo flow, interactive proof-of-concept UI) built to answer *"what should this look and feel like?"*. The output is the **learning / chosen direction**, not shippable code: a prototype is thrown away once the direction is decided.
 
 > **The taxonomy — three skills, two axes (throwaway vs kept, technical vs UX).**

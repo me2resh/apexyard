@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /request-apexyard-feature — Request a Framework Feature Upstream
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+upstream feature request: state the outcome and reason before detail.
+
 Files a structured GitHub Issue **proposing a feature or enhancement for the
 apexyard framework itself** to the canonical upstream **`me2resh/apexyard`** —
 for a new skill, a new hook, a rule improvement, a better workflow, etc.

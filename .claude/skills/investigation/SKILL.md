@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /investigation — Create an Investigation Ticket + Live-Doc
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the
+ticket and live document: state the outcome and next action first, then evidence.
+
 Creates a structured GitHub Issue + a sibling live-doc markdown file for an **investigation** — sustained root-cause work whose deliverable is a *written artefact* of what was observed, what we concluded, and what's next. Distinct from `/spike` (forward-looking hypothesis with a budget) and `/bug` (immediate-fix) — see the comparison block at the top of `templates/tickets/investigation.md`.
 
 > **When to use an investigation vs a bug vs a spike.** A `/bug` is filed when you already know what's broken and need to coordinate the fix. A `/spike` is filed when you want to test a forward-looking hypothesis ("will this approach work?") inside a time budget. An `/investigation` is filed when the *question itself* is the unknown — "why did this happen?", "what's actually going on with the metric drift?", "how does competitor X handle this?". The investigation produces a written record; the bug fix that may follow is a downstream artefact.

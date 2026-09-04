@@ -65,7 +65,7 @@ assert "template:readme" grep -qF 'Required core and conditional sections' "$SRC
 for consumer in write-spec feature bug task; do
   assert "consumer:$consumer:writing-rule" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
 done
-for consumer in code-review release release-sync; do
+for consumer in code-review release release-sync threat-model investigation handover roadmap plan-initiative idea migration spike prototype walking-skeleton stakeholder-update launch-check update tickets-batch request-apexyard-feature report-apexyard-bug design-review dfd; do
   assert "consumer:$consumer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
 done
 assert "consumer:code-reviewer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/agents/code-reviewer.md"

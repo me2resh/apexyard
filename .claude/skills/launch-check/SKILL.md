@@ -8,6 +8,9 @@ effort: high
 
 # /launch-check — Production Readiness Audit
 
+Read `.claude/rules/writing-standard.md` and use **Flavored mode** for the audit
+report. Lead with the verdict and next action; keep findings below it.
+
 Runs a 10-dimension sweep against a project and outputs a one-page verdict. Designed for milestone boundaries — epic completion, release cuts, launch prep — not per-PR use.
 
 **Invoke from** the project's workspace directory (`cd workspace/<project>/`) or pass the path as an argument: `/launch-check workspace/my-app`.
