@@ -1,5 +1,14 @@
 # PR Quality Requirements
 
+## Technical writing (MANDATORY)
+
+PR descriptions and review comments are durable, human-facing artefacts. Write
+them in **Flavored mode** from [the central writing standard](writing-standard.md):
+lead with the outcome, reason, decision, and next action when they exist; use
+short, plain, precise sentences; preserve uncertainty and modality; and omit
+empty or process-only sections. Keep detailed evidence below the opening rather
+than making the reader reconstruct the result from a narrative log.
+
 ## Glossary (MANDATORY)
 
 Every PR description **must** include a Glossary section:

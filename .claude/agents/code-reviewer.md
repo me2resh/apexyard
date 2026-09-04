@@ -55,6 +55,15 @@ The verdict that drives the merge gate is the **local marker**, NOT the host's "
 
 Invoked when a PR is ready for review.
 
+## Review writing standard
+
+The GitHub review is a durable, human-facing artefact. Read
+`.claude/rules/writing-standard.md` and use **Flavored mode**. Start with the
+verdict and the author's next action when one exists. State the reason in plain,
+short sentences. Put checklist evidence and forensic detail after the opening.
+Preserve `TBD`, hedges, numbers, and modality. Do not report a process transcript
+as the review, and do not label an author self-check as an independent Rex review.
+
 ## Input
 
 - PR number or URL — `{number}` below
