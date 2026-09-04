@@ -134,6 +134,8 @@ Single-fork adopters (no `portfolio` block) and adopters with no override fall s
 
 **Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/feature.md template missing — using inline fallback`). This preserves the pre-refactor behaviour for adopters whose installations don't yet have the new template files.
 
+Read `.claude/rules/writing-standard.md` before drafting. Treat the resolved template as the source of truth. Keep required sections, remove empty conditional sections, replace unknown required values with `TBD`, and delete the guidance comment before filing.
+
 ### 5. Show the formatted ticket for confirmation
 
 Substitute the gathered inputs into the resolved template (or the inline heredoc fallback), then display the full ticket using the resolved shape (the default `templates/tickets/feature.md` shape is reproduced below):
@@ -156,10 +158,10 @@ As a {persona}, I want {goal} so that {benefit}.
 {notes}
 
 ## Out of Scope
-{out of scope or "—"}
+{include only when provided}
 
 ## Effort Estimate
-TBD
+{TBD when required and unknown}
 
 ## Glossary
 | Term | Definition |

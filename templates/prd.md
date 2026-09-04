@@ -1,4 +1,10 @@
 <!-- Source: ApexYard · templates/prd.md · github.com/me2resh/apexyard · MIT -->
+<!--
+Required: Summary; Overview (Problem Statement, Target User, Goals, Non-Goals, Success Metrics); User Stories; Requirements (Functional Requirements); Approvals.
+Conditional: Edge Cases (under User Stories); Non-Functional Requirements (under Requirements); Design; Technical Notes; Launch Plan; Open Questions; Timeline.
+Delete a conditional section that has no content. Do not write "N/A". Replace every [placeholder] or write TBD. Delete this comment before the PRD leaves Draft.
+Rule: .claude/rules/writing-standard.md
+-->
 
 # PRD: [Feature/Product Name]
 
@@ -6,6 +12,12 @@
 **Author**: [Product Manager]
 **Created**: YYYY-MM-DD
 **Last Updated**: YYYY-MM-DD
+
+---
+
+## Summary
+
+[Two to five sentences a reader can act on without reading further. Outcome: what this delivers. Reason: why it matters. Decision: what was chosen, if a choice was made. Next action: what the reader must do now.]
 
 ---
 

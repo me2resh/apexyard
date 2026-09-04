@@ -108,10 +108,10 @@ How severe is this?
 3. P2 — minor, fix when convenient
 ```
 
-**d) Environment (optional)**
+**d) Environment details**
 
 ```
-Any environment details? (browser, device, staging/prod, or Enter to skip)
+Any environment details? (browser, device, staging/prod, or enter TBD if unknown)
 ```
 
 **e) Investigation Notes (optional)**
@@ -133,6 +133,8 @@ template=$(portfolio_resolve_template tickets/bug.md)   # → custom-templates/t
 Single-fork adopters (no `portfolio` block) and adopters with no override fall straight through to `templates/tickets/bug.md`. Adopters who want a customised bug-body shape drop their version at `<private_repo>/custom-templates/tickets/bug.md`. See `templates/README.md` for the path-mirroring convention.
 
 **Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/bug.md template missing — using inline fallback`). This preserves the pre-refactor behaviour for adopters whose installations don't yet have the new template files.
+
+Read `.claude/rules/writing-standard.md` before drafting. Treat the resolved template as the source of truth. Keep required sections, write `TBD` for unknown required values, remove empty conditional sections, and delete the guidance comment before filing.
 
 ### 5. Show the formatted ticket for confirmation
 
@@ -156,16 +158,16 @@ Here's the ticket I'll create:
 3. ...
 
 ## Environment
-{environment or "Not specified"}
+{environment details or TBD}
 
 ## Severity
 {P0-critical / P1-important / P2-later}
 
 ## Mitigation
-{workaround or "—"}
+{include only when provided}
 
 ## Investigation Notes
-{notes or "—"}
+{include only when provided}
 
 ## Glossary
 | Term | Definition |
