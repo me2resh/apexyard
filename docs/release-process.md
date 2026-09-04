@@ -30,6 +30,8 @@ Curated cadence — release when there's a meaningful batch on `dev` that's wort
 - **Minor (`vX.Y+1.0`)** — new features (additive). Cut every 1–2 weeks if there's been net-new feature work.
 - **Major (`vX+1.0.0`)** — breaking changes. Coordinate with adopters first; release notes call out migrations.
 
+Before cutting a release, run the cross-harness quality regression and adjudicate it: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any supported harness that ran stops the release until it is fixed. Record the summary under `docs/quality-regression/runs/<date>/README.md`.
+
 If `dev` is N commits ahead and nothing's broken, you're free to NOT release — adopters will stay on the previous tag and the drift banner will tell them about the new tag when it's cut.
 
 ## Cutting a release — happy path (automated)
