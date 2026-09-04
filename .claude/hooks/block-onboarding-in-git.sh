@@ -22,7 +22,14 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
-[ -z "$COMMAND" ] && exit 0
+if [ -z "$COMMAND" ]; then
+  . "$(dirname "$0")/_lib-fail-closed-json.sh"
+  if raw_payload_command_matches "$INPUT" 'git[[:space:]]+commit'; then
+    echo "BLOCKED: onboarding guard cannot parse this commit command. Restore jq and retry." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 # Only check on git commit
 echo "$COMMAND" | grep -qE '\bgit\s+commit\b' || exit 0

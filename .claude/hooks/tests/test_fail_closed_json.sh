@@ -34,5 +34,14 @@ read_rc=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git status"}
 if [ "$read_rc" -eq 0 ]; then echo "PASS [active Bash read]"; PASS=$((PASS+1));
 else echo "FAIL [active Bash read] expected rc=0 got rc=$read_rc" >&2; FAIL=$((FAIL+1)); fi
 
+check "staging" .claude/hooks/block-git-add-all.sh \
+  '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}'
+check "onboarding" .claude/hooks/block-onboarding-in-git.sh \
+  '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}'
+check "branch" .claude/hooks/validate-branch-name.sh \
+  '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
+check "commit-format" .claude/hooks/validate-commit-format.sh \
+  '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}'
+
 echo "fail-closed JSON smoke tests: PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
