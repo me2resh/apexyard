@@ -34,6 +34,11 @@ INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 if [ -z "$COMMAND" ]; then
+  . "$(dirname "$0")/_lib-fail-closed-json.sh"
+  if raw_payload_command_matches "$INPUT" 'gh[[:space:]]+(issue|pr)[[:space:]]+(create|comment)'; then
+    echo "BLOCKED: leak-protection hook cannot parse this tracker write. Restore jq and retry." >&2
+    exit 2
+  fi
   exit 0
 fi
 
