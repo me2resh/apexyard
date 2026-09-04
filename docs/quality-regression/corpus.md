@@ -24,5 +24,7 @@ Source of truth for each case is its fixture file; this index adds the run metad
 | HF-05 | Strict mode spawn brief | readability | medium | no | manual |
 | HF-06 | Flavored mode keeps uncertainty and precision | readability | high | yes | PASS if `1b12123` and `may` / `might` both survive |
 | HF-07 | Conversation is not forced into Strict mode | readability | medium | no | manual |
+| HF-08 | Durable PR and review artefacts use Flavored mode | readability | medium | no | manual |
+| HF-09 | Durable artefact producers carry the central rule | readability | medium | no | manual |
 
 Runs are recorded under `runs/<date>/<label>/<harness>/`. The latest release-readiness summary is the newest `runs/<date>/README.md`.

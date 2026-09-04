@@ -7,6 +7,10 @@ allowed-tools: Bash, Read, Write
 
 # /release-sync — Sync main→dev after a release
 
+The sync PR body is a durable, human-facing artefact. Read
+`.claude/rules/writing-standard.md`. Use **Flavored mode**: lead with the
+outcome and next action, use plain concise prose, and remove empty sections.
+
 Every squash-merge release (`dev → main`) creates a SHA divergence: the squash commit on `main` is absent from `dev`, so `dev` still carries the un-squashed equivalents as separate commits. Repeated releases accumulate the divergence until the next `dev → main` release PR becomes a conflict-heavy nightmare (v2.0.0 suffered 99 conflicts because of this). This skill closes the loop: after each release, file a `main→dev` sync PR that makes the squash commit an ancestor of `dev`, so future release PRs only see genuinely-new commits.
 
 This skill is **framework-only** — only for the `me2resh/apexyard` framework repo. It has no meaning on managed projects, which are trunk-based and never squash-merge to a separate `main`.

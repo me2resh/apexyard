@@ -65,10 +65,15 @@ assert "template:readme" grep -qF 'Required core and conditional sections' "$SRC
 for consumer in write-spec feature bug task; do
   assert "consumer:$consumer:writing-rule" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
 done
+for consumer in code-review release release-sync threat-model investigation handover roadmap plan-initiative idea migration spike prototype walking-skeleton stakeholder-update launch-check update tickets-batch request-apexyard-feature report-apexyard-bug design-review dfd; do
+  assert "consumer:$consumer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
+done
+assert "consumer:code-reviewer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/agents/code-reviewer.md"
+assert "pr-quality:writing-rule" grep -qF 'Flavored mode' "$SRC_ROOT/.claude/rules/pr-quality.md"
 assert "consumer:tech-lead:writing-rule" grep -qF 'writing-standard guidance' "$SRC_ROOT/roles/engineering/tech-lead.md"
 
 assert "cases:file-exists" test -f "$CASES_FILE"
-assert "cases:seven-cases" bash -c "[ \"\$(grep -cE '^## HF-[0-9]{2} ' '$CASES_FILE')\" -eq 7 ]"
+assert "cases:nine-cases" bash -c "[ \"\$(grep -cE '^## HF-[0-9]{2} ' '$CASES_FILE')\" -eq 9 ]"
 assert "cases:opening" grep -qF 'Opening states the outcome and next action' "$CASES_FILE"
 assert "cases:empty-section" grep -qF 'Empty conditional section is deleted' "$CASES_FILE"
 assert "cases:placeholder" grep -qF 'No placeholder survives' "$CASES_FILE"
@@ -76,6 +81,8 @@ assert "cases:strict-block" grep -qF 'Strict mode block message' "$CASES_FILE"
 assert "cases:strict-brief" grep -qF 'Strict mode spawn brief' "$CASES_FILE"
 assert "cases:flavored" grep -qF 'Flavored mode keeps uncertainty and precision' "$CASES_FILE"
 assert "cases:conversation" grep -qF 'Conversation is not forced into Strict mode' "$CASES_FILE"
+assert "cases:pr-review" grep -qF 'Durable PR and review artefacts use Flavored mode' "$CASES_FILE"
+assert "cases:producer-wiring" grep -qF 'Durable artefact producers carry the central rule' "$CASES_FILE"
 
 assert "agdr:file-exists" test -f "$AGDR_FILE"
 assert "agdr:no-yaml-frontmatter" bash -c "head -n1 '$AGDR_FILE' | grep -qE '^# '"

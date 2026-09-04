@@ -7,6 +7,11 @@ allowed-tools: Bash, Read, Write
 
 # /release — Cut an apexyard release
 
+Generated release PR descriptions and release notes are durable, human-facing
+artefacts. Read `.claude/rules/writing-standard.md`. Use **Flavored mode**:
+lead with the outcome and next action, use plain concise prose, and remove empty
+sections.
+
 Standardises the `dev` → `main` release flow introduced by AgDR-0007. Reads the conventional-commit log between `main` and `dev`, proposes a semver bump, **generates and writes the CHANGELOG entry**, **opens the release PR** (dev→main), and triggers the `auto-tag-on-release-pr-merge` GitHub Actions workflow that tags the squash commit and creates a GitHub Release after merge. One command drives the operator from "nothing" to "PR open, ready for Rex + CEO". The tag and GitHub Release entry are created automatically by CI when the PR merges. The release PR also records a `Released-From` trailer with the exact `dev` cut-point SHA, and the changelog step warns loudly if commits inside the resolved changelog range aren't all making it into entries — both guard against the #872 changelog-truncation failure mode. Design rationale: AgDR-0076, AgDR-0094.
 
 This skill is **framework-only** — it's for cutting apexyard releases, not for releasing managed projects under governance. Managed projects stay trunk-based and don't have a release-cut flow.

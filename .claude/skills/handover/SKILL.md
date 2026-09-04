@@ -7,6 +7,10 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 # /handover — External Repo Handover Assessment
 
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
+handover assessment: write for the receiving human, lead with the outcome, and
+omit empty sections.
+
 Adopt an external repo into ApexYard management. The skill reads the target repo, synthesises a structured handover document, and tells you which ApexYard roles, workflows, and hooks should kick in.
 
 This is the bridge between "we just inherited this codebase" and "this codebase is now governed by our normal SDLC".

@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /walking-skeleton — Scaffold the Thin End-to-End Slice
 
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
+walking-skeleton ticket and documentation. Remove empty sections.
+
 Creates a structured GitHub Issue for a **walking skeleton** — the thinnest possible end-to-end slice of a new feature or service: one trivial happy path wired through **every** architectural layer (UI → API → domain → store → deploy → back), with **no business logic beyond the thinnest happy path**. The skeleton actually runs and deploys, so integration and architecture are proven early. You then build the real product on top of it.
 
 > **The taxonomy — three skills, two axes (throwaway vs kept, technical vs UX).**

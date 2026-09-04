@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /spike — Create a Spike Ticket
 
+Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the spike
+ticket and disposition record. Keep the hypothesis and kill criteria concise.
+
 Creates a structured GitHub Issue for a **spike** — a 1-3 day hypothesis-driven exploration whose goal is to answer a technical question with minimum investment, with the explicit understanding that the code will be discarded or substantially rewritten once the answer is clear.
 
 > **When to use a spike vs a feature.** If you can answer the question through reasoning alone, file a `/feature`. If you genuinely don't know whether an approach will work — does this library scale, does this UX make sense, will this integration handle our load — file a `/spike` first. The spike's output is the answer; once it's in, file a fresh `[Feature]` ticket with production-shaped delivery (or a memo if the answer was no). See `workflows/sdlc.md` § Phase 1 for the gating heuristic.
