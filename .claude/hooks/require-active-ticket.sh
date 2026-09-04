@@ -606,6 +606,11 @@ if [ -z "$TOOL_NAME" ]; then
     echo "BLOCKED: active-ticket hook cannot parse this file-write request. Restore jq and retry." >&2
     exit 2
   fi
+  if raw_payload_tool_matches "$INPUT" 'Bash' && \
+     raw_payload_command_matches "$INPUT" '(tee[[:space:]]|write_(text|bytes)|>[[:space:]]*[A-Za-z0-9_./${-])'; then
+    echo "BLOCKED: active-ticket hook cannot parse this Bash write request. Restore jq and retry." >&2
+    exit 2
+  fi
 fi
 
 # Bash-tool path: extract the target file(s) from the command if it appears
