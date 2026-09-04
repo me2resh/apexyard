@@ -80,7 +80,7 @@ Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires 
 2. **Size.** Small — a rough guide is under ~50 changed lines. Use judgment, not a hard cutoff; a 200-line prose rewrite can still be Lean, a 10-line `.md` change that alters a documented gate's behavior might not be.
 3. **Reversibility / behavior.** Trivially reversible in one revert, with no behavior change — no code path, no runtime logic, no schema, no CI step, nothing that executes differently as a result of this diff.
 4. **Rail 1 (non-negotiable — mirrors `right-size-ceremony.md`'s rail 1 exactly; security / trust-chain / migration never goes Lean).** The diff does NOT touch ANY of:
-   - The trust chain: `.claude/hooks/**`, `.claude/settings.json` (me2resh/apexyard#777)
+   - The trust chain: production `.claude/hooks/*.sh`, `.claude/settings.json` (me2resh/apexyard#777). Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up if their assertions change enforcement semantics.
    - `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`
    - A migration path: anything under `**/migrations/**`, `**/migrate-*.{ts,js,py,sql}`, `prisma/schema.prisma`, `prisma/migrations/**`, `src/migrations/*.{ts,js}`, `alembic/versions/*.py`, `db/migrate/*.rb` (the same defaults `require-migration-ticket.sh` matches; check `.migration_paths` in `.claude/project-config.json` for an adopter override too)
    - **A single file matching ANY of these disqualifies the ENTIRE diff from reduced scope**, even if every other file in the diff is plain prose. Do not average across files — one match rounds the whole PR up.
@@ -230,16 +230,16 @@ Beyond the framework's generic rules, the adopter ships company-specific standar
 | **Public handbooks** | `handbooks/**/*.md` in the public ops fork | Generic adopter customisations safe to publish on a public framework fork |
 | **Private custom handbooks** | `<private_repo>/custom-handbooks/**/*.md`, resolved via `portfolio_custom_handbooks_dir` from `.claude/hooks/_lib-portfolio-paths.sh` | Company-confidential standards that name internal systems, refer to proprietary policy, or otherwise should not appear on a public repo (split-portfolio adopters only — single-fork adopters typically don't have this dir) |
 
-Both layers use the **same path-convention** (architecture / general / language) and the same advisory/blocking semantics. Both load on every review.
+Both layers use the **same path-convention** (architecture / general / language) and the same advisory/blocking semantics. Discovery runs on every review; individual handbooks load only when applicable to the changed paths or PR topic.
 
 #### Discovery (path-convention)
 
-The path conventions below apply to **each** of the two source roots. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
+The path conventions below apply to **each** of the two source roots. Before reading a handbook, classify it against the changed paths and PR topic: load architecture layering guidance only for application/domain/infrastructure or other architecture-bearing code, load migration safety only for migration/schema paths, and load language guidance only for matching language files. General commit-message guidance remains applicable to substantive commits. Record skipped candidates as not applicable rather than presenting them as findings. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
 
 | Path glob (relative to source root) | Load condition |
 |---|---|
-| `architecture/*.md` | Always — every PR |
-| `general/*.md` | Always — every PR |
+| `architecture/*.md` | Read when the PR diff includes architecture-bearing code, design artifacts, or migration/schema paths; migration safety remains applicable to migration/schema paths. |
+| `general/*.md` | Read for substantive commits; skip for empty/docs-only bookkeeping changes and record as not applicable. |
 | `language/<lang>/*.md` | When the PR diff includes files matching `<lang>`'s extensions: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`. Other directories under `language/` follow the same `<lang>/` → matching-extension convention. |
 | `domain/<area>/*.md` | **Parse the YAML frontmatter** (a `---`-delimited block at the top of the file). If a `paths:` field is present and non-empty, load this handbook only when the PR diff matches at least one glob in the list. If `paths:` is absent or empty, **always load** (foundational domain rule with no path boundary). See § "Domain handbook frontmatter — `paths:` field" below for the parse + match shape and [`handbooks/domain/README.md`](../../handbooks/domain/README.md) for the authoring convention. |
 | `<other>/*.md` | Default to always-load if you don't recognise the directory; flag in your review that the directory convention is undocumented. |
@@ -257,12 +257,25 @@ if [ -f "$OPS_ROOT/.claude/hooks/_lib-portfolio-paths.sh" ]; then
   [ -n "$candidate" ] && [ -d "$candidate" ] && PRIV="$candidate"
 fi
 
-# Always-load buckets — public + private (private may be empty).
-find handbooks/architecture handbooks/general -name '*.md' 2>/dev/null
-[ -n "$PRIV" ] && find "$PRIV/architecture" "$PRIV/general" -name '*.md' 2>/dev/null
+# Applicability-gated buckets — public + private (private may be empty).
+# Discovery runs every review, but these buckets are not read by default.
+# Load only the handbooks whose topic applies to the diff.
+DIFF_FILES=$(gh pr diff <number> --name-only)
+if printf '%s\n' "$DIFF_FILES" | grep -qE '(^|/)(src|app|packages|services|domain|application|infrastructure)/|docs/agdr/|(^|/)(designs|prds)/|technical-design|feature-spec|migrations/|prisma/schema.prisma'; then
+  find handbooks/architecture -name '*.md' 2>/dev/null
+  [ -n "$PRIV" ] && find "$PRIV/architecture" -name '*.md' 2>/dev/null
+fi
+
+# General handbooks still require topic judgment. Collect candidates, inspect
+# the path/title/scope, then read the full handbook only when it applies. For
+# example, commit-message-quality applies to substantive commits, while a
+# docs-only typo fix can record it as not applicable. Candidate discovery is
+# not handbook loading; do not report a candidate as an applicable finding
+# until this check is complete.
+find handbooks/general -name '*.md' 2>/dev/null
+[ -n "$PRIV" ] && find "$PRIV/general" -name '*.md' 2>/dev/null
 
 # Diff-matched language buckets — public + private.
-DIFF_FILES=$(gh pr diff <number> --name-only)
 echo "$DIFF_FILES" | (
   if grep -qE '\.(ts|tsx)$'; then
     find handbooks/language/typescript -name '*.md' 2>/dev/null
@@ -299,7 +312,7 @@ Tag every handbook loaded in this step with `discovery_method: path-convention` 
 
 #### Semantic supplement (MCP `search_docs`) — additive, fail-soft (apexyard#449)
 
-This step **supplements** the path-convention set above with handbooks that semantically match the PR's content but didn't match a path glob. It is **strictly additive** — the path-convention set is the floor and never shrinks. Adopters without MCP get path-convention only; the rest of this section is a no-op for them.
+This step **supplements** the applicable path-convention set above with handbooks that semantically match the PR's content but didn't match a path glob. It is **strictly additive** — the applicable path-convention set is the floor and never shrinks. Adopters without MCP get path-convention only; the rest of this section is a no-op for them.
 
 Rules:
 
@@ -354,8 +367,8 @@ except Exception:
 
 What this step does NOT do:
 
-- Does NOT replace the path-convention set — that set is the floor.
-- Does NOT shrink the loaded handbook set under any condition.
+- Does NOT replace the applicable path-convention set — that set is the floor.
+- Does NOT shrink the already-applicable loaded handbook set under any condition.
 - Does NOT block the review if MCP is down — Rex's review proceeds with path-convention discovery alone.
 - Does NOT emit a user-visible warning when MCP is unreachable — only verbose-logs the status for the operator who runs Rex with debug enabled.
 - Does NOT change the enforcement semantics (advisory / blocking) of any handbook — those still come from the handbook's own `ENFORCEMENT:` line. Discovery method only affects citation.

@@ -34,7 +34,7 @@ The key realization: the framework **already detects every Heavy class** (the au
 
 A right-sizing heuristic is only safe if it fails in the harmless direction:
 
-1. **Security and trust-chain never go Lean.** Any change touching `.claude/hooks/**`, `.claude/settings.json`, the merge-gate/marker libraries, auth, crypto, secrets, or a migration takes the Heavy path regardless of diff size. A one-line hook edit is exactly where you *want* the chain. This rail overrides the size signal every time.
+1. **Security and trust-chain never go Lean.** Any change touching a production `.claude/hooks/*.sh` file, `.claude/settings.json`, the merge-gate/marker libraries, auth, crypto, secrets, or a migration takes the Heavy path regardless of diff size. Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up when the test changes enforcement semantics. A one-line production hook edit is exactly where you *want* the chain. This rail overrides the size signal every time.
 2. **Ambiguity rounds up.** If you're not sure which tier a change is, take the higher one. The tolerated failure is "occasionally too much review on a borderline case" — never "too little review on a risky one."
 
 ## When to apply this (proactively)

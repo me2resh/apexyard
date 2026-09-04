@@ -147,6 +147,12 @@ in=$(jq -nc \
 run_case "trust chain: .claude/hooks/* fires Security Auditor [#777]" 0 \
   "ROLE TRIGGER: Security Auditor.*roles/security/security-auditor\\.md" "$in"
 
+# 2e-i-a. Tests under the hooks tree are not production trust-chain controls.
+in=$(jq -nc \
+  --arg p ".claude/hooks/tests/test_detect_role_trigger.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: hook tests do not fire Security Auditor" 0 "" "$in"
+
 # 2e-ii. Trust chain (#777): settings.json (the matcher wiring) fires Security Auditor.
 in=$(jq -nc \
   --arg p ".claude/settings.json" \

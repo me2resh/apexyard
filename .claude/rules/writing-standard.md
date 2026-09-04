@@ -52,7 +52,7 @@ Text that an agent or a hook acts on has no room for interpretation. When you wr
 8. **No idioms, contractions, humour, or rhetorical questions.**
 9. **Identifiers verbatim.** Paths, SHAs, flags, and command names appear exactly as the reader must type or match them.
 
-A block or warn message follows one order: what was blocked or found, in one line; why, in one sentence; what to do, as imperative steps; where to read more, as a path. Existing machine text is not rewritten in bulk. It migrates to this mode when it is next touched, and text under `.claude/hooks/**` still takes the Heavy path when it is.
+A block or warn message follows one order: what was blocked or found, in one line; why, in one sentence; what to do, as imperative steps; where to read more, as a path. Existing machine text is not rewritten in bulk. It migrates to this mode when it is next touched, and production text under `.claude/hooks/*.sh` still takes the Heavy path when it is.
 
 ## Rule 4 — Flavored mode for durable artifacts
 
