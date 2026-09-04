@@ -4,6 +4,8 @@ The framework's SDLC gates exist to keep high-blast-radius work safe: a merge ne
 
 This rule is the **trigger heuristic** — the sibling of [`plan-mode.md`](plan-mode.md), [`parallel-work.md`](parallel-work.md), and [`loop-mode.md`](loop-mode.md). It tells you how to **right-size the ceremony to the change** instead of defaulting every change to the full chain. It does **not** relax any existing hard gate — it adds the missing **lean floor** for work that plainly doesn't need them.
 
+The same tiers govern **the work itself**, not only its review. Planning, implementation, and artifact creation take the same Lean / Standard / Heavy reading as the review chain — see "Proportionate work" below (me2resh/apexyard#1163).
+
 ## The signals — how to tell what a change needs
 
 Score the change on three cheap signals you can read before touching it:
@@ -45,6 +47,28 @@ Before spinning up review ceremony for a change, classify it:
 
 And batch: N tiny independent Lean changes don't each need their own review pass — group the review, or merge them under one PR where the tracker model allows.
 
+## Proportionate work — the tiers apply before review, too
+
+Review ceremony is the last step of a task. The same disproportion shows up earlier: a plan with more steps than the change needs, an implementation that adds a helper module for one call site, a "quick assessment" that becomes a filed document. The tier you read for a change governs all four phases:
+
+| Phase | Lean | Standard | Heavy |
+|-------|------|----------|-------|
+| **Planning** | Act directly, or a one-line intent. No plan document. | A short plan in prose, or plan mode when [`plan-mode.md`](plan-mode.md) says so. | Plan mode; a technical design where the SDLC requires one. |
+| **Implementation** | The smallest edit that satisfies the acceptance criteria. Existing files and patterns only. | Smallest sufficient change. New code only where an existing pattern cannot carry it. | Full design first. New structure is expected, and each piece is justified in the design. |
+| **Artifact creation** | None beyond the change and its PR. Advice stays in conversation. | Only the artifacts a workflow gate or the ticket requires. | The full set the gates require — AgDR, design doc, migration record, runbook. |
+| **Review** | Reduced-scope Rex + the merge nod. | Rex + the merge nod. | The full chain. |
+
+Four working rules follow from the table. They are the same size-matching instinct as the review tiers, applied to what you build:
+
+1. **Start with the smallest change that satisfies the acceptance criteria.** Read the criteria, find the minimal edit that meets each one, and make that edit first. Extend it only when a criterion is still unmet, or when a reviewer asks. A larger change is not safer by default; it is a larger blast radius.
+2. **Reuse before you add.** Prefer an existing file, helper, pattern, dependency, or template over a new one. Extend the rule file that already owns a topic instead of adding a sibling. Use the library already in the manifest instead of adding another.
+3. **A new dependency, abstraction, service, or durable artifact needs a demonstrated need.** "Demonstrated" means you can name the criterion, gate, or concrete failure that the existing options cannot satisfy. If you cannot name it, do not add it. An abstraction with one caller, a service for one job, or a document nobody will read again is the usual sign.
+4. **Advice and quick assessments stay conversational.** A question deserves an answer in the thread, not a filed document. Create a durable artifact only when a workflow gate requires one (an AgDR for a material decision, a ticket to cross the tracker boundary, a design doc before Heavy Build) or when the operator asks for one.
+
+**The rails do not move.** Rule 1 through rule 4 reduce work, never safeguards. A change that touches security, the trust chain, or a migration is Heavy regardless of how small its diff is, and it gets every artifact and every review the Heavy path requires. When you cannot tell which tier the work is, round up (rail 2 above). "Smallest sufficient" is measured against the acceptance criteria and the Heavy safeguards together, never against the criteria alone.
+
+**What this rule does not say.** It does not say "write less code" as a goal in itself, and it does not say "skip the AgDR because the diff is small". A material decision (per [`agdr-decisions.md`](agdr-decisions.md)) is material at any diff size. It says: do not create structure, process, or documents that no criterion, gate, or reader needs.
+
 ## The "watch" half — process cost vs change size
 
 The other half of the operator's ask ("something to watch the overengineering") is a **disproportion nudge**: when the *process* is about to cost more than the *work* — e.g. spawning a ~100k-token review for a 3-line doc PR, or opening a five-agent fan-out for three two-line edits — stop and take the Lean path instead.
@@ -59,9 +83,13 @@ The other half of the operator's ask ("something to watch the overengineering") 
 [ ] Does it touch security / trust-chain / a migration? → Heavy, no exceptions (rail 1).
 [ ] Am I unsure of the tier? → round UP (rail 2).
 [ ] Is the process cost (agents, tokens, latency) proportionate to the change size?
+[ ] Is this the smallest change that meets every acceptance criterion, or did I add scope no criterion asks for?
+[ ] Did I reuse an existing file, pattern, or dependency before adding a new one?
+[ ] For each new dependency, abstraction, service, or durable artifact: can I name the criterion, gate, or failure that demanded it?
+[ ] Is this advice or a quick assessment that should stay in the conversation rather than become a filed document?
 ```
 
-If you're spinning up the full chain for a change that's plainly Lean, you missed a right-sizing opportunity — the same class of miss as over-using `/fan-out` on trivial edits.
+If you're spinning up the full chain for a change that's plainly Lean, you missed a right-sizing opportunity — the same class of miss as over-using `/fan-out` on trivial edits. If you added a module, a dependency, or a document that no criterion asked for, you made the same miss on the build side.
 
 ## Backstop
 
@@ -72,6 +100,8 @@ So the enforcement split is deliberate: the **Heavy** classes keep their existin
 Stating that plainly matters, because it changes how much weight the rule can carry. Every *other* rule in the self-discipline family (`plan-mode`, `parallel-work`, `loop-mode`) is honest that it has no enforcement. This one read as though it had a meter behind it, which made the Lean floor sound firmer than it is. It isn't — and if the recurring "too much process" feedback persists, that gap is the thing to close, not the prose.
 
 The cost of taking the Lean path on a change that turns out to need more is a follow-up review — cheap, and rail 2 makes it rare. The cost of running the full chain on every trivial change is the gatekeeper queue and token burn that prompted this rule.
+
+The "Proportionate work" section has the same enforcement shape. A hook can count files in a diff, but it cannot know whether a new module was needed or whether a question deserved a document. Regression cases for the build-side rules live at `.claude/rules/tests/fixtures/proportionate-work-cases.md`; a static test pins that the rule, its wiring, and those cases stay present. It does not score model behavior — cross-harness evaluation is me2resh/apexyard#1165.
 
 ---
 

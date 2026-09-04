@@ -260,6 +260,7 @@ under `.claude/rules/*.md`. Load-bearing ones to know before you start:
 - One ticket at a time — `/start-ticket <N>` before editing (`.claude/rules/workflow-gates.md`)
 - Branch `{type}/{TICKET-ID}-{description}`, PR title `type(TICKET): description` (`.claude/rules/git-conventions.md`)
 - Ground factual claims in verified evidence; scope observations to their execution context and preserve uncertainty (`.claude/rules/evidence-grounding.md`)
+- Match work and ceremony to the change: smallest change that meets the acceptance criteria, reuse before adding, justify every new dependency or artifact; security, trust-chain, and migration work stays Heavy at any size (`.claude/rules/right-size-ceremony.md`)
 - Every PR needs a Glossary + narrative Summary bullets (`.claude/rules/pr-quality.md`)
 - Merges need an explicit per-PR human nod — no plan-level "go" (`.claude/rules/pr-workflow.md`)
 - Technical decisions get an AgDR before Build (`.claude/rules/agdr-decisions.md`)
