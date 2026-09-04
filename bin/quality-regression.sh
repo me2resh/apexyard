@@ -38,6 +38,12 @@ REPRESENTATIVE="EG-01 EG-03 EG-05 PW-01 PW-04 PW-06 HF-01 HF-06"
 
 if [ "${1:-}" = "--_run-one" ]; then RUN_ONE_H="$2"; RUN_ONE_PROMPT="$3"; shift 3; else RUN_ONE_H=""; RUN_ONE_PROMPT=""; fi
 HARNESS="claude"; CASES="representative"; REF="HEAD"; LABEL=""; OUT=""; TIMEOUT=600; JOBS=3; CHECK_ONLY=0
+# GNU coreutils calls this `timeout`; on macOS it is commonly installed as
+# `gtimeout`. Keep the runner usable when neither is installed by running
+# uncapped, matching the repository's hook-test runner.
+TIMEOUT_BIN=""
+command -v timeout >/dev/null 2>&1 && TIMEOUT_BIN="timeout"
+command -v gtimeout >/dev/null 2>&1 && TIMEOUT_BIN="gtimeout"
 while [ $# -gt 0 ]; do
   case "$1" in
     --harness) HARNESS="$2"; shift 2 ;;
@@ -214,7 +220,11 @@ run_case() {
   prompt=$(build_prompt "$id")
   printf '%s' "$prompt" > "$dir/$id.prompt"
   started=$(date -u +%H:%M:%S)
-  ( cd "$wt" || exit 1; timeout "$TIMEOUT" bash "$SELF" --_run-one "$h" "$dir/$id.prompt" ) > "$dir/$id.out" 2> "$dir/$id.err" </dev/null
+  if [ -n "$TIMEOUT_BIN" ]; then
+    ( cd "$wt" || exit 1; "$TIMEOUT_BIN" "$TIMEOUT" bash "$SELF" --_run-one "$h" "$dir/$id.prompt" ) > "$dir/$id.out" 2> "$dir/$id.err" </dev/null
+  else
+    ( cd "$wt" || exit 1; bash "$SELF" --_run-one "$h" "$dir/$id.prompt" ) > "$dir/$id.out" 2> "$dir/$id.err" </dev/null
+  fi
   rc=$?
   ended=$(date -u +%H:%M:%S)
   # Files written by the agent. Subtract the ops root's own dirty set: a

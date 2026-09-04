@@ -28,6 +28,8 @@ assert "runner:representative-8" bash -c "echo \"\$1\" | grep -q '^cases selecte
 assert "runner:unknown-case-rejected" bash -c "! bash '$RUNNER' --check-only --cases ZZ-99 >/dev/null 2>&1"
 assert "runner:no-llm-judge" grep -qF 'It does not use an LLM judge' "$RUNNER"
 assert "runner:empty-change-count" grep -qF 'n=$(grep -c . "$changed" 2>/dev/null) || n=0' "$RUNNER"
+assert "runner:portable-timeout" grep -qF 'gtimeout' "$RUNNER"
+assert "runner:uncapped-fallback" grep -qF 'else' "$RUNNER"
 
 # every case id the runner parsed appears in the index
 for id in $(echo "$check_out" | sed -n 's/^cases parsed: 20 (\(.*\))$/\1/p'); do
