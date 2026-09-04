@@ -595,6 +595,24 @@ INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
+# If jq cannot decode the envelope, do not silently allow an edit/write tool
+# call. The raw check is intentionally limited to tool names whose payloads can
+# change files; unrelated tool calls remain no-ops.
+if [ -z "$TOOL_NAME" ]; then
+  . "$(dirname "$0")/_lib-fail-closed-json.sh"
+  if raw_payload_tool_matches "$INPUT" 'Edit' || \
+     raw_payload_tool_matches "$INPUT" 'Write' || \
+     raw_payload_tool_matches "$INPUT" 'MultiEdit'; then
+    echo "BLOCKED: active-ticket hook cannot parse this file-write request. Restore jq and retry." >&2
+    exit 2
+  fi
+  if raw_payload_tool_matches "$INPUT" 'Bash' && \
+     raw_payload_command_matches "$INPUT" '(tee[[:space:]]|write_(text|bytes)|>[[:space:]]*[A-Za-z0-9_./${-])'; then
+    echo "BLOCKED: active-ticket hook cannot parse this Bash write request. Restore jq and retry." >&2
+    exit 2
+  fi
+fi
+
 # Bash-tool path: extract the target file(s) from the command if it appears
 # to be a write. Closes the bypass surface where Bash file-writes
 # (`echo > file`, `tee file`, `sed -i ... file`, `python -c
