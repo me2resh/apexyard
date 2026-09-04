@@ -217,7 +217,10 @@ run_case() {
   ( cd "$wt" || exit 1; timeout "$TIMEOUT" bash "$SELF" --_run-one "$h" "$dir/$id.prompt" ) > "$dir/$id.out" 2> "$dir/$id.err" </dev/null
   rc=$?
   ended=$(date -u +%H:%M:%S)
-  git -C "$wt" status --porcelain > "$dir/$id.changed" 2>/dev/null
+  # Files written by the agent. Subtract the ops root's own dirty set: a
+  # session-start hook (e.g. a premium installer) can drop the same untracked
+  # files into every worktree, and those are environment noise, not the agent's work.
+  git -C "$wt" status --porcelain 2>/dev/null | grep -vxF -f "$dir/.ops-dirty" > "$dir/$id.changed"
   git -C "$SRC_ROOT" worktree remove --force "$wt" >/dev/null 2>&1
   {
     echo "# $id — $(cfield "$id" title)"
@@ -235,7 +238,7 @@ run_case() {
     if [ -s "$dir/$id.err" ]; then echo; echo "## Stderr"; echo; echo '```text'; tail -n 40 "$dir/$id.err"; echo '```'; fi
   } > "$dir/$id.md"
   rm -f "$dir/$id.out" "$dir/$id.err" "$dir/$id.changed" "$dir/$id.prompt"
-  echo "  $id done (exit $rc)"
+  if grep -qiE "session limit|usage limit|rate limit" "$dir/$id.md"; then echo "  $id NOT RUN — harness reported a usage/session limit (exit $rc); re-run this case later" >&2; else echo "  $id done (exit $rc)"; fi
 }
 
 write_scorecard() {
@@ -247,7 +250,10 @@ write_scorecard() {
     echo
     echo "| Case | Dimension | Severity | Mechanical | Adjudicated | Notes |"
     echo "|------|-----------|----------|------------|-------------|-------|"
-    for id in "${RUN_IDS[@]}"; do
+    # Every case with a transcript in the directory, so a partial re-run
+    # (e.g. after a rate limit) merges into the scorecard instead of replacing it.
+    for id in "${CASE_IDS[@]}"; do
+      [ -f "$dir/$id.md" ] || continue
       mech=$(grep -m1 '^- Mechanical check: ' "$dir/$id.md" 2>/dev/null | sed 's/^- Mechanical check: //')
       echo "| [$id]($id.md) | $(cfield "$id" dim) | $(severity_for "$id") | ${mech:-not run} | | |"
     done
@@ -280,8 +286,10 @@ HARNESSES=()
 if [ "$HARNESS" = "all" ]; then HARNESSES=(claude cursor codex pi opencode); else IFS=',' read -r -a HARNESSES <<< "$HARNESS"; fi
 
 mkdir -p "$OUT"
+OUT="$(cd "$OUT" && pwd)"   # absolute: per-case runs cd into a worktree and must still find $OUT
 for h in "${HARNESSES[@]}"; do
   dir="$OUT/$h"; mkdir -p "$dir"
+  { git -C "$SRC_ROOT" status --porcelain 2>/dev/null; echo "__none__"; } > "$dir/.ops-dirty"
   if ! harness_available "$h"; then
     echo "not run: $h CLI is not installed on this machine ($TODAY)" > "$dir/NOT-RUN.md"
     echo "$h: not installed — recorded as not-run"; continue
@@ -295,5 +303,6 @@ for h in "${HARNESSES[@]}"; do
   done
   wait
   write_scorecard "$h" "$dir"
+  rm -f "$dir/.ops-dirty"
 done
 echo "done: $OUT"
