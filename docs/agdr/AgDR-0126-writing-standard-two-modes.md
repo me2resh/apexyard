@@ -33,7 +33,7 @@ Existing hook messages and agent files are not rewritten in this change. They ta
 
 - `writing-standard.md` becomes the twenty-first rule file. `CLAUDE.md`, `AGENTS.md`, `SYSTEM.md`, and the generated Cursor bridge carry one sentence each and point to it.
 - A completed artifact contains only sections with content. `TBD` marks an unknown required value; nothing marks an absent conditional section.
-- Ticket skills that read `templates/tickets/*.md` pick up the guidance comment at render time and need no change. The inline heredoc fallbacks in those skills keep the pre-#1164 shape; that gap closes when each skill is next touched.
+- Ticket skills now read the writing-standard guidance before drafting. Their inline fallback previews still carry the pre-#1164 shape, so each fallback must be cleaned when that skill is next touched.
 - The framework does not claim ASD-STE100 certification and ships no restricted dictionary.
 - Seven human-adjudicated cases cover the opening, empty sections, placeholders, Strict block messages, Strict spawn briefs, Flavored uncertainty, and the conversation guard. Behavioral scoring belongs to me2resh/apexyard#1165.
 

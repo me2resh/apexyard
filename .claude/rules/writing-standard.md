@@ -30,7 +30,7 @@ Write only the elements that exist. A ticket with no decision has no "Decision:"
 
 ## Rule 2 — Small required core, conditional sections
 
-Templates under `templates/` mark each section **Required** or **Conditional** in a guidance comment at the top of the file. A completed artifact follows three rules:
+The five core templates annotated by this milestone (`prd.md`, `technical-design.md`, and the feature, bug, and task ticket templates) mark each section **Required** or **Conditional** in a guidance comment at the top of the file. Other templates keep their existing guidance until a later change adds this convention. A completed artifact follows three rules:
 
 1. **Required sections are always present.** If a required value is unknown, write `TBD` (per [`evidence-grounding.md`](evidence-grounding.md) § Durable artifacts). Never invent a value to fill the slot.
 2. **Conditional sections appear only with real content.** Delete a conditional section that has nothing to say. Do not write "N/A", "None", or leave an empty table.

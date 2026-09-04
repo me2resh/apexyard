@@ -45,6 +45,7 @@ assert "rule:keep-uncertainty" grep -qF 'hedges that carry evidence state' "$RUL
 assert "rule:no-certification-claim" grep -qF 'does not claim certified STE compliance' "$RULE_FILE"
 assert "rule:kill-criterion" grep -qF 'Move it to Flavored' "$RULE_FILE"
 assert "rule:advisory-honesty" grep -qF 'It does not score model behavior' "$RULE_FILE"
+assert "rule:scoped-template-claim" grep -qF 'five core templates annotated by this milestone' "$RULE_FILE"
 
 assert "wiring:claude" grep -qF '@.claude/rules/writing-standard.md' "$SRC_ROOT/CLAUDE.md"
 assert "wiring:agents" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/AGENTS.md"
@@ -60,6 +61,11 @@ for t in prd.md technical-design.md tickets/feature.md tickets/bug.md tickets/ta
 done
 assert "template:prd:summary" grep -qE '^## Summary$' "$SRC_ROOT/templates/prd.md"
 assert "template:readme" grep -qF 'Required core and conditional sections' "$SRC_ROOT/templates/README.md"
+
+for consumer in write-spec feature bug task; do
+  assert "consumer:$consumer:writing-rule" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
+done
+assert "consumer:tech-lead:writing-rule" grep -qF 'writing-standard guidance' "$SRC_ROOT/roles/engineering/tech-lead.md"
 
 assert "cases:file-exists" test -f "$CASES_FILE"
 assert "cases:seven-cases" bash -c "[ \"\$(grep -cE '^## HF-[0-9]{2} ' '$CASES_FILE')\" -eq 7 ]"

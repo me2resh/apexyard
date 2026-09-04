@@ -14,7 +14,7 @@ Prior to #281, the 5 older skills (`/feature`, `/bug`, `/task`, `/migration`, `/
 
 ## Required core and conditional sections (since #1164)
 
-Each template opens with a guidance comment that names its **Required** sections and its **Conditional** sections. A completed artifact keeps every required section (write `TBD` for an unknown value), deletes every conditional section that has no content, and removes the guidance comment and every placeholder before it is filed. "N/A", "None", and empty tables do not appear in a finished artifact. The rule and its rationale: [`.claude/rules/writing-standard.md`](../.claude/rules/writing-standard.md) (AgDR-0126).
+The five core templates annotated by this milestone (`prd.md`, `technical-design.md`, and the feature, bug, and task ticket templates) open with a guidance comment that names their **Required** and **Conditional** sections. Other templates keep their existing guidance until a later change adds this convention. A completed artifact keeps every required section (write `TBD` for an unknown value), deletes every conditional section that has no content, and removes the guidance comment and every placeholder before it is filed. "N/A", "None", and empty tables do not appear in a finished artifact. The rule and its rationale: [`.claude/rules/writing-standard.md`](../.claude/rules/writing-standard.md) (AgDR-0126).
 
 Adopter overrides can carry the same comment. The skills read it at render time, so no skill change is needed for an override to adopt the convention.
 
