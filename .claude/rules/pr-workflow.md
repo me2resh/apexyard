@@ -206,12 +206,27 @@ and "Build agents cannot self-review" above exist to prevent.
 **Two signs identify it.** The run reports "Running in the background", and no
 review appears on the PR.
 
-**The recovery.** Do not re-run `/code-review`; it will do the same thing. Do
-not write the approval marker by hand; that is marker forging regardless of how
-good the review was. Instead, set the active-reviewer marker, then spawn the
-`code-reviewer` agent (Rex) **directly with the Agent tool**. Rex resolves its
-own repo-qualified marker path and writes the marker on an APPROVED verdict, so
-the sanctioned path is restored without touching a gate signal by hand.
+**A CHANGES REQUESTED verdict is not this case.** A real review that requests
+changes also returns findings and writes no approval marker — by design. Both
+signs above must hold. If a genuine review posted to the PR and asked for
+changes, address the findings; the missing marker is the gate working, not
+failing.
+
+**The recovery, and only the orchestrator performs it.** Do not re-run
+`/code-review`; it will do the same thing. Do not write the approval marker by
+hand; that is marker forging regardless of how good the review was. Instead,
+set the active-reviewer marker, then spawn the `code-reviewer` agent (Rex)
+**directly with the Agent tool**. Rex resolves its own repo-qualified marker
+path and writes the marker on an APPROVED verdict, so the sanctioned path is
+restored without touching a gate signal by hand.
+
+This is the one sanctioned exception to "use the skill, don't spawn Rex
+directly" and to "don't set the active-reviewer marker by hand". It applies
+only when the skill cannot run at all. A **build-class sub-agent is not the
+audience for it** — it cannot nest the Agent tool, so it must hand the PR back
+to the orchestrator, exactly as it would normally. Note that the active-reviewer
+marker is a provenance signal at `.claude/session/active-reviewer`; it is not an
+approval marker, and setting it grants no gate-passing power.
 
 Adopters who hit this every session can settle the name collision permanently
 with the `skillOverrides` setting, or by turning bundled skills off

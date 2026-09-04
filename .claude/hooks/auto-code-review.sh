@@ -137,6 +137,17 @@ build sub-agent just handed this PR back to you):
   author grading their own work. (The marker also suppresses an advisory
   warning on Rex's own marker write, but that is a side effect, not the
   reason — the hook warns and never blocks since #1026.)
+
+  ONE EXCEPTION, and only for you (me2resh/apexyard#1161). After the review
+  returns, confirm the approval marker exists. If the review ran "in the
+  background" and posted nothing to the PR, the harness ran its OWN bundled
+  /code-review instead of ApexYard's skill. That bundled skill knows nothing
+  about these markers, so re-running it cannot help. Only in that case: set
+  the active-reviewer marker yourself, then spawn the code-reviewer agent
+  (Rex) directly with the Agent tool. A CHANGES REQUESTED verdict is NOT this
+  case — a real review that requests changes writes no approval marker by
+  design, and the fix is to address the findings. Never write the approval
+  marker yourself in either case.
 --------------------------------------------------------------------------
 
 CEREMONY TIER (.claude/rules/right-size-ceremony.md, AgDR-0116): Rex runs on
@@ -153,13 +164,6 @@ marker exists. Do NOT quote a marker path when you invoke the review — the
 reviewer resolves its own repo-qualified path (me2resh/apexyard#1144); a path
 handed to it in a prompt overrides that and lands the marker where no gate
 reads it.
-
-After the review returns, confirm the marker exists. If the review ran "in the
-background" and returned findings but wrote no marker, the harness ran its own
-bundled /code-review instead of ApexYard's skill (me2resh/apexyard#1161). The
-bundled skill knows nothing about these markers, so re-running it cannot help.
-Set the active-reviewer marker, then spawn the code-reviewer agent (Rex)
-directly with the Agent tool. Do not write the approval marker yourself.
 
 This message is a reminder from the PostToolUse hook, not a tool error. The PR
 was created successfully.
