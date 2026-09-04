@@ -254,6 +254,23 @@ if echo "$CURRENT_BRANCH" | grep -qE '^sync/main-to-dev-after-v[0-9]+\.[0-9]+\.[
   exit 0
 fi
 
+# Allow the two branches /handover prescribes for its opt-in writes INTO AN
+# ADOPTED REPO (me2resh/apexyard#1161). Steps 8.5 and 8.6 push `docs/agents-md`
+# (the generated AGENTS.md) and `docs/apexyard-badge` (the README badge) into
+# the target repo. Both are hardcoded in the skill, so the skill's own
+# prescribed branch could never satisfy this gate: /handover is bootstrap-class
+# and runs before the adopted repo has any tracker ticket to name, and the
+# adopted repo may have no tracker at all. Same narrow, intentional exception
+# as the release and sync branches above — the work itself is the ticket.
+#
+# The match is an exact literal on each of the two names, so this exempts
+# nothing else: a `docs/agents-md-v2` or any other `docs/*` branch still needs
+# a ticket-id. These branches also live in the ADOPTED repo, not the ops fork,
+# and land as a PR the repo owner reviews. See AgDR-0129.
+if echo "$CURRENT_BRANCH" | grep -qE '^docs/(agents-md|apexyard-badge)$'; then
+  exit 0
+fi
+
 # Load the branch-type whitelist from project config.
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 # shellcheck source=./_lib-read-config.sh

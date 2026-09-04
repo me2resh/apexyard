@@ -276,6 +276,16 @@ To unblock:
      /approve-merge ${PR_NUMBER} — that skill is human-only, you cannot
   4. Their invocation records the approval and performs the merge
 
+If you already ran /code-review for this PR and got a full review back, the
+harness may have run its OWN bundled /code-review instead of ApexYard's skill.
+The bundled skill runs as a background agent. It reports findings and writes no
+marker, so this gate can never pass from it. Two signs identify it: the run
+reports "Running in the background", and the review never posts to the PR.
+If you see those signs, do not re-run /code-review. Set the active-reviewer
+marker, then spawn the code-reviewer agent (Rex) directly with the Agent tool.
+Do not write the approval marker yourself. See .claude/rules/pr-workflow.md
+section "When the harness bundled skill shadows /code-review".
+
 Never skip this check — even for typo fixes. See .claude/rules/pr-workflow.md.
 MSG
   # Name the gate-invisible near-miss, if one is sitting on disk under the

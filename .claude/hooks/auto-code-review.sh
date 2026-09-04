@@ -154,6 +154,13 @@ reviewer resolves its own repo-qualified path (me2resh/apexyard#1144); a path
 handed to it in a prompt overrides that and lands the marker where no gate
 reads it.
 
+After the review returns, confirm the marker exists. If the review ran "in the
+background" and returned findings but wrote no marker, the harness ran its own
+bundled /code-review instead of ApexYard's skill (me2resh/apexyard#1161). The
+bundled skill knows nothing about these markers, so re-running it cannot help.
+Set the active-reviewer marker, then spawn the code-reviewer agent (Rex)
+directly with the Agent tool. Do not write the approval marker yourself.
+
 This message is a reminder from the PostToolUse hook, not a tool error. The PR
 was created successfully.
 MSG
