@@ -80,7 +80,7 @@ Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires 
 2. **Size.** Small — a rough guide is under ~50 changed lines. Use judgment, not a hard cutoff; a 200-line prose rewrite can still be Lean, a 10-line `.md` change that alters a documented gate's behavior might not be.
 3. **Reversibility / behavior.** Trivially reversible in one revert, with no behavior change — no code path, no runtime logic, no schema, no CI step, nothing that executes differently as a result of this diff.
 4. **Rail 1 (non-negotiable — mirrors `right-size-ceremony.md`'s rail 1 exactly; security / trust-chain / migration never goes Lean).** The diff does NOT touch ANY of:
-   - The trust chain: `.claude/hooks/**`, `.claude/settings.json` (me2resh/apexyard#777)
+   - The trust chain: production `.claude/hooks/*.sh`, `.claude/settings.json` (me2resh/apexyard#777). Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up if their assertions change enforcement semantics.
    - `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`
    - A migration path: anything under `**/migrations/**`, `**/migrate-*.{ts,js,py,sql}`, `prisma/schema.prisma`, `prisma/migrations/**`, `src/migrations/*.{ts,js}`, `alembic/versions/*.py`, `db/migrate/*.rb` (the same defaults `require-migration-ticket.sh` matches; check `.migration_paths` in `.claude/project-config.json` for an adopter override too)
    - **A single file matching ANY of these disqualifies the ENTIRE diff from reduced scope**, even if every other file in the diff is plain prose. Do not average across files — one match rounds the whole PR up.
@@ -234,12 +234,12 @@ Both layers use the **same path-convention** (architecture / general / language)
 
 #### Discovery (path-convention)
 
-The path conventions below apply to **each** of the two source roots. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
+The path conventions below apply to **each** of the two source roots. Before reading a handbook, classify it against the changed paths: load architecture layering guidance only for application/domain/infrastructure or other architecture-bearing code, load migration safety only for migration/schema paths, and load language guidance only for matching language files. General commit-message guidance remains applicable to substantive commits. Record skipped candidates as not applicable rather than presenting them as findings. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
 
 | Path glob (relative to source root) | Load condition |
 |---|---|
-| `architecture/*.md` | Always — every PR |
-| `general/*.md` | Always — every PR |
+| `architecture/*.md` | When the PR diff includes architecture-bearing code, design artifacts, or migration/schema paths; migration safety remains applicable to migration/schema paths. |
+| `general/*.md` | For substantive commits; skip for empty/docs-only bookkeeping changes and record as not applicable. |
 | `language/<lang>/*.md` | When the PR diff includes files matching `<lang>`'s extensions: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`. Other directories under `language/` follow the same `<lang>/` → matching-extension convention. |
 | `domain/<area>/*.md` | **Parse the YAML frontmatter** (a `---`-delimited block at the top of the file). If a `paths:` field is present and non-empty, load this handbook only when the PR diff matches at least one glob in the list. If `paths:` is absent or empty, **always load** (foundational domain rule with no path boundary). See § "Domain handbook frontmatter — `paths:` field" below for the parse + match shape and [`handbooks/domain/README.md`](../../handbooks/domain/README.md) for the authoring convention. |
 | `<other>/*.md` | Default to always-load if you don't recognise the directory; flag in your review that the directory convention is undocumented. |

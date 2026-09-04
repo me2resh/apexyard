@@ -21,7 +21,7 @@ ApexYard ships **20 role definitions** in `roles/{department}/`. They are not al
 | **UI Designer** | `roles/design/ui-designer.md` | Visual design · component specifications · design tokens · pixel-level work |
 | **UX Designer** | `roles/design/ux-designer.md` | User flows · information architecture · usability review · wireframing |
 | **Head of Security** | `roles/security/head-of-security.md` | Security strategy · threat model · compliance call · cross-project security architecture · escalation from a Security Auditor (strategy / compliance / repeated-pattern concern) |
-| **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (`.claude/hooks/**`, `.claude/settings.json`) — #777** · SAST findings · OWASP review · dependency vulnerability |
+| **Security Auditor** | `roles/security/security-auditor.md` | **PR touches auth / crypto / user data / secrets** · **the security-critical trust chain (production `.claude/hooks/*.sh`, `.claude/settings.json`) — #777** · SAST findings · OWASP review · dependency vulnerability |
 | **Penetration Tester** | `roles/security/penetration-tester.md` | Active testing · exploit discovery · API security review · pre-release security sign-off |
 | **Head of Data** | `roles/data/head-of-data.md` | Analytics strategy · data governance · reporting architecture · cross-project data modelling |
 | **Data Analyst** | `roles/data/data-analyst.md` | SQL queries · dashboards · A/B-test analysis · metric investigation |
@@ -85,7 +85,7 @@ This is a **prose convention**, not a mechanically-enforced format. The sibling 
 |--------|----------|
 | Ticket moved to `qa` label | QA Engineer |
 | PR diff touches `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*` | Security Auditor |
-| Edit/PR touches the trust chain — `.claude/hooks/**` (merge gates, tracker/forge lib, review-marker lib, credential-broker scripts) or `.claude/settings.json` (the matcher wiring that decides whether a gate fires) | Security Auditor (#777) |
+| Edit/PR touches the trust chain — production `.claude/hooks/*.sh` (merge gates, tracker/forge lib, review-marker lib, credential-broker scripts) or `.claude/settings.json` (the matcher wiring that decides whether a gate fires) | Security Auditor (#777) |
 | PR diff touches `.github/workflows/**`, `golden-paths/pipelines/**` | Platform Engineer |
 | PR diff touches `docs/agdr/**` or adds a new dependency | Tech Lead |
 | Edit/PR touches a design artifact (technical design, migration AgDR, feature spec / PRD) | Solution Architect |
