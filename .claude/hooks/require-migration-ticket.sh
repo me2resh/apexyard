@@ -227,6 +227,45 @@ elif ! is_migration_path "$FILE_PATH"; then
   exit 0
 fi
 
+# --------- Gate 0: the target must be resolvable (#1159) ---------
+# A Bash write target can carry an unexpanded shell variable — the detector
+# reports the literal text `$WD/app/migrations/0001.py`, because expanding it
+# would mean executing the command. That string still matches a migration
+# path, so the gate fires; but it can never match a workspace prefix, so
+# PROJECT resolution below silently fails and the three-tier lookup lands on
+# the tier-2 ops marker — a DIFFERENT ticket than the one governing this
+# worktree, with no warning.
+#
+# Degrading to "no target resolved" is correct for a detector. Degrading to
+# "use whatever marker is lying around" is wrong for a GATE: it is not no
+# opinion, it is someone else's answer. Refuse instead.
+#
+# Deliberately narrow: ONLY an unexpanded variable is treated as unresolvable.
+# A literal absolute path outside `workspace/` also leaves PROJECT empty and
+# MUST keep falling back to the ops marker — that is the legitimate case of a
+# migration inside the ops fork itself. Widening this to "PROJECT is empty"
+# would break it.
+case "$FILE_PATH" in
+  *'$'*)
+    cat >&2 <<MSG
+BLOCKED: This migration write target could not be resolved.
+
+  target: $FILE_PATH
+
+The path contains an unexpanded shell variable, so the gate cannot tell
+which project — and therefore which ticket — governs it. It will not guess.
+
+Use a literal path for migration writes:
+
+  cat > /absolute/path/to/app/migrations/0001_initial.py <<'EOF'
+
+Then retry. See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md
+section "Migration Gate (3a)".
+MSG
+    exit 2
+    ;;
+esac
+
 # --------- Gate 1: active ticket marker ---------
 # Reuse the #41 resolution: per-project marker if FILE_PATH is under the
 # resolved workspace dir, otherwise the ops-level fallback. The resolved

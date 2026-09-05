@@ -630,6 +630,50 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 23 (#1159): an unexpanded shell variable in a migration write target is
+# UNRESOLVABLE, and the gate must refuse rather than silently fall back to the
+# ops-level marker. Before the fix, extraction returned the literal text
+# `$WD/migrations/...`; it matched the migration matcher, so the gate fired,
+# but it could not match any workspace prefix, so PROJECT stayed empty and the
+# three-tier lookup landed on `current-ticket` — a DIFFERENT ticket, with no
+# warning. A gate that resolves against the wrong marker is worse than one
+# that fails, because the failure is invisible.
+#
+# The ops marker here is DELIBERATELY valid and migration-labelled: before the
+# fix this case exited 0 (allowed, against the wrong ticket). Exit 2 proves the
+# refusal comes from unresolvability, not from a missing/!unlabelled ticket.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > \"\$WD/$MIG\" <<EOF
+x
+EOF" 2; then
+  record_pass "#1159 bash: unexpanded variable in migration target → refuse, no marker fallback"
+else
+  record_fail "#1159 bash: unexpanded variable in migration target → refuse, no marker fallback"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 24 (#1159 regression guard): the fix must be NARROW. A LITERAL absolute
+# path that is also outside any `workspace/<project>/` leaves PROJECT empty for
+# an entirely legitimate reason — a migration inside the ops fork itself — and
+# MUST still fall back to the ops-level marker and be allowed. Widening the
+# refusal to "PROJECT is empty" instead of "target is unresolvable" would break
+# this case, so it is pinned.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "#1159 guard: literal ops-fork migration path still uses ops marker → allow"
+else
+  record_fail "#1159 guard: literal ops-fork migration path still uses ops marker → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo
