@@ -799,6 +799,73 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 35 (#1159, Hakim round-3 on PR #1180): with NO usable cwd, a relative
+# target must be returned EXACTLY as received. Commit 3 stopped joining the
+# untrusted cwd but still piped the target through the canonicaliser, which
+# emits a leading "/" unconditionally — so `migrations/001.sql` became
+# `/migrations/001.sql`. That fabricates an absolute path that never existed
+# and can match a workspace prefix: the same failure the join was removed to
+# avoid, relocated rather than fixed.
+#
+# This asserts the function directly, because the whole-hook exit code hid it
+# (the suite passed 38/38 with the bug present).
+# =============================================================================
+_c35_fail=0
+for _c35_in in 'migrations/001.sql' './migrations/y.sql' '../../../etc/migrations/x.sql'; do
+  _c35_out=$(
+    PAYLOAD_CWD=""
+    eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+    _rmt_normalise_target "$_c35_in"
+  )
+  [ "$_c35_out" = "$_c35_in" ] || { _c35_fail=1; echo "    got '$_c35_out' for '$_c35_in'"; }
+done
+if [ "$_c35_fail" -eq 0 ]; then
+  record_pass "#1159 no usable cwd: relative target returned verbatim, not fabricated absolute"
+else
+  record_fail "#1159 no usable cwd: relative target returned verbatim, not fabricated absolute"
+fi
+
+# =============================================================================
+# Cases 36-38 (#1159, Rex round-3 on PR #1180): DISCRIMINATING coverage for
+# normalisation. Cases 31-34 all passed against the unfixed commit-2 hook, and
+# two mutation runs — normalisation replaced by a pass-through, and the
+# round-2 bug restored verbatim — both still scored 38/38. The feature had no
+# test that could tell it was working.
+#
+# The missing ingredient is a fixture where the two markers give OPPOSITE
+# verdicts, so the exit code reveals WHICH ONE answered:
+#   ops marker      #42 -> no migration label -> would BLOCK (rc=2)
+#   project marker  #99 -> migration + AgDR   -> would ALLOW (rc=0)
+# A target under workspace/example reaches #99 only if it was normalised into
+# an absolute path first; un-normalised it misses the workspace prefix and
+# falls to #42. rc=0 therefore proves normalisation happened.
+# =============================================================================
+for shape in 'relative' 'dot-segment' 'double-slash'; do
+  SB=$(make_fork)
+  mkdir -p "$SB/workspace/example/migrations"
+  # Ops-level marker: valid ticket, but NOT migration-labelled -> blocks.
+  set_marker "$SB" "test-org/test-repo" 42
+  # Per-project marker: migration-labelled + AgDR -> allows.
+  mkdir -p "$SB/.claude/session/tickets"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+  install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  case "$shape" in
+    relative)     TGT="workspace/example/$MIG" ;;
+    dot-segment)  TGT="$SB/./workspace/example/$MIG" ;;
+    double-slash) TGT="$SB//workspace/example/$MIG" ;;
+  esac
+  if run_hook_bash "$SB" "cat > $TGT" 0 "$SB"; then
+    record_pass "#1159 normalisation ($shape) reaches the PROJECT marker, not the ops fallback"
+  else
+    record_fail "#1159 normalisation ($shape) reaches the PROJECT marker, not the ops fallback"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

@@ -267,6 +267,18 @@ _rmt_normalise_target() {
     # untouched: it then behaves as it did before this change.
     *)      [ -n "$PAYLOAD_CWD" ] && t="$PAYLOAD_CWD/$t" ;;
   esac
+
+  # If it is STILL relative, there was no trustworthy base. Return it exactly
+  # as received. The canonicaliser below emits a leading "/" unconditionally,
+  # so running it here would turn `migrations/001.sql` into
+  # `/migrations/001.sql` — inventing an absolute path that never existed and
+  # that can match a workspace prefix. That is the same fabrication the join
+  # was removed to avoid, just relocated; leaving early is what actually makes
+  # the un-normalised path behave as it did before this change.
+  case "$t" in
+    /*) ;;
+    *)  printf '%s' "$t"; return 0 ;;
+  esac
   # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
   # Lexical (not realpath) so a not-yet-created migration file still resolves.
   printf '%s' "$t" | awk -F/ '{
