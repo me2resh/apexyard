@@ -48,6 +48,30 @@
 # ticket regardless of path. Applied PER TARGET (not just once against
 # the first extracted target) so a meta-exempt target can't shadow a
 # genuinely migration-shaped target named later in the same command.
+# Which managed project governs this path? Empty means "none" -- the ops-level
+# marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
+# matching target rather than only the one it picked first (see the loop below).
+_rmt_project_for_path() {
+  local p="$1" proj="" tail
+  if [ -n "$WORKSPACE_DIR" ]; then
+    case "$p" in
+      "$WORKSPACE_DIR"/*)
+        tail="${p#$WORKSPACE_DIR/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  if [ -z "$proj" ] && [ -n "$OPS_ROOT" ]; then
+    case "$p" in
+      "$OPS_ROOT"/workspace/*)
+        tail="${p#$OPS_ROOT/workspace/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  printf '%s' "$proj"
+}
+
 _rmt_is_meta_exempt() {
   case "$1" in
     */.claude/*|*/.claude|*/docs/*|*/docs) return 0 ;;
@@ -362,14 +386,25 @@ MSG
     fi
   done <<< "$BASH_TARGETS"
 
-  # Pass 2: pick the migration-shaped target to gate on, normalised.
+  # Pass 2: judge EVERY migration-shaped target, normalised -- not just the
+  # first. RESOLVED_TARGET keeps the first for the single-marker case;
+  # MATCH_PROJECTS accumulates the distinct governing projects so a command
+  # spanning two of them cannot be approved by whichever happened to match
+  # first.
   RESOLVED_TARGET=""
+  MATCH_PROJECTS=""
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
     _tgt_norm=$(_rmt_normalise_target "$_tgt")
     # Ask BOTH spellings here too, for the same reason pass 1 does -- an
     # argument commit 5 made and then failed to carry across to selection.
+    # The two are NOT identical, and an earlier version of this comment
+    # implied they were: pass 1's raw arm is ungated, this one is gated on
+    # CUSTOM_PATHS. So `.../migrations/../$V.sql` is refused as unresolvable
+    # while its resolvable twin is deliberately allowed. Fail-closed, but
+    # asymmetric on purpose, and worth stating rather than glossing.
+    # (Hakim, round 6 on PR #1180.)
     # The default patterns are `*/`-anchored and survive absolutisation, but a
     # project-configured pattern is repo-relative (see this file's header:
     # `["src/db/**", "db/migrations/**"]`) and matches nothing against an
@@ -382,10 +417,56 @@ MSG
     # (Hakim, round 5 on PR #1180.)
     if is_migration_path "$_tgt_norm" \
       || { [ -n "$CUSTOM_PATHS" ] && is_migration_path "$_tgt"; }; then
-      RESOLVED_TARGET="$_tgt_norm"
-      break
+      # Do NOT stop here. Round 4 gave pass 1 order-independence; pass 2 kept
+      # its first-match `break`, and this change widened the match set so
+      # "first" lands earlier than it did on dev. A command writing one
+      # migration into project A (whose ticket satisfies the gate) and another
+      # into project B (whose ticket does not) was allowed outright, because B
+      # was never judged -- reversing the arguments blocked it. That is the
+      # wrong-project-ticket failure #1159 exists to close, and the file header
+      # already claimed all targets were judged. (Hakim, round 6 on PR #1180.)
+      [ -z "$RESOLVED_TARGET" ] && RESOLVED_TARGET="$_tgt_norm"
+      _tgt_proj=$(_rmt_project_for_path "$_tgt_norm")
+      if [ -z "$MATCH_PROJECTS" ]; then
+        MATCH_PROJECTS="$_tgt_proj"
+      else
+        case "
+$MATCH_PROJECTS
+" in
+          *"
+$_tgt_proj
+"*) ;;
+          *) MATCH_PROJECTS="$MATCH_PROJECTS
+$_tgt_proj" ;;
+        esac
+      fi
     fi
   done <<< "$BASH_TARGETS"
+
+  # More than one governing marker in a single command. Gating on any one of
+  # them approves writes the others govern, so refuse and let the operator
+  # split the command. Fail-closed, and strictly closer to dev, which blocked
+  # this shape in both argument orders.
+  if [ "$(printf '%s' "$MATCH_PROJECTS" | grep -c .)" -gt 1 ]; then
+    cat >&2 <<MSG
+BLOCKED: This command writes migrations governed by more than one ticket.
+
+  projects: $(printf '%s' "$MATCH_PROJECTS" | tr '\n' ' ' | sed 's/  */ /g')
+            (an empty entry means a path outside every workspace, which the
+             ops-level marker governs)
+
+Each of these is governed by a different active-ticket marker. Gating on any
+one of them would approve the writes the others govern -- which is the wrong
+ticket silently approving a migration, the failure this gate exists to stop.
+
+Split the writes into one command per project, so each is judged against the
+ticket that actually governs it.
+
+See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
+"Migration Gate (3a)".
+MSG
+    exit 2
+  fi
 
   if [ -z "$RESOLVED_TARGET" ]; then
     # No target in this command matches a migration path — other hooks
@@ -402,23 +483,7 @@ fi
 # Reuse the #41 resolution: per-project marker if FILE_PATH is under the
 # resolved workspace dir, otherwise the ops-level fallback. The resolved
 # workspace dir may live in the private sibling repo for v2 adopters.
-PROJECT=""
-if [ -n "$WORKSPACE_DIR" ]; then
-  case "$FILE_PATH" in
-    "$WORKSPACE_DIR"/*)
-      tail="${FILE_PATH#$WORKSPACE_DIR/}"
-      PROJECT="${tail%%/*}"
-      ;;
-  esac
-fi
-if [ -z "$PROJECT" ] && [ -n "$OPS_ROOT" ]; then
-  case "$FILE_PATH" in
-    "$OPS_ROOT"/workspace/*)
-      tail="${FILE_PATH#$OPS_ROOT/workspace/}"
-      PROJECT="${tail%%/*}"
-      ;;
-  esac
-fi
+PROJECT=$(_rmt_project_for_path "$FILE_PATH")
 
 # Three-tier marker lookup, mirroring require-active-ticket.sh (#41 + #513):
 # tier 0 per-worktree (tickets/<project>/<safe-branch>) → tier 1 per-project

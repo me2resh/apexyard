@@ -1041,6 +1041,63 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Cases 49-51 (#1159, Hakim round 6 on PR #1180). Pass 2 stopped at its FIRST
+# matching target, and this PR widened the match set so "first" lands earlier
+# than it did on dev. A command writing into project `example` (ticket #99
+# satisfies the gate) and project `other` (ticket #77 does not) was ALLOWED
+# outright -- `other` was never judged. Reversing the two arguments blocked it.
+# An order-dependent verdict on a blocking gate, and it is #1159's own subject:
+# one project's ticket authorising another project's migration.
+#
+# Measured before the fix: dev BLOCK / BLOCK, HEAD ALLOW / BLOCK.
+# No case in the suite named two migration-shaped targets in two projects.
+# =============================================================================
+mk_two_project_fixture() {        # echoes the sandbox path
+  local sb; sb=$(make_fork)
+  mkdir -p "$sb/workspace/example/migrations" "$sb/workspace/other/migrations"
+  mkdir -p "$sb/.claude/session/tickets"
+  # example -> satisfies the gate; other -> does not.
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$sb/.claude/session/tickets/other"
+  set_marker "$sb" "test-org/test-repo" 42
+  install_mock "$sb" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  echo "$sb"
+}
+
+# --- Cases 49-50: the verdict must not depend on argument order --------------
+# Target 1 is relative and only becomes migration-shaped once joined to the cwd
+# (project example, allowed); target 2 is an absolute write into project other
+# (blocked). Both orders must block.
+for order in 'satisfying-first' 'blocking-first'; do
+  SB=$(mk_two_project_fixture)
+  case "$order" in
+    satisfying-first) CMD="cat > migrations/001.sql; cat > $SB/workspace/other/migrations/002.sql" ;;
+    blocking-first)   CMD="cat > $SB/workspace/other/migrations/002.sql; cat > migrations/001.sql" ;;
+  esac
+  if run_hook_bash "$SB" "$CMD" 2 "$SB/workspace/example"; then
+    record_pass "#1159 two projects in one command are both judged ($order)"
+  else
+    record_fail "#1159 two projects in one command are both judged ($order)"
+  fi
+  rm -rf "$SB"
+done
+
+# --- Case 51: two targets in the SAME project are not over-refused -----------
+# The multi-marker refusal must fire on genuinely divergent governance, not on
+# any command that merely writes twice. Both targets here resolve to project
+# example, whose ticket satisfies the gate, so this must still ALLOW.
+SB=$(mk_two_project_fixture)
+if run_hook_bash "$SB" "cat > migrations/001.sql; cat > $SB/workspace/example/migrations/002.sql" 0 "$SB/workspace/example"; then
+  record_pass "#1159 two targets in the SAME project still gate normally (no over-refusal)"
+else
+  record_fail "#1159 two targets in the SAME project still gate normally (no over-refusal)"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo
