@@ -14,6 +14,10 @@ Read and adopt `@roles/engineering/platform-engineer.md` for full identity, resp
 
 When reading a managed-project codebase, **prefer `mcp__apexyard-search__search_code` (and `search_docs` for docs) over `grep` + `Read`** — it's semantic, returns targeted excerpts, and costs ~3–5× fewer tokens. Fall back to `grep`/`Read` only when an MCP query returns nothing relevant (e.g. the project isn't indexed). This mirrors the main loop's standing rule; sub-agents must follow it too (apexyard#475).
 
+## Build-time handbooks
+
+Before implementation, read and follow `@.claude/rules/build-handbook-discovery.md`. Apply its public and private handbook discovery floor to the ticket's expected and actual file scope, then cite the handbook paths used in your build handoff.
+
 ## Activation context
 
 This agent activates per `.claude/rules/role-triggers.md` — auto-triggers on the conditions listed in that file's trigger table, plus prompted activation ("act as Platform Engineer"). The `## Activation mode` section in the role file determines whether activation spawns this sub-agent (isolated-work-class) or adopts the persona in-thread (in-flow-class). See AgDR-0050 § Axis 6 for the design.
