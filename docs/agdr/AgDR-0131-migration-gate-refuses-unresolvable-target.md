@@ -1,6 +1,8 @@
 # Migration gate resolves what it can and refuses what it cannot
 
-> In the context of the migration gate deciding which ticket governs a Bash write, facing targets it cannot map to a project, I decided to **normalise every resolvable target and refuse the genuinely unresolvable ones — checking all targets, not just the first** — to achieve fail-closed behaviour for a blocking gate, accepting that unexpandable shell constructs must be rewritten as literal paths.
+> In the context of the migration gate deciding which ticket governs a Bash write, facing targets it resolved against the wrong project, I decided to **fix resolution only — leaving the set of writes this gate governs identical to `dev`'s** — to achieve a correct governing ticket without widening a blocking gate, accepting that the multi-target and heredoc halves of #1159 stay open.
+
+**The one-sentence property this change claims:** *the set of writes this gate governs is identical to `dev`'s; what changed is which ticket answers.* It is enforced by a differential test over the selection predicate, not by case enumeration — case enumeration missed eight defects across eight review rounds.
 
 **Status**: Accepted
 **Date**: 2026-09-05
@@ -21,6 +23,12 @@ The reviewer's framing on the issue is the precise one: `_lib-detect-bash-write.
 2. **Incomplete condition.** A backtick is the same bash feature as `$(…)`; one was caught, the other was not. Relative and `~/` targets also reached tier 2 unresolved.
 3. **False positive on the wrong tool.** The check also applied to `Edit`/`Write`, where `file_path` never passed through a shell — so a literal filename containing `$` was hard-blocked, with a message asserting a cause that had not been observed.
 
+### A labelling correction, because this record propagated the error
+
+This document numbers #1159's failures as: **Failure 1**, the wrong-marker fallthrough — an unresolvable or relative target reaching the wrong ticket. **Failure 2**, the heredoc problem — a heredoc body containing a write command extracted as a real target.
+
+Through rounds 4–8 the PR's commit messages, probe scripts and reviewer briefs repeatedly called the *wrong-marker* problem "Failure 2". It is Failure 1. Architecture review caught it in round 8. **Failure 1 is what this change addresses; Failure 2 was never in scope and stays open.**
+
 ## Options Considered
 
 | Option | Pros | Cons |
@@ -34,17 +42,43 @@ The reviewer's framing on the issue is the precise one: `_lib-detect-bash-write.
 
 ## Decision
 
+### Round 8: the change was narrowed after the stopping rule fired
+
+Rounds 6, 7 and 8 each produced a defect in the multi-target machinery, every one an adjacent case escaping the same single-representative election:
+
+| Round | Key the election used | How it escaped |
+|---|---|---|
+| 6 | first match wins | a command spanning two projects was approved by whichever matched first |
+| 7 | project **name** | the ops domain's name is empty, so that member was silently dropped |
+| 8 | marker **path** | one ticket reached through two marker files — a fresh subdirectory misses tier 0, because `git -C` fails on a directory that does not exist |
+
+Each key is a *proxy* for the governing ticket, and each proxy agreed with the ticket until it didn't. Round 8 tripped the stopping rule this record adopted, so the machinery was **removed rather than repaired a fourth time**.
+
+What ships is resolution only:
+
+- **Selection asks the RAW spelling, in both passes.** Normalisation serves resolution alone. Normalisation-in-selection was never part of fixing #1159 — it arrived as a side effect, widened the governed set beyond the ticket, and generated two of the eight defects.
+- **Pass 2 selects first-match, exactly as `dev`.** Pass 1 keeps its order-independent scan for unresolvable targets, which is Failure 1's subject and does not widen anything.
+- **The accumulator and its multi-marker refusal are gone**, along with cases 49–54. They move to me2resh/apexyard#1182.
+
+**What #1180 therefore does NOT close, stated plainly rather than softened:** the two-project order-dependent fail-open remains, inherited unchanged from `dev`. This record previously called that shape "#1159's own subject". So **#1159 stays open for two things** — the heredoc (Failure 2) and the multi-target order-dependence — and this is a scope reduction, recorded as one.
+
+**The price, paid knowingly.** `<abs>/migrations/../1.sql` was allowed while selection normalised, and is governed again now, so `dev`'s false positive returns with it. It was never part of fixing #1159; it arrived with normalisation-in-selection. Retiring it properly belongs to #1182.
+
+**The nine-cell enumeration is superseded, not recounted.** Under the differential property every remaining delta is a *resolution* delta by construction, which is a smaller and better-defined set than the enumeration it replaces. Re-deriving a count for a sweep whose premise changed would be arithmetic dressed as evidence.
+
 Chosen: **resolve, then refuse**, in two passes over every extracted target.
 
-- **Pass 1** examines *all* targets before any is selected, so refusal cannot depend on argument order. A target is unresolvable when it carries a shell variable, a command substitution, or a backtick — constructs whose value is unknowable without executing the command. Refusal is scoped to targets that are migration-shaped in **either** spelling — raw or normalised. An earlier draft said "scoped to a target's literal text, so an unrelated `$LOG` redirect is not refused", and offered that as reassurance. Round 5 made pass 1 test both spellings, which turns the example into a counter-example: `echo x > $LOG` issued from a `migrations/` cwd is passthru on `dev`, was allowed at commit 4, and is **refused** at this HEAD. That is the intended direction — fail-closed on a gate — but the record must not claim otherwise. The raw spelling is retained alongside the normalised one because normalisation can consume a `migrations/` segment via `..`, which would silently drop a refusal that exists today.
-- **Pass 2** judges *every* migration-shaped target, not the first. Where the matching targets are governed by more than one **marker**, the command is **refused** and the operator is asked to split it: gating on any one of them approves the writes the others govern.
+- **Pass 1** examines *all* targets before any is selected, so refusal cannot depend on argument order. A target is unresolvable when it carries a shell variable, a command substitution, or a backtick — constructs whose value is unknowable without executing the command. Refusal is scoped to targets that are migration-shaped in their **raw** spelling.
 
-  The key is the resolved marker, not the project name. Round 6 keyed on the name and got both directions wrong at once: the ops domain's name is legitimately empty, so that member was silently dropped (fail-open, order-dependent), while two projects sharing a single `current-ticket` were refused for differing in a field that governs nothing (over-refusal, against `dev`). All three reviewers found the first half independently in round 7.
+  Rounds 4–7 had pass 1 test both the raw and normalised spellings. That is gone: it made pass 1 refuse writes that pass 2 no longer governs — a refusal for a write this change declares out of scope — and it was one of the two selection widenings that generated defects. One question, one spelling, both passes.
 
-  **This refusal is a staged step, not the end state.** The end state is **per-domain evaluation** — loop the distinct governing markers and block if any one of them fails — which dominates the refusal on both axes: never weaker on safety, since the refusal only ever blocks more, and strictly better on usability, since the refusal also blocks the case where every marker is satisfied. It is expressible despite the hook's binary verdict; it is deferred here only because it needs the single-representative structure described below to be unwound first.
+  An earlier draft offered `$LOG` as reassurance that unrelated redirects are not refused, then round 5 made that example false. Under raw-only selection the reassurance is true again, and true for a checkable reason rather than by inspection: `echo x > $LOG` is not migration-shaped raw, on `dev` or here.
 
-  Two things keep the interim refusal defensible. It is **strictly closer to `dev`** than what it replaced, and the SDLC's **one-ticket-at-a-time rule already forbids** a single command spanning two governing tickets — so the refusal enforces an existing invariant rather than inventing a new inconvenience. Two targets under the *same* marker still gate normally.
-- **Pass 2** normalises each resolvable target — `~` expanded, relative resolved against the harness-supplied `.cwd`, and `//`, `/./`, `/../` canonicalised lexically (see "Why lexical" below — the reason is **not** the one two earlier drafts gave) — then applies the migration match and project resolution. The **match itself is unchanged; the string it is applied to is not**, and that is where round 5's defect lived: selecting on the normalised spelling alone silently disabled the Bash half of this gate on every fork that configures `migration_paths`, because adopter patterns are repo-relative while the defaults are `*/`-anchored and survive absolutisation. Pass 2 now asks both spellings, with the raw arm gated on a configured pattern set so it cannot reinstate the default-pattern false positive.
+- **Pass 2** selects the **first** migration-shaped target by its **raw** spelling — exactly as `dev` — and normalises only that target, for resolution. Selection set identical to `dev` by construction; resolution is the fix.
+
+  Judging every target against its own governing ticket is **me2resh/apexyard#1182**, not this change. Three attempts at it (rounds 6, 7, 8) each produced an adjacent-case defect, because each held a different *proxy* for the governing ticket — first-match, then project name, then marker path. #1182 removes the need for a proxy instead of choosing a better one, by sharing `require-active-ticket.sh`'s resolver rather than keeping a private copy of the question.
+
+  The round-5 adopter-pattern fix is **subsumed, not reverted**: raw-only selection makes repo-relative `migration_paths` match directly, which is why they work on `dev` too. Its defect was normalised-*only* selection; the fix for that was to ask both spellings, and asking one — the raw one — is strictly simpler and matches `dev`.
 
 The resolvability check is **Bash-only**. An `Edit`/`Write` `file_path` is a literal string that never met a shell, so a `$` there is an ordinary filename character.
 
@@ -70,7 +104,7 @@ Worth stating plainly, because the review history is the evidence. Seven commits
 
 The structural cause is that everything before Gate 1 exists to elect **one** `FILE_PATH` to stand for the whole command, because the tail can evaluate exactly one marker. Each fix improves the election; none removes the need to hold one. Architecture review named this in round 7 and recommended **restructure rather than continue iterating** for the remaining work, staged as: this commit's marker-keyed accumulator, then the resolution half (`_resolve_real_path` composed after the lexical collapse), then per-domain evaluation — which retires the refusal above and removes the election entirely.
 
-A stopping rule was set with it, and this record adopts it: **if another defect of this same class appears, restructure before merging anything further.**
+A stopping rule was set with it, and this record adopts it: **if another defect of this same class appears, restructure before merging anything further.** It fired in round 8, and the restructure is me2resh/apexyard#1182 — which architecture review reframed from *per-domain evaluation* to **sharing the sibling gate's resolver**: every defect in this sequence came from this hook holding a private copy of a question `require-active-ticket.sh` already answers.
 
 #### One resolution regime, a two-spelling selection predicate
 
@@ -100,6 +134,9 @@ The honest reason is narrower, and weaker. `_resolve_real_path` is not a drop-in
 - **Known gap — the meta-exemption reads the raw target (pre-existing).** `_rmt_is_meta_exempt` matches before normalisation, so `sub/docs/../db/migrations/1.sql` exempts itself on the `docs/` segment that normalisation would have removed, and skips the gate entirely. Raised by security review in round 4. Not fixed here: the exemption predates this change and moving it after normalisation widens the blast radius beyond the ticket.
 - Closing all three needs `_resolve_real_path` and `pwd -P` anchors, as the sibling gate `require-active-ticket.sh` already does, plus normalising before the exemption test. That is the natural follow-up and is not attempted here.
 - **The refusal blocks three shapes `dev` allowed.** Cataloguing them because the non-monotonic ledger above is the no-regressions assessment: a command spanning two projects whose tickets both satisfy the gate; one spanning a project and the ops domain where both satisfy; and one spanning two projects under different markers that both satisfy. All three are fail-closed, all three are forbidden by one-ticket-at-a-time anyway, and all three are retired by per-domain evaluation. The mirror-image over-refusal that was **not** acceptable — two projects sharing a single marker — was a round-7 defect and is fixed, not accepted.
+- **Known gap — tier-0 detection misses a not-yet-created directory (pre-existing).** Tier 0 asks `git -C "$(dirname "$path")"`, and `git -C` fails outright when that directory does not exist — the ordinary shape for a new migration, and the only shape Prisma emits. `require-active-ticket.sh` already solves this: it walks up to the first existing ancestor before asking git, with a comment saying "works for new files". This gate's tier-0 block is that sibling block **with the ancestor walk dropped** — a lossy transcription, not a novel design gap. It is a fourth entry in the "weaker than the sibling gate" table above. Present identically on `dev`; deliberately **not** patched here, because the function is slated for deletion by #1182 and patching it would be the ninth patch.
+- **Known gap — tier 0 has no test coverage at all.** No case creates a linked worktree or sets `CLAUDE_WORKTREE_BRANCH`. Code review measured that the entire tier can be deleted with the suite still green, and counted **11 single-mutation survivors** in the suite overall. That is why round 8 found a defect exactly there. Closing it is part of #1182's acceptance criteria.
+- **Correction — an earlier claim in this PR that two surviving mutants proved two mechanisms independently sufficient was incomplete.** Code review found a third, unnamed property they were coupled to: `RESOLVED_TARGET` holding the *first* match. The claim is withdrawn; the machinery it described is gone.
 - **The adopter-configured case is narrower than "fixed".** With `migration_paths: ["db/migrations/**"]`, the same file in the same project gates only as a bare relative path. `x/../db/…`, `./db/…`, the absolute spelling, and the whole `Edit`/`Write` half still pass ungated. That matches `dev` exactly, so it is not a regression — but the gate is not comprehensively covering configured patterns either, and an adopter who tests one spelling should not conclude otherwise. Raised by security review in round 6.
 - **Why four rounds missed the round-5 regression:** zero of the then-48 cases set `migration_paths` at all, though nine wrote a `project-config.json` for other keys. The whole adopter-configuration space was untested. That is the most transferable lesson in this record, and it lived only in the test file until round 6.
 - The ops-fork fallback is unchanged — a literal absolute path outside `workspace/` still legitimately uses the ops marker (case 24).
@@ -111,5 +148,5 @@ The honest reason is narrower, and weaker. `_resolve_real_path` is not a drop-in
 ## Artifacts
 
 - `.claude/hooks/require-migration-ticket.sh` — `_rmt_is_unresolvable`, `_rmt_normalise_target`, two-pass target loop
-- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–55. Cases 31–34 pin `.cwd` trust; **cases 36–38 are what pin normalisation itself** — they use a fixture whose ops and per-project markers give opposite verdicts, so the exit code reveals which marker answered. Case 34 does not pin normalisation, contrary to an earlier draft: its target lands outside `workspace/` either way, so the ops marker answers identically normalised or not.
-- PR me2resh/apexyard#1180 — seven rounds of review — Rex and Hakim throughout, joined by the Solution Architect at round 5 once the design-artifact gate applied. The first cut, the first redesign, and the `.cwd` fix were each rejected on a defect found by probing rather than by reading; this record was corrected in every one of the seven rounds — twice on this same symlink bullet, in opposite directions. Round 4 added the `~user`/`~+`/`~-` fabrication branch the round-3 fix did not reach, made both target-resolution passes ask the migration question of the same string, and gave the `.cwd` validation its first real coverage. Every fix is mutation-checked: reintroducing any one of them fails a named case.
+- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–48 plus the selection differential (cases 49–54 moved to #1182). Cases 31–34 pin `.cwd` trust; **cases 36–38 are what pin normalisation itself** — they use a fixture whose ops and per-project markers give opposite verdicts, so the exit code reveals which marker answered. Case 34 does not pin normalisation, contrary to an earlier draft: its target lands outside `workspace/` either way, so the ops marker answers identically normalised or not.
+- PR me2resh/apexyard#1180 — eight rounds of review — Rex and Hakim throughout, joined by the Solution Architect at round 5 once the design-artifact gate applied. The first cut, the first redesign, and the `.cwd` fix were each rejected on a defect found by probing rather than by reading; this record was corrected in every one of the eight rounds — twice on this same symlink bullet, in opposite directions. Round 4 added the `~user`/`~+`/`~-` fabrication branch the round-3 fix did not reach, made both target-resolution passes ask the migration question of the same string, and gave the `.cwd` validation its first real coverage. Every fix is mutation-checked: reintroducing any one of them fails a named case.

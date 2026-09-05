@@ -912,21 +912,13 @@ for tilde in '~root' '~+' '~-'; do
   rm -rf "$SB"
 done
 
-# --- Case 42: pass 1 and pass 2 must ask the same question -------------------
-# Hakim, round 4: pass 1 refused on `is_migration_path "$_tgt"` (RAW) while
-# pass 2 gated on `is_migration_path "$_tgt_norm"` (NORMALISED). A target that
-# only becomes migration-shaped once joined was therefore never a refusal
-# candidate, yet was gated on anyway -- the gate guessing that an unexpandable
-# `$F` stays inside the cwd's project, which its own refusal text promises it
-# will not do. Raw `$F.sql` carries no `migrations/` segment; joined to a
-# `migrations/` cwd it does. rc=2 here is the REFUSAL, not the ops marker.
-SB=$(mk_opposing_fixture)
-if run_hook_bash "$SB" 'cat > $F.sql' 2 "$SB/workspace/example/migrations"; then
-  record_pass "#1159 unresolvable target that becomes migration-shaped after normalisation is refused"
-else
-  record_fail "#1159 unresolvable target that becomes migration-shaped after normalisation is refused"
-fi
-rm -rf "$SB"
+# --- Case 42 REMOVED (round 8, b1+) -----------------------------------------
+# It asserted that pass 1 refuses a target which only becomes migration-shaped
+# after normalisation (`$F.sql` from a `migrations/` cwd). Selection now asks
+# the RAW spelling in both passes, so that write is outside the set this gate
+# governs -- exactly as on dev. Refusing it would be a refusal for a write the
+# same change declared out of scope. The behaviour is not lost, it is not ours:
+# it returns with me2resh/apexyard#1182.
 
 # --- Case 43: a .cwd that is absolute but does not exist is rejected ---------
 # Rex, round 4: deleting the whole absolute-and-exists validation left the
@@ -987,20 +979,25 @@ else
 fi
 rm -rf "$SB"
 
-# --- Case 46: the raw arm must NOT reinstate the default-pattern false positive
-# The raw check in pass 2 is gated on CUSTOM_PATHS precisely so it cannot fire
-# for default patterns. `<abs>/migrations/../1.sql` normalises to `<abs>/1.sql`,
-# which is not migration-shaped -- correctly allowed, and one of the nine cells
-# this PR moves. Ungating the raw arm would match `*/migrations/*` on the raw
-# spelling and block it again. rc=0 is the correct-allow; the mutant gives 2.
+# --- Case 46: `<abs>/migrations/../1.sql` is selected, exactly as on dev -----
+# THIS CELL REVERTED IN ROUND 8, deliberately. While selection normalised, this
+# path was not migration-shaped once collapsed (`<abs>/1.sql`) and was allowed --
+# recorded as one of the nine cells this PR moved. Under (b1+) selection asks
+# the raw spelling, which does carry a `migrations/` segment, so the write is
+# governed again and dev's false positive comes back with it.
+#
+# That is the price of the narrowing and it is paid knowingly: the cell was
+# never part of fixing #1159, it arrived with normalisation-in-selection, and
+# keeping it costs the checkable property that selection matches dev exactly.
+# Retiring it properly belongs to me2resh/apexyard#1182.
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations"
 set_marker "$SB" "test-org/test-repo" 42
 install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
-if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/../1.sql" 0 "$SB/workspace/example"; then
-  record_pass "#1159 raw-arm gating: default patterns do not re-block a normalised non-migration path"
+if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/../1.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 selection matches dev on '<abs>/migrations/../1.sql' (cell reverted in round 8)"
 else
-  record_fail "#1159 raw-arm gating: default patterns do not re-block a normalised non-migration path"
+  record_fail "#1159 selection matches dev on '<abs>/migrations/../1.sql' (cell reverted in round 8)"
 fi
 rm -rf "$SB"
 
@@ -1041,126 +1038,16 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
-# Cases 49-51 (#1159, Hakim round 6 on PR #1180). Pass 2 stopped at its FIRST
-# matching target, and this PR widened the match set so "first" lands earlier
-# than it did on dev. A command writing into project `example` (ticket #99
-# satisfies the gate) and project `other` (ticket #77 does not) was ALLOWED
-# outright -- `other` was never judged. Reversing the two arguments blocked it.
-# An order-dependent verdict on a blocking gate, and it is #1159's own subject:
-# one project's ticket authorising another project's migration.
+# Cases 49-54 REMOVED (round 8) -- they move to me2resh/apexyard#1182.
 #
-# Measured before the fix: dev BLOCK / BLOCK, HEAD ALLOW / BLOCK.
-# No case in the suite named two migration-shaped targets in two projects.
+# They covered the multi-target accumulator and its refusal: two projects in one
+# command, the ops domain as an accumulator member, and one marker governing two
+# projects. Rounds 6, 7 and 8 each produced a defect in that machinery, every one
+# an adjacent case escaping the same single-representative election, and round 8
+# tripped the stopping rule AgDR-0131 adopts. The machinery is gone; the cases go
+# with it rather than lingering as tests that pass by accident of first-match
+# selection. #1182 restores both together.
 # =============================================================================
-mk_two_project_fixture() {        # echoes the sandbox path
-  local sb; sb=$(make_fork)
-  mkdir -p "$sb/workspace/example/migrations" "$sb/workspace/other/migrations"
-  mkdir -p "$sb/.claude/session/tickets"
-  # example -> satisfies the gate; other -> does not.
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
-  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$sb/.claude/session/tickets/other"
-  set_marker "$sb" "test-org/test-repo" 42
-  install_mock "$sb" gh 'case "$*" in
-  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
-  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
-esac'
-  echo "$sb"
-}
-
-# --- Cases 49-50: the verdict must not depend on argument order --------------
-# Target 1 is relative and only becomes migration-shaped once joined to the cwd
-# (project example, allowed); target 2 is an absolute write into project other
-# (blocked). Both orders must block.
-for order in 'satisfying-first' 'blocking-first'; do
-  SB=$(mk_two_project_fixture)
-  case "$order" in
-    satisfying-first) CMD="cat > migrations/001.sql; cat > $SB/workspace/other/migrations/002.sql" ;;
-    blocking-first)   CMD="cat > $SB/workspace/other/migrations/002.sql; cat > migrations/001.sql" ;;
-  esac
-  if run_hook_bash "$SB" "$CMD" 2 "$SB/workspace/example"; then
-    record_pass "#1159 two projects in one command are both judged ($order)"
-  else
-    record_fail "#1159 two projects in one command are both judged ($order)"
-  fi
-  rm -rf "$SB"
-done
-
-# --- Case 51: two targets in the SAME project are not over-refused -----------
-# The multi-marker refusal must fire on genuinely divergent governance, not on
-# any command that merely writes twice. Both targets here resolve to project
-# example, whose ticket satisfies the gate, so this must still ALLOW.
-SB=$(mk_two_project_fixture)
-if run_hook_bash "$SB" "cat > migrations/001.sql; cat > $SB/workspace/example/migrations/002.sql" 0 "$SB/workspace/example"; then
-  record_pass "#1159 two targets in the SAME project still gate normally (no over-refusal)"
-else
-  record_fail "#1159 two targets in the SAME project still gate normally (no over-refusal)"
-fi
-rm -rf "$SB"
-
-# =============================================================================
-# Cases 52-55 (#1159, round 7 on PR #1180). All three reviewers independently
-# found the same defect in round 6's own fix: the accumulator keyed on project
-# NAME, and the ops domain's name is legitimately EMPTY. An empty member is
-# both unstorable (the `[ -z ]` init guard treats it as "nothing yet", so the
-# next member overwrites it) and uncountable (`grep -c .` skips empty lines) --
-# two independent drops, one per argument order. The accumulator now keys on
-# the resolved MARKER, which is what actually governs a write, and counts with
-# an explicit counter.
-# =============================================================================
-mk_ops_vs_project_fixture() {     # $1 = which side satisfies: "ops" | "project"
-  local sb; sb=$(make_fork)
-  mkdir -p "$sb/workspace/example/migrations" "$sb/migrations"
-  mkdir -p "$sb/.claude/session/tickets"
-  if [ "$1" = "ops" ]; then
-    set_marker "$sb" "test-org/test-repo" 99                                   # ops satisfies
-    printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$sb/.claude/session/tickets/example"
-  else
-    set_marker "$sb" "test-org/test-repo" 77                                   # ops fails
-    printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
-  fi
-  install_mock "$sb" gh 'case "$*" in
-  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
-  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
-esac'
-  echo "$sb"
-}
-
-# --- Cases 52-53: the ops domain is a real member, in BOTH argument orders ---
-# One case per dropping mechanism. Each uses the polarity where the satisfying
-# marker is the one that would win a first-match selection, so a dropped member
-# shows up as ALLOW rather than being masked by the other side blocking anyway.
-SB=$(mk_ops_vs_project_fixture project)
-if run_hook_bash "$SB" "cat > migrations/001.sql; cat > $SB/migrations/003.sql" 2 "$SB/workspace/example"; then
-  record_pass "#1159 ops domain counted when it is appended second (project-first order)"
-else
-  record_fail "#1159 ops domain counted when it is appended second (project-first order)"
-fi
-rm -rf "$SB"
-
-SB=$(mk_ops_vs_project_fixture ops)
-if run_hook_bash "$SB" "cat > $SB/migrations/003.sql; cat > migrations/001.sql" 2 "$SB/workspace/example"; then
-  record_pass "#1159 ops domain retained when it is stored first (ops-first order)"
-else
-  record_fail "#1159 ops domain retained when it is stored first (ops-first order)"
-fi
-rm -rf "$SB"
-
-# --- Case 54: one ticket governing two projects must NOT be refused ----------
-# The refusal keys on the governing MARKER, not the project name. Two projects
-# with no per-project marker both fall back to the same `current-ticket`, so one
-# ticket genuinely governs both writes -- dev allows this, and keying on the
-# name refused it while asserting a difference that did not exist.
-# (Hakim, round 7.)
-SB=$(make_fork)
-mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations"
-set_marker "$SB" "test-org/test-repo" 99          # satisfies; governs BOTH projects
-install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
-if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/001.sql; cat > $SB/workspace/other/migrations/002.sql" 0 "$SB/workspace/example"; then
-  record_pass "#1159 two projects sharing ONE governing marker are not refused"
-else
-  record_fail "#1159 two projects sharing ONE governing marker are not refused"
-fi
-rm -rf "$SB"
 
 # --- Case 55: pass 1's RAW arm (Rex, round 7 -- the third silent arm) --------
 # Deleting pass 1's raw spelling check left the suite at 55/55 while flipping a
@@ -1181,6 +1068,51 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# DIFFERENTIAL: the set of writes this gate governs is identical to dev's.
+#
+# This is the property (b1+) buys, and it is the one this change actually
+# claims. Eight rounds of case enumeration missed eight defects; three of them
+# were selection widening into territory dev never runs. A differential check
+# would have caught rounds 5 through 8, because each was a divergence in this
+# exact set.
+#
+# It compares SELECTION only -- which targets this gate governs -- not the
+# verdict. Resolution deliberately differs from dev; that difference is the fix.
+# =============================================================================
+DEV_HOOK=$(mktemp)
+if git -C "$(dirname "$HOOK_SCRIPT")" show 89209c9:.claude/hooks/require-migration-ticket.sh > "$DEV_HOOK" 2>/dev/null; then
+  # is_migration_path is self-contained in both versions, so the selection
+  # predicate can be compared directly without standing up two forks.
+  _sel_dev()  { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$DEV_HOOK")";     is_migration_path "$1"; }
+  _sel_head() { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$HOOK_SCRIPT")";  is_migration_path "$1"; }
+
+  _diff_fail=0
+  for _p in \
+    '/a/migrations/001.sql' '/a/migrations/../1.sql' '/a//migrations/x.sql' \
+    '/a/./migrations/x.sql' 'migrations/001.sql' './migrations/x.sql' \
+    '~/migrations/x.sql' '~root/migrations/x.sql' 'workspace/e/migrations/x.sql' \
+    '/a/db/migrate/1.rb' '/a/prisma/schema.prisma' '/a/notes.md' '/a/scratch.sql' \
+    '$WD/app/migrations/x.sql' '/a/migrations/2026/002.sql' '/a/src/migrations/x.ts'
+  do
+    if _sel_dev "$_p"; then _d=1; else _d=0; fi
+    if _sel_head "$_p"; then _h=1; else _h=0; fi
+    if [ "$_d" != "$_h" ]; then
+      _diff_fail=1
+      echo "    selection diverges on '$_p' (dev=$_d head=$_h)"
+    fi
+  done
+  if [ "$_diff_fail" -eq 0 ]; then
+    record_pass "#1159 DIFFERENTIAL: selection set identical to dev across 16 spellings"
+  else
+    record_fail "#1159 DIFFERENTIAL: selection set identical to dev across 16 spellings"
+  fi
+else
+  echo "  SKIP: differential test needs the dev blob (89209c9) — not available here"
+fi
+rm -f "$DEV_HOOK"
+
+# =============================================================================
+# Summary# =============================================================================
 # Summary
 # =============================================================================
 echo

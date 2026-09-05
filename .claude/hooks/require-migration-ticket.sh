@@ -36,7 +36,10 @@
 # The config is read from `<ops_root>/.claude/project-config.json` if
 # present, otherwise defaults below apply.
 #
-# ALL write targets are judged, not just the first (apexyard#886): a Bash
+# Pass 1 examines ALL write targets for unresolvability, not just the first
+# (apexyard#886, order-independence restored on PR #1180). Pass 2's SELECTION
+# is first-match, exactly as dev -- judging every target against its own
+# governing ticket is me2resh/apexyard#1182, not this change. A Bash
 # command can name more than one write target (`echo x > /tmp/scratch.sql
 # && echo y > db/migrations/002_add.sql`). Judging only the first target
 # let a command whose first target wasn't migration-shaped slip a later,
@@ -148,19 +151,6 @@ MARKER_HOME="${MARKER_HOME:-.}"
 # split-portfolio adopters point at the private sibling repo).
 WORKSPACE_DIR="$OPS_ROOT/workspace"
 
-# Sentinel for "no marker governs this path". Marker paths are absolute, so a
-# token starting with `<` cannot collide with one.
-#
-# Honest scope, because this PR has repeatedly claimed more than it delivered:
-# this sentinel is NOT what fixes the round-6 defect, and mutation testing says
-# so. Removing it while keeping the explicit counter leaves the suite green and
-# the behaviour correct; equally, restoring `grep -c .` while keeping the
-# sentinel is also correct. The two are independently sufficient. Both are kept
-# because the underlying bug had two independent causes and belt-and-braces is
-# cheap here -- and because `<none>` renders legibly in the refusal message,
-# where an empty entry was invisible.
-_RMT_NO_MARKER='<none>'
-
 # Which managed project governs this path? Empty means "none" -- the ops-level
 # marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
 # matching target rather than only the one it picked first (see the loop below).
@@ -221,7 +211,7 @@ _rmt_marker_for_path() {
     marker="$MARKER_HOME/.claude/session/current-ticket"
   fi
 
-  printf '%s' "${marker:-$_RMT_NO_MARKER}"
+  printf '%s' "$marker"
 }
 
 if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
@@ -408,16 +398,20 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
-    # Ask the migration question of BOTH spellings. Pass 2 selects on the
-    # normalised form, so testing only the raw one here leaves a hole: `$F`
-    # written from a `migrations/` cwd is not migration-shaped raw, becomes
-    # migration-shaped once joined, and so skipped refusal while still being
-    # gated on. Raw is kept in the test too -- normalisation can consume a
-    # `migrations/` segment via `..`, and dropping it would lose a refusal
-    # that exists today. (Hakim, round 4 on PR #1180.)
-    _tgt_n=$(_rmt_normalise_target "$_tgt")
-    if _rmt_is_unresolvable "$_tgt" \
-      && { is_migration_path "$_tgt" || is_migration_path "$_tgt_n"; }; then
+    # Selection asks the RAW spelling, here and in pass 2 -- one question, one
+    # spelling, everywhere. Normalisation serves RESOLUTION only.
+    #
+    # Rounds 5-8 each moved selection further into territory dev never runs,
+    # and three of the four produced a defect. Normalisation-in-selection was
+    # never part of fixing #1159: it arrived as a side effect, widened the set
+    # of writes this gate governs beyond the ticket, and generated two of the
+    # eight defects. (b1+, architecture review round 8.)
+    #
+    # The property this buys is checkable rather than enumerable: THE SET OF
+    # WRITES THIS GATE GOVERNS IS IDENTICAL TO DEV'S; WHAT CHANGED IS WHICH
+    # TICKET ANSWERS. See the differential test in the suite -- it would have
+    # caught rounds 5 through 8, which case enumeration did not.
+    if _rmt_is_unresolvable "$_tgt" && is_migration_path "$_tgt"; then
       cat >&2 <<MSG
 BLOCKED: This migration write target could not be resolved.
 
@@ -439,96 +433,26 @@ MSG
     fi
   done <<< "$BASH_TARGETS"
 
-  # Pass 2: judge EVERY migration-shaped target, normalised -- not just the
-  # first. RESOLVED_TARGET keeps the first for the single-marker case;
-  # MATCH_PROJECTS accumulates the distinct governing projects so a command
-  # spanning two of them cannot be approved by whichever happened to match
-  # first.
+  # Pass 2: select on the RAW spelling exactly as dev does, then normalise the
+  # target that was selected. Selection set identical to dev's by construction;
+  # resolution is what this change fixes.
+  #
+  # The multi-target accumulator and its refusal are GONE, deliberately. Rounds
+  # 6, 7 and 8 each produced a defect there, every one an adjacent case escaping
+  # the same single-representative election, and round 8 tripped the stopping
+  # rule this record adopted. That work moves to me2resh/apexyard#1182, which
+  # dissolves the election rather than improving it. The consequence is stated
+  # plainly in AgDR-0131: the two-project order-dependent fail-open REMAINS,
+  # inherited unchanged from dev, and #1159 stays open for it.
   RESOLVED_TARGET=""
-  MATCH_MARKERS=""
-  MATCH_MARKER_COUNT=0
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
-    _tgt_norm=$(_rmt_normalise_target "$_tgt")
-    # Ask BOTH spellings here too, for the same reason pass 1 does -- an
-    # argument commit 5 made and then failed to carry across to selection.
-    # The two are NOT identical, and an earlier version of this comment
-    # implied they were: pass 1's raw arm is ungated, this one is gated on
-    # CUSTOM_PATHS. So `.../migrations/../$V.sql` is refused as unresolvable
-    # while its resolvable twin is deliberately allowed. Fail-closed, but
-    # asymmetric on purpose, and worth stating rather than glossing.
-    # (Hakim, round 6 on PR #1180.)
-    # The default patterns are `*/`-anchored and survive absolutisation, but a
-    # project-configured pattern is repo-relative (see this file's header:
-    # `["src/db/**", "db/migrations/**"]`) and matches nothing against an
-    # absolute path. Selecting on the normalised spelling alone therefore
-    # switched this gate OFF entirely on any fork that configures
-    # `migration_paths` -- not the wrong ticket approving a migration, but no
-    # ticket at all, silently. The raw arm is gated on CUSTOM_PATHS so it
-    # cannot reinstate the default-pattern false positive on
-    # `.../migrations/../1.sql`, which is one of the cells this PR corrects.
-    # (Hakim, round 5 on PR #1180.)
-    if is_migration_path "$_tgt_norm" \
-      || { [ -n "$CUSTOM_PATHS" ] && is_migration_path "$_tgt"; }; then
-      # Do NOT stop here. Round 4 gave pass 1 order-independence; pass 2 kept
-      # its first-match `break`, and this change widened the match set so
-      # "first" lands earlier than it did on dev. A command writing one
-      # migration into project A (whose ticket satisfies the gate) and another
-      # into project B (whose ticket does not) was allowed outright, because B
-      # was never judged -- reversing the arguments blocked it. That is the
-      # wrong-project-ticket failure #1159 exists to close, and the file header
-      # already claimed all targets were judged. (Hakim, round 6 on PR #1180.)
-      [ -z "$RESOLVED_TARGET" ] && RESOLVED_TARGET="$_tgt_norm"
-      _tgt_marker=$(_rmt_marker_for_path "$_tgt_norm")
-      case "
-$MATCH_MARKERS
-" in
-        *"
-$_tgt_marker
-"*) ;;
-        *) MATCH_MARKERS="${MATCH_MARKERS:+$MATCH_MARKERS
-}$_tgt_marker"
-           MATCH_MARKER_COUNT=$((MATCH_MARKER_COUNT + 1)) ;;
-      esac
+    if is_migration_path "$_tgt"; then
+      RESOLVED_TARGET=$(_rmt_normalise_target "$_tgt")
+      break
     fi
   done <<< "$BASH_TARGETS"
-
-  # More than one governing marker in a single command. Gating on any one of
-  # them approves writes the others govern, so refuse and let the operator
-  # split the command.
-  #
-  # The round-6 version keyed on project NAME, and the ops domain's name is
-  # legitimately EMPTY -- so that member was both overwritten by the `[ -z ]`
-  # init guard and skipped by `grep -c .`. Two independent drops of the same
-  # member, one per argument order. All three reviewers found it in round 7.
-  #
-  # What actually fixes it is keying on the resolved MARKER instead of the
-  # project name: that is also what stops the mirror-image over-refusal, where
-  # two projects sharing one `current-ticket` were refused for differing in a
-  # field that does not govern anything. The explicit counter and the non-empty
-  # sentinel are each independently sufficient for the counting half; see the
-  # sentinel's own comment for why both are kept.
-  if [ "$MATCH_MARKER_COUNT" -gt 1 ]; then
-    cat >&2 <<MSG
-BLOCKED: This command writes migrations governed by more than one ticket.
-
-  markers: $(printf '%s' "$MATCH_MARKERS" | tr '\n' ' ' | sed 's/  */ /g')
-
-Each write in this command is governed by a different active-ticket marker.
-Gating on any one of them would approve the writes the others govern -- the
-wrong ticket silently approving a migration, which is the failure this gate
-exists to stop.
-
-Split the writes into one command per governing ticket. Note that the SDLC's
-one-ticket-at-a-time rule already forbids this shape, so this refusal enforces
-an existing invariant rather than adding a new restriction.
-
-See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
-"Migration Gate (3a)".
-MSG
-    exit 2
-  fi
 
   if [ -z "$RESOLVED_TARGET" ]; then
     # No target in this command matches a migration path — other hooks
@@ -549,7 +473,6 @@ PROJECT=$(_rmt_project_for_path "$FILE_PATH")
 
 # Three-tier marker lookup, shared with pass 2 so the two cannot diverge.
 MARKER=$(_rmt_marker_for_path "$FILE_PATH")
-[ "$MARKER" = "$_RMT_NO_MARKER" ] && MARKER=""
 
 if [ -z "$MARKER" ]; then
   cat >&2 <<MSG
