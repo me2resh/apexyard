@@ -613,12 +613,13 @@ Idempotence: empty `workspace/` (no entries to move) is a no-op.
 ```bash
 NEEDS=()
 grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
-grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+grep -qxF 'workspace/*' .gitignore 2>/dev/null || NEEDS+=('workspace/*')
+grep -qxF '!workspace/README.md' .gitignore 2>/dev/null || NEEDS+=('!workspace/README.md')
 
 if [ "${#NEEDS[@]}" -gt 0 ]; then
   {
     echo ""
-    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace live in the private sibling repo."
+    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace entries live in the private sibling repo."
     for n in "${NEEDS[@]}"; do echo "$n"; done
   } >> .gitignore
   git add .gitignore

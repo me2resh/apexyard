@@ -57,7 +57,7 @@ If you're not sure where a doc belongs, ask: "Would I want this doc to follow th
 
 ```
 # Don't commit live working copies — they have their own remotes
-workspace/*/
+workspace/*
 !workspace/README.md
 ```
 

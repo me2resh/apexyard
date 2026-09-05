@@ -13,8 +13,8 @@
 #      custom_skills_dir, custom_handbooks_dir)
 #   - .apexyard-fork presence marker exists at the public-fork root with
 #     the expected commented preamble (presence-only readers, AgDR-0021 § B)
-#   - .gitignore has the 4 v2 paths excluded
-#     (apexyard.projects.yaml, projects, onboarding.yaml, workspace)
+#   - .gitignore excludes private v2 data while preserving the public
+#     workspace/README.md framework artefact (AgDR-0021 § G)
 #   - portfolio_validate succeeds on the post-state
 #
 # Companion to test_split_portfolio_v2_migration.sh (which tests the
@@ -69,7 +69,7 @@ trap 'rm -rf "$TMP_ROOT"' EXIT
 # ---------------------------------------------------------------------------
 build_pre_setup_v2() {
   local sb="$1"
-  mkdir -p "$sb/public/.claude/hooks" "$sb/public/.claude"
+  mkdir -p "$sb/public/.claude/hooks" "$sb/public/.claude" "$sb/public/workspace"
   mkdir -p "$sb/private/projects" "$sb/private/workspace"
 
   # Public fork: framework files only — onboarding.yaml is still the
@@ -79,6 +79,9 @@ build_pre_setup_v2() {
 company:
   name: "Your Company Name"
 YAML
+  cat > "$sb/public/workspace/README.md" <<'MD'
+# Managed-project workspaces
+MD
 
   cp "$LIB_OPS"  "$sb/public/.claude/hooks/_lib-ops-root.sh"
   cp "$LIB_PORT" "$sb/public/.claude/hooks/_lib-portfolio-paths.sh"
@@ -147,8 +150,13 @@ apply_setup_v2() {
       echo "apexyard.projects.yaml"
       echo "projects"
       echo "onboarding.yaml"
-      echo "workspace"
+      echo "workspace/*"
+      echo "!workspace/README.md"
     } >> .gitignore
+
+    # The public framework README survives setup; only portfolio-owned root
+    # files are untracked from the public fork.
+    git rm --cached -r projects onboarding.yaml >/dev/null 2>&1 || true
 
     # 2. Write the v2 config block (8 keys including agent_routing
     #    per #351 PR 3).
@@ -224,15 +232,31 @@ else
   mark_fail "marker content" "preamble line missing or wrong"
 fi
 
-# Assertion 3: .gitignore has 4 v2 paths excluded
+# Assertion 3: .gitignore excludes private v2 paths but can re-include the
+# public workspace README because the parent directory itself is not ignored.
 GI="$SB/public/.gitignore"
-for path in apexyard.projects.yaml projects onboarding.yaml workspace; do
+for path in apexyard.projects.yaml projects onboarding.yaml 'workspace/*'; do
   if grep -qxF "$path" "$GI"; then
     mark_pass ".gitignore excludes '$path'"
   else
     mark_fail "gitignore exclude $path" "missing from $GI"
   fi
 done
+if grep -qxF '!workspace/README.md' "$GI"; then
+  mark_pass ".gitignore re-includes 'workspace/README.md'"
+else
+  mark_fail "gitignore README exception" "missing from $GI"
+fi
+if (cd "$SB/public" && git check-ignore -q workspace/README.md); then
+  mark_fail "workspace README visible" "workspace/README.md is still ignored"
+else
+  mark_pass "workspace/README.md is not ignored after split-portfolio setup"
+fi
+if [ "$(cd "$SB/public" && git ls-files workspace/README.md)" = "workspace/README.md" ]; then
+  mark_pass "workspace/README.md remains tracked after split-portfolio setup"
+else
+  mark_fail "workspace README tracked" "workspace/README.md was untracked"
+fi
 
 # Assertion 4: portfolio_validate succeeds on the post-state
 (
