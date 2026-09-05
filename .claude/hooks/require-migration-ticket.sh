@@ -63,20 +63,26 @@ _rmt_is_meta_exempt() {
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
-# The harness-supplied working directory for the Bash tool call. Relative write
-# targets are relative to THIS, not to the hook process's own cwd, which can
-# differ (me2resh/apexyard#1050 — same distinction verify-commit-refs.sh draws).
-PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
-# Trust it only if it is absolute AND exists — the same two conditions
-# verify-commit-refs.sh applies to the same field. A relative or bogus value
-# would otherwise fabricate a plausible-looking absolute path that is
-# indistinguishable downstream from a real one. Anything else is discarded,
-# and a relative target is then treated as unresolvable rather than guessed
-# against the hook process's own cwd (which is not the Bash tool's cwd).
-case "$PAYLOAD_CWD" in
-  /*) [ -d "$PAYLOAD_CWD" ] || PAYLOAD_CWD="" ;;
-  *)  PAYLOAD_CWD="" ;;
-esac
+# NOTE: the harness-supplied `.cwd` is deliberately NOT read. Rounds 3-8 joined
+# relative write targets to it, validated as absolute-and-existing. Security
+# review found the fail-open in round 9: `.cwd` is fixed when the tool call is
+# FORMED, so it cannot see a `cd` inside the command.
+#
+#   cd <ws>/workspace/other && cat > ./migrations/1.sql   with .cwd = <ws>/workspace/example
+#   -> dev BLOCKS (other's ticket governs and fails)
+#   -> joined:  ALLOWED against EXAMPLE's ticket, silently
+#
+# The identical write named absolutely was still blocked, so the verdict
+# depended on how the path was spelled and the permissive spelling is the
+# ordinary one. That is Failure 1's own signature in a spelling this change
+# introduced. Validating that `.cwd` is a real directory does not establish it
+# is the directory the write happens in.
+#
+# Teaching the join about `cd`/`pushd`/`git -C` was rejected: it means deciding
+# a gate by pattern-matching shell command text, which AgDR-0104 rules cannot be
+# made sound. A relative target is therefore left un-normalised and behaves
+# exactly as on `dev`. The question moves to me2resh/apexyard#1182 with the
+# shared resolver.
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 # Bash-tool path: if the command writes, collect ALL extractable targets so
@@ -326,21 +332,22 @@ _rmt_normalise_target() {
   case "$t" in
     '~')    t="$HOME" ;;
     '~/'*)  t="$HOME/${t#\~/}" ;;
-    # ~user, ~+, ~- (and any other ~-prefixed form). What these expand to
-    # depends on the passwd database or on $OLDPWD/$PWD inside the CALLER's
-    # shell -- state this process cannot read. Treating them as cwd-relative
-    # joins them to the caller's cwd and yields a path bash never writes to,
-    # which is the same fabrication the $PWD join was removed to avoid. Leave
-    # the target untouched so the still-relative check below returns it
-    # verbatim. (Hakim, round 4 on PR #1180.)
-    '~'*)   ;;
+    # ~user, ~+, ~- and every other ~-prefixed form fall through to the
+    # catch-all below, which leaves them untouched. They had their own arm
+    # while a cwd join existed (round 4) -- what they expand to depends on the
+    # passwd database or the CALLER shell's $PWD/$OLDPWD, none of which this
+    # process can read, so joining them yielded a path bash never writes to.
+    # With the join gone in round 9 that arm became identical to the
+    # catch-all, and a distinction no behaviour can observe is worth deleting
+    # rather than testing.
     /*)     ;;
-    # No $PWD fallback by design. The hook process's cwd is NOT the Bash
-    # tool's cwd, so joining against it fabricates a path that looks real and
-    # can resolve into an unrelated project — the exact wrong-marker failure
-    # this gate exists to stop. With no validated base, leave the target
-    # untouched: it then behaves as it did before this change.
-    *)      [ -n "$PAYLOAD_CWD" ] && t="$PAYLOAD_CWD/$t" ;;
+    # Relative: left untouched. There is no trustworthy base to join against.
+    # The hook process's cwd is not the Bash tool's cwd, and the harness `.cwd`
+    # cannot see a `cd` inside the command (see the note near the top of this
+    # file). Either join fabricates a path that looks real and can resolve into
+    # an unrelated project — the exact wrong-marker failure this gate exists to
+    # stop. Un-normalised, the target behaves exactly as on `dev`.
+    *)      ;;
   esac
 
   # If it is STILL relative, there was no trustworthy base. Return it exactly
