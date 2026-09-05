@@ -122,9 +122,16 @@ run_hook() {
 # just the first — a command naming a non-migration path FIRST and a
 # migration path SECOND must still hit the migration gate on the second.
 run_hook_bash() {
-  local sb="$1" command="$2" expected_rc="$3"
+  local sb="$1" command="$2" expected_rc="$3" payload_cwd="${4-}"
   local input rc
-  input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  # #1159: an optional 4th arg injects a `.cwd` into the payload, so tests can
+  # exercise the harness-supplied working directory the hook trusts for
+  # resolving relative write targets.
+  if [ $# -ge 4 ]; then
+    input=$(jq -nc --arg c "$command" --arg d "$payload_cwd" '{tool_name:"Bash", cwd:$d, tool_input:{command:$c}}')
+  else
+    input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  fi
   (
     cd "$sb" || exit 99
     PATH="$sb/bin:$PATH" .claude/hooks/require-migration-ticket.sh <<<"$input" >/dev/null 2>&1
@@ -744,6 +751,50 @@ if run_hook_bash "$SB" "cat > ./$MIG" 0; then
   record_pass "#1159 bash: relative migration target is resolved, not refused → allow"
 else
   record_fail "#1159 bash: relative migration target is resolved, not refused → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 31-33 (#1159, Rex re-review of PR #1180): the hook trusts `.cwd` to
+# resolve a relative target. An untrustworthy value must be DISCARDED, not
+# joined — joining fabricates a plausible absolute path that is
+# indistinguishable downstream from a real one and can resolve the write
+# against an unrelated project's marker.
+#
+# Each case sets a valid migration ticket, so a refusal here would be a false
+# block, and an allow-via-fabricated-path would be the silent wrong-marker
+# failure. Behaviour with an unusable cwd must match the no-cwd case exactly.
+# =============================================================================
+for cwdcase in 'relative' 'nonexistent' 'empty'; do
+  case "$cwdcase" in
+    relative)    CWDVAL='relative/dir' ;;
+    nonexistent) CWDVAL='/definitely/not/a/real/dir/anywhere' ;;
+    empty)       CWDVAL='' ;;
+  esac
+  SB=$(make_fork)
+  set_marker "$SB" "test-org/test-repo" 42
+  install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+  if run_hook_bash "$SB" "cat > ./$MIG" 0 "$CWDVAL"; then
+    record_pass "#1159 cwd: untrusted .cwd ($cwdcase) is discarded, not joined"
+  else
+    record_fail "#1159 cwd: untrusted .cwd ($cwdcase) is discarded, not joined"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# Case 34 (#1159): a VALID absolute, existing `.cwd` IS used — this is what
+# pins the normalisation actually happening, rather than the target merely
+# passing through unresolved. The relative target resolves under the fork, so
+# the migration matcher and marker resolution both see the real path.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > ./$MIG" 0 "$SB"; then
+  record_pass "#1159 cwd: valid absolute .cwd is used to resolve a relative target"
+else
+  record_fail "#1159 cwd: valid absolute .cwd is used to resolve a relative target"
 fi
 rm -rf "$SB"
 

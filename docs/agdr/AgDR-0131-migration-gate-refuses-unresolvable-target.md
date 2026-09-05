@@ -36,16 +36,34 @@ The reviewer's framing on the issue is the precise one: `_lib-detect-bash-write.
 Chosen: **resolve, then refuse**, in two passes over every extracted target.
 
 - **Pass 1** examines *all* targets before any is selected, so refusal cannot depend on argument order. A target is unresolvable when it carries a shell variable, a command substitution, or a backtick — constructs whose value is unknowable without executing the command. Refusal is scoped to targets whose literal text is still migration-shaped, so an unrelated `$LOG` redirect in the same command is not refused.
-- **Pass 2** normalises each resolvable target — `~` expanded, relative resolved against the harness-supplied `.cwd` (not the hook's own cwd; the same distinction `verify-commit-refs.sh` draws for #1050), and `//`, `/./`, `/../` canonicalised lexically so a not-yet-created migration file still resolves — then applies the existing migration match and project resolution.
+- **Pass 2** normalises each resolvable target — `~` expanded, relative resolved against the harness-supplied `.cwd`, and `//`, `/./`, `/../` canonicalised lexically so a not-yet-created migration file still resolves — then applies the existing migration match and project resolution.
 
 The resolvability check is **Bash-only**. An `Edit`/`Write` `file_path` is a literal string that never met a shell, so a `$` there is an ordinary filename character.
 
-This mirrors the sibling gate `require-active-ticket.sh`, which already absolutises and canonicalises before its containment checks.
+`.cwd` is read from `.cwd // .tool_input.cwd` (both shipped shapes) and trusted only when **absolute and existing** — the two conditions `verify-commit-refs.sh` applies to the same field. Anything else is discarded rather than joined: a relative or bogus value would fabricate a plausible absolute path that is indistinguishable downstream from a real one. With no usable `.cwd`, a relative target is left **un-normalised** and behaves exactly as it did before this change. It is deliberately not refused — refusing would newly block writes every prior version allowed, which is the bypass pressure this gate can least afford.
+
+### This is weaker than the sibling gate, in ways that matter
+
+An earlier draft of this record claimed the change "mirrors `require-active-ticket.sh`". That was wrong, and the difference is the substance:
+
+| | `require-active-ticket.sh` | this gate |
+|---|---|---|
+| Symlinks | resolved via `_resolve_real_path` | **not resolved** — normalisation is purely lexical |
+| Boundary anchors | canonicalised with `pwd -P` | **not canonicalised** |
+| Containment | four-way raw-AND-resolved check, added for #885's mirror-image hole | single prefix match |
+
+Lexical `/../` collapsing does not consult the filesystem, so it can disagree with the kernel when a symlink is in the path. Consequences of that are recorded below.
 
 ## Consequences
 
 - A Bash migration write whose target carries an unexpandable construct is refused, naming the path. Relative and `~/` paths are resolved and gated normally — the refusal message says so, to avoid pushing operators toward workarounds.
-- Relative, `~/`, `//`, `/./` and `/../` spellings now resolve to the **correct** project marker instead of silently reaching tier 2. This is a behaviour change: writes that previously consulted a stale ops marker now consult the right one, which can newly block where the correct ticket does not satisfy the gate. That is the fix working.
+- Relative (with a usable `.cwd`), `~/`, `//`, `/./` and `/../` spellings now resolve to the **correct** project marker instead of silently reaching tier 2.
+
+- **This change is not monotonic, and that is a real departure.** The first cut only ever *added* refusals, which made it easy to accept. This one moves cells in both directions: security review measured nine cases where `dev` blocked and this change allows. In eight of them the allow is *correct* — the right project's ticket does satisfy the gate, and the block was the wrong-marker bug. The ninth is a genuine new gap, below.
+
+- **Known gap — a path that escapes the fork via `/../` can now be allowed.** `<ops>/out/../workspace/A/…`, where `out` leaves the fork, lexically canonicalises to a path under `workspace/A`. The gate therefore consults project A's ticket and allows, while the kernel writes outside the fork entirely. `dev` blocked this via the ops marker. Rated MEDIUM in review: this is a discipline control, not an adversarial one, and reaching the case requires writing that path deliberately.
+
+- **Known gap — symlinks and un-canonicalised anchors.** Because normalisation is lexical, a symlink plus `..` can make the gate resolve to project B while the kernel writes into project A. That specific case is pre-existing (`dev`'s raw prefix match is equally wrong). The reachable-without-an-attacker instance is anchor spelling: the workspace boundary is never canonicalised, so on macOS the same file addressed through `/tmp` versus `/private/tmp` resolves to different markers. Closing both needs `_resolve_real_path` and `pwd -P` anchors, as the sibling gate does; that is the natural follow-up and is not attempted here.
 - The ops-fork fallback is unchanged — a literal absolute path outside `workspace/` still legitimately uses the ops marker (case 24).
 - The shared detector `_lib-detect-bash-write.sh` is untouched, so `require-active-ticket.sh` and `warn-review-marker-write.sh` are unaffected. Its contract stands; what changed is what *this gate* does with its output.
 - **Failure 2 of #1159 is still not addressed.** A heredoc body containing a write command is extracted as a real target, so a document quoting `cat > …/migrations/…` is blocked. It reproduced repeatedly while building this change — on a probe script, a debug script, and the commit message itself. That fix belongs in the shared detector and carries wider blast radius, so #1159 stays open for it. Reviewers noted it composes badly with this gate: the refusal advises "use a literal path", which is unhelpful for a document that is merely *quoting* one.
@@ -53,5 +71,5 @@ This mirrors the sibling gate `require-active-ticket.sh`, which already absoluti
 ## Artifacts
 
 - `.claude/hooks/require-migration-ticket.sh` — `_rmt_is_unresolvable`, `_rmt_normalise_target`, two-pass target loop
-- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–30
-- PR me2resh/apexyard#1180 — Rex and Hakim reviews that rejected the first cut
+- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–34 (incl. 31–34 pinning `.cwd` trust)
+- PR me2resh/apexyard#1180 — two rounds of Rex and Hakim review; the first cut and the first redesign were both rejected, and this record was corrected twice for overclaiming

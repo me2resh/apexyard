@@ -63,7 +63,17 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 # The harness-supplied working directory for the Bash tool call. Relative write
 # targets are relative to THIS, not to the hook process's own cwd, which can
 # differ (me2resh/apexyard#1050 — same distinction verify-commit-refs.sh draws).
-PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
+PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+# Trust it only if it is absolute AND exists — the same two conditions
+# verify-commit-refs.sh applies to the same field. A relative or bogus value
+# would otherwise fabricate a plausible-looking absolute path that is
+# indistinguishable downstream from a real one. Anything else is discarded,
+# and a relative target is then treated as unresolvable rather than guessed
+# against the hook process's own cwd (which is not the Bash tool's cwd).
+case "$PAYLOAD_CWD" in
+  /*) [ -d "$PAYLOAD_CWD" ] || PAYLOAD_CWD="" ;;
+  *)  PAYLOAD_CWD="" ;;
+esac
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 # Bash-tool path: if the command writes, collect ALL extractable targets so
@@ -220,6 +230,12 @@ _rmt_is_unresolvable() {
   case "$1" in
     *'$'*|*'`'*) return 0 ;;
   esac
+  # A relative target with no usable cwd is NOT refused here, deliberately.
+  # Refusing it would newly block writes that every prior version allowed —
+  # the bypass pressure this gate can least afford. Such a target is simply
+  # left un-normalised below, so it behaves exactly as it did before this
+  # change: it reaches marker resolution unresolved. That is a real remaining
+  # gap, recorded honestly in AgDR-0131 rather than papered over.
   return 1
 }
 
@@ -244,7 +260,12 @@ _rmt_normalise_target() {
     '~')    t="$HOME" ;;
     '~/'*)  t="$HOME/${t#\~/}" ;;
     /*)     ;;
-    *)      t="${PAYLOAD_CWD:-$PWD}/$t" ;;
+    # No $PWD fallback by design. The hook process's cwd is NOT the Bash
+    # tool's cwd, so joining against it fabricates a path that looks real and
+    # can resolve into an unrelated project — the exact wrong-marker failure
+    # this gate exists to stop. With no validated base, leave the target
+    # untouched: it then behaves as it did before this change.
+    *)      [ -n "$PAYLOAD_CWD" ] && t="$PAYLOAD_CWD/$t" ;;
   esac
   # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
   # Lexical (not realpath) so a not-yet-created migration file still resolves.
