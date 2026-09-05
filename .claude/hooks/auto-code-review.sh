@@ -137,6 +137,17 @@ build sub-agent just handed this PR back to you):
   author grading their own work. (The marker also suppresses an advisory
   warning on Rex's own marker write, but that is a side effect, not the
   reason — the hook warns and never blocks since #1026.)
+
+  ONE EXCEPTION, and only for you (me2resh/apexyard#1161). After the review
+  returns, confirm the approval marker exists. If the review ran "in the
+  background" and posted nothing to the PR, the harness ran its OWN bundled
+  /code-review instead of ApexYard's skill. That bundled skill knows nothing
+  about these markers, so re-running it cannot help. Only in that case: set
+  the active-reviewer marker yourself, then spawn the code-reviewer agent
+  (Rex) directly with the Agent tool. A CHANGES REQUESTED verdict is NOT this
+  case — a real review that requests changes writes no approval marker by
+  design, and the fix is to address the findings. Never write the approval
+  marker yourself in either case.
 --------------------------------------------------------------------------
 
 CEREMONY TIER (.claude/rules/right-size-ceremony.md, AgDR-0116): Rex runs on

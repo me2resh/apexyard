@@ -186,6 +186,52 @@ Both markers' SHAs must match the PR's HEAD as reported by GitHub (`gh pr view <
 
 Claude can technically `rm` or `touch` these files by hand, or fabricate the structured fields. Doing so is a visible, auditable, grep-able rule violation — and the whole point of recording the rule mechanically is so that the failure mode is "Claude ignored a hook" (visible) instead of "Claude inferred approval from something vague" (invisible). The structured-marker format raises the visibility bar one more notch by requiring the model to type `approved_by=user` etc. on purpose.
 
+### When the harness bundled skill shadows /code-review (me2resh/apexyard#1161)
+
+Claude Code ships its **own** bundled `/code-review`. It is a different thing
+from ApexYard's skill of the same name: it runs as a **background subagent**,
+reports findings through the harness, posts nothing to the PR, and knows nothing
+about approval markers. A project skill normally wins the name, but when the
+bundled one runs instead, every gate-bookkeeping step in ApexYard's SKILL.md is
+skipped — because that file is never loaded.
+
+The result is a session that cannot satisfy its own merge gate. The review
+content is genuine and often excellent, so nothing looks wrong until
+`gh pr merge` is refused. That refusal then tells the orchestrator to run
+`/code-review`, which runs the bundled skill again, which writes no marker
+again. Left there, the only ways forward are merging outside the gate or forging
+the marker — the exact pressure [#1144](#never-put-a-marker-path-in-a-reviewers-spawn-prompt-me2reshapexyard1144)
+and "Build agents cannot self-review" above exist to prevent.
+
+**Two signs identify it.** The run reports "Running in the background", and no
+review appears on the PR.
+
+**A CHANGES REQUESTED verdict is not this case.** A real review that requests
+changes also returns findings and writes no approval marker — by design. Both
+signs above must hold. If a genuine review posted to the PR and asked for
+changes, address the findings; the missing marker is the gate working, not
+failing.
+
+**The recovery, and only the orchestrator performs it.** Do not re-run
+`/code-review`; it will do the same thing. Do not write the approval marker by
+hand; that is marker forging regardless of how good the review was. Instead,
+set the active-reviewer marker, then spawn the `code-reviewer` agent (Rex)
+**directly with the Agent tool**. Rex resolves its own repo-qualified marker
+path and writes the marker on an APPROVED verdict, so the sanctioned path is
+restored without touching a gate signal by hand.
+
+This is the one sanctioned exception to "use the skill, don't spawn Rex
+directly" and to "don't set the active-reviewer marker by hand". It applies
+only when the skill cannot run at all. A **build-class sub-agent is not the
+audience for it** — it cannot nest the Agent tool, so it must hand the PR back
+to the orchestrator, exactly as it would normally. Note that the active-reviewer
+marker is a provenance signal at `.claude/session/active-reviewer`; it is not an
+approval marker, and setting it grants no gate-passing power.
+
+Adopters who hit this every session can settle the name collision permanently
+with the `skillOverrides` setting, or by turning bundled skills off
+(`disableBundledSkills`). Neither is required — the recovery above works as-is.
+
 ### The approval skills are human-only (#1042, AgDR-0110)
 
 "Explicit per-PR approval" is now enforced **mechanically**, not only in prose. `/approve-merge`, `/approve-design`, and `/approve-architecture` carry `disable-model-invocation: true`, so **only a human can invoke them**. Saying "approved" in conversation is no longer sufficient on its own — the operator types the command, and that invocation *is* the approval moment this rule has always described.

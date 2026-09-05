@@ -1465,6 +1465,7 @@ BODY
 
 Notes:
 
+- **Keep the branch name `docs/agents-md` exactly.** `validate-branch-name.sh` carries an exact-literal exemption for it (and for step 8.6's `docs/apexyard-badge`), because `/handover` runs before the adopted repo has a ticket to name — and that repo may have no tracker at all. Renaming it to anything else, `docs/agents-md-v2` included, re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
 - **Specific-file staging only** — `git add AGENTS.md` (and `CLAUDE.md` only when newly created). Never `git add -A` / `git add .`.
 - **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
 - This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply — this is the target repo's own review.
@@ -1591,6 +1592,7 @@ BODY
 
 Notes:
 
+- **Keep the branch name `docs/apexyard-badge` exactly** — same exact-literal exemption in `validate-branch-name.sh` as step 8.5's `docs/agents-md`. A renamed branch re-arms the ticket-ID gate and blocks the push. See me2resh/apexyard#1161 and AgDR-0129.
 - **Specific-file staging only** — `git add "$README_FILE"`. Never `git add -A` / `git add .`.
 - **Branch + PR, never a direct commit to the default branch.** The repo owner reviews before merge — `/handover` does not merge the PR.
 - This PR lives in the **target repo's** tracker/SDLC, not the ops fork's. The ops-fork merge gates (Rex/CEO markers) don't apply.
