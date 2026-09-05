@@ -139,6 +139,7 @@ run_hook_bash() {
   fi
   (
     cd "$sb" || exit 99
+    [ -n "${RHB_HOME:-}" ] && export HOME="$RHB_HOME"
     PATH="$sb/bin:$PATH" .claude/hooks/require-migration-ticket.sh <<<"$input" >/dev/null 2>&1
   )
   rc=$?
@@ -954,6 +955,88 @@ if run_hook_bash "$SB" "cat > workspace/example/$MIG" 0 "$SB/workspace/example" 
   record_pass "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
 else
   record_fail "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 45-48 (#1159, round 5 on PR #1180). Three coverage gaps, each found by
+# mutation rather than by reading: every one of these mutants scored 48/48.
+# =============================================================================
+
+# --- Case 45: the Bash gate must still fire on ADOPTER-configured paths ------
+# Hakim, round 5 -- the blocker. Pass 2 selected on the NORMALISED spelling
+# only. The default patterns are `*/`-anchored and survive absolutisation, but
+# a project-configured pattern is repo-relative (this hook's own header
+# documents `["src/db/**", "db/migrations/**"]`, and workflow-gates.md lists
+# the same shapes) and matches nothing against an absolute path. So on any fork
+# that sets `migration_paths`, RESOLVED_TARGET stayed empty and the Bash half
+# of the gate silently stopped firing -- dev BLOCKED, this PR ALLOWED. Not the
+# wrong ticket approving a migration: no ticket at all.
+#
+# Zero of the previous 48 cases set `migration_paths`, which is why four review
+# rounds missed it.
+SB=$(make_fork)
+printf '{ "migration_paths": ["src/db/**", "db/migrations/**"] }\n' > "$SB/.claude/project-config.json"
+mkdir -p "$SB/workspace/example/src/db"
+set_marker "$SB" "test-org/test-repo" 42          # no migration label -> blocks
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > src/db/001.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 Bash gate still fires when migration_paths is adopter-configured (relative)"
+else
+  record_fail "#1159 Bash gate still fires when migration_paths is adopter-configured (relative)"
+fi
+rm -rf "$SB"
+
+# --- Case 46: the raw arm must NOT reinstate the default-pattern false positive
+# The raw check in pass 2 is gated on CUSTOM_PATHS precisely so it cannot fire
+# for default patterns. `<abs>/migrations/../1.sql` normalises to `<abs>/1.sql`,
+# which is not migration-shaped -- correctly allowed, and one of the nine cells
+# this PR moves. Ungating the raw arm would match `*/migrations/*` on the raw
+# spelling and block it again. rc=0 is the correct-allow; the mutant gives 2.
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations"
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/../1.sql" 0 "$SB/workspace/example"; then
+  record_pass "#1159 raw-arm gating: default patterns do not re-block a normalised non-migration path"
+else
+  record_fail "#1159 raw-arm gating: default patterns do not re-block a normalised non-migration path"
+fi
+rm -rf "$SB"
+
+# --- Case 47: a RELATIVE .cwd is discarded, not used as a join base ----------
+# Rex, round 5. The .cwd guard has two arms; case 43 kills only the `-d`
+# (exists) one. Deleting `*) PAYLOAD_CWD="" ;;` -- the arm that rejects a
+# relative cwd -- left the suite at 48/48, and the case already named for that
+# property passed either way.
+#
+# `migrations/001.sql` has no leading slash, so un-joined it misses
+# `*/migrations/*` and the hook passes through (rc=0). Honouring the relative
+# cwd makes it `workspace/example/migrations/001.sql`, which DOES match, and
+# the ops marker then blocks. rc=0 therefore proves the cwd was discarded.
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations"
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > migrations/001.sql" 0 "workspace/example"; then
+  record_pass "#1159 relative .cwd is discarded, not joined (pins the non-absolute arm)"
+else
+  record_fail "#1159 relative .cwd is discarded, not joined (pins the non-absolute arm)"
+fi
+rm -rf "$SB"
+
+# --- Case 48: the `~/` expansion arm is actually exercised -------------------
+# Rex, round 5. Deleting `'~/'*) t="$HOME/${t#\~/}" ;;` left the suite at 48/48
+# while materially changing output, because $HOME is never inside the fixture:
+# both branches land outside workspace/ and the ops marker answers identically.
+# Pointing HOME at workspace/example gives the two arms opposite verdicts --
+# expanded reaches project #99 (allow), unexpanded falls through the `'~'*)`
+# catch-all to ops #42 (block).
+SB=$(mk_opposing_fixture)
+if RHB_HOME="$SB/workspace/example" run_hook_bash "$SB" "cat > ~/$MIG" 0 "$SB/workspace/example"; then
+  record_pass "#1159 '~/' is expanded via \$HOME, not left verbatim"
+else
+  record_fail "#1159 '~/' is expanded via \$HOME, not left verbatim"
 fi
 rm -rf "$SB"
 

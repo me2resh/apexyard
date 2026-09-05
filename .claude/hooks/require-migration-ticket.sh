@@ -288,7 +288,22 @@ _rmt_normalise_target() {
     *)  printf '%s' "$t"; return 0 ;;
   esac
   # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
-  # Lexical (not realpath) so a not-yet-created migration file still resolves.
+  #
+  # An earlier version of this comment said "lexical (not realpath) so a
+  # not-yet-created migration file still resolves". That reason is FALSE and is
+  # withdrawn: the framework already ships `_resolve_real_path` in
+  # `_lib-path-resolve.sh`, which has `realpath -m` semantics -- it walks up to
+  # the first existing ancestor, `pwd -P`s it, and re-appends the absent tail,
+  # so it resolves both an absent file and one behind a symlinked ancestor.
+  #
+  # The real reason is narrower. `_resolve_real_path` is not a drop-in here: it
+  # re-appends the absent tail verbatim, so dot-segments inside that tail
+  # survive, and a wholly absent root yields a doubled leading slash
+  # (`//nope/...`). The target design is the two composed -- lexical collapse
+  # THEN resolve -- and this change ships only the lexical half. That is a
+  # deliberate staged step, not a rejection of the helper, and it leaves this
+  # gate resolving paths more weakly than the sibling `require-active-ticket.sh`
+  # until the second half lands. Recorded in AgDR-0131. (Tariq, round 5.)
   printf '%s' "$t" | awk -F/ '{
     n = 0
     for (i = 1; i <= NF; i++) {
@@ -353,7 +368,20 @@ MSG
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
     _tgt_norm=$(_rmt_normalise_target "$_tgt")
-    if is_migration_path "$_tgt_norm"; then
+    # Ask BOTH spellings here too, for the same reason pass 1 does -- an
+    # argument commit 5 made and then failed to carry across to selection.
+    # The default patterns are `*/`-anchored and survive absolutisation, but a
+    # project-configured pattern is repo-relative (see this file's header:
+    # `["src/db/**", "db/migrations/**"]`) and matches nothing against an
+    # absolute path. Selecting on the normalised spelling alone therefore
+    # switched this gate OFF entirely on any fork that configures
+    # `migration_paths` -- not the wrong ticket approving a migration, but no
+    # ticket at all, silently. The raw arm is gated on CUSTOM_PATHS so it
+    # cannot reinstate the default-pattern false positive on
+    # `.../migrations/../1.sql`, which is one of the cells this PR corrects.
+    # (Hakim, round 5 on PR #1180.)
+    if is_migration_path "$_tgt_norm" \
+      || { [ -n "$CUSTOM_PATHS" ] && is_migration_path "$_tgt"; }; then
       RESOLVED_TARGET="$_tgt_norm"
       break
     fi
