@@ -122,11 +122,24 @@ run_hook() {
 # just the first — a command naming a non-migration path FIRST and a
 # migration path SECOND must still hit the migration gate on the second.
 run_hook_bash() {
-  local sb="$1" command="$2" expected_rc="$3"
+  local sb="$1" command="$2" expected_rc="$3" payload_cwd="${4-}" cwd_where="${5-top}"
   local input rc
-  input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  # #1159: an optional 4th arg injects a `.cwd` into the payload, so tests can
+  # exercise the harness-supplied working directory the hook trusts for
+  # resolving relative write targets.
+  if [ $# -ge 4 ] && [ "$cwd_where" = "tool_input" ]; then
+    # The hook reads `.cwd // .tool_input.cwd`. Exercising the SECOND arm needs
+    # a payload that omits the top-level key entirely (Rex, round 4 on #1180 --
+    # dropping that fallback left the suite at 42/42).
+    input=$(jq -nc --arg c "$command" --arg d "$payload_cwd" '{tool_name:"Bash", tool_input:{command:$c, cwd:$d}}')
+  elif [ $# -ge 4 ]; then
+    input=$(jq -nc --arg c "$command" --arg d "$payload_cwd" '{tool_name:"Bash", cwd:$d, tool_input:{command:$c}}')
+  else
+    input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  fi
   (
     cd "$sb" || exit 99
+    [ -n "${RHB_HOME:-}" ] && export HOME="$RHB_HOME"
     PATH="$sb/bin:$PATH" .claude/hooks/require-migration-ticket.sh <<<"$input" >/dev/null 2>&1
   )
   rc=$?
@@ -630,6 +643,480 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 23 (#1159): an unexpanded shell variable in a migration write target is
+# UNRESOLVABLE, and the gate must refuse rather than silently fall back to the
+# ops-level marker. Before the fix, extraction returned the literal text
+# `$WD/migrations/...`; it matched the migration matcher, so the gate fired,
+# but it could not match any workspace prefix, so PROJECT stayed empty and the
+# three-tier lookup landed on `current-ticket` — a DIFFERENT ticket, with no
+# warning. A gate that resolves against the wrong marker is worse than one
+# that fails, because the failure is invisible.
+#
+# The ops marker here is DELIBERATELY valid and migration-labelled: before the
+# fix this case exited 0 (allowed, against the wrong ticket). Exit 2 proves the
+# refusal comes from unresolvability, not from a missing/!unlabelled ticket.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > \"\$WD/$MIG\" <<EOF
+x
+EOF" 2; then
+  record_pass "#1159 bash: unexpanded variable in migration target → refuse, no marker fallback"
+else
+  record_fail "#1159 bash: unexpanded variable in migration target → refuse, no marker fallback"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 24 (#1159 regression guard): the fix must be NARROW. A LITERAL absolute
+# path that is also outside any `workspace/<project>/` leaves PROJECT empty for
+# an entirely legitimate reason — a migration inside the ops fork itself — and
+# MUST still fall back to the ops-level marker and be allowed. Widening the
+# refusal to "PROJECT is empty" instead of "target is unresolvable" would break
+# this case, so it is pinned.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook "$SB" "$SB/$MIG" 0; then
+  record_pass "#1159 guard: literal ops-fork migration path still uses ops marker → allow"
+else
+  record_fail "#1159 guard: literal ops-fork migration path still uses ops marker → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 25 (#1159, Rex review of PR #1180): Gate 0 must apply to the Bash path
+# ONLY. An Edit/Write `file_path` is a literal string that never passed through
+# a shell, so a `$` in it is an ordinary filename character — not an unexpanded
+# variable. The first cut of the guard sat after the tool branches converged
+# and hard-blocked such a path, with a message asserting a cause that had not
+# been observed. Fully resolvable, inside the workspace, valid ticket → allow.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook "$SB" "$SB/migrations/001_price\$usd.sql" 0; then
+  record_pass "#1159 guard: literal Write path containing '\$' is not a shell variable → allow"
+else
+  record_fail "#1159 guard: literal Write path containing '\$' is not a shell variable → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 26-28 (#1159, Hakim review of PR #1180): the ORIGINAL fix refused only
+# the `$` spelling. Backticks and $(...) are the same bash feature and were
+# not caught, so they still reached the marker gates unresolved — the same
+# Failure-1 signature in a different spelling. All three must now refuse.
+# =============================================================================
+for spelling in 'backtick' 'cmdsub' 'braced-var'; do
+  case "$spelling" in
+    backtick)   CMD='cat > `pwd`/'"$MIG" ;;
+    cmdsub)     CMD='cat > $(pwd)/'"$MIG" ;;
+    braced-var) CMD='cat > "${WD}/'"$MIG"'"' ;;
+  esac
+  SB=$(make_fork)
+  set_marker "$SB" "test-org/test-repo" 42
+  install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+  if run_hook_bash "$SB" "$CMD" 2; then
+    record_pass "#1159 bash: unresolvable ($spelling) migration target → refuse"
+  else
+    record_fail "#1159 bash: unresolvable ($spelling) migration target → refuse"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# Case 29 (#1159, Hakim's ORDERING finding on PR #1180): the first cut placed
+# the resolvability check AFTER the #886 loop, which `break`s on its first
+# migration-shaped match. A compliant literal target named FIRST therefore
+# smuggled a later unresolvable target straight past the gate (rc=0).
+# Refusal must not depend on argument order.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "echo a > ./$MIG; cat > \"\$WD/$MIG\"" 2; then
+  record_pass "#1159 bash: literal target first must not smuggle an unresolvable one past the gate"
+else
+  record_fail "#1159 bash: literal target first must not smuggle an unresolvable one past the gate"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 30 (#1159): a RELATIVE migration target is resolvable, not unresolvable.
+# It must be normalised and gated normally — never refused by the resolvability
+# check, and never silently passed through. With a valid migration ticket set,
+# it is allowed.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > ./$MIG" 0; then
+  record_pass "#1159 bash: relative migration target is resolved, not refused → allow"
+else
+  record_fail "#1159 bash: relative migration target is resolved, not refused → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 31-33 (#1159, Rex re-review of PR #1180): the hook trusts `.cwd` to
+# resolve a relative target. An untrustworthy value must be DISCARDED, not
+# joined — joining fabricates a plausible absolute path that is
+# indistinguishable downstream from a real one and can resolve the write
+# against an unrelated project's marker.
+#
+# Each case sets a valid migration ticket, so a refusal here would be a false
+# block, and an allow-via-fabricated-path would be the silent wrong-marker
+# failure. Behaviour with an unusable cwd must match the no-cwd case exactly.
+# =============================================================================
+for cwdcase in 'relative' 'nonexistent' 'empty'; do
+  case "$cwdcase" in
+    relative)    CWDVAL='relative/dir' ;;
+    nonexistent) CWDVAL='/definitely/not/a/real/dir/anywhere' ;;
+    empty)       CWDVAL='' ;;
+  esac
+  SB=$(make_fork)
+  set_marker "$SB" "test-org/test-repo" 42
+  install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+  if run_hook_bash "$SB" "cat > ./$MIG" 0 "$CWDVAL"; then
+    record_pass "#1159 cwd: untrusted .cwd ($cwdcase) is discarded, not joined"
+  else
+    record_fail "#1159 cwd: untrusted .cwd ($cwdcase) is discarded, not joined"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# Case 34 (#1159): a VALID absolute, existing `.cwd` IS used — this is what
+# pins the normalisation actually happening, rather than the target merely
+# passing through unresolved. The relative target resolves under the fork, so
+# the migration matcher and marker resolution both see the real path.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > ./$MIG" 0 "$SB"; then
+  record_pass "#1159 cwd: valid absolute .cwd is used to resolve a relative target"
+else
+  record_fail "#1159 cwd: valid absolute .cwd is used to resolve a relative target"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 35 (#1159, Hakim round-3 on PR #1180): with NO usable cwd, a relative
+# target must be returned EXACTLY as received. Commit 3 stopped joining the
+# untrusted cwd but still piped the target through the canonicaliser, which
+# emits a leading "/" unconditionally — so `migrations/001.sql` became
+# `/migrations/001.sql`. That fabricates an absolute path that never existed
+# and can match a workspace prefix: the same failure the join was removed to
+# avoid, relocated rather than fixed.
+#
+# This asserts the function directly, because the whole-hook exit code hid it
+# (the suite passed 38/38 with the bug present).
+# =============================================================================
+_c35_fail=0
+for _c35_in in 'migrations/001.sql' './migrations/y.sql' '../../../etc/migrations/x.sql'; do
+  _c35_out=$(
+    # shellcheck disable=SC2034  # read by the eval'd _rmt_normalise_target
+    PAYLOAD_CWD=""
+    eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+    _rmt_normalise_target "$_c35_in"
+  )
+  [ "$_c35_out" = "$_c35_in" ] || { _c35_fail=1; echo "    got '$_c35_out' for '$_c35_in'"; }
+done
+if [ "$_c35_fail" -eq 0 ]; then
+  record_pass "#1159 no usable cwd: relative target returned verbatim, not fabricated absolute"
+else
+  record_fail "#1159 no usable cwd: relative target returned verbatim, not fabricated absolute"
+fi
+
+# =============================================================================
+# Cases 36-38 (#1159, Rex round-3 on PR #1180): DISCRIMINATING coverage for
+# normalisation. Cases 31-34 all passed against the unfixed commit-2 hook, and
+# two mutation runs — normalisation replaced by a pass-through, and the
+# round-2 bug restored verbatim — both still scored 38/38. The feature had no
+# test that could tell it was working.
+#
+# The missing ingredient is a fixture where the two markers give OPPOSITE
+# verdicts, so the exit code reveals WHICH ONE answered:
+#   ops marker      #42 -> no migration label -> would BLOCK (rc=2)
+#   project marker  #99 -> migration + AgDR   -> would ALLOW (rc=0)
+# A target under workspace/example reaches #99 only if it was normalised into
+# an absolute path first; un-normalised it misses the workspace prefix and
+# falls to #42. rc=0 therefore proves normalisation happened.
+# =============================================================================
+for shape in 'relative' 'dot-segment' 'double-slash'; do
+  SB=$(make_fork)
+  mkdir -p "$SB/workspace/example/migrations"
+  # Ops-level marker: valid ticket, but NOT migration-labelled -> blocks.
+  set_marker "$SB" "test-org/test-repo" 42
+  # Per-project marker: migration-labelled + AgDR -> allows.
+  mkdir -p "$SB/.claude/session/tickets"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+  install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  case "$shape" in
+    relative)     TGT="workspace/example/$MIG" ;;
+    dot-segment)  TGT="$SB/./workspace/example/$MIG" ;;
+    double-slash) TGT="$SB//workspace/example/$MIG" ;;
+  esac
+  if run_hook_bash "$SB" "cat > $TGT" 0 "$SB"; then
+    record_pass "#1159 normalisation ($shape) reaches the PROJECT marker, not the ops fallback"
+  else
+    record_fail "#1159 normalisation ($shape) reaches the PROJECT marker, not the ops fallback"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# Cases 39-44 (#1159, round 4 on PR #1180). Every case here uses the
+# opposite-verdict fixture from cases 36-38, because round 3 established that
+# a same-verdict fixture cannot tell a working feature from a broken one:
+#   ops marker      #42 -> no migration label -> BLOCK (rc=2)
+#   project marker  #99 -> migration + AgDR   -> ALLOW (rc=0)
+# The exit code therefore names which marker answered.
+# =============================================================================
+mk_opposing_fixture() {           # echoes the sandbox path
+  local sb; sb=$(make_fork)
+  mkdir -p "$sb/workspace/example/migrations"
+  set_marker "$sb" "test-org/test-repo" 42
+  mkdir -p "$sb/.claude/session/tickets"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  install_mock "$sb" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  echo "$sb"
+}
+
+# --- Cases 39-41: ~user / ~+ / ~- must NOT be joined to the caller's cwd -----
+# Hakim, round 4: `_rmt_normalise_target` handled `~` and `~/`, then treated
+# every other non-absolute target as cwd-relative -- so `~root/...` was joined
+# and came back ABSOLUTE, which meant the still-relative early return added in
+# round 3 never saw it. What `~root` / `~+` / `~-` expand to depends on the
+# passwd database or on the caller shell's $PWD/$OLDPWD, none of which this
+# process can read. Joining them yields a path bash never writes to, resolved
+# under whichever project the caller happens to be sitting in.
+# rc=2 proves the target stayed verbatim and fell to the ops marker.
+for tilde in '~root' '~+' '~-'; do
+  SB=$(mk_opposing_fixture)
+  if run_hook_bash "$SB" "cat > $tilde/$MIG" 2 "$SB/workspace/example"; then
+    record_pass "#1159 '$tilde/' target is not joined to the caller cwd (ops marker answers)"
+  else
+    record_fail "#1159 '$tilde/' target is not joined to the caller cwd (ops marker answers)"
+  fi
+  rm -rf "$SB"
+done
+
+# --- Case 42 REMOVED (round 8, b1+) -----------------------------------------
+# It asserted that pass 1 refuses a target which only becomes migration-shaped
+# after normalisation (`$F.sql` from a `migrations/` cwd). Selection now asks
+# the RAW spelling in both passes, so that write is outside the set this gate
+# governs -- exactly as on dev. Refusing it would be a refusal for a write the
+# same change declared out of scope. The behaviour is not lost, it is not ours:
+# it returns with me2resh/apexyard#1182.
+
+# --- Case 43: a .cwd that is absolute but does not exist is rejected ---------
+# Rex, round 4: deleting the whole absolute-and-exists validation left the
+# suite at 42/42, so the check had no coverage at all. A non-existent cwd that
+# would otherwise resolve INTO workspace/example discriminates: honouring it
+# reaches #99 (rc=0), rejecting it leaves the target relative and falls to #42.
+# The target must be migration-shaped BEFORE any join, or the un-joined branch
+# exits 0 as "not a migration write" and the case stops discriminating:
+# `migrations/x.sql` has no leading slash, so it misses `*/migrations/*`.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" "cat > workspace/example/$MIG" 2 "$SB/workspace/example/no-such-dir"; then
+  record_pass "#1159 non-existent .cwd is rejected, not used as a join base"
+else
+  record_fail "#1159 non-existent .cwd is rejected, not used as a join base"
+fi
+rm -rf "$SB"
+
+# --- Case 44: the .tool_input.cwd fallback is actually read ------------------
+# Same Rex finding: dropping the `// .tool_input.cwd` arm also left 42/42.
+# Here the top-level key is absent, so rc=0 is only reachable via the fallback.
+# Same migration-shaped-before-the-join requirement as case 43: with a bare
+# `migrations/x.sql` both branches exit 0 as "not a migration write" and the
+# case cannot fail. Mutation-checked -- dropping the fallback fails this.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" "cat > workspace/example/$MIG" 0 "$SB/workspace/example" tool_input; then
+  record_pass "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
+else
+  record_fail "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 45-48 (#1159, round 5 on PR #1180). Three coverage gaps, each found by
+# mutation rather than by reading: every one of these mutants scored 48/48.
+# =============================================================================
+
+# --- Case 45: the Bash gate must still fire on ADOPTER-configured paths ------
+# Hakim, round 5 -- the blocker. Pass 2 selected on the NORMALISED spelling
+# only. The default patterns are `*/`-anchored and survive absolutisation, but
+# a project-configured pattern is repo-relative (this hook's own header
+# documents `["src/db/**", "db/migrations/**"]`, and workflow-gates.md lists
+# the same shapes) and matches nothing against an absolute path. So on any fork
+# that sets `migration_paths`, RESOLVED_TARGET stayed empty and the Bash half
+# of the gate silently stopped firing -- dev BLOCKED, this PR ALLOWED. Not the
+# wrong ticket approving a migration: no ticket at all.
+#
+# Zero of the previous 48 cases set `migration_paths`, which is why four review
+# rounds missed it.
+SB=$(make_fork)
+printf '{ "migration_paths": ["src/db/**", "db/migrations/**"] }\n' > "$SB/.claude/project-config.json"
+mkdir -p "$SB/workspace/example/src/db"
+set_marker "$SB" "test-org/test-repo" 42          # no migration label -> blocks
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > src/db/001.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 Bash gate still fires when migration_paths is adopter-configured (relative)"
+else
+  record_fail "#1159 Bash gate still fires when migration_paths is adopter-configured (relative)"
+fi
+rm -rf "$SB"
+
+# --- Case 46: `<abs>/migrations/../1.sql` is selected, exactly as on dev -----
+# THIS CELL REVERTED IN ROUND 8, deliberately. While selection normalised, this
+# path was not migration-shaped once collapsed (`<abs>/1.sql`) and was allowed --
+# recorded as one of the nine cells this PR moved. Under (b1+) selection asks
+# the raw spelling, which does carry a `migrations/` segment, so the write is
+# governed again and dev's false positive comes back with it.
+#
+# That is the price of the narrowing and it is paid knowingly: the cell was
+# never part of fixing #1159, it arrived with normalisation-in-selection, and
+# keeping it costs the checkable property that selection matches dev exactly.
+# Retiring it properly belongs to me2resh/apexyard#1182.
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations"
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/../1.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 selection matches dev on '<abs>/migrations/../1.sql' (cell reverted in round 8)"
+else
+  record_fail "#1159 selection matches dev on '<abs>/migrations/../1.sql' (cell reverted in round 8)"
+fi
+rm -rf "$SB"
+
+# --- Case 47: a RELATIVE .cwd is discarded, not used as a join base ----------
+# Rex, round 5. The .cwd guard has two arms; case 43 kills only the `-d`
+# (exists) one. Deleting `*) PAYLOAD_CWD="" ;;` -- the arm that rejects a
+# relative cwd -- left the suite at 48/48, and the case already named for that
+# property passed either way.
+#
+# `migrations/001.sql` has no leading slash, so un-joined it misses
+# `*/migrations/*` and the hook passes through (rc=0). Honouring the relative
+# cwd makes it `workspace/example/migrations/001.sql`, which DOES match, and
+# the ops marker then blocks. rc=0 therefore proves the cwd was discarded.
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations"
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > migrations/001.sql" 0 "workspace/example"; then
+  record_pass "#1159 relative .cwd is discarded, not joined (pins the non-absolute arm)"
+else
+  record_fail "#1159 relative .cwd is discarded, not joined (pins the non-absolute arm)"
+fi
+rm -rf "$SB"
+
+# --- Case 48: the `~/` expansion arm is actually exercised -------------------
+# Rex, round 5. Deleting `'~/'*) t="$HOME/${t#\~/}" ;;` left the suite at 48/48
+# while materially changing output, because $HOME is never inside the fixture:
+# both branches land outside workspace/ and the ops marker answers identically.
+# Pointing HOME at workspace/example gives the two arms opposite verdicts --
+# expanded reaches project #99 (allow), unexpanded falls through the `'~'*)`
+# catch-all to ops #42 (block).
+SB=$(mk_opposing_fixture)
+if RHB_HOME="$SB/workspace/example" run_hook_bash "$SB" "cat > ~/$MIG" 0 "$SB/workspace/example"; then
+  record_pass "#1159 '~/' is expanded via \$HOME, not left verbatim"
+else
+  record_fail "#1159 '~/' is expanded via \$HOME, not left verbatim"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 49-54 REMOVED (round 8) -- they move to me2resh/apexyard#1182.
+#
+# They covered the multi-target accumulator and its refusal: two projects in one
+# command, the ops domain as an accumulator member, and one marker governing two
+# projects. Rounds 6, 7 and 8 each produced a defect in that machinery, every one
+# an adjacent case escaping the same single-representative election, and round 8
+# tripped the stopping rule AgDR-0131 adopts. The machinery is gone; the cases go
+# with it rather than lingering as tests that pass by accident of first-match
+# selection. #1182 restores both together.
+# =============================================================================
+
+# --- Case 55: pass 1's RAW arm (Rex, round 7 -- the third silent arm) --------
+# Deleting pass 1's raw spelling check left the suite at 55/55 while flipping a
+# refusal into an allow. The arm is argued for in the pass-1 comment, in the
+# pass-2 comment, and in AgDR-0131, and had no case anywhere.
+#
+# `<abs>/migrations/../$V.sql` is migration-shaped RAW and unresolvable, so
+# pass 1 must refuse it. Normalised it is `<abs>/$V.sql`, which is not
+# migration-shaped -- so with the raw arm gone, nothing matches and the write
+# passes ungated. Case 46 is the control for this fixture: the same path with a
+# resolvable filename is correctly allowed.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" 'cat > '"$SB"'/workspace/example/migrations/../$V.sql' 2 "$SB/workspace/example"; then
+  record_pass "#1159 pass 1 refuses an unresolvable target that is migration-shaped RAW only"
+else
+  record_fail "#1159 pass 1 refuses an unresolvable target that is migration-shaped RAW only"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# DIFFERENTIAL: the set of writes this gate governs is identical to dev's.
+#
+# This is the property (b1+) buys, and it is the one this change actually
+# claims. Eight rounds of case enumeration missed eight defects; three of them
+# were selection widening into territory dev never runs. A differential check
+# would have caught rounds 5 through 8, because each was a divergence in this
+# exact set.
+#
+# It compares SELECTION only -- which targets this gate governs -- not the
+# verdict. Resolution deliberately differs from dev; that difference is the fix.
+# =============================================================================
+DEV_HOOK=$(mktemp)
+if git -C "$(dirname "$HOOK_SCRIPT")" show 89209c9:.claude/hooks/require-migration-ticket.sh > "$DEV_HOOK" 2>/dev/null; then
+  # is_migration_path is self-contained in both versions, so the selection
+  # predicate can be compared directly without standing up two forks.
+  # shellcheck disable=SC2034  # read by the eval'd is_migration_path
+  _sel_dev()  { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$DEV_HOOK")";     is_migration_path "$1"; }
+  # shellcheck disable=SC2034  # read by the eval'd is_migration_path
+  _sel_head() { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$HOOK_SCRIPT")";  is_migration_path "$1"; }
+
+  _diff_fail=0
+  # shellcheck disable=SC2088  # deliberate literals: these are the exact
+  # unexpanded spellings a Bash write-target extractor hands the predicate.
+  for _p in \
+    '/a/migrations/001.sql' '/a/migrations/../1.sql' '/a//migrations/x.sql' \
+    '/a/./migrations/x.sql' 'migrations/001.sql' './migrations/x.sql' \
+    '~/migrations/x.sql' '~root/migrations/x.sql' 'workspace/e/migrations/x.sql' \
+    '/a/db/migrate/1.rb' '/a/prisma/schema.prisma' '/a/notes.md' '/a/scratch.sql' \
+    '$WD/app/migrations/x.sql' '/a/migrations/2026/002.sql' '/a/src/migrations/x.ts'
+  do
+    if _sel_dev "$_p"; then _d=1; else _d=0; fi
+    if _sel_head "$_p"; then _h=1; else _h=0; fi
+    if [ "$_d" != "$_h" ]; then
+      _diff_fail=1
+      echo "    selection diverges on '$_p' (dev=$_d head=$_h)"
+    fi
+  done
+  if [ "$_diff_fail" -eq 0 ]; then
+    record_pass "#1159 DIFFERENTIAL: selection set identical to dev across 16 spellings"
+  else
+    record_fail "#1159 DIFFERENTIAL: selection set identical to dev across 16 spellings"
+  fi
+else
+  echo "  SKIP: differential test needs the dev blob (89209c9) — not available here"
+fi
+rm -f "$DEV_HOOK"
+
+# =============================================================================
+# Summary# =============================================================================
 # Summary
 # =============================================================================
 echo

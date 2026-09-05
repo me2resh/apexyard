@@ -36,7 +36,10 @@
 # The config is read from `<ops_root>/.claude/project-config.json` if
 # present, otherwise defaults below apply.
 #
-# ALL write targets are judged, not just the first (apexyard#886): a Bash
+# Pass 1 examines ALL write targets for unresolvability, not just the first
+# (apexyard#886, order-independence restored on PR #1180). Pass 2's SELECTION
+# is first-match, exactly as dev -- judging every target against its own
+# governing ticket is me2resh/apexyard#1182, not this change. A Bash
 # command can name more than one write target (`echo x > /tmp/scratch.sql
 # && echo y > db/migrations/002_add.sql`). Judging only the first target
 # let a command whose first target wasn't migration-shaped slip a later,
@@ -60,6 +63,20 @@ _rmt_is_meta_exempt() {
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# The harness-supplied working directory for the Bash tool call. Relative write
+# targets are relative to THIS, not to the hook process's own cwd, which can
+# differ (me2resh/apexyard#1050 — same distinction verify-commit-refs.sh draws).
+PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
+# Trust it only if it is absolute AND exists — the same two conditions
+# verify-commit-refs.sh applies to the same field. A relative or bogus value
+# would otherwise fabricate a plausible-looking absolute path that is
+# indistinguishable downstream from a real one. Anything else is discarded,
+# and a relative target is then treated as unresolvable rather than guessed
+# against the hook process's own cwd (which is not the Bash tool's cwd).
+case "$PAYLOAD_CWD" in
+  /*) [ -d "$PAYLOAD_CWD" ] || PAYLOAD_CWD="" ;;
+  *)  PAYLOAD_CWD="" ;;
+esac
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 # Bash-tool path: if the command writes, collect ALL extractable targets so
@@ -133,6 +150,70 @@ MARKER_HOME="${MARKER_HOME:-.}"
 # Resolve the workspace dir (defaults to $OPS_ROOT/workspace; v2
 # split-portfolio adopters point at the private sibling repo).
 WORKSPACE_DIR="$OPS_ROOT/workspace"
+
+# Which managed project governs this path? Empty means "none" -- the ops-level
+# marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
+# matching target rather than only the one it picked first (see the loop below).
+_rmt_project_for_path() {
+  local p="$1" proj="" tail
+  if [ -n "$WORKSPACE_DIR" ]; then
+    case "$p" in
+      "$WORKSPACE_DIR"/*)
+        tail="${p#$WORKSPACE_DIR/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  if [ -z "$proj" ] && [ -n "$OPS_ROOT" ]; then
+    case "$p" in
+      "$OPS_ROOT"/workspace/*)
+        tail="${p#$OPS_ROOT/workspace/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  printf '%s' "$proj"
+}
+
+# Which active-ticket marker governs this path? Mirrors the three-tier lookup in
+# require-active-ticket.sh (#41 + #513): tier 0 per-worktree, tier 1
+# per-project, tier 2 ops fallback. Extracted in round 7 so pass 2 can ask the
+# question that actually decides the gate -- WHICH MARKER governs -- of every
+# matching target, instead of asking which project and hoping the two agree.
+# Defined here, below the roots it reads, rather than above them.
+_rmt_marker_for_path() {
+  local p="$1" proj marker="" wt safe _fdir _gd _gcd
+  proj=$(_rmt_project_for_path "$p")
+
+  if [ -n "$proj" ]; then
+    # Tier 0 worktree detection -- identical to require-active-ticket.sh: env
+    # var, else LINKED-worktree check via absolute git-dir vs common-dir.
+    wt="${CLAUDE_WORKTREE_BRANCH:-}"
+    if [ -z "$wt" ]; then
+      _fdir=$(dirname "$p")
+      _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
+      _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+      if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
+        wt=$(git -C "$_fdir" branch --show-current 2>/dev/null)
+      fi
+    fi
+    if [ -n "$wt" ]; then
+      safe="${wt//\//__}"
+      if [ -f "$MARKER_HOME/.claude/session/tickets/$proj/$safe" ]; then
+        marker="$MARKER_HOME/.claude/session/tickets/$proj/$safe"
+      fi
+    fi
+  fi
+
+  if [ -z "$marker" ] && [ -n "$proj" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$proj" ]; then
+    marker="$MARKER_HOME/.claude/session/tickets/$proj"
+  elif [ -z "$marker" ] && [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
+    marker="$MARKER_HOME/.claude/session/current-ticket"
+  fi
+
+  printf '%s' "$marker"
+}
+
 if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-read-config.sh"
@@ -205,13 +286,170 @@ is_migration_path() {
 # first — skipping any that are meta-exempt, and gate on the first one
 # that matches a migration-path pattern. For a non-Bash tool call there is
 # only ever the one FILE_PATH (already meta-exemption-checked above).
+
+# _rmt_is_unresolvable TARGET (#1159)
+# True when the target carries a shell construct the hook cannot expand
+# without executing the command: a variable (`$V`, `${V}`), a command
+# substitution (`$(…)`), or a backtick. These are the shapes whose real path
+# is unknowable here. `~` and relative paths are deliberately NOT listed —
+# those ARE resolvable, and _rmt_normalise_target below resolves them.
+_rmt_is_unresolvable() {
+  case "$1" in
+    *'$'*|*'`'*) return 0 ;;
+  esac
+  # A relative target with no usable cwd is NOT refused here, deliberately.
+  # Refusing it would newly block writes that every prior version allowed —
+  # the bypass pressure this gate can least afford. Such a target is simply
+  # left un-normalised below, so it behaves exactly as it did before this
+  # change: it reaches marker resolution unresolved. That is a real remaining
+  # gap, recorded honestly in AgDR-0131 rather than papered over.
+  return 1
+}
+
+# _rmt_normalise_target TARGET
+# Absolutise and canonicalise a resolvable target so the migration matcher and
+# the project-prefix check see the real path. Without this, `~/…`, a relative
+# `workspace/<p>/…`, and `/./` `//` `/../` spellings all fail the workspace
+# prefix test and silently fall through to the tier-2 ops marker — the same
+# Failure-1 signature this ticket is about, in a different spelling.
+#
+# Relative targets resolve against the harness-supplied `.cwd` (the Bash tool's
+# working directory), NOT the hook process's own cwd, which can differ — see
+# the same distinction in verify-commit-refs.sh (me2resh/apexyard#1050).
+_rmt_normalise_target() {
+  local t="$1"
+  # SC2088: the quoted `~` here is a case PATTERN matching the literal two
+  # characters the extractor returned — we are detecting an unexpanded tilde
+  # in someone else's command text, not writing one we want the shell to
+  # expand. Expansion is what the branch body does, explicitly, via $HOME.
+  # shellcheck disable=SC2088
+  case "$t" in
+    '~')    t="$HOME" ;;
+    '~/'*)  t="$HOME/${t#\~/}" ;;
+    # ~user, ~+, ~- (and any other ~-prefixed form). What these expand to
+    # depends on the passwd database or on $OLDPWD/$PWD inside the CALLER's
+    # shell -- state this process cannot read. Treating them as cwd-relative
+    # joins them to the caller's cwd and yields a path bash never writes to,
+    # which is the same fabrication the $PWD join was removed to avoid. Leave
+    # the target untouched so the still-relative check below returns it
+    # verbatim. (Hakim, round 4 on PR #1180.)
+    '~'*)   ;;
+    /*)     ;;
+    # No $PWD fallback by design. The hook process's cwd is NOT the Bash
+    # tool's cwd, so joining against it fabricates a path that looks real and
+    # can resolve into an unrelated project — the exact wrong-marker failure
+    # this gate exists to stop. With no validated base, leave the target
+    # untouched: it then behaves as it did before this change.
+    *)      [ -n "$PAYLOAD_CWD" ] && t="$PAYLOAD_CWD/$t" ;;
+  esac
+
+  # If it is STILL relative, there was no trustworthy base. Return it exactly
+  # as received. The canonicaliser below emits a leading "/" unconditionally,
+  # so running it here would turn `migrations/001.sql` into
+  # `/migrations/001.sql` — inventing an absolute path that never existed and
+  # that can match a workspace prefix. That is the same fabrication the join
+  # was removed to avoid, just relocated; leaving early is what actually makes
+  # the un-normalised path behave as it did before this change.
+  case "$t" in
+    /*) ;;
+    *)  printf '%s' "$t"; return 0 ;;
+  esac
+  # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
+  #
+  # An earlier version of this comment said "lexical (not realpath) so a
+  # not-yet-created migration file still resolves". That reason is FALSE and is
+  # withdrawn: the framework already ships `_resolve_real_path` in
+  # `_lib-path-resolve.sh`, which has `realpath -m` semantics -- it walks up to
+  # the first existing ancestor, `pwd -P`s it, and re-appends the absent tail,
+  # so it resolves both an absent file and one behind a symlinked ancestor.
+  #
+  # The real reason is narrower. `_resolve_real_path` is not a drop-in here: it
+  # re-appends the absent tail verbatim, so dot-segments inside that tail
+  # survive, and a wholly absent root yields a doubled leading slash
+  # (`//nope/...`). The target design is the two composed -- lexical collapse
+  # THEN resolve -- and this change ships only the lexical half. That is a
+  # deliberate staged step, not a rejection of the helper, and it leaves this
+  # gate resolving paths more weakly than the sibling `require-active-ticket.sh`
+  # until the second half lands. Recorded in AgDR-0131. (Tariq, round 5.)
+  printf '%s' "$t" | awk -F/ '{
+    n = 0
+    for (i = 1; i <= NF; i++) {
+      if ($i == "" || $i == ".") continue
+      if ($i == "..") { if (n > 0) n--; continue }
+      out[++n] = $i
+    }
+    s = ""
+    for (i = 1; i <= n; i++) s = s "/" out[i]
+    print (s == "" ? "/" : s)
+  }'
+}
+
 if [ "$TOOL_NAME" = "Bash" ]; then
+  # Pass 1 (#1159, Hakim's ordering finding on PR #1180): examine EVERY target
+  # for unresolvability BEFORE picking one to gate on. The migration-shaped
+  # check below `break`s on its first match, so a compliant literal target
+  # placed first would otherwise smuggle a later unresolvable one straight
+  # past this gate. Refusal must not depend on argument order.
+  #
+  # Scoped to targets whose literal text is still migration-shaped: the
+  # `migrations/` segment survives an unexpanded prefix (`$WD/app/migrations/x`),
+  # so this refuses the writes this gate governs without refusing every command
+  # that merely happens to redirect into some unrelated `$LOG`.
+  while IFS= read -r _tgt; do
+    [ -z "$_tgt" ] && continue
+    _rmt_is_meta_exempt "$_tgt" && continue
+    # Selection asks the RAW spelling, here and in pass 2 -- one question, one
+    # spelling, everywhere. Normalisation serves RESOLUTION only.
+    #
+    # Rounds 5-8 each moved selection further into territory dev never runs,
+    # and three of the four produced a defect. Normalisation-in-selection was
+    # never part of fixing #1159: it arrived as a side effect, widened the set
+    # of writes this gate governs beyond the ticket, and generated two of the
+    # eight defects. (b1+, architecture review round 8.)
+    #
+    # The property this buys is checkable rather than enumerable: THE SET OF
+    # WRITES THIS GATE GOVERNS IS IDENTICAL TO DEV'S; WHAT CHANGED IS WHICH
+    # TICKET ANSWERS. See the differential test in the suite -- it would have
+    # caught rounds 5 through 8, which case enumeration did not.
+    if _rmt_is_unresolvable "$_tgt" && is_migration_path "$_tgt"; then
+      cat >&2 <<MSG
+BLOCKED: This migration write target could not be resolved.
+
+  target: $_tgt
+
+The path contains a shell variable, command substitution, or backtick that
+the gate cannot expand without running the command. It therefore cannot tell
+which project — and so which ticket — governs the write, and it will not
+guess. Guessing here means evaluating against whichever ticket happens to be
+set elsewhere, which is how the wrong ticket silently approves a migration.
+
+Use a literal path for migration writes. A relative or \`~/\` path is fine —
+those are resolved. Only unexpandable shell constructs are refused.
+
+See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
+"Migration Gate (3a)".
+MSG
+      exit 2
+    fi
+  done <<< "$BASH_TARGETS"
+
+  # Pass 2: select on the RAW spelling exactly as dev does, then normalise the
+  # target that was selected. Selection set identical to dev's by construction;
+  # resolution is what this change fixes.
+  #
+  # The multi-target accumulator and its refusal are GONE, deliberately. Rounds
+  # 6, 7 and 8 each produced a defect there, every one an adjacent case escaping
+  # the same single-representative election, and round 8 tripped the stopping
+  # rule this record adopted. That work moves to me2resh/apexyard#1182, which
+  # dissolves the election rather than improving it. The consequence is stated
+  # plainly in AgDR-0131: the two-project order-dependent fail-open REMAINS,
+  # inherited unchanged from dev, and #1159 stays open for it.
   RESOLVED_TARGET=""
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
     if is_migration_path "$_tgt"; then
-      RESOLVED_TARGET="$_tgt"
+      RESOLVED_TARGET=$(_rmt_normalise_target "$_tgt")
       break
     fi
   done <<< "$BASH_TARGETS"
@@ -231,52 +469,10 @@ fi
 # Reuse the #41 resolution: per-project marker if FILE_PATH is under the
 # resolved workspace dir, otherwise the ops-level fallback. The resolved
 # workspace dir may live in the private sibling repo for v2 adopters.
-PROJECT=""
-if [ -n "$WORKSPACE_DIR" ]; then
-  case "$FILE_PATH" in
-    "$WORKSPACE_DIR"/*)
-      tail="${FILE_PATH#$WORKSPACE_DIR/}"
-      PROJECT="${tail%%/*}"
-      ;;
-  esac
-fi
-if [ -z "$PROJECT" ] && [ -n "$OPS_ROOT" ]; then
-  case "$FILE_PATH" in
-    "$OPS_ROOT"/workspace/*)
-      tail="${FILE_PATH#$OPS_ROOT/workspace/}"
-      PROJECT="${tail%%/*}"
-      ;;
-  esac
-fi
+PROJECT=$(_rmt_project_for_path "$FILE_PATH")
 
-# Three-tier marker lookup, mirroring require-active-ticket.sh (#41 + #513):
-# tier 0 per-worktree (tickets/<project>/<safe-branch>) → tier 1 per-project
-# (tickets/<project>, a FILE) → tier 2 ops fallback (current-ticket).
-MARKER=""
-if [ -n "$PROJECT" ]; then
-  # Tier 0 worktree detection — identical to require-active-ticket.sh: env var,
-  # else LINKED-worktree check via absolute git-dir vs absolute common-dir.
-  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
-  if [ -z "$WT_BRANCH" ]; then
-    _fdir=$(dirname "$FILE_PATH")
-    _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
-    _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-    if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
-      WT_BRANCH=$(git -C "$_fdir" branch --show-current 2>/dev/null)
-    fi
-  fi
-  if [ -n "$WT_BRANCH" ]; then
-    SAFE_BRANCH="${WT_BRANCH//\//__}"
-    if [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH" ]; then
-      MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH"
-    fi
-  fi
-fi
-if [ -z "$MARKER" ] && [ -n "$PROJECT" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT" ]; then
-  MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT"
-elif [ -z "$MARKER" ] && [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
-  MARKER="$MARKER_HOME/.claude/session/current-ticket"
-fi
+# Three-tier marker lookup, shared with pass 2 so the two cannot diverge.
+MARKER=$(_rmt_marker_for_path "$FILE_PATH")
 
 if [ -z "$MARKER" ]; then
   cat >&2 <<MSG
