@@ -22,8 +22,9 @@ LIB_OPS="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
 LIB_PORT="$SRC_ROOT/.claude/hooks/_lib-portfolio-paths.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
+MIGRATION="$SRC_ROOT/.claude/migrations/v1.2.0-to-v1.3.0.sh"
 
-for f in "$LIB_OPS" "$LIB_PORT" "$LIB_CFG" "$DEFAULTS"; do
+for f in "$LIB_OPS" "$LIB_PORT" "$LIB_CFG" "$DEFAULTS" "$MIGRATION"; do
   [ -f "$f" ] || { echo "FAIL: missing $f" >&2; exit 1; }
 done
 
@@ -479,6 +480,46 @@ else
 fi
 
 rm -f "$STDERR_OUT"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 6: the shipped migration preserves and keeps tracking workspace/README.
+#
+# Case 5 exercises the recipe documented in /update. This case deliberately
+# executes the production migration script so its .gitignore behavior cannot
+# drift behind the duplicated recipe again.
+# ---------------------------------------------------------------------------
+echo "== Case 6: shipped migration keeps workspace/README.md visible to git"
+SB=$(mktemp -d)
+SB=$(cd "$SB" && pwd -P)
+build_pre_v2 "$SB"
+cat > "$SB/public/workspace/README.md" <<'README'
+# workspace/ — live working copies of managed projects
+README
+( cd "$SB/public" && git add workspace/README.md && git commit -q -m "add workspace framework readme" )
+
+( cd "$SB/public" && APEXYARD_MIGRATION_PROMPT=workspace APEXYARD_MIGRATION_QUIET=1 bash "$MIGRATION" )
+RC=$?
+
+if [ "$RC" = "0" ] && [ -f "$SB/public/workspace/README.md" ]; then
+  mark_pass "shipped migration preserves workspace/README.md"
+else
+  mark_fail "shipped migration preserves README" "rc=$RC; README missing after production migration"
+fi
+
+if ( cd "$SB/public" && ! git check-ignore -q workspace/README.md ); then
+  mark_pass "shipped migration does not ignore workspace/README.md"
+else
+  mark_fail "shipped migration keeps README trackable" "workspace/README.md is ignored by the generated rules"
+fi
+
+if grep -qxF 'workspace/*' "$SB/public/.gitignore" \
+  && grep -qxF '!workspace/README.md' "$SB/public/.gitignore"; then
+  mark_pass "shipped migration writes scoped workspace ignore rules"
+else
+  mark_fail "shipped migration writes scoped ignore rules" "expected workspace/* plus !workspace/README.md"
+fi
+
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
