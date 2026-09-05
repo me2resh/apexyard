@@ -724,6 +724,70 @@ resolve_ci_status_glab() {
   esac
 }
 
+# Echoes an owner/repo EXPLICITLY named in the merge command, or empty when
+# the command carries no literal repo. This intentionally excludes ambient
+# forge/CWD fallbacks so callers can apply the precedence "explicit command
+# target > cd-target heuristic > ambient checkout" without duplicating the
+# command parser (me2resh/apexyard#1151).
+extract_explicit_repo_from_command() {
+  local cmd="$1"
+  local repo=""
+
+  # 1. --repo/-R on the merge-command span only. A flag is the clearest
+  # explicit declaration and therefore outranks any URL text elsewhere.
+  local mspan
+  mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
+  repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+
+  # 2. gh api path extraction.
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' \
+      | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+  fi
+
+  # 2b. glab api path extraction (#767).
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | grep -oE 'projects/[^/[:space:]]+/merge_requests/[0-9]+/merge' \
+      | sed -nE 's|projects/([^/]+)/merge_requests/.*|\1|p' | head -1)
+    if [ -n "$repo" ]; then
+      repo=$(echo "$repo" | sed -e 's/%2[Ff]/\//g')
+    fi
+  fi
+
+  # 3. tracker_pr_merge positional repo argument (#759).
+  if [ -z "$repo" ]; then
+    local wspan wargs
+    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    if [ -n "$wspan" ]; then
+      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+      repo=$(_extract_wrapper_arg "$wargs" 1)
+    fi
+  fi
+
+  echo "$repo"
+}
+
+# Resolves the merge target with one precedence shared by all four gates:
+# explicit command target, then a leading cd target's origin, then ambient
+# forge/CWD discovery. pr_cmd_cd_target + git_origin_repo are supplied by
+# _lib-pr-repo.sh, which each merge-gate hook sources before calling this.
+resolve_merge_repo() {
+  local cmd="$1" repo="" cd_target=""
+
+  repo=$(extract_explicit_repo_from_command "$cmd")
+  if [ -z "$repo" ] && command -v pr_cmd_cd_target >/dev/null 2>&1 && command -v git_origin_repo >/dev/null 2>&1; then
+    cd_target=$(pr_cmd_cd_target "$cmd")
+    if [ -n "$cd_target" ] && git -C "$cd_target" rev-parse --git-dir >/dev/null 2>&1; then
+      repo=$(git_origin_repo "$cd_target")
+    fi
+  fi
+  if [ -z "$repo" ]; then
+    repo=$(extract_repo_from_command "$cmd")
+  fi
+
+  echo "$repo"
+}
+
 # Echoes the owner/repo extracted from the merge command, or empty if not found.
 #
 # This is a SIBLING function to extract_pr_number — same parsing approach,
@@ -745,47 +809,7 @@ extract_repo_from_command() {
   local cmd="$1"
   local repo=""
 
-  # 1. gh api path extraction.
-  repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' \
-    | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-
-  # 1b. glab api path extraction (#767). GitLab's API takes the project as a
-  #     single URL-encoded path segment — `projects/<owner>%2F<repo>` (nested
-  #     subgroups become `<a>%2F<b>%2F<repo>`). There are no literal slashes in
-  #     the encoded segment, so [^/[:space:]]+ captures the whole project; then
-  #     decode %2F/%2f back to `/` so the result matches the owner/repo form the
-  #     markers and `glab mr view -R` expect.
-  if [ -z "$repo" ]; then
-    repo=$(echo "$cmd" | grep -oE 'projects/[^/[:space:]]+/merge_requests/[0-9]+/merge' \
-      | sed -nE 's|projects/([^/]+)/merge_requests/.*|\1|p' | head -1)
-    if [ -n "$repo" ]; then
-      repo=$(echo "$repo" | sed -e 's/%2[Ff]/\//g')
-    fi
-  fi
-
-  # 2. Repo flag on the merge command: gh/glab `--repo` or the short `-R` alias
-  #    (both gh and glab accept `-R`) (#764). Search ONLY within the merge-command
-  #    span (fenced at the first shell separator, like extract_pr_number) so a
-  #    trailing unrelated `-R` in a compound command — e.g. `... && grep -R foo` —
-  #    cannot be mistaken for the merge target's repo.
-  if [ -z "$repo" ]; then
-    local mspan
-    mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
-    repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-  fi
-
-  # 2b. tracker_pr_merge wrapper positional arg (#759): `<owner/repo>` is the
-  #     FIRST argument — `tracker_pr_merge <owner/repo> <pr> <strategy> [<del>]`.
-  #     Same fencing-at-`)` discipline as extract_pr_number's wrapper step
-  #     (the real call site is a `$(...)` command substitution).
-  if [ -z "$repo" ]; then
-    local wspan wargs
-    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
-    if [ -n "$wspan" ]; then
-      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
-      repo=$(_extract_wrapper_arg "$wargs" 1)
-    fi
-  fi
+  repo=$(extract_explicit_repo_from_command "$cmd")
 
   # 3. Last resort: ask the forge which repo the current branch's PR/MR belongs
   #    to. Forge-aware (#764): a glab command falls back to `glab repo view`.
