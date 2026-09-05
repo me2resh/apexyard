@@ -756,9 +756,9 @@ SB=$(make_fork)
 set_marker "$SB" "test-org/test-repo" 42
 install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
 if run_hook_bash "$SB" "cat > ./$MIG" 0; then
-  record_pass "#1159 bash: relative migration target is resolved, not refused → allow"
+  record_pass "#1159 bash: relative migration target is not refused (it is also not resolved) → allow"
 else
-  record_fail "#1159 bash: relative migration target is resolved, not refused → allow"
+  record_fail "#1159 bash: relative migration target is not refused (it is also not resolved) → allow"
 fi
 rm -rf "$SB"
 
