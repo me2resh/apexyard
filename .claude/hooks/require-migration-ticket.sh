@@ -308,7 +308,12 @@ _rmt_is_unresolvable() {
   # the bypass pressure this gate can least afford. Such a target is simply
   # left un-normalised below, so it behaves exactly as it did before this
   # change: it reaches marker resolution unresolved. That is a real remaining
-  # gap, recorded honestly in AgDR-0131 rather than papered over.
+  # gap -- a live instance of Failure 1, the wrong-marker fallthrough this
+  # ticket is about. It is recorded in AgDR-0131's known-gap list and owned by
+  # me2resh/apexyard#1182, which fixes it through the shared resolver. It is
+  # NOT fixed here: the round-3..8 attempt to fix it (joining the harness
+  # `.cwd`) was removed in round 9 after security review found it approved a
+  # write in one project against another project's ticket.
   return 1
 }
 
@@ -319,9 +324,12 @@ _rmt_is_unresolvable() {
 # prefix test and silently fall through to the tier-2 ops marker — the same
 # Failure-1 signature this ticket is about, in a different spelling.
 #
-# Relative targets resolve against the harness-supplied `.cwd` (the Bash tool's
-# working directory), NOT the hook process's own cwd, which can differ — see
-# the same distinction in verify-commit-refs.sh (me2resh/apexyard#1050).
+# Relative targets are NOT absolutised. Rounds 3-8 joined them to the
+# harness-supplied `.cwd`; round 9 removed that (see the note near the top of
+# this file) because `.cwd` is fixed when the tool call is formed and cannot
+# see a `cd` inside the command. A relative target is therefore left untouched
+# and resolves exactly as on `dev`. What this function still fixes is `~/`,
+# `//`, `/./` and `/../` on paths that are already absolute.
 _rmt_normalise_target() {
   local t="$1"
   # SC2088: the quoted `~` here is a case PATTERN matching the literal two
@@ -416,8 +424,17 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     #
     # The property this buys is checkable rather than enumerable: THE SET OF
     # WRITES THIS GATE GOVERNS IS IDENTICAL TO DEV'S; WHAT CHANGED IS WHICH
-    # TICKET ANSWERS. See the differential test in the suite -- it would have
-    # caught rounds 5 through 8, which case enumeration did not.
+    # TICKET ANSWERS. It is established by measuring `dev` against this HEAD
+    # over the same command corpus, and pinned by enumerated cases, each
+    # mutation-checked.
+    #
+    # An earlier version of this comment cited a differential test as enforcing
+    # it. That test was removed in round 9: it compared `is_migration_path`
+    # extracted from two blobs that are byte-identical, so it compared a
+    # predicate to itself and never invoked a selection pass -- and it never ran
+    # in CI at all (shallow checkout, silent skip). The claim was the reverse of
+    # what was measured. Enforcing the property properly is carried into
+    # me2resh/apexyard#1182; the CI half is me2resh/apexyard#1183.
     if _rmt_is_unresolvable "$_tgt" && is_migration_path "$_tgt"; then
       cat >&2 <<MSG
 BLOCKED: This migration write target could not be resolved.
@@ -430,8 +447,14 @@ which project — and so which ticket — governs the write, and it will not
 guess. Guessing here means evaluating against whichever ticket happens to be
 set elsewhere, which is how the wrong ticket silently approves a migration.
 
-Use a literal path for migration writes. A relative or \`~/\` path is fine —
-those are resolved. Only unexpandable shell constructs are refused.
+Use a literal ABSOLUTE path for migration writes. A \`~/\` path is fine — those
+are expanded. Only unexpandable shell constructs are refused here.
+
+A relative path is not refused either, but be aware it is not resolved: this
+gate cannot tell which project a relative target lands in, so it falls back to
+the ops-level ticket. That is a known gap (me2resh/apexyard#1182), not a
+recommendation — an absolute path is governed by the ticket that actually owns
+the write.
 
 See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
 "Migration Gate (3a)".

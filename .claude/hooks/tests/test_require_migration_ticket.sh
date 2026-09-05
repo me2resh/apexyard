@@ -124,9 +124,11 @@ run_hook() {
 run_hook_bash() {
   local sb="$1" command="$2" expected_rc="$3" payload_cwd="${4-}" cwd_where="${5-top}"
   local input rc
-  # #1159: an optional 4th arg injects a `.cwd` into the payload, so tests can
-  # exercise the harness-supplied working directory the hook trusts for
-  # resolving relative write targets.
+  # #1159: an optional 4th arg injects a `.cwd` into the payload. The hook
+  # NO LONGER READS IT -- round 9 removed the join after security review found
+  # it approved a write against a ticket that did not govern it. The argument
+  # is kept so the payloads these cases send stay realistic (the harness does
+  # supply `.cwd` in production), not because any assertion depends on it.
   if [ $# -ge 4 ] && [ "$cwd_where" = "tool_input" ]; then
     # The hook reads `.cwd // .tool_input.cwd`. Exercising the SECOND arm needs
     # a payload that omits the top-level key entirely (Rex, round 4 on #1180 --
@@ -1084,6 +1086,33 @@ else
   record_fail "#1159 pass 1 does not refuse an unresolvable NON-migration target"
 fi
 rm -rf "$SB"
+
+# --- Case 48: the `..` arm of the lexical canonicaliser ----------------------
+# Security review (round 10) found this unpinned: the `//` and `/./` arms are
+# covered by cases 36-38, `..` was not. It is the least defensible gap in the
+# suite, because `..` is the mechanism behind BOTH the intended fix and the
+# symlinked-anchor divergence recorded in AgDR-0131.
+#
+# Asserts the function directly: `<abs>/x/../y` must collapse to `<abs>/y`.
+# Without the `..` arm it stays `<abs>/x/../y`, which fails the workspace
+# prefix test and falls to the tier-2 ops marker -- the Failure 1 signature.
+_c48_fail=0
+_c48_probe() {
+  local got; got=$(
+    eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+    _rmt_normalise_target "$1"
+  )
+  [ "$got" = "$2" ] || { _c48_fail=1; echo "    got '$got' for '$1' (want '$2')"; }
+}
+_c48_probe '/ws/proj/x/../migrations/1.sql' '/ws/proj/migrations/1.sql'
+_c48_probe '/ws/a/b/../../c/migrations/1.sql' '/ws/c/migrations/1.sql'
+_c48_probe '/ws/proj/migrations/../1.sql'    '/ws/proj/1.sql'
+_c48_probe '/../ws/migrations/1.sql'         '/ws/migrations/1.sql'
+if [ "$_c48_fail" -eq 0 ]; then
+  record_pass "#1159 the '..' arm of the canonicaliser collapses parent segments"
+else
+  record_fail "#1159 the '..' arm of the canonicaliser collapses parent segments"
+fi
 
 # =============================================================================
 # Summary
