@@ -122,12 +122,17 @@ run_hook() {
 # just the first — a command naming a non-migration path FIRST and a
 # migration path SECOND must still hit the migration gate on the second.
 run_hook_bash() {
-  local sb="$1" command="$2" expected_rc="$3" payload_cwd="${4-}"
+  local sb="$1" command="$2" expected_rc="$3" payload_cwd="${4-}" cwd_where="${5-top}"
   local input rc
   # #1159: an optional 4th arg injects a `.cwd` into the payload, so tests can
   # exercise the harness-supplied working directory the hook trusts for
   # resolving relative write targets.
-  if [ $# -ge 4 ]; then
+  if [ $# -ge 4 ] && [ "$cwd_where" = "tool_input" ]; then
+    # The hook reads `.cwd // .tool_input.cwd`. Exercising the SECOND arm needs
+    # a payload that omits the top-level key entirely (Rex, round 4 on #1180 --
+    # dropping that fallback left the suite at 42/42).
+    input=$(jq -nc --arg c "$command" --arg d "$payload_cwd" '{tool_name:"Bash", tool_input:{command:$c, cwd:$d}}')
+  elif [ $# -ge 4 ]; then
     input=$(jq -nc --arg c "$command" --arg d "$payload_cwd" '{tool_name:"Bash", cwd:$d, tool_input:{command:$c}}')
   else
     input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
@@ -813,6 +818,7 @@ rm -rf "$SB"
 _c35_fail=0
 for _c35_in in 'migrations/001.sql' './migrations/y.sql' '../../../etc/migrations/x.sql'; do
   _c35_out=$(
+    # shellcheck disable=SC2034  # read by the eval'd _rmt_normalise_target
     PAYLOAD_CWD=""
     eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
     _rmt_normalise_target "$_c35_in"
@@ -864,6 +870,92 @@ esac'
   fi
   rm -rf "$SB"
 done
+
+# =============================================================================
+# Cases 39-44 (#1159, round 4 on PR #1180). Every case here uses the
+# opposite-verdict fixture from cases 36-38, because round 3 established that
+# a same-verdict fixture cannot tell a working feature from a broken one:
+#   ops marker      #42 -> no migration label -> BLOCK (rc=2)
+#   project marker  #99 -> migration + AgDR   -> ALLOW (rc=0)
+# The exit code therefore names which marker answered.
+# =============================================================================
+mk_opposing_fixture() {           # echoes the sandbox path
+  local sb; sb=$(make_fork)
+  mkdir -p "$sb/workspace/example/migrations"
+  set_marker "$sb" "test-org/test-repo" 42
+  mkdir -p "$sb/.claude/session/tickets"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  install_mock "$sb" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  echo "$sb"
+}
+
+# --- Cases 39-41: ~user / ~+ / ~- must NOT be joined to the caller's cwd -----
+# Hakim, round 4: `_rmt_normalise_target` handled `~` and `~/`, then treated
+# every other non-absolute target as cwd-relative -- so `~root/...` was joined
+# and came back ABSOLUTE, which meant the still-relative early return added in
+# round 3 never saw it. What `~root` / `~+` / `~-` expand to depends on the
+# passwd database or on the caller shell's $PWD/$OLDPWD, none of which this
+# process can read. Joining them yields a path bash never writes to, resolved
+# under whichever project the caller happens to be sitting in.
+# rc=2 proves the target stayed verbatim and fell to the ops marker.
+for tilde in '~root' '~+' '~-'; do
+  SB=$(mk_opposing_fixture)
+  if run_hook_bash "$SB" "cat > $tilde/$MIG" 2 "$SB/workspace/example"; then
+    record_pass "#1159 '$tilde/' target is not joined to the caller cwd (ops marker answers)"
+  else
+    record_fail "#1159 '$tilde/' target is not joined to the caller cwd (ops marker answers)"
+  fi
+  rm -rf "$SB"
+done
+
+# --- Case 42: pass 1 and pass 2 must ask the same question -------------------
+# Hakim, round 4: pass 1 refused on `is_migration_path "$_tgt"` (RAW) while
+# pass 2 gated on `is_migration_path "$_tgt_norm"` (NORMALISED). A target that
+# only becomes migration-shaped once joined was therefore never a refusal
+# candidate, yet was gated on anyway -- the gate guessing that an unexpandable
+# `$F` stays inside the cwd's project, which its own refusal text promises it
+# will not do. Raw `$F.sql` carries no `migrations/` segment; joined to a
+# `migrations/` cwd it does. rc=2 here is the REFUSAL, not the ops marker.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" 'cat > $F.sql' 2 "$SB/workspace/example/migrations"; then
+  record_pass "#1159 unresolvable target that becomes migration-shaped after normalisation is refused"
+else
+  record_fail "#1159 unresolvable target that becomes migration-shaped after normalisation is refused"
+fi
+rm -rf "$SB"
+
+# --- Case 43: a .cwd that is absolute but does not exist is rejected ---------
+# Rex, round 4: deleting the whole absolute-and-exists validation left the
+# suite at 42/42, so the check had no coverage at all. A non-existent cwd that
+# would otherwise resolve INTO workspace/example discriminates: honouring it
+# reaches #99 (rc=0), rejecting it leaves the target relative and falls to #42.
+# The target must be migration-shaped BEFORE any join, or the un-joined branch
+# exits 0 as "not a migration write" and the case stops discriminating:
+# `migrations/x.sql` has no leading slash, so it misses `*/migrations/*`.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" "cat > workspace/example/$MIG" 2 "$SB/workspace/example/no-such-dir"; then
+  record_pass "#1159 non-existent .cwd is rejected, not used as a join base"
+else
+  record_fail "#1159 non-existent .cwd is rejected, not used as a join base"
+fi
+rm -rf "$SB"
+
+# --- Case 44: the .tool_input.cwd fallback is actually read ------------------
+# Same Rex finding: dropping the `// .tool_input.cwd` arm also left 42/42.
+# Here the top-level key is absent, so rc=0 is only reachable via the fallback.
+# Same migration-shaped-before-the-join requirement as case 43: with a bare
+# `migrations/x.sql` both branches exit 0 as "not a migration write" and the
+# case cannot fail. Mutation-checked -- dropping the fallback fails this.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" "cat > workspace/example/$MIG" 0 "$SB/workspace/example" tool_input; then
+  record_pass "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
+else
+  record_fail "#1159 .tool_input.cwd fallback resolves the target when .cwd is absent"
+fi
+rm -rf "$SB"
 
 # =============================================================================
 # Summary

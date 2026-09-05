@@ -259,6 +259,14 @@ _rmt_normalise_target() {
   case "$t" in
     '~')    t="$HOME" ;;
     '~/'*)  t="$HOME/${t#\~/}" ;;
+    # ~user, ~+, ~- (and any other ~-prefixed form). What these expand to
+    # depends on the passwd database or on $OLDPWD/$PWD inside the CALLER's
+    # shell -- state this process cannot read. Treating them as cwd-relative
+    # joins them to the caller's cwd and yields a path bash never writes to,
+    # which is the same fabrication the $PWD join was removed to avoid. Leave
+    # the target untouched so the still-relative check below returns it
+    # verbatim. (Hakim, round 4 on PR #1180.)
+    '~'*)   ;;
     /*)     ;;
     # No $PWD fallback by design. The hook process's cwd is NOT the Bash
     # tool's cwd, so joining against it fabricates a path that looks real and
@@ -308,7 +316,16 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
-    if _rmt_is_unresolvable "$_tgt" && is_migration_path "$_tgt"; then
+    # Ask the migration question of BOTH spellings. Pass 2 selects on the
+    # normalised form, so testing only the raw one here leaves a hole: `$F`
+    # written from a `migrations/` cwd is not migration-shaped raw, becomes
+    # migration-shaped once joined, and so skipped refusal while still being
+    # gated on. Raw is kept in the test too -- normalisation can consume a
+    # `migrations/` segment via `..`, and dropping it would lose a refusal
+    # that exists today. (Hakim, round 4 on PR #1180.)
+    _tgt_n=$(_rmt_normalise_target "$_tgt")
+    if _rmt_is_unresolvable "$_tgt" \
+      && { is_migration_path "$_tgt" || is_migration_path "$_tgt_n"; }; then
       cat >&2 <<MSG
 BLOCKED: This migration write target could not be resolved.
 
