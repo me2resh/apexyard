@@ -1083,10 +1083,14 @@ DEV_HOOK=$(mktemp)
 if git -C "$(dirname "$HOOK_SCRIPT")" show 89209c9:.claude/hooks/require-migration-ticket.sh > "$DEV_HOOK" 2>/dev/null; then
   # is_migration_path is self-contained in both versions, so the selection
   # predicate can be compared directly without standing up two forks.
+  # shellcheck disable=SC2034  # read by the eval'd is_migration_path
   _sel_dev()  { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$DEV_HOOK")";     is_migration_path "$1"; }
+  # shellcheck disable=SC2034  # read by the eval'd is_migration_path
   _sel_head() { CUSTOM_PATHS=""; eval "$(sed -n '/^is_migration_path() {/,/^}/p' "$HOOK_SCRIPT")";  is_migration_path "$1"; }
 
   _diff_fail=0
+  # shellcheck disable=SC2088  # deliberate literals: these are the exact
+  # unexpanded spellings a Bash write-target extractor hands the predicate.
   for _p in \
     '/a/migrations/001.sql' '/a/migrations/../1.sql' '/a//migrations/x.sql' \
     '/a/./migrations/x.sql' 'migrations/001.sql' './migrations/x.sql' \
