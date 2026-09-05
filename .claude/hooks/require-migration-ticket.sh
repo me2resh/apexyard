@@ -60,6 +60,10 @@ _rmt_is_meta_exempt() {
 
 INPUT=$(cat)
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
+# The harness-supplied working directory for the Bash tool call. Relative write
+# targets are relative to THIS, not to the hook process's own cwd, which can
+# differ (me2resh/apexyard#1050 — same distinction verify-commit-refs.sh draws).
+PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
 
 # Bash-tool path: if the command writes, collect ALL extractable targets so
@@ -205,13 +209,102 @@ is_migration_path() {
 # first — skipping any that are meta-exempt, and gate on the first one
 # that matches a migration-path pattern. For a non-Bash tool call there is
 # only ever the one FILE_PATH (already meta-exemption-checked above).
+
+# _rmt_is_unresolvable TARGET (#1159)
+# True when the target carries a shell construct the hook cannot expand
+# without executing the command: a variable (`$V`, `${V}`), a command
+# substitution (`$(…)`), or a backtick. These are the shapes whose real path
+# is unknowable here. `~` and relative paths are deliberately NOT listed —
+# those ARE resolvable, and _rmt_normalise_target below resolves them.
+_rmt_is_unresolvable() {
+  case "$1" in
+    *'$'*|*'`'*) return 0 ;;
+  esac
+  return 1
+}
+
+# _rmt_normalise_target TARGET
+# Absolutise and canonicalise a resolvable target so the migration matcher and
+# the project-prefix check see the real path. Without this, `~/…`, a relative
+# `workspace/<p>/…`, and `/./` `//` `/../` spellings all fail the workspace
+# prefix test and silently fall through to the tier-2 ops marker — the same
+# Failure-1 signature this ticket is about, in a different spelling.
+#
+# Relative targets resolve against the harness-supplied `.cwd` (the Bash tool's
+# working directory), NOT the hook process's own cwd, which can differ — see
+# the same distinction in verify-commit-refs.sh (me2resh/apexyard#1050).
+_rmt_normalise_target() {
+  local t="$1"
+  # SC2088: the quoted `~` here is a case PATTERN matching the literal two
+  # characters the extractor returned — we are detecting an unexpanded tilde
+  # in someone else's command text, not writing one we want the shell to
+  # expand. Expansion is what the branch body does, explicitly, via $HOME.
+  # shellcheck disable=SC2088
+  case "$t" in
+    '~')    t="$HOME" ;;
+    '~/'*)  t="$HOME/${t#\~/}" ;;
+    /*)     ;;
+    *)      t="${PAYLOAD_CWD:-$PWD}/$t" ;;
+  esac
+  # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
+  # Lexical (not realpath) so a not-yet-created migration file still resolves.
+  printf '%s' "$t" | awk -F/ '{
+    n = 0
+    for (i = 1; i <= NF; i++) {
+      if ($i == "" || $i == ".") continue
+      if ($i == "..") { if (n > 0) n--; continue }
+      out[++n] = $i
+    }
+    s = ""
+    for (i = 1; i <= n; i++) s = s "/" out[i]
+    print (s == "" ? "/" : s)
+  }'
+}
+
 if [ "$TOOL_NAME" = "Bash" ]; then
+  # Pass 1 (#1159, Hakim's ordering finding on PR #1180): examine EVERY target
+  # for unresolvability BEFORE picking one to gate on. The migration-shaped
+  # check below `break`s on its first match, so a compliant literal target
+  # placed first would otherwise smuggle a later unresolvable one straight
+  # past this gate. Refusal must not depend on argument order.
+  #
+  # Scoped to targets whose literal text is still migration-shaped: the
+  # `migrations/` segment survives an unexpanded prefix (`$WD/app/migrations/x`),
+  # so this refuses the writes this gate governs without refusing every command
+  # that merely happens to redirect into some unrelated `$LOG`.
+  while IFS= read -r _tgt; do
+    [ -z "$_tgt" ] && continue
+    _rmt_is_meta_exempt "$_tgt" && continue
+    if _rmt_is_unresolvable "$_tgt" && is_migration_path "$_tgt"; then
+      cat >&2 <<MSG
+BLOCKED: This migration write target could not be resolved.
+
+  target: $_tgt
+
+The path contains a shell variable, command substitution, or backtick that
+the gate cannot expand without running the command. It therefore cannot tell
+which project — and so which ticket — governs the write, and it will not
+guess. Guessing here means evaluating against whichever ticket happens to be
+set elsewhere, which is how the wrong ticket silently approves a migration.
+
+Use a literal path for migration writes. A relative or \`~/\` path is fine —
+those are resolved. Only unexpandable shell constructs are refused.
+
+See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
+"Migration Gate (3a)".
+MSG
+      exit 2
+    fi
+  done <<< "$BASH_TARGETS"
+
+  # Pass 2: pick the migration-shaped target to gate on, normalised.
   RESOLVED_TARGET=""
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
-    if is_migration_path "$_tgt"; then
-      RESOLVED_TARGET="$_tgt"
+    _tgt_norm=$(_rmt_normalise_target "$_tgt")
+    if is_migration_path "$_tgt_norm"; then
+      RESOLVED_TARGET="$_tgt_norm"
       break
     fi
   done <<< "$BASH_TARGETS"
@@ -226,45 +319,6 @@ elif ! is_migration_path "$FILE_PATH"; then
   # Not a migration file — other hooks handle the standard ticket check.
   exit 0
 fi
-
-# --------- Gate 0: the target must be resolvable (#1159) ---------
-# A Bash write target can carry an unexpanded shell variable — the detector
-# reports the literal text `$WD/app/migrations/0001.py`, because expanding it
-# would mean executing the command. That string still matches a migration
-# path, so the gate fires; but it can never match a workspace prefix, so
-# PROJECT resolution below silently fails and the three-tier lookup lands on
-# the tier-2 ops marker — a DIFFERENT ticket than the one governing this
-# worktree, with no warning.
-#
-# Degrading to "no target resolved" is correct for a detector. Degrading to
-# "use whatever marker is lying around" is wrong for a GATE: it is not no
-# opinion, it is someone else's answer. Refuse instead.
-#
-# Deliberately narrow: ONLY an unexpanded variable is treated as unresolvable.
-# A literal absolute path outside `workspace/` also leaves PROJECT empty and
-# MUST keep falling back to the ops marker — that is the legitimate case of a
-# migration inside the ops fork itself. Widening this to "PROJECT is empty"
-# would break it.
-case "$FILE_PATH" in
-  *'$'*)
-    cat >&2 <<MSG
-BLOCKED: This migration write target could not be resolved.
-
-  target: $FILE_PATH
-
-The path contains an unexpanded shell variable, so the gate cannot tell
-which project — and therefore which ticket — governs it. It will not guess.
-
-Use a literal path for migration writes:
-
-  cat > /absolute/path/to/app/migrations/0001_initial.py <<'EOF'
-
-Then retry. See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md
-section "Migration Gate (3a)".
-MSG
-    exit 2
-    ;;
-esac
 
 # --------- Gate 1: active ticket marker ---------
 # Reuse the #41 resolution: per-project marker if FILE_PATH is under the

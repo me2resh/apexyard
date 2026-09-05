@@ -674,6 +674,80 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Case 25 (#1159, Rex review of PR #1180): Gate 0 must apply to the Bash path
+# ONLY. An Edit/Write `file_path` is a literal string that never passed through
+# a shell, so a `$` in it is an ordinary filename character — not an unexpanded
+# variable. The first cut of the guard sat after the tool branches converged
+# and hard-blocked such a path, with a message asserting a cause that had not
+# been observed. Fully resolvable, inside the workspace, valid ticket → allow.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook "$SB" "$SB/migrations/001_price\$usd.sql" 0; then
+  record_pass "#1159 guard: literal Write path containing '\$' is not a shell variable → allow"
+else
+  record_fail "#1159 guard: literal Write path containing '\$' is not a shell variable → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Cases 26-28 (#1159, Hakim review of PR #1180): the ORIGINAL fix refused only
+# the `$` spelling. Backticks and $(...) are the same bash feature and were
+# not caught, so they still reached the marker gates unresolved — the same
+# Failure-1 signature in a different spelling. All three must now refuse.
+# =============================================================================
+for spelling in 'backtick' 'cmdsub' 'braced-var'; do
+  case "$spelling" in
+    backtick)   CMD='cat > `pwd`/'"$MIG" ;;
+    cmdsub)     CMD='cat > $(pwd)/'"$MIG" ;;
+    braced-var) CMD='cat > "${WD}/'"$MIG"'"' ;;
+  esac
+  SB=$(make_fork)
+  set_marker "$SB" "test-org/test-repo" 42
+  install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+  if run_hook_bash "$SB" "$CMD" 2; then
+    record_pass "#1159 bash: unresolvable ($spelling) migration target → refuse"
+  else
+    record_fail "#1159 bash: unresolvable ($spelling) migration target → refuse"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# Case 29 (#1159, Hakim's ORDERING finding on PR #1180): the first cut placed
+# the resolvability check AFTER the #886 loop, which `break`s on its first
+# migration-shaped match. A compliant literal target named FIRST therefore
+# smuggled a later unresolvable target straight past the gate (rc=0).
+# Refusal must not depend on argument order.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "echo a > ./$MIG; cat > \"\$WD/$MIG\"" 2; then
+  record_pass "#1159 bash: literal target first must not smuggle an unresolvable one past the gate"
+else
+  record_fail "#1159 bash: literal target first must not smuggle an unresolvable one past the gate"
+fi
+rm -rf "$SB"
+
+# =============================================================================
+# Case 30 (#1159): a RELATIVE migration target is resolvable, not unresolvable.
+# It must be normalised and gated normally — never refused by the resolvability
+# check, and never silently passed through. With a valid migration ticket set,
+# it is allowed.
+# =============================================================================
+SB=$(make_fork)
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > ./$MIG" 0; then
+  record_pass "#1159 bash: relative migration target is resolved, not refused → allow"
+else
+  record_fail "#1159 bash: relative migration target is resolved, not refused → allow"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo
