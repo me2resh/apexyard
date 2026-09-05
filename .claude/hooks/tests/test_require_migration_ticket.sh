@@ -1098,6 +1098,89 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Cases 52-55 (#1159, round 7 on PR #1180). All three reviewers independently
+# found the same defect in round 6's own fix: the accumulator keyed on project
+# NAME, and the ops domain's name is legitimately EMPTY. An empty member is
+# both unstorable (the `[ -z ]` init guard treats it as "nothing yet", so the
+# next member overwrites it) and uncountable (`grep -c .` skips empty lines) --
+# two independent drops, one per argument order. The accumulator now keys on
+# the resolved MARKER, which is what actually governs a write, and counts with
+# an explicit counter.
+# =============================================================================
+mk_ops_vs_project_fixture() {     # $1 = which side satisfies: "ops" | "project"
+  local sb; sb=$(make_fork)
+  mkdir -p "$sb/workspace/example/migrations" "$sb/migrations"
+  mkdir -p "$sb/.claude/session/tickets"
+  if [ "$1" = "ops" ]; then
+    set_marker "$sb" "test-org/test-repo" 99                                   # ops satisfies
+    printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$sb/.claude/session/tickets/example"
+  else
+    set_marker "$sb" "test-org/test-repo" 77                                   # ops fails
+    printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  fi
+  install_mock "$sb" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  echo "$sb"
+}
+
+# --- Cases 52-53: the ops domain is a real member, in BOTH argument orders ---
+# One case per dropping mechanism. Each uses the polarity where the satisfying
+# marker is the one that would win a first-match selection, so a dropped member
+# shows up as ALLOW rather than being masked by the other side blocking anyway.
+SB=$(mk_ops_vs_project_fixture project)
+if run_hook_bash "$SB" "cat > migrations/001.sql; cat > $SB/migrations/003.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 ops domain counted when it is appended second (project-first order)"
+else
+  record_fail "#1159 ops domain counted when it is appended second (project-first order)"
+fi
+rm -rf "$SB"
+
+SB=$(mk_ops_vs_project_fixture ops)
+if run_hook_bash "$SB" "cat > $SB/migrations/003.sql; cat > migrations/001.sql" 2 "$SB/workspace/example"; then
+  record_pass "#1159 ops domain retained when it is stored first (ops-first order)"
+else
+  record_fail "#1159 ops domain retained when it is stored first (ops-first order)"
+fi
+rm -rf "$SB"
+
+# --- Case 54: one ticket governing two projects must NOT be refused ----------
+# The refusal keys on the governing MARKER, not the project name. Two projects
+# with no per-project marker both fall back to the same `current-ticket`, so one
+# ticket genuinely governs both writes -- dev allows this, and keying on the
+# name refused it while asserting a difference that did not exist.
+# (Hakim, round 7.)
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations"
+set_marker "$SB" "test-org/test-repo" 99          # satisfies; governs BOTH projects
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > $SB/workspace/example/migrations/001.sql; cat > $SB/workspace/other/migrations/002.sql" 0 "$SB/workspace/example"; then
+  record_pass "#1159 two projects sharing ONE governing marker are not refused"
+else
+  record_fail "#1159 two projects sharing ONE governing marker are not refused"
+fi
+rm -rf "$SB"
+
+# --- Case 55: pass 1's RAW arm (Rex, round 7 -- the third silent arm) --------
+# Deleting pass 1's raw spelling check left the suite at 55/55 while flipping a
+# refusal into an allow. The arm is argued for in the pass-1 comment, in the
+# pass-2 comment, and in AgDR-0131, and had no case anywhere.
+#
+# `<abs>/migrations/../$V.sql` is migration-shaped RAW and unresolvable, so
+# pass 1 must refuse it. Normalised it is `<abs>/$V.sql`, which is not
+# migration-shaped -- so with the raw arm gone, nothing matches and the write
+# passes ungated. Case 46 is the control for this fixture: the same path with a
+# resolvable filename is correctly allowed.
+SB=$(mk_opposing_fixture)
+if run_hook_bash "$SB" 'cat > '"$SB"'/workspace/example/migrations/../$V.sql' 2 "$SB/workspace/example"; then
+  record_pass "#1159 pass 1 refuses an unresolvable target that is migration-shaped RAW only"
+else
+  record_fail "#1159 pass 1 refuses an unresolvable target that is migration-shaped RAW only"
+fi
+rm -rf "$SB"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo

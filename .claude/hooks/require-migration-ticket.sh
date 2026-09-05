@@ -48,30 +48,6 @@
 # ticket regardless of path. Applied PER TARGET (not just once against
 # the first extracted target) so a meta-exempt target can't shadow a
 # genuinely migration-shaped target named later in the same command.
-# Which managed project governs this path? Empty means "none" -- the ops-level
-# marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
-# matching target rather than only the one it picked first (see the loop below).
-_rmt_project_for_path() {
-  local p="$1" proj="" tail
-  if [ -n "$WORKSPACE_DIR" ]; then
-    case "$p" in
-      "$WORKSPACE_DIR"/*)
-        tail="${p#$WORKSPACE_DIR/}"
-        proj="${tail%%/*}"
-        ;;
-    esac
-  fi
-  if [ -z "$proj" ] && [ -n "$OPS_ROOT" ]; then
-    case "$p" in
-      "$OPS_ROOT"/workspace/*)
-        tail="${p#$OPS_ROOT/workspace/}"
-        proj="${tail%%/*}"
-        ;;
-    esac
-  fi
-  printf '%s' "$proj"
-}
-
 _rmt_is_meta_exempt() {
   case "$1" in
     */.claude/*|*/.claude|*/docs/*|*/docs) return 0 ;;
@@ -171,6 +147,83 @@ MARKER_HOME="${MARKER_HOME:-.}"
 # Resolve the workspace dir (defaults to $OPS_ROOT/workspace; v2
 # split-portfolio adopters point at the private sibling repo).
 WORKSPACE_DIR="$OPS_ROOT/workspace"
+
+# Sentinel for "no marker governs this path". Marker paths are absolute, so a
+# token starting with `<` cannot collide with one.
+#
+# Honest scope, because this PR has repeatedly claimed more than it delivered:
+# this sentinel is NOT what fixes the round-6 defect, and mutation testing says
+# so. Removing it while keeping the explicit counter leaves the suite green and
+# the behaviour correct; equally, restoring `grep -c .` while keeping the
+# sentinel is also correct. The two are independently sufficient. Both are kept
+# because the underlying bug had two independent causes and belt-and-braces is
+# cheap here -- and because `<none>` renders legibly in the refusal message,
+# where an empty entry was invisible.
+_RMT_NO_MARKER='<none>'
+
+# Which managed project governs this path? Empty means "none" -- the ops-level
+# marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
+# matching target rather than only the one it picked first (see the loop below).
+_rmt_project_for_path() {
+  local p="$1" proj="" tail
+  if [ -n "$WORKSPACE_DIR" ]; then
+    case "$p" in
+      "$WORKSPACE_DIR"/*)
+        tail="${p#$WORKSPACE_DIR/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  if [ -z "$proj" ] && [ -n "$OPS_ROOT" ]; then
+    case "$p" in
+      "$OPS_ROOT"/workspace/*)
+        tail="${p#$OPS_ROOT/workspace/}"
+        proj="${tail%%/*}"
+        ;;
+    esac
+  fi
+  printf '%s' "$proj"
+}
+
+# Which active-ticket marker governs this path? Mirrors the three-tier lookup in
+# require-active-ticket.sh (#41 + #513): tier 0 per-worktree, tier 1
+# per-project, tier 2 ops fallback. Extracted in round 7 so pass 2 can ask the
+# question that actually decides the gate -- WHICH MARKER governs -- of every
+# matching target, instead of asking which project and hoping the two agree.
+# Defined here, below the roots it reads, rather than above them.
+_rmt_marker_for_path() {
+  local p="$1" proj marker="" wt safe _fdir _gd _gcd
+  proj=$(_rmt_project_for_path "$p")
+
+  if [ -n "$proj" ]; then
+    # Tier 0 worktree detection -- identical to require-active-ticket.sh: env
+    # var, else LINKED-worktree check via absolute git-dir vs common-dir.
+    wt="${CLAUDE_WORKTREE_BRANCH:-}"
+    if [ -z "$wt" ]; then
+      _fdir=$(dirname "$p")
+      _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
+      _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+      if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
+        wt=$(git -C "$_fdir" branch --show-current 2>/dev/null)
+      fi
+    fi
+    if [ -n "$wt" ]; then
+      safe="${wt//\//__}"
+      if [ -f "$MARKER_HOME/.claude/session/tickets/$proj/$safe" ]; then
+        marker="$MARKER_HOME/.claude/session/tickets/$proj/$safe"
+      fi
+    fi
+  fi
+
+  if [ -z "$marker" ] && [ -n "$proj" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$proj" ]; then
+    marker="$MARKER_HOME/.claude/session/tickets/$proj"
+  elif [ -z "$marker" ] && [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
+    marker="$MARKER_HOME/.claude/session/current-ticket"
+  fi
+
+  printf '%s' "${marker:-$_RMT_NO_MARKER}"
+}
+
 if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-read-config.sh"
@@ -392,7 +445,8 @@ MSG
   # spanning two of them cannot be approved by whichever happened to match
   # first.
   RESOLVED_TARGET=""
-  MATCH_PROJECTS=""
+  MATCH_MARKERS=""
+  MATCH_MARKER_COUNT=0
   while IFS= read -r _tgt; do
     [ -z "$_tgt" ] && continue
     _rmt_is_meta_exempt "$_tgt" && continue
@@ -426,41 +480,49 @@ MSG
       # wrong-project-ticket failure #1159 exists to close, and the file header
       # already claimed all targets were judged. (Hakim, round 6 on PR #1180.)
       [ -z "$RESOLVED_TARGET" ] && RESOLVED_TARGET="$_tgt_norm"
-      _tgt_proj=$(_rmt_project_for_path "$_tgt_norm")
-      if [ -z "$MATCH_PROJECTS" ]; then
-        MATCH_PROJECTS="$_tgt_proj"
-      else
-        case "
-$MATCH_PROJECTS
+      _tgt_marker=$(_rmt_marker_for_path "$_tgt_norm")
+      case "
+$MATCH_MARKERS
 " in
-          *"
-$_tgt_proj
+        *"
+$_tgt_marker
 "*) ;;
-          *) MATCH_PROJECTS="$MATCH_PROJECTS
-$_tgt_proj" ;;
-        esac
-      fi
+        *) MATCH_MARKERS="${MATCH_MARKERS:+$MATCH_MARKERS
+}$_tgt_marker"
+           MATCH_MARKER_COUNT=$((MATCH_MARKER_COUNT + 1)) ;;
+      esac
     fi
   done <<< "$BASH_TARGETS"
 
   # More than one governing marker in a single command. Gating on any one of
   # them approves writes the others govern, so refuse and let the operator
-  # split the command. Fail-closed, and strictly closer to dev, which blocked
-  # this shape in both argument orders.
-  if [ "$(printf '%s' "$MATCH_PROJECTS" | grep -c .)" -gt 1 ]; then
+  # split the command.
+  #
+  # The round-6 version keyed on project NAME, and the ops domain's name is
+  # legitimately EMPTY -- so that member was both overwritten by the `[ -z ]`
+  # init guard and skipped by `grep -c .`. Two independent drops of the same
+  # member, one per argument order. All three reviewers found it in round 7.
+  #
+  # What actually fixes it is keying on the resolved MARKER instead of the
+  # project name: that is also what stops the mirror-image over-refusal, where
+  # two projects sharing one `current-ticket` were refused for differing in a
+  # field that does not govern anything. The explicit counter and the non-empty
+  # sentinel are each independently sufficient for the counting half; see the
+  # sentinel's own comment for why both are kept.
+  if [ "$MATCH_MARKER_COUNT" -gt 1 ]; then
     cat >&2 <<MSG
 BLOCKED: This command writes migrations governed by more than one ticket.
 
-  projects: $(printf '%s' "$MATCH_PROJECTS" | tr '\n' ' ' | sed 's/  */ /g')
-            (an empty entry means a path outside every workspace, which the
-             ops-level marker governs)
+  markers: $(printf '%s' "$MATCH_MARKERS" | tr '\n' ' ' | sed 's/  */ /g')
 
-Each of these is governed by a different active-ticket marker. Gating on any
-one of them would approve the writes the others govern -- which is the wrong
-ticket silently approving a migration, the failure this gate exists to stop.
+Each write in this command is governed by a different active-ticket marker.
+Gating on any one of them would approve the writes the others govern -- the
+wrong ticket silently approving a migration, which is the failure this gate
+exists to stop.
 
-Split the writes into one command per project, so each is judged against the
-ticket that actually governs it.
+Split the writes into one command per governing ticket. Note that the SDLC's
+one-ticket-at-a-time rule already forbids this shape, so this refusal enforces
+an existing invariant rather than adding a new restriction.
 
 See me2resh/apexyard#1159 and .claude/rules/workflow-gates.md section
 "Migration Gate (3a)".
@@ -485,34 +547,9 @@ fi
 # workspace dir may live in the private sibling repo for v2 adopters.
 PROJECT=$(_rmt_project_for_path "$FILE_PATH")
 
-# Three-tier marker lookup, mirroring require-active-ticket.sh (#41 + #513):
-# tier 0 per-worktree (tickets/<project>/<safe-branch>) → tier 1 per-project
-# (tickets/<project>, a FILE) → tier 2 ops fallback (current-ticket).
-MARKER=""
-if [ -n "$PROJECT" ]; then
-  # Tier 0 worktree detection — identical to require-active-ticket.sh: env var,
-  # else LINKED-worktree check via absolute git-dir vs absolute common-dir.
-  WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
-  if [ -z "$WT_BRANCH" ]; then
-    _fdir=$(dirname "$FILE_PATH")
-    _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
-    _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-    if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
-      WT_BRANCH=$(git -C "$_fdir" branch --show-current 2>/dev/null)
-    fi
-  fi
-  if [ -n "$WT_BRANCH" ]; then
-    SAFE_BRANCH="${WT_BRANCH//\//__}"
-    if [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH" ]; then
-      MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH"
-    fi
-  fi
-fi
-if [ -z "$MARKER" ] && [ -n "$PROJECT" ] && [ -f "$MARKER_HOME/.claude/session/tickets/$PROJECT" ]; then
-  MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT"
-elif [ -z "$MARKER" ] && [ -f "$MARKER_HOME/.claude/session/current-ticket" ]; then
-  MARKER="$MARKER_HOME/.claude/session/current-ticket"
-fi
+# Three-tier marker lookup, shared with pass 2 so the two cannot diverge.
+MARKER=$(_rmt_marker_for_path "$FILE_PATH")
+[ "$MARKER" = "$_RMT_NO_MARKER" ] && MARKER=""
 
 if [ -z "$MARKER" ]; then
   cat >&2 <<MSG
