@@ -652,8 +652,10 @@ fallow fix --dry-run
    base repo, NOT the fork; see marker section):
    tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
 
-   OR for a non-approving result you want reflected in the host's review state:
+   On gh, use this alternative only for another account's PR:
    tracker_review_submit "$PR_HOST_REPO" {number} request-changes "$REVIEW_BODY_FILE"
+   For a same-account review, pass comment with CHANGES REQUESTED in the body.
+   On glab, request-changes posts an MR note.
 
    Do NOT pass the `approve` verdict — on gh it maps to --approve, which GitHub blocks on
    single-account setups, and it is NOT required (the local marker is the gate signal).
