@@ -241,6 +241,15 @@ RELEASE_SUBJECT=""
 RELEASE_BODY_FILE=""
 if echo "$PR_HEAD_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+$' || \
    echo "$PR_TITLE" | grep -qE '^release\('; then
+  # Rex M1: guard the TITLE read too, not only the body read. $PR_TITLE comes
+  # from a `gh pr view` that swallows its own errors, so a transient failure
+  # leaves it empty while the branch match still fires. Refuse rather than
+  # merge a release PR with a gh-defaulted subject.
+  if [ -z "$PR_TITLE" ]; then
+    echo "ERROR: could not read the release PR's title." >&2
+    echo "Refusing to merge — retry /approve-merge once gh responds." >&2
+    exit 1
+  fi
   RELEASE_SUBJECT="$PR_TITLE"
   RELEASE_BODY_FILE=$(mktemp)
   if ! gh pr view <pr> --repo "$PR_HOST_REPO" --json body -q '.body' > "$RELEASE_BODY_FILE" 2>/dev/null \

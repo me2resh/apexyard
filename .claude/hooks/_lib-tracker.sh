@@ -1470,9 +1470,13 @@ _tracker_merge_gh() {
     rebase) args+=(--rebase) ;;
   esac
   [ "$delete_branch" = "true" ] && args+=(--delete-branch)
-  if [ -n "$subject" ] && [ -n "$body_file" ]; then
-    args+=(--subject "$subject" --body-file "$body_file")
-  fi
+  # #1136 / Rex H1: append each flag on its OWN condition. Requiring both
+  # silently dropped a readable body_file whenever subject was empty, which
+  # reintroduced the bare-squash bug this parameter exists to close. gh takes
+  # --subject and --body-file independently; when only --body-file is given,
+  # gh defaults the subject itself.
+  [ -n "$subject" ] && args+=(--subject "$subject")
+  [ -n "$body_file" ] && args+=(--body-file "$body_file")
   gh "${args[@]}" >/dev/null
 }
 
@@ -1616,10 +1620,13 @@ tracker_pr_merge() {
   # repo-default squash-body assembly for the body half — the exact bug this
   # parameter exists to close). If body_file is supplied but unreadable or
   # empty, refuse the merge rather than silently degrading to a bare squash
-  # that would reintroduce #1136. An empty subject with a body_file is
-  # accepted (gh happily takes --body-file alone); the only failing shape is
-  # "caller wanted body_file honoured and it can't be read".
-  if [ -n "$body_file" ] && [ ! -s "$body_file" ]; then
+  # that would reintroduce #1136. The guard tests that body_file is a regular,
+  # readable, non-empty file — a directory, a mode-000 file, and a zero-byte
+  # file all refuse here rather than reaching gh. An empty subject with a
+  # body_file is accepted (gh takes --body-file alone and defaults the
+  # subject); the only failing shape is "caller wanted body_file honoured and
+  # it can't be read".
+  if [ -n "$body_file" ] && { [ ! -f "$body_file" ] || [ ! -r "$body_file" ] || [ ! -s "$body_file" ]; }; then
     return 1
   fi
 

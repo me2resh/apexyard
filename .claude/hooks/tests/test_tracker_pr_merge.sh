@@ -382,6 +382,41 @@ PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c15b" \
   tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "$SB4/empty-body.md"; rc15b=$?
 assert_eq "gh empty body_file → refuses merge (non-zero)" "1" "$rc15b"
 assert_eq "gh empty body_file → no CLI invoked"            ""  "$(cat "$SB4/c15b" 2>/dev/null)"
+# Case 16 - REGRESSION (Rex H1, PR #1192 review): a readable, non-empty
+# body_file with an EMPTY subject must still append --body-file. The original
+# guard required BOTH to be non-empty, so this shape passed the fail-closed
+# check and then silently bare-squashed — reintroducing #1136 on the exact
+# path /approve-merge can reach when the PR-title read fails but the
+# branch-name match still fires. gh takes --body-file alone and defaults the
+# subject itself.
+tracker_clear_cache
+: > "$SB4/c16"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c16" \
+  tracker_pr_merge "o/r" 42 squash true "" "$BODY_FILE" >/dev/null; rc16=$?
+assert_eq "gh body_file with empty subject -> exit 0"            "0" "$rc16"
+assert_eq "gh body_file with empty subject -> --body-file present" "1" "$(grep -c -- '^--body-file$' "$SB4/c16")"
+assert_eq "gh body_file with empty subject -> no --subject"      "0" "$(grep -c -- '^--subject$' "$SB4/c16")"
+
+# Case 17 - the mirror shape: a subject with no body_file appends --subject
+# only. Independent flags, per gh pr merge -t/-F.
+tracker_clear_cache
+: > "$SB4/c17"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c17" \
+  tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "" >/dev/null; rc17=$?
+assert_eq "gh subject with empty body_file -> exit 0"          "0" "$rc17"
+assert_eq "gh subject with empty body_file -> --subject present" "1" "$(grep -c -- '^--subject$' "$SB4/c17")"
+assert_eq "gh subject with empty body_file -> no --body-file"  "0" "$(grep -c -- '^--body-file$' "$SB4/c17")"
+
+# Case 18 - fail-safe (Rex L1): a DIRECTORY passed as body_file must refuse.
+# -s alone reports a directory as non-empty, so the guard also tests -f/-r.
+tracker_clear_cache
+mkdir -p "$SB4/body-dir"
+: > "$SB4/c18"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c18" \
+  tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "$SB4/body-dir"; rc18=$?
+assert_eq "gh directory body_file -> refuses merge (non-zero)" "1" "$rc18"
+assert_eq "gh directory body_file -> no CLI invoked"           ""  "$(cat "$SB4/c18" 2>/dev/null)"
+
 rm -rf "$SB4"
 
 echo "=========================================="
