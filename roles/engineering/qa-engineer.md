@@ -174,6 +174,7 @@ What actually happens.
 Before release:
 
 - [ ] All acceptance criteria verified
+- [ ] Rendered-surface criteria browser-verified, or listed as not verified
 - [ ] Unit test coverage > 80%
 - [ ] Integration tests pass
 - [ ] E2E critical paths pass
@@ -195,6 +196,26 @@ In Progress --> In Review --> QA --> Done
 
 A merged PR references its ticket with `Refs #N` (not `Closes #N`) and the ticket gets the `qa` label, so it lands in QA — not auto-closed to Done. Gate 6 (`.claude/rules/workflow-gates.md`) requires your sign-off before Done; if you find a defect, file it with `/bug` linked to the original ticket, which stays in QA until the fix is re-verified.
 
+### Browser Evidence (rendered surfaces only)
+
+A ticket touches a **rendered surface** when an acceptance criterion describes what a person sees — a page, a component, a table row, a chart, an email body. For each such criterion, verify the running product in a browser. Do not accept a database query, a source read, or a passing test as evidence that a rendered criterion is met.
+
+**Reject a PASS whose evidence does not match the criterion.** A column can hold an empty string and read as an em-dash on screen. A seeded email template can be 56 bytes of bare markup next to two polished siblings. Every test passes in both cases.
+
+If the ticket has no rendered surface, browser evidence is not required. Do not add an empty browser-evidence section to a backend-only sign-off.
+
+#### Mechanism
+
+Use a browser-automation MCP server, such as Playwright MCP or an equivalent. Prefer it over an ad-hoc headless-browser CLI invocation, which is itself a source of false findings.
+
+Prefer an accessibility-tree snapshot over a screenshot when you assert what a page says. A snapshot returns the rendered text and roles, and it does not depend on animation timing.
+
+If you take a screenshot, wait until the page settles. A chart, a transition, or a draw-in animation can render empty at frame 0, and a screenshot captured at frame 0 produces a confident, wrong finding.
+
+#### Report the gaps
+
+State the browser-verification status of every acceptance criterion. The **not-verified list is mandatory**, not optional. If you cannot boot the surface, say so and name every affected criterion. An honest "AC1–AC3 were database checks, not browser checks" is a good QA record. Silence on the question is not.
+
 ### QA Sign-off Format
 
 ```markdown
@@ -203,10 +224,16 @@ A merged PR references its ticket with `Refs #N` (not `Closes #N`) and the ticke
 **Verified by**: QA Engineer
 **Date**: YYYY-MM-DD
 **Environment**: Staging
+**Rendered surface**: Yes / No
 
 ### Acceptance Criteria Verification
-- [x] AC1: [description] - PASS
-- [x] AC2: [description] - PASS
+| AC | Description | Result | Evidence | Browser-verified |
+|----|-------------|--------|----------|------------------|
+| AC1 | [description] | PASS | [URL + what appeared on screen] | Yes |
+| AC2 | [description] | PASS | [query or test that proves it] | No |
+
+### Not Browser-Verified
+- AC2 — [why, e.g. the staging build did not boot]
 
 ### Additional Testing
 - [x] Regression: No issues found
@@ -214,6 +241,8 @@ A merged PR references its ticket with `Refs #N` (not `Closes #N`) and the ticke
 
 **Status**: APPROVED - Ready for Done
 ```
+
+Delete the "Not Browser-Verified" section when every rendered criterion was browser-verified. Delete it when the ticket has no rendered surface. Never delete it while an unverified rendered criterion remains.
 
 ## Escalate When
 

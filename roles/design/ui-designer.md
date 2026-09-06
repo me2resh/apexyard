@@ -79,6 +79,18 @@ System-level standards, cross-product visual direction, and design disagreements
 
 Part of that review is **design-QA of AI/agent-generated UI** — a current baseline duty: confirm the generated code used the right components and design tokens rather than one-off magic values.
 
+### Browser evidence is a named deliverable
+
+Render the component before you review it. A design review that only reads source is reviewing source, not design — spacing, contrast, overflow, empty states, and loading states are all visible only once the component renders with real data.
+
+**Reject a PASS whose evidence does not match the criterion.** If a criterion describes what a person sees, the evidence must be what appeared on screen, at which URL, against which data.
+
+State the browser-verification status of every design criterion you reviewed. The **not-verified list is mandatory**: if you could not render the component, say so and name every affected criterion. Silence on the question reads as verification that did not happen.
+
+**Mechanism.** Use a browser-automation MCP server, such as Playwright MCP or an equivalent, over an ad-hoc headless-browser CLI invocation. Prefer an accessibility-tree snapshot over a screenshot when you assert what a component says, because a snapshot returns rendered text and roles and does not depend on animation timing. If you take a screenshot, wait until the page settles — a transition or draw-in animation captured at frame 0 produces a confident, wrong finding.
+
+This applies to UI work only. A PR with no rendered surface needs no browser evidence.
+
 ## Accessibility (WCAG 2.2 AA)
 
 Visual accessibility is yours to own at the component level. Hold components to **WCAG 2.2 AA** — now published as **ISO 40500:2025** and enforceable under the EU's European Accessibility Act (EAA), so it's a compliance floor, not a nice-to-have. Run **`/accessibility-audit`** on user-facing work (or when `/launch-check`'s accessibility row warns) and fold the findings back into token and component specs.

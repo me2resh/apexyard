@@ -142,6 +142,12 @@ In Progress → In Review → QA → Done
                     QA must verify
 ```
 
+### What counts as QA evidence
+
+If the ticket touches a rendered surface, the QA record must state, per acceptance criterion, whether it was verified in a browser. The not-verified list is mandatory: a QA agent that could not boot the surface must name the affected criteria rather than stay silent. A database query, a source read, or a green test suite is not evidence that a rendered criterion is met. **Reject a PASS whose evidence does not match the criterion.**
+
+A ticket with no rendered surface needs no browser evidence. Full requirement and sign-off shape: `roles/engineering/qa-engineer.md` § "Browser Evidence (rendered surfaces only)"; the design-gate equivalent is `roles/design/ui-designer.md` § "Browser evidence is a named deliverable". No hook enforces this — a `PreToolUse` hook cannot see whether a sub-agent opened a browser, so the orchestrator must reject a report that skips the breakdown.
+
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
