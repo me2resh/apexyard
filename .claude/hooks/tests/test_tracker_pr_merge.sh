@@ -318,6 +318,72 @@ else
   echo "SKIP: custom per-project case (no yq / python3+PyYAML)"
 fi
 
+# ---------------------------------------------------------------------------
+# Cases 12-15 — #1136: OPTIONAL <subject>/<body_file> params on a gh merge.
+# release-class PR head -> --subject/--body-file squash path; non-release PR
+# (the default 5-arg call used everywhere else in this file) -> unchanged
+# bare squash, proving the new parameters are fully backward compatible.
+# ---------------------------------------------------------------------------
+SB4=$(make_sandbox)
+install_gh_mock "$SB4"
+cd "$SB4" || { echo "FAIL: cd sandbox (SB4)"; exit 1; }
+# shellcheck source=/dev/null
+. "$SB4/.claude/hooks/_lib-tracker.sh"
+
+# Case 12 - subject+body_file both supplied (the release-PR path) ->
+# --subject/--body-file appended, alongside the normal --squash/--delete-branch.
+tracker_clear_cache
+BODY_FILE="$SB4/release-body.md"
+printf 'Summary\n\nReleased-From: deadbeef\n' > "$BODY_FILE"
+: > "$SB4/c12"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c12" \
+  tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "$BODY_FILE" >/dev/null; rc12=$?
+assert_eq "gh release-PR → exit 0"                    "0" "$rc12"
+assert_eq "gh release-PR → --squash still present"    "1" "$(grep -c -- '--squash' "$SB4/c12")"
+assert_eq "gh release-PR → --subject present"         "1" "$(grep -c -- '^--subject$' "$SB4/c12")"
+assert_eq "gh release-PR → subject value passed"      "1" "$(grep -c -- 'release(#9): v1.2.3' "$SB4/c12")"
+assert_eq "gh release-PR → --body-file present"       "1" "$(grep -c -- '^--body-file$' "$SB4/c12")"
+assert_eq "gh release-PR → body-file path passed"     "1" "$(grep -c -- "$SB4/release-body.md" "$SB4/c12")"
+
+# Case 13 - the default 5-arg call shape used everywhere else in this file
+# (no subject/body_file at all) is untouched -> no --subject/--body-file flags.
+tracker_clear_cache
+: > "$SB4/c13"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c13" tracker_pr_merge "o/r" 42 squash true >/dev/null
+assert_eq "gh non-release (5-arg call) → no --subject"   "0" "$(grep -c -- '^--subject$' "$SB4/c13")"
+assert_eq "gh non-release (5-arg call) → no --body-file" "0" "$(grep -c -- '^--body-file$' "$SB4/c13")"
+
+# Case 14 - explicit empty-string subject/body_file (the shape /approve-merge
+# passes for every ordinary, non-release-class PR — RELEASE_SUBJECT/
+# RELEASE_BODY_FILE stay "" outside the release-class branch) behaves
+# identically to omitting them: unchanged bare squash.
+tracker_clear_cache
+: > "$SB4/c14"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c14" tracker_pr_merge "o/r" 42 squash true "" "" >/dev/null
+assert_eq "gh explicit-empty subject/body_file → no --subject"   "0" "$(grep -c -- '^--subject$' "$SB4/c14")"
+assert_eq "gh explicit-empty subject/body_file → no --body-file" "0" "$(grep -c -- '^--body-file$' "$SB4/c14")"
+
+# Case 15 - fail-safe: a non-empty body_file that is unreadable/missing must
+# refuse the merge (return 1) rather than silently falling back to a bare
+# squash — that silent fallback is the exact #1136 bug under a new trigger.
+tracker_clear_cache
+: > "$SB4/c15"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c15" \
+  tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "$SB4/does-not-exist.md"; rc15=$?
+assert_eq "gh missing body_file → refuses merge (non-zero)" "1" "$rc15"
+assert_eq "gh missing body_file → no CLI invoked"           ""  "$(cat "$SB4/c15" 2>/dev/null)"
+
+# Case 15b - an empty (zero-byte) body_file is treated the same as missing —
+# -s (non-empty) is the check, not just existence.
+tracker_clear_cache
+: > "$SB4/empty-body.md"
+: > "$SB4/c15b"
+PATH="$SB4/bin:$PATH" GH_CAPTURE="$SB4/c15b" \
+  tracker_pr_merge "o/r" 42 squash true "release(#9): v1.2.3" "$SB4/empty-body.md"; rc15b=$?
+assert_eq "gh empty body_file → refuses merge (non-zero)" "1" "$rc15b"
+assert_eq "gh empty body_file → no CLI invoked"            ""  "$(cat "$SB4/c15b" 2>/dev/null)"
+rm -rf "$SB4"
+
 echo "=========================================="
 echo "PASS: $PASS  FAIL: $FAIL"
 if [ "$FAIL" -gt 0 ]; then printf "Failed:%b\n" "$FAILED"; exit 1; fi

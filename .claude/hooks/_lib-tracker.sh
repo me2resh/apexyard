@@ -34,15 +34,27 @@
 #                                      adapters built in, `custom` review_command template, `none`
 #                                      no-op (returns 3, echoes body). Exit 0 = submitted; non-zero
 #                                      = CLI errored; 3 = shape-only (kind=none, nothing to call).
-#   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]  (#759)
+#   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>] [<subject>] [<body_file>]  (#759, #1136)
 #                                      merges a PR/MR via the git host. strategy is one of
 #                                      squash|merge|rebase (default squash, normalised — never
-#                                      eval'd raw); delete_branch is true|false (default true). gh +
-#                                      glab adapters built in, `custom` merge_command template,
-#                                      `none` no-op (returns 3). Exit 0 = merged, emits normalised
-#                                      JSON {"sha":...} (the merge commit, best-effort — empty for
-#                                      `custom`); non-zero = CLI errored / blocked; 3 = shape-only
-#                                      (kind=none, nothing to call).
+#                                      eval'd raw); delete_branch is true|false (default true).
+#                                      subject/body_file are OPTIONAL (gh kind only): when BOTH are
+#                                      non-empty, the merge passes `--subject "$subject" --body-file
+#                                      "$body_file"` so the squash commit carries that exact
+#                                      subject/body instead of the repo's default squash-body
+#                                      assembly (see #1136 — under
+#                                      `squash_merge_commit_message=COMMIT_MESSAGES` a bare squash
+#                                      concatenates every commit message on the PR branch, burying
+#                                      any trailer that isn't in the final paragraph). body_file
+#                                      MUST be a readable, non-empty file when supplied — an
+#                                      unreadable/empty body_file with a non-empty subject fails
+#                                      closed (returns 1) rather than silently falling back to a
+#                                      bare squash. gh + glab adapters built in, `custom`
+#                                      merge_command template, `none` no-op (returns 3). Exit 0 =
+#                                      merged, emits normalised JSON {"sha":...} (the merge commit,
+#                                      best-effort — empty for `custom`); non-zero = CLI errored /
+#                                      blocked / body_file unreadable; 3 = shape-only (kind=none,
+#                                      nothing to call).
 #
 # Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
 # tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
@@ -1439,8 +1451,17 @@ _tracker_merge_normalise_delete_branch() {
 # the operator actually sees why a merge failed (matching the documented
 # contract in `/approve-merge`'s SKILL.md — the failure message the operator
 # sees is meant to be the CLI's own, not silently swallowed).
+#
+# subject/body_file (#1136, AgDR-0132): OPTIONAL, empty by default. When both
+# are non-empty, `--subject "$subject" --body-file "$body_file"` are appended
+# so the squash commit carries the caller's own reviewed subject/body instead
+# of GitHub's repo-default squash body (which, under
+# `squash_merge_commit_message=COMMIT_MESSAGES`, concatenates every commit
+# message on the PR branch — see #1136). `$subject` and `$body_file` are
+# passed as separate argv array elements (never interpolated into an eval'd
+# string), so neither can be mistaken for a flag or shell syntax.
 _tracker_merge_gh() {
-  local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
+  local repo="$1" pr="$2" strategy="$3" delete_branch="$4" subject="${5:-}" body_file="${6:-}"
   local -a args
   args=(pr merge "$pr" --repo "$repo")
   case "$strategy" in
@@ -1449,6 +1470,9 @@ _tracker_merge_gh() {
     rebase) args+=(--rebase) ;;
   esac
   [ "$delete_branch" = "true" ] && args+=(--delete-branch)
+  if [ -n "$subject" ] && [ -n "$body_file" ]; then
+    args+=(--subject "$subject" --body-file "$body_file")
+  fi
   gh "${args[@]}" >/dev/null
 }
 
@@ -1562,7 +1586,7 @@ _tracker_merge_resolve_sha() {
 # and glab+gitlab they coincide (this ticket's covered pair). A jira-issues+
 # gitlab-code adopter needs `tracker.kind=custom` with a merge_command.
 tracker_pr_merge() {
-  local repo="$1" pr="$2" strategy delete_branch
+  local repo="$1" pr="$2" strategy delete_branch subject body_file
   if [ -z "$repo" ] || [ -z "$pr" ]; then
     return 1
   fi
@@ -1584,6 +1608,20 @@ tracker_pr_merge() {
   esac
   strategy=$(_tracker_merge_normalise_strategy "${3:-}")
   delete_branch=$(_tracker_merge_normalise_delete_branch "${4:-}")
+  subject="${5:-}"
+  body_file="${6:-}"
+
+  # #1136 fail-safe: a subject/body_file pair is only meaningful together
+  # (gh's `--subject` with no `--body-file` still falls back to the
+  # repo-default squash-body assembly for the body half — the exact bug this
+  # parameter exists to close). If body_file is supplied but unreadable or
+  # empty, refuse the merge rather than silently degrading to a bare squash
+  # that would reintroduce #1136. An empty subject with a body_file is
+  # accepted (gh happily takes --body-file alone); the only failing shape is
+  # "caller wanted body_file honoured and it can't be read".
+  if [ -n "$body_file" ] && [ ! -s "$body_file" ]; then
+    return 1
+  fi
 
   local kind
   kind=$(tracker_kind "$repo")
@@ -1598,10 +1636,10 @@ tracker_pr_merge() {
 
   local rc
   case "$kind" in
-    gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
+    gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"; rc=$? ;;
     glab)   _tracker_merge_glab   "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
     custom) _tracker_merge_custom "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
-    *)      _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;  # see NOTE above
+    *)      _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"; rc=$? ;;  # see NOTE above
   esac
   if [ $rc -ne 0 ]; then
     return $rc
