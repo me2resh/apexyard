@@ -128,6 +128,29 @@ fi
 
 # --------- Discover ops root ---------
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# _resolve_real_path (#1181): shared realpath -m helper, composed after the
+# lexical collapse in _rmt_normalise_target below, and used again to
+# canonicalise the WORKSPACE_DIR/OPS_ROOT anchors further down. Sourced from
+# the single shared definition (Rex finding on PR #1087) rather than a
+# private copy -- require-active-ticket.sh already sources the same file.
+if [ -f "$HOOK_DIR/_lib-path-resolve.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+else
+  # Deliberate degrade, mirroring require-active-ticket.sh's own handling of
+  # the same missing-lib case: this should not happen in a normal clone,
+  # since the file is tracked right next to this one. Returning empty here
+  # is read by TWO callers, each with its own fallback: the composed
+  # _rmt_normalise_target falls back to its lexical-only result, and the
+  # OPS_ROOT_REAL/WORKSPACE_DIR_REAL anchor block further down falls back to
+  # the raw, uncanonicalised OPS_ROOT/WORKSPACE_DIR (its own `|| ANCHOR="$RAW"`
+  # line, not this one). Both degrades land on exactly this gate's pre-#1181
+  # behaviour, rather than crashing the hook or exempting a write it should
+  # still gate.
+  _resolve_real_path() { return 0; }
+fi
+
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 OPS_ROOT=""
 if [ -n "$REPO_ROOT" ]; then
@@ -160,20 +183,27 @@ WORKSPACE_DIR="$OPS_ROOT/workspace"
 # Which managed project governs this path? Empty means "none" -- the ops-level
 # marker answers. Extracted from Gate 1 in round 6 so pass 2 can ask it of EVERY
 # matching target rather than only the one it picked first (see the loop below).
+#
+# Compares against the CANONICALISED anchors (#1181) -- WORKSPACE_DIR_REAL /
+# OPS_ROOT_REAL, computed once above, not the raw WORKSPACE_DIR / OPS_ROOT --
+# so `p` needs to already be a real, symlink-resolved path for this match to
+# be meaningful. The Bash-target caller gets that from _rmt_normalise_target;
+# an Edit/Write `file_path` is compared as received (see that function's own
+# docstring for why the two tool paths are scoped differently).
 _rmt_project_for_path() {
   local p="$1" proj="" tail
-  if [ -n "$WORKSPACE_DIR" ]; then
+  if [ -n "$WORKSPACE_DIR_REAL" ]; then
     case "$p" in
-      "$WORKSPACE_DIR"/*)
-        tail="${p#$WORKSPACE_DIR/}"
+      "$WORKSPACE_DIR_REAL"/*)
+        tail="${p#"$WORKSPACE_DIR_REAL"/}"
         proj="${tail%%/*}"
         ;;
     esac
   fi
-  if [ -z "$proj" ] && [ -n "$OPS_ROOT" ]; then
+  if [ -z "$proj" ] && [ -n "$OPS_ROOT_REAL" ]; then
     case "$p" in
-      "$OPS_ROOT"/workspace/*)
-        tail="${p#$OPS_ROOT/workspace/}"
+      "$OPS_ROOT_REAL"/workspace/*)
+        tail="${p#"$OPS_ROOT_REAL"/workspace/}"
         proj="${tail%%/*}"
         ;;
     esac
@@ -229,6 +259,50 @@ if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HO
   if [ -n "$resolved_ws" ]; then
     WORKSPACE_DIR="$resolved_ws"
   fi
+fi
+
+# Canonicalise the boundary anchors with pwd -P (#1181), mirroring
+# require-active-ticket.sh's own anchor canonicalisation (#883). Every
+# containment check in _rmt_project_for_path below compares a resolved
+# target against these two -- a non-canonical anchor can miss a real match:
+# on macOS /tmp is itself a symlink to /private/tmp, so the same migration
+# file addressed through either spelling must land on the same marker.
+# Computed once, here, after WORKSPACE_DIR is final, rather than inside
+# _rmt_project_for_path on every call.
+#
+# Uses _resolve_real_path -- NOT a `[ -d "$X" ]` existence guard -- and MUST
+# keep doing so. An earlier version of this block only canonicalised when
+# the directory already existed on disk, and left the anchor EMPTY
+# otherwise. `_rmt_project_for_path`'s first branch is skipped on an empty
+# anchor, so the moment `$WORKSPACE_DIR` had not been created yet -- the
+# ordinary shape for a fresh split-portfolio v2 sibling repo, or any
+# `.portfolio.workspace_dir` override, and equally for a dangling symlink,
+# since `[ -d ]` follows symlinks and reports false for a broken one -- the
+# gate silently stopped identifying the governing project and fell through
+# to the tier-2 ops-level marker instead. That is #1137's cross-repo
+# authorisation hole on a new path: a write into project `alpha` gets
+# judged against the ops fallback ticket instead of alpha's own, and an
+# ops ticket that happens to be a valid open migration ticket approves it
+# with no warning. `_resolve_real_path` has `realpath -m` semantics -- it
+# canonicalises an absent path by walking to the nearest EXISTING ancestor
+# and re-appending the missing tail, so it never needs the target to exist
+# -- which is exactly why `_rmt_normalise_target` below already uses it
+# instead of an existence check. The anchors must use the same helper for
+# the same reason: a migration write into a not-yet-created project
+# workspace is the common case, not the edge case, and the gate must not
+# go permissive on it. The `|| ANCHOR="$RAW"` fallback below only fires
+# when `_resolve_real_path` itself is unavailable (see the missing-library
+# degrade above) or cannot stat even "/" -- it still prefers the raw,
+# uncanonicalised anchor over an empty one, for the same reason.
+OPS_ROOT_REAL=""
+if [ -n "$OPS_ROOT" ]; then
+  OPS_ROOT_REAL="$(_resolve_real_path "$OPS_ROOT")"
+  [ -n "$OPS_ROOT_REAL" ] || OPS_ROOT_REAL="$OPS_ROOT"
+fi
+WORKSPACE_DIR_REAL=""
+if [ -n "$WORKSPACE_DIR" ]; then
+  WORKSPACE_DIR_REAL="$(_resolve_real_path "$WORKSPACE_DIR")"
+  [ -n "$WORKSPACE_DIR_REAL" ] || WORKSPACE_DIR_REAL="$WORKSPACE_DIR"
 fi
 
 # --------- Load project-config overrides ---------
@@ -319,19 +393,29 @@ _rmt_is_unresolvable() {
 
 # _rmt_normalise_target TARGET
 # Absolutise and canonicalise a resolvable target so the migration matcher and
-# the project-prefix check see the real path. Without this, `~/…`, a relative
-# `workspace/<p>/…`, and `/./` `//` `/../` spellings all fail the workspace
-# prefix test and silently fall through to the tier-2 ops marker — the same
+# the project-prefix check see the real path. Composes TWO passes (#1181):
+# lexical collapse (`//`, `/./`, `/x/../`), then `_resolve_real_path` from
+# `_lib-path-resolve.sh` (realpath -m semantics -- walks to the first
+# existing ancestor, `pwd -P`s it, re-appends the absent tail verbatim).
+# Lexical MUST run first: `_resolve_real_path` re-appends its absent tail
+# VERBATIM, so a dot-segment inside a still-absent tail would survive
+# uncollapsed if resolution ran on the raw string. Without both passes,
+# `~/…`, a relative `workspace/<p>/…`, `/./` `//` `/../` spellings, AND a
+# target reached through a symlinked ancestor all fail the workspace prefix
+# test and silently fall through to the tier-2 ops marker — the same
 # Failure-1 signature this ticket is about, in a different spelling.
+#
+# Scoped to the Bash-target path only. On Edit/Write, `file_path` is the
+# literal string the tool reported and is never normalised at all -- that
+# scope boundary is unchanged by #1181 and is pinned in AgDR-0131.
 #
 # Relative targets are NOT absolutised. Rounds 3-8 joined them to the
 # harness-supplied `.cwd`; round 9 removed that (see the note near the top of
 # this file) because `.cwd` is fixed when the tool call is formed and cannot
 # see a `cd` inside the command. A relative target is therefore left untouched
-# and resolves exactly as on `dev`. What this function still fixes is `~/`,
-# `//`, `/./` and `/../` on paths that are already absolute.
+# and resolves exactly as on `dev`.
 _rmt_normalise_target() {
-  local t="$1"
+  local t="$1" lexical resolved
   # SC2088: the quoted `~` here is a case PATTERN matching the literal two
   # characters the extractor returned — we are detecting an unexpanded tilde
   # in someone else's command text, not writing one we want the shell to
@@ -369,24 +453,20 @@ _rmt_normalise_target() {
     /*) ;;
     *)  printf '%s' "$t"; return 0 ;;
   esac
-  # Canonicalise lexically: collapse `//`, drop `/./`, resolve `/x/../`.
+  # Pass 1 -- canonicalise lexically: collapse `//`, drop `/./`, resolve
+  # `/x/../`. Pure string manipulation; cannot see a symlink.
   #
   # An earlier version of this comment said "lexical (not realpath) so a
-  # not-yet-created migration file still resolves". That reason is FALSE and is
-  # withdrawn: the framework already ships `_resolve_real_path` in
-  # `_lib-path-resolve.sh`, which has `realpath -m` semantics -- it walks up to
-  # the first existing ancestor, `pwd -P`s it, and re-appends the absent tail,
-  # so it resolves both an absent file and one behind a symlinked ancestor.
-  #
-  # The real reason is narrower. `_resolve_real_path` is not a drop-in here: it
-  # re-appends the absent tail verbatim, so dot-segments inside that tail
-  # survive, and a wholly absent root yields a doubled leading slash
-  # (`//nope/...`). The target design is the two composed -- lexical collapse
-  # THEN resolve -- and this change ships only the lexical half. That is a
-  # deliberate staged step, not a rejection of the helper, and it leaves this
-  # gate resolving paths more weakly than the sibling `require-active-ticket.sh`
-  # until the second half lands. Recorded in AgDR-0131. (Tariq, round 5.)
-  printf '%s' "$t" | awk -F/ '{
+  # not-yet-created migration file still resolves". That reason is FALSE and
+  # was withdrawn in AgDR-0131: `_resolve_real_path` has `realpath -m`
+  # semantics -- it walks up to the first existing ancestor, `pwd -P`s it,
+  # and re-appends the absent tail, so it resolves an absent file on its own.
+  # The real reason lexical runs first is composition order, not necessity:
+  # `_resolve_real_path` re-appends its absent tail VERBATIM, so a
+  # dot-segment inside a still-absent tail needs collapsing before that
+  # function ever sees it, or it survives uncollapsed in the output.
+  # (Tariq, round 5 on PR #1180; composed in #1181.)
+  lexical=$(printf '%s' "$t" | awk -F/ '{
     n = 0
     for (i = 1; i <= NF; i++) {
       if ($i == "" || $i == ".") continue
@@ -396,7 +476,37 @@ _rmt_normalise_target() {
     s = ""
     for (i = 1; i <= n; i++) s = s "/" out[i]
     print (s == "" ? "/" : s)
-  }'
+  }')
+
+  # Pass 2 (#1181) -- resolve what pass 1 cannot: a symlink anywhere in an
+  # EXISTING ancestor. `_resolve_real_path` walks to the first existing
+  # ancestor, `pwd -P`s it (following any symlink along the way), and
+  # re-appends whatever tail does not exist yet -- so a not-yet-created
+  # migration file still resolves, and a target reached through a symlinked
+  # ancestor lands on the SAME marker the kernel's write is actually
+  # governed by, instead of whichever project the lexical spelling happens
+  # to name.
+  resolved=$(_resolve_real_path "$lexical")
+  if [ -z "$resolved" ]; then
+    # _resolve_real_path returns empty only when even "/" can't be stat'd
+    # (its own header comment: "should not happen for a well-formed absolute
+    # path"), or when the shared lib failed to load (see the degrade near
+    # the top of this file). Fail toward the lexical form rather than an
+    # empty RESOLVED_TARGET: the caller reads empty as "no migration-shaped
+    # target" and would let the write through UNGATED.
+    printf '%s' "$lexical"
+    return 0
+  fi
+
+  # A wholly absent root -- none of the target's ancestors exist all the way
+  # up to "/" -- makes _resolve_real_path emit a doubled leading slash: it
+  # walks to dir="/", `pwd -P`s that to "/", then appends the absent tail
+  # with its own separator ("/" + "/" + tail). Squash that one specific
+  # artifact so the result still compares cleanly against a real anchor.
+  case "$resolved" in
+    //*) resolved="/${resolved#//}" ;;
+  esac
+  printf '%s' "$resolved"
 }
 
 if [ "$TOOL_NAME" = "Bash" ]; then
