@@ -27,7 +27,8 @@ command shape.
 ## Consequences
 
 A normal subject plus body command now passes. A quoted value in --trailer
-cannot impersonate a message option. The tests cover both outcomes.
+cannot impersonate a message option. A compound command that contains a
+commit now fails closed. The tests cover these outcomes.
 
 The tokenizer supports the command shapes that the hook already supports.
 Complex shell syntax remains subject to the existing heredoc exception.

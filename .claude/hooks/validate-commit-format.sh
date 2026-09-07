@@ -159,6 +159,16 @@ if [ "$commit_index" -lt 0 ]; then
   exit 0
 fi
 
+token_count=${#COMMAND_TOKENS[@]}
+for ((i=0; i < token_count; i++)); do
+  case "${COMMAND_TOKENS[i]}" in
+    ";"|"|"|"&"|"<"|">")
+      echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+      exit 2
+      ;;
+  esac
+done
+
 MSG=""
 MSG_FILE=""
 for ((i=commit_index; i < token_count; i++)); do

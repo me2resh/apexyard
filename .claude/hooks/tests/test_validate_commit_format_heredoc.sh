@@ -127,6 +127,15 @@ run_case "plain -m '\''quoted'\'' valid subject: pass" \
 run_case "multiple -m: valid subject and body pass" \
   'git commit -m "chore: valid subject" -m "body text"' 0 ""
 
+# A later commit in a compound command must not bypass validation.
+run_case "compound command with later invalid commit: block" \
+  'git commit -m "fix: valid subject" && git commit -m "invalid subject"' 2 \
+  "does not accept compound commit commands"
+
+run_case "semicolon command with later invalid commit: block" \
+  'git commit -m "fix: valid subject" ; git commit -m "invalid subject"' 2 \
+  "does not accept compound commit commands"
+
 # A quoted value for another option must not impersonate a -m argument.
 run_case "trailer decoy with equals syntax: invalid subject blocks" \
   "git commit --trailer='-m \"fix: decoy\"' -m \"invalid subject\"" 2 "BLOCKED: Commit subject"
