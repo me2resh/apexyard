@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: high
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /accessibility-audit — WCAG 2.2 AA Compliance
 
 Deep-dive accessibility analysis against the Web Content Accessibility Guidelines 2.2 Level AA. Produces a prioritized findings list with fix instructions. Invoke when `/launch-check`'s accessibility row shows WARN or FAIL, or proactively for any user-facing app.

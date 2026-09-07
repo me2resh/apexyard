@@ -5,6 +5,10 @@ argument-hint: "[project-name] [--with-mockups]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /extract-features — Feature Inventory for Greenfield Rewrites
 
 Walks the target project's codebase across **six discovery axes** and writes a consolidated Feature Inventory. The artefact is the "what we must preserve" specification for a greenfield rewrite (different language, framework, or architecture) — instead of reverse-engineering features one route at a time, hand the inventory to the rewrite team.

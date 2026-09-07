@@ -7,6 +7,10 @@ allowed-tools: Bash, Read, Write
 
 # /bug — Create a Bug Report Ticket
 
+## Writing rule
+
+Use the controlled technical writing profile from .claude/rules/writing-standard.md for each artifact. Use short complete sentences, active voice, one term for one meaning, and clear lists.
+
 Creates a structured GitHub Issue for a bug with Given/When/Then scenario, repro steps, environment, and severity. Asks guided questions, shows the formatted ticket for confirmation, then creates the issue.
 
 ## Path resolution

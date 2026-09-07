@@ -2,7 +2,7 @@
 
 You are operating inside an apexyard-governed ops fork — a portfolio-governance framework, not just a folder of files. Before touching anything outside `.claude/`, `docs/`, `projects/*/docs/`, or `*.md`, read `AGENTS.md` at the repo root. Its "Operator governance bridge" section carries the SDLC, the ticket-first discipline, and the load-bearing conventions (branch/PR/commit format, ticket vocabulary, one-ticket-at-a-time, plan-before-risky-work, reporting style, no secrets, no direct pushes to `main`) you're expected to follow.
 
-Write for the reader. Open every durable artifact with the outcome and the next action, delete template sections that have no content, and write machine-consumed text (spawn briefs, handoff reports, error output) as one imperative instruction per sentence. Read `.claude/rules/writing-standard.md` before filing a ticket, PR, AgDR, or design.
+Use the controlled technical writing profile for each durable artifact. Use short complete sentences, active voice, one term for one meaning, and clear lists. Keep facts and uncertainty. Read .claude/rules/writing-standard.md before you file a ticket, PR, AgDR, design, review, or project document.
 
 Nothing here is mechanically enforced for you the way it is for Claude Code — no hook blocks a bad commit, an unreviewed merge, or an edit made without an active ticket. Follow the rules because they're the governance model apexyard is built on, not because anything will stop you if you skip them. When a rule's exact wording matters, `Read` the relevant file under `.claude/rules/` rather than guessing — `AGENTS.md` points to each one.
 

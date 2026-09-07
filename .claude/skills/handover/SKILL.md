@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Grep, Glob, Write
 
 # /handover — External Repo Handover Assessment
 
-Read `.claude/rules/writing-standard.md`. Use **Flavored mode** for the
+Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
 handover assessment: write for the receiving human, lead with the outcome, and
 omit empty sections.
 

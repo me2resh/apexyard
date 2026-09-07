@@ -3,7 +3,7 @@
 Required: Driver, Scope, Acceptance Criteria, Glossary.
 Conditional: Risks / Dependencies.
 Delete a conditional section that has no content. Do not write "N/A". Replace every {{placeholder}} or write TBD. Delete this comment before filing.
-Rule: .claude/rules/writing-standard.md
+Rule: .claude/rules/writing-standard.md. Use the controlled technical writing profile. Use short complete sentences and active voice.
 -->
 
 **[{{type}}] {{title}}**

@@ -21,8 +21,9 @@ assert() {
 
 assert "runner:exists" test -x "$RUNNER"
 check_out=$(bash "$RUNNER" --check-only --cases all 2>&1)
-assert "runner:parses-22" bash -c "echo \"\$1\" | grep -q '^cases parsed: 22 '" _ "$check_out"
-assert "runner:builds-22-prompts" bash -c "echo \"\$1\" | grep -q '^prompts built: 22'" _ "$check_out"
+expected_cases=$(grep -hE '^## [A-Z][A-Z]-[0-9][0-9] ' "$SRC_ROOT"/.claude/rules/tests/fixtures/*.md | wc -l | tr -d " ")
+assert "runner:parses-fixture-count" bash -c "echo \"\$1\" | grep -q \"^cases parsed: \$2 \"" _ "$check_out" "$expected_cases"
+assert "runner:builds-fixture-count" bash -c "echo \"\$1\" | grep -q \"^prompts built: \$2\"" _ "$check_out" "$expected_cases"
 rep_out=$(bash "$RUNNER" --check-only 2>&1)
 assert "runner:representative-8" bash -c "echo \"\$1\" | grep -q '^cases selected: 8 '" _ "$rep_out"
 assert "runner:unknown-case-rejected" bash -c "! bash '$RUNNER' --check-only --cases ZZ-99 >/dev/null 2>&1"
@@ -32,7 +33,7 @@ assert "runner:portable-timeout" grep -qF 'gtimeout' "$RUNNER"
 assert "runner:uncapped-fallback" grep -qF 'else' "$RUNNER"
 
 # every case id the runner parsed appears in the index
-for id in $(echo "$check_out" | sed -n 's/^cases parsed: 22 (\(.*\))$/\1/p'); do
+for id in $(echo "$check_out" | sed -n "s/^cases parsed: $expected_cases (\\(.*\\))$/\\1/p"); do
   assert "index:$id" grep -qF "| $id |" "$INDEX"
 done
 

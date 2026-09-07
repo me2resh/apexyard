@@ -1,3 +1,5 @@
+<!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
+
 <!-- Source: ApexYard · templates/initiative.md · github.com/me2resh/apexyard · MIT -->
 
 # Initiative: {Initiative Name}

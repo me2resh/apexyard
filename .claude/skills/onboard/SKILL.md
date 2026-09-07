@@ -7,6 +7,10 @@ effort: medium
 allowed-tools: Bash, Read, Write, Skill
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /onboard — Guided First-Run Onboarding
 
 This is increment 1 of the guided-onboarding walking skeleton (technical

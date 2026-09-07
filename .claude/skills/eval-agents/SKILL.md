@@ -5,6 +5,10 @@ argument-hint: "<rex|hakim|tariq> [--corpus <path>] [--check-only]"
 allowed-tools: Bash, Read, Glob, Grep, Agent
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /eval-agents — Review-Agent Eval Harness
 
 Scores one of the framework's review agents (Rex / Hakim / Tariq) against a labeled corpus of real, already-reviewed PRs with **frozen ground-truth defect sets**. Reports catch-rate, false-positive-rate, and **approve-precision** (the headline metric) against a configurable pass/fail threshold.

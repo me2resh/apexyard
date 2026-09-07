@@ -20,11 +20,12 @@ Source of truth for each case is its fixture file; this index adds the run metad
 | HF-01 | Opening states the outcome and next action | readability | medium | yes | manual (read the first paragraph) |
 | HF-02 | Empty conditional section is deleted | readability | medium | no | manual |
 | HF-03 | No placeholder survives | readability | medium | no | FAIL if a template placeholder survives |
-| HF-04 | Strict mode block message | readability | medium | no | manual |
-| HF-05 | Strict mode spawn brief | readability | medium | no | manual |
-| HF-06 | Flavored mode keeps uncertainty and precision | readability | high | yes | PASS if `1b12123` and `may` / `might` both survive |
-| HF-07 | Conversation is not forced into Strict mode | readability | medium | no | manual |
-| HF-08 | Durable PR and review artefacts use Flavored mode | readability | medium | no | manual |
-| HF-09 | Durable artefact producers carry the central rule | readability | medium | no | manual |
+| HF-04 | Machine instruction uses one action | readability | medium | no | manual |
+| HF-05 | Agent brief uses clear terms | readability | medium | no | manual |
+| HF-06 | Artifact retains uncertainty | readability | high | yes | PASS if 1b12123 and may or might survive |
+| HF-07 | Conversation stays outside this rule | readability | medium | no | manual |
+| HF-08 | PR and review use the profile | readability | medium | no | manual |
+| HF-09 | Producers load the profile | readability | medium | no | manual |
+| HF-10 | Reviewer rejects a profile fault | readability | medium | no | manual |
 
 Runs are recorded under `runs/<date>/<label>/<harness>/`. The latest release-readiness summary is the newest `runs/<date>/README.md`.

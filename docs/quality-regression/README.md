@@ -10,7 +10,7 @@ The cases are the three fixture files the rules already ship. They are the singl
 |------|--------|-----------|-------|
 | `.claude/rules/tests/fixtures/evidence-grounding-cases.md` | `EG` | grounding — unsupported claims, scope leakage, stale state, invented identifiers, lost modality, false success | 6 |
 | `.claude/rules/tests/fixtures/proportionate-work-cases.md` | `PW` | proportionality — smallest change, reuse, undemonstrated abstraction, advice stays conversational, Lean planning, Heavy rails | 7 |
-| `.claude/rules/tests/fixtures/human-friendly-cases.md` | `HF` | readability — outcome-first opening, empty sections, placeholders, Strict machine text, Flavored precision, conversation guard | 7 |
+| .claude/rules/tests/fixtures/human-friendly-cases.md | HF | controlled technical writing profile for artifacts, clear machine text, evidence retention, and review rejection | 10 |
 
 Each case states a **Given** (the situation), a **Prompt** (what the operator says), a **Fail if**, and a **Pass if**. Both conditions are observable in the transcript or in the files the agent wrote. See [`corpus.md`](corpus.md) for every case with its dimension, severity, representative flag, and mechanical check.
 

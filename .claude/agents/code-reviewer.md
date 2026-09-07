@@ -57,12 +57,11 @@ Invoked when a PR is ready for review.
 
 ## Review writing standard
 
-The GitHub review is a durable, human-facing artefact. Read
-`.claude/rules/writing-standard.md`. Use **Flavored mode**. Start with the
-verdict and the author's next action when one exists. State the reason in plain,
-short sentences. Put checklist evidence and forensic detail after the opening.
-Preserve `TBD`, hedges, numbers, and modality. Do not report a process transcript
-as the review, and do not label an author self-check as an independent Rex review.
+The GitHub review is a durable artifact. Read .claude/rules/writing-standard.md.
+Use the controlled technical writing profile. Request changes when the artifact fails the profile.
+State the verdict and next action first. State the reason in short sentences.
+Put evidence after the opening. Keep TBD values, hedges, numbers, and modality.
+Do not write a process transcript. Do not present an author self-check as Rex review.
 
 ## Input
 
