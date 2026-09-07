@@ -76,7 +76,7 @@ projects:
     repo: example/example
 YAML
     mkdir -p .claude/hooks migrations
-    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-detect-bash-write.sh; do
+    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh; do
       [ -f "$HOOK_DIR/$f" ] && cp "$HOOK_DIR/$f" ".claude/hooks/$f"
     done
     cp "$HOOK_SCRIPT" .claude/hooks/require-migration-ticket.sh
@@ -1096,9 +1096,21 @@ rm -rf "$SB"
 # Asserts the function directly: `<abs>/x/../y` must collapse to `<abs>/y`.
 # Without the `..` arm it stays `<abs>/x/../y`, which fails the workspace
 # prefix test and falls to the tier-2 ops marker -- the Failure 1 signature.
+#
+# #1181: the probe now sources the REAL _lib-path-resolve.sh alongside the
+# extracted function, since _rmt_normalise_target composes _resolve_real_path
+# after this lexical pass. Without it, calling the composed function here
+# hits "command not found" on every probe (bash treats the undefined name as
+# an external command) and the fallback in _rmt_normalise_target silently
+# masks it by returning the lexical form unchanged -- these `/ws/...` probe
+# paths don't exist on any real filesystem, so the resolve step, when it DOES
+# run, degrades to the same doubled-slash-then-squashed answer regardless.
+# Sourcing the real helper makes this probe exercise the actual composition.
 _c48_fail=0
 _c48_probe() {
   local got; got=$(
+    # shellcheck source=/dev/null
+    . "$HOOK_DIR/_lib-path-resolve.sh"
     eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
     _rmt_normalise_target "$1"
   )
@@ -1113,6 +1125,141 @@ if [ "$_c48_fail" -eq 0 ]; then
 else
   record_fail "#1159 the '..' arm of the canonicaliser collapses parent segments"
 fi
+
+# =============================================================================
+# Cases 1181-1..1181-5 (#1181): compose `_resolve_real_path` after the
+# lexical collapse, and canonicalise the WORKSPACE_DIR/OPS_ROOT anchors with
+# `pwd -P`, closing AgDR-0131's "symlinked anchor" and "un-canonicalised
+# anchors" known gaps. Each case's own comment says whether it discriminates
+# a full revert: 1181-1 pins a property that already held pre-#1181 (a
+# non-regression pin, not a discriminator on its own) -- 1181-2 discriminates
+# a narrower mistake (resolve in place of, rather than composed after,
+# lexical); 1181-3, 1181-4 and 1181-5 discriminate a full revert and are the
+# load-bearing pins for this ticket's acceptance criteria.
+# =============================================================================
+
+# --- Case 1181-1: a not-yet-created file with NO symlink still resolves -----
+# (AC: "no regression on the property the lexical pass was chosen for.")
+# This property predates #1181 -- lexical-only already got it right, since
+# there is nothing here for _resolve_real_path to change. Reverting #1181
+# does NOT fail this case; it is a non-regression pin, not a discriminator.
+SB=$(mktemp -d); SB=$(cd "$SB" && pwd -P)
+mkdir -p "$SB/workspace/example"
+_c1181_1_target="$SB/workspace/example/migrations/003_new.sql"
+_c1181_1_got=$(
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+  eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+  _rmt_normalise_target "$_c1181_1_target"
+)
+if [ "$_c1181_1_got" = "$_c1181_1_target" ]; then
+  record_pass "#1181 a not-yet-created migration file (no symlink) still resolves"
+else
+  record_fail "#1181 a not-yet-created migration file (no symlink) still resolves" \
+    "got '$_c1181_1_got' want '$_c1181_1_target'"
+fi
+rm -rf "$SB"
+
+# --- Case 1181-2: a dot-segment in an ABSENT tail is collapsed --------------
+# (AC: "Dot-segments in an absent tail are collapsed, not passed through.")
+# `newdir` does not exist -- `_resolve_real_path` walks up to `example`
+# (which does) and re-appends the rest VERBATIM. Discriminates the mistake
+# the ticket names: calling _resolve_real_path in place of the lexical pass
+# rather than composed after it -- resolve-only on this exact input returns
+# the UNCOLLAPSED `.../newdir/../migrations/2.sql`.
+SB=$(mktemp -d); SB=$(cd "$SB" && pwd -P)
+mkdir -p "$SB/workspace/example"
+_c1181_2_raw="$SB/workspace/example/newdir/../migrations/2.sql"
+_c1181_2_want="$SB/workspace/example/migrations/2.sql"
+_c1181_2_got=$(
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+  eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+  _rmt_normalise_target "$_c1181_2_raw"
+)
+if [ "$_c1181_2_got" = "$_c1181_2_want" ]; then
+  record_pass "#1181 a dot-segment in an absent tail is collapsed, not passed through"
+else
+  record_fail "#1181 a dot-segment in an absent tail is collapsed, not passed through" \
+    "got '$_c1181_2_got' want '$_c1181_2_want'"
+fi
+rm -rf "$SB"
+
+# --- Case 1181-3: a symlinked ancestor resolves to the REAL path (unit) -----
+# (AC: "A migration write reached through a symlinked ancestor resolves to
+# the same marker the kernel's write would be governed by.") Discriminates a
+# full revert: pre-#1181 (lexical-only) returns the alias spelling
+# unchanged, since lexical collapse cannot see a symlink.
+SB=$(mktemp -d); SB=$(cd "$SB" && pwd -P)
+mkdir -p "$SB/workspace/example/migrations"
+ln -s "$SB/workspace/example" "$SB/example_alias"
+_c1181_3_raw="$SB/example_alias/migrations/001.sql"
+_c1181_3_want="$SB/workspace/example/migrations/001.sql"
+_c1181_3_got=$(
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+  eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
+  _rmt_normalise_target "$_c1181_3_raw"
+)
+if [ "$_c1181_3_got" = "$_c1181_3_want" ]; then
+  record_pass "#1181 a symlinked ancestor resolves to the real, kernel-accurate path"
+else
+  record_fail "#1181 a symlinked ancestor resolves to the real, kernel-accurate path" \
+    "got '$_c1181_3_got' want '$_c1181_3_want'"
+fi
+rm -rf "$SB"
+
+# --- Case 1181-4: symlinked ancestor reaches the PROJECT marker (end-to-end)
+# Whole-hook proof of AC#1, using the opposing-marker fixture from cases
+# 36-38 (mk_opposing_fixture): ops marker #42 has no migration label
+# (BLOCK); project marker #99 for "example" has one (ALLOW). A target
+# spelled through a symlink alias OUTSIDE workspace/ must reach #99 (rc=0),
+# not fall through to #42 (rc=2) the way an un-normalised alias spelling
+# would. Discriminates a full revert.
+SB=$(mk_opposing_fixture)
+ln -s "$SB/workspace/example" "$SB/example_alias"
+if run_hook_bash "$SB" "cat > $SB/example_alias/$MIG" 0 "$SB"; then
+  record_pass "#1181 symlinked ancestor reaches the project marker, not the ops fallback"
+else
+  record_fail "#1181 symlinked ancestor reaches the project marker, not the ops fallback"
+fi
+rm -rf "$SB"
+
+# --- Case 1181-5: canonicalised workspace anchor (end-to-end) --------------
+# AC: "The workspace boundary is canonicalised, so the same file addressed
+# via /tmp and /private/tmp resolves to one marker." Reproduced portably
+# (CI may not run on a host where /tmp is itself a symlink): `workspace/`
+# ITSELF is turned into a symlink to `real_workspace/`, and the write is
+# spelled through the REAL directory -- bypassing the `workspace` symlink
+# entirely, so this isolates the ANCHOR fix from the target-resolution fix
+# in cases 1181-3/1181-4 (the raw target here needs no resolution of its
+# own; only the anchor comparison needs canonicalising).
+#
+# _lib-portfolio-paths.sh and _lib-read-config.sh are DELETED from this one
+# sandbox after make_fork() copies them in. Debugging this case found that
+# portfolio_workspace_dir() -- when both libs ARE present, as they are in
+# every other case in this file -- already canonicalises WORKSPACE_DIR
+# itself via its own _portfolio_canonicalize, which masks whether THIS
+# gate's anchor fix does anything at all: the case passed even against the
+# pre-#1181 hook. Removing the two libs forces require-migration-ticket.sh's
+# override block to skip (its guard requires both present) and WORKSPACE_DIR
+# to stay this file's raw "$OPS_ROOT/workspace" -- the documented "library
+# missing" fallback shape used elsewhere in this file -- which is exactly
+# the shape the anchor-canonicalisation fix protects. Confirmed by probing
+# both hook versions directly: pre-#1181, raw WORKSPACE_DIR ($SB/workspace)
+# does not literally prefix a target spelled via $SB/real_workspace/..., so
+# PROJECT resolution fails and falls to the ops marker (#42, rc=2); post-fix
+# it reaches #99 (rc=0). Discriminates a full revert.
+SB=$(mk_opposing_fixture)
+rm -f "$SB/.claude/hooks/_lib-portfolio-paths.sh" "$SB/.claude/hooks/_lib-read-config.sh"
+mv "$SB/workspace" "$SB/real_workspace"
+ln -s "$SB/real_workspace" "$SB/workspace"
+if run_hook_bash "$SB" "cat > $SB/real_workspace/example/$MIG" 0 "$SB"; then
+  record_pass "#1181 workspace anchor canonicalised: a target spelled around the workspace/ symlink still reaches the project marker"
+else
+  record_fail "#1181 workspace anchor canonicalised: a target spelled around the workspace/ symlink still reaches the project marker"
+fi
+rm -rf "$SB"
 
 # =============================================================================
 # Summary

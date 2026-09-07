@@ -9,7 +9,7 @@ A differential test was added in round 8 and **removed in round 9**: it extracte
 **Status**: Accepted
 **Date**: 2026-09-05
 **Ticket**: me2resh/apexyard#1159
-**Related**: [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) (pattern-matching command text cannot be made sound) · me2resh/apexyard#1152 (fail-closed across blocking hooks)
+**Related**: [AgDR-0104](AgDR-0104-trust-chain-controls-vs-backstops.md) (pattern-matching command text cannot be made sound) · me2resh/apexyard#1152 (fail-closed across blocking hooks) · me2resh/apexyard#1181 (composes `_resolve_real_path` after the lexical collapse this record deferred; retires two of the three "Known gap" bullets below)
 
 ## Context
 
@@ -92,17 +92,19 @@ A relative target is therefore left **un-normalised** and behaves exactly as on 
 
 ### This is weaker than the sibling gate, in ways that matter
 
-An earlier draft of this record claimed the change "mirrors `require-active-ticket.sh`". That was wrong, and the difference is the substance:
+An earlier draft of this record claimed the change "mirrors `require-active-ticket.sh`". That was wrong, and the difference is the substance. **Updated by me2resh/apexyard#1181** — two of the three rows below are now closed; see the note after the table.
 
 | | `require-active-ticket.sh` | this gate |
 |---|---|---|
-| Symlinks | resolved via `_resolve_real_path` | **not resolved** — normalisation is purely lexical |
-| Boundary anchors | canonicalised with `pwd -P` | **not canonicalised** |
-| Containment | four-way raw-AND-resolved check, added for #885's mirror-image hole | single prefix match |
+| Symlinks | resolved via `_resolve_real_path` | resolved via `_resolve_real_path`, composed after the lexical collapse (me2resh/apexyard#1181) |
+| Boundary anchors | canonicalised with `pwd -P` | canonicalised with `pwd -P` (me2resh/apexyard#1181) |
+| Containment | four-way raw-AND-resolved check, added for #885's mirror-image hole | single prefix match against the canonicalised anchor |
 
-Lexical `/../` collapsing does not consult the filesystem, so it can disagree with the kernel when a symlink is in the path. Consequences of that are recorded below.
+Lexical `/../` collapsing does not consult the filesystem, so it can disagree with the kernel when a symlink is in the path — the reason #1181 composes `_resolve_real_path` after the lexical pass rather than replacing it with it (see the two RETIRED "Known gap" bullets below).
 
-**The direction of this divergence is the part worth flagging.** The framework's own rails call migrations never-Lean and highest-blast-radius, yet after this change the migration gate resolves paths *more weakly* than `require-active-ticket.sh`, which governs ordinary writes. The stricter gate guards the lower-stakes surface. That is accepted here as a **staged step**, not as a resting state, and it is the reason the follow-up below is named rather than merely noted.
+The Containment row is the one dimension #1181 leaves as recorded, and deliberately: the two functions answer different questions. `require-active-ticket.sh`'s four-way check decides whether a write is EXEMPT from every tracked tree; this gate's single check decides WHICH tracked tree's marker applies once a write is already known to need one. Extending to a four-way check was not evaluated as part of #1181's scope and is not claimed here.
+
+**The direction of this divergence is now narrower.** The framework's own rails call migrations never-Lean and highest-blast-radius; before #1181, the migration gate resolved paths *more weakly* than `require-active-ticket.sh` on two of three dimensions. #1181 closes the Symlinks and Boundary anchors rows for the shapes named in the "Known gap" bullets below; the Containment row remains a genuine, acknowledged design difference rather than an oversight, and the narrower residual noted under the retired symlink-anchor bullet (a `..` immediately after a differently-nested symlink) is unchanged by either gate.
 
 #### The single-representative structure is the defect generator
 
@@ -137,17 +139,15 @@ The honest reason is narrower, and weaker. `_resolve_real_path` is not a drop-in
 
   An **eleventh** was found in round 9 and is fixed: the `.cwd` join approved a write in one project against another project's ticket whenever the command changed directory first (`cd <B> && cat > ./migrations/1.sql` with `.cwd = <A>`). `dev` blocked it; the join allowed it silently, while the same write named absolutely stayed blocked — so the verdict depended on the spelling, and the permissive spelling is the ordinary one. The join is removed rather than taught about `cd`: deciding a gate by pattern-matching shell command text is what AgDR-0104 rules cannot be made sound.
 
-- **Known gap — `..` crossing a symlinked anchor resolves to the wrong project.** This bullet has now been corrected in four separate rounds, each time because its stated *mechanism* was wrong while the gap itself was real. What both reviewers measured independently at this HEAD:
+- **Known gap — `..` crossing a symlinked anchor resolves to the wrong project. RETIRED for the shape this bullet names, by me2resh/apexyard#1181.** Composing `_resolve_real_path` after the lexical collapse makes a migration write reached through a symlinked ancestor resolve to the same project the kernel's write is governed by. Verified for a direct symlinked ancestor with no `..` involved, and for a `..` immediately after a symlink whose target sits at the SAME depth as the symlink itself — the shape a workspace-registered project alias actually takes, and the shape this bullet's own `<ws>/symproj/../other/db/migrations/1.sql` example describes when `symproj` and the project it aliases are both direct children of the workspace root.
 
-  `<ws>/symproj/../other/db/migrations/1.sql`, where `symproj` is a symlink, is written by the kernel into the project `symproj` points at. Lexical `..` collapse cannot see the symlink, so the gate resolves it to `other` and evaluates **`other`'s** ticket. `dev` also gets it wrong (it selects `symproj` and falls to the ops marker), so this is a newly reachable *direction* of an existing blindness rather than a new class — but it is the one genuine new gap this change opens.
+  A narrower shape is not proven, named here rather than buried: a `..` immediately following a symlink whose target is nested at a DIFFERENT depth than the symlink's own position can still diverge from the kernel's answer. `_resolve_real_path`'s per-ancestor `cd ... && pwd -P` inherits bash's LOGICAL (not physical) handling of a compound symlink-then-`..` argument, which is not always what `open()`/`stat()` do for the same string. Measured directly for this one compound shape: `dev` and #1181 give the IDENTICAL wrong answer. Not a regression, and not newly introduced by #1181, but not closed by it either — a limitation of the shared `_resolve_real_path` helper (also used by `require-active-ticket.sh`), not of this gate's composition. Not separately tracked.
 
-  **A symlink alone is NOT enough**, contrary to the previous three drafts of this bullet: both symlink-only shapes measure `dev` and HEAD identical. The `..` is load-bearing. And the mechanism has nothing to do with relative-target resolution, which an earlier draft grounded it in — that join was removed in round 9 and the gap did not leave with it.
+- **Known gap — un-canonicalised workspace anchors (pre-existing). RETIRED for the shape that reaches this gate's own code, by me2resh/apexyard#1181.** `require-migration-ticket.sh` now canonicalises `WORKSPACE_DIR`/`OPS_ROOT` with `pwd -P` before the containment check, mirroring `require-active-ticket.sh`'s anchor canonicalisation, so a workspace boundary reached through a symlink compares the same way regardless of which spelling addressed it.
 
-  Fixed by `_resolve_real_path` composed after the lexical collapse: me2resh/apexyard#1181.
+  Worth stating precisely, because it narrows the claim: in the default configuration — `_lib-portfolio-paths.sh` and `_lib-read-config.sh` both present, which is every fork this framework ships — `WORKSPACE_DIR` was already canonical before this fix, because `portfolio_workspace_dir()` resolves its result through `_portfolio_canonicalize` (the same `pwd -P`-based algorithm as `_resolve_real_path`, defined separately in `_lib-portfolio-paths.sh`). This gate's own `/tmp` vs `/private/tmp` bug was therefore reachable only when that override does not fire — the "library missing" fallback this file already exercises for its other libs (a minimal test sandbox, or a clone missing those two files) — and #1181 closes exactly that path. Confirmed by testing both hook versions with the two libraries deliberately absent from the sandbox: pre-#1181 the raw anchor misses the match and falls to the ops marker; #1181 finds the correct project marker.
 
-- **Known gap — un-canonicalised workspace anchors (pre-existing).** The workspace boundary is never canonicalised, so on macOS the same file addressed through `/tmp` versus `/private/tmp` resolves to different markers. `dev`'s raw prefix match is equally wrong here, so this one really is pre-existing.
-- **Known gap — the meta-exemption reads the raw target (pre-existing).** `_rmt_is_meta_exempt` matches before normalisation, so `sub/docs/../db/migrations/1.sql` exempts itself on the `docs/` segment that normalisation would have removed, and skips the gate entirely. Raised by security review in round 4. Not fixed here: the exemption predates this change and moving it after normalisation widens the blast radius beyond the ticket.
-- Closing all three needs `_resolve_real_path` and `pwd -P` anchors, as the sibling gate `require-active-ticket.sh` already does, plus normalising before the exemption test. That is the natural follow-up and is not attempted here.
+- **Known gap — the meta-exemption reads the raw target (pre-existing).** `_rmt_is_meta_exempt` matches before normalisation, so `sub/docs/../db/migrations/1.sql` exempts itself on the `docs/` segment that normalisation would have removed, and skips the gate entirely. Raised by security review in round 4. Not fixed by #1181 either: the exemption predates both changes, and moving it after normalisation widens the blast radius beyond either ticket. Still needs normalising before the exemption test — the natural follow-up, not attempted here.
 - **The multi-marker refusal is gone, so it blocks nothing.** An earlier version of this bullet catalogued three shapes it blocked that `dev` allowed. Round 8 removed the refusal with the rest of the accumulator, and those three shapes now measure `dev = HEAD = allow`. The bullet is kept, corrected, rather than deleted, because it is the sort of stale claim a reader acts on.
 - **The delta set has three categories, not two.** Resolution deltas (the fix), pass-1 refusals (new, fail-closed), and selection deltas — of which there are now none by construction, measured across 61 and 314 command shapes by two independent sweeps.
 
@@ -170,6 +170,6 @@ The honest reason is narrower, and weaker. `_resolve_real_path` is not a drop-in
 
 ## Artifacts
 
-- `.claude/hooks/require-migration-ticket.sh` — `_rmt_is_unresolvable`, `_rmt_normalise_target`, two-pass target loop
-- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–47. The multi-target cases and the differential moved to #1182; the `.cwd` cases (31–35, 43, 44, 47) were deleted in round 9 with the feature they covered. **Cases 36–38 are what pin normalisation** — they use a fixture whose ops and per-project markers give opposite verdicts, so the exit code reveals which marker answered.
+- `.claude/hooks/require-migration-ticket.sh` — `_rmt_is_unresolvable`, `_rmt_normalise_target` (composes `_resolve_real_path` after the lexical collapse, me2resh/apexyard#1181), `_rmt_project_for_path` (canonicalised `WORKSPACE_DIR_REAL`/`OPS_ROOT_REAL` anchors, #1181), two-pass target loop
+- `.claude/hooks/tests/test_require_migration_ticket.sh` — cases 23–48 plus 1181-1 through 1181-5. The multi-target cases and the differential moved to #1182; the `.cwd` cases (31–35, 43, 44, 47) were deleted in round 9 with the feature they covered. **Cases 36–38 are what pin normalisation; cases 1181-3, 1181-4 and 1181-5 are what pin the #1181 composition** — each uses a fixture whose ops and per-project markers give opposite verdicts, so the exit code reveals which marker answered.
 - PR me2resh/apexyard#1180 — nine rounds of review — Rex and Hakim throughout, joined by the Solution Architect at round 5 once the design-artifact gate applied. The first cut, the first redesign, and the `.cwd` fix were each rejected on a defect found by probing rather than by reading; this record was corrected in every one of the nine rounds — twice on this same symlink bullet, in opposite directions. Round 4 added the `~user`/`~+`/`~-` fabrication branch the round-3 fix did not reach and made both target-resolution passes ask the migration question of the same string. Round 9 removed the `.cwd` join entirely after security review found it approved a write against a ticket that did not govern it. Every fix is mutation-checked: reintroducing any one of them fails a named case.
