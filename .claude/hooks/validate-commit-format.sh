@@ -95,12 +95,20 @@ tokenize_shell_command() {
       fi
     else
       case "$char" in
-        " "|$'\t'|$'\n')
+        " "|$'\t')
           if [ "$token_started" -eq 1 ]; then
             COMMAND_TOKENS+=("$token")
             token=""
             token_started=0
           fi
+          ;;
+        $'\n')
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          COMMAND_TOKENS+=(";")
           ;;
         "'")
           quote="'"
