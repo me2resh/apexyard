@@ -124,11 +124,11 @@ Chosen: run each skill's **existing per-repo commands** once per repo from `mrt_
 
 **Revisit trigger for A:** a measured `/projects` or `/status` run above 5 s attributable to one project's repo count. Then adopt GraphQL **uniformly**, in its own ticket, with the singular output change declared and asserted.
 
-**Expected cost** — calls per project; latency extrapolated from the per-call figures in § Context at `P = 4`. Latency moves in whole waves of `P`, so a row moves only when its call count crosses a `⌈R / P⌉` boundary: at R = 3 the `pushedAt` fetches take `/projects` from 8 calls (2 waves) to 9 (3 waves), while at R = 8 the 23rd and 24th calls sit inside the same 6th wave:
+**Expected cost** — calls per project; latency extrapolated from the per-call figures in § Context at `P = 4`. `pa_fanout` caps **repos** in flight, not calls (D3): each job runs its own repo's calls serially, so a project's latency is about `⌈R / P⌉` × one repo's serial cost. Adding the `pushedAt` fetch therefore lengthens each job by one call rather than adding a wave — which is why the R = 3 figure below is unchanged from the pre-`pushedAt` draft:
 
 | Skill | Per-repo calls | R = 1 | R = 3 | R = 8 |
 |---|---|---|---|---|
-| `/projects` | 2 (PRs, issues); at R ≥ 2, plus 1 `pushedAt` for **every** repo, the primary included (D1) | 2 calls · ~0.9 s (unchanged) | 9 calls · ~1.9 s | 24 calls · ~2.8 s (`P = 8`: ~1.5 s) |
+| `/projects` | 2 (PRs, issues); at R ≥ 2, plus 1 `pushedAt` for **every** repo, the primary included (D1) | 2 calls · ~0.9 s (unchanged) | 9 calls · ~1.4 s | 24 calls · ~2.8 s (`P = 8`: ~1.5 s) |
 | `/status` | 2 (open PRs with checks, recent merges) | 2 · ~1.2 s (unchanged) | 6 · ~1.3 s | 16 · ~2.6 s |
 | `/inbox` | 9 (4 PR searches, 3 `tracker_list`, 2 reconcile) | 9 · ~4 s (unchanged) | 27 · ~4.5 s | 72 · ~8 s (`P = 8`: ~4 s) |
 | `/tasks` | ~8, plus one per open authored PR for comment threads (as today) | as `/inbox` | as `/inbox` | as `/inbox` |
@@ -169,7 +169,35 @@ Reads use the AgDR-0121 default (`primary:` if set, else the first entry of `rep
 | `/inbox` | Nothing — every item carries its own URL | Items of a multi-repo project are prefixed `owner/repo#N` — the qualified form `/start-ticket` already accepts — never the ambiguous `project#N`. Singular projects keep `project#N`. The mentions section's registry filter is the union of every project's `mrt_repos_for`. |
 | `/tasks` | Nothing — per-item URLs | Same ref rule as `/inbox`; the `--json` `id` uses it too, while `project` stays the registry name. |
 | `/status` | Section D — `gh issue view` for the in-progress issue | Repo = the active-ticket marker's `repo=` field when present (what `briefing.sh` already does), else `mrt_primary_repo_for`; always `--repo`. Section A (git state) reads the one `workspace:`, which is the primary's clone — unchanged. |
-| `/handover` | The registry append (step 7) and ticket filing (step 7.5) | Writes `repos:` plus an explicit `primary:` — the first repo given, or `--primary <owner/repo>`. Files tickets into `primary:`. On a re-run against a hand-edited entry with ≥ 2 repos and no `primary:`, prompt once. |
+| `/handover` | The registry append (step 7), ticket filing (step 7.5), and **every write into the adopted repo** (steps 5.5, 8.5, 8.6 — see below) | Writes `repos:` plus an explicit `primary:` — the first repo given, or `--primary <owner/repo>`. Files tickets into `primary:`. On a re-run against a hand-edited entry with ≥ 2 repos and no `primary:`, prompt once. In-repo artefacts go to an explicitly selected repo set, never silently to `primary:`. |
+
+#### In-repo writes into the adopted repo
+
+The table above covers writes into the **ops fork**. `/handover` also writes into the **adopted repo**, and earlier drafts of this design named none of them. There are three, and this is the complete set as the skill ships:
+
+| Step | Write | Delivery | Consent today |
+|---|---|---|---|
+| 5.5 | Topology CI pipelines into `<repo>/.github/workflows/*.yml` | Working tree only — not committed, not pushed | Follows the topology pick; no separate confirmation |
+| 8.5 | `AGENTS.md`, plus a one-line `@AGENTS.md` shim as `CLAUDE.md` when no `CLAUDE.md` exists | Branch `docs/agents-md` + PR | Opt-in, default-OFF, confirmed per run |
+| 8.6 | A "Governed by ApexYard" README badge | Branch `docs/apexyard-badge`, or onto 8.5's branch | Opt-in, default-OFF, confirmed per run |
+
+Step 5.5 is worth flagging on its own: the skill's Rule 1 calls steps 8.5 and 8.6 "the only two sanctioned writes into the target repo", but 5.5 also writes into the clone's working tree, uncommitted and without its own confirmation. That is a pre-existing inconsistency in the skill, not something this design introduces; it is named because a multi-repo handover multiplies it.
+
+Checked and **not** writes, so the set above can be read as complete: the `git clone` itself, the harness-adapter install command (step 1.6 prints it, never runs it), the branch-protection check (read-only API), `bin/install-git-hooks.sh` (deliberately not invoked, per PR #1087's security review), and the MCP reindex.
+
+**The target rule.** At R ≥ 2, one prompt precedes all three writes, listing the repos with the primary preselected; the selected set receives the artefacts:
+
+```text
+<name> has 3 repos. Which should receive in-repo artefacts (AGENTS.md, badge, CI pipelines)?
+  [1] owner/api (primary)   [2] owner/gateway   [3] owner/worker
+Select [default: 1]:
+```
+
+At R = 1 there is no prompt and nothing changes — today's flow exactly.
+
+It is a prompt rather than a primary-only default for two reasons. `AGENTS.md` is a **per-codebase** operating manual — build commands, layout, conventions — so one file generated from the primary is wrong for a gateway or a worker; the artefact does not generalise across a product the way `primary:` does for a tracker. And writing to every repo instead would open an externally-visible PR per repo from a single tick, which is the bulk-implied consent the skill's own Rule 23 already forbids for exactly this class.
+
+**The path rule, which matters more than the target rule.** Three sites hardcode `$WORKSPACE_DIR/<name>` as the repo root — step 5.5's `.git` guard and its `mkdir` / `cp` targets (`SKILL.md` 735–739), and `REPO="$WORKSPACE_DIR/<name>"` in step 8.5 (1368) and step 8.6 (1536). Under D6 that path is the **container directory**, not a repo: step 5.5 would find no `.git` and silently defer, while 8.5 and 8.6 would attempt a branch and a PR in a non-repo. So **`/handover` records each repo's clone path at intake, and every later read and write uses the recorded path. No step re-derives a repo root from `<workspace_dir>/<name>`.** Same discipline as D6's registry `workspace:` — resolve once, never re-derive.
 
 ### D5 — Backwards compatibility: how byte-identity is asserted
 
@@ -260,7 +288,7 @@ MCP reindex is already project-scoped (`reindex(scope="project", project="<name>
 | Skill | `.claude/skills/status/SKILL.md` | **Changed** | Union of PR lists with `owner/repo#N`, `Repos:` line, section-D repo resolution, `--by-repo` |
 | Skill helper | `.claude/skills/status/briefing.sh` | **Changed** | Branch resolution prefers the cwd's git toplevel; a container dir is not a clone (D6) |
 | Skill | `.claude/skills/inbox/SKILL.md`, `.claude/skills/tasks/SKILL.md` | **Changed** | Iterate `mrt_repos_for`, repo-qualified refs, mentions filter union, `--by-repo` tally |
-| Skill | `.claude/skills/handover/SKILL.md` | **Changed** | N-repo intake, container clone layout with per-repo status (D6), per-repo assessment sections, worst-of verdict, contributor union, `repos:` / `primary:` / `workspace:` registry entry |
+| Skill | `.claude/skills/handover/SKILL.md` | **Changed** | N-repo intake, container clone layout with per-repo status (D6), per-repo assessment sections, worst-of verdict, contributor union, `repos:` / `primary:` / `workspace:` registry entry, in-repo write target selection and per-repo path resolution (D4) |
 | Docs | `docs/multi-project.md`, `CLAUDE.md` skill one-liners | **Changed** | Document the multi-repo rendering and the flag |
 | Reused unchanged | `mrt_repos_for` / `mrt_primary_repo_for`, `_lib-tracker.sh` (`tracker_list`), `block-private-refs-in-public-repos.sh`, `require-active-ticket.sh`, `require-migration-ticket.sh` | — | Enumeration, issue-axis listing, leak-scrub, and the two gates D6 keeps working without change |
 
@@ -311,11 +339,11 @@ One ticket (#1138), suggested as three PRs so the library merges before the skil
 | 6 | `/status` — union PR lists with `owner/repo#N`, header suffix and `Repos:` line rendered from `pa_exceptions`, section-D repo resolution, the same git-dir guard in section A, `--by-repo` sub-blocks, and `briefing.sh` branch resolution across both `[ -d ]` branches (D6) | 2.5 h | PR-A |
 | — | **PR-B**: tasks 5–6, plus the rendering smoke (D5-3) | | |
 | 7 | `/inbox`, `/tasks` — iterate `mrt_repos_for`, repo-qualified refs, mentions filter union, `--by-repo` tally | 2 h | PR-A |
-| 8 | `/handover` — N-repo intake, the D6 container layout with per-repo clone status and its rerun / cleanup / failure rules including the collision-rename report, per-repo sections, worst-of verdict with the unassessed annotation, contributor union, `repos:` / `primary:` / `workspace:` entry, the D4 prompt rule | 4 h | PR-A |
+| 8 | `/handover` — N-repo intake, the D6 container layout with per-repo clone status and its rerun / cleanup / failure rules including the collision-rename report, per-repo sections, worst-of verdict with the unassessed annotation, contributor union, `repos:` / `primary:` / `workspace:` entry, the D4 prompt rule, and the in-repo write target + path rules (D4 § In-repo writes) — replacing the three hardcoded `$WORKSPACE_DIR/<name>` repo roots at `SKILL.md` 735–739, 1368, and 1536 with the recorded per-repo path | 4.5 h | PR-A |
 | 9 | `CLAUDE.md` one-liners; `docs/multi-project.md` on multi-repo rendering, the D6 container layout, and the singular → `repos:` clone-move migration | 1 h | 5–8 |
 | — | **PR-C**: tasks 7–9 | | |
 
-**Total estimate**: ~20.75 h. PR-A lands under `.claude/hooks/`, so the Security Auditor auto-fires — expected; the file is read-only and is not a gate.
+**Total estimate**: ~21.25 h. PR-A lands under `.claude/hooks/`, so the Security Auditor auto-fires — expected; the file is read-only and is not a gate.
 
 ---
 
@@ -332,13 +360,14 @@ One ticket (#1138), suggested as three PRs so the library merges before the skil
 | The 30-item count cap gets fixed in passing and breaks byte-identity | Med | Med | Named in D5 as out of scope; the smoke diff (D5-3) catches it |
 | A hand-edited multi-repo entry omits `workspace:`, so `mrt_workspace_for` falls back to the container directory | Low | Med | The container is not a repo, and git state is read only when `git rev-parse --git-dir` succeeds (D6), so the row renders `(not cloned)` rather than the enclosing repo's branch. `/handover` always writes an explicit `workspace:` |
 | The D6 layout is wrong for a shape no adopter has yet run, and reversing it later moves adopters' clones | Low | Med | Reversal is a directory move plus a `workspace:` rewrite, both scriptable, and no tracked file records the layout. The decision is recorded in AgDR-0133, co-filed here, with the attribution constraint that forces it — so a reversal is argued against evidence rather than taste |
+| Steps 5.5 / 8.5 / 8.6 keep `$WORKSPACE_DIR/<name>` as the repo root and so target the container directory | Med | High | The three sites are named with line numbers in D4 § In-repo writes and in task 8, and AT-5 asserts the resolved root is a real repo and not the container |
 | Converting an existing singular project to `repos:` needs its clone moved one level down | Low | Low | Documented in `docs/multi-project.md`; zero projects need it today |
 
 ---
 
 ## Security Considerations
 
-- [x] Read-only against every repo. The only writes are `/handover`'s existing registry append and ticket filing, now targeting `primary:` — the same mechanisms, no new write path.
+- [x] The aggregation paths are read-only against every repo — the five skills fetch counts, CI, and activity, and write nothing. `/handover` is the exception, and an earlier draft of this section stated the opposite. It writes into the **adopted** repo in three places: topology CI pipelines into the working tree (step 5.5), and the opt-in, default-OFF, PR-delivered `AGENTS.md` and README badge (steps 8.5, 8.6). It writes into the **ops fork** for the registry append and ticket filing. This design adds no new write path. What it changes is which repo each existing write targets — an explicit operator selection at R ≥ 2 — and where that repo's clone is found, resolved from the recorded per-repo path rather than `<workspace_dir>/<name>`. D4 § In-repo writes carries the complete set and the reason it is a prompt.
 - [x] No new credentials. Parallel jobs inherit the operator's `gh` auth; nothing is logged beyond what the commands already print. Temp files hold API JSON only, live under `mktemp -d`, and are removed on exit.
 - [x] Leak-scrub is untouched. `owner/repo#N` refs are terminal output; anything an operator later writes to a public repo still passes through `block-private-refs-in-public-repos.sh`, which scrubs every repo in `repos:` (AgDR-0121).
 - [x] The library lands under `.claude/hooks/`, so the trust-chain trigger fires the Security Auditor on the implementation PR. It must not be wired into `.claude/settings.json`; it gates nothing.
@@ -369,7 +398,9 @@ Four properties the implementation must assert. **They do not all live at the sa
 | **AT-3** | A failed or unreachable repo never becomes a fabricated count | Three-repo fixture; mock `gh` exits non-zero for repo B on every axis. `pa_sum` returns `<n>+?`, `pa_worst_ci` returns `?`, `pa_max_epoch` ignores B, `pa_exceptions` emits exactly one record — `B\tunreachable`. Negative assertions too: no fold equals the A + C sum alone, and no fold on a failed axis is a bare integer. `pa_fanout` exits 0 — degrade, never abort | The rendered forms of those values — the `⚠ <project> › <owner/repo>: unreachable` line and the `<n>+?` cell — are eyeballed once in the PR-B smoke |
 | **AT-4** | A mix of stale and non-stale repos produces the documented exception output | Three-repo fixture at `stale_days: 30`, epochs supplied by the mock. **(a)** One repo 45 days old, two recent → `pa_exceptions` emits exactly one `stale` record, for that repo. **(b)** All three 45 days old → **zero** stale records, D1's carve-out. **(c)** Fixture (a) at `stale_days: 60` → zero records, proving the threshold is read from config rather than hard-coded. **(d)** Fixture (a) with R forced to 1 → zero records on every condition, the R ≥ 2 gate | The project-level ⚠ that case (b) leaves to fire is today's prose line, unchanged and deliberately unasserted |
 
-AT-1 and AT-2 are the byte-identity contract; AT-3 and AT-4 are the two ways the aggregation can be confidently wrong rather than merely absent. None of the four asserts on model-rendered text — which is why the exception rule moved out of skill prose and into `pa_exceptions` (D3).
+| **AT-5** | A multi-repo in-repo write targets the selected repo, at its real clone path | Three-repo fixture under D6's container layout, with a recorded selection of repo B. Assert the resolved repo root is B's container path `<workspace_dir>/<name>/<dir-B>`, that `git -C <resolved> rev-parse --git-dir` succeeds, and that the resolved path is **not** `<workspace_dir>/<name>`. Negative assertion: with no selection recorded, resolution fails closed and emits no path rather than falling back to the container | The branch-and-PR half is not exercised — no throwaway multi-repo product exists to receive a real PR. The PR-B live smoke covers the singular path only |
+
+AT-1 and AT-2 are the byte-identity contract; AT-3 and AT-4 are the two ways the aggregation can be confidently wrong rather than merely absent. AT-5 covers the one path that writes into someone else's repository. None of the four asserts on model-rendered text — which is why the exception rule moved out of skill prose and into `pa_exceptions` (D3).
 
 ---
 
