@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /seo-audit — Technical SEO Analysis
 
 Deep-dive SEO audit against Google's best practices. Checks on-page SEO, technical SEO, and social sharing metadata. Invoke when `/launch-check`'s SEO row shows WARN or FAIL.

@@ -4,6 +4,10 @@ description: Show every item across managed projects needing the user's attentio
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /inbox — Items Needing Your Attention
 
 Aggregates everything that's currently waiting on **you** across the projects ApexYard manages. Designed to be the first thing you run in a session.

@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /geo-audit — LLM/Agent Discoverability Audit
 
 Deep-dive audit against the emerging GEO + AEO conventions. Checks discovery files (`llms.txt`, `AGENTS.md`), AI-crawler directives in `robots.txt`, capability manifests, citation-friendly metadata, snippet-extractable content shape, and token economics. Invoke when `/launch-check` flags the generative-engine row, or directly during docs/landing-site work.

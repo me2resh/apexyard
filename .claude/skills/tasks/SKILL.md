@@ -4,6 +4,10 @@ description: Flat actionable task list across the portfolio with direct URLs —
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /tasks — Actionable Task List
 
 A single ordered list of "things to click on right now". Where `/inbox` groups items by category, `/tasks` flattens everything into a prioritised TODO with one URL per line. Optimised for "I have 30 minutes, what should I do?".

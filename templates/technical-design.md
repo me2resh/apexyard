@@ -3,7 +3,7 @@
 Required: Overview, Architecture, Implementation Plan, Risks & Mitigations, Security Considerations, Testing Strategy, Approvals.
 Conditional: Domain Model, API Design, Data Model, Open Questions.
 Delete a conditional section that has no content. Do not write "N/A". Replace every [placeholder] or write TBD. Delete this comment before the design leaves Draft.
-Rule: .claude/rules/writing-standard.md
+Rule: .claude/rules/writing-standard.md. Use the controlled technical writing profile. Use short complete sentences and active voice.
 -->
 
 # Technical Design: [Feature Name]

@@ -4,6 +4,10 @@ description: Invoke The Contrarian (Naqid) to steelman-then-challenge an idea, f
 argument-hint: "<idea | #N | path/to/doc | 'the plan'>"
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /challenge — Stress-test the premise with The Contrarian
 
 `/challenge <target>` spawns the **Contrarian** agent (Naqid) to adversarially challenge an idea *before* you commit build effort to it. It is the premise-level analog of `/code-review` (Rex), `/security-review` (Hakim), and `/design-review` (Tariq) — but where those review **built artifacts** and gate a merge, the Contrarian challenges **whether the idea is right at all** and is **advisory-only**: it never writes a marker, never blocks a gate. The call stays yours.

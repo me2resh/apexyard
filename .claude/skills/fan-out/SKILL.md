@@ -6,6 +6,10 @@ argument-hint: "<task1, task2, ...> | <path/to/tasks.md> | --from-tickets <ref1,
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /fan-out — Parallel Agent Fan-Out
 
 Spawns multiple specialised agents in parallel — each on its own task, optionally in its own git worktree — so independent work items progress concurrently instead of being silently serialised behind a single agent's session.

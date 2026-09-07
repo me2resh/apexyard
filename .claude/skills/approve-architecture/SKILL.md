@@ -6,6 +6,10 @@ argument-hint: "<pr-number>"
 effort: low
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /approve-architecture — Record Per-PR Design-Review Approval
 
 Writes `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-architecture-review.sh` merge-gate hook will let a design-artifact PR through. Without this marker, the hook blocks merges on any PR that touches a technical design, a migration AgDR, or a feature spec / PRD.

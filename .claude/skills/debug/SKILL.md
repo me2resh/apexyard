@@ -6,6 +6,10 @@ argument-hint: "[symptom summary]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /debug — Structured Debug Methodology
 
 Most "stuck" debug sessions look the same: pattern-match on the symptom, propose a fix, ship it, find a different symptom, repeat. Each cycle costs a deploy + a CEO approval + the user's patience. This skill enforces the discipline that prevents the loop:

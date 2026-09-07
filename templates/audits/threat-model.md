@@ -1,3 +1,5 @@
+<!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
+
 <!-- Source: ApexYard · templates/audits/threat-model.md · github.com/me2resh/apexyard · MIT -->
 
 # Threat Model — {project} @ {short-sha}

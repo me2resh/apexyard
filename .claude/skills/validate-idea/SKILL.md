@@ -5,6 +5,10 @@ argument-hint: "<IDEA-NNN | project-name | free-form description>"
 allowed-tools: Bash, Read, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /validate-idea — Pre-spec validation gate
 
 A 10-minute, 5-question check before committing the time of `/write-spec`. Most ideas should die before the PRD round; this skill makes that decision explicit. Invokable standalone, and offered as an optional follow-up step inside `/idea` (after capture) and `/handover` (when the project looks dormant).

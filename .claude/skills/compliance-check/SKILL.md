@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: high
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /compliance-check — GDPR + ePrivacy Compliance
 
 Deep-dive regulatory compliance analysis. Checks cookie consent, privacy policy, terms of service, data handling, and user rights. Invoke when `/launch-check`'s compliance row shows WARN or FAIL, or proactively before launching in the EU/UK.

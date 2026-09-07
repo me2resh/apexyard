@@ -6,6 +6,10 @@ argument-hint: "[--reset] [--enable-lsp]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /setup — ApexYard First-Run Bootstrap
 
 Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.

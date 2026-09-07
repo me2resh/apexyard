@@ -12,6 +12,8 @@ status: {executed | rolled-back | superseded by AgDR-NNNN}
 # projects: [<project-name>]   # optional; defaults to the AgDR's containing project
 ---
 
+<!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
+
 # {Short Title}
 
 > In the context of {context}, facing {concern}, I decided {decision} to achieve {goal}, accepting {tradeoff}.

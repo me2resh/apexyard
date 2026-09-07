@@ -1,16 +1,12 @@
 #!/bin/bash
-# Static contract tests for the writing-standard rule shipped by
-# me2resh/apexyard#1164. These checks pin the rule text, auto-load wiring,
-# template guidance comments, regression cases, rule-audit entry, and decision
-# record. They do not claim to score model behavior; cross-harness evaluation
-# belongs to #1165.
+# Static contract tests for the controlled technical writing profile in issue #1164.
 
 set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/writing-standard.md"
 CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/human-friendly-cases.md"
-AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0126-writing-standard-two-modes.md"
+AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0134-controlled-technical-writing-profile.md"
 
 PASS=0
 FAIL=0
@@ -25,67 +21,68 @@ assert() {
   else
     echo "FAIL [$label]" >&2
     FAIL=$((FAIL+1))
-    FAILED="${FAILED}${label} "
+    FAILED="$FAILED$label "
   fi
 }
 
 assert "rule:file-exists" test -f "$RULE_FILE"
-assert "rule:two-modes" grep -qE '^## The two modes$' "$RULE_FILE"
-assert "rule:opening" grep -qF 'Open with what the reader needs' "$RULE_FILE"
-assert "rule:outcome" grep -qF '**Outcome**' "$RULE_FILE"
-assert "rule:next-action" grep -qF '**Next action**' "$RULE_FILE"
-assert "rule:required-core" grep -qF 'Small required core, conditional sections' "$RULE_FILE"
-assert "rule:delete-empty" grep -qF 'Delete a conditional section that has nothing to say' "$RULE_FILE"
-assert "rule:no-placeholder" grep -qF 'No placeholder survives' "$RULE_FILE"
-assert "rule:strict-mode" grep -qF 'Strict mode for machine-consumed text' "$RULE_FILE"
-assert "rule:one-instruction" grep -qF 'One instruction per sentence' "$RULE_FILE"
-assert "rule:modality" grep -qF 'Exact modality' "$RULE_FILE"
-assert "rule:flavored-mode" grep -qF 'Flavored mode for durable artifacts' "$RULE_FILE"
-assert "rule:keep-uncertainty" grep -qF 'hedges that carry evidence state' "$RULE_FILE"
-assert "rule:no-certification-claim" grep -qF 'does not claim certified STE compliance' "$RULE_FILE"
-assert "rule:kill-criterion" grep -qF 'Move it to Flavored' "$RULE_FILE"
-assert "rule:advisory-honesty" grep -qF 'It does not score model behavior' "$RULE_FILE"
-assert "rule:scoped-template-claim" grep -qF 'five core templates annotated by this milestone' "$RULE_FILE"
+assert "rule:title" grep -qF 'Controlled Technical Writing Profile' "$RULE_FILE"
+assert "rule:scope" grep -qF 'every project that' "$RULE_FILE"
+assert "rule:short-sentences" grep -qF '20 words for an instruction' "$RULE_FILE"
+assert "rule:active-voice" grep -qF 'Use active voice' "$RULE_FILE"
+assert "rule:one-term" grep -qF 'Use one term for one item or action' "$RULE_FILE"
+assert "rule:one-instruction" grep -qF 'Give one instruction in each sentence' "$RULE_FILE"
+assert "rule:no-semicolon" grep -qF 'Do not use a semicolon' "$RULE_FILE"
+assert "rule:preserve-evidence" grep -qF 'must not change the evidence' "$RULE_FILE"
+assert "rule:no-retroactive-rewrite" grep -qF 'does not rewrite existing artifacts' "$RULE_FILE"
+assert "rule:review-rejection" grep -qF 'must request changes' "$RULE_FILE"
+assert "rule:no-certification-claim" grep -qF 'does not implement or claim' "$RULE_FILE"
 
-assert "wiring:claude" grep -qF '@.claude/rules/writing-standard.md' "$SRC_ROOT/CLAUDE.md"
+assert "wiring:claude" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/CLAUDE.md"
 assert "wiring:agents" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/AGENTS.md"
-assert "wiring:system" grep -qF 'writing-standard' "$SRC_ROOT/SYSTEM.md"
-assert "wiring:cursor" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/bin/sync-cursor-adapter.sh"
-assert "wiring:cursor-reporting" grep -qF '.claude/rules/reporting-style.md' "$SRC_ROOT/bin/sync-cursor-adapter.sh"
-assert "wiring:rule-audit" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/docs/rule-audit.md"
+assert "wiring:system" grep -qF 'controlled technical writing profile' "$SRC_ROOT/SYSTEM.md"
+assert "wiring:cursor" grep -qF 'controlled technical writing profile' "$SRC_ROOT/bin/sync-cursor-adapter.sh"
+assert "wiring:rule-audit" grep -qF 'controlled technical writing profile' "$SRC_ROOT/docs/rule-audit.md"
+does_not_mention_third_party_standard() {
+  ! grep -qF 'third-party controlled-language standard' "$1"
+}
+
+assert "wiring:neutral-agents" does_not_mention_third_party_standard "$SRC_ROOT/AGENTS.md"
+assert "wiring:neutral-claude" does_not_mention_third_party_standard "$SRC_ROOT/CLAUDE.md"
 
 for t in prd.md technical-design.md tickets/feature.md tickets/bug.md tickets/task.md; do
   assert "template:$t:required" grep -qF 'Required:' "$SRC_ROOT/templates/$t"
   assert "template:$t:conditional" grep -qF 'Conditional:' "$SRC_ROOT/templates/$t"
-  assert "template:$t:rule-link" grep -qF 'writing-standard.md' "$SRC_ROOT/templates/$t"
 done
-assert "template:prd:summary" grep -qE '^## Summary$' "$SRC_ROOT/templates/prd.md"
-assert "template:readme" grep -qF 'Required core and conditional sections' "$SRC_ROOT/templates/README.md"
+while IFS= read -r template; do
+  assert "template:$template:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/$template"
+done < <(find "$SRC_ROOT/templates" -type f -name '*.md' ! -name 'README.md' ! -name 'custom-templates.README.example.md' | sed "s|$SRC_ROOT/||" | sort)
+first_line_is_yaml_delimiter() {
+  head -n 1 "$1" | grep -qx -- '---'
+}
 
-for consumer in write-spec feature bug task; do
-  assert "consumer:$consumer:writing-rule" grep -qF '.claude/rules/writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
-done
-for consumer in code-review release release-sync threat-model investigation handover roadmap plan-initiative idea migration spike prototype walking-skeleton stakeholder-update launch-check update tickets-batch request-apexyard-feature report-apexyard-bug design-review dfd; do
-  assert "consumer:$consumer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/skills/$consumer/SKILL.md"
-done
-assert "consumer:code-reviewer:writing-rule" grep -qF 'writing-standard.md' "$SRC_ROOT/.claude/agents/code-reviewer.md"
-assert "pr-quality:writing-rule" grep -qF 'Flavored mode' "$SRC_ROOT/.claude/rules/pr-quality.md"
-assert "consumer:tech-lead:writing-rule" grep -qF 'writing-standard guidance' "$SRC_ROOT/roles/engineering/tech-lead.md"
+assert "template:agdr-frontmatter" first_line_is_yaml_delimiter "$SRC_ROOT/templates/agdr.md"
+assert "template:pr-body" grep -qF 'controlled technical writing profile' "$SRC_ROOT/.github/PULL_REQUEST_TEMPLATE.md"
+assert "template:readme" grep -qF 'controlled technical writing profile' "$SRC_ROOT/templates/README.md"
+
+while IFS= read -r skill; do
+  assert "consumer:$skill:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/.claude/skills/$skill/SKILL.md"
+done < <(find "$SRC_ROOT/.claude/skills" -mindepth 2 -maxdepth 2 -name SKILL.md -exec sh -c 'basename "$(dirname "$1")"' _ {} \; | sort)
+assert "consumer:code-reviewer:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/.claude/agents/code-reviewer.md"
+assert "reviewer:code-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
+assert "reviewer:design-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/design-review/SKILL.md"
+assert "reviewer:rex" grep -qF 'Request changes when the artifact fails the profile' "$SRC_ROOT/.claude/agents/code-reviewer.md"
+assert "pr-quality:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/.claude/rules/pr-quality.md"
+assert "consumer:tech-lead:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/roles/engineering/tech-lead.md"
 
 assert "cases:file-exists" test -f "$CASES_FILE"
-assert "cases:nine-cases" bash -c "[ \"\$(grep -cE '^## HF-[0-9]{2} ' '$CASES_FILE')\" -eq 9 ]"
-assert "cases:opening" grep -qF 'Opening states the outcome and next action' "$CASES_FILE"
-assert "cases:empty-section" grep -qF 'Empty conditional section is deleted' "$CASES_FILE"
-assert "cases:placeholder" grep -qF 'No placeholder survives' "$CASES_FILE"
-assert "cases:strict-block" grep -qF 'Strict mode block message' "$CASES_FILE"
-assert "cases:strict-brief" grep -qF 'Strict mode spawn brief' "$CASES_FILE"
-assert "cases:flavored" grep -qF 'Flavored mode keeps uncertainty and precision' "$CASES_FILE"
-assert "cases:conversation" grep -qF 'Conversation is not forced into Strict mode' "$CASES_FILE"
-assert "cases:pr-review" grep -qF 'Durable PR and review artefacts use Flavored mode' "$CASES_FILE"
-assert "cases:producer-wiring" grep -qF 'Durable artefact producers carry the central rule' "$CASES_FILE"
+assert "cases:ten-cases" awk '/^## HF-[0-9][0-9] /{count++} END{exit count != 10}' "$CASES_FILE"
+assert "cases:pr-review" grep -qF 'PR and review use the profile' "$CASES_FILE"
+assert "cases:rejection" grep -qF 'Reviewer rejects a profile fault' "$CASES_FILE"
 
 assert "agdr:file-exists" test -f "$AGDR_FILE"
-assert "agdr:no-yaml-frontmatter" bash -c "head -n1 '$AGDR_FILE' | grep -qE '^# '"
+first_line_is_h1() { head -n 1 "$1" | grep -qE "^# "; }
+assert "agdr:no-yaml-frontmatter" first_line_is_h1 "$AGDR_FILE"
 assert "agdr:options" grep -qE '^## Options Considered$' "$AGDR_FILE"
 assert "agdr:decision" grep -qE '^## Decision$' "$AGDR_FILE"
 assert "agdr:ticket" grep -qF 'me2resh/apexyard#1164' "$AGDR_FILE"

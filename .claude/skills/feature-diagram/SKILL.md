@@ -5,6 +5,10 @@ argument-hint: "<feature-slug> [project-name] [--force]"
 allowed-tools: Bash, Read, Grep, Glob, Write, Edit
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /feature-diagram — Per-feature Mermaid Sub-graph
 
 Reads the Feature Inventory at `projects/<name>/feature-inventory.md` (produced by `/extract-features`) and writes a per-feature Mermaid `flowchart LR` showing the **HTTP routes, data models, async jobs, and UI screens** that participate in one feature. Output: `projects/<name>/features/<slug>.md` (one file per feature).

@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /docs-audit — Documentation Completeness (Diataxis)
 
 Deep-dive documentation analysis using the Diataxis framework. Checks that docs cover all four quadrants (tutorials, how-to guides, reference, explanation) and are not stale. Invoke when `/launch-check`'s documentation row shows WARN or FAIL.
