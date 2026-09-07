@@ -123,6 +123,20 @@ run_case "plain -m bad subject: BLOCK" \
 run_case "plain -m '\''quoted'\'' valid subject: pass" \
   "git commit -m 'fix: a fix'" 0 ""
 
+# The first -m value is the subject. A later -m value becomes the body.
+run_case "multiple -m: valid subject and body pass" \
+  'git commit -m "chore: valid subject" -m "body text"' 0 ""
+
+# A quoted value for another option must not impersonate a -m argument.
+run_case "trailer decoy with equals syntax: invalid subject blocks" \
+  "git commit --trailer='-m \"fix: decoy\"' -m \"invalid subject\"" 2 "BLOCKED: Commit subject"
+
+run_case "trailer decoy with separate value: invalid subject blocks" \
+  'git commit --trailer "-m fix: decoy" -m "invalid subject"' 2 "BLOCKED: Commit subject"
+
+run_case "quoted subject text containing -m: valid subject passes" \
+  'git commit -m "fix: describe -m safely"' 0 ""
+
 # -F file path → no heredoc substitution involved, full validation runs.
 # The skip pattern is anchored on `-m \$(cat <<` literally, so -F is never
 # affected.

@@ -63,18 +63,141 @@ if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit\b[^|;&]*-m\b[^|;&]*\$\(cat[
   exit 0
 fi
 
-# Extract commit message (multi-line safe)
-COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
-MSG=""
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
-if [ -z "$MSG" ]; then
-  MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-  if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
-    MSG=$(cat "$MSG_FILE")
+# Tokenize the command without evaluating it. The hook input is untrusted text.
+# A raw regex can mistake option text for a commit-message option. Keep shell
+# quoting intact while reading tokens, then inspect only real option tokens.
+tokenize_shell_command() {
+  local input="$1"
+  local length char token="" quote="" escaped=0 token_started=0
+  local i=0
+
+  COMMAND_TOKENS=()
+  length=${#input}
+  while [ "$i" -lt "$length" ]; do
+    char=${input:i:1}
+
+    if [ -n "$quote" ]; then
+      if [ "$quote" = "'" ]; then
+        if [ "$char" = "'" ]; then
+          quote=""
+        else
+          token+="$char"
+        fi
+      elif [ "$escaped" -eq 1 ]; then
+        token+="$char"
+        escaped=0
+      elif [ "$char" = "\\" ]; then
+        escaped=1
+      elif [ "$char" = '"' ]; then
+        quote=""
+      else
+        token+="$char"
+      fi
+    else
+      case "$char" in
+        " "|$'\t'|$'\n')
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          ;;
+        "'")
+          quote="'"
+          token_started=1
+          ;;
+        '"')
+          quote='"'
+          token_started=1
+          ;;
+        "\\")
+          escaped=1
+          token_started=1
+          ;;
+        ";"|"|"|"&"|"<"|">")
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          COMMAND_TOKENS+=("$char")
+          ;;
+        *)
+          token+="$char"
+          token_started=1
+          ;;
+      esac
+    fi
+
+    i=$((i + 1))
+  done
+
+  if [ -n "$quote" ] || [ "$escaped" -eq 1 ]; then
+    return 1
   fi
+  if [ "$token_started" -eq 1 ]; then
+    COMMAND_TOKENS+=("$token")
+  fi
+  return 0
+}
+
+if ! tokenize_shell_command "$COMMAND"; then
+  echo "BLOCKED: commit-format hook cannot safely parse this commit command." >&2
+  exit 2
+fi
+
+token_count=${#COMMAND_TOKENS[@]}
+commit_index=-1
+for ((i=0; i + 1 < token_count; i++)); do
+  if [ "${COMMAND_TOKENS[i]}" = "git" ] && [ "${COMMAND_TOKENS[i + 1]}" = "commit" ]; then
+    commit_index=$((i + 2))
+    break
+  fi
+done
+
+if [ "$commit_index" -lt 0 ]; then
+  exit 0
+fi
+
+MSG=""
+MSG_FILE=""
+for ((i=commit_index; i < token_count; i++)); do
+  token="${COMMAND_TOKENS[i]}"
+  case "$token" in
+    ";"|"|"|"&"|"<"|">")
+      break
+      ;;
+    -m|--message)
+      next=$((i + 1))
+      if [ "$next" -ge "$token_count" ]; then
+        echo "BLOCKED: commit-format hook found -m without a message." >&2
+        exit 2
+      fi
+      MSG="${COMMAND_TOKENS[next]}"
+      break
+      ;;
+    --message=*)
+      MSG="${token#--message=}"
+      break
+      ;;
+    -F|--file)
+      next=$((i + 1))
+      if [ "$next" -ge "$token_count" ]; then
+        echo "BLOCKED: commit-format hook found -F without a file." >&2
+        exit 2
+      fi
+      MSG_FILE="${COMMAND_TOKENS[next]}"
+      break
+      ;;
+    --file=*)
+      MSG_FILE="${token#--file=}"
+      break
+      ;;
+  esac
+done
+
+if [ -z "$MSG" ] && [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
+  MSG=$(cat "$MSG_FILE")
 fi
 
 if [ -z "$MSG" ]; then
