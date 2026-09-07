@@ -140,11 +140,14 @@ if [ -f "$HOOK_DIR/_lib-path-resolve.sh" ]; then
 else
   # Deliberate degrade, mirroring require-active-ticket.sh's own handling of
   # the same missing-lib case: this should not happen in a normal clone,
-  # since the file is tracked right next to this one. Returning empty makes
-  # the composed _rmt_normalise_target fall back to its lexical-only result
-  # and leaves the anchors un-canonicalised -- i.e. exactly this gate's
-  # pre-#1181 behaviour -- rather than crashing the hook or exempting a
-  # write it should still gate.
+  # since the file is tracked right next to this one. Returning empty here
+  # is read by TWO callers, each with its own fallback: the composed
+  # _rmt_normalise_target falls back to its lexical-only result, and the
+  # OPS_ROOT_REAL/WORKSPACE_DIR_REAL anchor block further down falls back to
+  # the raw, uncanonicalised OPS_ROOT/WORKSPACE_DIR (its own `|| ANCHOR="$RAW"`
+  # line, not this one). Both degrades land on exactly this gate's pre-#1181
+  # behaviour, rather than crashing the hook or exempting a write it should
+  # still gate.
   _resolve_real_path() { return 0; }
 fi
 
@@ -266,13 +269,40 @@ fi
 # file addressed through either spelling must land on the same marker.
 # Computed once, here, after WORKSPACE_DIR is final, rather than inside
 # _rmt_project_for_path on every call.
+#
+# Uses _resolve_real_path -- NOT a `[ -d "$X" ]` existence guard -- and MUST
+# keep doing so. An earlier version of this block only canonicalised when
+# the directory already existed on disk, and left the anchor EMPTY
+# otherwise. `_rmt_project_for_path`'s first branch is skipped on an empty
+# anchor, so the moment `$WORKSPACE_DIR` had not been created yet -- the
+# ordinary shape for a fresh split-portfolio v2 sibling repo, or any
+# `.portfolio.workspace_dir` override, and equally for a dangling symlink,
+# since `[ -d ]` follows symlinks and reports false for a broken one -- the
+# gate silently stopped identifying the governing project and fell through
+# to the tier-2 ops-level marker instead. That is #1137's cross-repo
+# authorisation hole on a new path: a write into project `alpha` gets
+# judged against the ops fallback ticket instead of alpha's own, and an
+# ops ticket that happens to be a valid open migration ticket approves it
+# with no warning. `_resolve_real_path` has `realpath -m` semantics -- it
+# canonicalises an absent path by walking to the nearest EXISTING ancestor
+# and re-appending the missing tail, so it never needs the target to exist
+# -- which is exactly why `_rmt_normalise_target` below already uses it
+# instead of an existence check. The anchors must use the same helper for
+# the same reason: a migration write into a not-yet-created project
+# workspace is the common case, not the edge case, and the gate must not
+# go permissive on it. The `|| ANCHOR="$RAW"` fallback below only fires
+# when `_resolve_real_path` itself is unavailable (see the missing-library
+# degrade above) or cannot stat even "/" -- it still prefers the raw,
+# uncanonicalised anchor over an empty one, for the same reason.
 OPS_ROOT_REAL=""
-if [ -n "$OPS_ROOT" ] && [ -d "$OPS_ROOT" ]; then
-  OPS_ROOT_REAL="$(cd "$OPS_ROOT" 2>/dev/null && pwd -P)"
+if [ -n "$OPS_ROOT" ]; then
+  OPS_ROOT_REAL="$(_resolve_real_path "$OPS_ROOT")"
+  [ -n "$OPS_ROOT_REAL" ] || OPS_ROOT_REAL="$OPS_ROOT"
 fi
 WORKSPACE_DIR_REAL=""
-if [ -n "$WORKSPACE_DIR" ] && [ -d "$WORKSPACE_DIR" ]; then
-  WORKSPACE_DIR_REAL="$(cd "$WORKSPACE_DIR" 2>/dev/null && pwd -P)"
+if [ -n "$WORKSPACE_DIR" ]; then
+  WORKSPACE_DIR_REAL="$(_resolve_real_path "$WORKSPACE_DIR")"
+  [ -n "$WORKSPACE_DIR_REAL" ] || WORKSPACE_DIR_REAL="$WORKSPACE_DIR"
 fi
 
 # --------- Load project-config overrides ---------

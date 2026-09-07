@@ -1262,6 +1262,119 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# Cases 1181-6..1181-9 (#1198 review -- B1): the anchor block above composes
+# `_resolve_real_path`, but the version of this fix originally submitted on
+# this PR instead kept an `[ -n "$X" ] && [ -d "$X" ]` existence guard around
+# a raw `cd ... && pwd -P` -- i.e. it canonicalised the anchor only when the
+# directory already existed on disk, and left it EMPTY otherwise.
+# AgDR-0131's own "un-canonicalised workspace anchors" bullet claimed this
+# class of gap was retired by #1181; it was not -- the submitted fix
+# reintroduced the same class of gap in a spelling of its own: an absent or
+# dangling-symlink WORKSPACE_DIR/OPS_ROOT empties the anchor,
+# `_rmt_project_for_path`'s first branch is skipped, and the write silently
+# falls to the tier-2 ops marker instead of the project that actually owns
+# it -- #1137's cross-repo authorisation hole, reachable on a brand-new
+# path. Every case below is BOTH a regression pin (fails against that
+# existence-gated anchor block) and a coverage gap-closer: AgDR-0131 records
+# zero cases exercising an absent or dangling-symlink anchor at all -- every
+# 1181-* case above uses a workspace dir that already exists on disk.
+#
+# The fixture MUST place the workspace dir OUTSIDE the ops root -- a
+# split-portfolio-v2-shaped `.portfolio.workspace_dir` override pointing at
+# a sibling directory -- or `_rmt_project_for_path`'s second branch
+# ($OPS_ROOT_REAL/workspace/*) silently rescues a broken first branch and
+# the case proves nothing. That mistake already happened once on this
+# ticket; see case 1181-5's own comment.
+# =============================================================================
+
+# mk_opposing_fixture_external_ws: like mk_opposing_fixture (ops marker #42
+# unlabelled -> BLOCK; project marker #99 for "example" migration+AgDR ->
+# ALLOW), but points .portfolio.workspace_dir at a SIBLING directory outside
+# the ops root instead of the in-fork default $sb/workspace. Echoes
+# "<sb> <external-workspace-dir>" on one line. The workspace dir itself is
+# deliberately NOT created here -- each case below decides whether it stays
+# wholly absent or becomes a dangling symlink, then removes both $sb and the
+# external parent it created.
+mk_opposing_fixture_external_ws() {
+  local sb ws_parent ws_dir
+  sb=$(make_fork)
+  ws_parent="$(dirname "$sb")/$(basename "$sb")-ext-portfolio"
+  ws_dir="$ws_parent/workspace"
+  cat > "$sb/.claude/project-config.json" <<JSON
+{ "portfolio": { "workspace_dir": "../$(basename "$ws_parent")/workspace" } }
+JSON
+  set_marker "$sb" "test-org/test-repo" 42
+  mkdir -p "$sb/.claude/session/tickets"
+  printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$sb/.claude/session/tickets/example"
+  install_mock "$sb" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+  printf '%s %s' "$sb" "$ws_dir"
+}
+
+# --- Case 1181-6: absent workspace anchor -- Bash target (B1) ---------------
+# Neither the workspace dir nor its parent exists on disk. The FIXED anchor
+# still resolves it (_resolve_real_path's realpath -m semantics) to the same
+# spelling the target itself normalises to, so branch 1 of
+# _rmt_project_for_path matches and the PROJECT marker (#99, valid) answers:
+# rc=0. Reverting to the existence-gated anchor empties WORKSPACE_DIR_REAL;
+# branch 2 does not rescue it (the workspace dir is OUTSIDE the ops root),
+# PROJECT resolves to empty, and the tier-2 ops marker (#42, unlabelled)
+# answers instead: rc=2. Discriminates a full revert of the anchor fix.
+read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+if run_hook_bash "$SB" "cat > $WS_DIR/example/$MIG" 0 "$SB"; then
+  record_pass "#1198 B1: absent workspace anchor still reaches the project marker (Bash)"
+else
+  record_fail "#1198 B1: absent workspace anchor still reaches the project marker (Bash)"
+fi
+rm -rf "$SB" "$(dirname "$WS_DIR")"
+
+# --- Case 1181-7: absent workspace anchor -- Edit/Write file_path (B1) ------
+# Same fixture and the same anchor bug, exercised through the Edit/Write
+# tool path instead of Bash. FILE_PATH is the literal string here -- never
+# normalised, by design (see _rmt_normalise_target's own docstring) -- so
+# this isolates the ANCHOR fix from target normalisation entirely: the
+# literal path already matches WORKSPACE_DIR_REAL byte-for-byte once the
+# anchor resolves correctly.
+read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+if run_hook "$SB" "$WS_DIR/example/$MIG" 0; then
+  record_pass "#1198 B1: absent workspace anchor still reaches the project marker (Write)"
+else
+  record_fail "#1198 B1: absent workspace anchor still reaches the project marker (Write)"
+fi
+rm -rf "$SB" "$(dirname "$WS_DIR")"
+
+# --- Case 1181-8: dangling-symlink workspace anchor -- Bash target (B1) -----
+# The workspace dir EXISTS as a symlink, but its target does not -- a
+# distinct filesystem shape from case 1181-6: `[ -d ]` follows symlinks and
+# reports false for a broken one, so the existence-gated anchor block
+# empties WORKSPACE_DIR_REAL here too, by a different trigger. Same
+# verdicts: fixed anchor -> rc=0 (project marker), reverted -> rc=2 (ops
+# fallback).
+read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+mkdir -p "$(dirname "$WS_DIR")"
+ln -s "$(dirname "$WS_DIR")/does-not-exist" "$WS_DIR"
+if run_hook_bash "$SB" "cat > $WS_DIR/example/$MIG" 0 "$SB"; then
+  record_pass "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Bash)"
+else
+  record_fail "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Bash)"
+fi
+rm -rf "$SB" "$(dirname "$WS_DIR")"
+
+# --- Case 1181-9: dangling-symlink workspace anchor -- Edit/Write (B1) ------
+# Case 1181-8's fixture, exercised through the Edit/Write tool path.
+read -r SB WS_DIR <<<"$(mk_opposing_fixture_external_ws)"
+mkdir -p "$(dirname "$WS_DIR")"
+ln -s "$(dirname "$WS_DIR")/does-not-exist" "$WS_DIR"
+if run_hook "$SB" "$WS_DIR/example/$MIG" 0; then
+  record_pass "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Write)"
+else
+  record_fail "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Write)"
+fi
+rm -rf "$SB" "$(dirname "$WS_DIR")"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo
