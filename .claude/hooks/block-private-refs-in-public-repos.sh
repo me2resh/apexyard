@@ -8,13 +8,19 @@
 # <private-project> rebuild". Once filed, the project's name is indexed
 # forever on a public issue tracker.
 #
-# Fires on PreToolUse Bash for the five gh shapes that write to a remote
-# tracker:
+# Fires on PreToolUse Bash for the seven gh shapes that publish content to a
+# remote tracker. me2resh/apexyard#1206 added the last two — review and
+# merge — after a reviewer quoted a private identifier through `gh pr review`
+# and it went unscanned, because neither shape was matched here at all:
 #   - gh issue create --repo <repo>
 #   - gh pr create --repo <repo>
 #   - gh issue comment <n> --repo <repo>
 #   - gh pr comment <n> --repo <repo>
 #   - gh api repos/<owner>/<repo>/{issues,pulls}[...]
+#   - gh pr review <n> --repo <repo>          (#1206)
+#   - gh pr merge <n> --repo <repo>           (#1206 — scans the squash/merge
+#     commit's --subject/--body text, not the merge action itself; the merge
+#     gate hooks separately govern whether the merge itself is allowed)
 #
 # Behaviour:
 #   - Target repo not public-class → exit 0 silently.
@@ -43,17 +49,23 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 1. Match the five covered gh shapes. If the command is anything else,
+# 1. Match the seven covered gh shapes. If the command is anything else,
 #    silently exit 0.
 # ---------------------------------------------------------------------------
 
-IS_GH_SUBCMD=0      # gh issue create | gh pr create | gh issue comment | gh pr comment
+IS_GH_SUBCMD=0      # gh issue create | gh pr create | gh issue comment | gh pr comment | gh pr review | gh pr merge
 IS_GH_API=0         # gh api .../issues | .../pulls
 
 if echo "$COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+issue\s+comment\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+comment\b'; then IS_GH_SUBCMD=1; fi
+# #1206 — gh pr review posts a review body to a public PR; gh pr merge can
+# carry a --subject/--body pair that becomes the squash/merge commit message.
+# Both are content-bearing writes to a public repo exactly like the five
+# shapes above, and were previously invisible to this hook.
+if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+review\b'; then IS_GH_SUBCMD=1; fi
+if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+api\b.*\b(issues|pulls)\b'; then IS_GH_API=1; fi
 
 if [ "$IS_GH_SUBCMD" -eq 0 ] && [ "$IS_GH_API" -eq 0 ]; then
@@ -101,7 +113,8 @@ fi
 #    The fix is class-based instead of positional: within the write segment
 #    (the substring starting at the leftmost recognised write invocation —
 #    `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`,
-#    `gh api` — so nothing BEFORE the write's own subcommand is in scope),
+#    `gh api`, `gh pr review`, `gh pr merge` (#1206) — so nothing BEFORE the
+#    write's own subcommand is in scope),
 #    check whether ANY known public-class repo is named as a `--repo` value
 #    or a `repos/<owner>/<repo>` URL path, ANYWHERE in that segment. If one
 #    is, the write is treated as targeting it — regardless of whether that
@@ -215,7 +228,10 @@ find_write_segment() {
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      anchor_re = "(^|[^A-Za-z0-9_.-])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
+      # #1206: "review" and "merge" added to the pr alternation alongside
+      # "create"/"comment" — gh pr review and gh pr merge are write shapes
+      # on the same footing as the other five (see step 1 above).
+      anchor_re = "(^|[^A-Za-z0-9_.-])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment|review|merge)([[:space:]]|$)|api([[:space:]]|$))"
       if (!match(s, anchor_re)) { exit }
       print substr(s, RSTART)
     }
@@ -518,7 +534,15 @@ extract_path_flag() {
   '
 }
 
-TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
+# #1206: --subject shares the TITLE variable rather than getting its own.
+# `gh pr merge`'s --subject is the merge-commit title, the same role --title
+# plays for issue/PR creation, and `-t` is ALREADY gh's short flag for
+# --subject on `gh pr merge` (it collides with -t/--title on the other
+# shapes) — so a bare `-t` was already flowing into TITLE before this fix.
+# Only the long form was missing. Folding it in means --subject inherits the
+# existing greedy extraction AND the truncation check below for free,
+# instead of duplicating both for one more flag.
+TITLE=$(extract_flag_value '--title|--subject|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
 
 # ---------------------------------------------------------------------------
@@ -582,12 +606,12 @@ esac
 if [ "$TITLE_TRUNCATED" -eq 1 ] || [ "$BODY_TRUNCATED" -eq 1 ]; then
   cat >&2 <<EOF
 ======================================================================
-[apexyard] BLOCKED: could not safely determine where a --title/--body value ends
+[apexyard] BLOCKED: could not safely determine where a --title/--subject/--body value ends
 ======================================================================
 
 This command targets a PUBLIC framework repo (${TARGET_REPO}), but a
-quoted --title or --body value is followed by text this hook does not
-recognise as a valid terminator (a real flag, or end of command).
+quoted --title, --subject, or --body value is followed by text this hook
+does not recognise as a valid terminator (a real flag, or end of command).
 
 The most likely cause: a second command chained after the write with
 && / ; / |, or a trailing shell comment (me2resh/apexyard#1068). Example:
@@ -607,7 +631,7 @@ fi
 # step 6. See the SCOPE ASYMMETRY note in extract_flag_value: the greedy
 # extraction above is fail-closed for detection but fail-OPEN for the bypass
 # marker, because over-capture hands the marker extra places to appear.
-TITLE_STRICT=$(extract_flag_value '--title|-t' "$COMMAND" first)
+TITLE_STRICT=$(extract_flag_value '--title|--subject|-t' "$COMMAND" first)
 BODY_STRICT=$(extract_flag_value '--body|-b' "$COMMAND" first)
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,

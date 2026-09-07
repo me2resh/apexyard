@@ -38,7 +38,7 @@ The hook then exits 0 and prints a one-line warning to stderr. The marker is del
 
 ## When the hook fires
 
-Wired to `PreToolUse` on `Bash` for five command shapes:
+Wired to `PreToolUse` on `Bash` for seven command shapes:
 
 | Shape | Example |
 |-------|---------|
@@ -47,12 +47,80 @@ Wired to `PreToolUse` on `Bash` for five command shapes:
 | `gh issue comment --repo` | `gh issue comment 42 --repo me2resh/apexyard --body "..."` |
 | `gh pr comment --repo` | `gh pr comment 42 --repo me2resh/apexyard --body "..."` |
 | `gh api .../issues\|/pulls` | `gh api repos/me2resh/apexyard/issues -f title=... -f body=...` |
+| `gh pr review --repo` | `gh pr review 42 --repo me2resh/apexyard --comment --body "..."` |
+| `gh pr merge --repo` | `gh pr merge 42 --repo me2resh/apexyard --squash --subject "..." --body "..."` |
+
+The last two closed me2resh/apexyard#1206: `tracker_review_submit` posts every
+code, security, and design review through `gh pr review`, and
+`tracker_pr_merge` can carry a reviewed `--subject`/`--body` onto the
+squash/merge commit (AgDR-0132). Neither shape was matched before #1206 —
+not by the hook's own shape detection, and not in `settings.json`'s
+`PreToolUse` wiring — so a private reference posted through either one
+reached a public repo with nothing scanning it.
+
+**Known gap, not yet closed here:** a private reference committed directly
+to a file — not passed through a `gh` command's title, body, or subject —
+is not scanned by this hook, or by any other hook, at any point. Tracked as
+a follow-up to me2resh/apexyard#1206: a new, dedicated enforcement point,
+not an extension of this hook.
 
 The hook silently exits 0 in three no-op cases:
 
 1. **Target not public-class** — the command points at a private registered repo (your own project); the concern doesn't apply inside your own org.
 2. **`apexyard.projects.yaml` missing** — no registry = no scrub list. The hook has nothing to enforce.
 3. **Empty title + empty body + no body-file** — `gh ... comment <n>` without a `-b` / `-F` opens the editor; the hook has nothing to scan.
+
+## Remediation — when a private reference reaches a public repo anyway
+
+Gaps 1 and 2 of me2resh/apexyard#1206 are prevention. This section is what
+to do once prevention has already failed and a private reference is live on
+a public repo. Say this plainly to whoever runs the remediation: **every
+self-service action below reduces exposure. Exactly one ends it.**
+
+The measurement behind that claim is direct, not theoretical. On the #1206
+incident, two remediations were applied to a real leak within the same hour:
+
+| Action | What it fixes | What it leaves |
+|---|---|---|
+| Edit or delete the comment, review, or PR body through the API | The rendered page and the current REST response | Email notifications already sent, third-party scrapes, and the GitHub search index |
+| Redact the file in a later commit | The file at the branch tip | The earlier commit, still served by the public API at its own SHA |
+| Rewrite the branch history and force-push (with or without a squash) | The branch tip, the Commits tab, and the base branch's ancestry | The orphaned commit, still served by SHA — and the force-push itself publishes that SHA in the PR's own timeline event |
+| Contact GitHub Support to purge unreachable objects | The object itself, once GitHub confirms the purge | Copies already fetched by mirrors, clones, or scrapers before the purge; content already living in a fork |
+
+After the redact-then-commit and the rewrite-then-squash had both run,
+`gh api repos/<repo>/contents/<path>?ref=<pre-rewrite-sha>` still returned
+48,174 bytes containing 2 occurrences. The rewrite changed where the content
+was reachable from. It did not remove it.
+
+GitHub's own documentation says the same thing about the rewrite-and-force-
+push step specifically, in its
+["Removing sensitive data from a repository"](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
+guide: "If you only rewrite your history and force push it, the commits
+with sensitive data may still be accessible elsewhere: in any clones or
+forks of your repository; directly via their SHA-1 hashes in cached views
+on GitHub; through any pull requests that reference them" — and that
+permanently removing the cached views and PR references requires
+"contacting us through the GitHub Support portal." A fork is a separate,
+harder case: GitHub's guidance is that you "will need to coordinate with
+the owners of the forks, asking them to remove the sensitive data or delete
+the fork entirely," because "GitHub cannot provide contact information for
+these owners." GitHub Support purging your own repository's objects does
+not reach a fork at all.
+
+### Runbook
+
+1. File the GitHub Support request first. Every other action in this list
+   can run before GitHub responds.
+2. Redact the leaked content in a new commit next.
+3. If the leak sits in a comment, a review, or a PR body, delete or edit it
+   through the API. Use `gh api -X DELETE` or `gh api -X PATCH`.
+4. Check `apexyard.projects.yaml` for a registered fork of the leaking
+   repo. If one exists, contact its owner directly. GitHub Support cannot
+   remove content from a fork.
+5. Until GitHub Support confirms the purge, the incident status must read
+   reduced exposure. It must not read removed or fixed.
+6. The incident closes when GitHub Support confirms the purge. It can also
+   close when a review finds the exposed content carried no real risk.
 
 ## False-positive handling
 
@@ -69,7 +137,7 @@ The leak-protection hook is a **sibling to `check-secrets.sh`** — both scan ou
 | Hook | Protects | When |
 |------|----------|------|
 | `check-secrets.sh` | API keys, passwords, tokens | `git commit` time (staged diff) |
-| `block-private-refs-in-public-repos.sh` | Project names, repo slugs, workspace paths | `gh` tracker-write time (title + body) |
+| `block-private-refs-in-public-repos.sh` | Project names, repo slugs, workspace paths | `gh` tracker-write time (issue/PR title + body, review body, merge-commit subject/body) |
 
 Both are backstops against routine-but-damaging leaks. Self-discipline is the primary defence; the hook catches the cases where the agent had the private information right in front of it while writing the upstream content and didn't actively suppress it.
 

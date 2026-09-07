@@ -813,6 +813,102 @@ run_case "#1070: existing -f/-F short forms are unaffected" \
   "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during curios-dog rebuild'"
 
 # ---------------------------------------------------------------------------
+# 47-59. me2resh/apexyard#1206 — gh pr review and gh pr merge were entirely
+# unmatched shapes. Neither the step-1 shape detection nor find_write_segment's
+# anchor recognised them, and settings.json wired no PreToolUse entry to this
+# hook for either — so the hook never ran at all, not merely failed to scan.
+# Discovered live during the #1205 review: a reviewer quoted a private
+# identifier through `gh pr review` and nothing caught it.
+# ---------------------------------------------------------------------------
+
+# 47. gh pr review — leak in the inline --body.
+run_case "#1206: gh pr review leak in --body → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr review 12 --repo me2resh/apexyard --comment --body 'confirmed during curios-dog rebuild'"
+
+# 48. gh pr review — leak read from --body-file, the shape
+#     tracker_review_submit actually emits for Rex/Hakim/Tariq.
+REVIEW_LEAK_FILE="$TMPDIR/review-leak.md"
+printf 'Verdict: APPROVED. Confirmed clean after the curios-dog rebuild.\n' > "$REVIEW_LEAK_FILE"
+run_case "#1206: gh pr review leak in --body-file → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr review 12 --repo me2resh/apexyard --approve --body-file \"$REVIEW_LEAK_FILE\""
+
+# 49. Clean review body → passes (no new false positive on the added shape).
+run_case "#1206: gh pr review clean body → pass" \
+  0 "" \
+  "gh pr review 12 --repo me2resh/apexyard --request-changes --body 'please add a test for the edge case'"
+
+# 50. Non-public target stays a no-op, same as every other shape.
+run_case "#1206: gh pr review on non-public target → no-op" \
+  0 "" \
+  "gh pr review 12 --repo me2resh/curios-dog --comment --body 'mentions curios-dog freely'"
+
+# 51. Skip marker still bypasses on the new shape.
+run_case "#1206: gh pr review skip marker bypasses" \
+  0 "private-refs: allow marker present" \
+  "gh pr review 12 --repo me2resh/apexyard --comment --body 'curios-dog <!-- private-refs: allow -->'"
+
+# 52. Named explicitly in the issue's own constraints: a reviewer quoting the
+#     LITERAL PHRASE "gh pr review" in prose (e.g. telling the author what to
+#     run next) must not itself trigger a block absent a real private
+#     reference. The command below is the pre-existing `gh issue comment`
+#     shape; "gh pr review" only ever appears inside its --body text.
+run_case "#1206: prose mentioning 'gh pr review' is not itself a leak" \
+  0 "" \
+  "gh issue comment 5 --repo me2resh/apexyard --body 'looks good — run gh pr review 12 next'"
+
+# 53. gh pr merge — leak in the long-form --subject. This is the actual gap:
+#     -t already rode in on the pre-existing --title|-t pattern (case 54
+#     below), but the long form did not match anything before this fix.
+run_case "#1206: gh pr merge leak in --subject → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --subject 'Merge: curios-dog rebuild notes'"
+
+# 54. Regression guard — the short flag -t was ALREADY an accidental alias of
+#     --title|-t before this fix (gh pr merge documents -t as --subject's own
+#     short form). Confirms the pre-existing coverage still works alongside
+#     the newly-added --subject long form, not just after it.
+run_case "#1206: gh pr merge leak via -t (pre-existing alias) → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash -t 'curios-dog rebuild notes'"
+
+# 55. gh pr merge — leak in the inline --body (merge-commit body text).
+run_case "#1206: gh pr merge leak in --body → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --body 'closes the loop from the curios-dog rebuild'"
+
+# 56. gh pr merge — leak read from --body-file, tracker_pr_merge's own shape
+#     (AgDR-0132 / #1136's reviewed-subject/body feature).
+MERGE_LEAK_FILE="$TMPDIR/merge-leak.md"
+printf 'Reviewed subject/body for the curios-dog rebuild.\n' > "$MERGE_LEAK_FILE"
+run_case "#1206: gh pr merge leak in --body-file → blocked" \
+  2 "project name: curios-dog" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --body-file \"$MERGE_LEAK_FILE\""
+
+# 57. The ordinary /approve-merge shape — no --subject/--body override at all
+#     — must stay a no-op. AgDR-0132 made both optional and empty by default,
+#     so this is the COMMON case and must not become a new false positive on
+#     every routine merge.
+run_case "#1206: gh pr merge with no subject/body override → no-op" \
+  0 "" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --delete-branch"
+
+# 58. Clean subject and body → passes.
+run_case "#1206: gh pr merge clean subject/body → pass" \
+  0 "" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --subject 'Merge: docs typo fix' --body 'fixes a typo in the README'"
+
+# 59. Folding --subject into the shared TITLE pattern (rather than giving it
+#     a parallel extractor) buys the #1068 truncation-safety net for free —
+#     this proves it actually applies: a chained command after a quoted
+#     --subject must refuse rather than silently scan a truncated value, the
+#     same class case 21 pins for --title.
+run_case "#1206: chained command after quoted --subject → truncation refusal, not a silent leak" \
+  2 "could not safely determine" \
+  "gh pr merge 12 --repo me2resh/apexyard --squash --subject \"curios-dog rebuild\" && gh pr list --repo acme/zebrafish-app"
+
+# ---------------------------------------------------------------------------
 # Portability lock: no ERE intervals in the hook's awk program.
 #
 # `{n,m}` support is not universal in awk — mawk 1.3.3 lacks it, BWK awk only
