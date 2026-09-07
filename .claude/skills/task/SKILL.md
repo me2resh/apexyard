@@ -7,6 +7,10 @@ allowed-tools: Bash, Read, Write
 
 # /task — Create a Technical Task Ticket
 
+## Writing rule
+
+Use the controlled technical writing profile from .claude/rules/writing-standard.md for each artifact. Use short complete sentences, active voice, one term for one meaning, and clear lists.
+
 Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit /feature or /bug.
 
 ## Path resolution

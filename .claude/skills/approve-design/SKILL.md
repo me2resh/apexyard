@@ -6,6 +6,10 @@ argument-hint: "<pr-number>"
 effort: low
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /approve-design - Record Per-PR Design-Review Approval
 
 Writes `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified path, see AgDR-0060) with the current HEAD SHA so the `require-design-review-for-ui.sh` merge-gate hook will let a UI PR through. Without this marker, the hook blocks merges on any PR that touches `.tsx`, `.jsx`, `.vue`, `.svelte`, `.css`, `.scss`, `.sass`, `.less`, or `design-tokens*` files.

@@ -6,6 +6,10 @@ argument-hint: "<pr-number> [repo]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /security-review — Security Review
 
 Review a pull request specifically for security vulnerabilities and best practices.

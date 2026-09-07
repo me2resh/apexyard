@@ -5,6 +5,10 @@ argument-hint: "[project-path] [--language=ts|js|python|go|ruby] [--runner=<name
 allowed-tools: Bash, Read, Glob, Grep, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /mutation-test — Behaviour-Quality Sensor
 
 Runs **mutation testing** against a project to measure whether the test suite *constrains* behaviour, not just *executes* lines. Coverage % answers "did the test run this line?"; mutation testing answers "if I broke this line, would the test catch it?".

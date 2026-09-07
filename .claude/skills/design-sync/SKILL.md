@@ -4,6 +4,10 @@ description: Sync a local component library to a claude.ai/design design-system 
 argument-hint: "[--project <uuid>] [--dir <localDir>] [component-name…]"
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /design-sync — Sync a design system to claude.ai/design
 
 Keeps a **local component library** in sync with a **claude.ai/design** design-system project (the shared, browsable source of truth the UI Designer owns). It drives the built-in **`DesignSync`** tool. This is the design-system half of the design-tooling map — see the UI Designer role's "Design Tooling" section.

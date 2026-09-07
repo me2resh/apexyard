@@ -36,10 +36,11 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
-Before drafting or posting the review, read `.claude/rules/writing-standard.md`.
-Apply **Flavored mode**. The review is a durable, human-facing artefact:
-open with the verdict and next action, then give the reason and supporting
-evidence. Do not turn the review into a process transcript.
+Before you draft or post a review, read .claude/rules/writing-standard.md.
+Use the controlled technical writing profile. The review is a durable artifact.
+If the artifact fails the profile, you must request changes.
+State the verdict and next action first. State the reason and evidence after it.
+Do not write a process transcript.
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 

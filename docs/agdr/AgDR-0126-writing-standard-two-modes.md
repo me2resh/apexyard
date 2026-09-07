@@ -7,8 +7,8 @@
 - `reporting-style.md` covers in-thread status only and says so. No rule covers how a ticket, PR body, PRD, or hook message should read.
 - The templates under `templates/` present every section as equally required. A completed PRD carries an empty Timeline table and an "Approvals" grid with no names; a feature ticket carries "Effort Estimate: TBD" by design.
 - Machine-consumed text (hook block messages, spawn briefs, handoff reports) is where ambiguity costs the most: an agent reads "should" as optional and "may" as permission.
-- The milestone's kill criterion (me2resh/apexyard#1164) says to narrow ASD-STE100 use if it removes voice, nuance, or precision from human-facing prose, and to keep Strict rules only for machine-consumed text.
-- The initiative's anti-scope forbids claiming certified ASD-STE100 compliance, reproducing its dictionary, or applying Strict rules to conversation and marketing copy.
+- The milestone's kill criterion (me2resh/apexyard#1164) says to narrow a controlled writing profile if it removes voice, nuance, or precision from human-facing prose, and to keep strict rules only for machine-consumed text.
+- The initiative's anti-scope forbids claims of third-party standard compliance, use of a third-party dictionary, or strict rules for conversation and marketing copy.
 - `evidence-grounding.md` (AgDR-0124) already requires `TBD` over invented values and forbids dropping modality; the writing rule must not contradict it.
 
 ## Options Considered
@@ -34,7 +34,7 @@ Existing hook messages and agent files are not rewritten in this change. They ta
 - `writing-standard.md` becomes the twenty-first rule file. `CLAUDE.md`, `AGENTS.md`, `SYSTEM.md`, and the generated Cursor bridge carry one sentence each and point to it.
 - A completed artifact contains only sections with content. `TBD` marks an unknown required value; nothing marks an absent conditional section.
 - Ticket skills now read the writing-standard guidance before drafting. Their inline fallback previews still carry the pre-#1164 shape, so each fallback must be cleaned when that skill is next touched.
-- The framework does not claim ASD-STE100 certification and ships no restricted dictionary.
+- The framework does not claim third-party certification and ships no third-party dictionary.
 - Seven human-adjudicated cases cover the opening, empty sections, placeholders, Strict block messages, Strict spawn briefs, Flavored uncertainty, and the conversation guard. Behavioral scoring belongs to me2resh/apexyard#1165.
 
 ## Artifacts

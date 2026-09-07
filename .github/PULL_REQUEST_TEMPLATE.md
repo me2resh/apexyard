@@ -6,8 +6,9 @@ The sections below are REQUIRED — the validate-pr-create hook + Rex check for 
 
 ## Summary
 
-<!-- 2–4 narrative bullets: what changed AND why it matters to the reviewer.
-     Not label-only ("State fix") — say the consequence/rationale. -->
+<!-- Use the controlled technical writing profile from .claude/rules/writing-standard.md.
+     Use short complete sentences. Use active voice. State one fact in each sentence.
+     Say what changed and why it matters. -->
 
 -
 -

@@ -6,6 +6,10 @@ argument-hint: "<pr-number> [--no-merge]"
 effort: low
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /approve-merge — Record CEO Approval and Merge
 
 Writes a structured marker at `.claude/session/reviews/<owner>__<repo>__<pr>-ceo.approved` (repo-qualified path, see AgDR-0060), then runs the merge (`gh pr merge <pr> --squash --delete-branch`, or the `glab mr merge` equivalent on a GitLab-forge project) in the same turn via `tracker_pr_merge` — the tracker-agnostic merge adapter in `_lib-tracker.sh` (#759, mirrors `tracker_review_submit` from #758). The marker contains required key/value fields (not just a bare SHA) so a raw `echo SHA > file` from the model is mechanically rejected by `block-unreviewed-merge.sh`.

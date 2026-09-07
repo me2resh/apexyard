@@ -5,6 +5,10 @@ argument-hint: "[browse|search <term>|show <id>|stats] [--project <name>] [--cat
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /agdr — AgDR Library across the portfolio
 
 Walks `apexyard.projects.yaml`, collects every `docs/agdr/*.md` from every managed project (local clone if available, otherwise `gh api`), parses the optional YAML frontmatter for `category` + `projects`, and answers four queries:

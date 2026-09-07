@@ -5,6 +5,10 @@ disable-model-invocation: false
 argument-hint: "<what you're deciding>"
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /decide — Technical Decision Gate
 
 Forces structured decision-making and creates an auditable Agent Decision Record (AgDR).

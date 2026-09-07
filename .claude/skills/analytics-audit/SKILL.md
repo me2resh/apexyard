@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /analytics-audit — Event Taxonomy & Coverage
 
 Deep-dive analytics analysis. Checks that tracking is configured, events follow a naming convention, key user funnels are instrumented, and dashboards exist. Invoke when `/launch-check`'s analytics row shows WARN or FAIL.

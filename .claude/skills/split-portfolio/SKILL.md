@@ -6,6 +6,10 @@ argument-hint: "[--verify | --dry-run]"
 effort: high
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /split-portfolio — Migrate to split-portfolio mode
 
 Automates the recovery flow for ApexYard adopters who hit the **trip-wire** documented in `docs/multi-project.md` — pushed private project names to a public fork, then realized GitHub Free disallows fork-visibility changes.

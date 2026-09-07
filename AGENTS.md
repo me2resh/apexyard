@@ -53,7 +53,7 @@ Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
 - **AgDR required for technical decisions** — before choosing a library, framework, architecture pattern, or implementation approach with real trade-offs, write an Agent Decision Record at `docs/agdr/AgDR-NNNN-{slug}.md` (template: `templates/agdr.md`). No hook enforces this for pi — it's self-discipline.
 - **No hardcoded secrets** — API keys, passwords, tokens, connection strings go in environment variables, never in code.
 - **PR quality** — every PR body needs a `## Glossary` table and narrative (not label-only) summary bullets — what changed AND why it matters. See `.claude/rules/pr-quality.md`.
-- **Write for the reader** — open every durable artifact (ticket, PR body, AgDR, PRD, design) with the outcome, reason, decision, and next action when they exist; keep a template's required core and delete conditional sections that have no content; let no placeholder or "N/A" survive. Machine-consumed text (hook messages, spawn briefs, handoff reports) is Strict: one instruction per sentence, imperative, condition first, `must` / `must not` / `can`. Durable artifacts stay Flavored: short and plain, with hedges, numbers, and voice kept. Full rule: `.claude/rules/writing-standard.md`.
+- **Use controlled technical writing for artifacts** — apply the controlled technical writing profile to each new or changed ticket, PR body, review, AgDR, design, audit, and project document. Use short complete sentences, active voice, one term for one meaning, and clear lists. Keep facts and uncertainty. Apply it to framework and managed-project artifacts. Full rule: .claude/rules/writing-standard.md.
 - **Explicit per-PR approval before merge** — a plan-level "go"/"continue" does not authorize `gh pr merge`. Stop and get an explicit per-PR nod first. See `.claude/rules/pr-workflow.md`.
 
 ### Full detail — read on demand
@@ -68,7 +68,7 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 | `.claude/rules/workflow-gates.md` | The 6 gates (PRD→Done), pre-build gate, migration gate, architecture-review gate, spike exemptions |
 | `.claude/rules/pr-workflow.md` | Pre-push checklist, merge-gate mechanics, build-agents-cannot-self-review |
 | `.claude/rules/pr-quality.md` | Glossary requirement, narrative summary bullets, QA checklist, no red CI |
-| `.claude/rules/writing-standard.md` | Human-first artifact openings, required-core templates, Strict mode for machine text, Flavored mode for artifacts |
+| .claude/rules/writing-standard.md | controlled technical writing profile for new and changed artifacts and machine text |
 | `.claude/rules/agdr-decisions.md` | When an AgDR is required, trigger patterns |
 | `.claude/rules/plan-mode.md` | When to plan before executing |
 | `.claude/rules/loop-mode.md` | When a repetitive build→verify cycle should be looped, with guardrails |

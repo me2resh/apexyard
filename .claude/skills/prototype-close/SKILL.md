@@ -5,6 +5,10 @@ argument-hint: "--promote | --discard [<prototype-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /prototype-close — Close a Prototype via the Disposition Gate
 
 The disposition gate prevents the worst-of-both case: a prototype that "looked great in the demo" but never decides what to do with it, leaving a throwaway mockup that quietly gets promoted into production. Every prototype must close with one of two paths:

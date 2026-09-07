@@ -211,8 +211,8 @@ Columns:
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
 |------|--------|-------------|---------------|---------------------------------|
-| Durable artifacts open with the outcome, reason, decision, and next action when they exist; templates keep a required core and drop empty conditional sections; no placeholder or "N/A" survives | `.claude/rules/writing-standard.md § Rule 1–2`, `templates/*` guidance comments, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | A hook can detect a literal `{{placeholder}}` in an issue body but cannot judge whether a section was needed or an opening is clear; static tests verify wiring and template comments only (AgDR-0126, [#1164][1164]) [^self-discipline] |
-| Machine-consumed text (hook messages, skill steps, spawn briefs, handoff reports) is Strict: one instruction per sentence, imperative, condition first, exact modality; durable artifacts are Flavored and keep hedges, numbers, names, and voice | `.claude/rules/writing-standard.md § Rule 3–4` | prose | no | A sentence-length or word-list lint blocks valid precision and passes empty clarity; the kill criterion in [#1164][1164] keeps Strict mode off human-facing prose [^self-discipline] |
+| New and changed artifacts use the controlled technical writing profile. They use short complete sentences, active voice, one term for one meaning, and clear lists. They retain evidence and uncertainty. | .claude/rules/writing-standard.md, producer instructions, and review skills | reviewer checks + regression cases | partial | Static tests confirm that producers and reviewers load the profile. Reviewers assess sentence structure, meaning, and vocabulary. A checker cannot prove full dictionary compliance. See AgDR-0134 and [#1164][1164]. |
+| Machine text uses one clear instruction in each sentence. Durable artifacts use the same controlled technical writing profile. | .claude/rules/writing-standard.md | reviewer checks | partial | Static checks can find missing wiring. Reviewers assess the text. The framework does not claim certified compliance. |
 
 ## Summary
 

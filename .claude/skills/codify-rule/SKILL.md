@@ -5,6 +5,10 @@ argument-hint: "[--pr <N>] [--blocking] [<github-pr-comment-url>]"
 allowed-tools: Bash, Read, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /codify-rule — Codify a Rex-Miss Into a Handbook Entry
 
 When a human reviewer (or Copilot, or any second-pass review) catches a bug Rex missed, run `/codify-rule` to turn that review comment into a draft handbook entry. The handbook layer then **compounds on Rex's actual misses** rather than only the rules an operator thought to write proactively.

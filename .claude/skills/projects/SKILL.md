@@ -4,6 +4,10 @@ description: List all managed projects with status, branch, open PRs, and open i
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /projects — List Managed Projects
 
 Show every project ApexYard is managing, with a one-line health snapshot. Reads `apexyard.projects.yaml` at the root of the ops repo (your fork of apexyard) and iterates the registry.

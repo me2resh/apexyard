@@ -5,6 +5,10 @@ argument-hint: "<input-file> [--no-prompt] [--converter=pandoc|md-to-pdf|wkhtmlt
 allowed-tools: Bash, Read, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /pdf — Export Any Doc to PDF
 
 Convert a framework-generated document (markdown, HTML, BPMN) to PDF for sharing with non-technical stakeholders, board members, customers, or auditors.
