@@ -107,10 +107,21 @@ Chosen: **{option}**, because {justification}.
 
 ### 6. Get the Next ID
 
+Use a filesystem lock while scanning and reserving the next ID. This prevents
+two concurrent `/decide` runs from selecting the same number.
+
 ```bash
-ls docs/agdr/AgDR-*.md 2>/dev/null | sort -V | tail -1 | grep -oE 'AgDR-[0-9]+' | grep -oE '[0-9]+'
-# Increment by 1, or start at 0001
+lock_dir="${APEXYARD_AGDR_LOCK_DIR:-.claude/session}/agdr-id.lock"
+while ! mkdir "$lock_dir" 2>/dev/null; do sleep 1; done
+trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+last=$(find docs/agdr -maxdepth 1 -type f -name 'AgDR-[0-9][0-9][0-9][0-9]-*.md' -print \
+  | sed -E 's#^.*/AgDR-([0-9]{4})-.*#\1#' | sort -n | tail -1)
+next=$(printf '%04d' $((10#${last:-0} + 1)))
+# Confirm that docs/agdr/AgDR-${next}-*.md does not exist before writing.
 ```
+
+Keep the lock until the AgDR file is created. If the candidate exists after
+the scan, increment and check again. Remove the lock after the file is written.
 
 ### 7. Offer a Contrarian challenge (optional — opt-in, never forced)
 
