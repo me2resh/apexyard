@@ -13,13 +13,22 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 printf '%s' "$COMMAND" | grep -qE '(^|[;&|[:space:]])git[[:space:]]+commit([[:space:]]|$)' || exit 0
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "BLOCKED: staged private-reference hook cannot resolve the Git root." >&2
+  exit 2
+}
 if [ -f "$ROOT/.claude/hooks/_lib-portfolio-paths.sh" ]; then
   # shellcheck source=/dev/null
   . "$ROOT/.claude/hooks/_lib-portfolio-paths.sh"
 fi
 REGISTRY=$(portfolio_registry 2>/dev/null || true)
-[ -f "$REGISTRY" ] || exit 0
+if [ ! -f "$REGISTRY" ]; then
+  if [ -f "$ROOT/.apexyard-fork" ]; then
+    echo "BLOCKED: staged private-reference hook cannot resolve the portfolio registry." >&2
+    exit 2
+  fi
+  exit 0
+fi
 TOKENS=$(awk '/^[[:space:]]*(name|workspace):[[:space:]]*/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/["'"'"' ]/, ""); if (length($0) >= 3) print $0 } /^[[:space:]]*repo:[[:space:]]*/ { sub(/^[^:]*:[[:space:]]*/, ""); gsub(/["'"'"' ]/, ""); split($0, a, "/"); for (i in a) if (length(a[i]) >= 3) print a[i]; print $0 }' "$REGISTRY" | sort -u)
 [ -n "$TOKENS" ] || exit 0
 while IFS= read -r path; do
