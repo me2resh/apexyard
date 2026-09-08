@@ -8,13 +8,37 @@
 # <private-project> rebuild". Once filed, the project's name is indexed
 # forever on a public issue tracker.
 #
-# Fires on PreToolUse Bash for the five gh shapes that write to a remote
-# tracker:
+# Fires on PreToolUse Bash for the seven gh shapes that publish content to a
+# remote tracker, PLUS the three tracker-agnostic wrapper functions that emit
+# those same shapes one process down. me2resh/apexyard#1206 added review,
+# merge, and every wrapper — after a reviewer quoted a private identifier
+# through `gh pr review` and it went unscanned, because none of these four
+# shapes were matched here at all:
 #   - gh issue create --repo <repo>
 #   - gh pr create --repo <repo>
 #   - gh issue comment <n> --repo <repo>
 #   - gh pr comment <n> --repo <repo>
 #   - gh api repos/<owner>/<repo>/{issues,pulls}[...]
+#   - gh pr review <n> --repo <repo>          (#1206)
+#   - gh pr merge <n> --repo <repo>           (#1206 — scans the squash/merge
+#     commit's --subject/--body text, not the merge action itself; the merge
+#     gate hooks separately govern whether the merge itself is allowed)
+#
+# WRAPPER SHAPES (#1206 H2, HIGH finding, the same class _lib-extract-pr.sh
+# closed for the four merge gates in #759):
+#   - tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]
+#   - tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]
+#   - tracker_pr_merge <owner/repo> <pr> <strategy> [<del>] [<subj>] [<file>]
+#
+# These are SOURCED SHELL FUNCTIONS in _lib-tracker.sh. The `gh` call each one
+# makes happens INSIDE the function, one process down — the literal text
+# "gh pr review" / "gh pr merge" / "gh issue create" never appears in the Bash
+# tool's own command string for these calls. `code-reviewer.md` prescribes
+# `tracker_review_submit` for every review Rex/Hakim/Tariq post, explicitly
+# NOT a hardcoded `gh pr review` — so the wrapper form is the CANONICAL path,
+# not an edge case, and it was completely unguarded: this hook had zero
+# matchers for any of the three wrapper names, before or after the gh-shape
+# fix above.
 #
 # Behaviour:
 #   - Target repo not public-class → exit 0 silently.
@@ -35,7 +59,16 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 if [ -z "$COMMAND" ]; then
   . "$(dirname "$0")/_lib-fail-closed-json.sh"
-  if raw_payload_command_matches "$INPUT" 'gh[[:space:]]+(issue|pr)[[:space:]]+(create|comment)'; then
+  # #1206 H1: this degraded-path (jq-unavailable) check named four of the
+  # seven gh shapes this hook covers. gh pr review and gh pr merge were
+  # absent, so a broken jq turned a covered write into a silent pass for
+  # exactly the two shapes #1206 added. Both gh-shape and wrapper-shape
+  # (tracker_review_submit / tracker_pr_merge / tracker_create) coverage
+  # must fail closed here too, or a broken jq reopens gap 1 and gap 2 (H2)
+  # at the same time.
+  if raw_payload_command_matches "$INPUT" 'gh[[:space:]]+(issue|pr)[[:space:]]+(create|comment|review|merge)' \
+    || raw_payload_command_matches "$INPUT" 'gh[[:space:]]+api[^\n]*\b(issues|pulls)\b' \
+    || raw_payload_command_matches "$INPUT" 'tracker_(review_submit|pr_merge|create)\b'; then
     echo "BLOCKED: leak-protection hook cannot parse this tracker write. Restore jq and retry." >&2
     exit 2
   fi
@@ -43,20 +76,32 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 1. Match the five covered gh shapes. If the command is anything else,
-#    silently exit 0.
+# 1. Match the seven gh shapes plus the three wrapper shapes. If the command
+#    is none of these, silently exit 0.
 # ---------------------------------------------------------------------------
 
-IS_GH_SUBCMD=0      # gh issue create | gh pr create | gh issue comment | gh pr comment
+IS_GH_SUBCMD=0      # gh issue create | gh pr create | gh issue comment | gh pr comment | gh pr review | gh pr merge
 IS_GH_API=0         # gh api .../issues | .../pulls
+IS_WRAPPER=0        # tracker_create | tracker_review_submit | tracker_pr_merge
 
 if echo "$COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+issue\s+comment\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+comment\b'; then IS_GH_SUBCMD=1; fi
+# #1206 — gh pr review posts a review body to a public PR; gh pr merge can
+# carry a --subject/--body pair that becomes the squash/merge commit message.
+# Both are content-bearing writes to a public repo exactly like the five
+# shapes above, and were previously invisible to this hook.
+if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+review\b'; then IS_GH_SUBCMD=1; fi
+if echo "$COMMAND" | grep -qE '\bgh\s+pr\s+merge\b'; then IS_GH_SUBCMD=1; fi
 if echo "$COMMAND" | grep -qE '\bgh\s+api\b.*\b(issues|pulls)\b'; then IS_GH_API=1; fi
+# #1206 H2 — the wrapper shapes. A build agent or skill calling these never
+# produces the literal "gh ..." text the checks above look for.
+if echo "$COMMAND" | grep -qE '\btracker_create\b'; then IS_WRAPPER=1; fi
+if echo "$COMMAND" | grep -qE '\btracker_review_submit\b'; then IS_WRAPPER=1; fi
+if echo "$COMMAND" | grep -qE '\btracker_pr_merge\b'; then IS_WRAPPER=1; fi
 
-if [ "$IS_GH_SUBCMD" -eq 0 ] && [ "$IS_GH_API" -eq 0 ]; then
+if [ "$IS_GH_SUBCMD" -eq 0 ] && [ "$IS_GH_API" -eq 0 ] && [ "$IS_WRAPPER" -eq 0 ]; then
   exit 0
 fi
 
@@ -101,7 +146,8 @@ fi
 #    The fix is class-based instead of positional: within the write segment
 #    (the substring starting at the leftmost recognised write invocation —
 #    `gh issue create`, `gh pr create`, `gh issue comment`, `gh pr comment`,
-#    `gh api` — so nothing BEFORE the write's own subcommand is in scope),
+#    `gh api`, `gh pr review`, `gh pr merge` (#1206) — so nothing BEFORE the
+#    write's own subcommand is in scope),
 #    check whether ANY known public-class repo is named as a `--repo` value
 #    or a `repos/<owner>/<repo>` URL path, ANYWHERE in that segment. If one
 #    is, the write is treated as targeting it — regardless of whether that
@@ -215,7 +261,14 @@ find_write_segment() {
     { buf = (NR == 1 ? $0 : buf "\n" $0) }
     END {
       s = buf
-      anchor_re = "(^|[^A-Za-z0-9_.-])gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment)([[:space:]]|$)|api([[:space:]]|$))"
+      # #1206: "review" and "merge" added to the pr alternation alongside
+      # "create"/"comment" — gh pr review and gh pr merge are write shapes
+      # on the same footing as the other five (see step 1 above).
+      # #1206 H2: the three tracker_* wrapper names are additional top-level
+      # anchor alternatives, on the same footing as the gh shapes — a wrapper
+      # call has no "gh" prefix at all, so it needs its own anchor branch,
+      # not an extension of the existing gh one.
+      anchor_re = "(^|[^A-Za-z0-9_.-])(gh[[:space:]]+(issue[[:space:]]+(create|comment)([[:space:]]|$)|pr[[:space:]]+(create|comment|review|merge)([[:space:]]|$)|api([[:space:]]|$))|tracker_create([[:space:]]|$)|tracker_review_submit([[:space:]]|$)|tracker_pr_merge([[:space:]]|$))"
       if (!match(s, anchor_re)) { exit }
       print substr(s, RSTART)
     }
@@ -262,6 +315,46 @@ if [ "${AUTO_DETECT_UPSTREAM:-true}" != "false" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# #1206 H2 — resolve a wrapper call's positional <owner/repo> (argument 1,
+# shared by all three wrappers). Reuses _extract_wrapper_arg from
+# _lib-extract-pr.sh, the same quoted-or-bare positional tokenizer the four
+# merge-gate hooks already trust for the identical tracker_pr_merge shape
+# (#759) — one tested tokenizer, not a second implementation that could
+# quietly drift from it.
+#
+# If the library cannot be loaded, WRAPPER_REPO stays empty and this write
+# resolves the same way an unrecognised --repo form already does elsewhere
+# in this file (case 31, --repo=owner/name): exit 0, not a block. A missing
+# core hook library breaks the four merge gates identically and is visible
+# there; blocking every wrapper call — public AND private target alike —
+# on top of that would be disproportionate to a library-install problem.
+#
+# Located via $(dirname "$0"), the same pattern already used for
+# _lib-fail-closed-json.sh above — _lib-extract-pr.sh is a SIBLING file in
+# this hook's own .claude/hooks/ directory, so finding it needs no git
+# lookup. Resolving it via `git rev-parse --show-toplevel` instead would
+# fail in any non-git working directory (verified: it does, in this file's
+# own test sandbox).
+# ---------------------------------------------------------------------------
+
+WRAPPER_REPO=""
+if [ "$IS_WRAPPER" -eq 1 ] && [ -f "$(dirname "$0")/_lib-extract-pr.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$(dirname "$0")/_lib-extract-pr.sh"
+  for _wfn in tracker_create tracker_review_submit tracker_pr_merge; do
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE "\\b${_wfn}\\b[^|;&)]*")
+    if [ -n "$_wspan" ]; then
+      _wargs=$(printf '%s' "$_wspan" | sed -E "s/^${_wfn}[[:space:]]+//")
+      _wcand=$(_extract_wrapper_arg "$_wargs" 1)
+      if [ -n "$_wcand" ]; then
+        WRAPPER_REPO="$_wcand"
+        break
+      fi
+    fi
+  done
+fi
+
 # Class-based membership check: does the write segment name ANY known
 # public repo as a --repo/-R value or a repos/<owner>/<repo> path,
 # anywhere? First match wins arbitrarily — it is used only for messaging
@@ -286,6 +379,14 @@ for r in $PUBLIC_REPOS; do
   # gh api shape: repos/<owner>/<repo> URL path, same boundary treatment
   # plus `/` for a trailing path segment (.../issues, .../pulls).
   if printf '%s' "$WRITE_SEGMENT" | grep -qE -- "(^|[^A-Za-z0-9_.-])repos/${esc}([/[:space:]\"'>]|\$)"; then
+    TARGET_REPO="$r"
+    break
+  fi
+  # #1206 H2 — wrapper positional <owner/repo> form. Exact match: unlike the
+  # flag form, _extract_wrapper_arg already returns the clean, quote-
+  # stripped token for exactly this one argument, so there is nothing left
+  # to bound with a regex.
+  if [ -n "$WRAPPER_REPO" ] && [ "$WRAPPER_REPO" = "$r" ]; then
     TARGET_REPO="$r"
     break
   fi
@@ -518,8 +619,36 @@ extract_path_flag() {
   '
 }
 
-TITLE=$(extract_flag_value '--title|-t' "$COMMAND")
+# #1206: --subject shares the TITLE variable rather than getting its own.
+# `gh pr merge`'s --subject is the merge-commit title, the same role --title
+# plays for issue/PR creation, and `-t` is ALREADY gh's short flag for
+# --subject on `gh pr merge` (it collides with -t/--title on the other
+# shapes) — so a bare `-t` was already flowing into TITLE before this fix.
+# Only the long form was missing. Folding it in means --subject inherits the
+# existing greedy extraction AND the truncation check below for free,
+# instead of duplicating both for one more flag.
+TITLE=$(extract_flag_value '--title|--subject|-t' "$COMMAND")
 BODY=$(extract_flag_value '--body|-b' "$COMMAND")
+
+# #1206 H2 — fold in the wrapper's positional title/subject when the flag-
+# based extraction above found nothing. tracker_create's title is argument
+# 2; tracker_pr_merge's subject is argument 5 (tracker_review_submit has
+# no title-equivalent argument at all). _extract_wrapper_arg returns the
+# token with its own quotes already stripped, so it can never start with a
+# raw quote character — it cannot trigger the truncation check below the
+# way a flag-based extraction can.
+if [ -z "$TITLE" ] && [ "$IS_WRAPPER" -eq 1 ] && command -v _extract_wrapper_arg >/dev/null 2>&1; then
+  if echo "$WRITE_SEGMENT" | grep -qE '\btracker_create\b'; then
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE '\btracker_create\b[^|;&)]*')
+    _wargs=$(printf '%s' "$_wspan" | sed -E 's/^tracker_create[[:space:]]+//')
+    TITLE=$(_extract_wrapper_arg "$_wargs" 2)
+  fi
+  if [ -z "$TITLE" ] && echo "$WRITE_SEGMENT" | grep -qE '\btracker_pr_merge\b'; then
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    _wargs=$(printf '%s' "$_wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+    TITLE=$(_extract_wrapper_arg "$_wargs" 5)
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # me2resh/apexyard#1068 (follow-on) — a chained shell command (or a trailing
@@ -580,13 +709,30 @@ case "$BODY" in
 esac
 
 if [ "$TITLE_TRUNCATED" -eq 1 ] || [ "$BODY_TRUNCATED" -eq 1 ]; then
+  # #1206 (Hakim MEDIUM) — name only the flag(s) that actually failed to
+  # close. Folding --subject into TITLE's shared pattern means a command
+  # with no --subject anywhere can still trip BODY_TRUNCATED alone — a
+  # gh pr merge whose own --body is followed by a chained command hits this
+  # class independent of --subject (verified against dev: this same command
+  # with the --subject text removed still triggers it, because gh pr merge
+  # was not a scanned shape on dev at all). Naming --subject regardless of
+  # which flag actually failed would misattribute the cause.
+  TRUNCATED_FLAGS=""
+  if [ "$TITLE_TRUNCATED" -eq 1 ]; then TRUNCATED_FLAGS="--title or --subject"; fi
+  if [ "$BODY_TRUNCATED" -eq 1 ]; then
+    if [ -n "$TRUNCATED_FLAGS" ]; then
+      TRUNCATED_FLAGS="${TRUNCATED_FLAGS} and --body"
+    else
+      TRUNCATED_FLAGS="--body"
+    fi
+  fi
   cat >&2 <<EOF
 ======================================================================
-[apexyard] BLOCKED: could not safely determine where a --title/--body value ends
+[apexyard] BLOCKED: could not safely determine where a ${TRUNCATED_FLAGS} value ends
 ======================================================================
 
 This command targets a PUBLIC framework repo (${TARGET_REPO}), but a
-quoted --title or --body value is followed by text this hook does not
+quoted ${TRUNCATED_FLAGS} value is followed by text this hook does not
 recognise as a valid terminator (a real flag, or end of command).
 
 The most likely cause: a second command chained after the write with
@@ -607,7 +753,7 @@ fi
 # step 6. See the SCOPE ASYMMETRY note in extract_flag_value: the greedy
 # extraction above is fail-closed for detection but fail-OPEN for the bypass
 # marker, because over-capture hands the marker extra places to appear.
-TITLE_STRICT=$(extract_flag_value '--title|-t' "$COMMAND" first)
+TITLE_STRICT=$(extract_flag_value '--title|--subject|-t' "$COMMAND" first)
 BODY_STRICT=$(extract_flag_value '--body|-b' "$COMMAND" first)
 
 # --body-file <path> / -F <path> (only when -F's value is NOT a key=val pair,
@@ -629,6 +775,62 @@ if [ -z "$BODY_FILE" ]; then
   if [ -n "$F_VAL" ] && ! echo "$F_VAL" | grep -q '='; then
     BODY_FILE="$F_VAL"
   fi
+fi
+
+# #1206 H2 — fold in the wrapper's positional body-file path. The argument
+# position differs per wrapper: tracker_create's is argument 3,
+# tracker_review_submit's is argument 4, tracker_pr_merge's is argument 6.
+# None of the three wrappers take an inline body string — body is always a
+# file — so this is the only body-content path a wrapper call can carry.
+# Landing it in the same $BODY_FILE variable means the existing
+# BODY_FILE_UNREADABLE fail-closed check just below applies to it too, with
+# no separate check to keep in sync.
+if [ -z "$BODY_FILE" ] && [ "$IS_WRAPPER" -eq 1 ] && command -v _extract_wrapper_arg >/dev/null 2>&1; then
+  if echo "$WRITE_SEGMENT" | grep -qE '\btracker_create\b'; then
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE '\btracker_create\b[^|;&)]*')
+    _wargs=$(printf '%s' "$_wspan" | sed -E 's/^tracker_create[[:space:]]+//')
+    BODY_FILE=$(_extract_wrapper_arg "$_wargs" 3)
+  fi
+  if [ -z "$BODY_FILE" ] && echo "$WRITE_SEGMENT" | grep -qE '\btracker_review_submit\b'; then
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE '\btracker_review_submit\b[^|;&)]*')
+    _wargs=$(printf '%s' "$_wspan" | sed -E 's/^tracker_review_submit[[:space:]]+//')
+    BODY_FILE=$(_extract_wrapper_arg "$_wargs" 4)
+  fi
+  if [ -z "$BODY_FILE" ] && echo "$WRITE_SEGMENT" | grep -qE '\btracker_pr_merge\b'; then
+    _wspan=$(printf '%s' "$WRITE_SEGMENT" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    _wargs=$(printf '%s' "$_wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+    BODY_FILE=$(_extract_wrapper_arg "$_wargs" 6)
+  fi
+fi
+
+# #1206 (Hakim MEDIUM) — the `--flag=value` equals form. extract_flag_value
+# and extract_path_flag both require WHITESPACE between a flag and its
+# value; --title=, --subject=, --body=, and --body-file= match neither
+# pattern, so a leak sent through the equals form would otherwise reach the
+# empty-haystack short-circuit below unscanned. --input already fixed this
+# exact gap for itself (#1070, matching space-or-equals); these four flags
+# did not carry the same fix. Checked against WRITE_SEGMENT, not the
+# extracted TITLE/BODY values, so it fires on the unparsed flag itself
+# rather than guessing from content that was never read.
+if printf '%s' "$WRITE_SEGMENT" | grep -qE -- '(^|[[:space:]])--(title|subject|body|body-file)='; then
+  cat >&2 <<EOF
+======================================================================
+[apexyard] BLOCKED: --flag=value form is not scanned
+======================================================================
+
+This command targets a PUBLIC framework repo (${TARGET_REPO}) and uses
+the --title=, --subject=, --body=, or --body-file= equals form. This
+hook's extractors require a space between the flag and its value, so an
+equals-joined value is never read.
+
+Fix: use a space instead of the equals sign, then retry.
+
+The <!-- private-refs: allow --> skip marker does NOT apply here, for the
+same reason it does not apply to an unreadable --body-file: it can only be
+honoured for content this hook has actually read.
+======================================================================
+EOF
+  exit 2
 fi
 
 # #1039 — DISTINGUISH "no body-file" FROM "body-file I could not read".
