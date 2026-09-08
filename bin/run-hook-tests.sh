@@ -95,6 +95,11 @@ for t in "${TESTS[@]}"; do
   # shellcheck disable=SC2086
   if $TIMEOUT_BIN bash "$t" </dev/null >/tmp/_hooktest.out 2>&1; then
     printf 'PASS %s\n' "$t"
+    if grep -q '^SKIP' /tmp/_hooktest.out; then
+      printf '  diagnostics from %s:\n' "$t"
+      grep '^SKIP' /tmp/_hooktest.out | sed 's/^/    /'
+      skip=$((skip+1))
+    fi
     pass=$((pass+1))
   else
     rc=$?
