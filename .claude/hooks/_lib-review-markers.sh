@@ -138,9 +138,8 @@ review_marker_path() {
 # `gh pr view` exposes no baseRepository field, but the PR URL is ALWAYS rooted
 # on the base repo — parse owner/repo from it (handles GitHub /pull/ and GitLab
 # /-/merge_requests/, including nested GitLab groups). Falls back to the passed
-# <repo> when the URL can't be parsed or the scoped gh call fails — so SAME-REPO
-# PRs (base == head) resolve exactly as before and this change is a provable
-# no-op for them.
+# <repo> when the URL cannot be parsed or the scoped gh call fails. Returning
+# the caller's repo would create a marker that the merge gate cannot read.
 #
 # Args:
 #   pr    — the PR/MR number.
@@ -148,11 +147,9 @@ review_marker_path() {
 #           this PR. Used to SCOPE the gh query (`--repo`), never omitted in
 #           favour of gh's ambient default.
 #
-# Output (stdout): "owner/repo" derived from the resolved PR URL, or the
-# passed-in <repo> when the scoped query fails/is unparseable (fail-soft — the
-# caller's own repo is still the best available answer).
-# Exit code: 0 normally; 1 (with a stderr message, no stdout) when <pr> is
-# given but <repo> is missing — there is nothing safe to scope the query to.
+# Output (stdout): "owner/repo" derived from the resolved PR URL.
+# Exit code: 0 on a parsed PR URL; 1 with no stdout when the query fails, the
+# URL is unparseable, or <repo> is missing.
 pr_base_repo() {
   local pr="${1:-}" repo="${2:-}" url base
   if [ -z "$pr" ]; then
@@ -165,12 +162,16 @@ pr_base_repo() {
   fi
   # ALWAYS scoped to the caller-supplied repo — never an unscoped/ambient gh
   # call. See the WHY-A-REQUIRED-REPO note above.
-  url=$(gh pr view "$pr" --repo "$repo" --json url,baseRefName --jq '.url' 2>/dev/null)
+  url=$(gh pr view "$pr" --repo "$repo" --json url,baseRefName --jq '.url' 2>/dev/null) || {
+    echo "_lib-review-markers.sh: cannot resolve PR #$pr in base repo $repo; no review marker written" >&2
+    return 1
+  }
   base=$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
   if [ -n "$base" ] && [ "$base" != "$url" ]; then
     printf '%s' "$base"
   else
-    printf '%s' "$repo"
+    echo "_lib-review-markers.sh: cannot parse base repo from PR #$pr URL; no review marker written" >&2
+    return 1
   fi
 }
 

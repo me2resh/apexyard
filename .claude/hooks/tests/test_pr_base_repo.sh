@@ -88,15 +88,14 @@ seturl 'https://gitlab.com/grp/sub/proj/-/merge_requests/12'
 assert_eq "glab nested MR → base confirmed via scoped query" "grp/sub/proj" \
   "$(pr_base_repo 12 grp/sub/proj)"
 
-# 4. gh fails (no URL queued) → fall back to the passed-in repo.
+# 4. gh fails (no URL queued) → fail loudly; do not create a gate-invisible marker.
 seturl ''
-assert_eq "gh fail → repo fallback" "me2resh/apexyard" \
+assert_eq "gh fail → no marker repo" "" \
   "$(pr_base_repo 999 me2resh/apexyard)"
 
-# 5. unparseable URL → repo fallback (sed leaves it unchanged → base==url →
-#    the mock's own base/repo comparison fails closed → repo fallback fires).
+# 5. unparseable URL → fail loudly; do not create a gate-invisible marker.
 seturl 'https://github.com/not-a-pr-url'
-assert_eq "bad URL → repo fallback" "owner/repo" \
+assert_eq "bad URL → no marker repo" "" \
   "$(pr_base_repo 1 owner/repo)"
 
 # 6. no pr number → repo (guard, no gh call).
@@ -109,13 +108,11 @@ assert_eq "missing repo w/ pr → empty (error path, not a silent guess)" "" \
   "$(pr_base_repo 5 2>/dev/null)"
 
 # 8. wrong repo passed (e.g. the head/fork of a genuine cross-fork PR) → the
-#    scoped query fails closed and returns the passed repo itself — NOT an
-#    ambient guess at some unrelated repo. Documents the contract: callers
-#    must pass the repo they're confident hosts the PR; passing the wrong one
-#    degrades safely rather than silently returning wrong data.
+#    scoped query fails closed and returns no repo. This prevents a marker from
+#    being written under a path that the merge gate cannot read.
 seturl 'https://github.com/me2resh/apexyard/pull/762'
-assert_eq "wrong (head/fork) repo passed → fails closed, returns itself" \
-  "AbdElrahmaN31/apexyard" "$(pr_base_repo 762 AbdElrahmaN31/apexyard)"
+assert_eq "wrong (head/fork) repo passed → fails closed, returns no repo" \
+  "" "$(pr_base_repo 762 AbdElrahmaN31/apexyard)"
 
 # 9. self-hosted GitHub Enterprise host → base still parsed (host-agnostic),
 #    confirmed via the correct repo.
