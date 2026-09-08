@@ -111,7 +111,11 @@ Use a filesystem lock while scanning and reserving the next ID. This prevents
 two concurrent `/decide` runs from selecting the same number.
 
 ```bash
-lock_dir="${APEXYARD_AGDR_LOCK_DIR:-.claude/session}/agdr-id.lock"
+# Use the main worktree's shared Git directory so linked worktrees serialize
+# allocation together.
+git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+ops_root=$(dirname "$git_common_dir")
+lock_dir="${APEXYARD_AGDR_LOCK_DIR:-$ops_root/.claude/session}/agdr-id.lock"
 while ! mkdir "$lock_dir" 2>/dev/null; do sleep 1; done
 trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
 last=$(find docs/agdr -maxdepth 1 -type f -name 'AgDR-[0-9][0-9][0-9][0-9]-*.md' -print \
