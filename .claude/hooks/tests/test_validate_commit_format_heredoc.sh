@@ -113,6 +113,24 @@ HEREDOC_DASH_CMD='git commit -m "$(cat <<-'\''EOF'\''
 run_case "heredoc-substitution <<-: skip with INFO" \
   "$HEREDOC_DASH_CMD" 0 "heredoc-substitution detected"
 
+# Shell-looking text in a heredoc is part of the commit message. It must not
+# be mistaken for a command chained after the outer `git commit` invocation.
+for operator in ';' '&&' '|'; do
+  BODY_OPERATOR_CMD="git commit -m \"\$(cat <<'EOF'
+body text ${operator} git commit -m \\\"not a command\\\"
+EOF
+)\""
+  run_case "heredoc body containing ${operator} git commit: skip with INFO" \
+    "$BODY_OPERATOR_CMD" 0 "heredoc-substitution detected"
+done
+
+BODY_CLOSER_TEXT_CMD='git commit -m "$(cat <<'"'"'EOF'"'"'
+) && git commit -m "still literal body text"
+EOF
+)"'
+run_case "heredoc body resembling a substitution close: skip with INFO" \
+  "$BODY_CLOSER_TEXT_CMD" 0 "heredoc-substitution detected"
+
 HEREDOC_THEN_COMMIT_CMD="$HEREDOC_CMD
 git commit -m \"invalid subject\""
 run_case "heredoc followed by newline commit: block" \
