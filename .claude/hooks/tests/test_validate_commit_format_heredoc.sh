@@ -140,6 +140,10 @@ run_case "newline command with later invalid commit: block" \
   $'git commit -m "fix: valid subject"\ngit commit -m "invalid subject"' 2 \
   "does not accept compound commit commands"
 
+run_case "nested commit command substitution: block" \
+  'git commit -m "fix: valid subject"$(git commit -m "invalid subject")' 2 \
+  "does not accept command substitutions"
+
 # A quoted value for another option must not impersonate a -m argument.
 run_case "trailer decoy with equals syntax: invalid subject blocks" \
   "git commit --trailer='-m \"fix: decoy\"' -m \"invalid subject\"" 2 "BLOCKED: Commit subject"

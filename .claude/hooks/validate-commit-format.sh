@@ -167,6 +167,11 @@ if [ "$commit_index" -lt 0 ]; then
   exit 0
 fi
 
+if printf '%s' "$COMMAND" | grep -qF '$('; then
+  echo "BLOCKED: commit-format hook does not accept command substitutions." >&2
+  exit 2
+fi
+
 token_count=${#COMMAND_TOKENS[@]}
 for ((i=0; i < token_count; i++)); do
   case "${COMMAND_TOKENS[i]}" in
