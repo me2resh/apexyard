@@ -118,6 +118,18 @@ git commit -m \"invalid subject\""
 run_case "heredoc followed by newline commit: block" \
   "$HEREDOC_THEN_COMMIT_CMD" 2 "newline compound commit commands"
 
+run_case "heredoc followed by semicolon commit: block" \
+  "$HEREDOC_CMD ; git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
+run_case "heredoc followed by and commit: block" \
+  "$HEREDOC_CMD && git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
+run_case "heredoc followed by pipe commit: block" \
+  "$HEREDOC_CMD | git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
 BACKTICK=$(printf '\140')
 run_case "backtick command substitution: block" \
   "git commit -m \"fix: valid subject\" $BACKTICK git commit -m \"invalid subject\" $BACKTICK" 2 \

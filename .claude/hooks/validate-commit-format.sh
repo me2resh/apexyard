@@ -46,6 +46,11 @@ if printf '%s' "$COMMAND" | grep -qF "$(printf '\140')"; then
   exit 2
 fi
 
+if echo "$COMMAND" | grep -qE '(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit\b'; then
+  echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+  exit 2
+fi
+
 # Heredoc-substitution short-circuit (#194):
 #
 #   git commit -m "$(cat <<'EOF'
