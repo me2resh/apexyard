@@ -108,6 +108,16 @@ resolve_ops_root_walk() {
   canon=$(cd "$start" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || canon=""
   [ -n "$canon" ] && start="$canon"
 
+  # A linked worktree has a worktree-local .git file, but its common git
+  # directory belongs to the main checkout. Use that shared directory to
+  # normalize the starting point before looking for ops-root anchors.
+  local common main
+  common=$(git -C "$start" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=""
+  if [ -n "$common" ] && [ "$common" != "$start/.git" ]; then
+    main=$(dirname "$common")
+    [ -d "$main" ] && start="$main"
+  fi
+
   local r="$start"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
     # v2 anchor (preferred): the explicit .apexyard-fork marker file.

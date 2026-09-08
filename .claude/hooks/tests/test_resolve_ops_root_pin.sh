@@ -296,8 +296,36 @@ case_8() {
   mark_pass "$case_name"
 }
 
+# Case 9: nested and out-of-tree linked worktrees resolve to the main root.
+case_9() {
+  local case_name="linked worktrees: nested and out-of-tree resolve to main root"
+  local sb nested outside expected
+  sb=$(mktemp -d)
+  nested="$sb/.claude/worktrees/nested"
+  outside=$(mktemp -d)/linked
+  mkdir -p "$sb/.claude/worktrees"
+  git -C "$sb" init -q
+  : > "$sb/.apexyard-fork"
+  git -C "$sb" add .apexyard-fork
+  git -C "$sb" -c user.email=test@example.invalid -c user.name=test commit -qm init
+  expected=$(git -C "$sb" rev-parse --show-toplevel)
+  git -C "$sb" worktree add -q -b nested "$nested"
+  git -C "$sb" worktree add -q -b outside "$outside"
+  (
+    unset CLAUDE_CODE_SESSION_ID APEXYARD_OPS_DISABLE_PIN
+    . "$LIB"
+    [ "$(cd "$nested" && resolve_ops_root_walk)" = "$expected" ] || return 1
+    [ "$(cd "$outside" && resolve_ops_root_walk)" = "$expected" ] || return 1
+  )
+  if [ "$?" -ne 0 ]; then
+    mark_fail "$case_name" "linked worktree did not normalize to '$expected'"
+    return
+  fi
+  mark_pass "$case_name"
+}
+
 echo "Running pin-first resolve_ops_root tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9; do
   run_case "$fn"
 done
 
