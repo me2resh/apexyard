@@ -313,9 +313,15 @@ case_9() {
   git -C "$sb" worktree add -q -b outside "$outside"
   (
     unset CLAUDE_CODE_SESSION_ID APEXYARD_OPS_DISABLE_PIN
+    # shellcheck source=/dev/null
     . "$LIB"
     [ "$(cd "$nested" && resolve_ops_root_walk)" = "$expected" ] || return 1
     [ "$(cd "$outside" && resolve_ops_root_walk)" = "$expected" ] || return 1
+    pin_dir=$(mktemp -d)
+    printf '%s\n' "$nested" > "$pin_dir/ops-root-linked"
+    export CLAUDE_CODE_SESSION_ID=linked
+    export APEXYARD_OPS_PIN_DIR="$pin_dir"
+    [ "$(cd "$nested" && resolve_ops_root)" = "$expected" ] || return 1
   )
   if [ "$?" -ne 0 ]; then
     mark_fail "$case_name" "linked worktree did not normalize to '$expected'"
