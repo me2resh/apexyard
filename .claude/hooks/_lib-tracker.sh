@@ -790,9 +790,6 @@ tracker_create() {
 
   local kind
   kind=$(tracker_kind "$repo")
-  if [ "$kind" != "none" ]; then
-    _tracker_check_private_refs "$repo" "" "$body_file" || return $?
-  fi
   case "$kind" in
     none)
       # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
@@ -1062,9 +1059,6 @@ tracker_list() {
   # override, else the global block (never cwd, never a session marker).
   local kind
   kind=$(tracker_kind "$repo")
-  if [ "$kind" != "none" ]; then
-    _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
-  fi
   case "$kind" in
     none)
       printf '[]\n'
@@ -1314,6 +1308,7 @@ tracker_review_submit() {
 
   local kind
   kind=$(tracker_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Emit the review body (if given)
@@ -1654,6 +1649,7 @@ tracker_pr_merge() {
 
   local kind
   kind=$(tracker_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Nothing to echo (unlike
