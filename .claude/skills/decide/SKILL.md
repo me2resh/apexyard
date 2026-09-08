@@ -118,14 +118,23 @@ ops_root=$(dirname "$git_common_dir")
 lock_dir="${APEXYARD_AGDR_LOCK_DIR:-$ops_root/.claude/session}/agdr-id.lock"
 while ! mkdir "$lock_dir" 2>/dev/null; do sleep 1; done
 trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
-last=$(find docs/agdr -maxdepth 1 -type f -name 'AgDR-[0-9][0-9][0-9][0-9]-*.md' -print \
-  | sed -E 's#^.*/AgDR-([0-9]{4})-.*#\1#' | sort -n | tail -1)
+reservation_dir="${APEXYARD_AGDR_RESERVATION_DIR:-$ops_root/.claude/session/agdr-reservations}"
+mkdir -p "$reservation_dir"
+last=$(find docs/agdr "$reservation_dir" -maxdepth 1 -type f \( \
+    -name 'AgDR-[0-9][0-9][0-9][0-9]-*.md' -o -name 'AgDR-[0-9][0-9][0-9][0-9]' \) -print \
+  | sed -E 's#^.*/AgDR-([0-9]{4})(-.*)?$#\1#' | sort -n | tail -1)
 next=$(printf '%04d' $((10#${last:-0} + 1)))
-# Confirm that docs/agdr/AgDR-${next}-*.md does not exist before writing.
+# Reserve the ID before writing the record. The reservation is shared by all
+# linked worktrees and remains after a worktree is removed.
+while ! (set -C; : > "$reservation_dir/AgDR-${next}") 2>/dev/null; do
+  next=$(printf '%04d' $((10#$next + 1)))
+done
+# Keep the reservation until the AgDR file is committed.
 ```
 
 Keep the lock until the AgDR file is created. If the candidate exists after
-the scan, increment and check again. Remove the lock after the file is written.
+the scan, increment and check again. Do not delete a reservation after the
+AgDR is written; it prevents another branch from reusing the identifier.
 
 ### 7. Offer a Contrarian challenge (optional — opt-in, never forced)
 
