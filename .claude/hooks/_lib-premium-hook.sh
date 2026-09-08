@@ -12,7 +12,7 @@
 # premium hooks are safe-by-construction and CANNOT break free/framework
 # users, by construction rather than by careful copy-paste.
 #
-# CONVENTION (see docs/agdr/AgDR-0095-premium-hook-safe-fallback-harness.md):
+# CONVENTION (see docs/agdr/AgDR-0138-premium-hook-safe-fallback-harness.md):
 # any NEW premium-touching hook MUST route its premium-only work through
 # `premium_hook_run` below instead of hand-rolling its own gate/timeout/
 # swallow logic.
