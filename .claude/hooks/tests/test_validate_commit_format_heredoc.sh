@@ -113,6 +113,16 @@ HEREDOC_DASH_CMD='git commit -m "$(cat <<-'\''EOF'\''
 run_case "heredoc-substitution <<-: skip with INFO" \
   "$HEREDOC_DASH_CMD" 0 "heredoc-substitution detected"
 
+HEREDOC_THEN_COMMIT_CMD="$HEREDOC_CMD
+git commit -m \"invalid subject\""
+run_case "heredoc followed by newline commit: block" \
+  "$HEREDOC_THEN_COMMIT_CMD" 2 "newline compound commit commands"
+
+BACKTICK=$(printf '\140')
+run_case "backtick command substitution: block" \
+  "git commit -m \"fix: valid subject\" $BACKTICK git commit -m \"invalid subject\" $BACKTICK" 2 \
+  "backtick command substitutions"
+
 # Plain non-substitution -m → still validated as before.
 run_case "plain -m valid subject: pass silently" \
   'git commit -m "feat(#194): valid subject"' 0 ""
@@ -138,7 +148,7 @@ run_case "semicolon command with later invalid commit: block" \
 
 run_case "newline command with later invalid commit: block" \
   $'git commit -m "fix: valid subject"\ngit commit -m "invalid subject"' 2 \
-  "does not accept compound commit commands"
+  "newline compound commit commands"
 
 run_case "nested commit command substitution: block" \
   'git commit -m "fix: valid subject"$(git commit -m "invalid subject")' 2 \

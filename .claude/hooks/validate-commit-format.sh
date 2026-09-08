@@ -36,6 +36,16 @@ if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
 fi
 
+if [[ "$COMMAND" =~ $'\n'[[:space:]]*git[[:space:]]+commit ]]; then
+  echo "BLOCKED: commit-format hook does not accept newline compound commit commands." >&2
+  exit 2
+fi
+
+if printf '%s' "$COMMAND" | grep -qF "$(printf '\140')"; then
+  echo "BLOCKED: commit-format hook does not accept backtick command substitutions." >&2
+  exit 2
+fi
+
 # Heredoc-substitution short-circuit (#194):
 #
 #   git commit -m "$(cat <<'EOF'
