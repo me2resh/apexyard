@@ -74,6 +74,13 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
+PRIVATE_REFS_HOOK="$REPO_ROOT/.claude/hooks/check-private-refs-staged.sh"
+if [ ! -x "$PRIVATE_REFS_HOOK" ]; then
+  echo "BLOCKED: $PRIVATE_REFS_HOOK is missing or not executable. Restore the staged private-reference gate before committing." >&2
+  exit 2
+fi
+"$PRIVATE_REFS_HOOK" || exit $?
+
 BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
 if [ -z "$BRANCH" ]; then
   # Detached HEAD (a rebase, a bisect, a `git commit` onto no branch at
