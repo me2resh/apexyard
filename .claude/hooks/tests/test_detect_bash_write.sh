@@ -499,6 +499,25 @@ assert_read   "2>&1 fd-dup still excluded alongside the new exclusion (#931)" \
 assert_read   ">&2 fd-dup still excluded alongside the new exclusion (#931)" \
   "echo err >&2"
 
+# #1145: command substitutions and heredoc bodies are data, not file-write
+# targets. Keep the detector from reading ordinary prose as a shell command.
+assert_read "printf in command substitution is read-only (#1145)" \
+  'result="$(printf "%s" "$result" | jq -r .url)"'
+assert_targets "printf substitution has no write target (#1145)" \
+  'result="$(printf "%s" "$result" | jq -r .url)"' ""
+assert_read "git commit heredoc body is not a file write (#1145)" \
+  "git commit -F - <<'MSG'
+chore: subject
+
+Body prose ending in portfolio.
+MSG"
+assert_targets "heredoc prose has no fabricated target (#1145)" \
+  "git commit -F - <<'MSG'
+chore: subject
+
+Body prose ending in portfolio.
+MSG" ""
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
