@@ -60,6 +60,12 @@ wrapper gap independently. `code-reviewer.md` tells Rex to call
 `gh pr merge`. Each wrapper runs its `gh` call inside a sourced shell
 function.
 
+The wrapper scan resolves only a literal `owner/repo` in argument 1. It
+cannot expand a shell variable or a value on a later line. Pass the target as
+a literal slug, or the hook cannot identify the public repository. Keep the
+body-file argument on the same command line for the same reason. A follow-up
+must add a fail-closed response for unresolved wrapper arguments.
+
 No second command event fires for that inner call. This hook had zero
 matchers for `gh pr review`, `gh pr merge`, or any of the three wrapper
 names before #1206. A private reference posted through any of these five

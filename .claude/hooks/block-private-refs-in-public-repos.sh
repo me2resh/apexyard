@@ -67,6 +67,7 @@ if [ -z "$COMMAND" ]; then
   # must fail closed here too, or a broken jq reopens gap 1 and gap 2 (H2)
   # at the same time.
   if raw_payload_command_matches "$INPUT" 'gh[[:space:]]+(issue|pr)[[:space:]]+(create|comment|review|merge)' \
+    || raw_payload_command_matches "$INPUT" 'gh[[:space:]]+api[^\n]*\b(issues|pulls)\b' \
     || raw_payload_command_matches "$INPUT" 'tracker_(review_submit|pr_merge|create)\b'; then
     echo "BLOCKED: leak-protection hook cannot parse this tracker write. Restore jq and retry." >&2
     exit 2

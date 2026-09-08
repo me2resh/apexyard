@@ -31,6 +31,9 @@ check "private tracker write: gh pr review" .claude/hooks/block-private-refs-in-
   '{"tool_name":"Bash","tool_input":{"command":"gh pr review 5 --repo me2resh/apexyard"}}'
 check "private tracker write: gh pr merge" .claude/hooks/block-private-refs-in-public-repos.sh \
   '{"tool_name":"Bash","tool_input":{"command":"gh pr merge 5 --repo me2resh/apexyard"}}'
+# #1206: gh api writes must also fail closed when jq cannot parse the payload.
+check "private tracker write: gh api issues" .claude/hooks/block-private-refs-in-public-repos.sh \
+  '{"tool_name":"Bash","tool_input":{"command":"gh api repos/me2resh/apexyard/issues -f body=leak"}}'
 # #1206 H2: the wrapper shapes must fail closed here too, for the same reason.
 check "private tracker write: tracker_review_submit wrapper" .claude/hooks/block-private-refs-in-public-repos.sh \
   '{"tool_name":"Bash","tool_input":{"command":"tracker_review_submit \"me2resh/apexyard\" \"5\" \"comment\""}}'
