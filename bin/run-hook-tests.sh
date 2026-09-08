@@ -99,6 +99,9 @@ for t in "${TESTS[@]}"; do
       printf '  diagnostics from %s:\n' "$t"
       grep '^SKIP' /tmp/_hooktest.out | sed 's/^/    /'
       skip=$((skip+1))
+      printf 'FAIL %s  (suite reported a skipped case)\n' "$t"
+      fail=$((fail+1))
+      FAILED+=("$t")
     fi
     pass=$((pass+1))
   else
