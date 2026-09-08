@@ -696,7 +696,6 @@ _tracker_check_private_refs() {
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
   local repo="$1" title="$2" body_file="$3" labels="$4"
-  _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
   local -a args
   args=(issue create --repo "$repo" --title "$title")
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
@@ -791,6 +790,9 @@ tracker_create() {
 
   local kind
   kind=$(tracker_kind "$repo")
+  if [ "$kind" != "none" ]; then
+    _tracker_check_private_refs "$repo" "" "$body_file" || return $?
+  fi
   case "$kind" in
     none)
       # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
@@ -803,6 +805,8 @@ tracker_create() {
       return 3
       ;;
   esac
+
+  _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
 
   local raw rc
   case "$kind" in
@@ -1058,6 +1062,9 @@ tracker_list() {
   # override, else the global block (never cwd, never a session marker).
   local kind
   kind=$(tracker_kind "$repo")
+  if [ "$kind" != "none" ]; then
+    _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
+  fi
   case "$kind" in
     none)
       printf '[]\n'
