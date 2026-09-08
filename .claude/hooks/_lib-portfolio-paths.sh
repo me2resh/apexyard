@@ -100,6 +100,10 @@ _portfolio_root() {
   fi
 
   # Prefer the shared, pin-aware resolver when available
+  # Worktree audit (#1184): `r` can be a linked-worktree root. The shared
+  # resolver normalizes it to the main worktree before checking anchors. Keep
+  # this fallback walk only for environments where that library is unavailable;
+  # it preserves the managed-project behavior documented below.
   # (me2resh/apexyard#1013): resolve_ops_root() already has its own
   # cross-process cache (the ops-root-<session> pin, #381), so consulting
   # it here avoids redoing the walk-up below on every process when a pin
