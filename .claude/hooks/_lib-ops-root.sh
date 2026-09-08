@@ -81,6 +81,19 @@
 [ -n "${_LIB_OPS_ROOT_SOURCED:-}" ] && return 0
 _LIB_OPS_ROOT_SOURCED=1
 
+# Return the main worktree for a path inside a Git worktree. Return the input
+# path when Git cannot provide a shared directory.
+_ops_root_main_worktree() {
+  local path="${1:-}" common main
+  [ -n "$path" ] || return 1
+  common=$(git -C "$path" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
+    printf '%s' "$path"
+    return 0
+  }
+  main=$(dirname "$common")
+  [ -d "$main" ] && printf '%s' "$main" || printf '%s' "$path"
+}
+
 # Pure walk-up. Recognises BOTH the v2 .apexyard-fork marker AND the
 # legacy v1 (onboarding.yaml + apexyard.projects.yaml) pair. Never
 # touches the pin.
@@ -107,6 +120,11 @@ resolve_ops_root_walk() {
   local canon
   canon=$(cd "$start" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || canon=""
   [ -n "$canon" ] && start="$canon"
+
+  # A linked worktree has a worktree-local .git file, but its common git
+  # directory belongs to the main checkout. Use that shared directory to
+  # normalize the starting point before looking for ops-root anchors.
+  start=$(_ops_root_main_worktree "$start")
 
   local r="$start"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
@@ -232,8 +250,10 @@ resolve_ops_root() {
       # literal. The single read is the whole file; we ignore any
       # subsequent lines (defensive against future format expansion).
       IFS= read -r pinned < "$pin_file" || pinned=""
-      if [ -n "$pinned" ] && _ops_root_anchor_valid "$pinned"; then
-        printf '%s' "$pinned"
+      local normalized_pin
+      normalized_pin=$(_ops_root_main_worktree "$pinned")
+      if [ -n "$normalized_pin" ] && _ops_root_anchor_valid "$normalized_pin"; then
+        printf '%s' "$normalized_pin"
         return 0
       fi
       # Pin present but stale (path no longer satisfies anchors).
