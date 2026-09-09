@@ -38,18 +38,18 @@
 #                                      merges a PR/MR via the git host. strategy is one of
 #                                      squash|merge|rebase (default squash, normalised — never
 #                                      eval'd raw); delete_branch is true|false (default true).
-#                                      subject/body_file are OPTIONAL (gh kind only): when BOTH are
-#                                      non-empty, the merge passes `--subject "$subject" --body-file
-#                                      "$body_file"` so the squash commit carries that exact
-#                                      subject/body instead of the repo's default squash-body
-#                                      assembly (see #1136 — under
+#                                      subject/body_file are OPTIONAL (gh kind only): each non-empty
+#                                      value adds its matching `--subject "$subject"` or `--body-file
+#                                      "$body_file"` flag, so a caller can preserve either field
+#                                      independently instead of relying on the repo's default
+#                                      squash-body assembly (see #1136 — under
 #                                      `squash_merge_commit_message=COMMIT_MESSAGES` a bare squash
 #                                      concatenates every commit message on the PR branch, burying
 #                                      any trailer that isn't in the final paragraph). body_file
-#                                      MUST be a readable, non-empty file when supplied — an
-#                                      unreadable/empty body_file with a non-empty subject fails
-#                                      closed (returns 1) rather than silently falling back to a
-#                                      bare squash. gh + glab adapters built in, `custom`
+#                                      MUST be a regular, readable, non-empty file when supplied —
+#                                      the guard tests `-f`, `-r`, and `-s` on body_file alone and
+#                                      fails closed (returns 1) rather than silently falling back to
+#                                      a bare squash. gh + glab adapters built in, `custom`
 #                                      merge_command template, `none` no-op (returns 3). Exit 0 =
 #                                      merged, emits normalised JSON {"sha":...} (the merge commit,
 #                                      best-effort — empty for `custom`); non-zero = CLI errored /
@@ -1200,8 +1200,8 @@ tracker_label_ensure() {
 # ------------------------------------------------------------------------------
 
 # Internal adapter: gh → `gh pr review`. Args passed as an array (never an eval'd
-# string) so a body full of shell metacharacters is inert. 2>/dev/null hides the
-# expected self-approval refusal noise; gh's exit status still propagates.
+# string) so a body full of shell metacharacters is inert. Stdout and stderr both
+# propagate: the caller needs the host's diagnostic when a review is rejected.
 _tracker_review_gh() {
   local repo="$1" pr="$2" verdict="$3" body_file="$4"
   _tracker_check_private_refs "$repo" "" "$body_file" || return $?
@@ -1215,7 +1215,7 @@ _tracker_review_gh() {
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--body-file "$body_file")
   fi
-  gh "${args[@]}" 2>/dev/null
+  gh "${args[@]}"
 }
 
 # Internal adapter: glab (GitLab) → `glab mr approve` / `glab mr note create`.
@@ -1476,9 +1476,9 @@ _tracker_merge_normalise_delete_branch() {
 # contract in `/approve-merge`'s SKILL.md — the failure message the operator
 # sees is meant to be the CLI's own, not silently swallowed).
 #
-# subject/body_file (#1136, AgDR-0132): OPTIONAL, empty by default. When both
-# are non-empty, `--subject "$subject" --body-file "$body_file"` are appended
-# so the squash commit carries the caller's own reviewed subject/body instead
+# subject/body_file (#1136, AgDR-0132): OPTIONAL, empty by default. Each
+# non-empty value appends its own `--subject "$subject"` or `--body-file
+# "$body_file"` flag so the squash commit preserves the supplied field instead
 # of GitHub's repo-default squash body (which, under
 # `squash_merge_commit_message=COMMIT_MESSAGES`, concatenates every commit
 # message on the PR branch — see #1136). `$subject` and `$body_file` are
@@ -1551,16 +1551,16 @@ _tracker_merge_template() {
 
 # Internal adapter: custom → operator-supplied merge_command template.
 #
-# Injection model: unlike _tracker_review_custom / _tracker_create_custom,
-# there is no arbitrary/untrusted free-text value in a merge call at all — pr
-# is numeric-guarded and repo is charset-guarded by the public function below
-# (both checked BEFORE any adapter, not just this one), and strategy/
-# delete_branch are both normalised to a closed enum before this function
-# ever sees them. So all four placeholders — {owner_repo} (registry slug,
+# Injection model: this adapter receives only the four validated dispatch
+# values. `pr` is numeric-guarded and `repo` is charset-guarded by the public
+# function below (both checked BEFORE every adapter), while `strategy` and
+# `delete_branch` are normalised to closed enums before this function sees
+# them. So all four placeholders — {owner_repo} (registry slug,
 # charset-guarded), {pr} (numeric-guarded), {strategy} (squash|merge|rebase),
 # {delete_branch} (true|false) — are safe to substitute directly into the
-# eval'd template; none of them can carry shell metacharacters by the time
-# they arrive here.
+# eval'd template. `subject` is fork-controlled PR-title text, but dispatch
+# deliberately does not forward it here. Any future forwarding of subject or
+# body content into this eval requires sanitising it before substitution.
 #
 # Stdout discarded, stderr left to propagate — same rationale as
 # _tracker_merge_gh/_tracker_merge_glab above: the operator-supplied CLI's
