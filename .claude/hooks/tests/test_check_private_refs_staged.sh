@@ -128,6 +128,16 @@ else
 fi
 rm -rf "$sandbox"
 
+sandbox=$(make_sandbox)
+printf '%s\n' 'projects:' '  - name: amber-secondary' '    repos:' '      - acme/amber-primary' '      - acme/amber-secondary' '    workspace: workspace/amber-secondary' > "$sandbox/apexyard.projects.yaml"
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reviewed acme/amber-secondary#7' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'acme/amber-secondary'; then
+  pass "plural repos entries block secondary repository references"
+else
+  fail "plural repos entries block secondary repository references" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
 echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"

@@ -683,8 +683,16 @@ _tracker_extract_ref_url() {
 
 _tracker_check_private_refs() {
   local repo="$1" title="${2:-}" body_file="${3:-}"
-  local tracker_lib_dir
-  tracker_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 2
+  local tracker_lib_dir="" root
+  if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    tracker_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd) || tracker_lib_dir=""
+  fi
+  if [ -z "$tracker_lib_dir" ] || [ ! -f "$tracker_lib_dir/check-private-refs-runtime.sh" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; }; then
+      tracker_lib_dir="$root/.claude/hooks"
+    fi
+  fi
   local scanner="$tracker_lib_dir/check-private-refs-runtime.sh"
   if [ ! -x "$scanner" ]; then
     echo "BLOCKED: private-reference runtime scanner is missing or not executable." >&2
