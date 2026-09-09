@@ -1,4 +1,4 @@
-# a third-party controlled-language standard Artifact Cases
+# Controlled technical writing regression cases
 
 These cases test the writing rule for new and changed artifacts. A reviewer
 judges the text. Static tests check that each producer and reviewer loads the
