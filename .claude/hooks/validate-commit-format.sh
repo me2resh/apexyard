@@ -46,6 +46,80 @@ if printf '%s' "$COMMAND" | grep -qF "$(printf '\140')"; then
   exit 2
 fi
 
+# Detect a second commit chained *after* a confirmed heredoc substitution.
+# The heredoc body is literal commit-message content, so raw command scans
+# must not interpret `; git commit`, `&& git commit`, or `| git commit` in
+# that body as executable shell syntax.
+has_heredoc_compound_commit() {
+  local cmd="$1" line marker delimiter check_line
+  local in_heredoc=0 strip_tabs=0 awaiting_close=0 awaiting_connector=0
+  local tab
+  tab="$(printf '\t')"
+  local close_compound_re='^[[:space:]]*\)"?[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'
+  local close_continuation_re='^[[:space:]]*\)"?[[:space:]]*\\[[:space:]]*$'
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$in_heredoc" -eq 1 ]; then
+      check_line="$line"
+      if [ "$strip_tabs" -eq 1 ]; then
+        while [ "${check_line:0:1}" = "$tab" ]; do
+          check_line="${check_line:1}"
+        done
+      fi
+      if [ "$check_line" = "$delimiter" ]; then
+        in_heredoc=0
+        awaiting_close=1
+      fi
+      continue
+    fi
+
+    if [ "$awaiting_close" -eq 1 ]; then
+      if [[ "$line" =~ $close_compound_re ]]; then
+        return 0
+      fi
+      if [[ "$line" =~ $close_continuation_re ]]; then
+        awaiting_close=0
+        awaiting_connector=1
+        continue
+      fi
+      # Blank lines are permitted before the command substitution closes.
+      if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+        awaiting_close=0
+      fi
+    fi
+
+    if [ "$awaiting_connector" -eq 1 ]; then
+      if [[ "$line" =~ ^[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$) ]]; then
+        return 0
+      fi
+      if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+        awaiting_connector=0
+      fi
+    fi
+
+    # Match only the supported `$(cat <<EOF` shape that this hook already
+    # recognises for the heredoc-substitution skip below. A terminator must
+    # be found before any text is treated as a literal heredoc body.
+    marker=$(printf '%s\n' "$line" | sed -nE "s/.*\\$\\(cat[[:space:]]+<<(-?)[[:space:]]*['\\\"]?([A-Za-z_][A-Za-z0-9_]*)['\\\"]?[[:space:]]*$/\\1:\\2/p")
+    if [ -z "$marker" ]; then
+      continue
+    fi
+    strip_tabs=0
+    case "$marker" in
+      -:*) strip_tabs=1 ;;
+    esac
+    delimiter="${marker#*:}"
+    in_heredoc=1
+  done <<< "$cmd"
+
+  return 1
+}
+
+if has_heredoc_compound_commit "$COMMAND"; then
+  echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+  exit 2
+fi
+
 # Heredoc-substitution short-circuit (#194):
 #
 #   git commit -m "$(cat <<'EOF'
