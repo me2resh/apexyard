@@ -78,6 +78,10 @@ When the `apexyard-search` MCP is connected, **prefer `mcp__apexyard-search__sea
 
 It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + full-file reads). **Graceful-degrade:** if the MCP server is absent the tool simply isn't available — fall back to `grep`/`Glob`/`Read` with no change in behaviour (same pattern as `search_docs`, `/handover`, and `/code-review`). Adopters who don't run the premium MCP are unaffected.
 
+## Evidence citations — read the criterion
+
+When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
+
 ## Reduced-Scope Review — Lean-tier diffs (Option 4, AgDR-0116)
 
 Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires a Rex pass — the merge gate (`block-unreviewed-merge.sh`) requires the `*-rex.approved` marker on EVERY PR, regardless of tier, unconditionally, because it is a CONTROL that reads structured state (a marker vs. the forge-reported HEAD) and structurally cannot itself inspect a diff's content to decide a tier. What changes for a Lean diff is the **depth** of your pass, never whether one happens.
