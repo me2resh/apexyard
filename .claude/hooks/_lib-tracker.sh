@@ -681,6 +681,26 @@ _tracker_extract_ref_url() {
   jq -nc --arg ref "$ref" --arg url "$url" '{ref:$ref, url:$url}' 2>/dev/null
 }
 
+_tracker_check_private_refs() {
+  local repo="$1" title="${2:-}" body_file="${3:-}"
+  local tracker_lib_dir="" root
+  if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    tracker_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd) || tracker_lib_dir=""
+  fi
+  if [ -z "$tracker_lib_dir" ] || [ ! -f "$tracker_lib_dir/check-private-refs-runtime.sh" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; }; then
+      tracker_lib_dir="$root/.claude/hooks"
+    fi
+  fi
+  local scanner="$tracker_lib_dir/check-private-refs-runtime.sh"
+  if [ ! -x "$scanner" ]; then
+    echo "BLOCKED: private-reference runtime scanner is missing or not executable." >&2
+    return 2
+  fi
+  "$scanner" "$repo" "$title" "$body_file"
+}
+
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
   local repo="$1" title="$2" body_file="$3" labels="$4"
@@ -790,6 +810,8 @@ tracker_create() {
       return 3
       ;;
   esac
+
+  _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
 
   local raw rc
   case "$kind" in
@@ -1182,6 +1204,7 @@ tracker_label_ensure() {
 # expected self-approval refusal noise; gh's exit status still propagates.
 _tracker_review_gh() {
   local repo="$1" pr="$2" verdict="$3" body_file="$4"
+  _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   local -a args
   args=(pr review "$pr" --repo "$repo")
   case "$verdict" in
@@ -1293,6 +1316,7 @@ tracker_review_submit() {
 
   local kind
   kind=$(tracker_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Emit the review body (if given)
@@ -1462,6 +1486,7 @@ _tracker_merge_normalise_delete_branch() {
 # string), so neither can be mistaken for a flag or shell syntax.
 _tracker_merge_gh() {
   local repo="$1" pr="$2" strategy="$3" delete_branch="$4" subject="${5:-}" body_file="${6:-}"
+  _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   local -a args
   args=(pr merge "$pr" --repo "$repo")
   case "$strategy" in
@@ -1632,6 +1657,7 @@ tracker_pr_merge() {
 
   local kind
   kind=$(tracker_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Nothing to echo (unlike

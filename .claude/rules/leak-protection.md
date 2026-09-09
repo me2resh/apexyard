@@ -71,11 +71,22 @@ matchers for `gh pr review`, `gh pr merge`, or any of the three wrapper
 names before #1206. A private reference posted through any of these five
 shapes reached a public repo unscanned.
 
-**Known gap, not yet closed here:** No hook scans a private reference
-committed directly to a file. This gap covers content that never passes
-through a `gh` command's title, body, or subject. me2resh/apexyard#1206
-tracks the fix as a new, dedicated enforcement point. It will not extend
-this hook.
+**Staged-content gate:** `check-private-refs-staged.sh` scans complete staged
+blobs during Git's native `pre-commit` hook. It blocks a project name, repo
+slug, or workspace path before that version can enter commit history. The
+check reads the index rather than a rendered net diff. An add-then-remove
+sequence cannot hide the first commit because the first commit is blocked.
+The diagnostic names the file and withholds the matched identifier.
+
+The tracker adapters also run `check-private-refs-runtime.sh` after resolving
+their arguments. This covers `tracker_create`, `tracker_review_submit`, and
+`tracker_pr_merge` when their repository or body-file argument comes from a
+shell variable. The command-text hook still protects direct `gh` calls.
+
+Git's `--no-verify` option and a clone without `core.hooksPath=.githooks`
+can bypass the staged-content gate. The command-layer hook remains a backstop
+for agent-driven writes. Treat either bypass as reduced protection, not as a
+reason to commit private identifiers.
 
 **Scope limit:** this hook matches `gh` command text only. It does not
 match `glab`. A GitLab adopter's `tracker.kind: glab` project sends review
@@ -158,6 +169,7 @@ The leak-protection hook is a **sibling to `check-secrets.sh`** — both scan ou
 |------|----------|------|
 | `check-secrets.sh` | API keys, passwords, tokens | `git commit` time (staged diff) |
 | `block-private-refs-in-public-repos.sh` | Project names, repo slugs, workspace paths | `gh` tracker-write time (issue/PR title + body, review body, merge-commit subject/body) |
+| `check-private-refs-staged.sh` | Project names, repo slugs, workspace paths in complete files | Git-native `pre-commit` time (staged blobs) |
 
 Both are backstops against routine-but-damaging leaks. Self-discipline is the primary defence; the hook catches the cases where the agent had the private information right in front of it while writing the upstream content and didn't actively suppress it.
 

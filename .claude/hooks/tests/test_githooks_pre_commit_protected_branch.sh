@@ -37,6 +37,7 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REAL_PRE_COMMIT="$ROOT/.githooks/pre-commit"
+REAL_PRIVATE_REFS_HOOK="$ROOT/.claude/hooks/check-private-refs-staged.sh"
 REAL_PROTECTED_LIB="$ROOT/.claude/hooks/_lib-protected-branches.sh"
 REAL_READ_CONFIG_LIB="$ROOT/.claude/hooks/_lib-read-config.sh"
 REAL_TRACKER_LIB="$ROOT/.claude/hooks/_lib-tracker.sh"
@@ -113,6 +114,8 @@ build_sandbox() {
   chmod +x "$work/.githooks/pre-commit"
 
   mkdir -p "$work/.claude/hooks"
+  cp "$REAL_PRIVATE_REFS_HOOK" "$work/.claude/hooks/check-private-refs-staged.sh"
+  chmod +x "$work/.claude/hooks/check-private-refs-staged.sh"
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
   cp "$REAL_OPS_ROOT_LIB" "$work/.claude/hooks/_lib-ops-root.sh"
@@ -333,6 +336,8 @@ case_installer_autopickup_blocks_main() {
   chmod +x "$work/.githooks/pre-commit"
 
   mkdir -p "$work/.claude/hooks" "$work/bin"
+  cp "$REAL_PRIVATE_REFS_HOOK" "$work/.claude/hooks/check-private-refs-staged.sh"
+  chmod +x "$work/.claude/hooks/check-private-refs-staged.sh"
   cp "$REAL_PROTECTED_LIB" "$work/.claude/hooks/_lib-protected-branches.sh"
   cp "$REAL_READ_CONFIG_LIB" "$work/.claude/hooks/_lib-read-config.sh"
   cp "$REAL_OPS_ROOT_LIB" "$work/.claude/hooks/_lib-ops-root.sh"
