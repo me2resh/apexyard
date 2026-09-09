@@ -63,21 +63,24 @@ Chosen: **Option A**. `tracker_pr_merge` (`_lib-tracker.sh`) gains two
 OPTIONAL trailing parameters, `<subject>` and `<body_file>` — empty by
 default, so every existing call site (every non-release merge) is
 byte-for-byte unchanged. `/approve-merge` step 6 gains a release-class
-detection block, structurally identical to the existing sync-class block:
-head branch matches `release/v[0-9]+\.[0-9]+\.[0-9]+`, or title starts with
-`release(`. When matched, it reads the PR's own title (as `--subject`) and
-body (written to a temp file, as `--body-file`) via `gh pr view`, and passes
-both through to `tracker_pr_merge`.
+detection block, structurally identical to the existing sync-class block,
+and keeps that detection, title/body-file creation, and `tracker_pr_merge`
+invocation in one fenced shell block (#1196). A fenced block is the unit of
+shell execution; values must not cross from one documented block to another.
+The release-class check uses a head branch that matches
+`release/v[0-9]+\.[0-9]+\.[0-9]+`, or a title that starts with `release(`.
+When matched, it reads the PR's own title (as `--subject`) and body (written
+to a temp file, as `--body-file`) via `gh pr view`, and passes both through to
+`tracker_pr_merge`.
 
 **Fail-safe, not fallback.** If the PR body can't be read (`gh pr view`
 fails, or the body is empty), `/approve-merge` STOPS before merging rather
 than silently falling back to a bare squash — a silent fallback here would
-just reproduce #1136 under a different trigger (a transient API failure
-instead of a forgotten flag). `tracker_pr_merge` itself carries the same
-fail-safe as a second layer: if `body_file` is non-empty but unreadable or
-empty, it returns 1 without attempting the merge — so even a caller that
-skips `/approve-merge`'s own check can't accidentally slip a bare squash
-through.
+reproduce #1136. `tracker_pr_merge` is a narrower second layer: if a
+non-empty `body_file` is unreadable or empty, it returns 1 without attempting
+the merge. It cannot distinguish an intentionally omitted body file from a
+lost empty shell variable, so it cannot backstop a cross-code-block scope
+failure. The one-block instruction is the prevention for that failure mode.
 
 **Scope: `gh` kind only.** The subject/body_file parameters are only wired
 into `_tracker_merge_gh`. `/release` — and therefore this bug — only ever
@@ -92,6 +95,9 @@ caller ever passes them for a non-gh project, which is the safe default
 - Merging a `release/vA.B.C` PR via `/approve-merge` now produces a squash
   commit whose final paragraph is the `Released-From` trailer, matching what
   `/release` Rule 11 has always promised.
+- The release subject and body-file variables are created and consumed in the
+  same documented shell block, so a harness that executes fenced blocks in
+  separate shells cannot silently omit the body file.
 - `/release` Rule 11 and `/approve-merge` step 6 now cross-reference each
   other directly, so a future reader of either skill sees the other half of
   the picture instead of two independently-plausible, silently-conflicting
@@ -110,8 +116,10 @@ caller ever passes them for a non-gh project, which is the safe default
 - `.claude/hooks/_lib-tracker.sh` — `_tracker_merge_gh`, `tracker_pr_merge`
 - `.claude/hooks/tests/test_tracker_pr_merge.sh` — release-PR body-file
   coverage
-- `.claude/skills/approve-merge/SKILL.md` — step 6 release-class detection,
-  step 7 wiring
+- `.claude/skills/approve-merge/SKILL.md` — one-block release-class
+  detection and merge wiring
+- `.claude/skills/approve-merge/tests/test_merge_invocation_not_substituted.sh`
+  — release metadata and merge-invocation co-location coverage
 - `.claude/skills/release/SKILL.md` — Rule 11 cross-reference
 - Issue: me2resh/apexyard#1136
 - Sibling decision: `AgDR-0053` (the `sync/`-class precedent this mirrors)

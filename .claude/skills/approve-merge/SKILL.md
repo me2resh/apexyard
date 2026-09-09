@@ -211,12 +211,16 @@ approval_summary="${summary}"
 EOF
 ```
 
-### 6. Determine merge strategy
+### 6. Determine merge strategy and release metadata
 
 Before running the merge, check whether this is a **sync-class PR**. A PR is sync-class if either:
 
 - Its head branch matches `sync/main-to-dev-after-*` (the canonical `/release-sync` branch prefix), OR
 - Its PR title starts with `sync(` (the canonical `/release-sync` PR title prefix)
+
+Run this entire block in one shell. The release subject and body file are
+intentionally derived immediately before `tracker_pr_merge`; a separate code
+block is not a shell scope and must not carry either value (#1196).
 
 ```bash
 PR_HEAD_BRANCH=$(gh pr view <pr> --repo "$PR_HOST_REPO" --json headRefName -q '.headRefName' 2>/dev/null)
@@ -227,20 +231,10 @@ if echo "$PR_HEAD_BRANCH" | grep -qE '^sync/main-to-dev-after-' || \
    echo "$PR_TITLE" | grep -qE '^sync\('; then
   MERGE_STRATEGY="merge"
 fi
-```
 
-Sync-class detection stays on `gh pr view` deliberately — sync PRs are a `/release-sync` concept, and `/release-sync` only ever runs against the `gh`-hosted apexyard framework fork itself, never a downstream GitLab-forge managed project. There's nothing to make forge-aware here.
-
-**Why auto-detect instead of a flag:** a `--merge-strategy` flag would require the operator to remember to pass it on every sync PR merge. Sync PRs squashed silently — the v2.2.0 incident — show that operator ceremony is not a reliable safeguard. Auto-detection makes the correct behaviour the default; an operator who wants to override can do so via the CLI directly. See `AgDR-0053`.
-
-**Why `merge` (not `squash`) for sync PRs:** the sync branch's top commit is a true two-parent merge commit (branch = dev, second parent = main's release squash). That two-parent relationship is the ancestry link that makes future `dev → main` release PRs conflict-free. Squash-merging discards the second parent permanently, defeating the skill's entire purpose. See `AgDR-0053`.
-
-Next, check whether this is a **release-class PR** — the sibling special-case for `/release` (#1136, `AgDR-0132`). A PR is release-class if either:
-
-- Its head branch matches `release/v[0-9]+.[0-9]+.[0-9]+` (the canonical `/release` branch shape), OR
-- Its PR title starts with `release(` (the canonical `/release` PR title prefix)
-
-```bash
+# Next, check whether this is a release-class PR — the sibling special-case
+# for /release (#1136, AgDR-0132). A release-class PR has a head branch that
+# matches release/v[0-9]+.[0-9]+.[0-9]+, or a title that starts with release(.
 RELEASE_SUBJECT=""
 RELEASE_BODY_FILE=""
 if echo "$PR_HEAD_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+$' || \
@@ -266,17 +260,7 @@ if echo "$PR_HEAD_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+$' || \
     exit 1
   fi
 fi
-```
 
-**Why this exists:** this repo has `squash_merge_commit_message=COMMIT_MESSAGES` — GitHub's default squash body concatenates every commit message on the PR branch. A release branch is cut from `dev`, so from `main`'s perspective it "contains" the entire dev↔main divergence (hundreds of commits); a bare `gh pr merge --squash` buries the release commit's `Released-From` trailer mid-body, where `%(trailers:...)` can no longer see it. `/release` Rule 11 already prescribes the fix for its own manual merge step (an explicit `--subject`/`--body-file`); this block makes `/approve-merge` — the mandated human-only merge path since #1042 — apply the same fix automatically, so the two skills stop conflicting. See `AgDR-0132`.
-
-**Fail-safe, not fallback:** if the PR body can't be read (network/auth failure, empty body), the block above STOPS the merge rather than silently degrading to a bare squash — a silent degrade here is exactly how #1136 happened. Fix the read failure and retry `/approve-merge`; the CEO marker written in step 5 is unaffected and does not need to be re-approved.
-
-### 7. Run the merge — DEFAULT FLOW
-
-Unless `--no-merge` was passed, run the merge in the same turn via the tracker-agnostic adapter — `tracker_pr_merge` in `_lib-tracker.sh` (#759, the same kind-dispatch pattern `tracker_review_submit` uses for review submission, #758) — using the strategy determined in step 6:
-
-```bash
 # _lib-tracker.sh lives alongside _lib-review-markers.sh, already sourced in
 # step 4 from $MARKER_HOME (the ops fork root, not necessarily git toplevel).
 # shellcheck source=/dev/null
@@ -305,7 +289,21 @@ MERGE_SHA=$(printf '%s' "$MERGE_RESULT" | jq -r '.sha // empty' 2>/dev/null)
 rm -f "$MERGE_RESULT_FILE" "$RELEASE_BODY_FILE"
 ```
 
-`$RELEASE_SUBJECT` and `$RELEASE_BODY_FILE` are empty strings for every non-release PR (step 6 only sets them inside the release-class branch), so this line is byte-for-byte the pre-#1136 behaviour — a bare squash/merge/rebase with no `--subject`/`--body-file` — for every PR that isn't release-class. `tracker_pr_merge` treats a `""` body_file the same as an omitted one (see `_lib-tracker.sh`'s fail-safe check, which only fires when `body_file` is non-empty).
+Sync-class detection stays on `gh pr view` deliberately — sync PRs are a `/release-sync` concept, and `/release-sync` only ever runs against the `gh`-hosted apexyard framework fork itself, never a downstream GitLab-forge managed project. There's nothing to make forge-aware here.
+
+**Why auto-detect instead of a flag:** a `--merge-strategy` flag would require the operator to remember to pass it on every sync PR merge. Sync PRs squashed silently — the v2.2.0 incident — show that operator ceremony is not a reliable safeguard. Auto-detection makes the correct behaviour the default; an operator who wants to override can do so via the CLI directly. See `AgDR-0053`.
+
+**Why `merge` (not `squash`) for sync PRs:** the sync branch's top commit is a true two-parent merge commit (branch = dev, second parent = main's release squash). That two-parent relationship is the ancestry link that makes future `dev → main` release PRs conflict-free. Squash-merging discards the second parent permanently, defeating the skill's entire purpose. See `AgDR-0053`.
+
+**Why release metadata is inline:** this repo has `squash_merge_commit_message=COMMIT_MESSAGES` — GitHub's default squash body concatenates every commit message on the PR branch. A release branch is cut from `dev`, so from `main`'s perspective it "contains" the entire dev↔main divergence (hundreds of commits); a bare `gh pr merge --squash` buries the release commit's `Released-From` trailer mid-body, where `%(trailers:...)` can no longer see it. `/release` Rule 11 already prescribes the fix for its own manual merge step (an explicit `--subject`/`--body-file`); this block makes `/approve-merge` — the mandated human-only merge path since #1042 — apply the same fix automatically, so the two skills stop conflicting. See `AgDR-0132`.
+
+**Fail-safe, not fallback:** if the PR body can't be read (network/auth failure, empty body), the block STOPS the merge rather than silently degrading to a bare squash — a silent degrade here is exactly how #1136 happened. Keeping its creation and use in this one block also prevents a lost shell variable from bypassing that check (#1196). Fix the read failure and retry `/approve-merge`; the CEO marker written in step 5 is unaffected and does not need to be re-approved.
+
+### 7. Process the merge result — DEFAULT FLOW
+
+Unless `--no-merge` was passed, the preceding block runs the merge in the same turn via the tracker-agnostic adapter — `tracker_pr_merge` in `_lib-tracker.sh` (#759, the same kind-dispatch pattern `tracker_review_submit` uses for review submission, #758) — using the strategy and release metadata it determined.
+
+`$RELEASE_SUBJECT` and `$RELEASE_BODY_FILE` are empty strings for every non-release PR, so the invocation remains the pre-#1136 bare squash/merge/rebase with no `--subject`/`--body-file` for those PRs. `tracker_pr_merge` treats a `""` body_file the same as an omitted one (see `_lib-tracker.sh`'s fail-safe check, which only fires when `body_file` is non-empty).
 
 `tracker_pr_merge` dispatches on the project's `tracker_kind <owner/repo>` (the same per-project resolution `tracker_review_submit` and `tracker_create` use): a `gh`-kind project runs `gh pr merge <pr> --repo <owner/repo> --squash|--merge|--rebase --delete-branch`; a `glab`-kind project runs the `glab mr merge` equivalent (`--squash`/`--rebase`/no-flag-for-a-plain-merge, `--remove-source-branch`). **Note what actually gates this call:** the `gh`/`glab` command above runs *inside* `_lib-tracker.sh`, a sourced shell function — the merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`) match the OUTER Bash command text this step actually submits (the `tracker_pr_merge "<owner/repo>" "<pr>" "${MERGE_STRATEGY}" true > "$MERGE_RESULT_FILE"` line above), and that text never literally contains `gh pr merge` or `glab mr merge` — those strings live inside already-sourced library code, not in this step's command. So the wrapper call itself is a dedicated, gate-recognised merge shape in its own right: `is_merge_command` and the PR/repo extractors in `_lib-extract-pr.sh` have a `tracker_pr_merge <owner/repo> <pr> ...` branch (#759), and `settings.json` carries a matching `Bash(tracker_pr_merge *)` matcher for all four hooks, alongside the existing `gh`/`glab` matchers (#764/#767/#793). The gates fire on the wrapper form directly — not by recognising the inner CLI command it happens to run, and ONLY when that form is issued as the bare top-level statement shown above — never inside a `$(...)`.
 

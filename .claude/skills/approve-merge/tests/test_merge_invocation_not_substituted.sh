@@ -45,6 +45,9 @@
 #      is actually wired, not just the top-level call in isolation
 #   6. The prose explicitly documents the "never wrap in $(...)" rule, so a
 #      human editing this file by hand still sees the warning inline
+#   7. Release metadata creation and the merge invocation occupy the same
+#      fenced bash block, so a harness cannot lose the values at a code-block
+#      boundary (#1196)
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -129,6 +132,29 @@ if grep -qE 'NEVER be invoked.*\$\(|MUST be invoked.*top-level|never wrap.*\$\('
   pass "SKILL.md prose documents the never-wrap-in-\$(...) rule inline"
 else
   fail "SKILL.md prose documents the never-wrap-in-\$(...) rule inline"
+fi
+
+# --- Case 7: release metadata and merge call share one code block ----------
+# A fenced block can execute in a separate shell. The body-file variable is
+# therefore only safe when its creation and tracker_pr_merge use are in the
+# same block. Extract the block containing the merge invocation and require
+# both release assignments in it.
+MERGE_BLOCK=$(awk '
+  /^```bash[[:space:]]*$/ { inblock=1; block=""; next }
+  /^```[[:space:]]*$/ {
+    if (inblock && block ~ /tracker_pr_merge/) print block
+    inblock=0
+    next
+  }
+  inblock { block=block $0 "\n" }
+' "$SKILL_MD")
+
+if printf '%s' "$MERGE_BLOCK" | grep -qF 'RELEASE_SUBJECT=""' \
+  && printf '%s' "$MERGE_BLOCK" | grep -qF "RELEASE_BODY_FILE=\$(mktemp)" \
+  && printf '%s' "$MERGE_BLOCK" | grep -qE '^[[:space:]]*tracker_pr_merge\b'; then
+  pass "release metadata and tracker_pr_merge share one fenced bash block"
+else
+  fail "release metadata and tracker_pr_merge share one fenced bash block"
 fi
 
 echo
