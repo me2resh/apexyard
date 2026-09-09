@@ -52,10 +52,11 @@ fi
 # that body as executable shell syntax.
 has_heredoc_compound_commit() {
   local cmd="$1" line marker delimiter check_line
-  local in_heredoc=0 strip_tabs=0 awaiting_close=0
+  local in_heredoc=0 strip_tabs=0 awaiting_close=0 awaiting_connector=0
   local tab
   tab="$(printf '\t')"
   local close_compound_re='^[[:space:]]*\)"?[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'
+  local close_continuation_re='^[[:space:]]*\)"?[[:space:]]*\\[[:space:]]*$'
 
   while IFS= read -r line || [ -n "$line" ]; do
     if [ "$in_heredoc" -eq 1 ]; then
@@ -76,9 +77,23 @@ has_heredoc_compound_commit() {
       if [[ "$line" =~ $close_compound_re ]]; then
         return 0
       fi
+      if [[ "$line" =~ $close_continuation_re ]]; then
+        awaiting_close=0
+        awaiting_connector=1
+        continue
+      fi
       # Blank lines are permitted before the command substitution closes.
       if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
         awaiting_close=0
+      fi
+    fi
+
+    if [ "$awaiting_connector" -eq 1 ]; then
+      if [[ "$line" =~ ^[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$) ]]; then
+        return 0
+      fi
+      if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+        awaiting_connector=0
       fi
     fi
 
