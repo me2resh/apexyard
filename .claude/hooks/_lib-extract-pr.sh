@@ -46,7 +46,7 @@
 # same way the gh CLI shape is paired with `Bash(gh api *)`).
 #
 # The gh path is unchanged byte-for-byte; glab is additive. Forge selection for
-# the CLI-calling resolvers goes through `tracker_kind` from `_lib-tracker.sh`
+# the CLI-calling resolvers goes through `tracker_review_kind` from `_lib-tracker.sh`
 # (gh + glab coincide with github + gitlab per #762); the shape detectors read
 # the command text directly.
 #
@@ -130,10 +130,10 @@
 # this change safe for the jq-present callers: their behaviour is provably
 # unchanged because they never call the new function at all.
 
-# Lazily source the tracker lib so `tracker_kind` is available for forge
+# Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
-# present. tracker_kind defaults to "gh" with no config, preserving gh behaviour.
-if ! command -v tracker_kind >/dev/null 2>&1; then
+# present. tracker_review_kind defaults to "gh" with no config, preserving gh behaviour.
+if ! command -v tracker_review_kind >/dev/null 2>&1; then
   # ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
   # default avoids a hard "parameter not set" error, but an empty value
   # still makes `dirname` resolve to ".", i.e. the CALLER's cwd rather than
@@ -171,15 +171,15 @@ if ! command -v tracker_kind >/dev/null 2>&1; then
   fi
 fi
 
-# Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_kind. Any
-# non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
+# Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_review_kind.
+# Any non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
 # the GitHub CLI path stays the default. Used by the CLI-calling resolvers
 # (resolve_pr_head, resolve_pr_head_branch) which only have the repo, not the
 # command text.
 _forge_kind_for() {
   local repo="${1:-}" kind="gh"
-  if command -v tracker_kind >/dev/null 2>&1; then
-    kind=$(tracker_kind "$repo" 2>/dev/null || echo gh)
+  if command -v tracker_review_kind >/dev/null 2>&1; then
+    kind=$(tracker_review_kind "$repo" 2>/dev/null || echo gh)
   fi
   case "$kind" in glab) echo glab ;; *) echo gh ;; esac
 }

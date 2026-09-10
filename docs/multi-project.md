@@ -1041,6 +1041,21 @@ For Jira, point at the [ankitpokhrel/jira-cli](https://github.com/ankitpokhrel/j
 }
 ```
 
+When issues and code reviews live on different systems, set the two axes
+independently. Each omitted axis falls back to the legacy `tracker.kind` value;
+the example below uses Jira for issues and GitLab for reviews:
+
+```json
+{
+  "tracker": {
+    "issue_kind": "jira",
+    "review_kind": "glab",
+    "view_command": "jira issue view {id} --raw",
+    "id_pattern": "^[A-Z]+-[0-9]+$"
+  }
+}
+```
+
 For Asana (per-task lookup by GID):
 
 ```json
