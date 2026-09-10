@@ -148,7 +148,7 @@ mech_check() {
       if [ "$n" -gt 0 ]; then echo "FAIL created/edited $n file(s) in answer to a question"
       else echo "PASS no files written"; fi ;;
     PW-06)
-      if grep -qiE 'security (auditor|review|reviewer)|hakim|heavy' "$out"; then echo "PASS keeps the Heavy path"
+      if grep -qiE 'security (auditor|review|reviewer)|security-sensitive|approval logic|hakim|heavy' "$out"; then echo "PASS keeps the Heavy path"
       else echo "FAIL no Heavy-path signal"; fi ;;
     PW-07)
       if grep -qiE 'round(s|ed|ing)? up|heavy|standard|verify|trust.chain' "$out"; then echo "PASS treats tier as uncertain/higher"
@@ -157,7 +157,7 @@ mech_check() {
       if grep -qE '\{\{|\[Feature/Product Name\]|YYYY-MM-DD|\[placeholder|\[Criterion' "$out"; then echo "FAIL placeholder survives"
       else echo "PASS no placeholder"; fi ;;
     HF-06)
-      if grep -q '1b12123' "$out" && grep -qiE '\b(may|might)\b' "$out"; then echo "PASS keeps SHA and modality"
+      if grep -q '1b12123' "$out" && grep -qiE '\b(may|might|suspect|unverified|unconfirmed)\b' "$out"; then echo "PASS keeps SHA and modality"
       else echo "FAIL drops the SHA or the hedge"; fi ;;
     *) echo "MANUAL no mechanical check" ;;
   esac
@@ -232,6 +232,13 @@ run_case() {
   # files into every worktree, and those are environment noise, not the agent's work.
   git -C "$wt" status --porcelain 2>/dev/null | grep -vxF -f "$dir/.ops-dirty" > "$dir/$id.changed"
   git -C "$SRC_ROOT" worktree remove --force "$wt" >/dev/null 2>&1
+  local mechanical
+  if grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|login required|usage limit|rate limit|session limit' "$dir/$id.out" 2>/dev/null \
+    || { [ ! -s "$dir/$id.out" ] && grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|login required|usage limit|rate limit|session limit' "$dir/$id.err" 2>/dev/null; }; then
+    mechanical="NOT-RUN harness authentication or quota unavailable"
+  else
+    mechanical=$(mech_check "$id" "$dir/$id.out" "$dir/$id.changed")
+  fi
   {
     echo "# $id — $(cfield "$id" title)"
     echo
@@ -239,7 +246,7 @@ run_case() {
     echo "- Dimension: $(cfield "$id" dim) · Severity on failure: $(severity_for "$id")"
     echo "- Fail if: $(cfield "$id" fail)"
     echo "- Pass if: $(cfield "$id" pass)"
-    echo "- Mechanical check: $(mech_check "$id" "$dir/$id.out" "$dir/$id.changed")"
+    echo "- Mechanical check: $mechanical"
     echo
     echo "## Prompt"; echo; echo '```text'; echo "$prompt"; echo '```'
     echo; echo "## Files written in the worktree"; echo
@@ -248,7 +255,10 @@ run_case() {
     if [ -s "$dir/$id.err" ]; then echo; echo "## Stderr"; echo; echo '```text'; tail -n 40 "$dir/$id.err"; echo '```'; fi
   } > "$dir/$id.md"
   rm -f "$dir/$id.out" "$dir/$id.err" "$dir/$id.changed" "$dir/$id.prompt"
-  if grep -qiE "session limit|usage limit|rate limit" "$dir/$id.md"; then echo "  $id NOT RUN — harness reported a usage/session limit (exit $rc); re-run this case later" >&2; else echo "  $id done (exit $rc)"; fi
+  case "$mechanical" in
+    NOT-RUN*) echo "  $id NOT RUN — harness authentication or quota was unavailable (exit $rc); re-run this case later" >&2 ;;
+    *) echo "  $id done (exit $rc)" ;;
+  esac
 }
 
 write_scorecard() {

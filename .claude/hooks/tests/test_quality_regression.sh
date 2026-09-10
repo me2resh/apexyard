@@ -31,6 +31,8 @@ assert "runner:no-llm-judge" grep -qF 'It does not use an LLM judge' "$RUNNER"
 assert "runner:empty-change-count" grep -qF 'n=$(grep -c . "$changed" 2>/dev/null) || n=0' "$RUNNER"
 assert "runner:portable-timeout" grep -qF 'gtimeout' "$RUNNER"
 assert "runner:uncapped-fallback" grep -qF 'else' "$RUNNER"
+assert "runner:auth-unavailable-is-not-run" grep -qF 'NOT-RUN harness authentication or quota unavailable' "$RUNNER"
+assert "runner:heavy-path-signal" grep -qF 'security-sensitive' "$RUNNER"
 
 # every case id the runner parsed appears in the index
 for id in $(echo "$check_out" | sed -n "s/^cases parsed: $expected_cases (\\(.*\\))$/\\1/p"); do
