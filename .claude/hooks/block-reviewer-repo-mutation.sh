@@ -52,7 +52,7 @@ fi
 # remote. The command-position anchor avoids matching quoted review prose such
 # as `echo 'git commit is forbidden'`. Options such as `git -C repo commit` are
 # accepted by the middle token span.
-MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|branch|update-ref|fetch|apply|submodule|worktree|notes|revert|am|bisect|config|reflog|replace|sparse-checkout|filter-branch|gc|init|repack|prune|fast-import'
+MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|branch|update-ref|fetch|apply|submodule|worktree|notes|revert|am|bisect|config|reflog|replace|sparse-checkout|filter-branch|gc|init|repack|prune|fast-import|fast-export|pull|remote|read-tree|write-tree|commit-tree|update-index|hash-object|index-pack|pack-refs|mktag|mktree|rerere|maintenance|clone|init-db|stage|subtree|replay|format-patch|archive'
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\\|\\||;|\\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent is read-only while an active review is in flight. Do not stage, commit, push, restore, stash, or otherwise mutate the repository; report the finding to the orchestrator." >&2
   exit 2
