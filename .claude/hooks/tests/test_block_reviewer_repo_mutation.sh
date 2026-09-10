@@ -45,6 +45,16 @@ run_case 'git apply is blocked' 'git apply fix.patch' blocked
 run_case 'git submodule update is blocked' 'git submodule update --init' blocked
 run_case 'git worktree add is blocked' 'git worktree add ../review-copy HEAD' blocked
 run_case 'git notes is blocked' 'git notes add -m note HEAD' blocked
+run_case 'git revert is blocked' 'git revert HEAD' blocked
+run_case 'git am is blocked' 'git am review.patch' blocked
+run_case 'git bisect is blocked' 'git bisect start' blocked
+run_case 'git config is blocked' 'git config user.name Reviewer' blocked
+run_case 'git reflog is blocked' 'git reflog expire --all' blocked
+run_case 'git replace is blocked' 'git replace HEAD HEAD^' blocked
+run_case 'git sparse-checkout is blocked' 'git sparse-checkout set src' blocked
+run_case 'git filter-branch is blocked' 'git filter-branch -- --all' blocked
+run_case 'git gc is blocked' 'git gc' blocked
+run_case 'git init is blocked' 'git init' blocked
 run_case 'git status remains available' 'git status --short' allowed
 run_case 'git diff remains available' 'git diff --check' allowed
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
