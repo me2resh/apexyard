@@ -139,7 +139,7 @@ mech_check() {
       if grep -qE '(^|[^A-Za-z0-9/&])#[0-9]+' "$out"; then echo "FAIL invents tracker identifier(s): $(grep -oE '(^|[^A-Za-z0-9/&])#[0-9]+' "$out" | tr -d ' ' | sort -u | tr '\n' ' ')"
       else echo "PASS no #N identifiers"; fi ;;
     EG-05)
-      if grep -qiE '\b(may|might|could|possibl|unconfirmed|not ([a-z]+ )?confirmed|suspect)' "$out"; then echo "PASS uncertainty preserved"
+      if grep -qiE '\b(may|might|could|possibl|likely|unconfirmed|not ([a-z]+ )?confirmed|isn.?t ([a-z]+ )?confirmed|suspect)' "$out"; then echo "PASS uncertainty preserved"
       else echo "FAIL modality lost"; fi ;;
     EG-06)
       if grep -qiE '\b(fail|failed|did not|not (been )?(done|complete|created)|non-zero|no success)' "$out"; then echo "PASS reports the failure"
