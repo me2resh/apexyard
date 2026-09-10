@@ -47,11 +47,11 @@ Add the upstream remote so you can pull updates later:
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, fetch and merge from `upstream/dev` to update your fork:
+Later, fetch and merge from `upstream/main` to update your fork:
 
 ```bash
 git fetch upstream
-git merge upstream/dev
+git merge upstream/main
 ```
 
 ---
