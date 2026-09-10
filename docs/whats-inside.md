@@ -1,8 +1,11 @@
 # What's Inside ApexYard
 
-The full component breakdown — directory layout, every role, the workflow docs, the templates, and the runnable `.claude/` layer (hooks, rules, agents, skills). The [README](../README.md) keeps a lean summary; this is the exhaustive reference.
+This page lists the ApexYard components. It covers the directory layout, roles,
+workflow documents, templates, and the runnable `.claude/` layer.
 
-All of it is plain markdown and shell. There is no runtime and no service — Claude Code reads these files directly, and the hooks fire on your `git` / `gh` commands.
+The [README](../README.md) gives the short version. This page is the detailed
+reference. The files use plain Markdown and shell. Claude Code reads them from
+the repository root. Hooks run when you use `git` or `gh`.
 
 ## Directory layout
 
@@ -54,7 +57,11 @@ apexyard/
 
 ## Roles
 
-ApexYard includes 20 software-development roles across 6 departments. Roles are not passive docs — they **activate on triggers** (a PR touching `**/auth/**` fires the Security Auditor; a ticket labelled `qa` fires the QA Engineer). See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md) for the full activation table.
+ApexYard includes 20 software-development roles across 6 departments. A role
+activates when its trigger matches the work. For example, a pull request that
+touches `**/auth/**` activates the Security Auditor. A ticket labelled `qa`
+activates the QA Engineer. See [`.claude/rules/role-triggers.md`](../.claude/rules/role-triggers.md)
+for the full trigger table.
 
 ### Engineering (7 roles)
 
@@ -102,17 +109,19 @@ ApexYard includes 20 software-development roles across 6 departments. Roles are 
 Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 ```
 
-Each phase has entry criteria, activities, exit criteria, and quality gates. See [`workflows/sdlc.md`](../workflows/sdlc.md) for the full flow.
+Each phase has entry criteria, activities, exit criteria, and quality gates.
+See [`workflows/sdlc.md`](../workflows/sdlc.md) for the full flow.
 
 ### Code Review Process
 
-Structured review with:
+The review process defines:
 
 - Author responsibilities and PR description format
 - Reviewer checklist (architecture, security, testing, performance)
 - Feedback severity levels (blocking, suggestion, question)
 - Response time targets
-- Rex (code-reviewer agent) auto-runs on every PR; human reviewer activates per role triggers
+- Rex, the Code Reviewer agent, runs on every pull request. A human reviewer
+  joins when a role trigger requires one.
 
 See [`workflows/code-review.md`](../workflows/code-review.md).
 
@@ -127,7 +136,8 @@ See [`workflows/deployment.md`](../workflows/deployment.md) for the full flow.
 
 ### Database Migration Sub-Workflow
 
-Migrations are high-blast-radius work and get their own gate (workflow gate 3a). Any edit to `migrate-*.{ts,js,py,sql}`, `**/migrations/**`, `prisma/schema.prisma`, `alembic/versions/*`, or similar requires:
+Migrations can affect many users and services. They have their own gate
+(workflow gate 3a). An edit to a migration path requires:
 
 1. A labelled `migration` ticket
 2. A matching migration AgDR that documents rollback, estimated downtime, cross-service consumers, data volume, testing plan, observability
@@ -148,7 +158,8 @@ The `/migration` skill creates both artefacts in one guided flow; the `require-m
 
 ## The `.claude/` layer — the runnable primitives
 
-This is what turns the markdown above into an enforced workflow. Claude Code picks it up automatically when the `.claude/` directory lives at the repo root.
+The `.claude/` directory turns the documents into an enforced workflow. Claude
+Code loads it when it is at the repository root.
 
 | Layer | Path | What it is |
 |-------|------|------------|

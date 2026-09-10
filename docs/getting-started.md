@@ -1,6 +1,7 @@
 # Getting Started with ApexYard
 
-Short version of the setup flow. For the full walkthrough (directory layout, daily workflow, upgrade path, FAQ) see [`multi-project.md`](multi-project.md).
+This page gives the short setup flow. See [`multi-project.md`](multi-project.md)
+for the directory layout, daily workflow, upgrade path, and FAQ.
 
 ---
 
@@ -8,18 +9,23 @@ Short version of the setup flow. For the full walkthrough (directory layout, dai
 
 - A GitHub account and an org you can fork into
 - [Claude Code](https://claude.com/claude-code) installed
-- [GitHub CLI (`gh`)](https://cli.github.com) installed (optional but recommended)
+- [GitHub CLI (`gh`)](https://cli.github.com) installed (recommended, but optional)
 - [`jq`](https://jqlang.org/download/) installed — required. Framework hooks use jq to read `.claude/project-config.json` overrides; without it your overrides silently no-op. `brew install jq` / `apt-get install jq` / `dnf install jq` depending on platform. `/setup` refuses to run without it, and a SessionStart banner surfaces the gap if jq disappears later. See [AgDR-0038](agdr/AgDR-0038-jq-as-hard-dependency.md) for the rationale.
-- **Windows**: [Git for Windows](https://gitforwindows.org) (which bundles Git Bash) or WSL — required. `.claude/hooks/*.sh` are bash scripts; native `cmd.exe`/PowerShell can't run them. This already works today (the ancestor-directory-walk hang some Windows users hit on `C:`-drive paths was fixed in [#691](https://github.com/me2resh/apexyard/issues/691)) — this is just making the requirement explicit, same shape as the `jq` line above.
+- **Windows**: Use [Git for Windows](https://gitforwindows.org) or WSL. The
+  `.claude/hooks/*.sh` files use Bash. Native `cmd.exe` and PowerShell cannot
+  run them. The `C:`-drive path issue reported in [#691](https://github.com/me2resh/apexyard/issues/691)
+  is fixed.
 - Basic familiarity with Claude Code's `CLAUDE.md` system
 
 ---
 
 ## Step 1: Fork apexyard on GitHub
 
-Your ops repo **is** a fork of apexyard. One repo, no nested installs.
+Your ops repo is a fork of ApexYard. It is one repository with no nested install.
 
-Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard), **Star** it, then **Fork** it into your org. Rename the fork if you want (`your-org/ops`, `your-org/apex`, or keep it as `apexyard` — GitHub handles the rename cleanly).
+Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard).
+Star it, then fork it into your organisation. Keep `apexyard`, or rename the
+fork to a name such as `your-org/ops`.
 
 Then clone your fork locally:
 
@@ -35,13 +41,18 @@ git clone https://github.com/your-org/apexyard.git
 cd apexyard
 ```
 
-Add the upstream remote so you can pull future updates:
+Add the upstream remote so you can pull updates later:
 
 ```bash
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, `git fetch upstream && git merge upstream/main` pulls the latest apexyard improvements into your fork.
+Later, fetch and merge from `upstream/dev` to update your fork:
+
+```bash
+git fetch upstream
+git merge upstream/dev
+```
 
 ---
 
