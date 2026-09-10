@@ -1,6 +1,6 @@
 ## [v5.5.0] — 2026-09-10
 
-Minor release — 8 features, 46 fixes, 21 improvements.
+Minor release — 8 features, 48 fixes, 21 improvements.
 
 ### Added (feat)
 
@@ -15,6 +15,8 @@ Minor release — 8 features, 46 fixes, 21 improvements.
 
 ### Fixed (fix)
 
+- (#1257) block agent privilege escalation — 8be2866
+- (#1255) ground reviewer behavior claims in real usage — afb20eb
 - recognize security approval safeguards — 205a967
 - avoid false quality-regression failures — ff08420
 - recognize likely and unconfirmed findings — e34fb5a
@@ -114,6 +116,8 @@ Minor release — 8 features, 46 fixes, 21 improvements.
 - Closes #1225
 - Closes #1230
 - Closes #1233
+- Closes #1255
+- Closes #1257
 
 # Changelog
 
