@@ -2,9 +2,9 @@
 
 **Status:** Native — the reference harness. Full experience, gates enforced live.
 
-Claude Code is the harness ApexYard was built for, and the only one where nothing is adapted: `CLAUDE.md` auto-loads at session start, the bash hooks fire on real tool calls, skills are typed slash commands, and agents spawn with their own tool restrictions. Everything the other harness pages describe as "delegated" or "planned" is simply *native* here.
+Claude Code is ApexYard's reference harness. Nothing is translated: `CLAUDE.md` loads at session start, bash hooks run on real tool calls, skills are typed slash commands, and agents start with their own tool restrictions. Features described as "delegated" or "planned" on other harness pages are native here.
 
-## What "full experience" concretely means
+## What "full experience" means
 
 - **`CLAUDE.md` auto-load** — the Chief-of-Staff framing, SDLC, workflow gates, and the `@.claude/rules/*.md` imports are loaded into every session without any manual step.
 - **Mechanical gates fire on every tool call** — the `.claude/hooks/*.sh` scripts wire to `PreToolUse` / `PostToolUse` / `SessionStart` via `.claude/settings.json` and block (exit 2) or advise (exit 0) in real time.
