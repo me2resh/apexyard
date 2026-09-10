@@ -127,6 +127,49 @@ if [ -n "$_CANDIDATE_DIR" ] && [ -f "$_CANDIDATE_DIR/_lib-ops-root.sh" ]; then
 fi
 unset _CANDIDATE_DIR
 
+# The settings wrapper normally resolves the hook from the session-pinned ops
+# root. A pin identifies where the hook lives. It does not prove that the
+# command's current repository belongs to that fork. When the wrapper asks for
+# this scope check, resolve the command cwd without consulting the pin and
+# leave unrelated repositories alone. This keeps a protected `main` branch in
+# a scratch repository from being mistaken for the framework's branch.
+if [ "${APEXYARD_OPS_SCOPE_GUARD:-}" = "1" ] &&
+   command -v resolve_ops_root_walk >/dev/null 2>&1; then
+  SCOPE_DIR="$PWD"
+  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+    SCOPE_DIR=$(echo "$COMMAND" \
+      | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+      | tail -n 1 \
+      | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+  fi
+  # A managed-project clone can sit below the pinned ops root and still have
+  # an ApexYard-looking ancestor. Resolve the Git repository the command will
+  # actually target and require it to be the pinned hook repository (or one of
+  # its linked worktrees), rather than treating any anchored descendant as an
+  # in-scope target.
+  if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git[[:space:]]+-C[[:space:]]+[^[:space:];&|]+'; then
+    TARGET_DIR=$(echo "$COMMAND" \
+      | grep -oE "git[[:space:]]+-C[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+      | tail -n 1 \
+      | sed -E "s/^git[[:space:]]+-C[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+    case "$TARGET_DIR" in
+      /*) ;;
+      *) TARGET_DIR="$SCOPE_DIR/$TARGET_DIR" ;;
+    esac
+  else
+    TARGET_DIR="$SCOPE_DIR"
+  fi
+
+  TARGET_ROOT=$(git -C "$TARGET_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+  HOOK_ROOT=$(cd "$HOOK_DIR/../.." 2>/dev/null && pwd -P || true)
+  TARGET_COMMON=$(git -C "$TARGET_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  HOOK_COMMON=$(git -C "$HOOK_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+  if [ -z "$TARGET_ROOT" ] || [ -z "$HOOK_ROOT" ] ||
+     { [ "$TARGET_ROOT" != "$HOOK_ROOT" ] && [ "$TARGET_COMMON" != "$HOOK_COMMON" ]; }; then
+    exit 0
+  fi
+fi
+
 # NOTE on heredoc bodies (me2resh/apexyard#1066, #1075): every presence
 # check and cd-target extraction below runs against the RAW $COMMAND, never
 # against heredoc-stripped text. A security review of the first #1066 fix
