@@ -20,7 +20,7 @@ run_case() {
   input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
   output=$(cd "$TMP" && printf '%s' "$input" | "$TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1)
   rc=$?
-  if [ "$expected" = blocked ] && [ "$rc" -eq 2 ] && printf '%s' "$output" | grep -q 'review-class agent is read-only'; then
+  if [ "$expected" = blocked ] && [ "$rc" -eq 2 ] && printf '%s' "$output" | grep -q 'BLOCKED:'; then
     echo "PASS: $name"
   elif [ "$expected" = allowed ] && [ "$rc" -eq 0 ]; then
     echo "PASS: $name"
@@ -60,6 +60,15 @@ run_case 'git diff remains available' 'git diff --check' allowed
 run_case 'git rev-parse remains available' 'git rev-parse HEAD' allowed
 run_case 'git remote get-url remains available' 'git remote get-url origin' allowed
 run_case 'git remote add is blocked' 'git remote add backup https://example.invalid/repo.git' blocked
+run_case 'git branch show-current remains available' 'git branch --show-current' allowed
+run_case 'git config get remains available' 'git config --get user.name' allowed
+run_case 'git reflog show remains available' 'git reflog -1' allowed
+run_case 'git notes show remains available' 'git notes show HEAD' allowed
+run_case 'git worktree list remains available' 'git worktree list' allowed
+run_case 'git branch create is blocked' 'git branch reviewer-copy' blocked
+run_case 'git config write is blocked' 'git config user.name Reviewer' blocked
+run_case 'git notes add is blocked' 'git notes add -m note HEAD' blocked
+run_case 'git worktree remove is blocked' 'git worktree remove ../review-copy' blocked
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
 run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body\nDo not run git commit during review.\nEOF' allowed
 
