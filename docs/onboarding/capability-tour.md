@@ -1,52 +1,48 @@
 # ApexYard Capability Tour
 
-A 60-second orientation to the three ideas that make ApexYard different from
-"just a folder of prompts": **roles**, **skills**, and **gates**. This is the
-shared tour content rendered by both `/onboard` (first-run) and `/tutorial`
-(re-entry, any time) — one asset, read by both, never duplicated. See
+A 60-second introduction to the three ideas that organize ApexYard:
+**roles**, **skills**, and **gates**. `/onboard` shows this content during
+first use, and `/tutorial` shows it again whenever someone needs a refresher.
+Both commands read this one shared file. See
 `docs/technical-designs/onboarding-increment-1.md` § D3.
 
-Skippable in one word — say "skip" at any point and move on.
+You can skip the tour at any time by saying "skip".
 
 ---
 
 ## What's a role?
 
-A role is a named persona with its own responsibilities and CAN/CANNOT
-boundaries — think of it as a teammate, not a mode. When work matches a
-role's trigger (a PR touches `**/auth/**`, a technical design needs review),
-that role activates and drives the task.
+A role names a type of teammate, its responsibilities, and its CAN/CANNOT
+boundaries. When work matches a role's trigger, the role activates and guides
+the task. For example, a PR that touches `**/auth/**` activates the Security
+Auditor.
 
-**Example**: open a PR that touches authentication code, and Hakim (the
-Security Auditor) activates automatically to review it — you didn't have to
-ask.
+**Example**: Hakim reviews that authentication PR automatically. You do not
+need to ask for the review.
 
 ## What's a skill?
 
-A skill is a slash command that packages a whole workflow — questions to
-ask, a template to fill in, a place to file the result — so you don't have
-to reconstruct the process by hand each time.
+A skill is a slash command that packages a workflow: the questions to ask, the
+template to use, and where to save the result. It gives each run the same
+starting point.
 
-**Example**: `/feature` asks you for a user story and acceptance criteria,
-shows you the formatted ticket, and files it as a real GitHub issue once you
-confirm.
+**Example**: `/feature` asks for a user story and acceptance criteria, shows
+the formatted ticket, and files a GitHub issue after you confirm it.
 
 ## What's a gate?
 
-A gate is a checkpoint the work can't pass until a specific condition is
-met — tests green, a reviewer's sign-off, your explicit approval. Gates are
-mechanically enforced, not just written down: a hook blocks the action until
-the gate is satisfied.
+A gate is a checkpoint. Work cannot pass it until a required condition is
+met, such as passing tests, a reviewer sign-off, or your explicit approval.
+Hooks enforce these conditions, so the gate is an action the system checks,
+not only a rule in a document.
 
-**Example**: `gh pr merge` is blocked until both Rex (the automated code
-reviewer) and you, the human, have each approved that exact commit — no
-merge slips through on a plan-level "go".
+**Example**: `gh pr merge` stays blocked until Rex and you have approved the
+same commit. A plan-level "go" does not replace those approvals.
 
 ## How the loop works
 
-Idea → ticket → PR → review → merge. Every feature moves through this loop;
-roles drive each stage, skills do the mechanical work, gates make sure
-nothing skips a step.
+Idea → ticket → PR → review → merge. Roles guide each stage, skills carry out
+repeatable steps, and gates stop work from skipping a required check.
 
 ---
 
