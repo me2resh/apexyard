@@ -244,7 +244,7 @@ For larger changes (new skills, rule changes, workflow redesigns), open a discus
 
 ## Contributors
 
-Thanks to everyone who has helped forge ApexYard:
+Thanks to everyone who contributes code, documentation, bug reports, ideas, and feedback.
 
 <table>
   <tr>
@@ -257,7 +257,38 @@ Thanks to everyone who has helped forge ApexYard:
   </tr>
 </table>
 
-<sub>This list credits every human directly, since squash-merges hide them from GitHub's contributor graph. New contributor? Open a PR and you'll be added.</sub>
+Squash merges can hide individual contributions from GitHub's contributor graph, so we keep these credits here.
+
+### Issue contributors
+
+Thank you to everyone who opened issues, including bug reports, feature requests, questions, and documentation feedback.
+These credits recognize issue contributions, regardless of whether an issue is open, closed, or included in a release.
+Each link shows the account's public issues in this repository.
+
+| Contributor | Contributor | Contributor |
+| --- | --- | --- |
+| [a-abdellatif98](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-abdellatif98) | [a-elnemr](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-elnemr) | [Abdelrahman-Shahda](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdelrahman-Shahda) |
+| [AbdElrahmaN31](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdElrahmaN31) | [aelnemr](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aaelnemr) | [ahmedashraffcih](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedashraffcih) |
+| [ahmedgemi](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedgemi) | [AhmedTheGeek](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAhmedTheGeek) | [ahmedwael216](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedwael216) |
+| [alalm3i](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aalalm3i) | [asami-me](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aasami-me) | [atlas-apex](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aatlas-apex) |
+| [aureyia](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aaureyia) | [batout](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Abatout) | [bitwhispererrr](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Abitwhispererrr) |
+| [borzoj](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aborzoj) | [Dr-kersho](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3ADr-kersho) | [drmas](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Adrmas) |
+| [engnaruto](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aengnaruto) | [hamoda-dev](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahamoda-dev) | [hazemahmedx0](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahazemahmedx0) |
+| [HC12026](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHC12026) | [HishamM1](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHishamM1) | [hossam-96](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahossam-96) |
+| [ibrahim-gad](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aibrahim-gad) | [KarimEbrahemAbdelaziz](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AKarimEbrahemAbdelaziz) | [khaledmedra](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Akhaledmedra) |
+| [mabdelaziz77](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amabdelaziz77) | [Manito2z](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AManito2z) | [me2resh](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ame2resh) |
+| [MedNewton](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMedNewton) | [MeDoTarek73](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMeDoTarek73) | [Mina4lfy](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMina4lfy) |
+| [mohamedELamine](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AmohamedELamine) | [mosta7il](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amosta7il) | [mostiwheelietravel](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amostiwheelietravel) |
+| [moussaws](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amoussaws) | [muhammadattia95](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amuhammadattia95) | [nickyreinert](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Anickyreinert) |
+| [nLoops](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AnLoops) | [Omar-Elhorbity](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOmar-Elhorbity) | [OmarEhab007](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOmarEhab007) |
+| [OmarElaraby26](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOmarElaraby26) | [osama-abu-baker](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aosama-abu-baker) | [OsamaAlSabry](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOsamaAlSabry) |
+| [rafik-wahid-cubeish](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Arafik-wahid-cubeish) | [Ref34t](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3ARef34t) | [sudanese](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asudanese) |
+| [tifa64](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Atifa64) | [yehiagamalx](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ayehiagamalx) | [zeyadsleem](https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Azeyadsleem) |
+
+This list covers available issue-author accounts through September 10, 2026. GitHub bot accounts are excluded.
+
+When updating these credits, include new issue authors as well as pull-request contributors.
+Use public GitHub handles and links, and describe each contribution accurately.
 
 ## License
 
