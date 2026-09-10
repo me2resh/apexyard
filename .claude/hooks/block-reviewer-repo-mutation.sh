@@ -113,7 +113,7 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   echo "BLOCKED: review-class agent cannot write fast-export marks during an active review." >&2
   exit 2
 fi
-if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?archive([^;&|]*[[:space:]])(-o=|-o[[:space:]]|--output=|--output[[:space:]])"; then
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?archive([^;&|]*[[:space:]])(-o=|-o[^[:space:];|&]+|-o[[:space:]]|--output=|--output[[:space:]])"; then
   echo "BLOCKED: review-class agent cannot write archive output during an active review." >&2
   exit 2
 fi

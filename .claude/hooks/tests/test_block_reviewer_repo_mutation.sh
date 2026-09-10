@@ -83,6 +83,8 @@ run_case 'git archive output write is blocked' 'git archive --output=archive.tar
 run_case 'git archive short output write is blocked' 'git archive -o archive.tar HEAD' blocked
 run_case 'git archive short equals output is blocked' 'git archive -o=archive.tar HEAD' blocked
 run_case 'git C archive output write is blocked' 'git -C repo archive -o archive.tar HEAD' blocked
+run_case 'git archive attached short output is blocked' 'git archive -oarchive.tar HEAD' blocked
+run_case 'git C archive attached short output is blocked' 'git -C repo archive -oarchive.tar HEAD' blocked
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
 run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body\nDo not run git commit during review.\nEOF' allowed
 
