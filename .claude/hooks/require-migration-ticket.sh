@@ -386,14 +386,6 @@ _rmt_normalise_target() {
     return 0
   fi
 
-  # A wholly absent root -- none of the target's ancestors exist all the way
-  # up to "/" -- makes _resolve_real_path emit a doubled leading slash: it
-  # walks to dir="/", `pwd -P`s that to "/", then appends the absent tail
-  # with its own separator ("/" + "/" + tail). Squash that one specific
-  # artifact so the result still compares cleanly against a real anchor.
-  case "$resolved" in
-    //*) resolved="/${resolved#//}" ;;
-  esac
   printf '%s' "$resolved"
 }
 
