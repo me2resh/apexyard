@@ -11,7 +11,9 @@
 #   tracker.id_pattern   — regex for valid ticket-ID shape (no-existence-check fallback)
 #
 # Public functions:
-#   tracker_kind [<owner/repo>]        echoes the configured tracker kind
+#   tracker_issue_kind [<owner/repo>]  echoes the issue-system adapter kind
+#   tracker_review_kind [<owner/repo>] echoes the code-review host adapter kind
+#   tracker_kind [<owner/repo>]        compatibility alias for tracker_issue_kind
 #   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
@@ -56,7 +58,8 @@
 #                                      blocked / body_file unreadable; 3 = shape-only (kind=none,
 #                                      nothing to call).
 #
-# Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
+# Per-project resolution (#670 / AgDR-0072): tracker_issue_kind / tracker_review_kind /
+# tracker_kind / tracker_id_pattern /
 # tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
 # that project's apexyard.projects.yaml entry overrides the global config block
 # (per key); when omitted, the global block is used — byte-for-byte the original
@@ -261,36 +264,67 @@ PY
 }
 
 # ------------------------------------------------------------------------------
-# Public: tracker_kind [<owner/repo>]
-#   Echoes the configured tracker kind. With an optional <owner/repo>, a
-#   per-project `tracker.kind` override in the registry wins; otherwise the
-#   global config block (default "gh"). The no-arg path is byte-for-byte the
-#   original behaviour (cached).
+# Public: tracker_issue_kind / tracker_review_kind [<owner/repo>]
+#   Resolve the two independent tracker axes. New config uses
+#   `tracker.issue_kind` and `tracker.review_kind`; legacy `tracker.kind` is
+#   the fallback for both axes, preserving existing projects byte-for-byte.
 # ------------------------------------------------------------------------------
-_TRACKER_KIND_CACHE=""
-tracker_kind() {
-  local repo="${1:-}"
+_tracker_axis_kind() {
+  local axis="$1" repo="${2:-}" key="${1}_kind" legacy="kind" pv="" k=""
+  case "$axis" in issue|review) : ;; *) return 1 ;; esac
   if [ -n "$repo" ]; then
-    local pv
-    if pv=$(_tracker_project_value "$repo" kind) && [ -n "$pv" ]; then
+    if pv=$(_tracker_project_value "$repo" "$key") && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+    if pv=$(_tracker_project_value "$repo" "$legacy") && [ -n "$pv" ]; then
       echo "$pv"
       return 0
     fi
   fi
-  if [ -z "$repo" ] && [ -n "$_TRACKER_KIND_CACHE" ]; then
-    echo "$_TRACKER_KIND_CACHE"
+  if [ "$axis" = "issue" ]; then
+    k="${_TRACKER_ISSUE_KIND_CACHE:-}"
+  else
+    k="${_TRACKER_REVIEW_KIND_CACHE:-}"
+  fi
+  if [ -z "$repo" ] && [ -n "$k" ]; then
+    echo "$k"
     return 0
   fi
   _tracker_load_config_lib
-  local k
-  k=$(config_get_or '.tracker.kind' 'gh' 2>/dev/null)
+  k=$(config_get_or ".tracker.$key" '' 2>/dev/null)
+  if [ -z "$k" ] || [ "$k" = "null" ]; then
+    k=$(config_get_or '.tracker.kind' 'gh' 2>/dev/null)
+  fi
   if [ -z "$k" ] || [ "$k" = "null" ]; then
     k="gh"
   fi
   if [ -z "$repo" ]; then
-    _TRACKER_KIND_CACHE="$k"
+    if [ "$axis" = "issue" ]; then
+      _TRACKER_ISSUE_KIND_CACHE="$k"
+    else
+      _TRACKER_REVIEW_KIND_CACHE="$k"
+    fi
   fi
   echo "$k"
+}
+
+_TRACKER_ISSUE_KIND_CACHE=""
+_TRACKER_REVIEW_KIND_CACHE=""
+tracker_issue_kind() { _tracker_axis_kind issue "${1:-}"; }
+tracker_review_kind() { _tracker_axis_kind review "${1:-}"; }
+_TRACKER_KIND_CACHE=""
+tracker_kind() {
+  local repo="${1:-}" value
+  # Preserve the historical cache variable because existing consumers and
+  # tests may set it directly when stubbing the legacy resolver.
+  if [ -z "$repo" ] && [ -n "$_TRACKER_KIND_CACHE" ]; then
+    echo "$_TRACKER_KIND_CACHE"
+    return 0
+  fi
+  value=$(tracker_issue_kind "$repo") || return $?
+  [ -z "$repo" ] && _TRACKER_KIND_CACHE="$value"
+  echo "$value"
 }
 
 # ------------------------------------------------------------------------------
@@ -580,7 +614,7 @@ tracker_view() {
   # and view_command come from that project's registry override (if any),
   # falling back to the global config block. See AgDR-0072 / #670.
   local kind
-  kind=$(tracker_kind "$owner_repo")
+  kind=$(tracker_issue_kind "$owner_repo")
 
   case "$kind" in
     none)
@@ -797,7 +831,7 @@ tracker_create() {
   fi
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     none)
       # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
@@ -1066,7 +1100,7 @@ tracker_list() {
   # Per-project resolution: the target repo selects the project's tracker
   # override, else the global block (never cwd, never a session marker).
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     none)
       printf '[]\n'
@@ -1170,7 +1204,7 @@ tracker_label_ensure() {
     return 0
   fi
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     gh)   _tracker_label_ensure_gh   "$repo" "$name" "$color" "$desc" ;;
     glab) _tracker_label_ensure_glab "$repo" "$name" "$color" "$desc" ;;
@@ -1291,13 +1325,10 @@ _tracker_review_custom() {
 
 # Public: tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]
 #
-# NOTE on the tracker.kind axis: kind describes the ISSUE tracker, but a review
-# targets the PR/MR HOST (the git remote). For gh+github and glab+gitlab they
-# coincide, which is exactly the pair this ticket (#758) covers. The wildcard
-# default below assumes a non-gh/glab issue tracker (jira/linear/asana) is paired
-# with a GitHub code host — correct for the common jira-issues+github-code setup,
-# but a jira-issues+gitlab-code adopter would need `tracker.kind=custom` with a
-# review_command (or a future dedicated review-host config).
+# Review operations resolve `tracker.review_kind`. For backward compatibility,
+# that axis falls back to `tracker.kind` when `review_kind` is absent. This lets
+# Jira/Linear/Asana issue adopters select `glab` for code reviews without a
+# custom review command.
 tracker_review_submit() {
   local repo="$1" pr="$2" verdict="${3:-comment}" body_file="${4:-}"
   if [ -z "$repo" ] || [ -z "$pr" ]; then
@@ -1315,7 +1346,7 @@ tracker_review_submit() {
   esac
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
   [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   case "$kind" in
     none)
@@ -1395,7 +1426,7 @@ tracker_review_at_sha() {
   esac
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
   case "$kind" in
     gh) : ;;
     *)  return 3 ;;   # not verifiable on this forge — see FORGE SUPPORT above
@@ -1610,10 +1641,8 @@ _tracker_merge_resolve_sha() {
 
 # Public: tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]
 #
-# NOTE on the tracker.kind axis: same caveat as tracker_review_submit — kind
-# describes the ISSUE tracker, but a merge targets the PR/MR HOST. For gh+github
-# and glab+gitlab they coincide (this ticket's covered pair). A jira-issues+
-# gitlab-code adopter needs `tracker.kind=custom` with a merge_command.
+# Merge operations resolve `tracker.review_kind`, with the legacy `tracker.kind`
+# value as the fallback for existing projects.
 tracker_pr_merge() {
   local repo="$1" pr="$2" strategy delete_branch subject body_file
   if [ -z "$repo" ] || [ -z "$pr" ]; then
@@ -1656,7 +1685,7 @@ tracker_pr_merge() {
   fi
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
   [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   case "$kind" in
     none)
@@ -1758,6 +1787,8 @@ tracker_check_issues() {
 # ------------------------------------------------------------------------------
 tracker_clear_cache() {
   _TRACKER_KIND_CACHE=""
+  _TRACKER_ISSUE_KIND_CACHE=""
+  _TRACKER_REVIEW_KIND_CACHE=""
   _TRACKER_ID_PATTERN_CACHE=""
   _TRACKER_VIEW_TPL_CACHE=""
 }
