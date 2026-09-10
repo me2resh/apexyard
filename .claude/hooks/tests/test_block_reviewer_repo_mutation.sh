@@ -69,6 +69,15 @@ run_case 'git branch create is blocked' 'git branch reviewer-copy' blocked
 run_case 'git config write is blocked' 'git config user.name Reviewer' blocked
 run_case 'git notes add is blocked' 'git notes add -m note HEAD' blocked
 run_case 'git worktree remove is blocked' 'git worktree remove ../review-copy' blocked
+run_case 'git submodule status remains available' 'git submodule status' allowed
+run_case 'git sparse-checkout list remains available' 'git sparse-checkout list' allowed
+run_case 'git format-patch stdout remains available' 'git format-patch --stdout HEAD~1..HEAD' allowed
+run_case 'git fast-export remains available' 'git fast-export HEAD' allowed
+run_case 'git rerere status remains available' 'git rerere status' allowed
+run_case 'git maintenance list remains available' 'git maintenance list' allowed
+run_case 'git C config get remains available' 'git -C repo config --get user.name' allowed
+run_case 'git format-patch file write is blocked' 'git format-patch HEAD~1..HEAD' blocked
+run_case 'git submodule update remains blocked' 'git submodule update --init' blocked
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
 run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body\nDo not run git commit during review.\nEOF' allowed
 

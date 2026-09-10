@@ -52,7 +52,7 @@ fi
 # remote. The command-position anchor avoids matching quoted review prose such
 # as `echo 'git commit is forbidden'`. Options such as `git -C repo commit` are
 # accepted by the middle token span.
-MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|update-ref|fetch|apply|submodule|revert|am|bisect|replace|sparse-checkout|filter-branch|gc|init|repack|prune|fast-import|fast-export|pull|read-tree|write-tree|commit-tree|update-index|hash-object|index-pack|pack-refs|mktag|mktree|rerere|maintenance|clone|init-db|stage|subtree|replay|format-patch'
+MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|update-ref|fetch|apply|revert|am|bisect|replace|filter-branch|gc|init|repack|prune|fast-import|pull|read-tree|write-tree|commit-tree|update-index|hash-object|index-pack|pack-refs|mktag|mktree|clone|init-db|stage|subtree|replay'
 
 # `git remote get-url` and `git remote -v` are read-only operations used to
 # resolve the review host. Block only remote subcommands that change remotes.
@@ -69,7 +69,7 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   exit 2
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?config([[:space:]]|$)" && \
-   ! printf '%s' "$COMMAND" | grep -qE "git[[:space:]]+config[[:space:]]+(-{1,2}(get|get-all|get-regexp|list|show-origin|show-scope|name-only|includes|null)([[:space:]]|$)|-l([[:space:]]|$))"; then
+   ! printf '%s' "$COMMAND" | grep -qE "git([^;&|]*[[:space:]])config[[:space:]]+(-{1,2}(get|get-all|get-regexp|list|show-origin|show-scope|name-only|includes|null)([[:space:]]|$)|-l([[:space:]]|$))"; then
   echo "BLOCKED: review-class agent cannot change Git configuration during an active review." >&2
   exit 2
 fi
@@ -83,6 +83,30 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?worktree([[:space:]]|$)([^;&|]*[[:space:]])?(add|lock|move|prune|remove|repair|unlock)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter worktrees during an active review." >&2
+  exit 2
+fi
+
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?submodule([[:space:]]|$)" && \
+   ! printf '%s' "$COMMAND" | grep -qE "git([^;&|]*[[:space:]])submodule[[:space:]]+(status|summary)([[:space:];|&]|$)"; then
+  echo "BLOCKED: review-class agent cannot change submodules during an active review." >&2
+  exit 2
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?sparse-checkout([[:space:]]|$)" && \
+   ! printf '%s' "$COMMAND" | grep -qE "git([^;&|]*[[:space:]])sparse-checkout[[:space:]]+list([[:space:];|&]|$)"; then
+  echo "BLOCKED: review-class agent cannot change sparse-checkout state during an active review." >&2
+  exit 2
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?format-patch([[:space:]]|$)" && \
+   ! printf '%s' "$COMMAND" | grep -qE "git([^;&|]*[[:space:]])format-patch([^;&|]*[[:space:]])--stdout([[:space:];|&]|$)"; then
+  echo "BLOCKED: review-class agent cannot write patch files during an active review." >&2
+  exit 2
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?rerere([[:space:]]|$)([^;&|]*[[:space:]])?(forget|clear)([[:space:];|&]|$)"; then
+  echo "BLOCKED: review-class agent cannot alter rerere state during an active review." >&2
+  exit 2
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?maintenance([[:space:]]|$)([^;&|]*[[:space:]])?(run|start|stop|register|unregister|start)([[:space:];|&]|$)"; then
+  echo "BLOCKED: review-class agent cannot alter maintenance state during an active review." >&2
   exit 2
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\\|\\||;|\\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:];|&]|$)"; then
