@@ -78,6 +78,8 @@ run_case 'git maintenance list remains available' 'git maintenance list' allowed
 run_case 'git C config get remains available' 'git -C repo config --get user.name' allowed
 run_case 'git format-patch file write is blocked' 'git format-patch HEAD~1..HEAD' blocked
 run_case 'git submodule update remains blocked' 'git submodule update --init' blocked
+run_case 'git fast-export marks write is blocked' 'git fast-export --export-marks=marks.txt HEAD' blocked
+run_case 'git archive output write is blocked' 'git archive --output=archive.tar HEAD' blocked
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
 run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body\nDo not run git commit during review.\nEOF' allowed
 

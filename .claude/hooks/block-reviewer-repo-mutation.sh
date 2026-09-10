@@ -109,6 +109,14 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   echo "BLOCKED: review-class agent cannot alter maintenance state during an active review." >&2
   exit 2
 fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?fast-export([^;&|]*[[:space:]])--export-marks(=|[[:space:]])"; then
+  echo "BLOCKED: review-class agent cannot write fast-export marks during an active review." >&2
+  exit 2
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?archive([^;&|]*[[:space:]])(--output=|--output[[:space:]])"; then
+  echo "BLOCKED: review-class agent cannot write archive output during an active review." >&2
+  exit 2
+fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\\|\\||;|\\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent is read-only while an active review is in flight. Do not stage, commit, push, restore, stash, or otherwise mutate the repository; report the finding to the orchestrator." >&2
   exit 2
