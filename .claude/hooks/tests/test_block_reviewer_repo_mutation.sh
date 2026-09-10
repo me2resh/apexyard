@@ -38,6 +38,13 @@ run_case 'git commit before separator is blocked' 'git commit;' blocked
 run_case 'git push before separator is blocked' 'git push; echo done' blocked
 run_case 'newline-separated git mutation is blocked' $'echo review\ngit commit' blocked
 run_case 'git tag is blocked' 'git tag release-candidate' blocked
+run_case 'git update-ref is blocked' 'git update-ref refs/heads/reviewed HEAD' blocked
+run_case 'git fetch is blocked' 'git fetch origin' blocked
+run_case 'git checkout-index is blocked' 'git checkout-index --all' blocked
+run_case 'git apply is blocked' 'git apply fix.patch' blocked
+run_case 'git submodule update is blocked' 'git submodule update --init' blocked
+run_case 'git worktree add is blocked' 'git worktree add ../review-copy HEAD' blocked
+run_case 'git notes is blocked' 'git notes add -m note HEAD' blocked
 run_case 'git status remains available' 'git status --short' allowed
 run_case 'git diff remains available' 'git diff --check' allowed
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
