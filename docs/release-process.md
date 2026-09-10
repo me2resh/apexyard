@@ -1,8 +1,8 @@
 # apexyard release process
 
-apexyard uses a **release-cut** branch model (sometimes called gitflow-lite) for the framework repo. This doc is the prose runbook for cutting a release. The `/release` skill at `.claude/skills/release/SKILL.md` automates most of the steps; this doc is the manual fallback and the conceptual reference.
+ApexYard uses a **release-cut** branch model for the framework repository. This document explains the release steps and the checks behind them. The `/release` skill at `.claude/skills/release/SKILL.md` automates most of the work; this page is the manual fallback and the reference for how the process fits together.
 
-**Important — framework only.** This release model is for `me2resh/apexyard` itself, not for managed projects under apexyard governance. Managed projects stay trunk-based (PRs merge to `main`); only the framework has dev/main + tags. See `docs/multi-project.md` for the rationale.
+**Framework only.** This model applies to `me2resh/apexyard`, not to managed projects. Managed projects remain trunk-based and merge PRs to `main`; only the framework uses `dev`, `main`, and release tags. See `docs/multi-project.md` for the reason.
 
 Decision records: [`docs/agdr/AgDR-0007-release-cut-branch-model.md`](agdr/AgDR-0007-release-cut-branch-model.md) · [`docs/agdr/AgDR-0076-release-automation.md`](agdr/AgDR-0076-release-automation.md).
 
@@ -24,15 +24,15 @@ main ─────●────────────────●──
 
 ## When to cut a release
 
-Curated cadence — release when there's a meaningful batch on `dev` that's worth surfacing to adopters. Loose guidance:
+Use judgment. Cut a release when `dev` contains a meaningful batch that adopters should receive. These are guidelines:
 
 - **Patch (`vX.Y.Z+1`)** — bug fixes only. Cut whenever there are ≥ 1 fix and adopters would benefit.
 - **Minor (`vX.Y+1.0`)** — new features (additive). Cut every 1–2 weeks if there's been net-new feature work.
 - **Major (`vX+1.0.0`)** — breaking changes. Coordinate with adopters first; release notes call out migrations.
 
-Before cutting a release, run the cross-harness quality regression and adjudicate it: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any supported harness that ran stops the release until it is fixed. Record the summary under `docs/quality-regression/runs/<date>/README.md`.
+Before cutting a release, run and review the cross-harness regression: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any harness that ran stops the release until it is fixed. Record the result in `docs/quality-regression/runs/<date>/README.md`.
 
-If `dev` is N commits ahead and nothing's broken, you're free to NOT release — adopters will stay on the previous tag and the drift banner will tell them about the new tag when it's cut.
+If `dev` is ahead and nothing is broken, you can wait. Adopters stay on the previous tag, and the drift banner tells them about the new tag after release.
 
 ## Cutting a release — happy path (automated)
 
