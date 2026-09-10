@@ -1,6 +1,6 @@
 # ApexYard Setup
 
-ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard, clone the fork, treat it as your "ops repo", and register every project you want under management. This document is the full setup guide: the fork flow, the directory layout, the daily workflow, and the FAQ.
+ApexYard manages a **portfolio of repositories as one organisation**. Fork the framework, clone your fork as the ops repo, and register each project you want it to manage. This guide covers the setup choices, directory layout, daily workflow, and common questions.
 
 > There is no single-project fallback mode. Even if you have exactly one repo, you still fork apexyard and register that one repo. Future projects plug into the same registry.
 
@@ -8,7 +8,7 @@ ApexYard governs a **portfolio of repos as one organisation**. You fork apexyard
 
 ## Two setup modes — pick the one that matches your privacy needs
 
-ApexYard ships two supported patterns. **Read this section before you fork** — picking the wrong one and pushing private project names to a public fork is hard to recover from cleanly (the GitHub PR / Issue edit history survives a force-push).
+ApexYard supports two patterns. **Read this section before you fork.** If you choose the public pattern for private work, a later cleanup cannot fully remove the names from GitHub's PR and issue history.
 
 | | Single-fork mode (default) | Split-portfolio mode (v2) |
 | --- | --- | --- |
@@ -18,11 +18,11 @@ ApexYard ships two supported patterns. **Read this section before you fork** —
 | **Where `onboarding.yaml` lives** | Inside the fork | Inside the private repo (v2, framework ≥ #242) |
 | **Where `workspace/<name>/` lives** | Inside the fork (gitignored) | Inside the private repo (v2, framework ≥ #242) |
 | **Ops-fork anchor on disk** | `onboarding.yaml + apexyard.projects.yaml` (legacy) — or `.apexyard-fork` marker file (v2) | `.apexyard-fork` marker file (v2) — neither legacy file is in the public fork |
-| **Public exposure** | Every registered project name + handover finding is on a public GitHub repo | Public fork holds only framework files + your customisations; private repo holds your portfolio data, company config, AND your managed-project clones |
+| **Public exposure** | Every registered project name and handover finding is on a public GitHub repo | The public fork holds framework files and your customisations; the private repo holds portfolio data, company config, and managed-project clones |
 | **Daily workflow** | Same | Same — skills resolve through the config block transparently |
 | **Pick this if…** | All your projects are already public, OR you're on GitHub Pro / Team / Enterprise (which support private forks of public repos) | You're on GitHub Free with any project you don't want named publicly |
 
-**The trip-wire**: GitHub Free disallows changing a fork's visibility — you cannot make a fork of a public repo private after the fact. Combined with the framework's default of committing the registry to the fork, free-tier adopters with any private project risk accidentally publishing their portfolio names with a stray push (the framework itself never pushes without operator approval, but once the registry is committed locally the next push exposes it). The split-portfolio mode below is the supported way around this.
+**The trip-wire:** GitHub Free does not let you change a public fork to private. Because the default mode commits the registry to the fork, a free-tier adopter with a private project could publish the project name with a later push. ApexYard never pushes without operator approval, but the registry is still public once committed. Use split-portfolio mode for this case.
 
 ---
 
@@ -30,12 +30,12 @@ ApexYard ships two supported patterns. **Read this section before you fork** —
 
 | | ApexYard (single-fork) |
 | --- | --- |
-| **What you install** | A fork of `me2resh/apexyard`, cloned locally. No `.apexyard/` symlinks, no nested installs. |
+| **What you install** | A local clone of your fork of `me2resh/apexyard`. No `.apexyard/` symlink or nested install. |
 | **What governs the portfolio** | `apexyard.projects.yaml` at the root of your fork |
 | **Where per-project docs live** | `projects/<name>/` inside your fork, committed |
 | **Where live working copies live** | `workspace/<name>/` inside your fork, gitignored |
 | **Where the registry, roadmap, ideas, updates live** | All inside your fork, alongside the apexyard primitives |
-| **How upgrades flow** | `git pull upstream main` from `me2resh/apexyard` |
+| **How upgrades flow** | Fetch `me2resh/apexyard` as `upstream`, then merge its `main` branch. |
 | **Best for** | CTOs, engineering leads, Chief-of-Staff roles managing 2+ repos (or 1 repo with intent to grow) — **all projects public, OR you have GitHub Pro / Team / Enterprise** |
 
 If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode--public-framework--private-portfolio) further down.
@@ -44,13 +44,13 @@ If you need privacy, jump to the [split-portfolio setup](#split-portfolio-mode--
 
 ## Why fork instead of clone?
 
-Earlier versions of apexyard told you to clone the repo into a hidden `.apexyard/` directory inside a separate ops repo and symlink the `.claude/` folder. That pattern worked but it had three problems:
+Earlier versions told you to clone the framework into a hidden `.apexyard/` directory inside a separate ops repo and symlink its `.claude/` folder. That worked, but it created three problems:
 
 1. **Brand invisibility** — `.apexyard/` is a dotfile, hidden from `ls` and GitHub views. Nobody knew you were using apexyard.
 2. **Two repos to maintain** — your ops repo plus the nested clone. Upgrades meant `git pull` in `.apexyard/`, which felt off-piste.
 3. **Symlink fragility** — the `.claude/` symlink broke on dotfile sync tools and Windows setups.
 
-Forking solves all three:
+Forking solves those problems:
 
 1. **The fork stays named** (keep it as `your-org/apexyard`, or rename to `your-org/ops` — your call)
 2. **One repo to maintain** — the fork IS the ops repo
@@ -58,11 +58,11 @@ Forking solves all three:
 
 ---
 
-## Setup — 6 steps, ~5 minutes
+## Setup — six steps, about five minutes
 
 ### 1. Fork on GitHub
 
-Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard) and click **Fork** (top right). Star it while you're there.
+Open [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard) and click **Fork** in the top-right corner.
 
 The fork lands in your org. You can keep the name as `apexyard` or rename to something that fits your naming convention (`your-org/ops`, `your-org/apex`, `your-org/cos` for Chief-of-Staff — whatever suits).
 
@@ -88,18 +88,18 @@ cd apexyard
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Now `git fetch upstream` will pull the latest apexyard changes whenever you want to upgrade, and `git merge upstream/main` brings them into your fork.
+`git fetch upstream` downloads the latest framework changes. When you are ready to upgrade, `git merge upstream/main` brings them into your fork.
 
 ### 4. Fill in `onboarding.yaml`
 
-The repo ships a tracked placeholder template, `onboarding.example.yaml`. Your real config lives in `onboarding.yaml`, which is **gitignored** (#517) — it stays local and is never published to your public fork or an upstream PR. Copy the template, then edit it (or just run `/setup`, which does the copy + fill for you):
+The repo includes a tracked placeholder, `onboarding.example.yaml`. Your real config belongs in `onboarding.yaml`, which is **gitignored** (#517). It stays local and is not published to your fork or an upstream PR. Copy the template and edit it, or run `/setup` to do both steps:
 
 ```bash
 cp onboarding.example.yaml onboarding.yaml
 $EDITOR onboarding.yaml      # set company, team, tech stack, quality bar
 ```
 
-Don't commit `onboarding.yaml` — a commit-time guard (`block-onboarding-in-git.sh`) blocks a filled-in copy if you try. If a teammate needs the config *shape*, edit and commit `onboarding.example.yaml` (placeholders only) instead.
+Do not commit `onboarding.yaml`. The commit-time guard (`block-onboarding-in-git.sh`) blocks a filled-in copy. If a teammate needs the config *shape*, edit and commit `onboarding.example.yaml` with placeholders only.
 
 > **Migrating an existing fork (pre-#517, where `onboarding.yaml` was tracked):** untrack it once — your local copy is preserved — and let the new gitignore + guard take over:
 >
@@ -112,7 +112,7 @@ Don't commit `onboarding.yaml` — a commit-time guard (`block-onboarding-in-git
 
 ### 5. Create the registry
 
-Copy the example and list every repo you want under management:
+Copy the example and list every repository you want to manage:
 
 ```bash
 cp apexyard.projects.yaml.example apexyard.projects.yaml
@@ -130,11 +130,11 @@ projects:
     status: active
 ```
 
-Add `workspace`, `roles`, `tier`, `tags`, and `ticket_prefix` later as you need them. Even if you have just one repo right now, register it — the skills are happier with one registered project than with a dangling "assume the current directory" fallback.
+Add `workspace`, `roles`, `tier`, `tags`, and `ticket_prefix` when you need them. Register a project even if you have only one today; the skills use the registry instead of guessing from the current directory.
 
 ### 6. Seed per-project docs
 
-For each project in the registry, create the docs folder:
+Create a docs folder for each project in the registry:
 
 ```
 projects/example-app/
@@ -158,7 +158,7 @@ git clone github.com/your-org/example-app workspace/example-app
 /projects
 ```
 
-You should see one row per registered project. Then:
+You should see one row for each registered project. Then run:
 
 ```
 /inbox
