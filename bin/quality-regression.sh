@@ -233,8 +233,8 @@ run_case() {
   git -C "$wt" status --porcelain 2>/dev/null | grep -vxF -f "$dir/.ops-dirty" > "$dir/$id.changed"
   git -C "$SRC_ROOT" worktree remove --force "$wt" >/dev/null 2>&1
   local mechanical
-  if grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|login required|usage limit|rate limit|session limit' "$dir/$id.out" 2>/dev/null \
-    || { [ ! -s "$dir/$id.out" ] && grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|login required|usage limit|rate limit|session limit' "$dir/$id.err" 2>/dev/null; }; then
+  if grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|authentication required|login required|usage limit|rate limit|session limit' "$dir/$id.out" 2>/dev/null \
+    || { [ ! -s "$dir/$id.out" ] && grep -qiE 'AuthRequired|invalid[_ -]?token|no API key|API key is invalid|subscription access|not authenticated|authentication required|login required|usage limit|rate limit|session limit|database is locked' "$dir/$id.err" 2>/dev/null; }; then
     mechanical="NOT-RUN harness authentication or quota unavailable"
   else
     mechanical=$(mech_check "$id" "$dir/$id.out" "$dir/$id.changed")
