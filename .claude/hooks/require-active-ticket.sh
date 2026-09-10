@@ -476,86 +476,20 @@ _ratc_evaluate_target() {
     fi
   fi
 
-  # Per-project resolution (apexyard#41): if FILE_PATH points under the
-  # resolved workspace dir, we look for a per-project marker at
-  # .claude/session/tickets/<project>. This keeps per-project session state
-  # keyed by the managed-project name and localised in the ops fork
-  # (gitignored), instead of the pre-#41 scheme that relied on a
-  # .claude/session/ inside each managed-project clone.
-  #
-  # Split-portfolio v2 (#242): WORKSPACE_DIR may resolve to a sibling
-  # private repo path (e.g. ../<fork>-portfolio/workspace) instead of the
-  # default $OPS_ROOT/workspace; both shapes are handled here.
-  local PROJECT="" tail
-  if [ -n "$WORKSPACE_DIR" ]; then
-    case "$FILE_PATH" in
-      "$WORKSPACE_DIR"/*)
-        tail="${FILE_PATH#$WORKSPACE_DIR/}"
-        PROJECT="${tail%%/*}"
-        ;;
-    esac
+  # Marker resolution is shared with the migration gate. Keeping the project
+  # and tier-0/1/2 marker lookup in one implementation prevents the two gates
+  # from authorising the same path against different tickets.
+  local ACTIVE_TICKET_LIB="$HOOK_DIR/_lib-active-ticket.sh"
+  if [ -f "$ACTIVE_TICKET_LIB" ]; then
+    # shellcheck source=/dev/null
+    . "$ACTIVE_TICKET_LIB"
   fi
-  # Belt-and-suspenders: also recognise the literal $OPS_ROOT/workspace/
-  # shape, in case workspace_dir is overridden but a tool produced an
-  # absolute path under the in-fork legacy location.
-  if [ -z "$PROJECT" ] && [ -n "$OPS_ROOT" ]; then
-    case "$FILE_PATH" in
-      "$OPS_ROOT"/workspace/*)
-        tail="${FILE_PATH#$OPS_ROOT/workspace/}"
-        PROJECT="${tail%%/*}"
-        ;;
-    esac
+  local MARKER="" PER_WORKTREE_MARKER="" PER_PROJECT_MARKER=""
+  local FALLBACK_MARKER="${MARKER_HOME:-${OPS_ROOT:-${REPO_ROOT:-.}}}/.claude/session/current-ticket"
+  if command -v active_ticket_project_for_path >/dev/null 2>&1; then
+    MARKER=$(active_ticket_marker_for_path "$FILE_PATH")
   fi
-
-  # Tier 0 — per-worktree marker (#513): when two agents are fanned out on the
-  # SAME managed project in parallel git worktrees, each must declare its ticket
-  # independently or they collide on the shared per-project file (last-writer-wins,
-  # silent wrong-ticket pass). A branch-scoped marker at
-  # tickets/<project>/<safe-branch> is resolved BEFORE the per-project tier.
-  # Single-agent / non-worktree flows have no such marker and fall straight
-  # through to the per-project tier — no behaviour change. Note: tickets/<project>
-  # is a FILE in single-agent mode and a DIRECTORY in worktree mode; the `-f`
-  # tests below distinguish them, so the two tiers never conflict.
-  local PER_WORKTREE_MARKER="" WT_BRANCH SAFE_BRANCH _fdir _gd _gcd
-  if [ -n "$PROJECT" ]; then
-    # Branch: prefer the harness-set env var (populated at worktree spawn). Else
-    # only treat the file's repo as worktree-scoped when it's a LINKED worktree,
-    # detected by comparing the ABSOLUTE git-dir against the ABSOLUTE common-dir
-    # (they differ only in a linked worktree). This matches /start-ticket's
-    # write-side detection exactly — no read/write asymmetry — and the absolute
-    # forms avoid the false positive where, in the main checkout from a subdir,
-    # `--git-dir` is absolute but `--git-common-dir` is relative.
-    WT_BRANCH="${CLAUDE_WORKTREE_BRANCH:-}"
-    if [ -z "$WT_BRANCH" ]; then
-      _fdir=$(dirname "$FILE_PATH")
-      _gd=$(git -C "$_fdir" rev-parse --absolute-git-dir 2>/dev/null)
-      _gcd=$(git -C "$_fdir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
-      if [ -n "$_gd" ] && [ "$_gd" != "$_gcd" ]; then
-        WT_BRANCH=$(git -C "$_fdir" branch --show-current 2>/dev/null)
-      fi
-    fi
-    if [ -n "$WT_BRANCH" ]; then
-      SAFE_BRANCH="${WT_BRANCH//\//__}"   # '/' → '__' for a filesystem-safe segment
-      PER_WORKTREE_MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT/$SAFE_BRANCH"
-      if [ -f "$PER_WORKTREE_MARKER" ]; then
-        return 0
-      fi
-    fi
-  fi
-
-  local PER_PROJECT_MARKER=""
-  if [ -n "$PROJECT" ]; then
-    PER_PROJECT_MARKER="$MARKER_HOME/.claude/session/tickets/$PROJECT"
-    if [ -f "$PER_PROJECT_MARKER" ]; then
-      return 0
-    fi
-  fi
-
-  # Fallback: the ops-level current-ticket marker. This is the pre-#41
-  # location and still honoured for ops-repo framework edits, and as a
-  # safety net for any file we couldn't map to a specific project.
-  local FALLBACK_MARKER="$MARKER_HOME/.claude/session/current-ticket"
-  if [ -f "$FALLBACK_MARKER" ]; then
+  if [ -n "$MARKER" ]; then
     return 0
   fi
 
