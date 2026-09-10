@@ -235,6 +235,7 @@ For maintainers of `me2resh/apexyard`, configure GitHub branch protection on `ma
 
 - Require pull request before merging
 - Require approvals: 1
+- Dismiss stale approvals when new commits are pushed
 - Require status checks to pass before merging (markdownlint, lychee, shellcheck, Verify Ticket ID)
 - Restrict who can push to matching branches (only repo admins, for the rare manual tag-fix case)
 
