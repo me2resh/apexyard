@@ -1,5 +1,5 @@
 #!/bin/bash
-# _lib-ops-root.sh — shared OPS_ROOT discovery for hooks and skills.
+# _lib-ops-root.sh — shared OPS_ROOT lookup for hooks and skills.
 #
 # An "ops root" is the directory containing one of:
 #
@@ -7,14 +7,10 @@
 #   2. BOTH `onboarding.yaml` AND `apexyard.projects.yaml` (legacy v1
 #      layout — pre-v2 single-fork OR pre-v2 split-portfolio adopters).
 #
-# Hooks that write or read framework session state (`.claude/session/*`)
-# need this to resolve consistently regardless of cwd. The failure mode
-# is real: when the operator works inside a managed-project workspace
-# clone at `workspace/<project>/`, `git rev-parse --show-toplevel`
-# returns the project clone, NOT the ops fork. Hooks that wrote markers
-# under the ops fork (e.g. via `require-active-ticket.sh`'s OPS_ROOT
-# walk) ended up invisible to merge-gate hooks that resolved REPO_ROOT
-# via plain `git rev-parse`.
+# Hooks that read or write `.claude/session/*` must resolve the same root from
+# every cwd. From `workspace/<project>/`, `git rev-parse --show-toplevel`
+# returns the managed project clone, not the ops fork. Without this lookup,
+# one hook can write a marker in the ops fork while another searches the clone.
 #
 # Why a marker file: split-portfolio v2 (#242) moves both `onboarding.yaml`
 # AND `apexyard.projects.yaml` to the private sibling repo. The legacy

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Blocks Edit/Write/MultiEdit on code paths when no active ticket is set.
-# Enforces the ticket-first rule mechanically instead of relying on prose
-# in CLAUDE.md, workflows/sdlc.md, or .claude/rules/workflow-gates.md.
+# This enforces the ticket-first rule instead of relying on prose in
+# CLAUDE.md, workflows/sdlc.md, or .claude/rules/workflow-gates.md.
 #
 # Active tickets are declared by the /start-ticket skill. The marker
 # layout is three-tier (apexyard#41 + #513):
