@@ -1,7 +1,6 @@
 #!/bin/bash
-# _lib-migration-chain.sh — detect the current framework version anchor,
-# discover the chain of intermediate-release migrations needed to reach
-# a target version, and shell out to each per-pair migration script.
+# _lib-migration-chain.sh — read the current framework version, build the
+# ordered migration path to a target release, and run each migration script.
 #
 # Source this library from /update (and from the smoke test).
 #
@@ -18,7 +17,7 @@
 # Single-line "vMAJOR.MINOR.PATCH". Written by /update on every successful
 # sync. See AgDR-0032.
 #
-# Design notes (kept here so the rationale travels with the code):
+# Design notes (kept here so the rationale stays next to the code):
 #   - The anchor is a separate file (not a git-derived signal) because
 #     adopters routinely rewrite history (squash-merge, rebase) and an
 #     anchor that depends on tag presence would silently drift.

@@ -1,6 +1,6 @@
 #!/bin/bash
-# PostToolUse hook: after `gh pr create` succeeds, tell Claude to invoke the
-# code-reviewer agent (Rex) on the new PR automatically.
+# PostToolUse hook: after `gh pr create` succeeds, tell Claude to run the
+# code-reviewer agent (Rex) on the new PR.
 #
 # Mechanism: the hook writes a pending-review marker and exits with code 2
 # so the stderr message is surfaced back to Claude as an "error", which in

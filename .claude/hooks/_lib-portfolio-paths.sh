@@ -1,9 +1,8 @@
 #!/bin/bash
-# _lib-portfolio-paths.sh — resolve portfolio paths from project-config.
+# _lib-portfolio-paths.sh — resolve configured portfolio paths.
 #
-# Source this library from any hook or skill that reads/writes the
-# portfolio registry, per-project docs dir, ideas backlog, the
-# onboarding config, or the workspace dir. Reads the `portfolio` block
+# Source this library from hooks or skills that read or write the portfolio
+# registry, project docs, ideas backlog, onboarding config, or workspace. It reads the `portfolio` block
 # from .claude/project-config.{defaults,}.json (via _lib-read-config.sh's
 # `config_get_or`).
 #
