@@ -30,7 +30,7 @@ Use judgment. Cut a release when `dev` contains a meaningful batch that adopters
 - **Minor (`vX.Y+1.0`)** — new features (additive). Cut every 1–2 weeks if there's been net-new feature work.
 - **Major (`vX+1.0.0`)** — breaking changes. Coordinate with adopters first; release notes call out migrations.
 
-Before cutting a release, run and review the cross-harness regression: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any harness that ran stops the release until it is fixed. Record the result in `docs/quality-regression/runs/<date>/README.md`.
+Before cutting a release, run and review the cross-harness regression: `bin/quality-regression.sh --harness all` (see `docs/quality-regression/README.md`). A high-severity failure on any supported harness that ran stops the release until it is fixed. Record the result in `docs/quality-regression/runs/<date>/README.md`.
 
 If `dev` is ahead and nothing is broken, you can wait. Adopters stay on the previous tag, and the drift banner tells them about the new tag after release.
 
