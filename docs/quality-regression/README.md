@@ -1,6 +1,6 @@
 # Quality regression — grounding, proportionality, readability
 
-**Outcome.** The framework keeps a small, permanent corpus of real failure cases and a runner that replays them through every supported harness. **Reason.** The three behavioral rules shipped in me2resh/apexyard#1162, #1163, and #1164 are prose, not hooks; the only way to know they work across harnesses is to run the same tasks everywhere and look. **Decision.** Scoring is human-adjudicated against observable pass / fail conditions, helped by mechanical checks, and never by an LLM judge rating prose ([AgDR-0089](../agdr/AgDR-0089-eval-agents-methodology.md) found that shape at chance). **Next action.** Run the corpus before a release; a high-severity failure on any supported harness stops the release until it is fixed.
+The framework keeps a small, permanent corpus of real failure cases and a runner that replays them through every supported harness. The three behavioral rules shipped in #1162, #1163, and #1164 are prose rather than hooks, so the same tasks must run on each harness to show that the behavior holds. A person scores each run against observable pass/fail conditions; mechanical checks provide evidence, but no model grades the prose ([AgDR-0089](../agdr/AgDR-0089-eval-agents-methodology.md)). Run the corpus before a release. A high-severity failure on any supported harness stops the release until it is fixed.
 
 ## The corpus
 
@@ -12,7 +12,7 @@ The cases are the three fixture files the rules already ship. They are the singl
 | `.claude/rules/tests/fixtures/proportionate-work-cases.md` | `PW` | proportionality — smallest change, reuse, undemonstrated abstraction, advice stays conversational, Lean planning, Heavy rails | 7 |
 | .claude/rules/tests/fixtures/human-friendly-cases.md | HF | controlled technical writing profile for artifacts, clear machine text, evidence retention, and review rejection | 10 |
 
-Each case states a **Given** (the situation), a **Prompt** (what the operator says), a **Fail if**, and a **Pass if**. Both conditions are observable in the transcript or in the files the agent wrote. See [`corpus.md`](corpus.md) for every case with its dimension, severity, representative flag, and mechanical check.
+Each case states a **Given** (the situation), a **Prompt** (what the operator says), a **Fail if**, and a **Pass if**. The result must be observable in the transcript or in files the agent wrote. See [`corpus.md`](corpus.md) for each case's dimension, severity, representative flag, and mechanical check.
 
 **Representative set** (runs on every harness): EG-01, EG-03, EG-05, PW-01, PW-04, PW-06, HF-01, HF-06 — one clear case per failure family, and both rails.
 
@@ -29,7 +29,7 @@ Four scores per run, all read from transcripts:
 
 **Severity.** A failure is **high** when it reduces safety, technical precision, or task completion: EG-02, EG-03, EG-06, PW-06, PW-07, HF-06. Every other failure is **medium**. The release gate is: no high-severity failure on any supported harness that ran.
 
-**Mechanical checks** are heuristics on observable text and on written files (for example, "output contains `#N`" or "worktree has a modified file"). They are printed per case and pre-fill the scorecard. **The adjudicated column is final** and is filled by a person from the transcript. A mechanical PASS with an adjudicated FAIL is expected sometimes; the reverse should be rare and is worth a note.
+**Mechanical checks** are heuristics over observable text and written files, such as "output contains `#N`" or "worktree has a modified file." They print per case and pre-fill the scorecard. **The adjudicated column is final** and is completed by a person from the transcript. A mechanical PASS with an adjudicated FAIL is sometimes expected; the reverse should be rare and deserves a note.
 
 ## Running it
 
@@ -60,7 +60,7 @@ Each case runs in its own detached worktree of `--ref` under `.claude/worktrees/
 ## What this is not
 
 - Not an LLM-judge benchmark. No model rates prose here.
-- Not proof of behavior. Twenty cases on a handful of harnesses is a smoke test that catches regressions in the defaults, not a measurement of the model.
+- Not proof of all behavior. Twenty cases on a handful of harnesses is a smoke test for regressions in the defaults, not a measurement of the model.
 - Not a hook. Nothing here blocks a merge. The release process reads the latest run.
 
 Decision record: [AgDR-0127](../agdr/AgDR-0127-cross-harness-quality-regression.md). Ticket: me2resh/apexyard#1165.
