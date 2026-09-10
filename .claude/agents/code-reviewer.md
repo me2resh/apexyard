@@ -86,6 +86,18 @@ It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + 
 
 When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
 
+## Evidence-backed behavior claims
+
+Before stating that code, configuration, or a workflow **does** something, verify the claim against the repository's real usage. Inspect relevant call sites, build scripts, CI references, and tests. When the claim depends on runtime behavior, run the smallest available command or reproduction that exercises it. A diff can show intent, but it does not prove that a path is reachable or that a commented section is active.
+
+Classify the basis of each load-bearing behavior finding:
+
+- **Observed** — reproduced by a command, test, or direct repository evidence.
+- **Inferred** — supported by code evidence but not exercised; state the inference and its basis.
+- **Unverified** — the required usage or runtime check was unavailable; report the gap and keep the finding conditional.
+
+Do not present an inference or an unverified hypothesis as a confirmed defect. If no suitable reproduction exists, say what was checked and what remains unknown. Keep examples and commands generic; do not copy private repository paths, credentials, or adopter identifiers into framework artifacts.
+
 ## Reduced-Scope Review — Lean-tier diffs (Option 4, AgDR-0116)
 
 Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires a Rex pass — the merge gate (`block-unreviewed-merge.sh`) requires the `*-rex.approved` marker on EVERY PR, regardless of tier, unconditionally, because it is a CONTROL that reads structured state (a marker vs. the forge-reported HEAD) and structurally cannot itself inspect a diff's content to decide a tier. What changes for a Lean diff is the **depth** of your pass, never whether one happens.
