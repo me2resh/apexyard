@@ -35,6 +35,8 @@ assert "runner:auth-unavailable-is-not-run" grep -qF 'NOT-RUN harness authentica
 assert "runner:cursor-auth-message" grep -qF 'authentication required' "$RUNNER"
 assert "runner:adapter-startup-failure-is-not-run" grep -qF 'database is locked' "$RUNNER"
 assert "runner:heavy-path-signal" grep -qF 'security-sensitive' "$RUNNER"
+assert "runner:context-check-precedes-example-text" grep -qF 'if grep -qiE "sandbox" "$out"' "$RUNNER"
+assert "runner:qualified-confirmation-phrases" grep -qF 'not ([a-z]+ ){0,3}confirmed' "$RUNNER"
 
 # every case id the runner parsed appears in the index
 for id in $(echo "$check_out" | sed -n "s/^cases parsed: $expected_cases (\\(.*\\))$/\\1/p"); do
