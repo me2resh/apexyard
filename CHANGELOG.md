@@ -114,6 +114,7 @@ Minor release — 8 features, 46 fixes, 21 improvements.
 - Closes #1225
 - Closes #1230
 - Closes #1233
+
 # Changelog
 
 All notable changes to ApexYard are documented here.
