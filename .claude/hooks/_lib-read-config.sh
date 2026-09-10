@@ -1,17 +1,12 @@
 #!/bin/bash
-# _lib-read-config.sh — shared reader for .claude/project-config.*.json
+# _lib-read-config.sh — read .claude/project-config.*.json
 #
-# Source this library from any hook or skill that needs to read project config.
-# Defaults ship at .claude/project-config.defaults.json (committed, upstream-
-# maintained). User overrides live at .claude/project-config.json (optional;
-# each fork decides whether to commit or gitignore it).
+# Source this library from a hook or skill that reads project configuration.
+# Defaults live in .claude/project-config.defaults.json. A fork can add the
+# optional .claude/project-config.json override.
 #
-# Merge strategy: `jq`'s `*` recursively merges objects, with the override's
-# scalar values winning conflicts, and replaces arrays wholesale. An override
-# can therefore name one object member without dropping its siblings, while an
-# array override replaces the inherited array. This is the behavior of the
-# implementation below; callers should state explicitly which shape they rely
-# on rather than calling the whole merge shallow.
+# Merge behavior: jq recursively merges objects. The override wins scalar
+# conflicts. An override array replaces the inherited array.
 #
 # Usage:
 #   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -19,10 +14,9 @@
 #   config_get '.branch.type_whitelist[]'
 #   config_get '.ticket.label_priority_scheme'
 #
-# Silent fallback behaviour:
-#   - No defaults file present: emit '{}' and an error on stderr. Callers should
-#     treat config_get as "unknown" and apply their own safety.
-#   - jq not installed: emit '{}' and a one-time warning on stderr.
+# Fallback behavior:
+#   - Missing defaults: emit '{}' and an error. Callers must apply their safety.
+#   - Missing jq: emit '{}' and one warning per process.
 
 # ------------------------------------------------------------------------------
 # Session-scoped, CROSS-PROCESS cache (me2resh/apexyard#1013 / AgDR-0120).

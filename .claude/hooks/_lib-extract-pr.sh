@@ -1,54 +1,27 @@
 #!/bin/bash
-# Shared PR-number and repo extraction for the merge-gate hooks:
-#   - block-unreviewed-merge.sh
-#   - require-design-review-for-ui.sh
-#   - require-architecture-review.sh
-#   - block-merge-on-red-ci.sh
+# Shared PR and repo extraction for merge-gate hooks. The hooks are:
+# block-unreviewed-merge.sh, require-design-review-for-ui.sh,
+# require-architecture-review.sh, and block-merge-on-red-ci.sh.
 #
-# Not a hook itself (prefixed with `_lib-` so it's never wired as one). Sourced
-# by the hooks above via `. "$(dirname "$0")/_lib-extract-pr.sh"`.
+# This file is a library, not a hook. The merge gates source it and share the
+# same tested parser. Keep parsing here instead of duplicating it in a hook.
+# The shared parser prevents API merge forms from bypassing the gates, as the
+# original GitHub API incident showed (#47).
 #
-# WHY THIS EXISTS
-# ---------------
-# The merge gates originally only matched `gh pr merge <N>`. Incident (#47):
-# merges via `gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT` silently
-# bypassed all three gates because neither the matcher nor the PR-number
-# extraction knew about the API shape. This helper gives every gate a single,
-# tested way to recognise both shapes:
+# The parser covers GitHub and GitLab CLI and API merge forms. Examples:
+#   gh pr merge 42 --squash
+#   gh api repos/owner/repo/pulls/42/merge -X PUT
+#   glab mr merge 42 -R owner/repo
+#   glab api projects/owner%2Frepo/merge_requests/42/merge
 #
-#   1. `gh pr merge 42 --squash`                                  → PR is 42
-#   2. `gh api repos/owner/repo/pulls/42/merge -X PUT`            → PR is 42
-#
-# Any tool that edits one of the three merge hooks MUST keep calling this
-# helper, not re-implement the parsing inline. That's the whole point.
-#
-# USAGE
-# -----
+# Usage:
 #   . "$(dirname "$0")/_lib-extract-pr.sh"
 #   if ! is_merge_command "$COMMAND"; then exit 0; fi
 #   PR_NUMBER=$(extract_pr_number "$COMMAND")
 #
-# FORGE-AWARENESS (#764)
-# ----------------------
-# The gates originally spoke only GitHub. A GitLab-forge project (`tracker.kind:
-# glab`) merges via `glab mr merge <iid>` — a shape neither the matcher nor this
-# helper recognised, so the gates silently did not fire (an ungated-merge hole,
-# the forge analog of the #47 `gh api` bypass). This helper now recognises both
-# forges' merge shapes and resolves MR/PR state via the matching CLI:
-#
-#   3. `glab mr merge 42 -R owner/repo`                           → MR is 42
-#   4. `glab api projects/owner%2Frepo/merge_requests/42/merge`   → MR is 42
-#
-# Shape 4 (#767) is the GitLab raw-API merge — the exact forge analog of the #47
-# `gh api …/pulls/<N>/merge` bypass. Gating only `glab mr merge` (shape 3) while
-# leaving the API passthrough open would re-create #47 on GitLab, so both glab
-# shapes are recognised (matched with `Bash(glab api *)` in settings.json, the
-# same way the gh CLI shape is paired with `Bash(gh api *)`).
-#
-# The gh path is unchanged byte-for-byte; glab is additive. Forge selection for
-# the CLI-calling resolvers goes through `tracker_review_kind` from `_lib-tracker.sh`
-# (gh + glab coincide with github + gitlab per #762); the shape detectors read
-# the command text directly.
+# GitLab support is additive. Forge selection uses tracker_review_kind. Shape
+# detection reads the command text directly. CLI state resolution uses the
+# matching forge adapter.
 #
 # CI-STATUS RESOLUTION (#790)
 # ----------------------------

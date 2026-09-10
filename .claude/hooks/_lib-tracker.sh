@@ -1,14 +1,16 @@
 #!/bin/bash
-# _lib-tracker.sh — tracker-agnostic existence verification + ID-shape regex.
+# _lib-tracker.sh — tracker-agnostic issue and review operations.
 #
-# Source this library from any hook or skill that needs to verify a ticket
-# exists in the adopter's tracker (GitHub Issues, Linear, Jira, Asana, custom).
-# It dispatches based on the `tracker` block of .claude/project-config.{defaults,}.json.
+# Source this library from a hook or skill that needs tracker access. The
+# library dispatches through the `tracker` block in
+# .claude/project-config.{defaults,}.json.
 #
-# Resolved at config time:
-#   tracker.kind         — "gh" | "linear" | "jira" | "asana" | "custom" | "none"
-#   tracker.view_command — template string with {id} and {owner_repo} placeholders
-#   tracker.id_pattern   — regex for valid ticket-ID shape (no-existence-check fallback)
+# Main settings:
+#   tracker.kind         — legacy adapter for both axes
+#   tracker.issue_kind   — adapter for issue operations
+#   tracker.review_kind  — adapter for pull or merge request operations
+#   tracker.view_command — template with {id} and {owner_repo} placeholders
+#   tracker.id_pattern   — ticket-ID shape used by shape-only checks
 #
 # Public functions:
 #   tracker_issue_kind [<owner/repo>]  echoes the issue-system adapter kind
@@ -58,25 +60,18 @@
 #                                      blocked / body_file unreadable; 3 = shape-only (kind=none,
 #                                      nothing to call).
 #
-# Per-project resolution (#670 / AgDR-0072): tracker_issue_kind / tracker_review_kind /
-# tracker_kind / tracker_id_pattern /
-# tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
-# that project's apexyard.projects.yaml entry overrides the global config block
-# (per key); when omitted, the global block is used — byte-for-byte the original
-# behaviour. The project is chosen by the OPERATION'S TARGET REPO the caller
-# already holds — never by cwd or a session-global marker.
+# Per-project resolution (#670 / AgDR-0072) accepts an optional owner/repo.
+# That repo selects the registry entry and its tracker overrides. Without a
+# repo, the library uses the global config. It never uses cwd or session state.
 #
-# Normalisation: each adapter parses the underlying CLI's JSON (gh / linear /
-# jira / asana / custom) into the common shape above. Consumers should only
-# touch the normalised fields — never reach for adapter-specific shapes.
+# Each adapter maps CLI output to one common JSON shape. Consumers must use the
+# common fields and must not depend on adapter-specific output.
 #
 # `tracker.kind = none` makes `tracker_view` a no-op that exits 1 (no
 # existence check possible). Consumers should fall back to shape-only
 # verification using `tracker_id_pattern`.
 #
-# Caching: results cached per-process in shell vars. Same pattern as
-# _CONFIG_CACHE in _lib-read-config.sh and _PORTFOLIO_*_CACHE in
-# _lib-portfolio-paths.sh.
+# Results use per-process shell caches, like the config and portfolio helpers.
 
 # ------------------------------------------------------------------------------
 # Internal: ensure _lib-read-config.sh is loaded so config_get_or works.

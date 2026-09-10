@@ -1,12 +1,24 @@
 # Harness support
 
-An **agent harness** is the CLI/IDE runtime that actually drives an ApexYard session — Claude Code, Codex, pi, opencode, Cursor. ApexYard was built for Claude Code first, and Claude Code is still the only harness where the whole experience is native. But the framework's mechanical enforcement layer — the merge gate, ticket-first edits, secrets scanning, red-CI blocking — is **portable bash**, not Claude-Code-specific, so it can be reached from other harnesses through thin adapters. This directory is the honest, per-harness "what works where, today" breakdown.
+An **agent harness** is the CLI or IDE that runs an ApexYard session. Examples
+include Claude Code, Codex, pi, opencode, and Cursor.
 
-> **Not a rebrand.** The primary tagline is still **"for Claude Code."** These pages document the engineering reality — and as of 2026-07-09 that reality includes **three live-proven adapters (opencode, pi, and Codex)**: a real model turn under each was actually blocked by a delegated bash gate. That clears the rebrand trigger's ≥2-live-proven condition, but the headline flip is a **separate, coordinated decision** and hasn't been made — the tagline stays "for Claude Code" until it is. See [Rebrand trigger](#rebrand-trigger) below.
+ApexYard was built for Claude Code first. Claude Code still provides the full
+native experience. The enforcement layer uses portable Bash. Other harnesses
+can reach the same gates through thin adapters.
+
+This directory records what each harness supports today.
+
+> **Positioning:** The primary tagline remains **"for Claude Code."** These
+> pages document the current adapter support. A separate product decision is
+> required before the headline changes. See [Rebrand trigger](#rebrand-trigger).
 
 ## Support matrix
 
-The one question this answers: **"I use tool X — does ApexYard enforce my rules on it, and what do I do?"** A tool is only marked **proven** when a real, credentialed agent turn on it was actually stopped by the same unmodified bash rule — not a mock, not a by-construction test.
+This page answers one question: **does ApexYard enforce my rules on this tool,
+and how do I set it up?** A tool is **proven** only after a real,
+credentialed agent turn is stopped by the same unmodified Bash rule. Mocks do
+not qualify.
 
 | Tool | Enforces your rules? | Setup | Good to know |
 |------|----------------------|-------|--------------|
