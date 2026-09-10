@@ -148,7 +148,7 @@ mech_check() {
       if [ "$n" -gt 0 ]; then echo "FAIL created/edited $n file(s) in answer to a question"
       else echo "PASS no files written"; fi ;;
     PW-06)
-      if grep -qiE 'security (auditor|review|reviewer)|security-sensitive|approval logic|hakim|heavy' "$out"; then echo "PASS keeps the Heavy path"
+      if grep -qiE 'security (auditor|approval|approvals?|review|reviewer)|security-sensitive|approval logic|hakim|heavy' "$out"; then echo "PASS keeps the Heavy path"
       else echo "FAIL no Heavy-path signal"; fi ;;
     PW-07)
       if grep -qiE 'round(s|ed|ing)? up|heavy|standard|verify|trust.chain' "$out"; then echo "PASS treats tier as uncertain/higher"
