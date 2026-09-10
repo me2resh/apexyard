@@ -29,7 +29,7 @@ The bootstrap-skill exemption (AgDR-0011) already establishes the marker-file pa
 
 ## Decision
 
-Chosen: **skill-marker + config-driven matcher list**, because it (a) mirrors the existing bootstrap-skill exemption (AgDR-0011) so the framework stays internally consistent; (b) is tracker-agnostic by construction — only the matcher list knows about specific CLIs and adopters extend it via shallow-merge in `.claude/project-config.json`; and (c) supports the recovery scenario through a per-session env-var escape hatch (`APEXYARD_ALLOW_RAW_TICKET_CREATE=1`) with a visible stderr warning.
+Chosen: **skill-marker + config-driven matcher list**, because it (a) mirrors the existing bootstrap-skill exemption (AgDR-0011) so the framework stays internally consistent; (b) is tracker-agnostic by construction — only the matcher list knows about specific CLIs and adopters replace the matcher array in `.claude/project-config.json`; and (c) supports the recovery scenario through a per-session env-var escape hatch (`APEXYARD_ALLOW_RAW_TICKET_CREATE=1`) with a visible stderr warning.
 
 Concretely:
 
@@ -41,7 +41,7 @@ Concretely:
 
 2. New SessionStart hook `.claude/hooks/clear-issue-skill-marker.sh` (mirror of `clear-bootstrap-marker.sh`) sweeps stale markers from killed sessions.
 
-3. New config key `ticket.create_command_patterns` in `project-config.defaults.json` with default patterns covering GitHub CLI (`gh issue create`, `gh api repos/`), Linear (`linear issue create`), Jira (`jira issue create`, `jira create`), Asana (`asana task create`). Adopters extend via shallow-merge.
+3. New config key `ticket.create_command_patterns` in `project-config.defaults.json` with default patterns covering GitHub CLI (`gh issue create`, `gh api repos/`), Linear (`linear issue create`), Jira (`jira issue create`, `jira create`), Asana (`asana task create`). This is an array, so adopters replace it wholesale when providing a custom list.
 
 4. The seven ticket skills (`/task`, `/feature`, `/bug`, `/spike`, `/migration`, `/investigation`, `/idea`) each write `.claude/session/active-issue-skill` on entry and remove it on completion / cancel.
 

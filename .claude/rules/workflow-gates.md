@@ -48,7 +48,7 @@ A small set of **bootstrap-class skills** runs before any portfolio is configure
 - `/update` — upstream sync (touches framework files; the only "ticket" for this work is the sync itself)
 - `/split-portfolio` — destructive migration to split-portfolio mode (rewriting fork-root files; existing private-name tickets being redacted *as the work proceeds*)
 
-The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters extend it via `.claude/project-config.json` shallow-merge if they have custom bootstrap skills.
+The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters replace this array via `.claude/project-config.json` if they have custom bootstrap skills. Config objects merge recursively, while arrays replace the inherited array wholesale, so retain the shipped entries explicitly when extending the list.
 
 **Mechanism:** each bootstrap skill writes its name to `.claude/session/active-bootstrap` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook sweeps stale markers from interrupted sessions so a crashed / killed skill can't leave the exemption open forever.
 

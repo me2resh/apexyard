@@ -29,7 +29,8 @@
   fields (`sha=`, `approved_by=user`, `skill_version=`) — none of that
   content is display text; it's a machine contract other hooks and tests
   depend on byte-for-byte.
-- `.claude/project-config.defaults.json` already ships a shallow-merge
+- `.claude/project-config.defaults.json` already ships a jq-based merge where
+  objects merge recursively and arrays replace wholesale
   config layer (`config_get` / `config_get_or` in `_lib-read-config.sh`)
   used for adopter-facing behavioural knobs like `review_markers.on_stale`,
   `ui_paths_exclude`, and `.pr.title_pattern` — precedent for a config key,

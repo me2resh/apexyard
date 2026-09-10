@@ -6,11 +6,12 @@
 # maintained). User overrides live at .claude/project-config.json (optional;
 # each fork decides whether to commit or gitignore it).
 #
-# Merge strategy: SHALLOW at the top level. If the user defines `ticket`, their
-# entire `ticket` subtree replaces the default. To extend a subtree, copy the
-# default fields and add/modify. This keeps merge behaviour predictable without
-# requiring a deep-merge jq function, and matches the "config file as a whole"
-# mental model most teams expect.
+# Merge strategy: `jq`'s `*` recursively merges objects, with the override's
+# scalar values winning conflicts, and replaces arrays wholesale. An override
+# can therefore name one object member without dropping its siblings, while an
+# array override replaces the inherited array. This is the behavior of the
+# implementation below; callers should state explicitly which shape they rely
+# on rather than calling the whole merge shallow.
 #
 # Usage:
 #   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -231,7 +232,8 @@ _config_load() {
 
   local _rc_merged
   if [ -f "$overrides" ]; then
-    # Shallow merge: user overrides win at top-level keys.
+    # jq recursively merges objects, replaces arrays wholesale, and lets the
+    # override win scalar conflicts.
     _rc_merged=$(jq -s '.[0] * .[1]' "$defaults" "$overrides" 2>/dev/null) || _rc_merged=$(cat "$defaults")
   else
     _rc_merged=$(cat "$defaults")

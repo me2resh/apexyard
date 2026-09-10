@@ -11,7 +11,7 @@ PR #144 (merged into `dev` 2026-05-03) shipped the docs + `/setup` privacy gate 
 3. **The `/setup` skill in #144 hand-creates symlinks**; a `/split-portfolio` skill that automates the full destructive recovery flow (#146) needs the config primitive to land somewhere clean, not pile on more symlink writes.
 4. **No proactive failure surface.** A typo in `portfolio.registry` (or a stale path after the adopter moves the sibling portfolio repo) only surfaces when the next portfolio-aware skill is invoked, with a confusing downstream error.
 
-The existing config layer (`.claude/project-config.{defaults,}.json` + `_lib-read-config.sh` + `config_get_or`, with 6+ hooks already using it) is the right home — it already supports per-fork overrides, ships an `_lib-` shared library pattern, and provides shallow-merge semantics with sensible defaults.
+The existing config layer (`.claude/project-config.{defaults,}.json` + `_lib-read-config.sh` + `config_get_or`, with 6+ hooks already using it) is the right home — it already supports per-fork overrides, ships an `_lib-` shared library pattern, and merges objects recursively while replacing arrays wholesale.
 
 ## Options
 

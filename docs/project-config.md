@@ -44,7 +44,7 @@ The defaults file would be the obvious home, and it is the wrong one. `_lib-read
 
 ## Merge semantics
 
-**Shallow** at the top level. If the override file defines `"ticket": {...}`, that entire subtree replaces the default `ticket` subtree. To extend rather than replace, copy the default fields and add new ones. This keeps the merge behaviour predictable without requiring deep-merge semantics in shell scripts.
+Objects merge recursively, with override values winning scalar conflicts. Arrays replace the inherited array wholesale. For example, an override containing only `"portfolio": {"registry": "custom"}` keeps other inherited object members such as `portfolio.stale_days`, while an override of `ticket.bootstrap_skills` replaces that array. This is the behavior of `jq -s '.[0] * .[1]'` used by the shared config reader.
 
 ## Schema (v1)
 
