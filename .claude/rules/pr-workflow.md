@@ -53,6 +53,10 @@ Also check before pushing:
 
 ## Before `gh pr merge` (HARD STOP)
 
+### Least privilege is mandatory
+
+Agents must use the normal, least-privileged workflow. They must not use administrator flags, `sudo`, force pushes, `--no-verify`, role-assumption commands, privileged API alternatives, or any other bypass to overcome a blocked check. If the normal path is unavailable, stop and report the missing requirement. An operator may perform exceptional privileged work directly outside the agent workflow; the agent must not do it on the operator's behalf.
+
 ```
 [ ] Code Reviewer approved for THIS commit SHA?     NO → WAIT
 [ ] Human approver approved THIS specific PR?       NO → WAIT, ASK EXPLICITLY
