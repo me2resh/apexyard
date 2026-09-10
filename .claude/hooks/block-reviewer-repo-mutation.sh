@@ -32,7 +32,7 @@ ACTIVE="$ROOT/.claude/session/active-reviewer"
 [ -f "$ACTIVE" ] || exit 0
 
 if [ -z "$COMMAND" ]; then
-  if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:]]|$)'; then
+  if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then
     echo "BLOCKED: review-class agent cannot mutate the repository while an active review is in flight; use read-only git commands and report findings." >&2
     exit 2
   fi
@@ -53,7 +53,7 @@ fi
 # as `echo 'git commit is forbidden'`. Options such as `git -C repo commit` are
 # accepted by the middle token span.
 MUTATING='add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch'
-if printf '%s' "$COMMAND" | grep -qE "(^|&&|\\|\\||;|\\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:]]|$)"; then
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\\|\\||;|\\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent is read-only while an active review is in flight. Do not stage, commit, push, restore, stash, or otherwise mutate the repository; report the finding to the orchestrator." >&2
   exit 2
 fi

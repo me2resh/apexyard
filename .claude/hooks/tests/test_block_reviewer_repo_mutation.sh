@@ -34,6 +34,10 @@ run_case 'git commit is blocked' 'git commit -m "reviewed"' blocked
 run_case 'git push is blocked' 'cd repo && git push origin fix/1233-review-agent-read-only' blocked
 run_case 'git restore is blocked' 'git -C repo restore tracked.md' blocked
 run_case 'git stash is blocked' 'git stash push -m save' blocked
+run_case 'git commit before separator is blocked' 'git commit;' blocked
+run_case 'git push before separator is blocked' 'git push; echo done' blocked
+run_case 'newline-separated git mutation is blocked' $'echo review\ngit commit' blocked
+run_case 'git tag is blocked' 'git tag release-candidate' blocked
 run_case 'git status remains available' 'git status --short' allowed
 run_case 'git diff remains available' 'git diff --check' allowed
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
