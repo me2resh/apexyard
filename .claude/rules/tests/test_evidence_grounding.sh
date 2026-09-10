@@ -8,6 +8,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/evidence-grounding.md"
+REVIEWER_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
 CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/evidence-grounding-cases.md"
 AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0124-universal-evidence-grounding-contract.md"
 
@@ -39,6 +40,10 @@ assert "rule:mutable-state" grep -qF 'Re-check mutable state immediately before 
 assert "rule:preserve-uncertainty" grep -qF 'Preserve uncertainty' "$RULE_FILE"
 assert "rule:no-false-success" grep -qF 'without a success result' "$RULE_FILE"
 assert "rule:advisory-honesty" grep -qF 'A shell hook cannot determine whether prose follows from evidence' "$RULE_FILE"
+assert "reviewer:real-usage" grep -qF "verify the claim against the repository's real usage" "$REVIEWER_FILE"
+assert "reviewer:runtime-reproduction" grep -qF 'smallest available command or reproduction' "$REVIEWER_FILE"
+assert "reviewer:claim-states" grep -qF '**Unverified**' "$REVIEWER_FILE"
+assert "reviewer:no-private-identifiers" grep -qF 'do not copy private repository paths' "$REVIEWER_FILE"
 
 assert "wiring:claude" grep -qF '@.claude/rules/evidence-grounding.md' "$SRC_ROOT/CLAUDE.md"
 assert "wiring:agents" grep -qF '.claude/rules/evidence-grounding.md' "$SRC_ROOT/AGENTS.md"
