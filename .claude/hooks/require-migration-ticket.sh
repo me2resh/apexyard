@@ -182,6 +182,8 @@ if [ -n "$OPS_ROOT" ] && [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ] && [ -f "$HO
   . "$HOOK_DIR/_lib-portfolio-paths.sh"
   resolved_ws=$(portfolio_workspace_dir 2>/dev/null)
   if [ -n "$resolved_ws" ]; then
+    # Used by the sourced shared marker resolver below.
+    # shellcheck disable=SC2034
     WORKSPACE_DIR="$resolved_ws"
   fi
 fi

@@ -5,6 +5,7 @@
 # same question: which marker governs this target? Keeping the path, project,
 # and tier-0 worktree rules here prevents the migration gate from drifting from
 # the ordinary ticket gate.
+# shellcheck disable=SC2088
 
 _at_resolve_path() {
   local target="$1" base lexical resolved
@@ -12,7 +13,6 @@ _at_resolve_path() {
 
   case "$target" in
     '~')    target="$HOME" ;;
-    # shellcheck disable=SC2088
     '~/'*)  target="$HOME/${target#\~/}" ;;
     '~'*)   return 0 ;;
   esac
