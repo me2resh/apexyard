@@ -14,8 +14,9 @@ an entry:
   `<!-- term: <key>[,<key>...] -->` — comma-separated surface spellings
   that all resolve to the same entry (e.g. "issue" and "ticket" both map
   to the first section below).
-- Body: 1–3 plain-language sentences. Define any necessary technical term
-  in the same entry, unless it is one of these five terms (D6 — Consistency).
+- Body: 1–3 plain-language sentences. Do not use jargon to define another
+  term. If a technical term is necessary, define it in the same entry unless
+  it is one of these five terms (D6 — Consistency).
 - `/tutorial` renders the whole file, top to bottom, unchanged. The other
   consumers select one section by its `term:` key. They do not copy or
   paraphrase this text elsewhere.
