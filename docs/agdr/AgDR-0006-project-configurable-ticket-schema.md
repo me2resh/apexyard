@@ -24,12 +24,12 @@ status: executed
 | -------- | ------ | ------ |
 | **A. Keep lists hardcoded in each hook** | Zero new abstraction | Drift; forks can't customise without editing framework files; upstream sync becomes conflict-heavy |
 | **B. Each hook reads its own one-off config key** | Minimal coupling | Same-pattern drift — every hook's reader differs; forks face N small config keys instead of one schema |
-| **C. Shared `_lib-read-config.sh` + versioned schema at `.claude/project-config.*.json` — CHOSEN** | One source of truth; skills / hooks / CI all read the same file; shipped defaults upgrade cleanly via `/update`; forks override only what they need | Schema now has a version number the framework must honour; deep-merge semantics deferred (shallow only for v1) |
+| **C. Shared `_lib-read-config.sh` + versioned schema at `.claude/project-config.*.json` — CHOSEN** | One source of truth; skills / hooks / CI all read the same file; shipped defaults upgrade cleanly via `/update`; forks override only what they need | Schema now has a version number the framework must honour; object merges are recursive and arrays replace wholesale |
 | **D. Schema in `onboarding.yaml` | Reuses an existing user-facing file | Mixes org config (stack, quality bar) with tooling policy (prefix lists); YAML parsing adds jq+yq complexity to every hook |
 
 ## Decision
 
-Chosen: **Option C**, because it gives every consumer — skills, hooks, CI, future upstream additions — one read path and one file to override. The shipped-defaults file means upstream changes propagate via `/update` without overwriting fork customisation. Shallow top-level merge (not deep merge) is deliberate: simpler, predictable, no shell-side jq gymnastics. The small cost of copying a subtree when overriding one nested field is worth the zero-drift reader semantics.
+Chosen: **Option C**, because it gives every consumer — skills, hooks, CI, future upstream additions — one read path and one file to override. The shipped-defaults file means upstream changes propagate via `/update` without overwriting fork customisation. The implementation uses `jq -s '.[0] * .[1]'`: objects merge recursively, scalar conflicts use the override, and arrays replace wholesale. This keeps the reader aligned with jq while making array replacement explicit to adopters.
 
 Keeping the schema in `.claude/` (not `onboarding.yaml`) reflects the split that already exists in the framework: `onboarding.yaml` is org / stack / quality-bar config the human writes once; `.claude/project-config.*.json` is tooling policy the framework reads on every hook invocation.
 
@@ -62,7 +62,7 @@ Each of those tickets extends the schema by adding keys under its own subtree; t
 
 **Non-consequences (explicitly):**
 
-- No deep merge in v1. A fork that overrides `ticket` must copy the subtree. Revisit if pain warrants.
+- Object merges are recursive in the shipped jq implementation; arrays replace wholesale. A fork that overrides an array must copy the entries it wants to retain.
 - No runtime schema validation. A malformed config degrades gracefully (reader returns null, hooks fall back to shipped defaults). Add JSON Schema validation if schema complexity grows.
 - No migration tool for the legacy `commit_types` flat key — it keeps working via backward-compat in `validate-commit-format.sh`. Will deprecate with a warning in a future ticket once usage is measured.
 
