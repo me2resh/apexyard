@@ -1,6 +1,6 @@
 # Deployment Process
 
-How code moves from development to production.
+This guide explains how a tested change moves from development to production and how the team watches it after release.
 
 ## Roles
 
@@ -26,10 +26,10 @@ Push to main
 CI/CD triggers
     |
     v
-Authenticate with cloud provider
+Authenticate with the cloud provider
     |
     v
-Apply infrastructure changes (IaC)
+Apply infrastructure changes (infrastructure as code)
     |
     v
 Build application
@@ -95,7 +95,7 @@ Verify and monitor
 
 ## Pre-Deploy Checklist
 
-Before deploying to production:
+Before production deployment:
 
 - [ ] All tests passing
 - [ ] QA sign-off received
@@ -110,7 +110,7 @@ Before deploying to production:
 
 ## Infrastructure as Code
 
-All infrastructure changes must be:
+Treat every infrastructure change as code. It must be:
 
 1. **Defined in code** -- No manual console changes
 2. **Version controlled** -- In the same repo as application code
@@ -148,7 +148,7 @@ git push origin main
 # Use your IaC tool's rollback mechanism
 ```
 
-### When to Rollback
+### When to Roll Back
 
 - Error rate spikes above threshold
 - P1 incident caused by deployment
@@ -178,7 +178,7 @@ Is the issue affecting users?
 
 ### Production Deploy Approval
 
-Before promoting to production:
+Before promoting a staging build to production:
 
 1. Staging has been tested
 2. QA has signed off
