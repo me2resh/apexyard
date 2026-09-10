@@ -1,16 +1,12 @@
 #!/bin/bash
-# _lib-read-config.sh — shared reader for .claude/project-config.*.json
+# _lib-read-config.sh — read .claude/project-config.*.json
 #
-# Source this library from any hook or skill that needs to read project config.
-# Defaults ship at .claude/project-config.defaults.json (committed, upstream-
-# maintained). User overrides live at .claude/project-config.json (optional;
-# each fork decides whether to commit or gitignore it).
+# Source this library from a hook or skill that reads project configuration.
+# Defaults live in .claude/project-config.defaults.json. A fork can add the
+# optional .claude/project-config.json override.
 #
-# Merge strategy: SHALLOW at the top level. If the user defines `ticket`, their
-# entire `ticket` subtree replaces the default. To extend a subtree, copy the
-# default fields and add/modify. This keeps merge behaviour predictable without
-# requiring a deep-merge jq function, and matches the "config file as a whole"
-# mental model most teams expect.
+# Merge behavior: jq recursively merges objects. The override wins scalar
+# conflicts. An override array replaces the inherited array.
 #
 # Usage:
 #   source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
@@ -18,10 +14,9 @@
 #   config_get '.branch.type_whitelist[]'
 #   config_get '.ticket.label_priority_scheme'
 #
-# Silent fallback behaviour:
-#   - No defaults file present: emit '{}' and an error on stderr. Callers should
-#     treat config_get as "unknown" and apply their own safety.
-#   - jq not installed: emit '{}' and a one-time warning on stderr.
+# Fallback behavior:
+#   - Missing defaults: emit '{}' and an error. Callers must apply their safety.
+#   - Missing jq: emit '{}' and one warning per process.
 
 # ------------------------------------------------------------------------------
 # Session-scoped, CROSS-PROCESS cache (me2resh/apexyard#1013 / AgDR-0120).
@@ -231,7 +226,8 @@ _config_load() {
 
   local _rc_merged
   if [ -f "$overrides" ]; then
-    # Shallow merge: user overrides win at top-level keys.
+    # jq recursively merges objects, replaces arrays wholesale, and lets the
+    # override win scalar conflicts.
     _rc_merged=$(jq -s '.[0] * .[1]' "$defaults" "$overrides" 2>/dev/null) || _rc_merged=$(cat "$defaults")
   else
     _rc_merged=$(cat "$defaults")

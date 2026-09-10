@@ -7,6 +7,9 @@ allowed-tools: Bash, Read, Write
 
 # /request-apexyard-feature — Request a Framework Feature Upstream
 
+Read `.claude/rules/writing-standard.md`. Use the **controlled technical writing profile** for the
+upstream feature request: state the outcome and reason before detail.
+
 Files a structured GitHub Issue **proposing a feature or enhancement for the
 apexyard framework itself** to the canonical upstream **`me2resh/apexyard`** —
 for a new skill, a new hook, a rule improvement, a better workflow, etc.
@@ -84,7 +87,7 @@ carries `main → dev`, so it is always current on `dev`:
 ```bash
 # Primary: top-most `## [X.Y.Z]` heading in CHANGELOG.md (carried main→dev by
 # /release-sync, so always the canonical current version on dev).
-FW_VERSION=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
+FW_VERSION=$(grep -m1 -oE '^## \[v?[0-9]+\.[0-9]+\.[0-9]+\]' "$ops_root/CHANGELOG.md" 2>/dev/null \
   | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 if [ -n "$FW_VERSION" ]; then
   FW_VERSION="v$FW_VERSION"          # keep the `v` prefix the field renders today

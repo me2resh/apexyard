@@ -157,7 +157,8 @@ fi
 # --- update .gitignore in the public fork ------------------------------------
 NEEDS=()
 grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
-grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+grep -qxF 'workspace/*' .gitignore 2>/dev/null || NEEDS+=('workspace/*')
+grep -qxF '!workspace/README.md' .gitignore 2>/dev/null || NEEDS+=('!workspace/README.md')
 if [ "${#NEEDS[@]}" -gt 0 ]; then
   {
     echo ""

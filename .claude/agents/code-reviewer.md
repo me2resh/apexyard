@@ -39,7 +39,7 @@ The verdict that drives the merge gate is the **local marker**, NOT the host's "
 
 - **Canonical happy path:** call `tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"` and state the verdict (`APPROVED` / `CHANGES REQUESTED`) in the body itself. This always works — on gh it maps to `gh pr review --comment`; on glab to an MR note; on custom to the operator's `review_command`.
 - **Do NOT pass the `approve` verdict by default.** On gh it maps to `gh pr review --approve`, which in the common single-account / auto-mode setup GitHub refuses ("Cannot approve your own PR"), and an auto-mode write-classifier may additionally flag it. **That block is expected and is not a failure** — a host "Approved" state is optional and unavailable when reviewing your own account's PR. Do not retry it, do not escalate it, and do not report the review as incomplete because of it. The local marker (output #1) is what satisfies the gate.
-- The `request-changes` verdict is fine for a non-approving result you want reflected in the host's review state (on gh it does not hit the self-approval restriction; on glab it posts a note, since GitLab has no request-changes state).
+- On gh, GitHub refuses both `request-changes` and `approve` when the reviewing account authored the PR. For a same-account non-approving review, pass `comment` and state `CHANGES REQUESTED` in the body. A `CHANGES REQUESTED` verdict must not produce an approval marker. For another account's PR, `request-changes` can record a non-approving result in GitHub's review state. On glab, `request-changes` posts a note because GitLab has no request-changes state.
 
 **Do NOT** return without (a) writing the marker on APPROVED and (b) posting the `comment` review via `tracker_review_submit`. The review must be visible on the host; the marker must exist on disk.
 
@@ -51,9 +51,21 @@ The verdict that drives the merge gate is the **local marker**, NOT the host's "
 
 ---
 
+## Repository mutation boundary
+
+You are a review-class agent. Treat the repository and its remotes as read-only. Do not run `git add`, `git commit`, `git push`, `git restore`, `git reset`, `git stash`, `git clean`, `git checkout`, `git switch`, `git mv`, `git rm`, `git rebase`, `git merge`, or other commands that alter tracked files, refs, or remotes. Do not use shell editors or redirections to modify repository files. Report findings and proposed fixes to the orchestrator; a build agent or the orchestrator applies changes after your review. A blocking hook enforces this boundary while the active-reviewer marker is present.
+
 ## Trigger
 
 Invoked when a PR is ready for review.
+
+## Review writing standard
+
+The GitHub review is a durable artifact. Read .claude/rules/writing-standard.md.
+Use the controlled technical writing profile. Request changes when the artifact fails the profile.
+State the verdict and next action first. State the reason in short sentences.
+Put evidence after the opening. Keep TBD values, hedges, numbers, and modality.
+Do not write a process transcript. Do not present an author self-check as Rex review.
 
 ## Input
 
@@ -70,6 +82,22 @@ When the `apexyard-search` MCP is connected, **prefer `mcp__apexyard-search__sea
 
 It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + full-file reads). **Graceful-degrade:** if the MCP server is absent the tool simply isn't available — fall back to `grep`/`Glob`/`Read` with no change in behaviour (same pattern as `search_docs`, `/handover`, and `/code-review`). Adopters who don't run the premium MCP are unaffected.
 
+## Evidence citations — read the criterion
+
+When citing a file as evidence — prior art, precedent, a counterexample, or a claim about how another part of the framework behaves — read the cited region in full before asserting what it does. A section header, scope line, table heading, or gate lead-in is not the mechanism. Verify the applicable criterion, including its conditions and exceptions, and cite the line where that criterion lives. Do not assert that a condition is absent until you have read the region where it could be defined.
+
+## Evidence-backed behavior claims
+
+Before stating that code, configuration, or a workflow **does** something, verify the claim against the repository's real usage. Inspect relevant call sites, build scripts, CI references, and tests. When the claim depends on runtime behavior, run the smallest available command or reproduction that exercises it. A diff can show intent, but it does not prove that a path is reachable or that a commented section is active.
+
+Classify the basis of each load-bearing behavior finding:
+
+- **Observed** — reproduced by a command, test, or direct repository evidence.
+- **Inferred** — supported by code evidence but not exercised; state the inference and its basis.
+- **Unverified** — the required usage or runtime check was unavailable; report the gap and keep the finding conditional.
+
+Do not present an inference or an unverified hypothesis as a confirmed defect. If no suitable reproduction exists, say what was checked and what remains unknown. Keep examples and commands generic; do not copy private repository paths, credentials, or adopter identifiers into framework artifacts.
+
 ## Reduced-Scope Review — Lean-tier diffs (Option 4, AgDR-0116)
 
 Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires a Rex pass — the merge gate (`block-unreviewed-merge.sh`) requires the `*-rex.approved` marker on EVERY PR, regardless of tier, unconditionally, because it is a CONTROL that reads structured state (a marker vs. the forge-reported HEAD) and structurally cannot itself inspect a diff's content to decide a tier. What changes for a Lean diff is the **depth** of your pass, never whether one happens.
@@ -80,7 +108,7 @@ Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires 
 2. **Size.** Small — a rough guide is under ~50 changed lines. Use judgment, not a hard cutoff; a 200-line prose rewrite can still be Lean, a 10-line `.md` change that alters a documented gate's behavior might not be.
 3. **Reversibility / behavior.** Trivially reversible in one revert, with no behavior change — no code path, no runtime logic, no schema, no CI step, nothing that executes differently as a result of this diff.
 4. **Rail 1 (non-negotiable — mirrors `right-size-ceremony.md`'s rail 1 exactly; security / trust-chain / migration never goes Lean).** The diff does NOT touch ANY of:
-   - The trust chain: `.claude/hooks/**`, `.claude/settings.json` (me2resh/apexyard#777)
+   - The trust chain: production `.claude/hooks/*.sh`, `.claude/settings.json` (me2resh/apexyard#777). Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up if their assertions change enforcement semantics.
    - `**/auth/**`, `**/crypto/**`, `**/secrets/**`, `.env*`
    - A migration path: anything under `**/migrations/**`, `**/migrate-*.{ts,js,py,sql}`, `prisma/schema.prisma`, `prisma/migrations/**`, `src/migrations/*.{ts,js}`, `alembic/versions/*.py`, `db/migrate/*.rb` (the same defaults `require-migration-ticket.sh` matches; check `.migration_paths` in `.claude/project-config.json` for an adopter override too)
    - **A single file matching ANY of these disqualifies the ENTIRE diff from reduced scope**, even if every other file in the diff is plain prose. Do not average across files — one match rounds the whole PR up.
@@ -230,16 +258,16 @@ Beyond the framework's generic rules, the adopter ships company-specific standar
 | **Public handbooks** | `handbooks/**/*.md` in the public ops fork | Generic adopter customisations safe to publish on a public framework fork |
 | **Private custom handbooks** | `<private_repo>/custom-handbooks/**/*.md`, resolved via `portfolio_custom_handbooks_dir` from `.claude/hooks/_lib-portfolio-paths.sh` | Company-confidential standards that name internal systems, refer to proprietary policy, or otherwise should not appear on a public repo (split-portfolio adopters only — single-fork adopters typically don't have this dir) |
 
-Both layers use the **same path-convention** (architecture / general / language) and the same advisory/blocking semantics. Both load on every review.
+Both layers use the **same path-convention** (architecture / general / language) and the same advisory/blocking semantics. Discovery runs on every review; individual handbooks load only when applicable to the changed paths or PR topic.
 
 #### Discovery (path-convention)
 
-The path conventions below apply to **each** of the two source roots. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
+The path conventions below apply to **each** of the two source roots. Before reading a handbook, classify it against the changed paths and PR topic: load architecture layering guidance only for application/domain/infrastructure or other architecture-bearing code, load migration safety only for migration/schema paths, and load language guidance only for matching language files. General commit-message guidance remains applicable to substantive commits. Record skipped candidates as not applicable rather than presenting them as findings. Within a single review you may load handbooks from both sources for the same bucket — that's the expected case for a split-portfolio adopter who has, say, both a public `architecture/clean-architecture-layers.md` AND a private `architecture/internal-pii-handling.md`.
 
 | Path glob (relative to source root) | Load condition |
 |---|---|
-| `architecture/*.md` | Always — every PR |
-| `general/*.md` | Always — every PR |
+| `architecture/*.md` | Read when the PR diff includes architecture-bearing code, design artifacts, or migration/schema paths; migration safety remains applicable to migration/schema paths. |
+| `general/*.md` | Read for substantive commits; skip for empty/docs-only bookkeeping changes and record as not applicable. |
 | `language/<lang>/*.md` | When the PR diff includes files matching `<lang>`'s extensions: `typescript/` → `**/*.{ts,tsx}`, `python/` → `**/*.py`, `go/` → `**/*.go`, `rust/` → `**/*.rs`. Other directories under `language/` follow the same `<lang>/` → matching-extension convention. |
 | `domain/<area>/*.md` | **Parse the YAML frontmatter** (a `---`-delimited block at the top of the file). If a `paths:` field is present and non-empty, load this handbook only when the PR diff matches at least one glob in the list. If `paths:` is absent or empty, **always load** (foundational domain rule with no path boundary). See § "Domain handbook frontmatter — `paths:` field" below for the parse + match shape and [`handbooks/domain/README.md`](../../handbooks/domain/README.md) for the authoring convention. |
 | `<other>/*.md` | Default to always-load if you don't recognise the directory; flag in your review that the directory convention is undocumented. |
@@ -257,12 +285,25 @@ if [ -f "$OPS_ROOT/.claude/hooks/_lib-portfolio-paths.sh" ]; then
   [ -n "$candidate" ] && [ -d "$candidate" ] && PRIV="$candidate"
 fi
 
-# Always-load buckets — public + private (private may be empty).
-find handbooks/architecture handbooks/general -name '*.md' 2>/dev/null
-[ -n "$PRIV" ] && find "$PRIV/architecture" "$PRIV/general" -name '*.md' 2>/dev/null
+# Applicability-gated buckets — public + private (private may be empty).
+# Discovery runs every review, but these buckets are not read by default.
+# Load only the handbooks whose topic applies to the diff.
+DIFF_FILES=$(gh pr diff <number> --name-only)
+if printf '%s\n' "$DIFF_FILES" | grep -qE '(^|/)(src|app|packages|services|domain|application|infrastructure)/|docs/agdr/|(^|/)(designs|prds)/|technical-design|feature-spec|migrations/|prisma/schema.prisma'; then
+  find handbooks/architecture -name '*.md' 2>/dev/null
+  [ -n "$PRIV" ] && find "$PRIV/architecture" -name '*.md' 2>/dev/null
+fi
+
+# General handbooks still require topic judgment. Collect candidates, inspect
+# the path/title/scope, then read the full handbook only when it applies. For
+# example, commit-message-quality applies to substantive commits, while a
+# docs-only typo fix can record it as not applicable. Candidate discovery is
+# not handbook loading; do not report a candidate as an applicable finding
+# until this check is complete.
+find handbooks/general -name '*.md' 2>/dev/null
+[ -n "$PRIV" ] && find "$PRIV/general" -name '*.md' 2>/dev/null
 
 # Diff-matched language buckets — public + private.
-DIFF_FILES=$(gh pr diff <number> --name-only)
 echo "$DIFF_FILES" | (
   if grep -qE '\.(ts|tsx)$'; then
     find handbooks/language/typescript -name '*.md' 2>/dev/null
@@ -299,7 +340,7 @@ Tag every handbook loaded in this step with `discovery_method: path-convention` 
 
 #### Semantic supplement (MCP `search_docs`) — additive, fail-soft (apexyard#449)
 
-This step **supplements** the path-convention set above with handbooks that semantically match the PR's content but didn't match a path glob. It is **strictly additive** — the path-convention set is the floor and never shrinks. Adopters without MCP get path-convention only; the rest of this section is a no-op for them.
+This step **supplements** the applicable path-convention set above with handbooks that semantically match the PR's content but didn't match a path glob. It is **strictly additive** — the applicable path-convention set is the floor and never shrinks. Adopters without MCP get path-convention only; the rest of this section is a no-op for them.
 
 Rules:
 
@@ -354,8 +395,8 @@ except Exception:
 
 What this step does NOT do:
 
-- Does NOT replace the path-convention set — that set is the floor.
-- Does NOT shrink the loaded handbook set under any condition.
+- Does NOT replace the applicable path-convention set — that set is the floor.
+- Does NOT shrink the already-applicable loaded handbook set under any condition.
 - Does NOT block the review if MCP is down — Rex's review proceeds with path-convention discovery alone.
 - Does NOT emit a user-visible warning when MCP is unreachable — only verbose-logs the status for the operator who runs Rex with debug enabled.
 - Does NOT change the enforcement semantics (advisory / blocking) of any handbook — those still come from the handbook's own `ENFORCEMENT:` line. Discovery method only affects citation.
@@ -630,8 +671,10 @@ fallow fix --dry-run
    base repo, NOT the fork; see marker section):
    tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
 
-   OR for a non-approving result you want reflected in the host's review state:
+   On gh, use this alternative only for another account's PR:
    tracker_review_submit "$PR_HOST_REPO" {number} request-changes "$REVIEW_BODY_FILE"
+   For a same-account review, pass comment with CHANGES REQUESTED in the body.
+   On glab, request-changes posts an MR note.
 
    Do NOT pass the `approve` verdict — on gh it maps to --approve, which GitHub blocks on
    single-account setups, and it is NOT required (the local marker is the gate signal).
@@ -655,7 +698,14 @@ The orchestrator (or the `/code-review` skill) sets the `.claude/session/active-
 
 ### Path: ops fork root, not git toplevel
 
-The marker MUST land at `<ops_fork_root>/.claude/session/reviews/{number}-rex.approved`. Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
+The marker MUST land at `$REX_MARKER` — the **repo-qualified** path
+`<ops_fork_root>/.claude/session/reviews/<owner>__<repo>__{number}-rex.approved`
+that `review_marker_path` returns (AgDR-0060 / #485). Never hand-assemble it, and
+never take a literal marker path from your spawn prompt even when one is offered —
+the bare-number form `{number}-rex.approved` is read by no gate, and a marker there
+is invisible while looking exactly like a valid approval (me2resh/apexyard#1144).
+
+Inside `workspace/<project>/`, `git rev-parse --show-toplevel` returns the project clone — NOT the ops fork. Writing to a relative `.claude/session/reviews/` path from inside a workspace clone puts the marker where the merge-gate hook can't see it (the bug fix in me2resh/apexyard#229 + #230 aligned the merge gate with this path; this section is the agent-side counterpart).
 
 **Resolve `MARKER_HOME` ONCE, at review start, from your initial working directory** — before any `cd`, `git clone`, `gh pr checkout`, or other tool call that might change where you are or what's anchored above you. The walk-up shape below is sensitive to `$PWD`: if you've cloned the fork into `/tmp` for inspection and `cd`'d into the clone first, the walk resolves to that throwaway tree, the marker lands in `/tmp`, and the merge gate (running from the real ops fork) cannot find it. Capture `MARKER_HOME` first; treat it as immutable for the rest of the review. This is the prose discipline; the mechanical safety net is `pin-ops-root.sh` (apexyard#381), which captures the launch-cwd ops root at SessionStart and feeds it to `_lib-ops-root.sh::resolve_ops_root` so adopters on framework versions that ship the hook get the pin automatically — the walk-up below remains as the safety net for older versions and as the resolution method when no pin exists.
 
@@ -766,7 +816,7 @@ The hook reads the marker, strips whitespace, and compares to the PR's HEAD SHA.
 2933a06e28a1e98aee8cdef18a0dcaaa0f610b08
 ```
 
-41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c .claude/session/reviews/{number}-rex.approved | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
+41 bytes: 40 hex + `\n`. No labels, no keys, no timestamp, no trailing text. Confirm with `od -c "$REX_MARKER" | head -2` — the first two bytes of the second line should be `\n` then `*` (the asterisk is `od`'s repeat marker for EOF).
 
 #### WRONG — do NOT write any of these
 

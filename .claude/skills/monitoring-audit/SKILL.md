@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /monitoring-audit — Observability & Incident Readiness
 
 Deep-dive observability analysis. Checks that production issues will be detected, alerted on, and resolvable. Invoke when `/launch-check`'s monitoring row shows WARN or FAIL.

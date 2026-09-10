@@ -7,6 +7,10 @@ allowed-tools: Bash, Read, Write
 
 # /task — Create a Technical Task Ticket
 
+## Writing rule
+
+Use the controlled technical writing profile from .claude/rules/writing-standard.md for each artifact. Use short complete sentences, active voice, one term for one meaning, and clear lists.
+
 Creates a structured GitHub Issue for a technical task with driver (why), scope (what), acceptance criteria, and risks. Used for tech debt, infrastructure, refactoring, dependency updates, or any non-user-facing work that doesn't fit /feature or /bug.
 
 ## Path resolution
@@ -128,6 +132,8 @@ Single-fork adopters (no `portfolio` block) and adopters with no override fall s
 
 **Backward-compat fallback**: if `portfolio_resolve_template` returns empty (template file missing — partial adopter setup), fall back to the inline heredoc body below and print a one-line WARN on stderr (`WARN: tickets/task.md template missing — using inline fallback`).
 
+Read `.claude/rules/writing-standard.md` before drafting. Treat the resolved template as the source of truth. Keep required sections, remove empty conditional sections, replace unknown required values with `TBD`, and delete the guidance comment before filing.
+
 ### 5. Show the formatted ticket for confirmation
 
 Substitute the gathered inputs into the resolved template (or the inline heredoc fallback), then display the full ticket using the resolved shape (the default `templates/tickets/task.md` shape is reproduced below):
@@ -150,7 +156,7 @@ Here's the ticket I'll create:
 - [ ] ...
 
 ## Risks / Dependencies
-{risks or "None identified"}
+{include only when provided}
 
 ## Glossary
 | Term | Definition |

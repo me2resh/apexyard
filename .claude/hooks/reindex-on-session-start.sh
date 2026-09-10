@@ -43,7 +43,7 @@
 # have apexyard-search on PATH and never configured that key — so the
 # feature-flag gate here defaults to enabled when the key is absent, and
 # only an explicit "search: / enabled: false" in features.yaml opts a
-# session out without needing to uninstall the CLI. See AgDR-0095.
+# session out without needing to uninstall the CLI. See AgDR-0138.
 #
 # Tunables (env):
 #   APEXYARD_SEARCH_STALE_AFTER       staleness threshold in seconds (default 86400 = 24h)

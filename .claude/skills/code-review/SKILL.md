@@ -36,6 +36,12 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ## Process
 
+Before you draft or post a review, read .claude/rules/writing-standard.md.
+Use the controlled technical writing profile. The review is a durable artifact.
+If the artifact fails the profile, you must request changes.
+State the verdict and next action first. State the reason and evidence after it.
+Do not write a process transcript.
+
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
 
 Before spawning the Code Reviewer agent (Rex), write the active-reviewer session marker. It records that this review pass is the sanctioned one, and suppresses `warn-review-marker-write.sh`'s advisory warning on Rex's `*-rex.approved` write (that hook warns and never blocks since #1026 — AgDR-0111). At skill entry:
@@ -59,6 +65,30 @@ rm -f "$ops_root/.claude/session/active-reviewer"
 ```
 
 Nothing mechanically stops a build-class sub-agent writing the same file; what makes Rex's marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
+
+### 0a. Never hand the reviewer a marker path (me2resh/apexyard#1144)
+
+**The spawn prompt for Rex MUST NOT contain a literal marker path.** Say
+*"write your approval marker on an APPROVED verdict"*; say nothing about where.
+
+Rex already resolves the correct path through `review_marker_path` — the
+repo-qualified `<owner>__<repo>__<pr>-rex.approved` form from AgDR-0060,
+which is the exact path the gates read. A path in the prompt overrides that
+correct resolution: the agent obeys the instruction it was handed, and the
+marker lands at the bare-number `<pr>-rex.approved` instead. **No gate reads
+that path** — there is no bare-number fallback on any on-disk marker lookup.
+
+The failure is silent in the dangerous direction. `ls .claude/session/reviews/`
+shows a file that reads, to a human, like a valid approval; only the merge
+attempt reveals otherwise. And at that moment the obvious repair — moving the
+file into place — is marker forging, the behaviour
+[`pr-workflow.md`](../../rules/pr-workflow.md) § "Build agents cannot
+self-review" exists to prevent. The right recovery is always: delete the
+gate-invisible file and re-run a real review.
+
+`warn-unqualified-review-marker.sh` warns (advisory, never blocks) when a
+bare-number marker appears, and the merge gates name the near-miss in their
+refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff

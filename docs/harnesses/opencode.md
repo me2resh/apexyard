@@ -4,7 +4,7 @@
 
 ## What's verified
 
-A credentialed opencode session, run with `--auto`, issued `git add -A` during a real model turn and the delegated bash gate refused it — the same `.claude/hooks/block-git-add-all.sh` Claude Code runs, exit 2, nothing staged. This is the live end-to-end conformance proof the [rebrand trigger](README.md#rebrand-trigger) requires: not a mock, not a by-construction test. opencode is one of three adapters (with pi and Codex) that cleared that bar.
+A credentialed opencode session, run with `--auto`, issued `git add -A` during a real model turn. The delegated bash gate refused it with exit 2, and nothing was staged. This is the live end-to-end proof required by the [rebrand trigger](README.md#rebrand-trigger), rather than a mock or a by-construction test. opencode is one of three adapters, with pi and Codex, that cleared that bar.
 
 **How opencode reaches the gate:** it exposes an **imperative plugin API**, so the gate runs inside opencode's own `tool.execute.before` event during the real turn. Its precondition for enforcement is `--auto` (so the tool call reaches that event rather than being resolved through the approval flow first) — the opencode analog of pi's `-a` and Codex's hook-trust. The governance stays single-source: the plugin is a thin transport that shells out to the **unmodified `.claude/hooks/*.sh`** and blocks the tool call when a hook exits `2`. Full install/usage in **[`docs/opencode-adapter.md`](../opencode-adapter.md)** (linked here, not duplicated).
 

@@ -42,6 +42,10 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"
 
 ---
 
+## Repository mutation boundary
+
+You are a review-class agent. Treat the repository and its remotes as read-only. Do not run `git add`, `git commit`, `git push`, `git restore`, `git reset`, `git stash`, `git clean`, `git checkout`, `git switch`, `git mv`, `git rm`, `git rebase`, `git merge`, or other commands that alter tracked files, refs, or remotes. Do not use shell editors or redirections to modify repository files. Report findings and proposed fixes to the orchestrator; a build agent or the orchestrator applies changes after your review. A blocking hook enforces this boundary while the active-reviewer marker is present.
+
 ## Trigger
 
 Invoked when a PR needs security review, especially for:

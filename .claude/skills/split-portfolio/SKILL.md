@@ -6,6 +6,10 @@ argument-hint: "[--verify | --dry-run]"
 effort: high
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /split-portfolio — Migrate to split-portfolio mode
 
 Automates the recovery flow for ApexYard adopters who hit the **trip-wire** documented in `docs/multi-project.md` — pushed private project names to a public fork, then realized GitHub Free disallows fork-visibility changes.
@@ -424,12 +428,13 @@ Idempotence: empty `workspace/` (no entries to move, or only `README.md` left) i
 ```bash
 NEEDS=()
 grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
-grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+grep -qxF 'workspace/*' .gitignore 2>/dev/null || NEEDS+=('workspace/*')
+grep -qxF '!workspace/README.md' .gitignore 2>/dev/null || NEEDS+=('!workspace/README.md')
 
 if [ "${#NEEDS[@]}" -gt 0 ]; then
   {
     echo ""
-    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace live in the private sibling repo."
+    echo "# Split-portfolio v2 (framework ≥ #242): onboarding + workspace entries live in the private sibling repo."
     for n in "${NEEDS[@]}"; do echo "$n"; done
   } >> .gitignore
   git add .gitignore

@@ -113,6 +113,52 @@ HEREDOC_DASH_CMD='git commit -m "$(cat <<-'\''EOF'\''
 run_case "heredoc-substitution <<-: skip with INFO" \
   "$HEREDOC_DASH_CMD" 0 "heredoc-substitution detected"
 
+# Shell-looking text in a heredoc is part of the commit message. It must not
+# be mistaken for a command chained after the outer `git commit` invocation.
+for operator in ';' '&&' '|'; do
+  BODY_OPERATOR_CMD="git commit -m \"\$(cat <<'EOF'
+body text ${operator} git commit -m \\\"not a command\\\"
+EOF
+)\""
+  run_case "heredoc body containing ${operator} git commit: skip with INFO" \
+    "$BODY_OPERATOR_CMD" 0 "heredoc-substitution detected"
+done
+
+BODY_CLOSER_TEXT_CMD='git commit -m "$(cat <<'"'"'EOF'"'"'
+) && git commit -m "still literal body text"
+EOF
+)"'
+run_case "heredoc body resembling a substitution close: skip with INFO" \
+  "$BODY_CLOSER_TEXT_CMD" 0 "heredoc-substitution detected"
+
+HEREDOC_THEN_COMMIT_CMD="$HEREDOC_CMD
+git commit -m \"invalid subject\""
+run_case "heredoc followed by newline commit: block" \
+  "$HEREDOC_THEN_COMMIT_CMD" 2 "newline compound commit commands"
+
+run_case "heredoc followed by semicolon commit: block" \
+  "$HEREDOC_CMD ; git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
+run_case "heredoc followed by and commit: block" \
+  "$HEREDOC_CMD && git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
+run_case "heredoc followed by pipe commit: block" \
+  "$HEREDOC_CMD | git commit -m \"invalid subject\"" 2 \
+  "does not accept compound commit commands"
+
+HEREDOC_CONTINUED_COMMIT_CMD="$HEREDOC_CMD \\
+&& git commit -m \"invalid subject\""
+run_case "heredoc followed by continued and commit: block" \
+  "$HEREDOC_CONTINUED_COMMIT_CMD" 2 \
+  "does not accept compound commit commands"
+
+BACKTICK=$(printf '\140')
+run_case "backtick command substitution: block" \
+  "git commit -m \"fix: valid subject\" $BACKTICK git commit -m \"invalid subject\" $BACKTICK" 2 \
+  "backtick command substitutions"
+
 # Plain non-substitution -m → still validated as before.
 run_case "plain -m valid subject: pass silently" \
   'git commit -m "feat(#194): valid subject"' 0 ""
@@ -122,6 +168,37 @@ run_case "plain -m bad subject: BLOCK" \
 
 run_case "plain -m '\''quoted'\'' valid subject: pass" \
   "git commit -m 'fix: a fix'" 0 ""
+
+# The first -m value is the subject. A later -m value becomes the body.
+run_case "multiple -m: valid subject and body pass" \
+  'git commit -m "chore: valid subject" -m "body text"' 0 ""
+
+# A later commit in a compound command must not bypass validation.
+run_case "compound command with later invalid commit: block" \
+  'git commit -m "fix: valid subject" && git commit -m "invalid subject"' 2 \
+  "does not accept compound commit commands"
+
+run_case "semicolon command with later invalid commit: block" \
+  'git commit -m "fix: valid subject" ; git commit -m "invalid subject"' 2 \
+  "does not accept compound commit commands"
+
+run_case "newline command with later invalid commit: block" \
+  $'git commit -m "fix: valid subject"\ngit commit -m "invalid subject"' 2 \
+  "newline compound commit commands"
+
+run_case "nested commit command substitution: block" \
+  'git commit -m "fix: valid subject"$(git commit -m "invalid subject")' 2 \
+  "does not accept command substitutions"
+
+# A quoted value for another option must not impersonate a -m argument.
+run_case "trailer decoy with equals syntax: invalid subject blocks" \
+  "git commit --trailer='-m \"fix: decoy\"' -m \"invalid subject\"" 2 "BLOCKED: Commit subject"
+
+run_case "trailer decoy with separate value: invalid subject blocks" \
+  'git commit --trailer "-m fix: decoy" -m "invalid subject"' 2 "BLOCKED: Commit subject"
+
+run_case "quoted subject text containing -m: valid subject passes" \
+  'git commit -m "fix: describe -m safely"' 0 ""
 
 # -F file path → no heredoc substitution involved, full validation runs.
 # The skip pattern is anchored on `-m \$(cat <<` literally, so -F is never

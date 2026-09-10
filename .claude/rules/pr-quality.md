@@ -1,5 +1,13 @@
 # PR Quality Requirements
 
+## Technical writing (MANDATORY)
+
+PR descriptions and review comments are durable artifacts. Use the
+controlled technical writing profile from writing-standard.md. Use short, complete sentences.
+Use active voice. State one fact or action in each sentence. Lead with the
+outcome and next action. Keep uncertainty, evidence, and identifiers. Remove
+empty and process-only sections.
+
 ## Glossary (MANDATORY)
 
 Every PR description **must** include a Glossary section:

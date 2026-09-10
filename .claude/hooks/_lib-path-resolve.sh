@@ -65,7 +65,13 @@ _resolve_real_path() {
   fi
   [ -n "$dir" ] || return 0
   if [ -n "$tail" ]; then
-    printf '%s/%s' "$dir" "$tail"
+    # When the nearest existing ancestor is the filesystem root, it already
+    # ends in `/`; do not add a second separator. This keeps every resolved
+    # absolute path in canonical single-slash form.
+    case "$dir" in
+      /) printf '/%s' "$tail" ;;
+      *) printf '%s/%s' "$dir" "$tail" ;;
+    esac
   else
     printf '%s' "$dir"
   fi

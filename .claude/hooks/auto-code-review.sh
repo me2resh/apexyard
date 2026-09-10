@@ -1,6 +1,6 @@
 #!/bin/bash
-# PostToolUse hook: after `gh pr create` succeeds, tell Claude to invoke the
-# code-reviewer agent (Rex) on the new PR automatically.
+# PostToolUse hook: after `gh pr create` succeeds, tell Claude to run the
+# code-reviewer agent (Rex) on the new PR.
 #
 # Mechanism: the hook writes a pending-review marker and exits with code 2
 # so the stderr message is surfaced back to Claude as an "error", which in
@@ -10,7 +10,12 @@
 #
 # The marker file at .claude/session/pending-reviews/<pr> is also read by
 # the merge-gate hook so a PR cannot be merged without a corresponding Rex
-# approval file at .claude/session/reviews/<pr>-rex.approved.
+# approval file at .claude/session/reviews/<owner>__<repo>__<pr>-rex.approved
+# (repo-qualified, AgDR-0060). This banner deliberately does NOT print that
+# path: quoting a literal marker path at an agent is the #1144 vector — the
+# reviewer obeys the path it is handed instead of resolving its own, and the
+# marker lands bare-number where no gate reads it. Name the review, never the
+# path.
 #
 # SUBAGENT-AWARE BANNER (me2resh/apexyard#843): this hook fires on ANY
 # `gh pr create`, regardless of which agent ran it. Twice (PRs #835, #842) a
@@ -132,6 +137,17 @@ build sub-agent just handed this PR back to you):
   author grading their own work. (The marker also suppresses an advisory
   warning on Rex's own marker write, but that is a side effect, not the
   reason — the hook warns and never blocks since #1026.)
+
+  ONE EXCEPTION, and only for you (me2resh/apexyard#1161). After the review
+  returns, confirm the approval marker exists. If the review ran "in the
+  background" and posted nothing to the PR, the harness ran its OWN bundled
+  /code-review instead of ApexYard's skill. That bundled skill knows nothing
+  about these markers, so re-running it cannot help. Only in that case: set
+  the active-reviewer marker yourself, then spawn the code-reviewer agent
+  (Rex) directly with the Agent tool. A CHANGES REQUESTED verdict is NOT this
+  case — a real review that requests changes writes no approval marker by
+  design, and the fix is to address the findings. Never write the approval
+  marker yourself in either case.
 --------------------------------------------------------------------------
 
 CEREMONY TIER (.claude/rules/right-size-ceremony.md, AgDR-0116): Rex runs on
@@ -143,8 +159,11 @@ Lean-tier diff (docs / config-text, small, reversible, no behavior change,
 non-security-path) still gets a Rex pass — in REDUCED SCOPE per
 .claude/agents/code-reviewer.md § "Reduced-Scope Review" — never a bypass.
 
-The merge-gate hook will block \`gh pr merge\` for this PR until a Rex approval
-file exists at .claude/session/reviews/${PR_NUMBER:-<pr>}-rex.approved.
+The merge-gate hook will block \`gh pr merge\` for this PR until Rex's approval
+marker exists. Do NOT quote a marker path when you invoke the review — the
+reviewer resolves its own repo-qualified path (me2resh/apexyard#1144); a path
+handed to it in a prompt overrides that and lands the marker where no gate
+reads it.
 
 This message is a reminder from the PostToolUse hook, not a tool error. The PR
 was created successfully.

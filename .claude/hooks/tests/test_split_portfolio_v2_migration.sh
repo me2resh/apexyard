@@ -22,8 +22,9 @@ LIB_OPS="$SRC_ROOT/.claude/hooks/_lib-ops-root.sh"
 LIB_PORT="$SRC_ROOT/.claude/hooks/_lib-portfolio-paths.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
+MIGRATION="$SRC_ROOT/.claude/migrations/v1.2.0-to-v1.3.0.sh"
 
-for f in "$LIB_OPS" "$LIB_PORT" "$LIB_CFG" "$DEFAULTS"; do
+for f in "$LIB_OPS" "$LIB_PORT" "$LIB_CFG" "$DEFAULTS" "$MIGRATION"; do
   [ -f "$f" ] || { echo "FAIL: missing $f" >&2; exit 1; }
 done
 
@@ -149,7 +150,8 @@ run_migration() {
     # Update .gitignore
     NEEDS=()
     grep -qxF onboarding.yaml .gitignore 2>/dev/null || NEEDS+=(onboarding.yaml)
-    grep -qxF workspace .gitignore 2>/dev/null || NEEDS+=(workspace)
+    grep -qxF 'workspace/*' .gitignore 2>/dev/null || NEEDS+=('workspace/*')
+    grep -qxF '!workspace/README.md' .gitignore 2>/dev/null || NEEDS+=('!workspace/README.md')
     if [ "${#NEEDS[@]}" -gt 0 ]; then
       {
         echo ""
@@ -236,9 +238,13 @@ grep -qxF onboarding.yaml "$SB/public/.gitignore" \
   && mark_pass "onboarding.yaml added to public-fork .gitignore" \
   || mark_fail "gitignore onboarding" "not added"
 
-grep -qxF workspace "$SB/public/.gitignore" \
-  && mark_pass "workspace added to public-fork .gitignore" \
-  || mark_fail "gitignore workspace" "not added"
+grep -qxF 'workspace/*' "$SB/public/.gitignore" \
+  && mark_pass "workspace entries added to public-fork .gitignore" \
+  || mark_fail "gitignore workspace entries" "not added"
+
+grep -qxF '!workspace/README.md' "$SB/public/.gitignore" \
+  && mark_pass "workspace README exception added to public-fork .gitignore" \
+  || mark_fail "gitignore workspace README" "exception not added"
 
 ONB_KEY=$(jq -r '.portfolio.onboarding // empty' "$SB/public/.claude/project-config.json")
 WS_KEY=$(jq -r '.portfolio.workspace_dir // empty' "$SB/public/.claude/project-config.json")
@@ -280,12 +286,13 @@ run_migration "$SB/public"
 POST_LIST=$(find "$SB/public" "$SB/private" -type f 2>/dev/null | sort)
 
 # .gitignore should have exactly one entry per v2 file class even after re-run.
-GI_ONB=$(grep -cxF onboarding.yaml "$SB/public/.gitignore" 2>/dev/null || echo 0)
-GI_WS=$(grep -cxF workspace "$SB/public/.gitignore" 2>/dev/null || echo 0)
-if [ "$GI_ONB" -eq 1 ] && [ "$GI_WS" -eq 1 ]; then
+GI_ONB=$(grep -cxF onboarding.yaml "$SB/public/.gitignore" 2>/dev/null || true)
+GI_WS=$(grep -cxF 'workspace/*' "$SB/public/.gitignore" 2>/dev/null || true)
+GI_README=$(grep -cxF '!workspace/README.md' "$SB/public/.gitignore" 2>/dev/null || true)
+if [ "${GI_ONB:-0}" -eq 1 ] && [ "${GI_WS:-0}" -eq 1 ] && [ "${GI_README:-0}" -eq 1 ]; then
   mark_pass "idempotence: .gitignore has exactly one entry per file class"
 else
-  mark_fail "idempotence gitignore" "got onboarding=$GI_ONB workspace=$GI_WS (expected 1 each)"
+  mark_fail "idempotence gitignore" "got onboarding=${GI_ONB:-0} workspace=${GI_WS:-0} readme=${GI_README:-0} (expected 1 each)"
 fi
 
 if [ "$PRE_LIST" = "$POST_LIST" ]; then
@@ -473,6 +480,46 @@ else
 fi
 
 rm -f "$STDERR_OUT"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 6: the shipped migration preserves and keeps tracking workspace/README.
+#
+# Case 5 exercises the recipe documented in /update. This case deliberately
+# executes the production migration script so its .gitignore behavior cannot
+# drift behind the duplicated recipe again.
+# ---------------------------------------------------------------------------
+echo "== Case 6: shipped migration keeps workspace/README.md visible to git"
+SB=$(mktemp -d)
+SB=$(cd "$SB" && pwd -P)
+build_pre_v2 "$SB"
+cat > "$SB/public/workspace/README.md" <<'README'
+# workspace/ — live working copies of managed projects
+README
+( cd "$SB/public" && git add workspace/README.md && git commit -q -m "add workspace framework readme" )
+
+( cd "$SB/public" && APEXYARD_MIGRATION_PROMPT=workspace APEXYARD_MIGRATION_QUIET=1 bash "$MIGRATION" )
+RC=$?
+
+if [ "$RC" = "0" ] && [ -f "$SB/public/workspace/README.md" ]; then
+  mark_pass "shipped migration preserves workspace/README.md"
+else
+  mark_fail "shipped migration preserves README" "rc=$RC; README missing after production migration"
+fi
+
+if ( cd "$SB/public" && ! git check-ignore -q workspace/README.md ); then
+  mark_pass "shipped migration does not ignore workspace/README.md"
+else
+  mark_fail "shipped migration keeps README trackable" "workspace/README.md is ignored by the generated rules"
+fi
+
+if grep -qxF 'workspace/*' "$SB/public/.gitignore" \
+  && grep -qxF '!workspace/README.md' "$SB/public/.gitignore"; then
+  mark_pass "shipped migration writes scoped workspace ignore rules"
+else
+  mark_fail "shipped migration writes scoped ignore rules" "expected workspace/* plus !workspace/README.md"
+fi
+
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------

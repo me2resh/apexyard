@@ -261,6 +261,9 @@ detect_path_triggers() {
   # Over-triggering is cheap (the auditor no-ops on a false positive); leaving
   # trust-chain edits to the generalist review alone is the gap #777 closes.
   case "$rel" in
+    .claude/hooks/tests/*|*/.claude/hooks/tests/*)
+      # Test fixtures exercise the controls but are not controls themselves.
+      ;;
     .claude/hooks/*|*/.claude/hooks/*|\
     .claude/settings.json|*/.claude/settings.json)
       emit_banner \

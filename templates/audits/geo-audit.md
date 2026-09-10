@@ -1,3 +1,5 @@
+<!-- When this template creates an artifact, use the controlled technical writing profile in .claude/rules/writing-standard.md. -->
+
 <!-- Source: ApexYard · templates/audits/geo-audit.md · github.com/me2resh/apexyard · MIT -->
 
 # GEO Audit — {project} @ {short-sha}

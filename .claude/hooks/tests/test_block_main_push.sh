@@ -400,6 +400,63 @@ run_case "config override REPLACES default list: push to release blocks" \
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
+# (i) Session-pinned ops-root scope (#1230)
+# ---------------------------------------------------------------------------
+# The settings wrapper uses the session pin to locate this hook. The pin must
+# not make a protected branch in an unrelated scratch repository look governed
+# by the pinned fork. A real command in the pinned fork must remain blocked.
+if grep -qF 'exec env APEXYARD_OPS_SCOPE_GUARD=1' \
+  "$SRC_ROOT/.claude/settings.json"; then
+  echo "PASS [settings wiring enables ops-root scope guard]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [settings wiring enables ops-root scope guard]" >&2
+  FAIL=$((FAIL+1))
+  FAILED_CASES="${FAILED_CASES}settings wiring enables ops-root scope guard "
+fi
+
+OPS_SCOPE=$(make_sandbox "main")
+touch "$OPS_SCOPE/.apexyard-fork"
+SCRATCH_SCOPE=$(mktemp -d)
+make_git_repo "$SCRATCH_SCOPE" "main"
+MANAGED_SCOPE="$OPS_SCOPE/workspace/project"
+mkdir -p "$MANAGED_SCOPE"
+make_git_repo "$MANAGED_SCOPE" "main"
+PIN_SCOPE=$(mktemp -d)
+printf '%s\n' "$OPS_SCOPE" > "$PIN_SCOPE/ops-root-session-1230"
+
+run_scope_case() {
+  local label="$1" cwd="$2" cmd="$3" want_rc="$4"
+  local input got_rc got_stderr
+  input=$(jq -nc --arg c "$cmd" '{tool_input:{command:$c}}')
+  got_stderr=$(cd "$cwd" && \
+    APEXYARD_OPS_SCOPE_GUARD=1 \
+    CLAUDE_CODE_SESSION_ID=session-1230 \
+    APEXYARD_OPS_PIN_DIR="$PIN_SCOPE" \
+    bash "$OPS_SCOPE/.claude/hooks/block-main-push.sh" <<<"$input" 2>&1 >/dev/null)
+  got_rc=$?
+  if [ "$got_rc" = "$want_rc" ]; then
+    echo "PASS [$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: want rc=$want_rc, got $got_rc" >&2
+    echo "    stderr: ${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}${label} "
+  fi
+}
+
+run_scope_case "pinned hook ignores main in unrelated scratch repo" \
+  "$SCRATCH_SCOPE" "git commit -m scratch" 0
+run_scope_case "pinned hook still blocks main in pinned ops fork" \
+  "$OPS_SCOPE" "git commit -m framework" 2
+run_scope_case "pinned hook ignores protected main in managed-project clone" \
+  "$MANAGED_SCOPE" "git commit -m project" 0
+run_scope_case "git -C target outside pinned ops fork is ignored" \
+  "$OPS_SCOPE" "git -C '$SCRATCH_SCOPE' commit -m scratch" 0
+rm -rf "$OPS_SCOPE" "$SCRATCH_SCOPE" "$PIN_SCOPE"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

@@ -5,6 +5,10 @@ argument-hint: "[project-slug | . | --framework]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /tech-vision — Interactive Architecture Vision Author
 
 Walks the operator through the existing `templates/architecture/vision.md` (shipped in #224) **section by section** — instead of leaving the operator staring at an empty template — so the load-bearing sections (Anti-scope, Current-vs-Target, Migration path) actually get filled in honestly rather than left as aspirational stubs.

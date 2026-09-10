@@ -8,7 +8,7 @@
 #   2. SKILL.md description: budget — every description ≤ 200 chars, with the
 #      majority ≤ 120 chars (the budget is "~120 chars"; we cap at 200 hard,
 #      flag overs above 120 as soft warnings)
-#   3. Every skill on disk is catalogued in the CLAUDE.md table (no orphans)
+#   3. Every tracked framework skill is catalogued in the CLAUDE.md table
 #   4. SessionStart happy-path char budget — banner output across the seven
 #      SessionStart hooks stays ≤ 600 chars (covers the unconfigured-fork
 #      worst-case fixture present in this worktree)
@@ -21,10 +21,9 @@ set -u
 # Resolve repo root from the test file's location so the test can run from
 # any cwd inside the worktree.
 TEST_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$TEST_DIR/../../.." && pwd)"
+ROOT="${TOKEN_EFFICIENCY_ROOT:-$(cd "$TEST_DIR/../../.." && pwd)}"
 
 CLAUDE_MD="$ROOT/CLAUDE.md"
-SKILLS_DIR="$ROOT/.claude/skills"
 HOOKS_DIR="$ROOT/.claude/hooks"
 
 FAIL=0
@@ -62,7 +61,10 @@ echo "== Invariant 2: SKILL.md description: ≤ 200 chars (hard), ≤ 120 chars 
 total=0
 overs120=0
 overs200=0
-for f in "$SKILLS_DIR"/*/SKILL.md; do
+skill_files=$(git -C "$ROOT" ls-files '.claude/skills/*/SKILL.md')
+while IFS= read -r relative_f; do
+  [ -n "$relative_f" ] || continue
+  f="$ROOT/$relative_f"
   desc=$(awk '
     BEGIN{infm=0; indesc=0; out=""}
     /^---[[:space:]]*$/ { infm=!infm; if (!infm) exit; next }
@@ -92,27 +94,76 @@ for f in "$SKILLS_DIR"/*/SKILL.md; do
   elif [ "$n" -gt 120 ]; then
     overs120=$((overs120 + 1))
   fi
-done
-skill_count=$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '_lib*' | wc -l | tr -d ' ')
+done <<EOF
+$skill_files
+EOF
+skill_count=$(printf '%s\n' "$skill_files" | awk 'NF { count++ } END { print count + 0 }')
 echo "  Total: $total chars across $skill_count skills"
 echo "  Soft warnings (121–200 chars): $overs120 (documented exception per AgDR-0044)"
 [ "$overs200" -eq 0 ] && green "  OK (hard cap)"
 
 # -----------------------------------------------------------------------------
-# Invariant 3 — every skill on disk catalogued in CLAUDE.md
+# Invariant 3 — every tracked framework skill catalogued in CLAUDE.md
 # -----------------------------------------------------------------------------
-echo "== Invariant 3: every skill in .claude/skills/ is catalogued in CLAUDE.md"
+echo "== Invariant 3: every tracked framework skill is catalogued in CLAUDE.md"
 missing=0
-for d in "$SKILLS_DIR"/*/; do
-  name=$(basename "$d")
+while IFS= read -r relative_f; do
+  [ -n "$relative_f" ] || continue
+  name=$(basename "$(dirname "$relative_f")")
   case "$name" in _lib*) continue ;; esac
   if ! grep -qE "^\| \`/$name\` \|" "$CLAUDE_MD"; then
     red "  FAIL: /$name is in .claude/skills/ but not in CLAUDE.md skill table"
     missing=$((missing + 1))
     FAIL=$((FAIL + 1))
   fi
-done
+done <<EOF
+$skill_files
+EOF
 [ "$missing" -eq 0 ] && green "  OK"
+
+# Regression fixture — a private sibling-repo skill symlink is out of scope
+# even when its description exceeds the framework cap and it is intentionally
+# absent from the public CLAUDE.md catalog.
+if [ "${TOKEN_EFFICIENCY_SKIP_SYMLINK_FIXTURE:-0}" != "1" ]; then
+  echo "== Regression: private skill symlinks are ignored"
+  fixture=$(mktemp -d)
+  trap 'rm -rf "$fixture"' EXIT
+  mkdir -p "$fixture/.claude/skills/framework-skill" \
+           "$fixture/.claude/hooks" \
+           "$fixture/private/custom-skills/private-skill"
+  cp "$0" "$fixture/.claude/hooks/test_token_efficiency_wave1.sh"
+  cat > "$fixture/CLAUDE.md" <<'EOF'
+### Available skills
+| Skill | Description |
+|---|---|
+| `/framework-skill` | Framework-owned test skill. |
+The hooks, agents, and skills are framework primitives.
+EOF
+  cat > "$fixture/.claude/skills/framework-skill/SKILL.md" <<'EOF'
+---
+name: framework-skill
+description: Framework-owned test skill.
+---
+EOF
+  cat > "$fixture/private/custom-skills/private-skill/SKILL.md" <<'EOF'
+---
+name: private-skill
+description: This deliberately over-budget private description must not count toward the public framework token budget because the skill belongs to the adopter's private sibling portfolio and is only surfaced in the ops fork through a symlink.
+---
+EOF
+  ln -s "$fixture/private/custom-skills/private-skill" \
+        "$fixture/.claude/skills/private-skill"
+  git -C "$fixture" init -q
+  git -C "$fixture" add CLAUDE.md .claude/skills/framework-skill/SKILL.md
+  if TOKEN_EFFICIENCY_ROOT="$fixture" \
+     TOKEN_EFFICIENCY_SKIP_SYMLINK_FIXTURE=1 \
+     bash "$fixture/.claude/hooks/test_token_efficiency_wave1.sh" >/dev/null; then
+    green "  OK"
+  else
+    red "  FAIL: private skill symlink affected framework invariants"
+    FAIL=$((FAIL + 1))
+  fi
+fi
 
 # -----------------------------------------------------------------------------
 # Invariant 4 — SessionStart happy-path char budget

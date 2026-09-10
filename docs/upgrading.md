@@ -1,6 +1,6 @@
 # Upgrading Your ApexYard Fork
 
-`/update` is the single entry point for pulling new framework releases into your fork. As of v1.4.0 it walks the **per-version migration chain** — so a fork that's three releases behind runs three migrations in order, not just the latest one.
+`/update` is the single entry point for bringing framework releases into your fork. Since v1.4.0 it walks the **per-version migration chain**, so a fork that is three releases behind runs the three required migrations in order.
 
 This doc covers:
 
@@ -22,7 +22,7 @@ cd ~/ops/apexyard          # your fork
 /update                    # interactive sync — walks intermediate-release migrations
 ```
 
-That's it. On a fork that's three releases behind, `/update`:
+On a fork that is three releases behind, `/update`:
 
 1. Fetches `upstream/main`.
 2. Detects your current framework version from `.claude/framework-version` (or prompts you once if the file is missing).
@@ -31,7 +31,7 @@ That's it. On a fork that's three releases behind, `/update`:
 5. Stages all changes; you commit + push on a sync branch.
 6. Advances `.claude/framework-version` to the new latest tag.
 
-You're never more than one `/update` away from running every migration the framework needs you to run, even if you've been gone six months.
+One `/update` run can apply every migration required by the release gap, even after a long period without an upgrade.
 
 ---
 
@@ -41,15 +41,15 @@ You're never more than one `/update` away from running every migration the frame
 .claude/framework-version    # one line, e.g. "v1.4.0"
 ```
 
-This file records the framework version your fork was last synced against. `/update` reads it on entry, walks the chain to the new release tag, and writes the new value at the end. Forks created **before v1.4.0** don't have this file yet — `/update` will prompt you once to bootstrap it.
+This file records the framework version your fork last synced against. `/update` reads it, walks the chain to the new release tag, and writes the new value at the end. Forks created **before v1.4.0** do not have the file; `/update` prompts once to create it.
 
-The anchor is intentionally a separate file (not derived from git tags or merged into `project-config.json`) because:
+The anchor is a separate file rather than a value derived from git tags or stored in `project-config.json` because:
 
 - Adopters rewrite history routinely (squash-merge, rebase, `/update --rebase`). A derived signal would silently drift.
 - `project-config.json` mixes configured values with measured values; keeping the anchor separate lets each one have a single owner.
 - It's one line, one job — easy to read, easy to write, easy to debug.
 
-If you ever need to override it (rolled back a release, restored an older fork, accidentally deleted it):
+If you need to override it after a rollback, an older fork restore, or accidental deletion:
 
 ```bash
 /update --from-version v1.2.0
@@ -69,6 +69,7 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | `v5.1.0-to-v5.2.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.2.0-to-v5.3.0.sh` | No-op placeholder. Backfilled by #1105. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.3.0-to-v5.4.0.sh` | **Real migration.** Untracks `.claude/project-config.json` (`git rm --cached`, working-tree file and its content preserved, untrack staged not committed) so the long-inert `.gitignore` entry finally applies. Closes the #1065 data-loss window: while the file was tracked, a plain `git checkout` could silently overwrite it and destroy a split-portfolio adopter's private `portfolio` block (never in git to restore from). Idempotent — no-op if the file is already untracked; defers to the operator (exit 1) rather than force past an unexpected staged state. | Every adopter whose fork still tracks `.claude/project-config.json` (anyone upgrading from ≤ v5.3.0). No-op once untracked. |
+| `v5.4.0-to-v5.5.0.sh` | No-op placeholder — v5.5.0 has no per-adopter file or configuration migration. | Nobody (no-op); exists so the chain walks past this hop. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
 
@@ -159,9 +160,9 @@ When you use `--from-dev` to pull from `upstream/dev`, the migration chain is au
 
 ## When `/update` isn't enough — re-forking & keeping your data
 
-Most of the time `/update` is all you need. The exception is when your fork has
-drifted so far that upgrading is a wall of conflicts — then you re-fork. Either
-way, the only thing you have to protect is **your own work**.
+Most of the time `/update` is enough. If the fork has drifted so far that the
+upgrade produces conflicts across most of the framework, re-fork it. In either
+case, protect **your own work**.
 
 One idea makes this easy: everything in your fork is either **the framework** or
 **your data**.
@@ -174,9 +175,9 @@ One idea makes this easy: everything in your fork is either **the framework** or
 
 ### Upgrade or re-fork?
 
-Run `/update --dry-run`. A clean or small merge → just `/update`. Conflicts
-across most of `.claude/` — or a PR from your fork to upstream that touches the
-*whole* framework tree → your base has drifted too far; re-fork.
+Run `/update --dry-run`. A clean or small merge means `/update` is enough.
+Conflicts across most of `.claude/`, or a fork PR that touches the whole
+framework tree, indicate that the base has drifted too far; re-fork it.
 
 ### Re-forking without losing anything
 

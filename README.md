@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://yard.apexscript.com"><img src="https://yard.apexscript.com/brand/apexyard-avatar-512.png" alt="ApexYard" width="88"></a>
+  <a href="https://apexyard.ai"><img src="https://apexyard.ai/brand/apexyard-avatar-512.png" alt="ApexYard" width="88"></a>
 </p>
 
 <h1 align="center">ApexYard</h1>
@@ -12,40 +12,49 @@
   <a href="https://github.com/me2resh/apexyard/releases"><img src="https://img.shields.io/github/v/release/me2resh/apexyard?color=2F6DF6&label=release" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/built%20for-Claude%20Code-8A63D2" alt="Built for Claude Code"></a>
-  <a href="https://yard.apexscript.com"><img src="https://img.shields.io/badge/site-yard.apexscript.com-2F6DF6" alt="Site"></a>
+  <a href="https://apexyard.ai"><img src="https://img.shields.io/badge/site-apexyard.ai-2F6DF6" alt="Site"></a>
   <a href="https://github.com/me2resh/apexyard/stargazers"><img src="https://img.shields.io/github/stars/me2resh/apexyard?style=social" alt="Stars"></a>
 </p>
 
-## You built something real with AI. Then it fell apart.
+## AI can build quickly. Shipping safely needs a system.
 
-The first 80% flew — a working prototype in a weekend, features landing faster than you could test them. Then the context slipped. The codebase turned into a pile nobody could review, decisions vanished into chat history, and the thing you were *so close* to shipping never actually made it to production.
+AI can produce a working prototype in a weekend. Teams still need a way to
+track decisions, review changes, run checks, and approve a release.
 
-**ApexYard is the machinery that takes agent-built code the last mile.** It wraps your AI coding agent in the discipline a real engineering team runs on: every change moves through a ticket, gets an independent review, and hits a merge gate that stays shut until a *named human* says "ship it." So the code your agent writes is actually safe to put in front of users.
+**ApexYard provides that system.** Every change starts with a ticket. An
+independent reviewer checks the change. A merge gate stays closed until a
+named human approves the exact commit.
 
-Concretely, it's a multi-project **ops repo**: you fork it, register your projects, and govern them all as one organisation — shared memory across the portfolio, a strict SDLC, and dozens of shell hooks that enforce the rules mechanically instead of hoping everyone remembers them. Built for founders who ship alone, and for teams standing up AI-enabled squads.
+ApexYard is a multi-project **ops repo**. You fork it, register your projects,
+and manage the portfolio from one place. Shared rules, project records, and
+shell hooks keep the workflow consistent.
 
-Claude Code is the default driver, but the rules, hooks, and templates are plain markdown and shell. Swap the AI. Keep the forge. No SaaS. No lock-in.
+Claude Code is the default driver. The rules, hooks, and templates are plain
+Markdown and shell, so you can use another coding tool through an adapter.
+There is no service to run and no hosted lock-in.
 
-**Proven shipping** TypeScript + AWS Lambda backends, Next.js web apps, Chrome extensions, and native **Swift** macOS desktop apps. The stack is process and guardrails — not a language or framework lock-in.
+The workflow has been used with TypeScript and AWS Lambda backends, Next.js
+apps, Chrome extensions, and native Swift macOS apps.
 
 ## What makes it different
 
-| Feature | Without ApexYard | With ApexYard |
-|---------|-------------------|----------------|
-| Code reviews | Ad-hoc prompts | Rex agent on every PR, SHA-bound approval marker |
-| Technical decisions | Lost in chat history | Documented as Agent Decision Records |
-| Quality gates | Hope and pray | Shell hooks block bad commits, forged markers, unreviewed merges |
-| Merge approval | Informal "LGTM" | Two-marker gate — Rex (code) + a named human (per-PR explicit) |
-| Database migrations | Drop-column-on-Friday | Dedicated gate: labelled ticket + migration AgDR (rollback, downtime, consumers) required before schema edits |
-| Architecture docs | Nobody draws them | C4 L1 + L2 Mermaid templates + `/c4` skill generates stubs from a codebase |
-| Portfolio visibility | Tab through 5 GitHubs | `/inbox`, `/status`, `/tasks` aggregate across a single registry file |
-| Upstream sync | Forget for 6 months | Session-start drift banner + `/update` skill |
-| Role consistency | Re-explain every session | Persistent role definitions, activation-triggered |
-| Onboarding | Days of context-setting | `/setup` three-exchange config |
+| Area | Without ApexYard | With ApexYard |
+|---|---|---|
+| Code review | Ad-hoc prompts | Rex reviews every pull request. |
+| Technical decisions | Lost in chat | Agent Decision Records preserve them. |
+| Quality gates | Manual memory | Shell hooks block unsafe actions. |
+| Merge approval | Informal “LGTM” | Rex and a named human approve the exact commit. |
+| Database migrations | High-risk edits | A migration ticket and rollback plan are required. |
+| Architecture | Scattered notes | C4 templates and the `/c4` skill create a shared model. |
+| Portfolio view | Several GitHub tabs | `/inbox`, `/status`, and `/tasks` read one registry. |
+| Upstream updates | Easy to forget | `/update` reports drift and guides the sync. |
+| Roles | Repeated context | Role files activate from clear triggers. |
+| Onboarding | Manual setup | `/setup` collects the required configuration. |
 
 ## What's inside
 
-ApexYard is a set of plain-text primitives Claude Code reads automatically — no runtime, no service:
+ApexYard is a set of plain-text files. Claude Code reads them from the repo
+root. No runtime or service is required.
 
 - **20 roles** across 6 departments (engineering, product, design, security, data, architecture) that activate on triggers
 - **49 shell hooks** that mechanically enforce the SDLC — ticket-first edits, a two-marker merge gate, migration gates, secrets scanning, and more
@@ -53,23 +62,29 @@ ApexYard is a set of plain-text primitives Claude Code reads automatically — n
 - **23 sub-agents** — Rex (code review), Hakim (security), Tariq (design review), plus the department personas
 - **18 rule files**, workflow docs, and document templates (PRD, tech design, ADR, AgDR, C4 diagrams)
 
-**Full directory tree and the complete role / hook / skill / agent breakdown → [`docs/whats-inside.md`](docs/whats-inside.md).**
+**See [`docs/whats-inside.md`](docs/whats-inside.md) for the full directory and component list.**
 
-> **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [yard.apexscript.com](https://yard.apexscript.com).
+> **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [apexyard.ai](https://apexyard.ai).
 >
-> **Built for Claude Code first**, but opencode, pi, and Codex run the same enforcement through a small adapter (Cursor partially) — see [Using another AI coding tool?](#using-another-ai-coding-tool) below.
+> **Built for Claude Code first.** opencode, pi, and Codex use the same rules through small adapters. Cursor has partial support. See [Using another AI coding tool?](#using-another-ai-coding-tool).
 >
-> **For AI coding agents:** the repo root carries `AGENTS.md` — a universal entry doc for Cursor / Claude Code / Aider / Cline / pi, for harnesses that don't auto-load `CLAUDE.md`. Details: [`docs/harnesses/pi.md`](docs/harnesses/pi.md).
+> **For AI coding agents:** `AGENTS.md` is the universal entry document for tools that do not load `CLAUDE.md`. See [`docs/harnesses/pi.md`](docs/harnesses/pi.md).
 
 ## Quick Start — fork and go
 
-ApexYard governs a **portfolio of repos** as one organisation. You fork apexyard, clone the fork, treat it as your "ops repo", and register every project you want under management. No `.apexyard/` symlinks, no nested installs — the fork IS the ops repo.
+ApexYard governs a **portfolio of repos** as one organisation. Fork and clone
+the repository. Use that fork as your ops repo. Register each project you want
+to manage. The fork is the ops repo, so no nested installation is needed.
 
-> **On opencode, pi, or Codex?** Steps 1–3 below are plain `git` / `gh` and work as-is. Install your tool's adapter (one command — see [Using another AI coding tool?](#using-another-ai-coding-tool)) before steps 4–6; each of those steps also shows the manual-file equivalent for when there's no `/skill` to run. The rules that get enforced are identical either way.
+> **Using opencode, pi, or Codex?** Steps 1–3 use plain `git` and `gh`. Install
+> your tool's adapter before steps 4–6. Each step also gives a manual file
+> option. The enforced rules are the same in both paths.
 
 ### 1. Star + Fork on GitHub
 
-Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard), **Star** it, then **Fork** it into your org. You can keep the fork named `apexyard` or rename to something that fits your naming convention (`your-org/ops`, `your-org/apex`, etc.).
+Visit [`github.com/me2resh/apexyard`](https://github.com/me2resh/apexyard).
+Star it, then fork it into your organisation. Keep the name `apexyard`, or use
+a name such as `your-org/ops`.
 
 ### 2. Clone your fork locally
 
@@ -91,29 +106,38 @@ cd apexyard
 git remote add upstream https://github.com/me2resh/apexyard.git
 ```
 
-Later, run **`/update`** to pull the latest apexyard improvements into your fork — it previews the upstream diff, merges on a sync branch, and walks you through any per-version migrations (don't hand-merge `main`).
+Later, run **`/update`** to bring upstream changes into your fork. The skill
+previews the diff, uses a sync branch, and guides any version migrations.
 
 ### 4. Configure the framework — run `/setup`
 
-Run **`/setup`** in Claude Code. In three exchanges (describe your stack → review the proposed defaults → accept or tweak) it captures your company, team, tech stack, and quality bar and writes your config.
+Run **`/setup`** in Claude Code. The skill asks about your company, team,
+technology, and quality bar. It shows the proposed defaults before it writes
+the configuration.
 
 ```text
 /setup
 ```
 
-Your real config lives in `onboarding.yaml`, which is **gitignored** — it stays local and is never published. `/setup` copies it from the tracked `onboarding.example.yaml` placeholder and fills it in, so nothing private is committed. (A commit-time guard blocks a filled-in `onboarding.yaml` if you ever try to add it.)
+Your real config lives in the **gitignored** `onboarding.yaml`. It stays local.
+`/setup` copies the tracked `onboarding.example.yaml` placeholder and fills it
+in. A commit-time guard blocks the real file if you try to add it.
 
-No `/setup` on your tool? `cp onboarding.example.yaml onboarding.yaml` and fill in your company, stack, and quality bar by hand — the gates read the file, not the skill.
+No `/setup` on your tool? Copy the example and fill it in by hand:
+`cp onboarding.example.yaml onboarding.yaml`. The gates read the file, not the
+skill.
 
 ### 5. Register your projects — run `/handover`
 
-Projects join the portfolio through a skill, not hand-edited YAML. For each repo you want under management:
+Projects join the portfolio through a skill. For each repo you want to manage:
 
 ```text
 /handover <repo-url-or-local-path>
 ```
 
-**`/handover`** clones the repo, scores its "harnessability" across five dimensions, seeds its per-project docs, and **registers it in `apexyard.projects.yaml`** (creating the registry on first use). `/setup` also offered to register your first project back in step 4.
+**`/handover`** clones the repo, scores five harnessability dimensions, seeds
+the project docs, and **registers the repo in `apexyard.projects.yaml`**. It
+creates the registry on first use. `/setup` can register your first project.
 
 The registry it maintains looks like this — you rarely touch it by hand:
 
@@ -126,18 +150,21 @@ projects:
     status: active
 ```
 
-Register even a single repo — the portfolio skills (`/projects`, `/inbox`, `/status`) work off the registry. No `/handover` on your tool? `cp apexyard.projects.yaml.example apexyard.projects.yaml` and add your repos by hand — same registry, no skill required.
+Register a single repo too. The portfolio skills (`/projects`, `/inbox`, and
+`/status`) read the same registry. No `/handover` on your tool? Copy
+`apexyard.projects.yaml.example` and add the repos by hand.
 
 ### 6. Start working
 
 ```
-/projects          # list every managed project + status
-/inbox             # PRs, issues, comments needing your attention
-/status            # git + CI snapshot per project
-/decide            # make a technical decision (creates an AgDR)
+/projects          # list managed projects and status
+/inbox             # show PRs, issues, and comments that need attention
+/status            # show the git and CI state for each project
+/decide            # record a technical decision
 ```
 
-The hooks fire on every `git` / `gh` command, the portfolio skills aggregate across the registry, and the Code Reviewer agent can be invoked with `/code-review <pr>`.
+Hooks run on `git` and `gh` commands. Portfolio skills read the registry. Run
+`/code-review <pr>` to invoke the Code Reviewer agent.
 
 Full setup guide with directory layout, daily workflow, and FAQ: [`docs/multi-project.md`](docs/multi-project.md).
 
@@ -145,7 +172,14 @@ Keeping a fork current — upgrade in place, when to re-fork instead, and how to
 
 ## Using another AI coding tool?
 
-**ApexYard was built for Claude Code** — that's where everything is native: the `/setup`, `/handover`, and other `/…` commands are Claude Code skills, a convenience layer on top of the real enforcement. But the part that actually *enforces* your rules is plain bash, not tied to Claude Code, so other AI coding tools can run the **exact same rules** through a small adapter. We only claim what we've watched work: as of **2026-07-09**, three tools — **opencode, pi, and Codex** — are proven, meaning a real agent turn on each was stopped by the same unmodified rule. Each needs one small setting so the agent's command actually reaches the rule. Cursor is the honest exception. On any of these tools, the manual fallback is always the same plain-text config files shown in the Quick Start steps above — no skill required, just done by hand.
+**ApexYard was built for Claude Code.** Its slash commands are native Claude
+Code skills. The enforcement layer is plain Bash, so other tools can use the
+same rules through an adapter.
+
+As of **2026-07-09**, opencode, pi, and Codex have passed real enforcement
+checks. Each tool needs one setting so its commands reach the rules. Cursor has
+partial support and is not included in that claim. You can always use the
+manual configuration files from Quick Start when a skill is unavailable.
 
 | Tool | Enforces your rules? | Setup | Good to know |
 |------|----------------------|-------|--------------|

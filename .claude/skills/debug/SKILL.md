@@ -6,6 +6,10 @@ argument-hint: "[symptom summary]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /debug — Structured Debug Methodology
 
 Most "stuck" debug sessions look the same: pattern-match on the symptom, propose a fix, ship it, find a different symptom, repeat. Each cycle costs a deploy + a CEO approval + the user's patience. This skill enforces the discipline that prevents the loop:
@@ -186,6 +190,8 @@ Each appendix carries the stack-specific surface-evidence requirements (step 1),
 - Browser DevTools Network tab redirect chain — every status code and Location header from the user action to the visible failure
 - Browser DevTools Console — any errors, including the stack trace
 - The exact URL in the address bar at the moment of failure (often differs from what the user typed — note both)
+
+**Capture that evidence with a browser-automation MCP server** (Playwright MCP or equivalent) rather than an ad-hoc headless-browser CLI invocation. Prefer an accessibility-tree snapshot over a screenshot when the hypothesis is about what the page *says* — a snapshot returns rendered text and roles, and it does not depend on animation timing. If you take a screenshot, wait until the page settles: a chart's draw-in animation captured at frame 0 renders empty, and that frame has already produced at least one confident, wrong root-cause finding.
 
 **Architecture-surface map (step 2).** Read the file at every layer the request touches:
 

@@ -24,11 +24,100 @@ INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 
 if [ -z "$COMMAND" ]; then
+  . "$(dirname "$0")/_lib-fail-closed-json.sh"
+  if raw_payload_command_matches "$INPUT" 'git[[:space:]]+commit'; then
+    echo "BLOCKED: commit-format hook cannot parse this commit command. Restore jq and retry." >&2
+    exit 2
+  fi
   exit 0
 fi
 
 if ! echo "$COMMAND" | grep -qE '\bgit\s+commit\b'; then
   exit 0
+fi
+
+if [[ "$COMMAND" =~ $'\n'[[:space:]]*git[[:space:]]+commit ]]; then
+  echo "BLOCKED: commit-format hook does not accept newline compound commit commands." >&2
+  exit 2
+fi
+
+if printf '%s' "$COMMAND" | grep -qF "$(printf '\140')"; then
+  echo "BLOCKED: commit-format hook does not accept backtick command substitutions." >&2
+  exit 2
+fi
+
+# Detect a second commit chained *after* a confirmed heredoc substitution.
+# The heredoc body is literal commit-message content, so raw command scans
+# must not interpret `; git commit`, `&& git commit`, or `| git commit` in
+# that body as executable shell syntax.
+has_heredoc_compound_commit() {
+  local cmd="$1" line marker delimiter check_line
+  local in_heredoc=0 strip_tabs=0 awaiting_close=0 awaiting_connector=0
+  local tab
+  tab="$(printf '\t')"
+  local close_compound_re='^[[:space:]]*\)"?[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$)'
+  local close_continuation_re='^[[:space:]]*\)"?[[:space:]]*\\[[:space:]]*$'
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ "$in_heredoc" -eq 1 ]; then
+      check_line="$line"
+      if [ "$strip_tabs" -eq 1 ]; then
+        while [ "${check_line:0:1}" = "$tab" ]; do
+          check_line="${check_line:1}"
+        done
+      fi
+      if [ "$check_line" = "$delimiter" ]; then
+        in_heredoc=0
+        awaiting_close=1
+      fi
+      continue
+    fi
+
+    if [ "$awaiting_close" -eq 1 ]; then
+      if [[ "$line" =~ $close_compound_re ]]; then
+        return 0
+      fi
+      if [[ "$line" =~ $close_continuation_re ]]; then
+        awaiting_close=0
+        awaiting_connector=1
+        continue
+      fi
+      # Blank lines are permitted before the command substitution closes.
+      if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+        awaiting_close=0
+      fi
+    fi
+
+    if [ "$awaiting_connector" -eq 1 ]; then
+      if [[ "$line" =~ ^[[:space:]]*(;|&&|&|\|)[[:space:]]*git[[:space:]]+commit([[:space:]]|$) ]]; then
+        return 0
+      fi
+      if [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+        awaiting_connector=0
+      fi
+    fi
+
+    # Match only the supported `$(cat <<EOF` shape that this hook already
+    # recognises for the heredoc-substitution skip below. A terminator must
+    # be found before any text is treated as a literal heredoc body.
+    marker=$(printf '%s\n' "$line" | sed -nE "s/.*\\$\\(cat[[:space:]]+<<(-?)[[:space:]]*['\\\"]?([A-Za-z_][A-Za-z0-9_]*)['\\\"]?[[:space:]]*$/\\1:\\2/p")
+    if [ -z "$marker" ]; then
+      continue
+    fi
+    strip_tabs=0
+    case "$marker" in
+      -:*) strip_tabs=1 ;;
+    esac
+    delimiter="${marker#*:}"
+    in_heredoc=1
+  done <<< "$cmd"
+
+  return 1
+}
+
+if has_heredoc_compound_commit "$COMMAND"; then
+  echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+  exit 2
 fi
 
 # Heredoc-substitution short-circuit (#194):
@@ -58,18 +147,164 @@ if echo "$COMMAND" | grep -qE 'git[[:space:]]+commit\b[^|;&]*-m\b[^|;&]*\$\(cat[
   exit 0
 fi
 
-# Extract commit message (multi-line safe)
-COMMAND_FLAT=$(echo "$COMMAND" | tr '\n' ' ')
-MSG=""
-MSG=$(echo "$COMMAND_FLAT" | sed -nE "s/.*-m[[:space:]]+'([^']*)'.*/\1/p" | head -1)
-if [ -z "$MSG" ]; then
-  MSG=$(echo "$COMMAND_FLAT" | sed -nE 's/.*-m[[:space:]]+"([^"]*)".*/\1/p' | head -1)
-fi
-if [ -z "$MSG" ]; then
-  MSG_FILE=$(echo "$COMMAND_FLAT" | sed -nE 's/.*(-F|--file)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-  if [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
-    MSG=$(cat "$MSG_FILE")
+# Tokenize the command without evaluating it. The hook input is untrusted text.
+# A raw regex can mistake option text for a commit-message option. Keep shell
+# quoting intact while reading tokens, then inspect only real option tokens.
+tokenize_shell_command() {
+  local input="$1"
+  local length char token="" quote="" escaped=0 token_started=0
+  local i=0
+
+  COMMAND_TOKENS=()
+  length=${#input}
+  while [ "$i" -lt "$length" ]; do
+    char=${input:i:1}
+
+    if [ -n "$quote" ]; then
+      if [ "$quote" = "'" ]; then
+        if [ "$char" = "'" ]; then
+          quote=""
+        else
+          token+="$char"
+        fi
+      elif [ "$escaped" -eq 1 ]; then
+        token+="$char"
+        escaped=0
+      elif [ "$char" = "\\" ]; then
+        escaped=1
+      elif [ "$char" = '"' ]; then
+        quote=""
+      else
+        token+="$char"
+      fi
+    else
+      case "$char" in
+        " "|$'\t')
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          ;;
+        $'\n')
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          COMMAND_TOKENS+=(";")
+          ;;
+        "'")
+          quote="'"
+          token_started=1
+          ;;
+        '"')
+          quote='"'
+          token_started=1
+          ;;
+        "\\")
+          escaped=1
+          token_started=1
+          ;;
+        ";"|"|"|"&"|"<"|">")
+          if [ "$token_started" -eq 1 ]; then
+            COMMAND_TOKENS+=("$token")
+            token=""
+            token_started=0
+          fi
+          COMMAND_TOKENS+=("$char")
+          ;;
+        *)
+          token+="$char"
+          token_started=1
+          ;;
+      esac
+    fi
+
+    i=$((i + 1))
+  done
+
+  if [ -n "$quote" ] || [ "$escaped" -eq 1 ]; then
+    return 1
   fi
+  if [ "$token_started" -eq 1 ]; then
+    COMMAND_TOKENS+=("$token")
+  fi
+  return 0
+}
+
+if ! tokenize_shell_command "$COMMAND"; then
+  echo "BLOCKED: commit-format hook cannot safely parse this commit command." >&2
+  exit 2
+fi
+
+token_count=${#COMMAND_TOKENS[@]}
+commit_index=-1
+for ((i=0; i + 1 < token_count; i++)); do
+  if [ "${COMMAND_TOKENS[i]}" = "git" ] && [ "${COMMAND_TOKENS[i + 1]}" = "commit" ]; then
+    commit_index=$((i + 2))
+    break
+  fi
+done
+
+if [ "$commit_index" -lt 0 ]; then
+  exit 0
+fi
+
+if printf '%s' "$COMMAND" | grep -qF '$('; then
+  echo "BLOCKED: commit-format hook does not accept command substitutions." >&2
+  exit 2
+fi
+
+token_count=${#COMMAND_TOKENS[@]}
+for ((i=0; i < token_count; i++)); do
+  case "${COMMAND_TOKENS[i]}" in
+    ";"|"|"|"&"|"<"|">")
+      echo "BLOCKED: commit-format hook does not accept compound commit commands." >&2
+      exit 2
+      ;;
+  esac
+done
+
+MSG=""
+MSG_FILE=""
+for ((i=commit_index; i < token_count; i++)); do
+  token="${COMMAND_TOKENS[i]}"
+  case "$token" in
+    ";"|"|"|"&"|"<"|">")
+      break
+      ;;
+    -m|--message)
+      next=$((i + 1))
+      if [ "$next" -ge "$token_count" ]; then
+        echo "BLOCKED: commit-format hook found -m without a message." >&2
+        exit 2
+      fi
+      MSG="${COMMAND_TOKENS[next]}"
+      break
+      ;;
+    --message=*)
+      MSG="${token#--message=}"
+      break
+      ;;
+    -F|--file)
+      next=$((i + 1))
+      if [ "$next" -ge "$token_count" ]; then
+        echo "BLOCKED: commit-format hook found -F without a file." >&2
+        exit 2
+      fi
+      MSG_FILE="${COMMAND_TOKENS[next]}"
+      break
+      ;;
+    --file=*)
+      MSG_FILE="${token#--file=}"
+      break
+      ;;
+  esac
+done
+
+if [ -z "$MSG" ] && [ -n "$MSG_FILE" ] && [ -f "$MSG_FILE" ]; then
+  MSG=$(cat "$MSG_FILE")
 fi
 
 if [ -z "$MSG" ]; then

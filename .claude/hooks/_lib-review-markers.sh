@@ -138,9 +138,8 @@ review_marker_path() {
 # `gh pr view` exposes no baseRepository field, but the PR URL is ALWAYS rooted
 # on the base repo — parse owner/repo from it (handles GitHub /pull/ and GitLab
 # /-/merge_requests/, including nested GitLab groups). Falls back to the passed
-# <repo> when the URL can't be parsed or the scoped gh call fails — so SAME-REPO
-# PRs (base == head) resolve exactly as before and this change is a provable
-# no-op for them.
+# <repo> when the URL cannot be parsed or the scoped gh call fails. Returning
+# the caller's repo would create a marker that the merge gate cannot read.
 #
 # Args:
 #   pr    — the PR/MR number.
@@ -148,11 +147,9 @@ review_marker_path() {
 #           this PR. Used to SCOPE the gh query (`--repo`), never omitted in
 #           favour of gh's ambient default.
 #
-# Output (stdout): "owner/repo" derived from the resolved PR URL, or the
-# passed-in <repo> when the scoped query fails/is unparseable (fail-soft — the
-# caller's own repo is still the best available answer).
-# Exit code: 0 normally; 1 (with a stderr message, no stdout) when <pr> is
-# given but <repo> is missing — there is nothing safe to scope the query to.
+# Output (stdout): "owner/repo" derived from the resolved PR URL.
+# Exit code: 0 on a parsed PR URL; 1 with no stdout when the query fails, the
+# URL is unparseable, or <repo> is missing.
 pr_base_repo() {
   local pr="${1:-}" repo="${2:-}" url base
   if [ -z "$pr" ]; then
@@ -165,11 +162,132 @@ pr_base_repo() {
   fi
   # ALWAYS scoped to the caller-supplied repo — never an unscoped/ambient gh
   # call. See the WHY-A-REQUIRED-REPO note above.
-  url=$(gh pr view "$pr" --repo "$repo" --json url,baseRefName --jq '.url' 2>/dev/null)
+  url=$(gh pr view "$pr" --repo "$repo" --json url,baseRefName --jq '.url' 2>/dev/null) || {
+    echo "_lib-review-markers.sh: cannot resolve PR #$pr in base repo $repo; no review marker written" >&2
+    return 1
+  }
   base=$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/(.+)/(pull|-/merge_requests)/[0-9].*#\1#')
   if [ -n "$base" ] && [ "$base" != "$url" ]; then
     printf '%s' "$base"
   else
-    printf '%s' "$repo"
+    echo "_lib-review-markers.sh: cannot parse base repo from PR #$pr URL; no review marker written" >&2
+    return 1
   fi
+}
+
+# ---------------------------------------------------------------------------
+# GATE-INVISIBLE (bare-number) MARKER DETECTION — me2resh/apexyard#1144
+# ---------------------------------------------------------------------------
+
+# review_role_skill <role>
+#
+# Maps a marker role to the skill that legitimately produces it, so refusal
+# messages can name the right re-run command instead of a generic one.
+review_role_skill() {
+  case "${1:-}" in
+    rex)          printf '/code-review' ;;
+    security)     printf '/security-review' ;;
+    architecture) printf '/design-review' ;;
+    design)       printf '/approve-design' ;;
+    ceo)          printf '/approve-merge' ;;
+    *)            printf '/code-review' ;;
+  esac
+}
+
+# unqualified_marker_path <marker_home> <pr> <role>
+#
+# Echoes the BARE-NUMBER sibling of `review_marker_path`'s output:
+#
+#   <marker_home>/.claude/session/reviews/<pr>-<role>.approved
+#
+# This is the pre-AgDR-0060 filename shape, and it is the shape an agent
+# produces when a spawn prompt hands it a literal marker path instead of
+# letting it resolve one through `review_marker_path` (me2resh/apexyard#1144).
+#
+# NOTHING READS THIS PATH. Every merge gate — block-unreviewed-merge.sh,
+# require-architecture-review.sh, require-design-review-for-ui.sh — resolves
+# the marker it looks for through `review_marker_path`, which always emits the
+# repo-qualified form. There is no bare-number fallback on any on-disk marker
+# lookup. (block-unreviewed-merge.sh does match a bare-number basename when
+# scanning the *command text* of a compound write-then-merge command, but that
+# is inline-content validation for the CEO marker, not an on-disk read — it
+# does not make a bare-number file on disk visible to the gate.)
+#
+# So a file at this path is GATE-INVISIBLE while looking, to a human running
+# `ls .claude/session/reviews/`, exactly like a valid approval. This helper
+# exists so gates and skills can NAME that near-miss in their refusal message
+# rather than reporting a bare "marker missing".
+#
+# Output (stdout): the bare-number marker path.
+# Exit code: 0 on success; 1 if required args are missing (with stderr msg).
+unqualified_marker_path() {
+  local marker_home="${1:-${MARKER_HOME:-.}}"
+  local pr="${2:-}"
+  local role="${3:-}"
+
+  if [ -z "$pr" ] || [ -z "$role" ]; then
+    echo "_lib-review-markers.sh: unqualified_marker_path requires <marker_home> <pr> <role>" >&2
+    return 1
+  fi
+
+  local reviews_dir
+  reviews_dir=$(review_markers_dir "$marker_home")
+
+  printf '%s/%s-%s.approved' "$reviews_dir" "$pr" "$role"
+}
+
+# unqualified_marker_hint <marker_home> <pr> <role> <expected_path>
+#
+# Echoes a ready-to-print diagnostic paragraph when a gate-invisible
+# bare-number sibling EXISTS on disk for this (pr, role); echoes nothing and
+# returns 1 otherwise. Callers append the output to their own refusal message:
+#
+#   if HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR" rex "$REX_APPROVAL"); then
+#     printf '%s\n' "$HINT" >&2
+#   fi
+#
+# WHY THE "DO NOT MOVE IT" LINE IS THE LOAD-BEARING PART
+# -----------------------------------------------------
+# The obvious repair for a near-miss marker — renaming it to the qualified
+# path — is exactly the marker-forging behaviour `.claude/rules/pr-workflow.md`
+# § "Build agents cannot self-review" exists to prevent. An agent that has
+# blocked itself on a path mistake, and believes the review genuinely passed,
+# is one rationalisation away from hand-writing a gate signal for a review
+# this session cannot vouch for. Naming the near-miss without also naming the
+# wrong fix would hand that agent a diagnosis and a temptation in the same
+# breath. See me2resh/apexyard#1144.
+unqualified_marker_hint() {
+  local marker_home="${1:-${MARKER_HOME:-.}}"
+  local pr="${2:-}"
+  local role="${3:-}"
+  local expected="${4:-}"
+  local near_miss skill
+
+  near_miss=$(unqualified_marker_path "$marker_home" "$pr" "$role") || return 1
+  [ -f "$near_miss" ] || return 1
+  skill=$(review_role_skill "$role")
+
+  cat <<HINT
+
+NEAR MISS — a gate-invisible marker for this PR exists on disk:
+
+  found:    ${near_miss}
+  expected: ${expected}
+
+That file is named in the pre-AgDR-0060 bare-number form. No gate reads it,
+which is why this PR reads as unreviewed even though a marker is sitting in
+.claude/session/reviews/. It is what you get when a reviewer is handed a
+literal marker path in its spawn prompt instead of resolving one through
+review_marker_path (me2resh/apexyard#1144).
+
+Do NOT rename, move, or copy it into place. Nothing mechanically stops you,
+and that is the point: the qualified path is a gate signal, and relocating a
+file to satisfy a gate records a review this session cannot vouch for — the
+exact behaviour .claude/rules/pr-workflow.md forbids.
+
+Delete it and re-run the real review, passing NO marker path:
+
+  rm ${near_miss}
+  ${skill} ${pr}
+HINT
 }

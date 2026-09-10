@@ -1,6 +1,6 @@
 # Code Review Process
 
-Ensure code quality, share knowledge, and catch issues before they reach production.
+Code review checks that a change is correct, safe, and understandable before it reaches production. It also records the reasoning that future maintainers need.
 
 ---
 
@@ -23,9 +23,9 @@ Code review is a **role-activated** workflow. The roles below activate automatic
 
 ### Before Requesting Review
 
-1. **Self-review your diff** -- Read every line you changed
-2. **Ensure CI passes** -- Lint, type check, tests
-3. **Write a good PR description**
+1. **Read your diff** — inspect every changed line.
+2. **Run the checks** — lint, type checks, and tests must pass.
+3. **Write a useful PR description** — explain what changed, why it matters, and how to verify it.
 
 ### PR Description Format
 
@@ -48,7 +48,7 @@ Fixes #[ticket-id]
 
 **Summary bullets must be narrative, not label-only.** Every bullet should answer *what changed* AND *why it matters to the person reading this*. Label-only bullets ("State fix", "CI pipeline changes") force reviewers into diff archaeology and waste their judgment time. See [`.claude/rules/pr-quality.md`](../.claude/rules/pr-quality.md) § "Summary bullets — narrative quality" for the rule, a worked bad/good pair, and the legitimate-exceptions list. Rex flags label-only bullets as an advisory finding (`nit:` / `suggestion:`, non-blocking).
 
-**Why a Glossary?** Every PR is a learning opportunity. Explaining concepts helps:
+**Why a Glossary?** A glossary makes a PR useful to more than the people who wrote it. Clear definitions help:
 
 - Junior devs learn from senior work
 - Seniors articulate their thinking
@@ -69,11 +69,11 @@ Fixes #[ticket-id]
 
 ### How to Review
 
-1. **Understand context first** -- Read PR description, check linked ticket
-2. **Review for correctness** -- Does it do what it's supposed to? Edge cases?
-3. **Review for quality** -- Architecture, conventions, readability, maintainability
-4. **Review for security** -- Input validation, auth, sensitive data
-5. **Review tests** -- Meaningful tests, edge cases, regression protection
+1. **Understand the context** — read the PR description and linked ticket.
+2. **Check correctness** — confirm the requested behavior and test the important edge cases.
+3. **Check quality** — review architecture, conventions, readability, and maintenance cost.
+4. **Check security** — look for validation gaps, authorization errors, and leaked sensitive data.
+5. **Check tests** — confirm that tests cover the behavior and protect against regressions.
 
 ### Giving Feedback
 

@@ -207,11 +207,17 @@ case9() {
   # markdownlint config: just omit the trailing newline.
   printf '# README\nno-trailing-newline' > "$sb/README.md"
   (cd "$sb" && git add README.md && git commit -q -m "chore: add bad README")
-  # npx must be available for this case to be meaningful; skip gracefully if not.
-  if ! command -v npx >/dev/null 2>&1; then
-    echo "SKIP [tracked-bad-md-fails]: npx not available, case not executable"
-    return
-  fi
+  # Use a local npx stub so this gate test never depends on registry access or
+  # a package download. The test is about propagating a tracked lint failure,
+  # not about testing markdownlint-cli2 itself.
+  mkdir -p "$sb/bin"
+  cat > "$sb/bin/npx" <<'EOF'
+#!/bin/bash
+echo "MD047: Files should end with a single newline" >&2
+exit 1
+EOF
+  chmod +x "$sb/bin/npx"
+  PATH="$sb/bin:$PATH"
   run_hook "$sb" "$(push_json)" 2 "markdownlint: FAILED" "tracked-bad-md-fails"
   rm -rf "$sb"
 }

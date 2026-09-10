@@ -1,12 +1,24 @@
 # Harness support
 
-An **agent harness** is the CLI/IDE runtime that actually drives an ApexYard session — Claude Code, Codex, pi, opencode, Cursor. ApexYard was built for Claude Code first, and Claude Code is still the only harness where the whole experience is native. But the framework's mechanical enforcement layer — the merge gate, ticket-first edits, secrets scanning, red-CI blocking — is **portable bash**, not Claude-Code-specific, so it can be reached from other harnesses through thin adapters. This directory is the honest, per-harness "what works where, today" breakdown.
+An **agent harness** is the CLI or IDE that runs an ApexYard session. Examples
+include Claude Code, Codex, pi, opencode, and Cursor.
 
-> **Not a rebrand.** The primary tagline is still **"for Claude Code."** These pages document the engineering reality — and as of 2026-07-09 that reality includes **three live-proven adapters (opencode, pi, and Codex)**: a real model turn under each was actually blocked by a delegated bash gate. That clears the rebrand trigger's ≥2-live-proven condition, but the headline flip is a **separate, coordinated decision** and hasn't been made — the tagline stays "for Claude Code" until it is. See [Rebrand trigger](#rebrand-trigger) below.
+ApexYard was built for Claude Code first. Claude Code still provides the full
+native experience. The enforcement layer uses portable Bash. Other harnesses
+can reach the same gates through thin adapters.
+
+This directory records what each harness supports today.
+
+> **Positioning:** The primary tagline remains **"for Claude Code."** These
+> pages document the current adapter support. A separate product decision is
+> required before the headline changes. See [Rebrand trigger](#rebrand-trigger).
 
 ## Support matrix
 
-The one question this answers: **"I use tool X — does ApexYard enforce my rules on it, and what do I do?"** A tool is only marked **proven** when a real, credentialed agent turn on it was actually stopped by the same unmodified bash rule — not a mock, not a by-construction test.
+This page answers one question: **does ApexYard enforce my rules on this tool,
+and how do I set it up?** A tool is **proven** only after a real,
+credentialed agent turn is stopped by the same unmodified Bash rule. Mocks do
+not qualify.
 
 | Tool | Enforces your rules? | Setup | Good to know |
 |------|----------------------|-------|--------------|
@@ -60,7 +72,7 @@ The headline stays **"for Claude Code"** until this condition is met, verbatim:
 
 "Live end-to-end conformance proof" means the credentialed run described above: a real model turn under that harness actually blocked by a gate (e.g. a `git add -A` refused by the unmodified bash hook), not a mock or a by-construction test.
 
-**As of 2026-07-09 the trigger condition is MET** — three adapters (**opencode**, **pi**, and **Codex**) have recorded that proof. That does **not** auto-flip the headline: the flip is a **separate, deliberate decision** that moves the site (yard.apexscript.com) and channel positioning in one coordinated pass, and it hasn't been taken. Until it is, the framework keeps the Claude-Code tagline and describes multi-harness support in the precise, per-harness terms above rather than as a blanket claim. (Cursor remains below the bar — it fails closed rather than running the delegated gate — so the count is opencode + pi + Codex, not all four.)
+**As of 2026-07-09 the trigger condition is MET** — three adapters (**opencode**, **pi**, and **Codex**) have recorded that proof. That does **not** auto-flip the headline: the flip is a **separate, deliberate decision** that moves the site (apexyard.ai) and channel positioning in one coordinated pass, and it hasn't been taken. Until it is, the framework keeps the Claude-Code tagline and describes multi-harness support in the precise, per-harness terms above rather than as a blanket claim. (Cursor remains below the bar — it fails closed rather than running the delegated gate — so the count is opencode + pi + Codex, not all four.)
 
 ---
 

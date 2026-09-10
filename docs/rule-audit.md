@@ -133,6 +133,19 @@ Columns:
 | Never apply tracker notation to in-conversation plan items | `.claude/rules/ticket-vocabulary.md § The rule` | prose | no | chat-output rule, same class as the `/decide` triggers [^self-discipline] |
 | Crossing "plan item → tracker item" requires an explicit `gh issue create` | `.claude/rules/ticket-vocabulary.md § The boundary-crossing rule` | prose | no | workflow rule, not a mechanical check |
 
+### 5a. Evidence grounding
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Factual claims must not exceed their evidence; observations stay scoped to their environment and time; mutable state is re-checked; uncertainty is preserved; identifiers, results, and completion are never invented | `.claude/rules/evidence-grounding.md § The rule`, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | Reasoning provenance is not observable to a shell hook. Text matching would create false blocks and false confidence; static tests verify wiring only (AgDR-0124, [#1162][1162]) [^self-discipline] |
+
+### 5b. Proportionate work and ceremony
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Classify a change as Lean / Standard / Heavy by path class, blast radius, and behavior surface; run only the review chain that tier needs; security, trust chain, and migrations never go Lean; ambiguity rounds up | `.claude/rules/right-size-ceremony.md § The tiers`, `CLAUDE.md § Quality Rules` | prose (self-discipline) + the existing Heavy gates | no | The `Agent`-spawn boundary has no `PreToolUse` matcher (AgDR-0056) and a blocking tier classifier would reintroduce the rigidity the rule removes (AgDR-0107). The Heavy gates stay mechanical. Rex runs at every tier (AgDR-0116) [^self-discipline] |
+| The same tier sizes planning, implementation, and artifact creation: smallest change that meets the acceptance criteria; reuse before adding; a demonstrated need for every new dependency, abstraction, service, or durable artifact; advice stays conversational | `.claude/rules/right-size-ceremony.md § Proportionate work`, `CLAUDE.md § Quality Rules` | prose + human-adjudicated regression cases | no | A hook can count files but cannot judge whether a new module or document was needed; static tests verify wiring only (AgDR-0125, [#1163][1163]) [^self-discipline] |
+
 ### 6. Code standards
 
 | rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
@@ -194,15 +207,22 @@ Columns:
 
 ---
 
+### 11a. Writing standard
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| New and changed artifacts use the controlled technical writing profile. They use short complete sentences, active voice, one term for one meaning, and clear lists. They retain evidence and uncertainty. | .claude/rules/writing-standard.md, producer instructions, and review skills | reviewer checks + regression cases | partial | Static tests confirm that producers and reviewers load the profile. Reviewers assess sentence structure, meaning, and vocabulary. A checker cannot prove full dictionary compliance. See AgDR-0134 and [#1164][1164]. |
+| Machine text uses one clear instruction in each sentence. Durable artifacts use the same controlled technical writing profile. | .claude/rules/writing-standard.md | reviewer checks | partial | Static checks can find missing wiring. Reviewers assess the text. The framework does not claim certified compliance. |
+
 ## Summary
 
 | bucket | count |
 |--------|-------|
 | mechanized (`yes` — hook / agent enforces it fully) | 29 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
-| advisory (`no` — stays prose by design) | 36 |
+| advisory (`no` — stays prose by design) | 39 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **76** |
+| **total rows** | **79** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.
@@ -238,5 +258,8 @@ The spread confirms what AgDR-0001 set out to make true: the **high-blast-radius
 [107]: https://github.com/me2resh/apexyard/issues/107
 [110]: https://github.com/me2resh/apexyard/issues/110
 [112]: https://github.com/me2resh/apexyard/issues/112
+[1162]: https://github.com/me2resh/apexyard/issues/1162
+[1163]: https://github.com/me2resh/apexyard/issues/1163
 [995]: https://github.com/me2resh/apexyard/issues/995
 [997]: https://github.com/me2resh/apexyard/issues/997
+[1164]: https://github.com/me2resh/apexyard/issues/1164

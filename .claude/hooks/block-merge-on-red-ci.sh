@@ -79,6 +79,11 @@ INPUT=$(cat)
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
 . "$(dirname "$0")/_lib-extract-pr.sh"
+# Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
+# Optional only for standalone hook-test sandboxes that copy a minimal lib set.
+if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
+  . "$(dirname "$0")/_lib-pr-repo.sh"
+fi
 
 # _registry_glab_fallback <owner/repo>
 # -------------------------------------
@@ -260,7 +265,7 @@ fi
 # owner/repo`). Uses the shared extractor, which also recovers the repo from a
 # `gh api .../pulls/<N>/merge` or `glab api .../merge_requests/<N>/merge` URL
 # path so the CI-status check below is still scoped correctly.
-CMD_REPO=$(extract_repo_from_command "$COMMAND")
+CMD_REPO=$(resolve_merge_repo "$COMMAND")
 REPO_FLAG=""
 if [ -n "$CMD_REPO" ]; then
   REPO_FLAG="--repo $CMD_REPO"

@@ -5,6 +5,10 @@ argument-hint: "<process-slug> [--from-endpoint METHOD /path] [--from-machine Cl
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /process — BPMN 2.0 from Code, Anchor-Scoped, Cross-Repo-Aware
 
 Maps a named business process from what the codebase actually does to a stakeholder-shareable BPMN 2.0 file. Discovery is **anchor-scoped + reachability-bounded** — the skill follows only what's connected to the operator-supplied entry point, stops at the connected-component boundary, and crosses repo boundaries only when the target is in `apexyard.projects.yaml`.

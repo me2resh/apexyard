@@ -1,9 +1,9 @@
 # Cursor Adapter
 
-ApexYard's canonical runtime still lives in `.claude/`: skills, agents, hooks,
-rules, and hook wiring are authored there first. Cursor support is generated
-from that source of truth so the two agent surfaces do not drift by hand —
-the same declarative-generate pattern as the [Codex adapter](codex-adapter.md).
+ApexYard's canonical runtime lives in `.claude/`: skills, agents, hooks, rules,
+and hook wiring are authored there first. Cursor support is generated from
+that source, so the two agent surfaces do not drift by hand. This follows the
+same generate-from-source pattern as the [Codex adapter](codex-adapter.md).
 
 Decision record: [`AgDR-0091`](agdr/AgDR-0091-cursor-adapter-generation.md).
 Precedent: [`AgDR-0088`](agdr/AgDR-0088-codex-adapter-generation.md) (Codex),
@@ -22,13 +22,11 @@ Precedent: [`AgDR-0088`](agdr/AgDR-0088-codex-adapter-generation.md) (Codex),
 > own.
 
 **Where Cursor stands among the four third-party adapters.** opencode and pi
-are both live-proven — their CLIs genuinely execute the delegated extension
-code. Codex carried the same "live conformance unverified" caveat as Cursor
-when its own AgDR (AgDR-0088) was written, but live testing has since closed
-that gap (it turned out to be a trust-prompt issue, resolved via
-`--dangerously-bypass-hook-trust` / a user-level trust grant) — Codex is now
-live-proven too. **Cursor is the sole remaining outlier**: see "Known
-Limitations" below for exactly what "enforced" means on Cursor today.
+are live-proven: their CLIs execute the delegated extension code. Codex had
+the same unverified-conformance caveat when its AgDR was written, but live
+testing closed that gap through the trust prompt; Codex is now live-proven.
+**Cursor is the remaining outlier.** See "Known Limitations" for what
+"enforced" means on Cursor today.
 
 ## Install (the path that actually loads in Cursor 3.x)
 
@@ -72,7 +70,7 @@ CLI-targeting adapter (translating apexyard's gates into
 future work. Only the Cursor IDE agent (Cursor.app / Composer) is addressed
 by `hooks.json`.
 
-## Generate The Project-Level Adapter (kept available, not the load-bearing path)
+## Generate the project-level adapter (available, but not the load-bearing path)
 
 ```bash
 bin/sync-cursor-adapter.sh

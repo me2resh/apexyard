@@ -5,6 +5,10 @@ argument-hint: "[project-name] [--level=1|2|both] [--force] [--dsl]"
 allowed-tools: Bash, Read, Grep, Glob, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /c4 — Generate C4 Architecture Diagrams
 
 Reads the target project's codebase and produces filled-in **Level 1 (System Context)** and **Level 2 (Container)** diagrams as Mermaid markdown. Saves the slog of filling in the templates by hand for a repo you already understand structurally.

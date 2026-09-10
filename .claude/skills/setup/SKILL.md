@@ -6,6 +6,10 @@ argument-hint: "[--reset] [--enable-lsp]"
 effort: medium
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /setup — ApexYard First-Run Bootstrap
 
 Configures `onboarding.yaml` for a new ApexYard fork in three exchanges instead of eight sequential questions. The "describe, propose, confirm" pattern gets most users from fork to working in under 2 minutes.
@@ -155,8 +159,8 @@ The full setup lives in `docs/multi-project.md` § "Split-portfolio mode — pub
    - `.gitignore` with `workspace/*/` so the inner clones don't get double-tracked in the private repo either
    - initial commit + push
 6. **Configure path resolution in the fork** (recommended — v2 config-block mode):
-   - Append `.gitignore` lines for `apexyard.projects.yaml`, `projects`, `onboarding.yaml`, AND `workspace` so none of them get accidentally staged in the public fork even on a stray `git add -A`. (The first two cover registry + per-project docs; the last two are the v2 additions.)
-   - Untrack any tracked `projects/README.md`, `onboarding.yaml`, or `workspace/README.md` from the upstream framework: `git rm --cached -r projects onboarding.yaml workspace 2>/dev/null || true`.
+   - Append `.gitignore` lines for `apexyard.projects.yaml`, `projects`, and `onboarding.yaml`. Keep the framework's `workspace/*` + `!workspace/README.md` pair: it ignores every adopter workspace entry while leaving the committed convention README visible and re-includable. Do not add a broad `workspace` rule; Git cannot re-include the README when its parent directory is excluded.
+   - Untrack the upstream framework's tracked `projects/README.md` and `onboarding.yaml`: `git rm --cached -r projects onboarding.yaml 2>/dev/null || true`. **Do not untrack `workspace/README.md`** — it is a public framework artefact and stays in the fork per AgDR-0021 § G.
    - Write `.claude/project-config.json` with the v2 `portfolio:` block pointing at the sibling repo. Substitute the actual sibling-dir name the operator chose for `apexyard-portfolio` below:
 
      ```json

@@ -1,17 +1,21 @@
 #!/bin/bash
-# _lib-tracker.sh — tracker-agnostic existence verification + ID-shape regex.
+# _lib-tracker.sh — tracker-agnostic issue and review operations.
 #
-# Source this library from any hook or skill that needs to verify a ticket
-# exists in the adopter's tracker (GitHub Issues, Linear, Jira, Asana, custom).
-# It dispatches based on the `tracker` block of .claude/project-config.{defaults,}.json.
+# Source this library from a hook or skill that needs tracker access. The
+# library dispatches through the `tracker` block in
+# .claude/project-config.{defaults,}.json.
 #
-# Resolved at config time:
-#   tracker.kind         — "gh" | "linear" | "jira" | "asana" | "custom" | "none"
-#   tracker.view_command — template string with {id} and {owner_repo} placeholders
-#   tracker.id_pattern   — regex for valid ticket-ID shape (no-existence-check fallback)
+# Main settings:
+#   tracker.kind         — legacy adapter for both axes
+#   tracker.issue_kind   — adapter for issue operations
+#   tracker.review_kind  — adapter for pull or merge request operations
+#   tracker.view_command — template with {id} and {owner_repo} placeholders
+#   tracker.id_pattern   — ticket-ID shape used by shape-only checks
 #
 # Public functions:
-#   tracker_kind [<owner/repo>]        echoes the configured tracker kind
+#   tracker_issue_kind [<owner/repo>]  echoes the issue-system adapter kind
+#   tracker_review_kind [<owner/repo>] echoes the code-review host adapter kind
+#   tracker_kind [<owner/repo>]        compatibility alias for tracker_issue_kind
 #   tracker_id_pattern [<owner/repo>]  echoes the configured ID regex
 #   tracker_owner_repo_param <slug>    formats the owner/repo parameter (gh: "owner/repo"; others: empty)
 #   tracker_view <id> [<owner_repo>]   dispatches the view command and emits normalised JSON on stdout
@@ -34,34 +38,40 @@
 #                                      adapters built in, `custom` review_command template, `none`
 #                                      no-op (returns 3, echoes body). Exit 0 = submitted; non-zero
 #                                      = CLI errored; 3 = shape-only (kind=none, nothing to call).
-#   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]  (#759)
+#   tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>] [<subject>] [<body_file>]  (#759, #1136)
 #                                      merges a PR/MR via the git host. strategy is one of
 #                                      squash|merge|rebase (default squash, normalised — never
-#                                      eval'd raw); delete_branch is true|false (default true). gh +
-#                                      glab adapters built in, `custom` merge_command template,
-#                                      `none` no-op (returns 3). Exit 0 = merged, emits normalised
-#                                      JSON {"sha":...} (the merge commit, best-effort — empty for
-#                                      `custom`); non-zero = CLI errored / blocked; 3 = shape-only
-#                                      (kind=none, nothing to call).
+#                                      eval'd raw); delete_branch is true|false (default true).
+#                                      subject/body_file are OPTIONAL (gh kind only): each non-empty
+#                                      value adds its matching `--subject "$subject"` or `--body-file
+#                                      "$body_file"` flag, so a caller can preserve either field
+#                                      independently instead of relying on the repo's default
+#                                      squash-body assembly (see #1136 — under
+#                                      `squash_merge_commit_message=COMMIT_MESSAGES` a bare squash
+#                                      concatenates every commit message on the PR branch, burying
+#                                      any trailer that isn't in the final paragraph). body_file
+#                                      MUST be a regular, readable, non-empty file when supplied —
+#                                      the guard tests `-f`, `-r`, and `-s` on body_file alone and
+#                                      fails closed (returns 1) rather than silently falling back to
+#                                      a bare squash. gh + glab adapters built in, `custom`
+#                                      merge_command template, `none` no-op (returns 3). Exit 0 =
+#                                      merged, emits normalised JSON {"sha":...} (the merge commit,
+#                                      best-effort — empty for `custom`); non-zero = CLI errored /
+#                                      blocked / body_file unreadable; 3 = shape-only (kind=none,
+#                                      nothing to call).
 #
-# Per-project resolution (#670 / AgDR-0072): tracker_kind / tracker_id_pattern /
-# tracker_view take an OPTIONAL owner/repo. When supplied, a `tracker:` block on
-# that project's apexyard.projects.yaml entry overrides the global config block
-# (per key); when omitted, the global block is used — byte-for-byte the original
-# behaviour. The project is chosen by the OPERATION'S TARGET REPO the caller
-# already holds — never by cwd or a session-global marker.
+# Per-project resolution (#670 / AgDR-0072) accepts an optional owner/repo.
+# That repo selects the registry entry and its tracker overrides. Without a
+# repo, the library uses the global config. It never uses cwd or session state.
 #
-# Normalisation: each adapter parses the underlying CLI's JSON (gh / linear /
-# jira / asana / custom) into the common shape above. Consumers should only
-# touch the normalised fields — never reach for adapter-specific shapes.
+# Each adapter maps CLI output to one common JSON shape. Consumers must use the
+# common fields and must not depend on adapter-specific output.
 #
 # `tracker.kind = none` makes `tracker_view` a no-op that exits 1 (no
 # existence check possible). Consumers should fall back to shape-only
 # verification using `tracker_id_pattern`.
 #
-# Caching: results cached per-process in shell vars. Same pattern as
-# _CONFIG_CACHE in _lib-read-config.sh and _PORTFOLIO_*_CACHE in
-# _lib-portfolio-paths.sh.
+# Results use per-process shell caches, like the config and portfolio helpers.
 
 # ------------------------------------------------------------------------------
 # Internal: ensure _lib-read-config.sh is loaded so config_get_or works.
@@ -249,36 +259,67 @@ PY
 }
 
 # ------------------------------------------------------------------------------
-# Public: tracker_kind [<owner/repo>]
-#   Echoes the configured tracker kind. With an optional <owner/repo>, a
-#   per-project `tracker.kind` override in the registry wins; otherwise the
-#   global config block (default "gh"). The no-arg path is byte-for-byte the
-#   original behaviour (cached).
+# Public: tracker_issue_kind / tracker_review_kind [<owner/repo>]
+#   Resolve the two independent tracker axes. New config uses
+#   `tracker.issue_kind` and `tracker.review_kind`; legacy `tracker.kind` is
+#   the fallback for both axes, preserving existing projects byte-for-byte.
 # ------------------------------------------------------------------------------
-_TRACKER_KIND_CACHE=""
-tracker_kind() {
-  local repo="${1:-}"
+_tracker_axis_kind() {
+  local axis="$1" repo="${2:-}" key="${1}_kind" legacy="kind" pv="" k=""
+  case "$axis" in issue|review) : ;; *) return 1 ;; esac
   if [ -n "$repo" ]; then
-    local pv
-    if pv=$(_tracker_project_value "$repo" kind) && [ -n "$pv" ]; then
+    if pv=$(_tracker_project_value "$repo" "$key") && [ -n "$pv" ]; then
+      echo "$pv"
+      return 0
+    fi
+    if pv=$(_tracker_project_value "$repo" "$legacy") && [ -n "$pv" ]; then
       echo "$pv"
       return 0
     fi
   fi
-  if [ -z "$repo" ] && [ -n "$_TRACKER_KIND_CACHE" ]; then
-    echo "$_TRACKER_KIND_CACHE"
+  if [ "$axis" = "issue" ]; then
+    k="${_TRACKER_ISSUE_KIND_CACHE:-}"
+  else
+    k="${_TRACKER_REVIEW_KIND_CACHE:-}"
+  fi
+  if [ -z "$repo" ] && [ -n "$k" ]; then
+    echo "$k"
     return 0
   fi
   _tracker_load_config_lib
-  local k
-  k=$(config_get_or '.tracker.kind' 'gh' 2>/dev/null)
+  k=$(config_get_or ".tracker.$key" '' 2>/dev/null)
+  if [ -z "$k" ] || [ "$k" = "null" ]; then
+    k=$(config_get_or '.tracker.kind' 'gh' 2>/dev/null)
+  fi
   if [ -z "$k" ] || [ "$k" = "null" ]; then
     k="gh"
   fi
   if [ -z "$repo" ]; then
-    _TRACKER_KIND_CACHE="$k"
+    if [ "$axis" = "issue" ]; then
+      _TRACKER_ISSUE_KIND_CACHE="$k"
+    else
+      _TRACKER_REVIEW_KIND_CACHE="$k"
+    fi
   fi
   echo "$k"
+}
+
+_TRACKER_ISSUE_KIND_CACHE=""
+_TRACKER_REVIEW_KIND_CACHE=""
+tracker_issue_kind() { _tracker_axis_kind issue "${1:-}"; }
+tracker_review_kind() { _tracker_axis_kind review "${1:-}"; }
+_TRACKER_KIND_CACHE=""
+tracker_kind() {
+  local repo="${1:-}" value
+  # Preserve the historical cache variable because existing consumers and
+  # tests may set it directly when stubbing the legacy resolver.
+  if [ -z "$repo" ] && [ -n "$_TRACKER_KIND_CACHE" ]; then
+    echo "$_TRACKER_KIND_CACHE"
+    return 0
+  fi
+  value=$(tracker_issue_kind "$repo") || return $?
+  [ -z "$repo" ] && _TRACKER_KIND_CACHE="$value"
+  echo "$value"
 }
 
 # ------------------------------------------------------------------------------
@@ -568,7 +609,7 @@ tracker_view() {
   # and view_command come from that project's registry override (if any),
   # falling back to the global config block. See AgDR-0072 / #670.
   local kind
-  kind=$(tracker_kind "$owner_repo")
+  kind=$(tracker_issue_kind "$owner_repo")
 
   case "$kind" in
     none)
@@ -669,6 +710,26 @@ _tracker_extract_ref_url() {
   jq -nc --arg ref "$ref" --arg url "$url" '{ref:$ref, url:$url}' 2>/dev/null
 }
 
+_tracker_check_private_refs() {
+  local repo="$1" title="${2:-}" body_file="${3:-}"
+  local tracker_lib_dir="" root
+  if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    tracker_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd) || tracker_lib_dir=""
+  fi
+  if [ -z "$tracker_lib_dir" ] || [ ! -f "$tracker_lib_dir/check-private-refs-runtime.sh" ]; then
+    root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+    if [ -n "$root" ] && { [ -f "$root/.apexyard-fork" ] || { [ -f "$root/onboarding.yaml" ] && [ -f "$root/apexyard.projects.yaml" ]; }; }; then
+      tracker_lib_dir="$root/.claude/hooks"
+    fi
+  fi
+  local scanner="$tracker_lib_dir/check-private-refs-runtime.sh"
+  if [ ! -x "$scanner" ]; then
+    echo "BLOCKED: private-reference runtime scanner is missing or not executable." >&2
+    return 2
+  fi
+  "$scanner" "$repo" "$title" "$body_file"
+}
+
 # Internal adapter: gh → run `gh issue create` with safe arg passing.
 _tracker_create_gh() {
   local repo="$1" title="$2" body_file="$3" labels="$4"
@@ -765,7 +826,7 @@ tracker_create() {
   fi
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     none)
       # Shape-only mode (tracker.kind=none): no tracker CLI to call. Emit the
@@ -778,6 +839,8 @@ tracker_create() {
       return 3
       ;;
   esac
+
+  _tracker_check_private_refs "$repo" "$title" "$body_file" || return $?
 
   local raw rc
   case "$kind" in
@@ -1032,7 +1095,7 @@ tracker_list() {
   # Per-project resolution: the target repo selects the project's tracker
   # override, else the global block (never cwd, never a session marker).
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     none)
       printf '[]\n'
@@ -1136,7 +1199,7 @@ tracker_label_ensure() {
     return 0
   fi
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_issue_kind "$repo")
   case "$kind" in
     gh)   _tracker_label_ensure_gh   "$repo" "$name" "$color" "$desc" ;;
     glab) _tracker_label_ensure_glab "$repo" "$name" "$color" "$desc" ;;
@@ -1166,10 +1229,11 @@ tracker_label_ensure() {
 # ------------------------------------------------------------------------------
 
 # Internal adapter: gh → `gh pr review`. Args passed as an array (never an eval'd
-# string) so a body full of shell metacharacters is inert. 2>/dev/null hides the
-# expected self-approval refusal noise; gh's exit status still propagates.
+# string) so a body full of shell metacharacters is inert. Stdout and stderr both
+# propagate: the caller needs the host's diagnostic when a review is rejected.
 _tracker_review_gh() {
   local repo="$1" pr="$2" verdict="$3" body_file="$4"
+  _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   local -a args
   args=(pr review "$pr" --repo "$repo")
   case "$verdict" in
@@ -1180,7 +1244,7 @@ _tracker_review_gh() {
   if [ -n "$body_file" ] && [ -f "$body_file" ]; then
     args+=(--body-file "$body_file")
   fi
-  gh "${args[@]}" 2>/dev/null
+  gh "${args[@]}"
 }
 
 # Internal adapter: glab (GitLab) → `glab mr approve` / `glab mr note create`.
@@ -1256,13 +1320,10 @@ _tracker_review_custom() {
 
 # Public: tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]
 #
-# NOTE on the tracker.kind axis: kind describes the ISSUE tracker, but a review
-# targets the PR/MR HOST (the git remote). For gh+github and glab+gitlab they
-# coincide, which is exactly the pair this ticket (#758) covers. The wildcard
-# default below assumes a non-gh/glab issue tracker (jira/linear/asana) is paired
-# with a GitHub code host — correct for the common jira-issues+github-code setup,
-# but a jira-issues+gitlab-code adopter would need `tracker.kind=custom` with a
-# review_command (or a future dedicated review-host config).
+# Review operations resolve `tracker.review_kind`. For backward compatibility,
+# that axis falls back to `tracker.kind` when `review_kind` is absent. This lets
+# Jira/Linear/Asana issue adopters select `glab` for code reviews without a
+# custom review command.
 tracker_review_submit() {
   local repo="$1" pr="$2" verdict="${3:-comment}" body_file="${4:-}"
   if [ -z "$repo" ] || [ -z "$pr" ]; then
@@ -1280,7 +1341,8 @@ tracker_review_submit() {
   esac
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Emit the review body (if given)
@@ -1359,7 +1421,7 @@ tracker_review_at_sha() {
   esac
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
   case "$kind" in
     gh) : ;;
     *)  return 3 ;;   # not verifiable on this forge — see FORGE SUPPORT above
@@ -1439,8 +1501,18 @@ _tracker_merge_normalise_delete_branch() {
 # the operator actually sees why a merge failed (matching the documented
 # contract in `/approve-merge`'s SKILL.md — the failure message the operator
 # sees is meant to be the CLI's own, not silently swallowed).
+#
+# subject/body_file (#1136, AgDR-0132): OPTIONAL, empty by default. Each
+# non-empty value appends its own `--subject "$subject"` or `--body-file
+# "$body_file"` flag so the squash commit preserves the supplied field instead
+# of GitHub's repo-default squash body (which, under
+# `squash_merge_commit_message=COMMIT_MESSAGES`, concatenates every commit
+# message on the PR branch — see #1136). `$subject` and `$body_file` are
+# passed as separate argv array elements (never interpolated into an eval'd
+# string), so neither can be mistaken for a flag or shell syntax.
 _tracker_merge_gh() {
-  local repo="$1" pr="$2" strategy="$3" delete_branch="$4"
+  local repo="$1" pr="$2" strategy="$3" delete_branch="$4" subject="${5:-}" body_file="${6:-}"
+  _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   local -a args
   args=(pr merge "$pr" --repo "$repo")
   case "$strategy" in
@@ -1449,6 +1521,13 @@ _tracker_merge_gh() {
     rebase) args+=(--rebase) ;;
   esac
   [ "$delete_branch" = "true" ] && args+=(--delete-branch)
+  # #1136 / Rex H1: append each flag on its OWN condition. Requiring both
+  # silently dropped a readable body_file whenever subject was empty, which
+  # reintroduced the bare-squash bug this parameter exists to close. gh takes
+  # --subject and --body-file independently; when only --body-file is given,
+  # gh defaults the subject itself.
+  [ -n "$subject" ] && args+=(--subject "$subject")
+  [ -n "$body_file" ] && args+=(--body-file "$body_file")
   gh "${args[@]}" >/dev/null
 }
 
@@ -1498,16 +1577,16 @@ _tracker_merge_template() {
 
 # Internal adapter: custom → operator-supplied merge_command template.
 #
-# Injection model: unlike _tracker_review_custom / _tracker_create_custom,
-# there is no arbitrary/untrusted free-text value in a merge call at all — pr
-# is numeric-guarded and repo is charset-guarded by the public function below
-# (both checked BEFORE any adapter, not just this one), and strategy/
-# delete_branch are both normalised to a closed enum before this function
-# ever sees them. So all four placeholders — {owner_repo} (registry slug,
+# Injection model: this adapter receives only the four validated dispatch
+# values. `pr` is numeric-guarded and `repo` is charset-guarded by the public
+# function below (both checked BEFORE every adapter), while `strategy` and
+# `delete_branch` are normalised to closed enums before this function sees
+# them. So all four placeholders — {owner_repo} (registry slug,
 # charset-guarded), {pr} (numeric-guarded), {strategy} (squash|merge|rebase),
 # {delete_branch} (true|false) — are safe to substitute directly into the
-# eval'd template; none of them can carry shell metacharacters by the time
-# they arrive here.
+# eval'd template. `subject` is fork-controlled PR-title text, but dispatch
+# deliberately does not forward it here. Any future forwarding of subject or
+# body content into this eval requires sanitising it before substitution.
 #
 # Stdout discarded, stderr left to propagate — same rationale as
 # _tracker_merge_gh/_tracker_merge_glab above: the operator-supplied CLI's
@@ -1557,12 +1636,10 @@ _tracker_merge_resolve_sha() {
 
 # Public: tracker_pr_merge <owner/repo> <pr> <strategy> [<delete_branch>]
 #
-# NOTE on the tracker.kind axis: same caveat as tracker_review_submit — kind
-# describes the ISSUE tracker, but a merge targets the PR/MR HOST. For gh+github
-# and glab+gitlab they coincide (this ticket's covered pair). A jira-issues+
-# gitlab-code adopter needs `tracker.kind=custom` with a merge_command.
+# Merge operations resolve `tracker.review_kind`, with the legacy `tracker.kind`
+# value as the fallback for existing projects.
 tracker_pr_merge() {
-  local repo="$1" pr="$2" strategy delete_branch
+  local repo="$1" pr="$2" strategy delete_branch subject body_file
   if [ -z "$repo" ] || [ -z "$pr" ]; then
     return 1
   fi
@@ -1584,9 +1661,27 @@ tracker_pr_merge() {
   esac
   strategy=$(_tracker_merge_normalise_strategy "${3:-}")
   delete_branch=$(_tracker_merge_normalise_delete_branch "${4:-}")
+  subject="${5:-}"
+  body_file="${6:-}"
+
+  # #1136 fail-safe: a subject/body_file pair is only meaningful together
+  # (gh's `--subject` with no `--body-file` still falls back to the
+  # repo-default squash-body assembly for the body half — the exact bug this
+  # parameter exists to close). If body_file is supplied but unreadable or
+  # empty, refuse the merge rather than silently degrading to a bare squash
+  # that would reintroduce #1136. The guard tests that body_file is a regular,
+  # readable, non-empty file — a directory, a mode-000 file, and a zero-byte
+  # file all refuse here rather than reaching gh. An empty subject with a
+  # body_file is accepted (gh takes --body-file alone and defaults the
+  # subject); the only failing shape is "caller wanted body_file honoured and
+  # it can't be read".
+  if [ -n "$body_file" ] && { [ ! -f "$body_file" ] || [ ! -r "$body_file" ] || [ ! -s "$body_file" ]; }; then
+    return 1
+  fi
 
   local kind
-  kind=$(tracker_kind "$repo")
+  kind=$(tracker_review_kind "$repo")
+  [ "$kind" = "none" ] || _tracker_check_private_refs "$repo" "$subject" "$body_file" || return $?
   case "$kind" in
     none)
       # Shape-only mode: no git-host CLI to call. Nothing to echo (unlike
@@ -1598,10 +1693,10 @@ tracker_pr_merge() {
 
   local rc
   case "$kind" in
-    gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
+    gh)     _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"; rc=$? ;;
     glab)   _tracker_merge_glab   "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
     custom) _tracker_merge_custom "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;
-    *)      _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch"; rc=$? ;;  # see NOTE above
+    *)      _tracker_merge_gh     "$repo" "$pr" "$strategy" "$delete_branch" "$subject" "$body_file"; rc=$? ;;  # see NOTE above
   esac
   if [ $rc -ne 0 ]; then
     return $rc
@@ -1687,6 +1782,8 @@ tracker_check_issues() {
 # ------------------------------------------------------------------------------
 tracker_clear_cache() {
   _TRACKER_KIND_CACHE=""
+  _TRACKER_ISSUE_KIND_CACHE=""
+  _TRACKER_REVIEW_KIND_CACHE=""
   _TRACKER_ID_PATTERN_CACHE=""
   _TRACKER_VIEW_TPL_CACHE=""
 }

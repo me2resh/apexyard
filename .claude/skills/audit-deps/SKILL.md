@@ -6,6 +6,10 @@ argument-hint: "[project-path]"
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /audit-deps — Dependency Audit
 
 Audit project dependencies for security vulnerabilities, outdated packages, and license compliance.

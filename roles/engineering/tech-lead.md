@@ -82,6 +82,8 @@ You are the **author** of the design; Tariq **reviews** it — author and review
 
 Author against the canonical template at `templates/technical-design.md` — the sketch below is the shape it fills in:
 
+Read the controlled technical writing profile before drafting. Use short complete sentences and active voice. Keep required sections. Remove empty sections and template guidance before filing.
+
 ```markdown
 # Technical Design: [Feature Name]
 

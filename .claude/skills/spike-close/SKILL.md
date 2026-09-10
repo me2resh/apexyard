@@ -5,6 +5,10 @@ argument-hint: "--promote | --discard [<spike-ticket-number>]"
 allowed-tools: Bash, Read, Write
 ---
 
+## Writing rule
+
+When this skill writes a durable artifact, read .claude/rules/writing-standard.md. Use the controlled technical writing profile.
+
 # /spike-close — Close a Spike via the Disposition Gate
 
 The disposition gate prevents the worst-of-both case: a spike that "succeeded" but never decides what to do with the code, leaving half-shipped exploration in main. Every spike must close with one of two paths:

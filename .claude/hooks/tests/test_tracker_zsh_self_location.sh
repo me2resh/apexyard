@@ -46,6 +46,7 @@ TRACKER_LIB="$HOOK_DIR/_lib-tracker.sh"
 CONFIG_LIB="$HOOK_DIR/_lib-read-config.sh"
 PORTFOLIO_LIB="$HOOK_DIR/_lib-portfolio-paths.sh"
 OPSROOT_LIB="$HOOK_DIR/_lib-ops-root.sh"
+RUNTIME_SCANNER="$HOOK_DIR/check-private-refs-runtime.sh"
 
 PASS=0
 FAIL=0
@@ -78,6 +79,8 @@ make_sandbox() {
   cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$PORTFOLIO_LIB" "$sb/.claude/hooks/_lib-portfolio-paths.sh"
+  cp "$RUNTIME_SCANNER" "$sb/.claude/hooks/check-private-refs-runtime.sh"
+  chmod +x "$sb/.claude/hooks/check-private-refs-runtime.sh"
   [ -f "$OPSROOT_LIB" ] && cp "$OPSROOT_LIB" "$sb/.claude/hooks/_lib-ops-root.sh"
   cat > "$sb/.claude/project-config.defaults.json" <<'JSON'
 { "tracker": { "kind": "gh" } }

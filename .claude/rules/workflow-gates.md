@@ -6,7 +6,7 @@
 | 2 | Tech Design → Build | Design approved, story tickets exist, **AgDR for key decisions** |
 | 3 | Starting code | Ticket exists, branch created, design review if UI work |
 | 3a | Starting a **migration** edit | Active ticket has the `migration` label **and** its body references a migration AgDR at `docs/agdr/AgDR-\d+-.*migration.*\.md`. Enforced by `require-migration-ticket.sh`. Use `/migration` to produce both artefacts in one flow. |
-| 3b | Design → Build (merging a **design-artifact** PR) | A PR carrying a technical design / migration AgDR / feature spec has a Solution Architect (Tariq) sign-off marker at `.claude/session/reviews/<pr>-architecture.approved` with a matching HEAD SHA. Enforced by `require-architecture-review.sh`. Produce the sign-off via `/design-review` (Tariq writes it on APPROVED) or `/approve-architecture`. |
+| 3b | Design → Build (merging a **design-artifact** PR) | A PR carrying a technical design / migration AgDR / feature spec has a Solution Architect (Tariq) sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` with a matching HEAD SHA. Enforced by `require-architecture-review.sh`. Produce the sign-off via `/design-review` (Tariq writes it on APPROVED) or `/approve-architecture`. |
 | 4 | Creating PR | Tests pass, checks pass, **> 80% coverage**, **AgDR linked if decisions made** |
 | 5 | Merging PR | 2 reviews (agent + human), CI green, **commit SHA matches review** |
 | 6 | Ticket → Done | QA verified, signed off |
@@ -48,7 +48,7 @@ A small set of **bootstrap-class skills** runs before any portfolio is configure
 - `/update` — upstream sync (touches framework files; the only "ticket" for this work is the sync itself)
 - `/split-portfolio` — destructive migration to split-portfolio mode (rewriting fork-root files; existing private-name tickets being redacted *as the work proceeds*)
 
-The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters extend it via `.claude/project-config.json` shallow-merge if they have custom bootstrap skills.
+The list lives at `.claude/project-config.defaults.json` → `ticket.bootstrap_skills`. Adopters replace this array via `.claude/project-config.json` if they have custom bootstrap skills. Config objects merge recursively, while arrays replace the inherited array wholesale, so retain the shipped entries explicitly when extending the list.
 
 **Mechanism:** each bootstrap skill writes its name to `.claude/session/active-bootstrap` on entry and removes the file on completion. The hook reads the marker and exempts skills on the configured list. The `clear-bootstrap-marker.sh` SessionStart hook sweeps stale markers from interrupted sessions so a crashed / killed skill can't leave the exemption open forever.
 
@@ -92,7 +92,7 @@ In the ApexYard SDLC a technical design lands as a **committed document** — a 
 
 Any merge of a PR whose diff carries a design artifact requires:
 
-1. A Solution Architect sign-off marker at `.claude/session/reviews/<pr>-architecture.approved`
+1. A Solution Architect sign-off marker at `.claude/session/reviews/<owner>__<repo>__<pr>-architecture.approved` (repo-qualified, AgDR-0060 — the bare-number form is read by no gate)
 2. Whose SHA matches the PR's HEAD on GitHub
 
 Default design-artifact patterns (configurable via `.claude/project-config.json` → `design_paths` to REPLACE, `design_paths_exclude` to additively carve out):
@@ -141,6 +141,12 @@ In Progress → In Review → QA → Done
                     MANDATORY STOP
                     QA must verify
 ```
+
+### What counts as QA evidence
+
+If the ticket touches a rendered surface, the QA record must state, per acceptance criterion, whether it was verified in a browser. The not-verified list is mandatory: a QA agent that could not boot the surface must name the affected criteria rather than stay silent. A database query, a source read, or a green test suite is not evidence that a rendered criterion is met. **Reject a PASS whose evidence does not match the criterion.**
+
+A ticket with no rendered surface needs no browser evidence. Full requirement and sign-off shape: `roles/engineering/qa-engineer.md` § "Browser Evidence (rendered surfaces only)"; the design-gate equivalent is `roles/design/ui-designer.md` § "Browser evidence is a named deliverable". No hook enforces this — a `PreToolUse` hook cannot see whether a sub-agent opened a browser, so the orchestrator must reject a report that skips the breakdown.
 
 ---
 

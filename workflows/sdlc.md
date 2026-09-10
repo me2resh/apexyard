@@ -1,6 +1,6 @@
 # Software Development Lifecycle (SDLC)
 
-How features move from idea to production.
+This guide explains how work moves from an idea to a monitored production release.
 
 ---
 
@@ -40,9 +40,9 @@ Planning --> Design --> Build --> Review --> QA --> Deploy --> Monitor
 - Tickets created and prioritized
 - Work scheduled in sprint/cycle
 
-> **Sidebar — when to file a `/spike` instead of a `/feature`.** If you can answer the technical question through reasoning alone (will library X work, does this approach scale, does this UX make sense), feel free to draft the feature directly. If you genuinely don't know, file a `[Spike]` first via `/spike` — a 1-3 day, hypothesis-driven, throw-away-by-default ticket. The spike's output is the answer, not shippable code; once the answer is in, run `/spike-close --promote` (file a fresh `[Feature]` for production-shaped delivery) or `/spike-close --discard` (write a memo to `docs/spike-memos/<slug>.md` so future-us doesn't re-explore the same ground). Spike PRs are exempt from the AgDR + 80% coverage gates; code review (Rex) and the security auditor still apply. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
+> **Sidebar — when to file a `/spike` instead of a `/feature`.** If reasoning can answer the technical question (for example, whether a library works or an approach scales), write the feature directly. If the answer is unknown, file a `[Spike]` with `/spike`. A spike is a 1–3 day, hypothesis-driven ticket whose default output is disposable learning, not production code. When the question is answered, run `/spike-close --promote` to file a fresh `[Feature]`, or `/spike-close --discard` to save a memo in `docs/spike-memos/<slug>.md`. Spike PRs do not require an AgDR or 80% coverage; Rex and the security auditor still review them. See `.claude/rules/workflow-gates.md` § Spike work and `templates/tickets/spike.md`.
 >
-> **Sidebar — the early-work taxonomy: `/spike` vs `/prototype` vs `/walking-skeleton`.** Three early-phase scaffolds across two axes (throwaway-vs-kept, technical-vs-UX):
+> **Sidebar — the early-work taxonomy: `/spike` vs `/prototype` vs `/walking-skeleton`.** These three tools answer different questions and have different lifecycles:
 >
 > | Skill | Question | Lifecycle |
 > |-------|----------|-----------|
@@ -99,7 +99,7 @@ Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale
 | Break into tasks | Tech Lead | Task list with estimates |
 | Identify risks | Tech Lead | Risk register |
 
-> **"Have we decided this before?"** Before drafting a design, run `/agdr search <term>` (or `/agdr browse --category architecture`) to scan the portfolio's existing Agent Decision Records. The skill walks every managed project and the apexyard fork itself, so prior calls on auth, data layers, or vendor choices surface in seconds rather than getting silently re-litigated.
+> **"Have we decided this before?"** Before drafting a design, run `/agdr search <term>` or `/agdr browse --category architecture`. This searches the managed projects and the ApexYard fork, so prior decisions about authentication, data layers, or vendors are easy to find and do not get reconsidered by accident.
 
 ### Exit Criteria
 
@@ -131,7 +131,7 @@ Skill reference: `.claude/skills/journey/SKILL.md`. Rendering decision rationale
 
 ### Pre-Build Gate (MANDATORY)
 
-DO NOT START CODING until these exist in your ticket tracker:
+Do not start coding until the ticket tracker contains all of the following:
 
 | Requirement | How to Verify |
 |-------------|---------------|
@@ -142,7 +142,7 @@ DO NOT START CODING until these exist in your ticket tracker:
 
 ### One Ticket at a Time (MANDATORY)
 
-Work on ONE ticket at a time. Complete it fully before starting the next.
+Complete one ticket before starting the next. The ticket is not complete until its PR, review, and QA work are complete.
 
 ```
 WRONG:
@@ -157,23 +157,23 @@ RIGHT:
 ### Development Flow
 
 ```
-1. Create branch from main
+1. Create a branch from `main`.
    git checkout -b feature/TICKET-ID-description
 
-2. Implement in small commits
+2. Implement in small commits.
    - Follow architecture principles
    - Follow coding conventions
    - Write tests as you go
 
-3. Keep branch updated
+3. Keep the branch updated.
    git rebase main regularly
 
-4. Self-review before PR
+4. Review your own work before opening the PR.
    - Run lint/format
    - Run tests locally
    - Review own diff
 
-5. Create PR with description
+5. Create the PR with a description that answers:
    - What: Summary of changes
    - Why: Link to ticket
    - How: Technical approach

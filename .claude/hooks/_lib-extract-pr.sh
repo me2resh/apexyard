@@ -1,54 +1,27 @@
 #!/bin/bash
-# Shared PR-number and repo extraction for the merge-gate hooks:
-#   - block-unreviewed-merge.sh
-#   - require-design-review-for-ui.sh
-#   - require-architecture-review.sh
-#   - block-merge-on-red-ci.sh
+# Shared PR and repo extraction for merge-gate hooks. The hooks are:
+# block-unreviewed-merge.sh, require-design-review-for-ui.sh,
+# require-architecture-review.sh, and block-merge-on-red-ci.sh.
 #
-# Not a hook itself (prefixed with `_lib-` so it's never wired as one). Sourced
-# by the hooks above via `. "$(dirname "$0")/_lib-extract-pr.sh"`.
+# This file is a library, not a hook. The merge gates source it and share the
+# same tested parser. Keep parsing here instead of duplicating it in a hook.
+# The shared parser prevents API merge forms from bypassing the gates, as the
+# original GitHub API incident showed (#47).
 #
-# WHY THIS EXISTS
-# ---------------
-# The merge gates originally only matched `gh pr merge <N>`. Incident (#47):
-# merges via `gh api repos/<owner>/<repo>/pulls/<N>/merge -X PUT` silently
-# bypassed all three gates because neither the matcher nor the PR-number
-# extraction knew about the API shape. This helper gives every gate a single,
-# tested way to recognise both shapes:
+# The parser covers GitHub and GitLab CLI and API merge forms. Examples:
+#   gh pr merge 42 --squash
+#   gh api repos/owner/repo/pulls/42/merge -X PUT
+#   glab mr merge 42 -R owner/repo
+#   glab api projects/owner%2Frepo/merge_requests/42/merge
 #
-#   1. `gh pr merge 42 --squash`                                  → PR is 42
-#   2. `gh api repos/owner/repo/pulls/42/merge -X PUT`            → PR is 42
-#
-# Any tool that edits one of the three merge hooks MUST keep calling this
-# helper, not re-implement the parsing inline. That's the whole point.
-#
-# USAGE
-# -----
+# Usage:
 #   . "$(dirname "$0")/_lib-extract-pr.sh"
 #   if ! is_merge_command "$COMMAND"; then exit 0; fi
 #   PR_NUMBER=$(extract_pr_number "$COMMAND")
 #
-# FORGE-AWARENESS (#764)
-# ----------------------
-# The gates originally spoke only GitHub. A GitLab-forge project (`tracker.kind:
-# glab`) merges via `glab mr merge <iid>` — a shape neither the matcher nor this
-# helper recognised, so the gates silently did not fire (an ungated-merge hole,
-# the forge analog of the #47 `gh api` bypass). This helper now recognises both
-# forges' merge shapes and resolves MR/PR state via the matching CLI:
-#
-#   3. `glab mr merge 42 -R owner/repo`                           → MR is 42
-#   4. `glab api projects/owner%2Frepo/merge_requests/42/merge`   → MR is 42
-#
-# Shape 4 (#767) is the GitLab raw-API merge — the exact forge analog of the #47
-# `gh api …/pulls/<N>/merge` bypass. Gating only `glab mr merge` (shape 3) while
-# leaving the API passthrough open would re-create #47 on GitLab, so both glab
-# shapes are recognised (matched with `Bash(glab api *)` in settings.json, the
-# same way the gh CLI shape is paired with `Bash(gh api *)`).
-#
-# The gh path is unchanged byte-for-byte; glab is additive. Forge selection for
-# the CLI-calling resolvers goes through `tracker_kind` from `_lib-tracker.sh`
-# (gh + glab coincide with github + gitlab per #762); the shape detectors read
-# the command text directly.
+# GitLab support is additive. Forge selection uses tracker_review_kind. Shape
+# detection reads the command text directly. CLI state resolution uses the
+# matching forge adapter.
 #
 # CI-STATUS RESOLUTION (#790)
 # ----------------------------
@@ -130,10 +103,10 @@
 # this change safe for the jq-present callers: their behaviour is provably
 # unchanged because they never call the new function at all.
 
-# Lazily source the tracker lib so `tracker_kind` is available for forge
+# Lazily source the tracker lib so `tracker_review_kind` is available for forge
 # resolution. Guarded: only source if not already defined and the lib is
-# present. tracker_kind defaults to "gh" with no config, preserving gh behaviour.
-if ! command -v tracker_kind >/dev/null 2>&1; then
+# present. tracker_review_kind defaults to "gh" with no config, preserving gh behaviour.
+if ! command -v tracker_review_kind >/dev/null 2>&1; then
   # ${BASH_SOURCE[0]} is bash-only and unset under zsh (#1025) — the `:-`
   # default avoids a hard "parameter not set" error, but an empty value
   # still makes `dirname` resolve to ".", i.e. the CALLER's cwd rather than
@@ -171,15 +144,15 @@ if ! command -v tracker_kind >/dev/null 2>&1; then
   fi
 fi
 
-# Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_kind. Any
-# non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
+# Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_review_kind.
+# Any non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
 # the GitHub CLI path stays the default. Used by the CLI-calling resolvers
 # (resolve_pr_head, resolve_pr_head_branch) which only have the repo, not the
 # command text.
 _forge_kind_for() {
   local repo="${1:-}" kind="gh"
-  if command -v tracker_kind >/dev/null 2>&1; then
-    kind=$(tracker_kind "$repo" 2>/dev/null || echo gh)
+  if command -v tracker_review_kind >/dev/null 2>&1; then
+    kind=$(tracker_review_kind "$repo" 2>/dev/null || echo gh)
   fi
   case "$kind" in glab) echo glab ;; *) echo gh ;; esac
 }
@@ -724,6 +697,70 @@ resolve_ci_status_glab() {
   esac
 }
 
+# Echoes an owner/repo EXPLICITLY named in the merge command, or empty when
+# the command carries no literal repo. This intentionally excludes ambient
+# forge/CWD fallbacks so callers can apply the precedence "explicit command
+# target > cd-target heuristic > ambient checkout" without duplicating the
+# command parser (me2resh/apexyard#1151).
+extract_explicit_repo_from_command() {
+  local cmd="$1"
+  local repo=""
+
+  # 1. --repo/-R on the merge-command span only. A flag is the clearest
+  # explicit declaration and therefore outranks any URL text elsewhere.
+  local mspan
+  mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
+  repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+
+  # 2. gh api path extraction.
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' \
+      | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
+  fi
+
+  # 2b. glab api path extraction (#767).
+  if [ -z "$repo" ]; then
+    repo=$(echo "$cmd" | grep -oE 'projects/[^/[:space:]]+/merge_requests/[0-9]+/merge' \
+      | sed -nE 's|projects/([^/]+)/merge_requests/.*|\1|p' | head -1)
+    if [ -n "$repo" ]; then
+      repo=$(echo "$repo" | sed -e 's/%2[Ff]/\//g')
+    fi
+  fi
+
+  # 3. tracker_pr_merge positional repo argument (#759).
+  if [ -z "$repo" ]; then
+    local wspan wargs
+    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
+    if [ -n "$wspan" ]; then
+      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
+      repo=$(_extract_wrapper_arg "$wargs" 1)
+    fi
+  fi
+
+  echo "$repo"
+}
+
+# Resolves the merge target with one precedence shared by all four gates:
+# explicit command target, then a leading cd target's origin, then ambient
+# forge/CWD discovery. pr_cmd_cd_target + git_origin_repo are supplied by
+# _lib-pr-repo.sh, which each merge-gate hook sources before calling this.
+resolve_merge_repo() {
+  local cmd="$1" repo="" cd_target=""
+
+  repo=$(extract_explicit_repo_from_command "$cmd")
+  if [ -z "$repo" ] && command -v pr_cmd_cd_target >/dev/null 2>&1 && command -v git_origin_repo >/dev/null 2>&1; then
+    cd_target=$(pr_cmd_cd_target "$cmd")
+    if [ -n "$cd_target" ] && git -C "$cd_target" rev-parse --git-dir >/dev/null 2>&1; then
+      repo=$(git_origin_repo "$cd_target")
+    fi
+  fi
+  if [ -z "$repo" ]; then
+    repo=$(extract_repo_from_command "$cmd")
+  fi
+
+  echo "$repo"
+}
+
 # Echoes the owner/repo extracted from the merge command, or empty if not found.
 #
 # This is a SIBLING function to extract_pr_number — same parsing approach,
@@ -745,47 +782,7 @@ extract_repo_from_command() {
   local cmd="$1"
   local repo=""
 
-  # 1. gh api path extraction.
-  repo=$(echo "$cmd" | grep -oE 'repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge' \
-    | sed -nE 's|repos/([^/]+/[^/]+)/pulls/.*|\1|p' | head -1)
-
-  # 1b. glab api path extraction (#767). GitLab's API takes the project as a
-  #     single URL-encoded path segment — `projects/<owner>%2F<repo>` (nested
-  #     subgroups become `<a>%2F<b>%2F<repo>`). There are no literal slashes in
-  #     the encoded segment, so [^/[:space:]]+ captures the whole project; then
-  #     decode %2F/%2f back to `/` so the result matches the owner/repo form the
-  #     markers and `glab mr view -R` expect.
-  if [ -z "$repo" ]; then
-    repo=$(echo "$cmd" | grep -oE 'projects/[^/[:space:]]+/merge_requests/[0-9]+/merge' \
-      | sed -nE 's|projects/([^/]+)/merge_requests/.*|\1|p' | head -1)
-    if [ -n "$repo" ]; then
-      repo=$(echo "$repo" | sed -e 's/%2[Ff]/\//g')
-    fi
-  fi
-
-  # 2. Repo flag on the merge command: gh/glab `--repo` or the short `-R` alias
-  #    (both gh and glab accept `-R`) (#764). Search ONLY within the merge-command
-  #    span (fenced at the first shell separator, like extract_pr_number) so a
-  #    trailing unrelated `-R` in a compound command — e.g. `... && grep -R foo` —
-  #    cannot be mistaken for the merge target's repo.
-  if [ -z "$repo" ]; then
-    local mspan
-    mspan=$(echo "$cmd" | grep -oE '\b(gh\s+pr|glab\s+mr)\s+merge\b[^|;&]*')
-    repo=$(echo "$mspan" | sed -nE 's/.*(--repo|-R)[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-  fi
-
-  # 2b. tracker_pr_merge wrapper positional arg (#759): `<owner/repo>` is the
-  #     FIRST argument — `tracker_pr_merge <owner/repo> <pr> <strategy> [<del>]`.
-  #     Same fencing-at-`)` discipline as extract_pr_number's wrapper step
-  #     (the real call site is a `$(...)` command substitution).
-  if [ -z "$repo" ]; then
-    local wspan wargs
-    wspan=$(echo "$cmd" | grep -oE '\btracker_pr_merge\b[^|;&)]*')
-    if [ -n "$wspan" ]; then
-      wargs=$(echo "$wspan" | sed -E 's/^tracker_pr_merge[[:space:]]+//')
-      repo=$(_extract_wrapper_arg "$wargs" 1)
-    fi
-  fi
+  repo=$(extract_explicit_repo_from_command "$cmd")
 
   # 3. Last resort: ask the forge which repo the current branch's PR/MR belongs
   #    to. Forge-aware (#764): a glab command falls back to `glab repo view`.

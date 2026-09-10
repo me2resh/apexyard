@@ -4,7 +4,7 @@
 
 **Cursor is now the sole outlier among the four third-party adapters on live conformance.** opencode and pi are both live-proven (their CLIs genuinely run the delegated extension code). Codex carried the same "live conformance unverified" caveat as Cursor when AgDR-0088/AgDR-0091 were written, but live testing since closed that gap (it was a trust-prompt issue, fixed via `--dangerously-bypass-hook-trust` / a user-level trust grant) — Codex is now live-proven too. Cursor alone remains in the weaker "failClosed blocks known-bad commands, delegated execution not confirmed" state described below.
 
-Cursor support follows the same declarative-generate pattern as Codex: `.cursor/hooks.json`'s content is **generated** from the canonical `.claude/` runtime and every generated hook **delegates to the unmodified `.claude/hooks/*.sh`** — gate logic never forks. The full generate / install / drift-check workflow lives in **[`docs/cursor-adapter.md`](../cursor-adapter.md)** (linked here, not duplicated).
+Cursor support follows the same generate-from-source pattern as Codex. `.cursor/hooks.json` is generated from the canonical `.claude/` runtime, and every generated hook delegates to the unmodified `.claude/hooks/*.sh`; gate logic has one source. The full generate, install, and drift-check workflow is in **[`docs/cursor-adapter.md`](../cursor-adapter.md)**.
 
 ## What's enforced vs advisory today
 

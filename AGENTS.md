@@ -45,12 +45,15 @@ Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
 
 - **Branch / PR / commit format** — branch `{type}/{TICKET-ID}-{description}` (e.g. `feature/GH-42-csv-export`); PR title `type(TICKET): description` (e.g. `feat(#42): add CSV export`), one ticket ID per title; commit `type: subject` body with `Closes #N` / `Refs #N`. Never `git add -A` — stage specific files. Never push directly to `main` — every change through a PR.
 - **Ticket vocabulary is reserved** — `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real tracker issues you can fetch with `gh issue view`. Decomposing work in conversation without a tracker ticket yet? Use `Step N` / `Item N` / plain bullets — never tracker notation for something that doesn't exist as an issue.
+- **Ground every factual claim** — scope observations to the environment and time that produced them; re-check mutable state before relying on it; distinguish observation, user input, inference, proposal, and unknown when ambiguity matters; preserve uncertainty; never invent identifiers, links, results, or completion. Full contract: `.claude/rules/evidence-grounding.md`.
+- **Match work and ceremony to the change** — read the change as Lean, Standard, or Heavy and size the plan, the implementation, the artifacts, and the review to that tier. Start with the smallest change that meets the acceptance criteria; reuse existing files, patterns, and dependencies before adding new ones; give every new dependency, abstraction, service, or durable artifact a demonstrated need; keep advice and quick assessments in the conversation. Security, trust-chain, and migration work is Heavy at any diff size, and ambiguity rounds up. Full heuristic: `.claude/rules/right-size-ceremony.md`.
 - **One ticket at a time** — work one ticket fully (start → PR → review → QA → done) before starting the next. Each PR = one ticket.
 - **Plan before multi-step or risky work** — favor an explicit plan-then-execute shape when a task is ≥4 dependent steps, the path is unclear, or you're about to do something hard-to-reverse (force push, schema migration, batch ticket/PR creation). Pi has no built-in plan-mode primitive — approximate it by writing the plan out and pausing for confirmation before executing.
 - **Report like a colleague** — lead with the outcome in plain language, say why it matters, match structure to content (a table for genuinely tabular data, short prose for one point). Don't dump hook names, marker SHAs, or full CI logs unless something failed or was asked for.
 - **AgDR required for technical decisions** — before choosing a library, framework, architecture pattern, or implementation approach with real trade-offs, write an Agent Decision Record at `docs/agdr/AgDR-NNNN-{slug}.md` (template: `templates/agdr.md`). No hook enforces this for pi — it's self-discipline.
 - **No hardcoded secrets** — API keys, passwords, tokens, connection strings go in environment variables, never in code.
 - **PR quality** — every PR body needs a `## Glossary` table and narrative (not label-only) summary bullets — what changed AND why it matters. See `.claude/rules/pr-quality.md`.
+- **Use controlled technical writing for artifacts** — apply the controlled technical writing profile to each new or changed ticket, PR body, review, AgDR, design, audit, and project document. Use short complete sentences, active voice, one term for one meaning, and clear lists. Keep facts and uncertainty. Apply it to framework and managed-project artifacts. Full rule: .claude/rules/writing-standard.md.
 - **Explicit per-PR approval before merge** — a plan-level "go"/"continue" does not authorize `gh pr merge`. Stop and get an explicit per-PR nod first. See `.claude/rules/pr-workflow.md`.
 
 ### Full detail — read on demand
@@ -61,9 +64,11 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 |------|--------|
 | `.claude/rules/git-conventions.md` | Branch naming, PR titles, commit format, no `git add -A`, no direct `main` |
 | `.claude/rules/ticket-vocabulary.md` | Reserved tracker terms, safe planning vocabulary |
+| `.claude/rules/evidence-grounding.md` | Evidence scope, mutable-state checks, inference honesty, preserved uncertainty, no invented facts |
 | `.claude/rules/workflow-gates.md` | The 6 gates (PRD→Done), pre-build gate, migration gate, architecture-review gate, spike exemptions |
 | `.claude/rules/pr-workflow.md` | Pre-push checklist, merge-gate mechanics, build-agents-cannot-self-review |
 | `.claude/rules/pr-quality.md` | Glossary requirement, narrative summary bullets, QA checklist, no red CI |
+| .claude/rules/writing-standard.md | controlled technical writing profile for new and changed artifacts and machine text |
 | `.claude/rules/agdr-decisions.md` | When an AgDR is required, trigger patterns |
 | `.claude/rules/plan-mode.md` | When to plan before executing |
 | `.claude/rules/loop-mode.md` | When a repetitive build→verify cycle should be looped, with guardrails |
@@ -71,6 +76,7 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 | `.claude/rules/isolated-builds.md` | Safe multi-repo git (worktrees, not `/tmp`; guarded `cd`) |
 | `.claude/rules/agent-role-selection.md` | Picking the role-appropriate sub-agent when spawning build work |
 | `.claude/rules/reporting-style.md` | How to narrate status back to the operator |
+| `.claude/rules/right-size-ceremony.md` | Lean / Standard / Heavy tiers for review ceremony and for planning, implementation, and artifact creation |
 | `.claude/rules/leak-protection.md` | Never leak private project names/repos into public framework issues |
 | `.claude/rules/role-triggers.md` | Full role-activation table + handoff artefacts |
 
@@ -102,7 +108,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
   - `.claude/hooks/` — 42 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 64 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
-  - `.claude/rules/` — 11 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
+  - `.claude/rules/` — 21 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
   - `.claude/settings.json` — hook wiring
 - `roles/` — 19 role definitions across Engineering, Product, Design, Security, Data
 - `workflows/` — SDLC, code-review, deployment workflow docs
@@ -111,7 +117,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 - `docs/` — adopter docs (`getting-started.md`, `multi-project.md`, `release-process.md`, `agdr/`, `harnesses/`)
 - `projects/<name>/` — per-managed-project docs (committed to the ops fork)
 - `workspace/<name>/` — managed-project clones (gitignored — each project has its own remote)
-- `site/` — **moved** to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site); live at yard.apexscript.com
+- `site/` — **moved** to [me2resh/apexyard-site](https://github.com/me2resh/apexyard-site); live at apexyard.ai
 - `golden-paths/pipelines/` — reusable GitHub Actions workflows for adopter projects
 - `bin/` — small CLI shims (e.g. `bin/apexyard` for the `apexyard status` briefing)
 
@@ -176,9 +182,9 @@ The framework is plain markdown + shell — no build step, no SaaS, no lock-in. 
 
 ### Related entry-point conventions
 
-- **[yard.apexscript.com/skill.md](https://yard.apexscript.com/skill.md)** — capability manifest for AI coding agents (served from me2resh/apexyard-site)
-- **[yard.apexscript.com/llms.txt](https://yard.apexscript.com/llms.txt)** — llmstxt.org manifest; index for AI crawlers (served from me2resh/apexyard-site)
-- **[yard.apexscript.com/llms-full.txt](https://yard.apexscript.com/llms-full.txt)** — full content concatenation for one-shot LLM consumption (served from me2resh/apexyard-site)
+- **[apexyard.ai/skill.md](https://apexyard.ai/skill.md)** — capability manifest for AI coding agents (served from me2resh/apexyard-site)
+- **[apexyard.ai/llms.txt](https://apexyard.ai/llms.txt)** — llmstxt.org manifest; index for AI crawlers (served from me2resh/apexyard-site)
+- **[apexyard.ai/llms-full.txt](https://apexyard.ai/llms-full.txt)** — full content concatenation for one-shot LLM consumption (served from me2resh/apexyard-site)
 - **`README.md`** — public-facing intro (humans + agents)
 - **`SYSTEM.md`** — optional custom system prompt pi reads alongside `AGENTS.md`; a short operating-posture primer, not a duplicate of this file
 - **`docs/harnesses/pi.md`** — what works / doesn't yet for pi specifically
