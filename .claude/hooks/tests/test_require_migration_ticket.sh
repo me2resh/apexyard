@@ -883,12 +883,16 @@ rm -rf "$SB"
 # =============================================================================
 _c35_fail=0
 _c35_base=$(pwd -P)
+. "$HOOK_DIR/_lib-path-resolve.sh"
 for _c35_in in 'migrations/001.sql' './migrations/y.sql' 'workspace/e/migrations/1.sql' '../../../etc/migrations/x.sql'; do
   case "$_c35_in" in
     migrations/001.sql) _c35_want="$_c35_base/migrations/001.sql" ;;
     ./migrations/y.sql) _c35_want="$_c35_base/migrations/y.sql" ;;
     workspace/e/migrations/1.sql) _c35_want="$_c35_base/workspace/e/migrations/1.sql" ;;
-    ../../../etc/migrations/x.sql) _c35_want="$(cd /etc && pwd -P)/migrations/x.sql" ;;
+    # Keep the assertion independent of the CI checkout depth. The hook
+    # resolves the relative spelling from its actual cwd, then applies the
+    # same realpath-style canonicalisation used for an absent target.
+    ../../../etc/migrations/x.sql) _c35_want="$(_resolve_real_path "$_c35_base/../../../etc/migrations/x.sql")" ;;
   esac
   _c35_out=$(
     . "$HOOK_DIR/_lib-path-resolve.sh"
