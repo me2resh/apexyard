@@ -57,6 +57,9 @@ run_case 'git gc is blocked' 'git gc' blocked
 run_case 'git init is blocked' 'git init' blocked
 run_case 'git status remains available' 'git status --short' allowed
 run_case 'git diff remains available' 'git diff --check' allowed
+run_case 'git rev-parse remains available' 'git rev-parse HEAD' allowed
+run_case 'git remote get-url remains available' 'git remote get-url origin' allowed
+run_case 'git remote add is blocked' 'git remote add backup https://example.invalid/repo.git' blocked
 run_case 'quoted prose is not a mutation' "printf '%s\\n' 'git commit is forbidden'" allowed
 run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body\nDo not run git commit during review.\nEOF' allowed
 
