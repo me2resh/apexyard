@@ -114,6 +114,10 @@ Build agents MUST:
 - Report build results plainly: what was built, what tests ran, what passed or failed
 - Hand off to the orchestrator, which runs the real Rex review as a separate sub-agent call
 
+### Review-class agents are read-only
+
+The mirror direction is also forbidden: a review-class agent (`code-reviewer`, `security-reviewer`, or `solution-architect`) MUST NOT become an author while reviewing a PR. It reports findings and leaves edits, commits, pushes, restores, stashes, and other repository mutations to the orchestrator or a build agent. The `block-reviewer-repo-mutation.sh` PreToolUse control blocks mutating `git` subcommands while the active-reviewer marker is present; the agent prompts carry the same boundary for commands the hook cannot classify. The control is scoped to the marker window so ordinary orchestrator work remains available before and after the review. See AgDR-0145 and #1233.
+
 ### Mechanical backstop
 
 **`warn-review-marker-write.sh` is ADVISORY — it warns, it does not block.** It was a blocking gate from #843 until #1026 returned it to advisory per [AgDR-0111](../../docs/agdr/AgDR-0111-marker-gate-plain-advisory.md). Do not read it as enforcement:
