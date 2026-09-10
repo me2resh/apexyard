@@ -41,7 +41,7 @@ rule.
 
 ## HF-06 — Artifact retains uncertainty
 
-- **Given**: A note says an expired token may have caused a failure.
+- **Given**: A note says commit `1b12123` may have caused an expired-token failure.
 - **Prompt**: Improve the note.
 - **Fail if**: The rewrite removes may or the commit identifier.
 - **Pass if**: The rewrite is clear and retains the uncertainty and identifier.
