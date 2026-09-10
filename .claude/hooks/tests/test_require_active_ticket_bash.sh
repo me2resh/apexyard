@@ -20,9 +20,10 @@ HOOK_SRC="$SRC_ROOT/.claude/hooks/require-active-ticket.sh"
 LIB_BASH="$SRC_ROOT/.claude/hooks/_lib-detect-bash-write.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_PATH_RESOLVE="$SRC_ROOT/.claude/hooks/_lib-path-resolve.sh"
+LIB_ACTIVE_TICKET="$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
-for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$DEFAULTS"; do
+for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$DEFAULTS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -51,6 +52,7 @@ make_sandbox() {
   cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$LIB_PATH_RESOLVE" "$sb/.claude/hooks/_lib-path-resolve.sh"
+  cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
   echo "$sb"
@@ -79,6 +81,7 @@ make_sandbox_no_pathresolve() {
   cp "$HOOK_SRC" "$sb/.claude/hooks/require-active-ticket.sh"
   cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
+  cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
   # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
@@ -436,6 +439,7 @@ cp "$HOOK_SRC"  "$_t30_ops/.claude/hooks/require-active-ticket.sh"
 cp "$LIB_BASH"  "$_t30_ops/.claude/hooks/_lib-detect-bash-write.sh"
 cp "$LIB_CFG"   "$_t30_ops/.claude/hooks/_lib-read-config.sh"
 cp "$LIB_PATH_RESOLVE" "$_t30_ops/.claude/hooks/_lib-path-resolve.sh"
+cp "$LIB_ACTIVE_TICKET" "$_t30_ops/.claude/hooks/_lib-active-ticket.sh"
 cp "$DEFAULTS"  "$_t30_ops/.claude/project-config.defaults.json"
 [ -f "$LIB_OPS_SRC" ]  && cp "$LIB_OPS_SRC"  "$_t30_ops/.claude/hooks/_lib-ops-root.sh"
 [ -f "$LIB_PORT_SRC" ] && cp "$LIB_PORT_SRC" "$_t30_ops/.claude/hooks/_lib-portfolio-paths.sh"

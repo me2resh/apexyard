@@ -76,7 +76,7 @@ projects:
     repo: example/example
 YAML
     mkdir -p .claude/hooks migrations
-    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh; do
+    for f in _lib-tracker.sh _lib-read-config.sh _lib-portfolio-paths.sh _lib-ops-root.sh _lib-detect-bash-write.sh _lib-path-resolve.sh _lib-active-ticket.sh; do
       [ -f "$HOOK_DIR/$f" ] && cp "$HOOK_DIR/$f" ".claude/hooks/$f"
     done
     cp "$HOOK_SCRIPT" .claude/hooks/require-migration-ticket.sh
@@ -148,6 +148,16 @@ run_hook_bash() {
   [ "$rc" = "$expected_rc" ]
 }
 
+run_hook_bash_from_dir() {
+  local sb="$1" run_dir="$2" command="$3" expected_rc="$4" input
+  input=$(jq -nc --arg c "$command" '{tool_name:"Bash", tool_input:{command:$c}}')
+  (
+    cd "$run_dir" || exit 99
+    PATH="$sb/bin:$PATH" "$sb/.claude/hooks/require-migration-ticket.sh" <<<"$input" >/dev/null 2>&1
+  )
+  [ "$?" = "$expected_rc" ]
+}
+
 MIG="migrations/001_add_table.sql"   # matches */migrations/*.sql
 GH_OPEN_OK='
 if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
@@ -174,6 +184,79 @@ if run_hook "$SB" "$SB/$MIG" 0; then
   record_pass "gh: OPEN + migration label + AgDR body → allow"
 else
   record_fail "gh: OPEN + migration label + AgDR body → allow"
+fi
+rm -rf "$SB"
+
+# --- Cases 49-54 (#1182): per-target and marker-domain coverage -------------
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations" "$SB/.claude/session/tickets"
+set_marker "$SB" "test-org/test-repo" 42
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 77 > "$SB/.claude/session/tickets/other"
+install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+if run_hook_bash "$SB" "cat > $SB/workspace/other/$MIG; cat > $SB/workspace/example/$MIG" 2; then
+  record_pass "#1182 reverse argument order still blocks the failing project"
+else
+  record_fail "#1182 reverse argument order still blocks the failing project"
+fi
+rm -rf "$SB"
+
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations" "$SB/.claude/session/tickets"
+set_marker "$SB" "test-org/test-repo" 42
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/other"
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
+if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG; cat > $SB/workspace/other/$MIG" 0; then
+  record_pass "#1182 two projects with one ticket domain both allow"
+else
+  record_fail "#1182 two projects with one ticket domain both allow"
+fi
+rm -rf "$SB"
+
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations"
+set_marker "$SB" "test-org/test-repo" 42
+install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}"'
+if run_hook_bash "$SB" "cat > $SB/migrations/ops.sql; cat > $SB/workspace/example/$MIG" 2; then
+  record_pass "#1182 ops-domain target is evaluated independently"
+else
+  record_fail "#1182 ops-domain target is evaluated independently"
+fi
+rm -rf "$SB"
+
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations" "$SB/.claude/session/tickets/example"
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example/feature__1182"
+install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+export CLAUDE_WORKTREE_BRANCH=feature/1182
+if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG" 0; then
+  record_pass "#1182 tier-0 worktree marker wins for migration writes"
+else
+  record_fail "#1182 tier-0 worktree marker wins for migration writes"
+fi
+unset CLAUDE_WORKTREE_BRANCH
+rm -rf "$SB"
+
+SB=$(make_fork)
+mkdir -p "$SB/workspace/example"
+set_marker "$SB" "test-org/test-repo" 42
+mkdir -p "$SB/.claude/session/tickets"
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+if run_hook_bash "$SB" "cat > $SB/workspace/example/new/migrations/001.sql" 0; then
+  record_pass "#1182 absent migration directory uses nearest existing ancestor"
+else
+  record_fail "#1182 absent migration directory uses nearest existing ancestor"
 fi
 rm -rf "$SB"
 
@@ -753,12 +836,17 @@ rm -rf "$SB"
 # it is allowed.
 # =============================================================================
 SB=$(make_fork)
+mkdir -p "$SB/workspace/example/migrations" "$SB/.claude/session/tickets"
 set_marker "$SB" "test-org/test-repo" 42
-install_mock "$SB" gh 'echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}"'
-if run_hook_bash "$SB" "cat > ./$MIG" 0; then
-  record_pass "#1159 bash: relative migration target is not refused (it is also not resolved) → allow"
+printf 'repo=%s\nnumber=%s\n' "test-org/test-repo" 99 > "$SB/.claude/session/tickets/example"
+install_mock "$SB" gh 'case "$*" in
+  *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
+  *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
+esac'
+if run_hook_bash_from_dir "$SB" "$SB/workspace/example" "cat > ./$MIG" 0; then
+  record_pass "#1182 relative migration target resolves against the actual cwd"
 else
-  record_fail "#1159 bash: relative migration target is not refused (it is also not resolved) → allow"
+  record_fail "#1182 relative migration target resolves against the actual cwd"
 fi
 rm -rf "$SB"
 
@@ -794,17 +882,29 @@ rm -rf "$SB"
 # around it moves, and deleting a neighbour can disarm one just as easily.
 # =============================================================================
 _c35_fail=0
+_c35_base=$(pwd -P)
+. "$HOOK_DIR/_lib-path-resolve.sh"
 for _c35_in in 'migrations/001.sql' './migrations/y.sql' 'workspace/e/migrations/1.sql' '../../../etc/migrations/x.sql'; do
+  case "$_c35_in" in
+    migrations/001.sql) _c35_want="$_c35_base/migrations/001.sql" ;;
+    ./migrations/y.sql) _c35_want="$_c35_base/migrations/y.sql" ;;
+    workspace/e/migrations/1.sql) _c35_want="$_c35_base/workspace/e/migrations/1.sql" ;;
+    # Keep the assertion independent of the CI checkout depth. The hook
+    # resolves the relative spelling from its actual cwd, then applies the
+    # same realpath-style canonicalisation used for an absent target.
+    ../../../etc/migrations/x.sql) _c35_want="$(_resolve_real_path "$_c35_base/../../../etc/migrations/x.sql")" ;;
+  esac
   _c35_out=$(
+    . "$HOOK_DIR/_lib-path-resolve.sh"
     eval "$(sed -n '/^_rmt_normalise_target() {/,/^}/p' "$HOOK_SCRIPT")"
     _rmt_normalise_target "$_c35_in"
   )
-  [ "$_c35_out" = "$_c35_in" ] || { _c35_fail=1; echo "    got '$_c35_out' for '$_c35_in'"; }
+  [ "$_c35_out" = "$_c35_want" ] || { _c35_fail=1; echo "    got '$_c35_out' for '$_c35_in' (want '$_c35_want')"; }
 done
 if [ "$_c35_fail" -eq 0 ]; then
-  record_pass "#1159 relative target returned verbatim, never a fabricated absolute"
+  record_pass "#1182 relative target resolves from the hook cwd"
 else
-  record_fail "#1159 relative target returned verbatim, never a fabricated absolute"
+  record_fail "#1182 relative target resolves from the hook cwd"
 fi
 
 # =============================================================================
@@ -822,9 +922,8 @@ fi
 # an absolute path first; un-normalised it misses the workspace prefix and
 # falls to #42. rc=0 therefore proves normalisation happened.
 # =============================================================================
-# The `relative` shape was dropped in round 9 with the `.cwd` join: without a
-# base to join against, a relative target is left un-normalised, exactly as on
-# dev. The two absolute shapes still pin lexical canonicalisation.
+# The relative shape is covered above by #1182. The two absolute shapes below
+# continue to pin lexical canonicalisation and symlink-safe resolution.
 for shape in 'dot-segment' 'double-slash'; do
   SB=$(make_fork)
   mkdir -p "$SB/workspace/example/migrations"
@@ -1049,13 +1148,10 @@ else
 fi
 rm -rf "$SB"
 
-# --- Case 46: pass 2 selects the FIRST match, exactly as dev -----------------
-# The multi-target half of "the set of writes this gate governs is identical to
-# dev's". Cases 49-54 pinned this until round 8 removed them with the
-# accumulator, and nothing replaced them -- so last-match-wins passed the whole
-# suite. Two migration targets in two projects: the FIRST decides.
-#   tickets/example #99 satisfies · tickets/other #77 does not
-# First-match -> example answers -> ALLOW. Last-match -> other answers -> BLOCK.
+# --- Case 46: every migration target is evaluated independently --------------
+# Two migration targets in two projects must not be reduced to a representative.
+# tickets/example #99 satisfies; tickets/other #77 does not. The command blocks
+# regardless of argument order.
 SB=$(make_fork)
 mkdir -p "$SB/workspace/example/migrations" "$SB/workspace/other/migrations"
 mkdir -p "$SB/.claude/session/tickets"
@@ -1066,10 +1162,10 @@ install_mock "$SB" gh 'case "$*" in
   *99*) echo "{\"state\":\"OPEN\",\"labels\":[{\"name\":\"migration\"}],\"body\":\"docs/agdr/AgDR-0001-db-migration.md\"}" ;;
   *)    echo "{\"state\":\"OPEN\",\"labels\":[],\"body\":\"\"}" ;;
 esac'
-if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG; cat > $SB/workspace/other/$MIG" 0; then
-  record_pass "#1159 pass 2 selects the FIRST matching target, as dev does"
+if run_hook_bash "$SB" "cat > $SB/workspace/example/$MIG; cat > $SB/workspace/other/$MIG" 2; then
+  record_pass "#1182 multi-target command blocks on the failing project"
 else
-  record_fail "#1159 pass 2 selects the FIRST matching target, as dev does"
+  record_fail "#1182 multi-target command blocks on the failing project"
 fi
 rm -rf "$SB"
 
@@ -1373,6 +1469,46 @@ else
   record_fail "#1198 B1: dangling-symlink workspace anchor still reaches the project marker (Write)"
 fi
 rm -rf "$SB" "$(dirname "$WS_DIR")"
+
+# --- Selection parity: compare the raw target selected by dev and this hook --
+# The baseline is the parent commit, not a copied predicate. If the checkout
+# cannot provide it, the test fails instead of silently skipping.
+_parity_base=$(git rev-parse HEAD^ 2>/dev/null || true)
+_parity_fail=0
+if [ -z "$_parity_base" ]; then
+  record_fail "#1182 selection parity baseline is available"
+else
+  _parity_baseline=$(mktemp "$HOOK_DIR/.baseline-1182.XXXXXX")
+  if ! git show "$_parity_base:.claude/hooks/require-migration-ticket.sh" >"$_parity_baseline" 2>/dev/null; then
+    record_fail "#1182 selection parity baseline can be read"
+    _parity_fail=1
+  else
+    # Instrument only the baseline's first-match selector. The current hook's
+    # explicit selection-test branch emits the same raw spelling before gating.
+    _parity_instrumented=$(mktemp "$HOOK_DIR/.baseline-1182-instrumented.XXXXXX")
+    awk '
+      /if is_migration_path "\$_tgt"; then/ && !done { print; print "      if [ \"${APEXYARD_SELECTION_TEST:-}\" = \"1\" ]; then printf \"%s\\n\" \"$_tgt\"; exit 0; fi"; done=1; next }
+      { print }
+    ' "$_parity_baseline" >"$_parity_instrumented"
+    for _payload_target in "/tmp/migrations/001.sql" "/tmp/db/002.sql"; do
+      _payload=$(jq -nc --arg c "cat > $_payload_target" '{tool_name:"Bash",tool_input:{command:$c}}')
+      _current=$(APEXYARD_SELECTION_TEST=1 bash "$HOOK_SCRIPT" <<<"$_payload" 2>/dev/null || true)
+      _baseline=$(APEXYARD_SELECTION_TEST=1 bash "$_parity_instrumented" <<<"$_payload" 2>/dev/null || true)
+      if [ "$_current" != "$_baseline" ]; then
+        _parity_fail=1
+        echo "FAIL: #1182 selection parity for $_payload_target (current='$_current' baseline='$_baseline')"
+      fi
+    done
+    rm -f "$_parity_instrumented"
+    if [ "$_parity_fail" -eq 0 ]; then
+      record_pass "#1182 selection parity compares current and parent implementations"
+    else
+      FAIL=$((FAIL + 1))
+      FAILED_CASES="$FAILED_CASES\n  - #1182 selection parity compares current and parent implementations"
+    fi
+  fi
+  rm -f "$_parity_baseline"
+fi
 
 # =============================================================================
 # Summary
