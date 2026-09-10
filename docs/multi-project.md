@@ -172,7 +172,7 @@ Each aggregates across every registered project. You're live.
 
 ## Split-portfolio mode — public framework + private portfolio
 
-Use this mode if you're on GitHub Free with any project you don't want named publicly. The fork stays public + upstream-aligned; a separate private repo holds the registry + per-project docs.
+Use this mode when any project name must stay private on GitHub Free. The framework fork remains public and upstream-aligned; a separate private repository holds the registry and project documents.
 
 ### Layout
 
@@ -184,18 +184,18 @@ Use this mode if you're on GitHub Free with any project you don't want named pub
 
 The default sibling-dir name is **`<fork>-portfolio`**, so the relationship between the two repos is self-documenting on disk and on GitHub. If you kept the fork name as `apexyard`, the sibling defaults to `apexyard-portfolio`. If you renamed the fork (e.g. `cos` for Chief-of-Staff), the sibling defaults to `cos-portfolio`. Pick something else if you'd prefer — the framework only cares about the local path you point the config block at.
 
-Both repos live in your account; on disk they sit side-by-side. Inside the apexyard fork, the framework's portfolio-aware skills resolve `apexyard.projects.yaml`, `projects/`, **`onboarding.yaml`** (v2), and **`workspace/`** (v2) through one of two mechanisms:
+Keep both repositories in the same account and side by side on disk. Inside the framework fork, portfolio-aware skills resolve `apexyard.projects.yaml`, `projects/`, **`onboarding.yaml`** (v2), and **`workspace/`** (v2) in one of two ways:
 
 - **Config block (recommended, framework ≥ #145; v2 keys added in #242).** A `portfolio:` block in `.claude/project-config.json` points the skills at `../apexyard-portfolio/apexyard.projects.yaml`, `../apexyard-portfolio/projects`, `../apexyard-portfolio/onboarding.yaml`, and `../apexyard-portfolio/workspace`. The `_lib-portfolio-paths.sh` helper resolves all five (`registry`, `projects_dir`, `ideas_backlog`, `onboarding`, `workspace_dir`). A `SessionStart` banner surfaces broken config (missing files, bad paths) at session start so you don't discover a misconfiguration mid-skill.
 - **Symlink (legacy, framework < #145).** `apexyard.projects.yaml` and `projects/` are symlinks into the portfolio repo (and gitignored from the fork itself). Existing skills resolve through the symlink transparently. Continues to work; if you're upgrading framework versions, prefer the config block. The v2 additions (`onboarding`, `workspace_dir`) are config-block only — there is no legacy symlink path for them.
 
-**The v2 additions: why both `onboarding.yaml` and `workspace/` move to the private repo.** Earlier split-portfolio releases (v1, framework < #242) kept `onboarding.yaml` (your company name, mission, team list, tech stack) AND `workspace/<name>/` (the local clones of your managed projects) in the public fork. Both leak. The v1 layout meant a CTO running ApexYard on a private SaaS effectively published their team roster + tech-stack + every project name on a public GitHub repo via routine session activity. v2 closes that gap: every adopter-specific artefact lives in the private sibling repo; the public fork holds only framework files plus the operator's customisations to skills/hooks/rules.
+**The v2 additions: why both `onboarding.yaml` and `workspace/` move to the private repo.** Earlier split-portfolio releases kept the company config and local project clones in the public fork. Those files can expose a team roster, technology choices, and project names. In v2, adopter-specific data lives in the private sibling repository; the public fork holds framework files and your customisations to skills, hooks, and rules.
 
-**The ops-fork anchor under v2.** Pre-v2 every hook + skill that walked up to find the ops fork looked for BOTH `onboarding.yaml` AND `apexyard.projects.yaml` at the candidate dir. Under v2, neither file is in the public fork — the walk-up condition fails. v2 introduces a presence-only marker file `.apexyard-fork` at the public-fork root; `_lib-ops-root.sh` and every walk-up consumer recognises both anchors (v2 marker first, legacy v1 pair as fallback for un-migrated adopters during the transition window).
+**The ops-fork anchor under v2.** Before v2, hooks and skills found the ops fork by looking for both `onboarding.yaml` and `apexyard.projects.yaml`. Under v2 those files are private, so the old check cannot find the public fork. The `.apexyard-fork` marker at the public-fork root provides the new presence-only anchor. `_lib-ops-root.sh` checks that marker first and keeps the old pair as a fallback during migration.
 
 The `/split-portfolio` skill (introduced #146) automates the single-fork → split-portfolio migration. The `/update` skill (extended in #242) automates the v1 → v2 split-portfolio migration for adopters who're already split but on the older layout — see § "Migrating from split-portfolio v1 to v2" below.
 
-### Setup — 7 steps, ~6 minutes
+### Setup — seven steps, about six minutes
 
 #### 1. Fork apexyard on GitHub
 
