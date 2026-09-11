@@ -200,7 +200,43 @@ cd - >/dev/null || true
 rm -rf "$SB4"
 
 # ---------------------------------------------------------------------------
-# Case 5 — regression pin: every BASH_SOURCE[0] self-location reference in
+# Case 5 — a managed-project worktree still finds the scanner in the pinned
+# ops fork. Under zsh the tracker library has no BASH_SOURCE, and
+# git-rev-parse resolves to the project clone. Before #1271 that path failed
+# closed even when the session pin identified the real ops root.
+# ---------------------------------------------------------------------------
+SB5=$(mktemp -d); SB5=$(cd "$SB5" && pwd -P)
+OPS5="$SB5/ops"; PROJECT5="$SB5/project"; PIN5="$SB5/pins"
+mkdir -p "$OPS5/.claude/hooks" "$PROJECT5" "$PIN5" "$SB5/bin"
+touch "$OPS5/.apexyard-fork"
+( cd "$PROJECT5" && git init -q ) 2>/dev/null || true
+cp "$TRACKER_LIB" "$OPS5/.claude/hooks/_lib-tracker.sh"
+cp "$CONFIG_LIB" "$OPS5/.claude/hooks/_lib-read-config.sh"
+cp "$PORTFOLIO_LIB" "$OPS5/.claude/hooks/_lib-portfolio-paths.sh"
+cp "$RUNTIME_SCANNER" "$OPS5/.claude/hooks/check-private-refs-runtime.sh"
+chmod +x "$OPS5/.claude/hooks/check-private-refs-runtime.sh"
+cat > "$OPS5/.claude/project-config.defaults.json" <<'JSON'
+{ "tracker": { "kind": "gh" } }
+JSON
+printf '%s\n' "$OPS5" > "$PIN5/ops-root-test-1271"
+cat > "$SB5/bin/gh" <<'EOF'
+#!/bin/bash
+[ -n "${GH_CAPTURE:-}" ] && printf '%s\n' "$@" > "$GH_CAPTURE"
+exit 0
+EOF
+chmod +x "$SB5/bin/gh"
+printf 'body\n' > "$SB5/rev.md"
+cd "$PROJECT5" || { echo "FAIL: cd sandbox 5"; exit 1; }
+rc5=$(env -u APEXYARD_OPS_ROOT PATH="$SB5/bin:$PATH" GH_CAPTURE="$SB5/cap5" \
+  CLAUDE_CODE_SESSION_ID=test-1271 APEXYARD_OPS_PIN_DIR="$PIN5" \
+  zsh -c 'setopt NO_UNSET; source "$1/.claude/hooks/_lib-tracker.sh"; tracker_review_submit "o/r" 42 comment "$2"; echo $?' _ "$OPS5" "$SB5/rev.md" 2>/dev/null | tail -1)
+assert_eq "zsh: managed-project worktree uses the pinned ops scanner" "0" "$rc5"
+assert_eq "zsh: managed-project worktree reaches gh after scanner lookup" "yes" "$([ -f "$SB5/cap5" ] && echo yes || echo no)"
+cd - >/dev/null || true
+rm -rf "$SB5"
+
+# ---------------------------------------------------------------------------
+# Case 6 — regression pin: every BASH_SOURCE[0] self-location reference in
 # the tracker lib uses the `:-` safe-default form. A future revert to the
 # bare form fails loudly HERE instead of silently reintroducing #1025.
 # ---------------------------------------------------------------------------
