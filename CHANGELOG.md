@@ -1,3 +1,15 @@
+## [v5.5.1] — 2026-09-11
+
+Patch release — 1 improvement.
+
+### Changed (refactor / chore / docs)
+
+- (#1260) credit issue contributors across repository history — 3c50de0
+
+### Closes
+
+- Closes #1259
+
 ## [v5.5.0] — 2026-09-10
 
 Minor release — 8 features, 48 fixes, 21 improvements.
