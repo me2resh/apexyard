@@ -255,19 +255,14 @@ Thanks to everyone who contributes code, documentation, bug reports, ideas, and 
 <a href="https://github.com/aniketshukla1" title="aniketshukla1"><img src="https://github.com/aniketshukla1.png?size=100" width="64" height="64" alt="aniketshukla1"></a>
 </p>
 
-Squash merges can hide individual contributions from GitHub's contributor graph, so we keep these credits here.
-
 ### Issue contributors
 
 Thank you to everyone who opened issues, including bug reports, feature requests, questions, and documentation feedback.
-These credits recognize issue contributions, regardless of whether an issue is open, closed, or included in a release.
-Select an avatar below to see that account's public issues. Hover over an avatar to see the GitHub handle.
 
 <p>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-abdellatif98" title="a-abdellatif98"><img src="https://github.com/a-abdellatif98.png?size=100" width="64" height="64" alt="a-abdellatif98"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-elnemr" title="a-elnemr"><img src="https://github.com/a-elnemr.png?size=100" width="64" height="64" alt="a-elnemr"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdelrahman-Shahda" title="Abdelrahman-Shahda"><img src="https://github.com/Abdelrahman-Shahda.png?size=100" width="64" height="64" alt="Abdelrahman-Shahda"></a>
-<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdElrahmaN31" title="AbdElrahmaN31"><img src="https://github.com/AbdElrahmaN31.png?size=100" width="64" height="64" alt="AbdElrahmaN31"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aaelnemr" title="aelnemr"><img src="https://github.com/aelnemr.png?size=100" width="64" height="64" alt="aelnemr"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedashraffcih" title="ahmedashraffcih"><img src="https://github.com/ahmedashraffcih.png?size=100" width="64" height="64" alt="ahmedashraffcih"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedgemi" title="ahmedgemi"><img src="https://github.com/ahmedgemi.png?size=100" width="64" height="64" alt="ahmedgemi"></a>
@@ -286,14 +281,11 @@ Select an avatar below to see that account's public issues. Hover over an avatar
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahamoda-dev" title="hamoda-dev"><img src="https://github.com/hamoda-dev.png?size=100" width="64" height="64" alt="hamoda-dev"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahazemahmedx0" title="hazemahmedx0"><img src="https://github.com/hazemahmedx0.png?size=100" width="64" height="64" alt="hazemahmedx0"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHC12026" title="HC12026"><img src="https://github.com/HC12026.png?size=100" width="64" height="64" alt="HC12026"></a>
-<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHishamM1" title="HishamM1"><img src="https://github.com/HishamM1.png?size=100" width="64" height="64" alt="HishamM1"></a>
-<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahossam-96" title="hossam-96"><img src="https://github.com/hossam-96.png?size=100" width="64" height="64" alt="hossam-96"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aibrahim-gad" title="ibrahim-gad"><img src="https://github.com/ibrahim-gad.png?size=100" width="64" height="64" alt="ibrahim-gad"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AKarimEbrahemAbdelaziz" title="KarimEbrahemAbdelaziz"><img src="https://github.com/KarimEbrahemAbdelaziz.png?size=100" width="64" height="64" alt="KarimEbrahemAbdelaziz"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Akhaledmedra" title="khaledmedra"><img src="https://github.com/khaledmedra.png?size=100" width="64" height="64" alt="khaledmedra"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Amabdelaziz77" title="mabdelaziz77"><img src="https://github.com/mabdelaziz77.png?size=100" width="64" height="64" alt="mabdelaziz77"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AManito2z" title="Manito2z"><img src="https://github.com/Manito2z.png?size=100" width="64" height="64" alt="Manito2z"></a>
-<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ame2resh" title="me2resh"><img src="https://github.com/me2resh.png?size=100" width="64" height="64" alt="me2resh"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMedNewton" title="MedNewton"><img src="https://github.com/MedNewton.png?size=100" width="64" height="64" alt="MedNewton"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMeDoTarek73" title="MeDoTarek73"><img src="https://github.com/MeDoTarek73.png?size=100" width="64" height="64" alt="MeDoTarek73"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AMina4lfy" title="Mina4lfy"><img src="https://github.com/Mina4lfy.png?size=100" width="64" height="64" alt="Mina4lfy"></a>
@@ -312,12 +304,9 @@ Select an avatar below to see that account's public issues. Hover over an avatar
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Arafik-wahid-cubeish" title="rafik-wahid-cubeish"><img src="https://github.com/rafik-wahid-cubeish.png?size=100" width="64" height="64" alt="rafik-wahid-cubeish"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3ARef34t" title="Ref34t"><img src="https://github.com/Ref34t.png?size=100" width="64" height="64" alt="Ref34t"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asudanese" title="sudanese"><img src="https://github.com/sudanese.png?size=100" width="64" height="64" alt="sudanese"></a>
-<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Atifa64" title="tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" height="64" alt="tifa64"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ayehiagamalx" title="yehiagamalx"><img src="https://github.com/yehiagamalx.png?size=100" width="64" height="64" alt="yehiagamalx"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Azeyadsleem" title="zeyadsleem"><img src="https://github.com/zeyadsleem.png?size=100" width="64" height="64" alt="zeyadsleem"></a>
 </p>
-
-This list covers available issue-author accounts through September 10, 2026. GitHub bot accounts are excluded.
 
 When updating these credits, include new issue authors as well as pull-request contributors.
 Use public GitHub handles and links, and describe each contribution accurately.
