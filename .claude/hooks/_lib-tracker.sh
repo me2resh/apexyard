@@ -712,7 +712,26 @@ _tracker_extract_ref_url() {
 
 _tracker_check_private_refs() {
   local repo="$1" title="${2:-}" body_file="${3:-}"
-  local tracker_lib_dir="" root
+  local tracker_lib_dir="" root pin_file pinned_root
+
+  # A review is often submitted from workspace/<project>, whose git root is
+  # the managed project clone rather than the ops fork that owns this scanner.
+  # Under zsh, BASH_SOURCE is unavailable as well, so the old git-root fallback
+  # selected the project clone and failed closed even though the scanner was
+  # present in the pinned ops fork. Prefer the explicit adapter override and
+  # the session pin before any shell-local or cwd-derived fallback.
+  if [ -n "${APEXYARD_OPS_ROOT:-}" ] && [ -d "$APEXYARD_OPS_ROOT/.claude/hooks" ]; then
+    tracker_lib_dir="$APEXYARD_OPS_ROOT/.claude/hooks"
+  fi
+  if [ -z "$tracker_lib_dir" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+    pin_file="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID}"
+    if [ -f "$pin_file" ]; then
+      IFS= read -r pinned_root < "$pin_file" || pinned_root=""
+      if [ -n "$pinned_root" ] && [ -d "$pinned_root/.claude/hooks" ]; then
+        tracker_lib_dir="$pinned_root/.claude/hooks"
+      fi
+    fi
+  fi
   if [ -n "${BASH_SOURCE[0]:-}" ]; then
     tracker_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd) || tracker_lib_dir=""
   fi
