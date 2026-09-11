@@ -122,6 +122,25 @@ resolve_ops_root_walk() {
   # normalize the starting point before looking for ops-root anchors.
   start=$(_ops_root_main_worktree "$start")
 
+  # A caller can start one level above the fork when that enclosing directory
+  # is itself a Git repository. The upward walk cannot descend into the fork,
+  # so inspect immediate child directories for a single anchored fork before
+  # walking toward /. Do not guess when several children look like forks.
+  local child child_candidate="" child_matches=0
+  for child in "$start"/*; do
+    [ -d "$child" ] || continue
+    if [ -f "$child/.apexyard-fork" ] || {
+      [ -f "$child/onboarding.yaml" ] && [ -f "$child/apexyard.projects.yaml" ]
+    }; then
+      child_matches=$((child_matches + 1))
+      child_candidate="$child"
+    fi
+  done
+  if [ "$child_matches" -eq 1 ]; then
+    printf '%s' "$child_candidate"
+    return 0
+  fi
+
   local r="$start"
   while [ -n "$r" ] && [ "$r" != "/" ]; do
     # v2 anchor (preferred): the explicit .apexyard-fork marker file.

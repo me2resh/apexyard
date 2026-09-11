@@ -224,8 +224,29 @@ case_8() {
   )
 }
 
+# ---------------------------------------------------------------------------
+# Case 9: the fork is one level below an unrelated enclosing git repository
+# ---------------------------------------------------------------------------
+case_9() {
+  local case_name="resolve_ops_root from enclosing git repo → nested fork"
+  local outer sb
+  outer=$(mktemp -d)
+  sb="$outer/apexyard-fork"
+  git init -q "$outer"
+  build_sandbox "$sb"
+  local expected
+  expected=$(cd "$sb" && pwd -P)
+  (
+    # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$outer" && resolve_ops_root)
+    [ "$out" = "$expected" ] || { mark_fail "$case_name" "expected '$expected', got '$out'"; return; }
+    mark_pass "$case_name"
+  )
+}
+
 echo "Running ops-root lib tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9; do
   run_case "$fn"
 done
 
