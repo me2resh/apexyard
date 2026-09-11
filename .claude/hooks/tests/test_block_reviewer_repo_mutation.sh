@@ -43,7 +43,9 @@ run_case 'git fetch is blocked' 'git fetch origin' blocked
 run_case 'git checkout-index is blocked' 'git checkout-index --all' blocked
 run_case 'git apply is blocked' 'git apply fix.patch' blocked
 run_case 'git submodule update is blocked' 'git submodule update --init' blocked
-run_case 'git worktree add is blocked' 'git worktree add ../review-copy HEAD' blocked
+run_case 'git worktree add remains available for orchestration' 'git worktree add ../review-copy HEAD' allowed
+run_case 'git worktree add with branch remains available' 'git worktree add -b reviewer-copy ../review-copy HEAD' allowed
+run_case 'git worktree lock is blocked' 'git worktree lock ../review-copy' blocked
 run_case 'git notes is blocked' 'git notes add -m note HEAD' blocked
 run_case 'git revert is blocked' 'git revert HEAD' blocked
 run_case 'git am is blocked' 'git am review.patch' blocked
