@@ -1,6 +1,8 @@
 #!/bin/bash
 # CLASS: CONTROL — blocks repository-mutating git commands while a sanctioned
-# review-class agent is active (me2resh/apexyard#1233, AgDR-0145).
+# review-class agent is active (me2resh/apexyard#1233, AgDR-0145). Worktree
+# creation remains available so the orchestrator can provision an isolated
+# review checkout after the active-reviewer marker is set (AgDR-0147).
 #
 # The active-reviewer marker is written by the review skill immediately before
 # Rex, Hakim, or Tariq is spawned. It is a narrow session signal: when present,
@@ -81,7 +83,14 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   echo "BLOCKED: review-class agent cannot alter Git notes during an active review." >&2
   exit 2
 fi
-if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?worktree([[:space:]]|$)([^;&|]*[[:space:]])?(add|lock|move|prune|remove|repair|unlock)([[:space:];|&]|$)"; then
+# `git worktree add` creates the isolated checkout that the orchestrator gives
+# to the reviewer. It does not alter the reviewed worktree or its index, so it
+# stays available during the review window. Lock, move, prune, remove, repair,
+# and unlock remain blocked because they alter existing worktree state.
+if printf '%s' "$COMMAND" | grep -qE '^[[:space:]]*(cd[[:space:]]+[^;&|]+[[:space:]]+&&[[:space:]]*)?git[[:space:]]+([^;&|]*[[:space:]])?worktree[[:space:]]+add([[:space:]][^;&|]*)?[[:space:]]*$'; then
+  exit 0
+fi
+if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?worktree([[:space:]]|$)([^;&|]*[[:space:]])?(lock|move|prune|remove|repair|unlock)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter worktrees during an active review." >&2
   exit 2
 fi
