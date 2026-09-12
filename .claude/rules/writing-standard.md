@@ -36,6 +36,13 @@ the project's approved technical terms.
 12. Delete empty conditional sections. Remove placeholders before you file an
     artifact.
 
+Required artifact sections remain required under this profile.
+Short sentences must preserve structure, evidence, rationale, and verification limits.
+For Rex reviews, follow the Output Format in `.claude/agents/code-reviewer.md`.
+Keep required sections even when their result is None, N/A, or Unverified.
+Explain why a check does not apply or could not run.
+The sentence limits do not impose a total review length limit.
+
 Use the project's approved terms for product names, API names, code identifiers,
 and other technical names. Add a short glossary when a reader can misunderstand
 a technical term.
@@ -50,6 +57,7 @@ Before you file an artifact, check each item:
     [ ] Does the artifact use active voice where the actor matters?
     [ ] Does the opening state the outcome and next action?
     [ ] Did the rewrite retain all evidence and uncertainty?
+    [ ] Did the rewrite retain the artifact's required sections and supporting rationale?
     [ ] Did you remove empty sections and placeholders?
 
 A reviewer must request changes when an artifact does not meet this profile.

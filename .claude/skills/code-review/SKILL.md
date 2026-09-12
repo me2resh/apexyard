@@ -40,6 +40,9 @@ Before you draft or post a review, read .claude/rules/writing-standard.md.
 Use the controlled technical writing profile. The review is a durable artifact.
 If the artifact fails the profile, you must request changes.
 State the verdict and next action first. State the reason and evidence after it.
+Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
+Retain its required sections and give each checklist result a reason or evidence reference.
+Before submission, check the report against that format and repair omissions.
 Do not write a process transcript.
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843)
