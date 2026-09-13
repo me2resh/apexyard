@@ -7,6 +7,7 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/writing-standard.md"
 CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/human-friendly-cases.md"
 AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0134-controlled-technical-writing-profile.md"
+REX_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
 
 PASS=0
 FAIL=0
@@ -34,6 +35,8 @@ assert "rule:one-term" grep -qF 'Use one term for one item or action' "$RULE_FIL
 assert "rule:one-instruction" grep -qF 'Give one instruction in each sentence' "$RULE_FILE"
 assert "rule:no-semicolon" grep -qF 'Do not use a semicolon' "$RULE_FILE"
 assert "rule:preserve-evidence" grep -qF 'must not change the evidence' "$RULE_FILE"
+assert "rule:preserve-required-sections" grep -qF 'Required artifact sections remain required' "$RULE_FILE"
+assert "rule:no-review-length-cap" grep -qF 'do not impose a total review length limit' "$RULE_FILE"
 assert "rule:no-retroactive-rewrite" grep -qF 'does not rewrite existing artifacts' "$RULE_FILE"
 assert "rule:review-rejection" grep -qF 'must request changes' "$RULE_FILE"
 assert "rule:no-certification-claim" grep -qF 'does not implement or claim' "$RULE_FILE"
@@ -72,12 +75,31 @@ assert "consumer:code-reviewer:profile" grep -qF 'controlled technical writing p
 assert "reviewer:code-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
 assert "reviewer:design-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/design-review/SKILL.md"
 assert "reviewer:rex" grep -qF 'Request changes when the artifact fails the profile' "$SRC_ROOT/.claude/agents/code-reviewer.md"
+assert "reviewer:skill-output-format" grep -qF "agent's required Output Format" "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
+assert "reviewer:all-review-scopes" grep -qF 'first reviews, re-reviews, and reduced-scope reviews' "$REX_FILE"
+assert "reviewer:checklist-evidence" grep -qF 'Give each checklist result a brief reason or an evidence reference.' "$REX_FILE"
+assert "reviewer:unperformed-checks" grep -qF 'Do not mark an unperformed check as Pass.' "$REX_FILE"
+# Check the actual output template, not headings in the review instructions.
+rex_template_has() {
+  awk '/^## Output Format$/{section=1; next}
+       section && /^```markdown$/{template=1; next}
+       template && /^```$/{exit}
+       template {print}' "$REX_FILE" | grep -qF -- "$1"
+}
+for heading in '## Code Review: PR' '**Commit**:' '**Scope**:' '### Summary' \
+  '### Checklist Results' '### Issues Found' '### Validation' '### Verdict' \
+  'Reviewed by Rex' 'Reviewed commit:'; do
+  assert "reviewer:template:$heading" rex_template_has "$heading"
+done
 assert "pr-quality:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/.claude/rules/pr-quality.md"
 assert "consumer:tech-lead:profile" grep -qF 'controlled technical writing profile' "$SRC_ROOT/roles/engineering/tech-lead.md"
 
 assert "cases:file-exists" test -f "$CASES_FILE"
 assert "cases:ten-cases" awk '/^## HF-[0-9][0-9] /{count++} END{exit count != 10}' "$CASES_FILE"
 assert "cases:pr-review" grep -qF 'PR and review use the profile' "$CASES_FILE"
+assert "cases:review-structure" grep -qF 'Any review omits required sections, checklist reasons, validation results, or verification limits.' "$CASES_FILE"
+assert "cases:review-variants" grep -qF 'Then show a shorter re-review' "$CASES_FILE"
+assert "cases:reduced-scope" grep -qF 'reduced-scope variant' "$CASES_FILE"
 assert "cases:rejection" grep -qF 'Reviewer rejects a profile fault' "$CASES_FILE"
 
 assert "agdr:file-exists" test -f "$AGDR_FILE"

@@ -55,10 +55,10 @@ rule.
 
 ## HF-08 — PR and review use the profile
 
-- **Given**: A framework fix needs a PR body and a review.
-- **Prompt**: Draft both artifacts.
-- **Fail if**: A sentence has more than 25 words or uses a semicolon.
-- **Pass if**: Both artifacts use short sentences, active voice, and clear terms.
+- **Given**: A framework fix needs a PR body and a structured Rex review under the controlled technical writing profile.
+- **Prompt**: Draft both artifacts using Rex's Output Format. Then show a shorter re-review after one finding is fixed. Finally show a reduced-scope variant for an eligible docs-only change. Preserve required sections, checklist reasons, validation results, and verification limits in each version. Mark unavailable evidence as unverified.
+- **Fail if**: A sentence has more than 25 words or uses a semicolon. Any review omits required sections, checklist reasons, validation results, or verification limits. The review marks an unperformed check as Pass or invents evidence.
+- **Pass if**: Both artifacts use short sentences, active voice, and clear terms while retaining required sections and supporting evidence.
 
 ## HF-09 — Producers load the profile
 

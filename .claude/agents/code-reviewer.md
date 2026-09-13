@@ -65,6 +65,8 @@ The GitHub review is a durable artifact. Read .claude/rules/writing-standard.md.
 Use the controlled technical writing profile. Request changes when the artifact fails the profile.
 State the verdict and next action first. State the reason in short sentences.
 Put evidence after the opening. Keep TBD values, hedges, numbers, and modality.
+Use the required Output Format below for first reviews, re-reviews, and reduced-scope reviews.
+Short sentences must preserve the review sections and supporting evidence.
 Do not write a process transcript. Do not present an author self-check as Rex review.
 
 ## Input
@@ -853,7 +855,25 @@ Report the failure in plain text with the exact command the caller needs to run.
 
 ## Output Format
 
+Use this structure for every posted review, including re-reviews and reduced-scope reviews.
+Keep the title, Commit, Scope, Summary, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
+Start with the verdict and next action, then provide the structured report below.
+Do not replace the report with a prose-only approval or a list of fixed issues.
+
+Give each checklist result a brief reason or an evidence reference.
+Use N/A with a reason for checks outside the review scope.
+Use Unverified with the limitation when an applicable check could not run.
+Do not mark an unperformed check as Pass.
+Report validation commands, their results, and any remaining verification limits.
+For re-reviews, identify resolved findings and reassess the current commit without claiming checks that were not repeated.
+For reduced-scope reviews, preserve the sections and explain skipped checks without expanding the review depth.
+Retain relevant factual checks and rationale under descriptive headings when they help the reader assess the verdict.
+Omit Handbook Findings, Fallow Findings, and Suggestions when they have no applicable content.
+If no issues remain, write "None" under Issues Found.
+
 ```markdown
+[Verdict and next action in short, complete sentences.]
+
 ## Code Review: PR #{number}
 
 **Commit**: `{headRefOid}`  ← REQUIRED — always include this.
@@ -863,16 +883,18 @@ Report the failure in plain text with the exact command the caller needs to run.
 [Brief summary of what the PR does]
 
 ### Checklist Results
-- ✅ Architecture & Design:    [Pass / Fail]
-- ✅ Code Quality:              [Pass / Fail]
-- ✅ Testing:                   [Pass / Fail]
-- ✅ Security:                  [Pass / Fail]
-- ✅ Performance:               [Pass / Fail]
-- ✅ PR Description & Glossary: [Pass / Fail]
-- ⚠ Summary Bullet Narrative:  [Pass / Advisory]   ← advisory only, never blocks
-- ✅ Technical Decisions (AgDR):[Pass / Fail / N/A]
-- ✅ Adopter Handbooks:         [Pass / Fail / N/A]   ← N/A if no handbooks loaded
-- ⚠ Fallow Static Analysis (JS/TS): [Pass / Advisory / N/A]   ← advisory only, never blocks; N/A if not JS/TS or CLI absent
+- Architecture & Design: [Result — reason or evidence]
+- Code Quality: [Result — reason or evidence]
+- Testing: [Result — reason or evidence]
+- Security: [Result — reason or evidence]
+- Performance: [Result — reason or evidence]
+- PR Description & Glossary: [Result — reason or evidence]
+- Summary Bullet Narrative: [Pass / Advisory — reason (advisory only)]
+- Technical Decisions (AgDR): [Result — decision record or reason]
+- Adopter Handbooks: [Result — applicable standards or reason]
+- Fallow Static Analysis (JS/TS): [Pass / Advisory / N/A — reason (advisory only)]
+
+[Use ✅ for Pass, ❌ for Fail, and ⚠ for Advisory or Unverified. Explain N/A without a success icon.]
 
 ### Issues Found
 [List any issues, or "None"]
@@ -886,8 +908,12 @@ Report the failure in plain text with the exact command the caller needs to run.
 ### Suggestions
 [Optional improvements, not blocking]
 
+### Validation
+[Commands and results, inspected evidence, and verification limits. Distinguish current checks from earlier reported results.]
+
 ### Verdict
 **[APPROVED / CHANGES REQUESTED / COMMENT]**
+[Explain why the findings support this verdict.]
 
 ---
 🤖 Reviewed by Rex (Code Reviewer Agent)
