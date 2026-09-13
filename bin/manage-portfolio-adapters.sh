@@ -33,7 +33,6 @@ while IFS=$'\t' read -r name workspace adapters; do
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
   project_root="$root_dir/$workspace"
   if [ ! -d "$project_root" ]; then echo "DRIFT $name: workspace missing ($project_root)"; drift=$((drift+1)); continue; fi
-  if [ -z "$adapters" ]; then adapters="codex,pi,opencode,cursor"; fi
   IFS=',' read -r -a requested <<< "$adapters"
   for adapter in "${requested[@]}"; do
     case "$adapter" in
@@ -53,7 +52,7 @@ while IFS=$'\t' read -r name workspace adapters; do
     esac
     if [ "$result" = ok ] || [ "$result" = installed ]; then echo "$result $name: $adapter"; else echo "DRIFT $name: $adapter ($result)"; drift=$((drift+1)); fi
   done
-done < <(yq -r '.projects[] | [ .name, (.workspace // ""), ((.adapters // []) | join(",")) ] | @tsv' "$REGISTRY")
+done < <(yq -r '.projects[] | [ .name, (.workspace // ""), ((.adapters // ["codex", "pi", "opencode", "cursor"]) | join(",")) ] | @tsv' "$REGISTRY")
 [ "$count" -gt 0 ] || { echo "No registered projects matched."; exit 0; }
 if [ "$MODE" = check ] && [ "$drift" -gt 0 ]; then echo "Portfolio adapter drift: $drift finding(s)."; exit 1; fi
 echo "Portfolio adapter check complete: $count project(s)."
