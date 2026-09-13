@@ -10,7 +10,12 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/nul
 # This guard covers raw GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross
 # repository boundaries.
-if ! printf '%s' "$COMMAND" | grep -qE '(^|[;&|])[[:space:]]*gh[[:space:]]+(issue|pr)[[:space:]]+'; then
+# A shell command can prefix, group, or conditionally execute the tracker
+# invocation. Match `gh issue` / `gh pr` after any non-word shell delimiter so
+# wrappers such as `timeout`, `command`, subshells, and `if` cannot bypass the
+# repository check. Fail closed on quoted or commented matches because this is
+# a trust-chain control and false negatives are worse than extra checks.
+if ! printf '%s' "$COMMAND" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+'; then
   exit 0
 fi
 if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then

@@ -33,6 +33,12 @@ root=$(mktemp -d)
 make_repo "$root" "git@github.com:owner/framework.git"
 printf '%s\n' 'repo=owner/project' > "$root/.claude/session/tickets/demo"
 run_case 'unqualified issue lookup is blocked for a different active repo' 2 'gh issue view 42' "$root"
+run_case 'environment-prefixed issue lookup is blocked' 2 'FOO=bar gh issue view 42' "$root"
+run_case 'timeout-prefixed issue lookup is blocked' 2 'timeout 5 gh issue view 42' "$root"
+run_case 'command-prefixed issue lookup is blocked' 2 'command gh issue view 42' "$root"
+run_case 'subshell issue lookup is blocked' 2 '( gh issue view 42 )' "$root"
+run_case 'conditional issue lookup is blocked' 2 'if true; then gh issue view 42; fi' "$root"
+run_case 'pipeline issue lookup is blocked' 2 'printf x | gh issue view 42' "$root"
 run_case 'explicit issue repo is allowed' 0 'gh issue view 42 --repo owner/project' "$root"
 run_case 'explicit short repo flag is allowed' 0 'gh pr list -R owner/project' "$root"
 
