@@ -42,6 +42,7 @@ run_case 'pipeline issue lookup is blocked' 2 'printf x | gh issue view 42' "$ro
 run_case 'repository flag in a comment does not authorize issue lookup' 2 'gh issue view 42 # --repo owner/project' "$root"
 run_case 'repository flag in a separate command does not authorize issue lookup' 2 'echo --repo owner/project; gh issue view 42' "$root"
 run_case 'short repository flag in a separate command does not authorize PR lookup' 2 'echo -R owner/project; gh pr list' "$root"
+run_case 'repository flag after option terminator does not authorize issue lookup' 2 'gh issue view 42 -- --repo owner/project' "$root"
 run_case 'explicit issue repo is allowed' 0 'gh issue view 42 --repo owner/project' "$root"
 run_case 'explicit short repo flag is allowed' 0 'gh pr list -R owner/project' "$root"
 

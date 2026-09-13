@@ -27,8 +27,11 @@ fi
 unqualified=0
 while IFS= read -r segment; do
   segment="${segment%%#*}"
+  # A standalone `--` ends GitHub CLI option parsing. Ignore any repo-like
+  # token after it; only flags before that boundary can authorize the call.
+  options="$(printf '%s' "$segment" | sed -E 's/[[:space:]]--([[:space:]].*)?$//')"
   if printf '%s' "$segment" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+' \
-    && ! printf '%s' "$segment" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
+    && ! printf '%s' "$options" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
     unqualified=1
     break
   fi
