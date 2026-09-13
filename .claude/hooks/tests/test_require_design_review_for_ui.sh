@@ -114,8 +114,12 @@ install_mock_gh() {
 #!/bin/bash
 args="\$*"
 case "\$args" in
-  *"pr diff"*"--name-only"*)
-    printf '%s\n' $diff_files
+  *"api"*"pulls/"*"/files"*)
+    if [ "\${MOCK_LARGE:-0}" = 1 ]; then
+      seq 1 3001 | sed 's|^|src/file-|; s|$|.ts|'
+    else
+      printf '%s\n' $diff_files
+    fi
     ;;
   *"pr view"*headRefOid*)
     printf '%s\n' "$head_sha"
@@ -239,13 +243,13 @@ args="\$*"
 case "\$args" in
   *"--repo $portfolio"*|*"repos/$portfolio/"*)
     case "\$args" in
-      *"pr diff"*"--name-only"*) printf '%s\n' $diff_files ;;
+      *"pulls/77/files"*) printf '%s\n' $diff_files ;;
       *"pr view"*headRefOid*)    printf '%s\n' "$head_sha" ;;
       *"pr view"*headRepository*) printf '%s\n' "$portfolio" ;;
       *) exit 0 ;;
     esac
     ;;
-  *"pr diff"*"--name-only"*) ;;    # bare → no files (ops-fork resolution)
+  *"pulls/77/files"*) ;;    # bare → no files (ops-fork resolution)
   *"pr view"*headRefOid*) ;;        # bare → empty
   *) exit 0 ;;
 esac
@@ -312,8 +316,12 @@ install_mock_gh_headrefoid_fails() {
 #!/bin/bash
 args="\$*"
 case "\$args" in
-  *"pr diff"*"--name-only"*)
-    printf '%s\n' $diff_files
+  *"pulls/"*"/files"*)
+    if [ "${MOCK_LARGE:-0}" = 1 ]; then
+      seq 1 3001 | sed 's|^|src/file-|; s|$|.ts|'
+    else
+      printf '%s\n' $diff_files
+    fi
     ;;
   *"pr view"*headRefOid*)
     exit 1
@@ -339,6 +347,14 @@ local_head=$(cd "$sb" && git rev-parse HEAD 2>/dev/null)
 printf '%s\n' "$local_head" > "$(review_marker_path "o/r" 77 design "$sb")"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "#1091: forge HEAD unresolvable + marker matching LOCAL head -> BLOCKED" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) PR over the files API ceiling -> BLOCK (exit 2)"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/handlers/user.ts"' "$SHA"
+code=$(MOCK_LARGE=1 run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "blocks when changed-file count exceeds 3000" "2" "$code"
 rm -rf "$sb"
 
 echo ""
