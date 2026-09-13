@@ -1,6 +1,11 @@
 # Portfolio-wide harness adapter management
 
-> In the context of a portfolio where repositories may use different AI coding harnesses, facing inconsistent adapter installation and drift, I decided to manage adapters from the portfolio registry. The framework hooks remain the single enforcement source. This achieves consistent governance across repositories while accepting per-harness trust prerequisites and Cursor's current partial enforcement.
+> Repositories in this portfolio can use different AI coding harnesses.
+> Adapter installation and drift lack a portfolio-level signal.
+> I decided to manage adapters from the portfolio registry.
+> The framework hooks remain the single enforcement source.
+> This gives repositories consistent governance.
+> It accepts per-harness trust setup and Cursor's current partial enforcement.
 
 ## Context
 
