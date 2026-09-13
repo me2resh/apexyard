@@ -43,10 +43,10 @@ while IFS=$'\t' read -r name workspace adapters; do
         elif { [ -f "$project_root/.codex/apexyard-adapter.json" ] || { [ -d "$project_root/.agents/skills" ] && [ -d "$project_root/.codex/agents" ] && [ -f "$project_root/.codex/hooks.json" ]; }; } && bash "$FRAMEWORK_ROOT/bin/sync-codex-adapter.sh" --root "$project_root" --check-installed >/dev/null 2>&1; then result=ok
         elif [ -e "$project_root/.codex" ] || [ -e "$project_root/.agents" ]; then result=drift; else result=missing; fi;;
       pi)
-        [ ! -L "$project_root/.pi" ] || { echo "DRIFT $name: .pi is a symlink"; drift=$((drift+1)); continue; }
+        [ ! -L "$project_root/.pi" ] && [ ! -L "$project_root/.pi/extensions" ] || { echo "DRIFT $name: pi adapter path is a symlink"; drift=$((drift+1)); continue; }
         script="$FRAMEWORK_ROOT/bin/install-pi-adapter.sh"; target="$project_root/.pi/extensions"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ]; then result=ok; else result=missing; fi;;
       opencode)
-        [ ! -L "$project_root/.opencode" ] || { echo "DRIFT $name: .opencode is a symlink"; drift=$((drift+1)); continue; }
+        [ ! -L "$project_root/.opencode" ] && [ ! -L "$project_root/.opencode/plugins" ] || { echo "DRIFT $name: opencode adapter path is a symlink"; drift=$((drift+1)); continue; }
         script="$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh"; target="$project_root/.opencode/plugins"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ]; then result=ok; else result=missing; fi;;
       cursor) if [ "$MODE" = install ]; then bash "$FRAMEWORK_ROOT/bin/install-cursor-adapter.sh" --root "$project_root" >/dev/null; result=installed; elif [ -f "$HOME/.cursor/hooks.json" ] && grep -q '.claude/hooks/' "$HOME/.cursor/hooks.json"; then result=ok; else result=missing; fi;;
       *) echo "DRIFT $name: unsupported adapter '$adapter'"; drift=$((drift+1)); continue;;
