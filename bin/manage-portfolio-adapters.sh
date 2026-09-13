@@ -34,6 +34,7 @@ while IFS=$'\t' read -r name workspace adapters; do
   project_root="$root_dir/$workspace"
   if [ ! -d "$project_root" ]; then echo "DRIFT $name: workspace missing ($project_root)"; drift=$((drift+1)); continue; fi
   IFS=',' read -r -a requested <<< "$adapters"
+  [ -n "$adapters" ] || { echo "OK $name: adapters opted out"; continue; }
   for adapter in "${requested[@]}"; do
     case "$adapter" in
       claude) [ -d "$project_root/.claude" ] && result=ok || result=missing;;
