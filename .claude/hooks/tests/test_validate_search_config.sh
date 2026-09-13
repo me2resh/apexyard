@@ -45,12 +45,16 @@ build_sandbox() {
   mkdir -p "$1"
   : > "$1/onboarding.yaml"
   : > "$1/apexyard.projects.yaml"
+  mkdir -p "$1/.claude"
+  printf '%s\n' '{"portfolio":{"registry":"./apexyard.projects.yaml"}}' > "$1/.claude/project-config.json"
 }
 
 run_hook_in() {
   # run_hook_in <dir> [env assignments...]
   local dir="$1"; shift
-  ( cd "$dir" && env "$@" bash "$HOOK" ) 2>&1
+  # Clear operator-level root overrides so each fixture is isolated from the
+  # surrounding split-portfolio session.
+  ( cd "$dir" && env -u APEXYARD_OPS_ROOT -u APEXYARD_PORTFOLIO_ROOT "$@" bash "$HOOK" ) 2>&1
 }
 
 # ---------------------------------------------------------------------------
