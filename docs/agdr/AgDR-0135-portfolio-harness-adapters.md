@@ -1,15 +1,10 @@
 # Portfolio-wide harness adapter management
 
-> Repositories in this portfolio can use different AI coding harnesses.
-> Adapter installation and drift lack a portfolio-level signal.
-> I decided to manage adapters from the portfolio registry.
-> The framework hooks remain the single enforcement source.
-> This gives repositories consistent governance.
-> It accepts per-harness trust setup and Cursor's current partial enforcement.
+> In the context of a portfolio where repositories may use different AI coding harnesses, facing inconsistent adapter installation and drift, I decided to manage adapters from the portfolio registry and keep the framework hooks as the single enforcement source to achieve consistent governance across repositories, accepting per-harness trust prerequisites and Cursor's current partial enforcement.
 
 ## Context
 
-Claude Code loads ApexYard hooks natively. Codex, pi, opencode, and Cursor require harness-specific adapter files. Existing installers and `/update` reconciliation operate on one repository at a time. A registered portfolio can therefore contain missing or stale adapters without a portfolio-level signal.
+Claude Code loads ApexYard hooks natively. Codex, pi, opencode, and Cursor require harness-specific adapter files. Existing installers and `/update` reconciliation operate on one repository at a time, so a registered portfolio can contain missing or stale adapters without a portfolio-level signal.
 
 ## Options Considered
 
@@ -21,7 +16,7 @@ Claude Code loads ApexYard hooks natively. Codex, pi, opencode, and Cursor requi
 
 ## Decision
 
-Chosen: **registry-driven adapter management with shared hook delegation**. This preserves one audited hook implementation while covering each registered repository. Onboarding installs declared adapters. `/update` reconciles installed adapters. A read-only portfolio check reports missing or stale output. Capability status remains explicit: full for Claude Code, Codex with trust, pi with `-a`/`--approve`, and opencode with `--auto`. Cursor remains partial until delegated execution is live-proven.
+Chosen: **registry-driven adapter management with shared hook delegation**, because it preserves one audited hook implementation while covering each registered repository. Onboarding installs declared adapters, `/update` reconciles installed adapters, and a read-only portfolio check reports missing or stale output. Capability status remains explicit: full for Claude Code, Codex with trust, pi with `-a`/`--approve`, and opencode with `--auto`; Cursor remains partial until delegated execution is live-proven.
 
 ## Consequences
 
