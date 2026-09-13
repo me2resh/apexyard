@@ -18,9 +18,22 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/nul
 if ! printf '%s' "$COMMAND" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+'; then
   exit 0
 fi
-if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
-  exit 0
-fi
+# Check each shell command segment independently. A repository flag in a
+# comment or a separate command must not authorize an unqualified tracker
+# invocation. Splitting on shell control characters is intentionally
+# conservative. A segment that cannot be classified remains blocked.
+# A segment with an explicit repository is safe. If every tracker segment had
+# one, no unqualified segment remains to check.
+unqualified=0
+while IFS= read -r segment; do
+  segment="${segment%%#*}"
+  if printf '%s' "$segment" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+' \
+    && ! printf '%s' "$segment" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
+    unqualified=1
+    break
+  fi
+done < <(printf '%s\n' "$COMMAND" | tr ';|&()' '\n')
+[ "$unqualified" -eq 1 ] || exit 0
 
 HOOK_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || exit 0
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
