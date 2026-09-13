@@ -77,3 +77,5 @@ The headline stays **"for Claude Code"** until this condition is met, verbatim:
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+- [Portfolio adapter management](portfolio-adapters.md) — registry-driven install and drift checks.

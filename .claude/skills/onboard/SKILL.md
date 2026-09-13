@@ -492,3 +492,17 @@ re-run-offer exits, and on any decline/cancel path. Never leave it set.
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+### Harness adapter reconciliation
+
+After a project is registered, reconcile its declared harness adapters before
+starting the first ticket. The registry entry may include `adapters: [codex,
+pi, opencode, cursor]`. Run the portfolio manager in install mode for the new
+project:
+
+```bash
+bash bin/manage-portfolio-adapters.sh --install --project "{name}"
+```
+
+The command delegates to the existing per-harness generators. It never copies
+or changes canonical `.claude/hooks/*.sh` logic.

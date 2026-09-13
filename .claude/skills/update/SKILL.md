@@ -1097,3 +1097,17 @@ Always remove the bootstrap marker on a clean exit (after the sync branch is rea
 ---
 
 *Part of [ApexYard](https://github.com/me2resh/apexyard) — multi-project SDLC framework for Claude Code · MIT.*
+
+### Portfolio harness adapter reconciliation
+
+After framework files and migrations are complete, reconcile declared adapters
+for registered projects. This is explicit and registry-driven; projects with
+no `adapters` field are left unchanged.
+
+```bash
+bash bin/manage-portfolio-adapters.sh --install
+```
+
+For a read-only governance report, use `--check`. A missing workspace,
+unsupported adapter, or stale generated adapter exits non-zero and is reported
+as structured drift.
