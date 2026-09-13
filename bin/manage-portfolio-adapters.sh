@@ -48,7 +48,7 @@ while IFS=$'\t' read -r name workspace adapters; do
       opencode)
         [ ! -L "$project_root/.opencode" ] && [ ! -L "$project_root/.opencode/plugins" ] || { echo "DRIFT $name: opencode adapter path is a symlink"; drift=$((drift+1)); continue; }
         script="$FRAMEWORK_ROOT/bin/install-opencode-adapter.sh"; target="$project_root/.opencode/plugins"; if [ "$MODE" = install ]; then bash "$script" --root "$FRAMEWORK_ROOT" --target-dir "$target" >/dev/null; result=installed; elif [ -f "$target/apexyard/index.ts" ]; then result=ok; else result=missing; fi;;
-      cursor) if [ "$MODE" = install ]; then bash "$FRAMEWORK_ROOT/bin/install-cursor-adapter.sh" --root "$project_root" >/dev/null; result=installed; elif [ -f "$HOME/.cursor/hooks.json" ] && grep -q '.claude/hooks/' "$HOME/.cursor/hooks.json"; then result=ok; else result=missing; fi;;
+      cursor) if [ "$MODE" = install ]; then bash "$FRAMEWORK_ROOT/bin/install-cursor-adapter.sh" --root "$FRAMEWORK_ROOT" >/dev/null; result=installed; elif [ -f "$HOME/.cursor/hooks.json" ] && grep -q '.claude/hooks/' "$HOME/.cursor/hooks.json"; then result=ok; else result=missing; fi;;
       *) echo "DRIFT $name: unsupported adapter '$adapter'"; drift=$((drift+1)); continue;;
     esac
     if [ "$result" = ok ] || [ "$result" = installed ]; then echo "$result $name: $adapter"; else echo "DRIFT $name: $adapter ($result)"; drift=$((drift+1)); fi
