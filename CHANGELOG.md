@@ -1,3 +1,29 @@
+## [v5.5.2] — 2026-09-13
+
+Patch release — 6 fixes, 2 improvements.
+
+### Fixed (fix)
+
+- (#1281) support large PR file lists in merge gates — 4965d40
+- (#1277) require explicit tracker repo across projects — 831e9fa
+- (#1279) restore structured Rex review reports — dc3883a
+- (#1276) find nested ops fork under enclosing repo — 6b98e58
+- (#1275) allow orchestrator review worktree setup — 2cdf62f
+- (#1274) resolve review scanner from ops pin — d665f73
+
+### Changed (refactor / chore / docs)
+
+- (#1282) isolate search config fixtures — d5e88cb
+- sync dev after v5.5.1 release — 98a4f58
+
+### Closes
+
+- Closes #1261
+- Closes #1268
+- Closes #1270
+- Closes #1271
+- Closes #1272
+
 ## [v5.5.1] — 2026-09-11
 
 Patch release — 1 improvement.
