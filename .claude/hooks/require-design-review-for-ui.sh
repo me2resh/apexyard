@@ -130,15 +130,6 @@ fi
 PR_NUMBER=$(extract_pr_number "$COMMAND")
 CMD_REPO=$(resolve_merge_repo "$COMMAND")
 
-# Derive REPO_FLAG from the FULLY-resolved CMD_REPO (#687) so the `gh pr diff`
-# below targets the PR's real repo. If this were set before the cd-target /
-# fallback steps, the no---repo split-portfolio case would diff the ops fork,
-# find no UI files, and silently bypass the gate.
-REPO_FLAG=""
-if [ -n "$CMD_REPO" ]; then
-  REPO_FLAG="--repo $CMD_REPO"
-fi
-
 if [ -z "$PR_NUMBER" ]; then
   # Let block-unreviewed-merge.sh handle the "no PR number" error — we skip
   exit 0
@@ -178,10 +169,20 @@ if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; the
   fi
 fi
 
-# Get the PR's changed files
-CHANGED=$(gh pr diff "$PR_NUMBER" $REPO_FLAG --name-only 2>/dev/null)
-CHANGED_RC=$?
-if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ]; then
+# Get the PR's changed files. The diff endpoint rejects responses over 300
+# files; the files API is paginated and supports larger PRs. It caps at 3,000
+# files, so refuse to evaluate a truncated result rather than fail open.
+CHANGED_FILE_LIST=$(mktemp "${TMPDIR:-/tmp}/apexyard-pr-files.XXXXXX") || exit 2
+CHANGED_RC=0
+TOTAL_FILES=""
+if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' >"$CHANGED_FILE_LIST" 2>/dev/null; then
+  CHANGED_RC=1
+fi
+CHANGED_COUNT=$(wc -l <"$CHANGED_FILE_LIST" 2>/dev/null | tr -d ' ')
+CHANGED_COUNT=${CHANGED_COUNT:-0}
+CHANGED=$(cat "$CHANGED_FILE_LIST" 2>/dev/null)
+rm -f "$CHANGED_FILE_LIST"
+if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; then
   echo "BLOCKED: design-review gate could not determine the PR's changed files. Refusing to merge until the diff can be verified." >&2
   exit 2
 fi
