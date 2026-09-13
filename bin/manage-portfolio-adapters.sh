@@ -33,7 +33,7 @@ while IFS=$'\t' read -r name workspace adapters; do
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
   project_root="$root_dir/$workspace"
   if [ ! -d "$project_root" ]; then echo "DRIFT $name: workspace missing ($project_root)"; drift=$((drift+1)); continue; fi
-  [ -n "$adapters" ] || { echo "OK $name: no adapters declared"; continue; }
+  if [ -z "$adapters" ]; then adapters="codex,pi,opencode,cursor"; fi
   IFS=',' read -r -a requested <<< "$adapters"
   for adapter in "${requested[@]}"; do
     case "$adapter" in

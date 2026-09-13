@@ -23,3 +23,7 @@ fail-closed limitation is unchanged.
 
 Supported declarations are `claude`, `codex`, `pi`, `opencode`, and `cursor`.
 An omitted `adapters` field means the project is not managed by this command.
+
+When `adapters` is omitted, the framework default is all four supported
+third-party adapters. Set `adapters: []` only when a project intentionally
+opts out; use a list to select a smaller set.
