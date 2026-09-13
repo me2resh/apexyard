@@ -114,6 +114,9 @@ install_mock_gh() {
 #!/bin/bash
 args="\$*"
 case "\$args" in
+  *"api"*"pulls/77"*"changed_files"*)
+    if [ "\${MOCK_LARGE:-0}" = 1 ]; then printf '%s\n' 3001; else printf '%s\n' 1; fi
+    ;;
   *"api"*"pulls/"*"/files"*)
     if [ "\${MOCK_LARGE:-0}" = 1 ]; then
       seq 1 3001 | sed 's|^|src/file-|; s|$|.ts|'
@@ -243,6 +246,7 @@ args="\$*"
 case "\$args" in
   *"--repo $portfolio"*|*"repos/$portfolio/"*)
     case "\$args" in
+      *"pulls/77"*"changed_files"*) printf '%s\n' 1 ;;
       *"pulls/77/files"*) printf '%s\n' $diff_files ;;
       *"pr view"*headRefOid*)    printf '%s\n' "$head_sha" ;;
       *"pr view"*headRepository*) printf '%s\n' "$portfolio" ;;

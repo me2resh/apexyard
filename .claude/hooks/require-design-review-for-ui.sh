@@ -174,14 +174,15 @@ fi
 # files, so refuse to evaluate a truncated result rather than fail open.
 CHANGED_FILE_LIST=$(mktemp "${TMPDIR:-/tmp}/apexyard-pr-files.XXXXXX") || exit 2
 CHANGED_RC=0
-if [ -z "$CMD_REPO" ] || ! gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' >"$CHANGED_FILE_LIST" 2>/dev/null; then
+TOTAL_FILES=""
+if [ -z "$CMD_REPO" ] || ! TOTAL_FILES=$(gh api "repos/${CMD_REPO}/pulls/${PR_NUMBER}" --jq '.changed_files' 2>/dev/null) || ! printf '%s' "$TOTAL_FILES" | grep -qE '^[0-9]+$' || [ "$TOTAL_FILES" -gt 3000 ] || ! gh api --paginate "repos/${CMD_REPO}/pulls/${PR_NUMBER}/files?per_page=100" --jq '.[].filename' >"$CHANGED_FILE_LIST" 2>/dev/null; then
   CHANGED_RC=1
 fi
 CHANGED_COUNT=$(wc -l <"$CHANGED_FILE_LIST" 2>/dev/null | tr -d ' ')
 CHANGED_COUNT=${CHANGED_COUNT:-0}
 CHANGED=$(cat "$CHANGED_FILE_LIST" 2>/dev/null)
 rm -f "$CHANGED_FILE_LIST"
-if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$CHANGED_COUNT" -gt 3000 ]; then
+if [ "$CHANGED_RC" -ne 0 ] || [ -z "$CHANGED" ] || [ "$TOTAL_FILES" -gt 3000 ]; then
   echo "BLOCKED: design-review gate could not determine the PR's changed files. Refusing to merge until the diff can be verified." >&2
   exit 2
 fi
