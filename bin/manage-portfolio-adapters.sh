@@ -37,15 +37,14 @@ while IFS= read -r row; do
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
   project_root="$root_dir/$workspace"
   if [ ! -d "$project_root" ]; then echo "DRIFT $name: workspace missing ($project_root)"; drift=$((drift+1)); continue; fi
-  if [ ! -f "$project_root/.claude/settings.json" ]; then echo "DRIFT $name: missing .claude/settings.json"; drift=$((drift+1)); continue; fi
   IFS=',' read -r -a requested <<< "$adapters"
   [ -n "$adapters" ] || { echo "OK $name: adapters opted out"; continue; }
   for adapter in "${requested[@]}"; do
     case "$adapter" in
       claude) [ -d "$project_root/.claude" ] && result=ok || result=missing;;
       codex)
-        if [ "$MODE" = install ]; then bash "$FRAMEWORK_ROOT/bin/sync-codex-adapter.sh" --root "$project_root" >/dev/null; result=installed
-        elif { [ -f "$project_root/.codex/apexyard-adapter.json" ] || { [ -d "$project_root/.agents/skills" ] && [ -d "$project_root/.codex/agents" ] && [ -f "$project_root/.codex/hooks.json" ]; }; } && bash "$FRAMEWORK_ROOT/bin/sync-codex-adapter.sh" --root "$project_root" --check-installed >/dev/null 2>&1; then result=ok
+        if [ "$MODE" = install ]; then bash "$FRAMEWORK_ROOT/bin/sync-codex-adapter.sh" --root "$FRAMEWORK_ROOT" --target-root "$project_root" >/dev/null; result=installed
+        elif { [ -f "$project_root/.codex/apexyard-adapter.json" ] || { [ -d "$project_root/.agents/skills" ] && [ -d "$project_root/.codex/agents" ] && [ -f "$project_root/.codex/hooks.json" ]; }; } && bash "$FRAMEWORK_ROOT/bin/sync-codex-adapter.sh" --root "$FRAMEWORK_ROOT" --target-root "$project_root" --check-installed >/dev/null 2>&1; then result=ok
         elif [ -e "$project_root/.codex" ] || [ -e "$project_root/.agents" ]; then result=drift; else result=missing; fi;;
       pi)
         [ ! -L "$project_root/.pi" ] && [ ! -L "$project_root/.pi/extensions" ] || { echo "DRIFT $name: pi adapter path is a symlink"; drift=$((drift+1)); continue; }

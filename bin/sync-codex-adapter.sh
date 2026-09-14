@@ -12,6 +12,7 @@ CHECK=0
 CLEAN=0
 RECONCILE_INSTALLED=0
 CHECK_INSTALLED=0
+TARGET_ROOT=""
 
 usage() {
   cat <<'USAGE'
@@ -48,6 +49,11 @@ while [ "$#" -gt 0 ]; do
       ROOT="$2"
       shift
       ;;
+    --target-root)
+      [ "$#" -ge 2 ] || { echo "ERROR: --target-root requires a path" >&2; exit 2; }
+      TARGET_ROOT="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -62,6 +68,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 ROOT="$(cd "$ROOT" && pwd)"
+[ -n "$TARGET_ROOT" ] && TARGET_ROOT="$(cd "$TARGET_ROOT" && pwd)" || TARGET_ROOT="$ROOT"
 CLAUDE_DIR="$ROOT/.claude"
 
 [ -d "$CLAUDE_DIR" ] || { echo "ERROR: .claude not found under $ROOT" >&2; exit 1; }
@@ -82,14 +89,14 @@ ADAPTER_OWNED_PATHS=(
 
 assert_safe_output_paths() {
   local path rel
-  for path in "$ROOT/.agents" "$ROOT/.codex"; do
+  for path in "$TARGET_ROOT/.agents" "$TARGET_ROOT/.codex"; do
     if [ -L "$path" ]; then
       echo "ERROR: refusing Codex adapter output through symlink: $path" >&2
       return 1
     fi
   done
   for rel in "${ADAPTER_OWNED_PATHS[@]}"; do
-    if [ -L "$ROOT/$rel" ]; then
+    if [ -L "$TARGET_ROOT/$rel" ]; then
       echo "ERROR: refusing Codex adapter output through symlink: $ROOT/$rel" >&2
       return 1
     fi
@@ -102,15 +109,15 @@ assert_safe_output_paths() {
 assert_safe_output_paths || exit 1
 
 codex_adapter_installed() {
-  local manifest="$ROOT/.codex/apexyard-adapter.json"
+  local manifest="$TARGET_ROOT/.codex/apexyard-adapter.json"
   if [ -f "$manifest" ] \
     && grep -qE '"adapter"[[:space:]]*:[[:space:]]*"apexyard-codex"' "$manifest"; then
     return 0
   fi
 
-  [ -d "$ROOT/.agents/skills" ] \
-    && [ -d "$ROOT/.codex/agents" ] \
-    && [ -f "$ROOT/.codex/hooks.json" ]
+  [ -d "$TARGET_ROOT/.agents/skills" ] \
+    && [ -d "$TARGET_ROOT/.codex/agents" ] \
+    && [ -f "$TARGET_ROOT/.codex/hooks.json" ]
 }
 
 if [ "$RECONCILE_INSTALLED" = "1" ] && ! codex_adapter_installed; then
@@ -285,44 +292,44 @@ check_drift() {
 
 if [ "$CHECK" = "1" ]; then
   rc=0
-  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
-  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  check_drift "$TARGET_ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$TARGET_ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
   exit "$rc"
 fi
 
 if [ "$CHECK_INSTALLED" = "1" ]; then
   rc=0
-  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
-  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  check_drift "$TARGET_ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$TARGET_ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
   exit "$rc"
 fi
 
 if [ "$RECONCILE_INSTALLED" = "1" ] \
-  && [ -e "$ROOT/.agents" ] \
-  && [ -e "$ROOT/.codex" ] \
-  && check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" 2>/dev/null \
-  && check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" 2>/dev/null; then
+  && [ -e "$TARGET_ROOT/.agents" ] \
+  && [ -e "$TARGET_ROOT/.codex" ] \
+  && check_drift "$TARGET_ROOT/.agents" "$OUT_AGENTS" ".agents" 2>/dev/null \
+  && check_drift "$TARGET_ROOT/.codex" "$OUT_CODEX" ".codex" 2>/dev/null; then
   exit 0
 fi
 
 if [ "$CLEAN" = "1" ]; then
-  rm -rf "$ROOT/.agents" "$ROOT/.codex"
+  rm -rf "$TARGET_ROOT/.agents" "$TARGET_ROOT/.codex"
 fi
 
-mkdir -p "$ROOT/.agents" "$ROOT/.codex"
-rm -rf "$ROOT/.agents/skills" "$ROOT/.codex/agents" "$ROOT/.codex/hooks" "$ROOT/.codex/rules" \
-  "$ROOT/.codex/migrations" "$ROOT/.codex/registries" "$ROOT/.codex/hooks.json" \
-  "$ROOT/.codex/project-config.defaults.json" "$ROOT/.codex/framework-version" \
-  "$ROOT/.codex/apexyard-adapter.json"
-cp -R "$OUT_AGENTS/skills" "$ROOT/.agents/skills"
-cp -R "$OUT_CODEX/agents" "$ROOT/.codex/agents"
-cp "$OUT_CODEX/hooks.json" "$ROOT/.codex/hooks.json"
-cp "$OUT_CODEX/apexyard-adapter.json" "$ROOT/.codex/apexyard-adapter.json"
+mkdir -p "$TARGET_ROOT/.agents" "$TARGET_ROOT/.codex"
+rm -rf "$TARGET_ROOT/.agents/skills" "$TARGET_ROOT/.codex/agents" "$TARGET_ROOT/.codex/hooks" "$TARGET_ROOT/.codex/rules" \
+  "$TARGET_ROOT/.codex/migrations" "$TARGET_ROOT/.codex/registries" "$TARGET_ROOT/.codex/hooks.json" \
+  "$TARGET_ROOT/.codex/project-config.defaults.json" "$TARGET_ROOT/.codex/framework-version" \
+  "$TARGET_ROOT/.codex/apexyard-adapter.json"
+cp -R "$OUT_AGENTS/skills" "$TARGET_ROOT/.agents/skills"
+cp -R "$OUT_CODEX/agents" "$TARGET_ROOT/.codex/agents"
+cp "$OUT_CODEX/hooks.json" "$TARGET_ROOT/.codex/hooks.json"
+cp "$OUT_CODEX/apexyard-adapter.json" "$TARGET_ROOT/.codex/apexyard-adapter.json"
 
 if [ "$RECONCILE_INSTALLED" = "1" ]; then
   rc=0
-  check_drift "$ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
-  check_drift "$ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
+  check_drift "$TARGET_ROOT/.agents" "$OUT_AGENTS" ".agents" || rc=1
+  check_drift "$TARGET_ROOT/.codex" "$OUT_CODEX" ".codex" || rc=1
   [ "$rc" = "0" ] || exit "$rc"
   echo "Reconciled installed Codex adapter from .claude."
   exit 0
