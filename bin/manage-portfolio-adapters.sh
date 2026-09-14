@@ -37,6 +37,7 @@ while IFS= read -r row; do
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
   project_root="$root_dir/$workspace"
   if [ ! -d "$project_root" ]; then echo "DRIFT $name: workspace missing ($project_root)"; drift=$((drift+1)); continue; fi
+  if [ ! -f "$project_root/.claude/settings.json" ]; then echo "DRIFT $name: missing .claude/settings.json"; drift=$((drift+1)); continue; fi
   IFS=',' read -r -a requested <<< "$adapters"
   [ -n "$adapters" ] || { echo "OK $name: adapters opted out"; continue; }
   for adapter in "${requested[@]}"; do

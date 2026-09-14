@@ -3,7 +3,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/workspace/ok"
+mkdir -p "$TMP/workspace/ok/.claude"
+printf '{}\n' > "$TMP/workspace/ok/.claude/settings.json"
 cat > "$TMP/registry.yaml" <<YAML
 version: 1
 projects:
