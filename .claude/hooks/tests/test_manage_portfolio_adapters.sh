@@ -28,4 +28,5 @@ projects:
     docs: projects/repoless
     status: active
 YAML
-"$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-repoless.yaml" | grep -q 'OK repoless: no workspace; skipped'
+"$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-repoless.yaml" >"$TMP/repoless-out"
+grep -q 'OK repoless: no workspace; skipped' "$TMP/repoless-out"

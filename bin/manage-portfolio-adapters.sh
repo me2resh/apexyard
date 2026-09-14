@@ -31,8 +31,8 @@ while IFS= read -r row; do
   workspace=$(jq -r '.[1]' <<<"$row")
   adapters=$(jq -r '.[2]' <<<"$row")
   [ -n "$name" ] || continue
-  [ -n "$workspace" ] || { echo "OK $name: no workspace; skipped"; continue; }
   [ -z "$PROJECT_FILTER" ] || [ "$name" = "$PROJECT_FILTER" ] || continue
+  [ -n "$workspace" ] || { echo "OK $name: no workspace; skipped"; continue; }
   count=$((count+1))
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
   project_root="$root_dir/$workspace"
