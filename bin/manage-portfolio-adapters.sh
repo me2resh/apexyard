@@ -26,7 +26,10 @@ fi
 command -v yq >/dev/null 2>&1 || { echo "ERROR: yq is required" >&2; exit 1; }
 root_dir="$(cd "$(dirname "$REGISTRY")" && pwd)"
 count=0; drift=0
-while IFS=$'\t' read -r name workspace adapters; do
+while IFS= read -r row; do
+  name=$(jq -r '.[0]' <<<"$row")
+  workspace=$(jq -r '.[1]' <<<"$row")
+  adapters=$(jq -r '.[2]' <<<"$row")
   [ -n "$name" ] || continue
   [ -n "$workspace" ] || { echo "OK $name: no workspace; skipped"; continue; }
   [ -z "$PROJECT_FILTER" ] || [ "$name" = "$PROJECT_FILTER" ] || continue
@@ -54,7 +57,7 @@ while IFS=$'\t' read -r name workspace adapters; do
     esac
     if [ "$result" = ok ] || [ "$result" = installed ]; then echo "$result $name: $adapter"; else echo "DRIFT $name: $adapter ($result)"; drift=$((drift+1)); fi
   done
-done < <(yq -r '.projects[] | [ .name, (.workspace // ""), ((.adapters // ["codex", "pi", "opencode", "cursor"]) | join(",")) ] | @tsv' "$REGISTRY")
+done < <(yq -o=json -I=0 '.projects[] | [ .name, (.workspace // ""), ((.adapters // ["codex", "pi", "opencode", "cursor"]) | join(",")) ]' "$REGISTRY")
 [ "$count" -gt 0 ] || { echo "No registered projects matched."; exit 0; }
 if [ "$MODE" = check ] && [ "$drift" -gt 0 ]; then echo "Portfolio adapter drift: $drift finding(s)."; exit 1; fi
 echo "Portfolio adapter check complete: $count project(s)."
