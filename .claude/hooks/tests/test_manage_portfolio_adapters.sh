@@ -20,3 +20,12 @@ fi
 grep -q 'DRIFT missing: workspace missing' "$TMP/out"
 "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry.yaml" --project ok >/dev/null
 echo "PASS: portfolio adapter management"
+# Repo-less entries must not shift fields or create a bogus workspace path.
+cat > "$TMP/registry-repoless.yaml" <<YAML
+version: 1
+projects:
+  - name: repoless
+    docs: projects/repoless
+    status: active
+YAML
+"$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-repoless.yaml" | grep -q 'OK repoless: no workspace; skipped'

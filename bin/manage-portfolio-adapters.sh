@@ -28,6 +28,7 @@ root_dir="$(cd "$(dirname "$REGISTRY")" && pwd)"
 count=0; drift=0
 while IFS=$'\t' read -r name workspace adapters; do
   [ -n "$name" ] || continue
+  [ -n "$workspace" ] || { echo "OK $name: no workspace; skipped"; continue; }
   [ -z "$PROJECT_FILTER" ] || [ "$name" = "$PROJECT_FILTER" ] || continue
   count=$((count+1))
   case "$workspace" in /*|*".."*) echo "DRIFT $name: unsafe workspace path ($workspace)"; drift=$((drift+1)); continue;; esac
