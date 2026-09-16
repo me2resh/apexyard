@@ -3,6 +3,13 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 FRAMEWORK_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Use the main checkout as the durable ops-root anchor when this command runs
+# from a linked worktree. Generated adapters may be temporary, but the anchor
+# must not point at a worktree that is removed after the PR merges.
+FRAMEWORK_ANCHOR_ROOT="$FRAMEWORK_ROOT"
+if common_git_dir=$(git -C "$FRAMEWORK_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+  FRAMEWORK_ANCHOR_ROOT="$(cd "$(dirname "$common_git_dir")" && pwd)"
+fi
 REGISTRY=""
 MODE=check
 PROJECT_FILTER=""
@@ -26,6 +33,46 @@ fi
 command -v yq >/dev/null 2>&1 || { echo "ERROR: yq is required" >&2; exit 1; }
 root_dir="$(cd "$(dirname "$REGISTRY")" && pwd)"
 count=0; drift=0
+
+ensure_split_portfolio_anchor() {
+  [ "$root_dir" = "$FRAMEWORK_ROOT" ] && return 0
+  local anchor="$root_dir/.apexyard-fork"
+  local config_dir="$root_dir/.claude"
+  local hooks_link="$config_dir/hooks"
+  local settings_link="$config_dir/settings.json"
+  if [ "$MODE" = install ]; then
+    [ -e "$anchor" ] || : > "$anchor"
+    mkdir -p "$config_dir"
+    if [ ! -e "$hooks_link" ] && [ ! -L "$hooks_link" ]; then
+      local hooks_target settings_target
+      hooks_target=$(python3 - "$config_dir" "$FRAMEWORK_ANCHOR_ROOT/.claude/hooks" <<'PY'
+import os, sys
+print(os.path.relpath(sys.argv[2], sys.argv[1]))
+PY
+)
+      ln -s "$hooks_target" "$hooks_link"
+    fi
+    if [ ! -e "$settings_link" ] && [ ! -L "$settings_link" ]; then
+      local settings_target
+      settings_target=$(python3 - "$config_dir" "$FRAMEWORK_ANCHOR_ROOT/.claude/settings.json" <<'PY'
+import os, sys
+print(os.path.relpath(sys.argv[2], sys.argv[1]))
+PY
+)
+      ln -s "$settings_target" "$settings_link"
+    fi
+  fi
+  [ -f "$anchor" ] || { echo "DRIFT portfolio: missing $anchor"; return 1; }
+  [ -L "$hooks_link" ] && [ -d "$hooks_link" ] || { echo "DRIFT portfolio: $hooks_link must link to framework hooks"; return 1; }
+  [ -L "$settings_link" ] && [ -f "$settings_link" ] || { echo "DRIFT portfolio: $settings_link must link to framework settings"; return 1; }
+}
+
+if ! ensure_split_portfolio_anchor; then
+  [ "$MODE" = check ] && exit 1
+  echo "ERROR: unable to establish the split-portfolio ops-root anchor" >&2
+  exit 1
+fi
+
 while IFS= read -r row; do
   name=$(jq -r '.[0]' <<<"$row")
   workspace=$(jq -r '.[1]' <<<"$row")
