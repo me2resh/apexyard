@@ -6,7 +6,7 @@ The retired full copy is recorded in [AgDR-0091](../agdr/AgDR-0091-cursor-adapte
 
 ## What's enforced vs advisory today
 
-**Cursor IDE, with third-party configs on.** Cursor loads `.claude/settings.json`. The same unmodified bash gates fire as under Claude Code. A live Write call on 2026-09-16 hit `require-active-ticket.sh` and returned the real ticket-first message.
+**Cursor IDE, with third-party configs on.** Cursor loads `.claude/settings.json`. The same unmodified bash gates fire as under Claude Code. A live Write call on 2026-09-16 was refused by `require-active-ticket.sh`. The hook returned the real ticket-first message.
 
 **Overlay (session pin only).** `.cursor/hooks.json` runs `.claude/hooks/cursor-session-pin.sh` on sessionStart. It does not copy merge gates, secrets scan, or ticket-first. It does not set `failClosed`.
 

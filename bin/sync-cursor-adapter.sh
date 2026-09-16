@@ -98,7 +98,7 @@ mkdir -p "$OUT_OVERLAY/rules"
 # Project hooks run from the repo root. User hooks run from ~/.cursor, so
 # they need the same ops-root walk the canonical wrappers already use.
 PROJECT_PIN_CMD='.claude/hooks/cursor-session-pin.sh'
-USER_PIN_CMD=$(printf '%s' "bash -c 'r=\"\";if [ -n \"\${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"\${APEXYARD_OPS_PIN_DIR:-\$HOME/.claude/apexyard}/ops-root-\${CLAUDE_CODE_SESSION_ID}\";[ -f \"\$p\" ] && IFS= read -r r < \"\$p\" && [ -d \"\$r/.claude/hooks\" ] || r=\"\";fi;if [ -z \"\$r\" ];then r=\${CURSOR_PROJECT_DIR:-\$PWD};while [ -n \"\$r\" ] && [ \"\$r\" != / ];do { [ -f \"\$r/.apexyard-fork\" ] || [ -f \"\$r/onboarding.yaml\" ]; } && [ -d \"\$r/.claude/hooks\" ] && break;r=\${r%/*};done;fi;[ -d \"\$r/.claude/hooks\" ] || { printf \"%s\\n\" \"{}\"; exit 0; };exec \"\$r/.claude/hooks/cursor-session-pin.sh\"'")
+USER_PIN_CMD=$(printf '%s' "bash -c 'valid(){ [ -d \"\$1/.claude/hooks\" ] && { [ -f \"\$1/.apexyard-fork\" ] || { [ -f \"\$1/onboarding.yaml\" ] && [ -f \"\$1/apexyard.projects.yaml\" ]; }; }; };r=\"\";if [ -n \"\${CLAUDE_CODE_SESSION_ID:-}\" ];then p=\"\${APEXYARD_OPS_PIN_DIR:-\$HOME/.claude/apexyard}/ops-root-\${CLAUDE_CODE_SESSION_ID}\";[ -f \"\$p\" ] && IFS= read -r r < \"\$p\" && valid \"\$r\" || r=\"\";fi;if [ -z \"\$r\" ];then r=\${CURSOR_PROJECT_DIR:-\$PWD};while [ -n \"\$r\" ] && [ \"\$r\" != / ];do valid \"\$r\" && break;r=\${r%/*};done;fi;valid \"\$r\" || { printf \"%s\\n\" \"{}\"; exit 0; };CURSOR_PROJECT_DIR=\"\$r\" exec \"\$r/.claude/hooks/cursor-session-pin.sh\"'")
 
 write_hooks_json() {
   local cmd="$1"
@@ -184,7 +184,7 @@ warn_full_adapter() {
   [ -f "$target" ] || return 0
   local owned
   owned=$(count_owned <"$target" 2>/dev/null) || owned=0
-  if grep -F 'APEXYARD_CURSOR_HOOK_GLOB' "$target" >/dev/null 2>&1 || [ "${owned:-0}" -gt 2 ]; then
+  if grep -F 'APEXYARD_CURSOR_HOOK_GLOB' "$target" >/dev/null 2>&1 || [ "${owned:-0}" -gt 1 ]; then
     echo "WARNING: $target still has a full generated apexyard adapter ($owned owned entries)." >&2
     echo "WARNING: that copy can fail-closed-block every Shell/Write call. Re-install replaces it with the thin overlay." >&2
   fi

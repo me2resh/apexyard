@@ -66,7 +66,7 @@ root. No runtime or service is required.
 
 > **Marketing site:** the site that was previously bundled here has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed independently at [apexyard.ai](https://apexyard.ai).
 >
-> **Built for Claude Code first.** opencode, pi, and Codex use the same rules through small adapters. Cursor has partial support. See [Using another AI coding tool?](#using-another-ai-coding-tool).
+> **Built for Claude Code first.** opencode, pi, and Codex use the same rules through small adapters. Cursor loads `.claude/` natively in the IDE. See [Using another AI coding tool?](#using-another-ai-coding-tool).
 >
 > **For AI coding agents:** `AGENTS.md` is the universal entry document for tools that do not load `CLAUDE.md`. See [`docs/harnesses/pi.md`](docs/harnesses/pi.md).
 
@@ -188,9 +188,9 @@ manual configuration files from Quick Start when a skill is unavailable.
 | **opencode** | ✅ **Yes — proven.** A real agent's `git add -A` was blocked by the same rule. | `bash bin/install-opencode-adapter.sh` | Run opencode with `--auto` so the agent's command reaches the rule. |
 | **pi** | ✅ **Yes — proven.** Same, in a real pi session. | `bash bin/install-pi-adapter.sh` | Run pi with `-a` (auto-approve). pi is deliberately bare-bones — ApexYard is the governance it leaves to you. |
 | **Codex** | ✅ **Yes — proven.** Same, in a real Codex session. | `bash bin/sync-codex-adapter.sh` | Codex has to trust the rules once — `/hooks`, a one-off flag, or a user-level install. Details: [`docs/codex-adapter.md`](docs/codex-adapter.md). |
-| **Cursor** | ✅ **Yes — native in the IDE.** Cursor loads `.claude/` when third-party configs are on. A real Write call hit the ticket-first rule (2026-09-16). | Enable third-party configs. Then `bash bin/install-cursor-adapter.sh` for the session-pin overlay. | IDE only. The command-line `cursor-agent` ignores hooks. A leftover full adapter can lock the session. |
+| **Cursor** | ✅ **Yes — native in the IDE.** Cursor loads `.claude/` when third-party configs are on. A real Write call was refused by the ticket-first rule (2026-09-16). | Enable third-party configs. Then `bash bin/install-cursor-adapter.sh` for the session-pin overlay. | IDE only. The command-line `cursor-agent` ignores hooks. A leftover full adapter can lock the session. |
 
-*Under the hood:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones — never a separate copy that can drift out of sync. A daily, credentialed [Conformance CI](docs/conformance-ci.md) job re-verifies each proven harness automatically, so the claims above aren't just one-off manual checks. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/README.md`](docs/harnesses/README.md)**.
+*Under the hood:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones — never a separate copy that can drift out of sync. A daily, credentialed [Conformance CI](docs/conformance-ci.md) job re-verifies opencode, pi, and Codex. Cursor has no headless path in that matrix. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/README.md`](docs/harnesses/README.md)**.
 
 ## Roles, workflows & templates
 

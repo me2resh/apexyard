@@ -48,6 +48,12 @@ mkdir -p "$TMPROOT/.claude/hooks"
 touch "$TMPROOT/.apexyard-fork"
 cp "$ROOT/.claude/hooks/cursor-session-pin.sh" "$TMPROOT/.claude/hooks/cursor-session-pin.sh"
 chmod +x "$TMPROOT/.claude/hooks/cursor-session-pin.sh"
+cp "$ROOT/.claude/hooks/_lib-ops-root.sh" "$TMPROOT/.claude/hooks/_lib-ops-root.sh"
+cat > "$TMPROOT/.claude/hooks/pin-ops-root.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+chmod +x "$TMPROOT/.claude/hooks/pin-ops-root.sh"
 
 # settings.json is NOT an overlay input. Keep a fixture so a regression
 # that starts copying gates from it would be visible.
@@ -276,6 +282,51 @@ if jq -e '[.hooks.sessionStart[] | select(.command | contains("cursor-session-pi
 else
   mark_fail "fresh user config carries the session-pin overlay" "$(jq '.hooks' "$FRESH_USERDIR/hooks.json")"
 fi
+
+echo "== user-level overlay command execution"
+
+user_cmd=$(jq -r '.hooks.sessionStart[0].command' "$FRESH_USERDIR/hooks.json")
+PLAIN=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-plain.XXXXXX")
+YAMLONLY=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-yaml.XXXXXX")
+PINDIR=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-pin.XXXXXX")
+mkdir -p "$YAMLONLY/.claude/hooks"
+touch "$YAMLONLY/onboarding.yaml"
+
+out=$(printf '%s' '{"session_id":"sess-user"}' | (cd "$TMPROOT" && unset CURSOR_PROJECT_DIR CLAUDE_CODE_SESSION_ID && bash -c "$user_cmd") )
+if printf '%s' "$out" | jq -e '.env.CLAUDE_CODE_SESSION_ID == "sess-user"' >/dev/null 2>&1; then
+  mark_pass "user overlay command maps session_id from the fixture fork"
+else
+  mark_fail "user overlay command maps session_id from the fixture fork" "got [$out]"
+fi
+
+out=$(printf '%s' '{"session_id":"sess-plain"}' | (cd "$PLAIN" && unset CURSOR_PROJECT_DIR CLAUDE_CODE_SESSION_ID && bash -c "$user_cmd") )
+if [ "$out" = "{}" ]; then
+  mark_pass "user overlay command prints {} outside an ops fork"
+else
+  mark_fail "user overlay command prints {} outside an ops fork" "got [$out]"
+fi
+
+out=$(printf '%s' '{"session_id":"sess-yaml"}' | (cd "$YAMLONLY" && unset CURSOR_PROJECT_DIR CLAUDE_CODE_SESSION_ID && bash -c "$user_cmd") )
+if [ "$out" = "{}" ]; then
+  mark_pass "user overlay command does not treat onboarding.yaml alone as an ops fork"
+else
+  mark_fail "user overlay command does not treat onboarding.yaml alone as an ops fork" "got [$out]"
+fi
+
+printf '%s\n' "$TMPROOT" > "$PINDIR/ops-root-sess-pin"
+out=$(printf '%s' '{"session_id":"sess-pin"}' | (
+  cd "$PLAIN"
+  unset CURSOR_PROJECT_DIR
+  export CLAUDE_CODE_SESSION_ID=sess-pin
+  export APEXYARD_OPS_PIN_DIR="$PINDIR"
+  bash -c "$user_cmd"
+) )
+if printf '%s' "$out" | jq -e '.env.CLAUDE_CODE_SESSION_ID == "sess-pin"' >/dev/null 2>&1; then
+  mark_pass "user overlay command passes the pinned root into the session pin script"
+else
+  mark_fail "user overlay command passes the pinned root into the session pin script" "got [$out]"
+fi
+rm -rf "$PLAIN" "$YAMLONLY" "$PINDIR"
 
 echo
 echo "===== test_sync_cursor_adapter.sh ====="

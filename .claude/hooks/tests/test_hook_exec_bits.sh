@@ -86,6 +86,16 @@ else
   mark_fail "_lib leak" "found ${lib_leak} _lib-*.sh file(s) in the exec'd set — extraction regex is over-matching"
 fi
 
+# Overlay hook is not wired in settings.json. The project .cursor/hooks.json
+# invokes it directly, so a lost exec bit would pass the settings.json scan.
+PIN_HOOK=".claude/hooks/cursor-session-pin.sh"
+pin_mode=$(git ls-files -s -- "$PIN_HOOK" 2>/dev/null | awk '{print $1}')
+if [ "$pin_mode" = "100755" ]; then
+  mark_pass "cursor-session-pin.sh is 100755 in the git index"
+else
+  mark_fail "cursor-session-pin.sh is 100755 in the git index" "mode=${pin_mode:-missing}"
+fi
+
 # --- Summary ---
 echo
 echo "===== test_hook_exec_bits.sh ====="

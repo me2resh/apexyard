@@ -39,8 +39,9 @@ bin/install-cursor-adapter.sh --uninstall
 Removes only apexyard's own entries. Foreign hooks stay.
 
 **Scope.** This is a per-machine install. The overlay self-scopes. It walks
-for `.apexyard-fork` (or a live session pin) and prints `{}` when the
-current project is not governed.
+for `.apexyard-fork`, or the legacy `onboarding.yaml` plus
+`apexyard.projects.yaml` pair, and prints `{}` when the current project is
+not governed.
 
 **`cursor-agent` (the CLI) is not covered.** It ignores `hooks.json`. It
 uses `~/.cursor/cli-config.json` permissions instead.
