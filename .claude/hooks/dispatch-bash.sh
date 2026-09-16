@@ -4,7 +4,16 @@ set -euo pipefail
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 INPUT=$(cat)
-COMMAND=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
+# Do not let a missing or broken jq abort dispatch with exit 127. Claude
+# Code only blocks on exit 2. Merge gates already fail closed on a raw
+# merge-shaped payload when they cannot parse the command (T13).
+COMMAND=""
+if command -v jq >/dev/null 2>&1; then
+  COMMAND=$(jq -r '.tool_input.command // empty' <<<"$INPUT" 2>/dev/null) || COMMAND=""
+fi
+if [ "$COMMAND" = "null" ]; then
+  COMMAND=""
+fi
 
 run_hook() {
   local script="$1" rc=0
@@ -164,3 +173,13 @@ case "$COMMAND" in
     run_hook require-architecture-review.sh
     ;;
 esac
+
+# Command parse failed. Route the raw payload to the merge gates so their
+# jq-independent fallback still blocks merge-shaped commands.
+if [ -z "$COMMAND" ]; then
+  printf 'WARN: dispatcher could not parse the Bash command; running merge gates fail-closed.\n' >&2
+  run_hook block-unreviewed-merge.sh
+  run_hook require-design-review-for-ui.sh
+  run_hook block-merge-on-red-ci.sh
+  run_hook require-architecture-review.sh
+fi

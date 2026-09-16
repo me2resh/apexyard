@@ -82,4 +82,38 @@ set -e
 [ "$rc" -eq 2 ]
 [ "$(grep -c '^block-git-add-all.sh$' "$TMP/log")" -eq 1 ]
 
+# Broken jq must not fail-open a merge. The real merge gates fail closed
+# when they cannot parse the command and the raw payload looks merge-shaped.
+broken_jq="$(mktemp -d)"
+trap 'rm -rf "$TMP" "$broken_jq"' EXIT
+cat > "$broken_jq/jq" <<'EOF'
+#!/usr/bin/env bash
+exit 127
+EOF
+chmod +x "$broken_jq/jq"
+
+run_broken_jq() {
+  printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" \
+    | PATH="$broken_jq:${PATH}" "$ROOT/dispatch-bash.sh"
+}
+
+set +e
+run_broken_jq 'true' >/dev/null
+rc=$?
+set -e
+[ "$rc" -ne 2 ]
+
+for command in \
+  'gh pr merge 42' \
+  'gh api repos/example/repo/pulls/42/merge' \
+  'glab mr merge 42' \
+  'glab api projects/1/merge_requests/42/merge' \
+  'tracker_pr_merge 42'; do
+  set +e
+  run_broken_jq "$command" >/dev/null
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ]
+done
+
 echo "PASS: bash dispatcher"

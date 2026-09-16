@@ -56,6 +56,10 @@ no longer lists the delegated Bash gates. A lost execute bit on those
 scripts now warns and continues. The exec-bit control is then the remaining
 guard against a silent fail-open.
 
+The dispatcher must not abort on a missing or broken `jq`. Claude Code
+only blocks exit 2. If command parse fails, the dispatcher still runs the
+four merge gates so their raw-payload fallback can block (T13).
+
 On the same worktree, three sequential `true` calls measured about 10.24
 seconds through the old 54-entry list (about 3.41 seconds per call) and 1.43
 seconds through the dispatcher (about 0.48 seconds per call). The original
