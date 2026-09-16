@@ -330,8 +330,43 @@ case_9() {
   mark_pass "$case_name"
 }
 
+# Case 10: a pinned subdirectory fork must remain distinct from its enclosing
+# repository, while a unique v2 child still wins over a v1-pair sibling.
+case_10() {
+  local case_name="subdirectory fork pin: preserves fork root beside v1 sibling"
+  local outer fork portfolio pin_dir expected
+  outer=$(mktemp -d)
+  fork="$outer/fork"
+  portfolio="$outer/portfolio"
+  mkdir -p "$fork" "$portfolio"
+  git init -q "$outer"
+  : > "$fork/.apexyard-fork"
+  : > "$portfolio/onboarding.yaml"
+  : > "$portfolio/apexyard.projects.yaml"
+  pin_dir=$(mktemp -d)
+  expected=$(cd "$fork" && pwd -P)
+  printf '%s\n' "$expected" > "$pin_dir/ops-root-testsess10"
+  (
+    export CLAUDE_CODE_SESSION_ID="testsess10"
+    export APEXYARD_OPS_PIN_DIR="$pin_dir"
+    unset APEXYARD_OPS_DISABLE_PIN
+    # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$fork" && resolve_ops_root)
+    [ "$out" = "$expected" ] || { mark_fail "$case_name (pin read)" "expected '$expected', got '$out'"; return; }
+    unset CLAUDE_CODE_SESSION_ID
+    cd "$fork" || return 1
+    export CLAUDE_CODE_SESSION_ID="testsess10-write"
+    bash "$HOOK" >/dev/null 2>&1
+    pinned=""
+    IFS= read -r pinned < "$pin_dir/ops-root-testsess10-write" || pinned=""
+    [ "$pinned" = "$expected" ] || { mark_fail "$case_name (pin write)" "expected '$expected', got '$pinned'"; return; }
+    mark_pass "$case_name"
+  )
+}
+
 echo "Running pin-first resolve_ops_root tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10; do
   run_case "$fn"
 done
 
