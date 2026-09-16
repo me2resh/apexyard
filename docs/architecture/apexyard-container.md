@@ -1,6 +1,6 @@
 # Container Diagram — ApexYard
 
-> **C4 Level 2** — the functional subsystems inside the ApexYard fork. Non-traditional: ApexYard has no runtime of its own. Each "container" is a folder-scoped set of files interpreted by an external system (Claude Code CLI, the user, or GitHub's rendering).
+> **C4 Level 2** — the functional subsystems inside the ApexYard fork. Non-traditional: ApexYard has no runtime of its own. Each "container" is a folder-scoped set of files interpreted by an external system (Claude Code CLI, Cursor IDE, the user, or GitHub's rendering).
 
 ## Diagram
 
@@ -10,13 +10,15 @@ C4Container
 
     Person(ops, "CEO / CoS / Tech Lead")
     System_Ext(claude, "Claude Code CLI")
+    System_Ext(cursor, "Cursor IDE")
     System_Ext(github, "GitHub")
 
     System_Boundary(apex, "ApexYard (ops fork)") {
-        Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code reads this first. Imports rules and role-triggers.")
+        Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code and Cursor read this first when native load is on. Imports rules and role-triggers.")
         Container(rules, ".claude/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
-        Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart events.")
-        Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (31 skills)")
+        Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart. Cursor session-pin overlay lives here too.")
+        Container(overlay, ".cursor/", "hooks.json + rules", "Thin Cursor overlay. sessionStart maps session_id onto CLAUDE_CODE_SESSION_ID. Does not copy the Claude Code gates.")
+        Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (66 skills)")
         Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), solution-architect (Tariq), contrarian (Naqid), plus the department-aligned role agents.")
         Container(roles, "roles/", "Markdown role files", "19 role definitions across engineering / product / design / security / data. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
@@ -26,12 +28,18 @@ C4Container
         Container(goldens, "golden-paths/", "YAML + Markdown", "Reusable GitHub Actions workflow templates — CI, security, dependency audit, PR title check, review check.")
     }
 
-    Rel(ops, claudemd, "Reads / edits", "via Claude Code or editor")
+    Rel(ops, claudemd, "Reads / edits", "via Claude Code, Cursor, or editor")
     Rel(claude, claudemd, "Loads on session start")
+    Rel(cursor, claudemd, "Loads when third-party configs are on")
     Rel(claudemd, rules, "Imports via @.claude/rules/*.md")
     Rel(claude, hooks, "Executes on tool events", "bash")
+    Rel(cursor, hooks, "Executes .claude/settings.json gates natively", "bash")
+    Rel(cursor, overlay, "Runs sessionStart pin")
+    Rel(overlay, hooks, "Execs cursor-session-pin.sh")
     Rel(claude, skills, "Invokes on /slash-command", "Skill tool")
     Rel(claude, agents, "Spawns sub-agents", "Agent tool")
+    Rel(cursor, skills, "Loads SKILL.md when third-party configs are on")
+    Rel(cursor, agents, "Loads agent defs when third-party configs are on")
     Rel(hooks, github, "Calls gh CLI", "gh pr / gh issue")
     Rel(skills, github, "Calls gh CLI", "gh pr / gh issue / gh api")
     Rel(skills, registry, "Reads for portfolio iteration")
@@ -45,6 +53,7 @@ C4Container
 ApexYard is unusual in C4 terms: there is **no running process that IS ApexYard**. Every "container" above is a folder of files. The "runtime" is either:
 
 - **Claude Code CLI** — reads `CLAUDE.md`, executes hooks, invokes skills, spawns sub-agents
+- **Cursor IDE** — loads the same `.claude/` runtime when third-party configs are on. The `.cursor/` overlay only maps the session id.
 - **The user** — reads role files, workflow docs, and the portfolio registry manually
 - **GitHub** — renders Markdown in the repo view, enforces branch protection, runs CI on `golden-paths/` pipelines copied into project repos
 
@@ -60,7 +69,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 ## What this diagram does NOT show
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
-- The full list of 31 skills — see CLAUDE.md § "Available skills".
+- The full list of 66 skills — see CLAUDE.md § "Available skills".
 - The full list of 19 roles — see `.claude/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
@@ -79,3 +88,7 @@ Updates when:
 - The Claude Code integration model changes (new event type, new agent shape)
 
 Skill-count / hook-count / role-count drift goes in the relevant summary docs (CLAUDE.md, hooks/README.md), not here. This diagram stays at the "shape of the fork" level.
+
+## Evolution
+
+**2026-09-16 — native-first Cursor overlay (AgDR-0151, me2resh/apexyard#1311).** Cursor.app 3.10.20 executed unmodified `.claude/hooks/*.sh` through the Claude Code loader. The generated 86-entry `hooks.json` copy became a lock-the-session hazard (`failClosed` plus leftover user config). Architecture change: Cursor is now a runtime of `.claude/`, not a second gate list. `.cursor/` is a one-hook overlay that maps `session_id` onto `CLAUDE_CODE_SESSION_ID`. Skill count on this diagram moved from 31 to 66 to match CLAUDE.md.

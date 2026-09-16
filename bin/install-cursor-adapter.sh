@@ -1,52 +1,29 @@
 #!/usr/bin/env bash
-# Install the apexyard Cursor gate adapter into Cursor's USER-level hooks
-# config — the ONLY location Cursor 3.x actually loads
-# (me2resh/apexyard#840 finding #3). A project-level `.cursor/hooks.json`
-# (what `bin/sync-cursor-adapter.sh` writes without --user) showed
-# "Configured Hooks (0)" in a live Cursor.app 3.10.20 session — never
-# loaded, no trust prompt. Installing the identical, unmodified generated
-# hooks into `~/.cursor/hooks.json` showed "Configured Hooks (1)" and it
-# blocked a real `git add .` in an agent turn. Schema (`version:1`,
-# `beforeShellExecution`, `failClosed`) was already correct; only the
-# location was wrong.
+# Install the thin Cursor overlay into Cursor USER-level hooks config.
+#
+# Native-first (AgDR-0151): Cursor loads `.claude/settings.json` hooks when
+# third-party configs are enabled. This script does not copy those gates.
+# It merges the sessionStart pin overlay into ~/.cursor/hooks.json and
+# refreshes `.cursor/rules/apexyard.mdc`.
 #
 # WHY THIS SCRIPT EXISTS, NOT JUST bin/sync-cursor-adapter.sh
 # ----------------------------------------------------------------
-# bin/sync-cursor-adapter.sh owns the jq generation pipeline (the
-# event-mapping table, the beforeShellExecution stdin remap, the
-# failClosed list) — this script does not fork or re-implement any of
-# that gate logic. It reuses the exact same generator, in its `--user`
-# mode, which MERGES the generated hooks.json into the user config
-# instead of writing a project file: existing entries in
-# ~/.cursor/hooks.json that this framework did not generate (the user's
-# own hooks, or a different tool's) are left untouched; only apexyard's
-# own entries (identified structurally — every one execs a
-# `.claude/hooks/*.sh` script, see owned_hooks_only() in
-# bin/sync-cursor-adapter.sh) are replaced. This wrapper adds the
-# install-lifecycle ergonomics a raw `sync-cursor-adapter.sh --user` call
-# doesn't have on its own: a documented default target, a --uninstall
-# path, and a friendly summary of what changed.
+# bin/sync-cursor-adapter.sh owns generation of the overlay. This wrapper
+# adds install-lifecycle ergonomics: a documented default target, a
+# --uninstall path, and a summary of what changed.
 #
-# SCOPE NOTE — this is a per-machine (per-OS-user) install, unlike the
-# pi/opencode adapters (installed per-PROJECT into that project's
-# .pi/extensions/ or .opencode/plugins/). Cursor's hook loader reads one
-# ~/.cursor/hooks.json and applies it across every project you open in
-# Cursor. That is safe here because every generated hook command still
-# self-scopes: it resolves ops-root by walking up from Cursor's cwd for
-# an `.apexyard-fork` marker (or a live session pin) and exits 0
-# immediately if the current project isn't apexyard-governed (see the
-# CURSOR_SHELL_REMAP shim in bin/sync-cursor-adapter.sh) — so installing
-# once does not force apexyard's gates onto unrelated Cursor projects.
+# --user merge replaces leftover full generated adapters. Any command
+# that execs `.claude/hooks/*.sh` is apexyard-owned. Re-install strips
+# those copies and writes the thin overlay. Foreign hooks stay.
 #
-# KNOWN LIMITATION (me2resh/apexyard#840 finding #4) — even once loaded,
-# a live Cursor.app 3.10.20 agent turn could not be confirmed to cleanly
-# EXECUTE the delegated bash hook (`MainThreadShellExec not initialized`
-# was reported, instrumentation never fired). The observed block came
-# from `failClosed: true` denying the action after the hook-runner
-# errored, not from the gate logic evaluating and returning exit 2. This
-# is weaker than the opencode/pi adapters, where the delegated bash
-# genuinely runs. See docs/cursor-adapter.md § Known Limitations before
-# relying on this for anything beyond "known-bad commands get blocked."
+# SCOPE NOTE — this is a per-machine (per-OS-user) install. Cursor's
+# user hooks.json applies across every project. The overlay still
+# self-scopes: it walks for an `.apexyard-fork` marker (or a live
+# session pin) and prints {} if the current project is not governed.
+#
+# Native gate execution needs Settings → Rules, Skills, Subagents →
+# Include third-party Plugins, Skills, and other configs. Without that
+# toggle, `.claude/settings.json` does not load.
 
 set -euo pipefail
 
@@ -59,16 +36,18 @@ usage() {
   cat <<'USAGE'
 Usage: bin/install-cursor-adapter.sh [--root <path>] [--user-dir <path>] [--uninstall]
 
-Merges the apexyard Cursor gate adapter into Cursor's USER-level hooks
-config (~/.cursor/hooks.json by default) — the location Cursor 3.x
-actually loads (me2resh/apexyard#840). Also writes/refreshes the
+Merges the thin apexyard Cursor overlay into Cursor's USER-level hooks
+config (~/.cursor/hooks.json by default). Also writes/refreshes the
 project-level .cursor/rules/apexyard.mdc advisory bridge in --root.
+
+The overlay maps Cursor session_id onto CLAUDE_CODE_SESSION_ID. Canonical
+gates load from .claude/settings.json when third-party configs are on.
 
 Options:
   --root PATH      Path to the apexyard ops fork (where bin/sync-cursor-adapter.sh
                     and .claude/ live). Defaults to this script's own repo root.
                     Run this from within the project whose .cursor/rules/apexyard.mdc
-                    you also want refreshed; the hooks.json merge itself is
+                    you also want refreshed. The hooks.json merge itself is
                     machine-wide, not project-scoped (see this script's header).
   --user-dir PATH  Override the user Cursor config directory (default
                     $HOME/.cursor). Mainly for testing — never point this at
@@ -166,16 +145,15 @@ ROOT="$(cd "$ROOT" && pwd)"
 
 if "$ROOT/bin/sync-cursor-adapter.sh" --user --user-dir "$USER_DIR" --root "$ROOT"; then
   echo ""
-  echo "Restart Cursor (or reload the window) to pick up the change — Cursor"
+  echo "Restart Cursor (or reload the window) to pick up the change. Cursor"
   echo "reads ~/.cursor/hooks.json at startup, not live."
   echo ""
-  echo "KNOWN LIMITATION (me2resh/apexyard#840): on Cursor 3.10.20 the delegated"
-  echo "bash hook did not appear to execute cleanly in agent mode"
-  echo "(MainThreadShellExec not initialized). The observed block came from"
-  echo "failClosed denying the action after the hook-runner errored, not from"
-  echo "the gate logic evaluating. See docs/cursor-adapter.md § Known Limitations."
+  echo "Enable Settings → Rules, Skills, Subagents → Include third-party"
+  echo "Plugins, Skills, and other configs so .claude/settings.json gates load."
+  echo "A leftover full generated adapter can fail-closed-block every Shell"
+  echo "or Write call. Re-install replaces that copy with the thin overlay."
   echo ""
-  echo "cursor-agent (the CLI) is NOT covered by this adapter — it enforces via"
+  echo "cursor-agent (the CLI) is NOT covered by this overlay. It enforces via"
   echo "its own ~/.cursor/cli-config.json permissions model, not hooks.json."
 else
   exit 1

@@ -18,8 +18,9 @@ ApexYard update. The command invokes the existing generators and installers;
 
 Use `--check` for a read-only drift report. It reports missing workspaces,
 missing adapter files, unsupported declarations, and stale Codex output with a
-non-zero exit status. Cursor remains partial by design; its documented
-fail-closed limitation is unchanged.
+non-zero exit status. Cursor `--check` looks for the session-pin overlay. A
+leftover full generated adapter (`APEXYARD_CURSOR_HOOK_GLOB`) is reported as
+stale.
 
 Supported declarations are `claude`, `codex`, `pi`, `opencode`, and `cursor`.
 An explicit `adapters: []` field opts a project out of adapter management.

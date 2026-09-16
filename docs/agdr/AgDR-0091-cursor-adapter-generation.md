@@ -230,3 +230,22 @@ The original "Update (GH-840)" section above (the `require-migration-ticket.sh` 
 - `docs/cursor-adapter.md`, `docs/harnesses/cursor.md` (corrected)
 - `.claude/hooks/tests/test_sync_cursor_adapter.sh` (`--user` merge/idempotency/drift assertions added)
 - `.claude/hooks/tests/test_install_cursor_adapter.sh` (new)
+
+## Update (GH-1311) — native-first overlay supersedes full generation
+
+A live probe on Cursor.app 3.10.20 (2026-09-16) observed native execution of unmodified `.claude/hooks/*.sh` through Cursor's Claude Code loader. After the user-level full adapter was removed and the window was reloaded, a Write call hit `require-active-ticket.sh` and returned the real ticket-first message.
+
+That finding changes the load-bearing path this AgDR chose.
+
+**What is superseded.** Full event-mapped generation of the 86 Claude Code gates into Cursor `hooks.json` is retired. The `beforeShellExecution` stdin remap, the matcher allowlist hard-fail, and `FAIL_CLOSED_HOOKS` are no longer generated. Cursor `failClosed` on copied gates locked the IDE when the runner errored. Native loading already owns those gates.
+
+**What remains.** `.claude/` is still the only source of gate logic. `bin/install-cursor-adapter.sh` still merges into `~/.cursor/hooks.json` and still preserves foreign entries. `--user` still treats any command that execs `.claude/hooks/*.sh` as apexyard-owned. That merge now *strips* leftover full copies and writes a thin sessionStart overlay instead.
+
+**Replacement decision.** [AgDR-0151](AgDR-0151-native-first-cursor-overlay.md) records native-first plus the session-pin overlay. Read that AgDR for current install steps. This file stays as the history of the generated-copy design and the GH-840 location and CLI findings.
+
+**What did not change.** `cursor-agent` CLI still ignores `hooks.json`. Conformance CI still has no headless Cursor path.
+
+## Artifacts (GH-1311 update)
+
+- Refs me2resh/apexyard#1311
+- [AgDR-0151](AgDR-0151-native-first-cursor-overlay.md)

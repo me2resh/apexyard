@@ -177,8 +177,9 @@ Code skills. The enforcement layer is plain Bash, so other tools can use the
 same rules through an adapter.
 
 As of **2026-07-09**, opencode, pi, and Codex have passed real enforcement
-checks. Each tool needs one setting so its commands reach the rules. Cursor has
-partial support and is not included in that claim. You can always use the
+checks. Each tool needs one setting so its commands reach the rules. Cursor
+IDE native exec was observed later (2026-09-16) when third-party configs are
+on. You can always use the
 manual configuration files from Quick Start when a skill is unavailable.
 
 | Tool | Enforces your rules? | Setup | Good to know |
@@ -187,7 +188,7 @@ manual configuration files from Quick Start when a skill is unavailable.
 | **opencode** | ✅ **Yes — proven.** A real agent's `git add -A` was blocked by the same rule. | `bash bin/install-opencode-adapter.sh` | Run opencode with `--auto` so the agent's command reaches the rule. |
 | **pi** | ✅ **Yes — proven.** Same, in a real pi session. | `bash bin/install-pi-adapter.sh` | Run pi with `-a` (auto-approve). pi is deliberately bare-bones — ApexYard is the governance it leaves to you. |
 | **Codex** | ✅ **Yes — proven.** Same, in a real Codex session. | `bash bin/sync-codex-adapter.sh` | Codex has to trust the rules once — `/hooks`, a one-off flag, or a user-level install. Details: [`docs/codex-adapter.md`](docs/codex-adapter.md). |
-| **Cursor** | 🟡 **Partly.** It blocks the command, but by *failing safe* when its rule-runner errors — not by running our rule. We don't count it as proven. | `bash bin/install-cursor-adapter.sh` | Works in the Cursor **IDE**, not the command-line version. Install is user-level (`~/.cursor/hooks.json`). |
+| **Cursor** | ✅ **Yes — native in the IDE.** Cursor loads `.claude/` when third-party configs are on. A real Write call hit the ticket-first rule (2026-09-16). | Enable third-party configs. Then `bash bin/install-cursor-adapter.sh` for the session-pin overlay. | IDE only. The command-line `cursor-agent` ignores hooks. A leftover full adapter can lock the session. |
 
 *Under the hood:* your rules stay one set of portable bash scripts, and every tool reads the **same** ones — never a separate copy that can drift out of sync. A daily, credentialed [Conformance CI](docs/conformance-ci.md) job re-verifies each proven harness automatically, so the claims above aren't just one-off manual checks. Full per-tool setup, limits, and how to add a new tool → **[`docs/harnesses/README.md`](docs/harnesses/README.md)**.
 

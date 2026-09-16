@@ -1,0 +1,37 @@
+---
+description: ApexYard governance bridge for Cursor. Mechanical gates load from .claude/settings.json when third-party configs are on. This file is the advisory pointer.
+alwaysApply: true
+---
+
+# ApexYard governance (Cursor)
+
+This repo is governed by ApexYard. Cursor loads the canonical
+`.claude/hooks/*.sh` gates from `.claude/settings.json` when
+**Settings → Rules, Skills, Subagents → Include third-party Plugins,
+Skills, and other configs** is enabled.
+
+The generated `.cursor/hooks.json` is a **thin overlay**. It only maps
+Cursor `session_id` onto `CLAUDE_CODE_SESSION_ID` so the ops-root pin
+works. It does not copy the 86 Claude Code gate entries. A leftover
+full copy in `~/.cursor/hooks.json` can double-fire or fail closed.
+Remove it with `bin/install-cursor-adapter.sh --uninstall` then
+re-install.
+
+Read `AGENTS.md` for the Cursor operator bridge. Read `CLAUDE.md` and
+`.claude/rules/*.md` for the full rules.
+
+Load-bearing rules before you start:
+
+- One ticket at a time — `/start-ticket <N>` before editing (`.claude/rules/workflow-gates.md`)
+- Branch `{type}/{TICKET-ID}-{description}`, PR title `type(TICKET): description` (`.claude/rules/git-conventions.md`)
+- Ground factual claims in verified evidence (`.claude/rules/evidence-grounding.md`)
+- Match work and ceremony to the change (`.claude/rules/right-size-ceremony.md`)
+- Every PR needs a Glossary plus narrative Summary bullets (`.claude/rules/pr-quality.md`)
+- Merges need an explicit per-PR human nod (`.claude/rules/pr-workflow.md`)
+- Technical decisions get an AgDR before Build (`.claude/rules/agdr-decisions.md`)
+- Report status like a colleague (`.claude/rules/reporting-style.md`)
+- Use the controlled technical writing profile for durable artifacts (`.claude/rules/writing-standard.md`)
+
+Regenerate this overlay after any change to
+`.claude/hooks/cursor-session-pin.sh`: `bin/sync-cursor-adapter.sh`.
+Drift check: `bin/sync-cursor-adapter.sh --check`.

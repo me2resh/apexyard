@@ -9,11 +9,10 @@
 # bin/conformance-assert-block-message.sh, which derives its assertion
 # from the hook's own live output rather than a hardcoded copy of it.
 #
-# Cursor is deliberately NOT in this matrix. Its `cursor-agent` CLI
-# ignores hooks.json entirely (confirmed live, docs/harnesses/cursor.md),
-# so there is no headless path that would exercise the delegated gate —
-# only the GUI-only IDE, which fails closed rather than proving the gate
-# ran. Cursor stays documented-manual; see docs/conformance-ci.md.
+# Cursor is deliberately NOT in this matrix. Native IDE exec of
+# `.claude/hooks/*.sh` was observed on 2026-09-16, but `cursor-agent`
+# still ignores hooks.json (docs/harnesses/cursor.md). There is no
+# headless path that would exercise the delegated gate in CI.
 #
 # FAIL-CLOSED, NOT SKIP-GREEN: a harness job with no credential secret
 # provisioned FAILS loudly (::error::) rather than being skipped quietly.

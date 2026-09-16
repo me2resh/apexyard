@@ -20,7 +20,7 @@ Claude Code is ApexYard's reference harness. Nothing is translated: `CLAUDE.md` 
 
 ## How it works (transport)
 
-There is no transport layer — Claude Code *is* the runtime the other adapters shell out to. The hooks read tool-call JSON on stdin, decide, and return an exit code Claude Code honors directly. `.claude/` is the canonical authoring surface for every other harness precisely because it is executed natively here.
+There is no transport layer for Claude Code itself. Cursor can load the same `.claude/` files when third-party configs are on. See [cursor.md](cursor.md). The hooks read tool-call JSON on stdin, decide, and return an exit code the harness honors. `.claude/` is the canonical authoring surface for every other harness because Claude Code executes it natively.
 
 ## How to install
 

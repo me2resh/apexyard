@@ -7,6 +7,7 @@ Entry point for AI coding agents (Cursor, Claude Code, Aider, Cline, **pi**, etc
 | An agent operating *inside an apexyard ops fork* on behalf of an adopter — governing a portfolio, working a ticket, opening a PR — **and you don't auto-load `CLAUDE.md`** (this is the normal case for **pi** and most non-Claude-Code harnesses) | **"Operator governance bridge"** below, first |
 | An agent extending apexyard's *own* source (hooks, skills, rules, agents) — i.e. contributing to the framework itself | **"Framework repo orientation"** further down |
 | Claude Code | Neither — `CLAUDE.md` is auto-loaded at session start and already covers the governance bridge in full; skim "Framework repo orientation" only if you're also touching the framework's own internals |
+| Cursor (third-party configs on) | `CLAUDE.md` and `.claude/settings.json` load natively. Mechanical gates fire. Read **"Cursor overlay"** below for the session-pin gap, then follow the same rules as Claude Code |
 
 Why two audiences in one file: `CLAUDE.md` is the framework-level instruction set Claude Code auto-loads inside an ops fork. Harnesses that don't recognise `CLAUDE.md` — pi chief among them — auto-load `AGENTS.md` instead (from cwd, or `~/.pi/agent/`). Before this section existed, a pi user landing in an apexyard ops fork got only the framework-contributor orientation below — useful if you're hacking on apexyard's hooks, useless if you're trying to run the SDLC it governs. This section closes that gap.
 
@@ -93,6 +94,14 @@ Being upfront about the gap: this section gives you the rules as *instructions* 
 - **Role-trigger advisory banners** — Claude Code gets a `PreToolUse` banner nudging "this diff touches `**/auth/**`, consider the Security Auditor"; pi gets no such nudge. Self-check the role-triggers table manually.
 
 See `docs/harnesses/pi.md` for the full today-vs-not-yet breakdown and the install shape.
+
+### Cursor overlay
+
+Cursor 3.10.20 can load `.claude/settings.json` when **Settings → Rules, Skills, Subagents → Include third-party Plugins, Skills, and other configs** is on. Native Write has been observed to exec `require-active-ticket.sh` (2026-09-16). The generated `.cursor/hooks.json` is a thin overlay. It maps Cursor `session_id` onto `CLAUDE_CODE_SESSION_ID`. It does not copy the Claude Code gates.
+
+A leftover full adapter in `~/.cursor/hooks.json` can fail-closed-block every Shell and Write call. Replace it with `bin/install-cursor-adapter.sh`. Details: `docs/harnesses/cursor.md` and [AgDR-0151](docs/agdr/AgDR-0151-native-first-cursor-overlay.md).
+
+The `cursor-agent` CLI ignores `hooks.json`. It is not covered by this overlay.
 
 ---
 

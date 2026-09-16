@@ -15,9 +15,9 @@ This is the same shape as the honest per-harness breakdown in [`docs/harnesses/R
 
 ## Why Cursor is not in the matrix
 
-Cursor's `cursor-agent` **CLI ignores `hooks.json` entirely** — confirmed live, zero hook fires while a benign command executed cleanly through it (see [`docs/harnesses/cursor.md`](harnesses/cursor.md)). Its only observed enforcement is the **Cursor IDE**, a GUI with no headless runner, where the block came from `failClosed` (the hook-runner erroring) rather than the gate's own logic evaluating and returning exit 2. There is no headless path that would exercise the *real* delegated gate under Cursor today, so it has no matrix job here.
+Native IDE exec of unmodified `.claude/hooks/*.sh` was observed on Cursor.app 3.10.20 (2026-09-16). The `cursor-agent` **CLI still ignores `hooks.json`**. There is no headless runner that would exercise the delegated gate in this workflow. Cursor stays out of the matrix.
 
-**Cursor's badge is static, not computed.** `bin/conformance-publish-badge.sh` seeds `cursor.json` once as a grey "documented-manual (not proven)" endpoint and never overwrites it from a matrix result — there is no code path by which Cursor's badge could silently drift to "proven". If Cursor ever ships a headless mode that genuinely runs the delegated gate (not just failClosed), that's new adapter + conformance work, not a flag flip on this workflow.
+**Cursor's badge is static, not computed.** `bin/conformance-publish-badge.sh` seeds `cursor.json` once as a grey "documented-manual" endpoint and never overwrites it from a matrix result. A headless Cursor path that runs the delegated gate would be new adapter plus conformance work, not a flag flip on this workflow.
 
 ## Secrets an operator must provision
 

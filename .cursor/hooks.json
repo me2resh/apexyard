@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".claude/hooks/cursor-session-pin.sh"
+      }
+    ]
+  }
+}
