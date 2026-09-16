@@ -154,14 +154,15 @@ echo "pre-push checks:" >&2
 #
 # NUL-delimited (`tr '\n' '\0' | xargs -0`) so a path containing a space or an
 # apostrophe cannot be word-split or trip xargs' quote handling. Plain `xargs`
-# fails on both.
+# fails on both. The size cap keeps each invocation below Windows cmd.exe's
+# command-line limit when `npx` resolves to a `.cmd` shim.
 #
 # The empty guard is required because `markdownlint-cli2` with no file
 # arguments prints its usage banner and lints nothing — so without the guard an
 # empty repo produces a confusing non-zero rather than a clean skip. (It does
 # NOT fall back to a default glob: .markdownlint.json is a rules-only format
 # and cannot carry `globs`.)
-MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 npx --yes markdownlint-cli2 2>&1"
+MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
 # 2. shellcheck — .claude/hooks/*.sh, severity=warning
