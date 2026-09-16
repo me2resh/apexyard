@@ -28,6 +28,9 @@ printf '%s\n' "$name" >> "${DISPATCH_LOG:?}"
 if [ "$name" = block-git-add-all.sh ] && grep -q 'git add -A' <<<"$input"; then
   exit 2
 fi
+if [ "${DISPATCH_FAIL_SCRIPT:-}" = "$name" ]; then
+  exit 1
+fi
 EOF
   chmod +x "$TMP/hooks/$script"
 done
@@ -47,6 +50,16 @@ fi
 
 : > "$TMP/log"
 run 'gh pr merge 42'
+[ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
+
+# A non-blocking hook failure must not suppress later gates.
+: > "$TMP/log"
+set +e
+printf '{"tool_name":"Bash","tool_input":{"command":"gh pr merge 42"}}' \
+  | DISPATCH_LOG="$TMP/log" DISPATCH_FAIL_SCRIPT=block-ambient-tracker-repo.sh "$TMP/hooks/dispatch-bash.sh" >/dev/null
+rc=$?
+set -e
+[ "$rc" -eq 0 ]
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 [ "$(grep -c '^require-architecture-review.sh$' "$TMP/log")" -eq 1 ]
 

@@ -35,9 +35,19 @@ environment variables.
 
 The dispatcher must be updated when a Bash hook is added or its command
 predicate changes. Its regression test checks unconditional calls, command
-selection, deduplication, and blocking exit-code propagation. On the same
-worktree, three sequential `true` calls measured about 10.24 seconds through
-the old 54-entry list and 1.43 seconds through the dispatcher.
+selection, deduplication, non-blocking hook failures, and blocking exit-code
+propagation. Hooks now share one dispatcher process, so an unexpected hook
+failure must be collected and reported while later hooks continue to run;
+only exit code 2 stops dispatch. The dispatcher also owns the propagation of
+`APEXYARD_OPS_SCOPE_GUARD` and `APEXYARD_REVIEW_OPS_ROOT`, which previously
+lived in settings wrappers and therefore requires dispatcher-level regression
+coverage.
+
+On the same worktree, three sequential `true` calls measured about 10.24
+seconds through the old 54-entry list (about 3.41 seconds per call) and 1.43
+seconds through the dispatcher (about 0.48 seconds per call). The original
+measurement did not record a machine class; future comparisons must record
+that context and use the same three-call method.
 
 ## References
 

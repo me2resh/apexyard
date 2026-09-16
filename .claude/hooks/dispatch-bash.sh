@@ -7,13 +7,27 @@ INPUT=$(cat)
 COMMAND=$(jq -r '.tool_input.command // empty' <<<"$INPUT")
 
 run_hook() {
-  local script="$1"
+  local script="$1" rc=0
+  # A hook may warn or fail for an unrelated reason, but only exit 2 blocks
+  # the tool call. Keep running the remaining gates so one failed hook cannot
+  # suppress a later safety or merge gate.
   case "$script" in
-    block-main-push.sh) APEXYARD_OPS_SCOPE_GUARD=1 "$HOOK_DIR/$script" <<<"$INPUT" ;;
+    block-main-push.sh)
+      if APEXYARD_OPS_SCOPE_GUARD=1 "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
+      ;;
     block-reviewer-repo-mutation.sh)
-      APEXYARD_REVIEW_OPS_ROOT="$(cd "$HOOK_DIR/../.." && pwd -P)" "$HOOK_DIR/$script" <<<"$INPUT" ;;
-    *) "$HOOK_DIR/$script" <<<"$INPUT" ;;
+      if APEXYARD_REVIEW_OPS_ROOT="$(cd "$HOOK_DIR/../.." && pwd -P)" "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
+      ;;
+    *)
+      if "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
+      ;;
   esac
+  if [ "$rc" -eq 2 ]; then
+    exit 2
+  fi
+  if [ "$rc" -ne 0 ]; then
+    printf 'WARN: %s exited %s; continuing with remaining gates.\n' "$script" "$rc" >&2
+  fi
 }
 
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
