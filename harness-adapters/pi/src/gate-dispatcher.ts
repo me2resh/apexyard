@@ -270,7 +270,8 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
     const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
     const dispatcherPath = path.join(opsRoot, ".claude/hooks/dispatch-bash.sh");
     const dispatcher = existsSync(dispatcherPath) ? deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8")) : [];
-    return [...deriveGatesFromSettings(raw), ...dispatcher];
+    const settingsGates = deriveGatesFromSettings(raw).filter((gate) => gate.hookRelativePath !== ".claude/hooks/dispatch-bash.sh");
+    return [...settingsGates, ...dispatcher];
   } catch (err) {
     warnOnce(
       `parse-failure:${settingsPath}`,
