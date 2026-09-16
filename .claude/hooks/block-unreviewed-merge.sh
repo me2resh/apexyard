@@ -165,6 +165,7 @@ fi
 # convention, refuse a squash/rebase merge on BOTH command shapes:
 #   - `gh pr merge <N> --squash` / `--rebase`
 #   - `gh api .../pulls/<N>/merge -f merge_method=squash` (or rebase)
+#   - `tracker_pr_merge <owner/repo> <N> squash|rebase ...`
 # The `gh api` shape is the silent-bypass route that motivated #47, so the
 # guard must match `merge_method=squash|rebase` as well as the `--squash`
 # flag. The head-branch lookup is delegated to resolve_pr_head_branch (#764) so
@@ -172,7 +173,7 @@ fi
 # call from the HEAD-SHA lookup further down, not the same one.
 # On network failure we skip the guard and let the merge proceed — an
 # unavailable forge API is not a reason to permanently block all syncs.
-if echo "$COMMAND" | grep -qE '(--squash|--rebase|merge_method=squash|merge_method=rebase)'; then
+if echo "$COMMAND" | grep -qE '(--squash|--rebase|merge_method=squash|merge_method=rebase|tracker_pr_merge[[:space:]]+[^[:space:]]+[[:space:]]+[0-9]+[[:space:]]+(squash|rebase)([[:space:]]|$))'; then
   _SYNC_BRANCH=$(resolve_pr_head_branch "$PR_NUMBER" "$CMD_REPO")
   if echo "$_SYNC_BRANCH" | grep -qE '^(sync/main-to-dev-after-|chore/(#[^/]+-)?sync-upstream-(apexyard|dev)$)'; then
     cat >&2 <<MSG

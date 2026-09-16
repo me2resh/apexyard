@@ -537,6 +537,24 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}update-sync-squash-blocked "
 fi
 
+# Case S7: /update sync PR + tracker_pr_merge positional squash → BLOCKED
+# The approve-merge skill calls the tracker-agnostic wrapper with the strategy
+# as its fourth positional argument, so flag-only detection must not be enough.
+sb=$(make_sandbox_with_sync_branch "chore/#1301-sync-upstream-apexyard")
+write_rex_marker "$sb" 306
+write_ceo_marker_structured "$sb" 306
+cmd="tracker_pr_merge me2resh/apexyard 306 squash true '' ''"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot use squash or rebase"; then
+  echo "PASS [/update sync PR + tracker_pr_merge positional squash → blocked (apexyard#1301)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [/update sync PR + tracker_pr_merge positional squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}update-sync-tracker-squash-blocked "
+fi
+
 # --- Cross-repo collision regression test (#485) ----------------------
 #
 # Proves that a marker for repo A's PR #N is DISTINCT from a marker for
