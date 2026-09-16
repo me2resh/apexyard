@@ -12,7 +12,7 @@ Score the change on three cheap signals you can read before touching it:
 
 | Signal | Read from | Low ← → High |
 |--------|-----------|--------------|
-| **Path class** | the file globs the framework already configures | docs/config-text (`.md`, `.txt`, issue templates) → ordinary code (`.py`, `.ts`) → **high-blast** (`.claude/hooks/**`, `.claude/settings.json`, `**/auth/**`, `**/crypto/**`, `**/secrets/**`, migrations, design artifacts, CI) |
+| **Path class** | the file globs the framework already configures | docs/config-text (`.md`, `.txt`, issue templates) → ordinary code (`.py`, `.ts`) → **high-blast** (`.claude/hooks/**`, `.claude/settings.json`, `.githooks/**`, delegated gate runners such as `bin/run-pre-push-checks.sh`, `**/auth/**`, `**/crypto/**`, `**/secrets/**`, migrations, design artifacts, CI) |
 | **Blast radius** | diff size + reversibility | a few lines, revert-in-one-commit → a large diff, or an externally-visible / hard-to-reverse act (a released tag, a schema change, a message send) |
 | **Behavior surface** | does it change runtime behavior? | prose / comments only → touches code or tests → changes a security-critical control path |
 
@@ -34,7 +34,7 @@ The key realization: the framework **already detects every Heavy class** (the au
 
 A right-sizing heuristic is only safe if it fails in the harmless direction:
 
-1. **Security and trust-chain never go Lean.** Any change touching a production `.claude/hooks/*.sh` file, `.claude/settings.json`, the merge-gate/marker libraries, auth, crypto, secrets, or a migration takes the Heavy path regardless of diff size. Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up when the test changes enforcement semantics. A one-line production hook edit is exactly where you *want* the chain. This rail overrides the size signal every time.
+1. **Security and trust-chain never go Lean.** Any change touching a production `.claude/hooks/*.sh` file, `.claude/settings.json`, `.githooks/**`, a delegated gate runner such as `bin/run-pre-push-checks.sh`, the merge-gate/marker libraries, auth, crypto, secrets, or a migration takes the Heavy path regardless of diff size. Test-only files under `.claude/hooks/tests/**` do not trigger Heavy by path alone; round up when the test changes enforcement semantics. A one-line production gate edit is exactly where you *want* the chain. This rail overrides the size signal every time.
 2. **Ambiguity rounds up.** If you're not sure which tier a change is, take the higher one. The tolerated failure is "occasionally too much review on a borderline case" — never "too little review on a risky one."
 
 ## When to apply this (proactively)

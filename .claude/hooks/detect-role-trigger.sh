@@ -254,7 +254,8 @@ detect_path_triggers() {
   # Security Auditor — the TRUST CHAIN (me2resh/apexyard#777).
   # The framework's most security-critical code is its own enforcement layer:
   # the hooks that decide whether an action (esp. a merge) is permitted, and the
-  # settings.json matcher wiring that decides whether a gate fires at all. These
+  # settings.json matcher wiring that decides whether a gate fires at all, the
+  # git-native hooks, and the runner they delegate to. These
   # are NOT auth/crypto/secrets paths, so the trigger above misses them — yet a
   # subtle bug here (a path-traversal write, a fail-open gate, an injection in
   # the tracker/broker lib) is exactly what the adversarial security lens is for.
@@ -265,7 +266,9 @@ detect_path_triggers() {
       # Test fixtures exercise the controls but are not controls themselves.
       ;;
     .claude/hooks/*|*/.claude/hooks/*|\
-    .claude/settings.json|*/.claude/settings.json)
+    .claude/settings.json|*/.claude/settings.json|\
+    .githooks/*|*/.githooks/*|\
+    bin/run-pre-push-checks.sh|*/bin/run-pre-push-checks.sh)
       emit_banner \
         "Security Auditor" \
         "roles/security/security-auditor.md" \

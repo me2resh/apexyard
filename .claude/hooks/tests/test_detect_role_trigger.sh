@@ -167,7 +167,22 @@ in=$(jq -nc \
 run_case "trust chain: */.claude/hooks/* fires Security Auditor [#777]" 0 \
   "ROLE TRIGGER: Security Auditor" "$in"
 
-# 2e-iv. A .claude path that is NOT trust-chain (a skill doc) stays silent.
+# 2e-iv. Git-native pre-push hooks and their delegated runner are also
+# enforcement controls. Keep both path forms covered so a future edit does
+# not silently fall outside the Heavy trust-chain review path (#1302).
+in=$(jq -nc \
+  --arg p ".githooks/pre-push" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: .githooks/* fires Security Auditor [#1302]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+in=$(jq -nc \
+  --arg p "bin/run-pre-push-checks.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: delegated bin gate fires Security Auditor [#1302]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
+# 2e-v. A .claude path that is NOT trust-chain (a skill doc) stays silent.
 in=$(jq -nc \
   --arg p ".claude/skills/roadmap/SKILL.md" \
   '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
