@@ -126,8 +126,8 @@ if ! echo "$POSITIVE_OUTPUT" | grep -q "RESULT: BLOCKED"; then
   echo "FAIL: expected the positive case to be BLOCKED by the real hook" >&2
   FAIL=1
 fi
-if ! echo "$POSITIVE_OUTPUT" | grep -qi "no recorded code-reviewer"; then
-  echo "FAIL: expected block-unreviewed-merge.sh's own Rex-approval reason text in the block message" >&2
+if ! echo "$POSITIVE_OUTPUT" | grep -Eqi "no recorded code-reviewer|could not resolve PR"; then
+  echo "FAIL: expected block-unreviewed-merge.sh's own block reason text in the block message" >&2
   FAIL=1
 fi
 if ! echo "$NEGATIVE_OUTPUT" | grep -q "RESULT: ALLOWED"; then

@@ -170,6 +170,30 @@ export function deriveGatesFromSettings(settings: RawSettings): GateDefinition[]
   return Array.from(byHook.values());
 }
 
+/**
+ * Derives Bash gate wires from the dispatcher's machine-readable routing
+ * comments. The dispatcher is the executable source for Claude Code after
+ * the Bash fan-out is collapsed, while this table keeps pi and opencode's
+ * derived gate views equivalent to the same routing.
+ */
+export function deriveGatesFromDispatcher(source: string): GateDefinition[] {
+  const byHook = new Map<string, GateDefinition>();
+  const row = /^\s*#\s*APEXYARD_DISPATCH_GATE:\s*([^|]+)\|([^|]*)\|([\w.-]+\.sh)\s*$/;
+  for (const line of source.split("\n")) {
+    const match = line.match(row);
+    if (!match) continue;
+    const [, claudeMatcher, glob, script] = match;
+    const hookRelativePath = `.claude/hooks/${script}`;
+    let gate = byHook.get(hookRelativePath);
+    if (!gate) {
+      gate = { name: hookNameFromPath(hookRelativePath), hookRelativePath, wires: [] };
+      byHook.set(hookRelativePath, gate);
+    }
+    gate.wires.push({ claudeMatcher: claudeMatcher.trim(), commandGlob: glob === "*" ? "*" : glob });
+  }
+  return Array.from(byHook.values());
+}
+
 /** Converts a Claude Code `if: "Bash(<glob>)"` glob (shell-style `*` wildcard) into an anchored RegExp. */
 export function globToRegExp(glob: string): RegExp {
   const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");

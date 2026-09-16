@@ -2,8 +2,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SETTINGS="$ROOT/../settings.json"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+bash_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[]] | length' "$SETTINGS")
+[ "$bash_entries" -eq 1 ]
+dispatcher_command=$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command][0]' "$SETTINGS")
+grep -q 'dispatch-bash.sh' <<<"$dispatcher_command"
+reviewer_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[] | select(.command | contains("block-reviewer-repo-mutation.sh"))] | length' "$SETTINGS")
+[ "$reviewer_entries" -eq 0 ]
+
 mkdir -p "$TMP/hooks"
 cp "$ROOT/dispatch-bash.sh" "$TMP/hooks/dispatch-bash.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
@@ -40,6 +49,17 @@ fi
 run 'gh pr merge 42'
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 [ "$(grep -c '^require-architecture-review.sh$' "$TMP/log")" -eq 1 ]
+
+for command in \
+  'gh pr merge 42' \
+  'gh api repos/example/pulls/42' \
+  'glab mr merge 42' \
+  'glab api projects/1/merge_requests/42' \
+  'tracker_pr_merge 42'; do
+  : > "$TMP/log"
+  run "$command"
+  [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
+done
 
 : > "$TMP/log"
 set +e
