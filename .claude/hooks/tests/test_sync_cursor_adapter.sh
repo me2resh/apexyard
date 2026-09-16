@@ -315,7 +315,7 @@ fi
 
 printf '%s\n' "$TMPROOT" > "$PINDIR/ops-root-sess-pin"
 out=$(printf '%s' '{"session_id":"sess-pin"}' | (
-  cd "$PLAIN"
+  cd "$PLAIN" || exit 1
   unset CURSOR_PROJECT_DIR
   export CLAUDE_CODE_SESSION_ID=sess-pin
   export APEXYARD_OPS_PIN_DIR="$PINDIR"
