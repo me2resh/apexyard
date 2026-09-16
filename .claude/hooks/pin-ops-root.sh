@@ -27,7 +27,7 @@
 #
 # `resolve_ops_root` then consults the pin BEFORE walking up. Stale
 # pins self-heal because the pinned path is re-validated against the
-# anchor conditions on read.
+# anchor conditions and framework hook directory on read.
 #
 # Silent no-ops:
 #   - CLAUDE_CODE_SESSION_ID unset                    → exit 0 (no pin)
@@ -74,6 +74,13 @@ ops_root="$(resolve_ops_root_walk "$PWD")"
 if [ -z "$ops_root" ]; then
   # No anchor found upward from $PWD. The current session isn't in an
   # ops-fork-shaped tree at launch time, so there's nothing to pin.
+  exit 0
+fi
+
+# The legacy v1 anchor pair also exists in a split-portfolio data sibling.
+# Only pin a directory that contains the framework hooks; otherwise a
+# portfolio path can become the trusted ops root for the whole session.
+if [ ! -d "$ops_root/.claude/hooks" ]; then
   exit 0
 fi
 

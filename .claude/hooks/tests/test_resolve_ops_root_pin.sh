@@ -57,7 +57,7 @@ run_case() {
 # Legacy v1 sandbox: onboarding.yaml + apexyard.projects.yaml.
 build_v1_sandbox() {
   local sb="$1"
-  mkdir -p "$sb/workspace/demo/.git"
+  mkdir -p "$sb/workspace/demo/.git" "$sb/.claude/hooks"
   : > "$sb/onboarding.yaml"
   : > "$sb/apexyard.projects.yaml"
 }
@@ -65,7 +65,7 @@ build_v1_sandbox() {
 # v2 sandbox: .apexyard-fork marker.
 build_v2_sandbox() {
   local sb="$1"
-  mkdir -p "$sb/workspace/demo/.git"
+  mkdir -p "$sb/workspace/demo/.git" "$sb/.claude/hooks"
   : > "$sb/.apexyard-fork"
 }
 
@@ -338,7 +338,7 @@ case_10() {
   outer=$(mktemp -d)
   fork="$outer/fork"
   portfolio="$outer/portfolio"
-  mkdir -p "$fork" "$portfolio"
+  mkdir -p "$fork/.claude/hooks" "$portfolio"
   git init -q "$outer"
   : > "$fork/.apexyard-fork"
   : > "$portfolio/onboarding.yaml"
@@ -365,8 +365,52 @@ case_10() {
   )
 }
 
+# Case 11: a pinned split-portfolio sibling has the v1 pair but no hooks.
+# The pin is rejected and the unique v2 fork is selected. The SessionStart
+# writer must make the same choice when launched from the sibling workspace.
+case_11() {
+  local case_name="split portfolio pin: v2 fork wins over hookless v1 sibling"
+  local outer fork portfolio pin_dir expected
+  outer=$(mktemp -d)
+  fork="$outer/fork"
+  portfolio="$outer/portfolio"
+  mkdir -p "$fork/.claude/hooks" "$portfolio/workspace/demo"
+  git init -q "$outer"
+  : > "$fork/.apexyard-fork"
+  : > "$portfolio/onboarding.yaml"
+  : > "$portfolio/apexyard.projects.yaml"
+  pin_dir=$(mktemp -d)
+  expected=$(cd "$fork" && pwd -P)
+
+  # A stale pre-fix pin incorrectly names the portfolio sibling.
+  printf '%s\n' "$portfolio" > "$pin_dir/ops-root-testsess11-read"
+  (
+    export CLAUDE_CODE_SESSION_ID="testsess11-read"
+    export APEXYARD_OPS_PIN_DIR="$pin_dir"
+    unset APEXYARD_OPS_DISABLE_PIN
+    # shellcheck source=/dev/null
+    . "$LIB"
+    out=$(cd "$portfolio/workspace/demo" && resolve_ops_root)
+    [ "$out" = "$expected" ] \
+      || { mark_fail "$case_name (pin read)" "expected '$expected', got '$out'"; return; }
+  ) || return 1
+
+  # A fresh SessionStart pin from the same cwd must also name the fork.
+  (
+    export CLAUDE_CODE_SESSION_ID="testsess11-write"
+    export APEXYARD_OPS_PIN_DIR="$pin_dir"
+    cd "$portfolio/workspace/demo" || return 1
+    bash "$HOOK" >/dev/null 2>&1
+  ) || { mark_fail "$case_name (pin write)" "hook invocation failed"; return; }
+  local pinned=""
+  IFS= read -r pinned < "$pin_dir/ops-root-testsess11-write" || pinned=""
+  [ "$pinned" = "$expected" ] \
+    || { mark_fail "$case_name (pin write)" "expected '$expected', got '$pinned'"; return; }
+  mark_pass "$case_name"
+}
+
 echo "Running pin-first resolve_ops_root tests..."
-for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10; do
+for fn in case_1 case_2 case_3 case_4 case_5 case_6 case_7 case_8 case_9 case_10 case_11; do
   run_case "$fn"
 done
 

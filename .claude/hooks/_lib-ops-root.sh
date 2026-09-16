@@ -40,8 +40,8 @@
 # `${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-<SESSION_ID>`.
 # `resolve_ops_root` consults the pin BEFORE walking up. Stale pins
 # self-heal because the pinned path is re-validated against the anchor
-# conditions; a pin pointing at a dir that no longer satisfies the
-# anchors is ignored and the walk-up runs.
+# conditions and framework hook directory; a pin pointing at a directory
+# that no longer satisfies either requirement is ignored and the walk-up runs.
 #
 # Escape hatches:
 #   - APEXYARD_OPS_DISABLE_PIN=1     → ignore the pin, use walk-up only
@@ -198,6 +198,17 @@ _ops_root_anchor_valid() {
   return 1
 }
 
+# A session pin must identify the actual ops fork, not a split-portfolio
+# data repository that happens to carry the legacy v1 anchor pair. The
+# framework hooks live under .claude/hooks; requiring that directory here
+# keeps a valid-looking portfolio sibling from becoming the trusted pin.
+_ops_root_pin_valid() {
+  local r="$1"
+  _ops_root_anchor_valid "$r" || return 1
+  [ -d "$r/.claude/hooks" ] || return 1
+  return 0
+}
+
 # ------------------------------------------------------------------------
 # resolve_anchored_lib_dir RAW_BASH_SOURCE_0
 # ------------------------------------------------------------------------
@@ -289,7 +300,7 @@ resolve_ops_root() {
       IFS= read -r pinned < "$pin_file" || pinned=""
       local normalized_pin
       normalized_pin=$(_ops_root_main_worktree "$pinned")
-      if [ -n "$normalized_pin" ] && _ops_root_anchor_valid "$normalized_pin"; then
+      if [ -n "$normalized_pin" ] && _ops_root_pin_valid "$normalized_pin"; then
         printf '%s' "$normalized_pin"
         return 0
       fi
