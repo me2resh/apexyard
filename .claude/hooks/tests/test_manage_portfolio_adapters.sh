@@ -45,6 +45,7 @@ mkdir -p "$TMP/target"
 # Split-portfolio installs establish an anchor at the registry root so a
 # managed workspace can resolve the sibling framework hooks without an
 # absolute machine-specific environment variable.
+mkdir -p "$ROOT/.claude/session"
 FIXTURE="$(mktemp -d "$ROOT/.claude/session/adapter-fixture.XXXXXX")"
 trap 'rm -rf "$TMP" "$FIXTURE"' EXIT
 mkdir -p "$FIXTURE/portfolio/.claude" "$FIXTURE/portfolio/workspace/ok"
