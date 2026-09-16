@@ -1,0 +1,45 @@
+# Bash PreToolUse dispatcher
+
+## Status
+
+Accepted
+
+## Context
+
+The framework registers 54 Bash PreToolUse commands in `.claude/settings.json`.
+Each command repeats the same ops-root discovery wrapper. The configuration
+also carries command predicates beside the hook command, which other harness
+adapters must compile because those predicates are not portable hook fields.
+This creates unnecessary process fan-out and makes the Bash gate list harder
+to audit.
+
+## Decision
+
+Register one Bash PreToolUse command that resolves the ops root once and
+executes `.claude/hooks/dispatch-bash.sh`. The dispatcher reads the Bash
+command from the hook payload, runs the unconditional safety hooks, and then
+executes each matching existing hook at most once. Unknown commands receive
+the unconditional safety checks and no command-specific gate. Existing hook
+scripts remain the source of truth, including their exit codes and special
+environment variables.
+
+## Options considered
+
+| Option | Result |
+| --- | --- |
+| One dispatcher over the existing Bash hooks | Accepted. It removes repeated wrappers and preserves one gate implementation. |
+| Copy each gate into a dispatcher implementation | Rejected. It would duplicate policy and drift from the audited scripts. |
+| Keep the 54 entries and optimize individual hooks | Rejected. It leaves the configuration fan-out and repeated root discovery in place. |
+
+## Consequences
+
+The dispatcher must be updated when a Bash hook is added or its command
+predicate changes. Its regression test checks unconditional calls, command
+selection, deduplication, and blocking exit-code propagation. On the same
+worktree, three sequential `true` calls measured about 10.24 seconds through
+the old 54-entry list and 1.43 seconds through the dispatcher.
+
+## References
+
+- Issue #1317
+- Closed issue #1013
