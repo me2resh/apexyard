@@ -92,3 +92,7 @@ Skill-count / hook-count / role-count drift goes in the relevant summary docs (C
 ## Evolution
 
 **2026-09-16 — native-first Cursor overlay (AgDR-0151, me2resh/apexyard#1311).** Cursor.app 3.10.20 executed unmodified `.claude/hooks/*.sh` through the Claude Code loader. The generated 86-entry `hooks.json` copy became a lock-the-session hazard (`failClosed` plus leftover user config). Architecture change: Cursor is now a runtime of `.claude/`, not a second gate list. `.cursor/` is a one-hook overlay that maps `session_id` onto `CLAUDE_CODE_SESSION_ID`. Skill count on this diagram moved from 31 to 66 to match CLAUDE.md.
+
+**2026-09-16 — Bash PreToolUse dispatcher (AgDR-0157, me2resh/apexyard#1317).** Claude Code Bash `PreToolUse` no longer fans out one process per gate. `.claude/settings.json` registers one dispatcher. `.claude/hooks/dispatch-bash.sh` runs the existing hook scripts by command prefix. Policy still lives in those scripts. pi and opencode derive the same routes from the dispatcher table. They do not exec the dispatcher as a nested gate.
+
+Unconditional safety hooks now always run before command-specific gates. The first blocking reason can change when two gates would both exit 2. The C4 containers stay the same. The change is inside the hooks container.

@@ -11,15 +11,22 @@
 #
 # This test closes that blind spot mechanically: every hook settings.json
 # invokes via `exec "$r/.claude/hooks/<name>.sh"` MUST be committed 100755
-# in git's index. It deliberately does NOT check the `_lib-*.sh` files —
-# those are `source`d by other hooks, never exec'd directly, so 100644 is
-# correct for them (see #1008's own notes + the six 100644 files audited
-# during the fix: five _lib-*.sh + this one).
+# in git's index. After AgDR-0157, Bash PreToolUse also execs the scripts
+# named in dispatch-bash.sh's APEXYARD_DISPATCH_GATE table. Those delegated
+# gates must stay in this set. A lost exec bit now returns 126, and the
+# dispatcher warns and continues, so an unwatched 100644 file fails open.
+# It deliberately does NOT check the `_lib-*.sh` files — those are
+# `source`d by other hooks, never exec'd directly, so 100644 is correct
+# for them (see #1008's own notes + the six 100644 files audited during
+# the fix: five _lib-*.sh + this one).
 #
 # Cases covered:
-#   1. Every hook exec'd from settings.json is 100755 in the git index
+#   1. Every hook exec'd from settings.json or the dispatcher table is
+#      100755 in the git index
 #   2. No _lib-*.sh file is accidentally required to be 100755 by this test
 #      (negative control — confirms the extraction logic doesn't overreach)
+#   3. Named trust-chain gates remain in the extracted set after the
+#      dispatcher collapse (#1317)
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -46,14 +53,36 @@ mark_fail() {
 
 echo "== Directly-exec'd hook exec-bit invariants (#1008 regression guard)"
 
-# --- Extract every hook path settings.json invokes via `exec "$r/.../<name>.sh"`
-EXEC_HOOKS=$(grep -oE '\.claude/hooks/[A-Za-z0-9_-]+\.sh' "$SETTINGS" | sort -u)
+# --- Extract every hook path settings.json or the Bash dispatcher execs
+SETTINGS_HOOKS=$(grep -oE '\.claude/hooks/[A-Za-z0-9_-]+\.sh' "$SETTINGS")
+DISPATCHER="$ROOT/.claude/hooks/dispatch-bash.sh"
+DISPATCH_HOOKS=""
+if [ -f "$DISPATCHER" ]; then
+  DISPATCH_HOOKS=$(grep -E '^\s*#\s*APEXYARD_DISPATCH_GATE:' "$DISPATCHER" \
+    | awk -F'|' '{gsub(/[[:space:]]/, "", $3); if ($3 != "") print ".claude/hooks/" $3}')
+fi
+EXEC_HOOKS=$(printf '%s\n%s\n' "$SETTINGS_HOOKS" "$DISPATCH_HOOKS" | grep -E '\.claude/hooks/' | sort -u)
 
 if [ -z "$EXEC_HOOKS" ]; then
-  mark_fail "wrapper extraction" "found 0 exec'd hooks in settings.json — extraction regex may have drifted"
+  mark_fail "wrapper extraction" "found 0 exec'd hooks in settings.json or dispatch-bash.sh — extraction regex may have drifted"
 else
-  mark_pass "extracted $(echo "$EXEC_HOOKS" | wc -l | tr -d ' ') directly-exec'd hook path(s) from settings.json"
+  mark_pass "extracted $(echo "$EXEC_HOOKS" | wc -l | tr -d ' ') directly-exec'd hook path(s) from settings.json and dispatch-bash.sh"
 fi
+
+extracted_count=$(printf '%s\n' "$EXEC_HOOKS" | grep -c '.' || true)
+if [ "${extracted_count:-0}" -lt 50 ]; then
+  mark_fail "exec-set floor" "extracted ${extracted_count:-0} hooks; dispatcher collapse must not drop below 50 watched scripts"
+else
+  mark_pass "extracted set stays at or above 50 hooks"
+fi
+
+for required in block-unreviewed-merge.sh check-secrets.sh block-main-push.sh dispatch-bash.sh; do
+  if printf '%s\n' "$EXEC_HOOKS" | grep -qx ".claude/hooks/$required"; then
+    mark_pass "extracted set includes $required"
+  else
+    mark_fail "delegated-gate coverage" "$required is exec'd by the dispatcher or settings.json but is missing from the exec-bit set"
+  fi
+done
 
 # --- Invariant 1: every exec'd hook is 100755 in git's index -----------------
 cd "$ROOT" || exit 1
@@ -75,7 +104,7 @@ EOF
 if [ "$checked" -gt 0 ] && [ -z "$bad" ]; then
   mark_pass "all $checked directly-exec'd hooks are 100755 in the git index"
 else
-  mark_fail "exec-bit regression" "non-executable or untracked hook(s) directly invoked by settings.json:$bad"
+  mark_fail "exec-bit regression" "non-executable or untracked hook(s) directly invoked by settings.json or dispatch-bash.sh:$bad"
 fi
 
 # --- Invariant 2 (negative control): _lib-*.sh files are never in the exec set
