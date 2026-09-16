@@ -26,7 +26,7 @@
 #   2. No _lib-*.sh file is accidentally required to be 100755 by this test
 #      (negative control — confirms the extraction logic doesn't overreach)
 #   3. Named trust-chain gates remain in the extracted set after the
-#      dispatcher collapse (#1317)
+#      dispatcher collapses SessionStart wiring (#1317, #1318)
 #
 # Exit 0 if all cases pass; 1 on first failure.
 
@@ -70,10 +70,10 @@ else
 fi
 
 extracted_count=$(printf '%s\n' "$EXEC_HOOKS" | grep -c '.' || true)
-if [ "${extracted_count:-0}" -lt 50 ]; then
-  mark_fail "exec-set floor" "extracted ${extracted_count:-0} hooks; dispatcher collapse must not drop below 50 watched scripts"
+if [ "${extracted_count:-0}" -lt 40 ]; then
+  mark_fail "exec-set floor" "extracted ${extracted_count:-0} hooks; the framework must keep at least 40 watched scripts after SessionStart collapse"
 else
-  mark_pass "extracted set stays at or above 50 hooks"
+  mark_pass "extracted set stays at or above 40 hooks"
 fi
 
 for required in block-unreviewed-merge.sh check-secrets.sh block-main-push.sh dispatch-bash.sh; do
