@@ -396,9 +396,9 @@ run_case_custom_cmd "compound-old-skill-version" 2 "no CEO approval marker" "$sb
 
 # --- Sync-PR squash guard tests (apexyard#459) -------------------------
 #
-# The guard in block-unreviewed-merge.sh refuses --squash on PRs whose
-# head branch starts with `sync/main-to-dev-after-`. The guard fires on
-# both merge shapes (gh pr merge + gh api .../merge).
+# The guard in block-unreviewed-merge.sh refuses --squash/--rebase on PRs
+# whose head branch is a release-sync or /update sync branch. The guard fires
+# on both merge shapes (gh pr merge + gh api .../merge).
 #
 # The gh mock in make_sandbox already handles `gh pr view ... headRefOid`
 # calls. We extend it per-sandbox to also handle `headRefName` calls so
@@ -449,7 +449,7 @@ input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
 got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
-if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -Eq "cannot (be squash-merged|use squash or rebase)"; then
   echo "PASS [sync PR + --squash → blocked (apexyard#459)]"; PASS=$((PASS+1))
 else
   echo "FAIL [sync PR + --squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
@@ -498,7 +498,7 @@ input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
 got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
-if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot be squash-merged"; then
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -Eq "cannot (be squash-merged|use squash or rebase)"; then
   echo "PASS [sync PR + gh-api merge_method=squash → blocked (apexyard#459, #47 bypass class)]"; PASS=$((PASS+1))
 else
   echo "FAIL [sync PR + gh-api merge_method=squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
@@ -519,6 +519,22 @@ if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
 else
   echo "FAIL [sync PR + gh-api merge_method=merge → passes]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}sync-ghapi-merge-passes "
+fi
+
+# Case S6: /update sync branch + --squash → BLOCKED (#1301)
+sb=$(make_sandbox_with_sync_branch "chore/#1301-sync-upstream-apexyard")
+write_rex_marker "$sb" 305
+write_ceo_marker_structured "$sb" 305
+cmd="gh pr merge 305 --repo me2resh/apexyard --squash --delete-branch"
+input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot use squash or rebase"; then
+  echo "PASS [/update sync PR + --squash → blocked (apexyard#1301)]"; PASS=$((PASS+1))
+else
+  echo "FAIL [/update sync PR + --squash → blocked]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}update-sync-squash-blocked "
 fi
 
 # --- Cross-repo collision regression test (#485) ----------------------

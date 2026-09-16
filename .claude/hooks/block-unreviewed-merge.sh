@@ -154,14 +154,15 @@ if [ -z "$PR_NUMBER" ]; then
   exit 2
 fi
 
-# --- Sync-PR squash guard (apexyard#459) ---
-# /release-sync PRs MUST be merged with --merge (true merge, two parents).
+# --- Sync-PR strategy guard (apexyard#459, #1301) ---
+# /release-sync and /update sync PRs MUST be merged with --merge (true merge,
+# two parents).
 # Squash-merging destroys the second parent (pointing at the release squash
 # on main), so the release squash is never an ancestor of dev, and the
 # squash-divergence the skill exists to fix is silently re-introduced.
 #
-# Detection: if the PR's head branch starts with `sync/main-to-dev-after-`,
-# refuse a squash/rebase merge on BOTH command shapes:
+# Detection: if the PR's head branch matches a release-sync or /update sync
+# convention, refuse a squash/rebase merge on BOTH command shapes:
 #   - `gh pr merge <N> --squash` / `--rebase`
 #   - `gh api .../pulls/<N>/merge -f merge_method=squash` (or rebase)
 # The `gh api` shape is the silent-bypass route that motivated #47, so the
@@ -173,20 +174,21 @@ fi
 # unavailable forge API is not a reason to permanently block all syncs.
 if echo "$COMMAND" | grep -qE '(--squash|--rebase|merge_method=squash|merge_method=rebase)'; then
   _SYNC_BRANCH=$(resolve_pr_head_branch "$PR_NUMBER" "$CMD_REPO")
-  if echo "$_SYNC_BRANCH" | grep -qE '^sync/main-to-dev-after-'; then
+  if echo "$_SYNC_BRANCH" | grep -qE '^(sync/main-to-dev-after-|chore/(#[^/]+-)?sync-upstream-(apexyard|dev)$)'; then
     cat >&2 <<MSG
-BLOCKED: Sync PR #${PR_NUMBER} (branch: ${_SYNC_BRANCH}) cannot be squash-merged.
+BLOCKED: Sync PR #${PR_NUMBER} (branch: ${_SYNC_BRANCH}) cannot use squash or rebase.
 
-/release-sync PRs MUST be merged with --merge (true merge that preserves both
-parents). Squash-merging destroys the second parent (pointing at the release
+/release-sync and /update sync PRs MUST be merged with --merge (true merge
+that preserves both parents). Squash-merging destroys the second parent (pointing at the release
 squash commit on main), so the release squash is NOT made an ancestor of dev —
 defeating the entire purpose of /release-sync.
 
 Use --merge instead:
   gh pr merge ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>} --merge --delete-branch
 
-Or have the human approver run /approve-merge ${PR_NUMBER} — it auto-detects sync
-PRs and uses --merge. That skill is human-only (#1042); the model cannot invoke it.
+Or have the human approver run /approve-merge ${PR_NUMBER} — it auto-detects
+sync PRs and uses --merge. That skill is human-only (#1042); the model cannot
+invoke it.
 
 See AgDR-0053 for the full rationale.
 MSG

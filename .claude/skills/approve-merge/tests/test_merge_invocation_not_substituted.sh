@@ -157,6 +157,14 @@ else
   fail "release metadata and tracker_pr_merge share one fenced bash block"
 fi
 
+# --- Case 8: /update sync shapes select the ancestry-preserving strategy ----
+if grep -qF 'sync-upstream-(apexyard|dev)' "$SKILL_MD" \
+  && grep -qF 'sync ops fork with upstream' "$SKILL_MD"; then
+  pass "/update sync branch and title shapes are classified as sync PRs"
+else
+  fail "/update sync branch and title shapes are classified as sync PRs"
+fi
+
 echo
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

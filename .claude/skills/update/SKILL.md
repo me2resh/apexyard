@@ -356,6 +356,12 @@ fi
 git checkout -b "$BRANCH"
 ```
 
+Sync PRs created by `/update` must preserve upstream ancestry. Merge the PR
+with a true merge commit (`--merge`), through `/approve-merge` or the
+equivalent host command. Do not squash or rebase an update sync PR. The merge
+skill detects the `chore/(#<TICKET>-)?sync-upstream-*` branch convention and
+selects the ancestry-preserving strategy automatically.
+
 ### 6. Do the sync
 
 `$UPSTREAM_REF` was set in the pre-step (`upstream/main` by default, `upstream/dev` under `--from-dev`).

@@ -216,7 +216,9 @@ EOF
 Before running the merge, check whether this is a **sync-class PR**. A PR is sync-class if either:
 
 - Its head branch matches `sync/main-to-dev-after-*` (the canonical `/release-sync` branch prefix), OR
-- Its PR title starts with `sync(` (the canonical `/release-sync` PR title prefix)
+- Its head branch matches `/update`'s `chore/(#<TICKET>-)?sync-upstream-apexyard` or `chore/(#<TICKET>-)?sync-upstream-dev` convention, OR
+- Its PR title starts with `sync(` (the canonical `/release-sync` PR title prefix), OR
+- Its PR title starts with `chore(` or `chore:` and says `sync ops fork with upstream` (the `/update` PR shape)
 
 Run this entire block in one shell. The release subject and body file are
 intentionally derived immediately before `tracker_pr_merge`; a separate code
@@ -227,8 +229,9 @@ PR_HEAD_BRANCH=$(gh pr view <pr> --repo "$PR_HOST_REPO" --json headRefName -q '.
 PR_TITLE=$(gh pr view <pr> --repo "$PR_HOST_REPO" --json title -q '.title' 2>/dev/null)
 
 MERGE_STRATEGY="squash"  # default for all other PRs — bare enum, not a CLI flag (tracker_pr_merge normalises it per-forge)
-if echo "$PR_HEAD_BRANCH" | grep -qE '^sync/main-to-dev-after-' || \
-   echo "$PR_TITLE" | grep -qE '^sync\('; then
+if echo "$PR_HEAD_BRANCH" | grep -qE '^(sync/main-to-dev-after-|chore/(#[^/]+-)?sync-upstream-(apexyard|dev)$)' || \
+   echo "$PR_TITLE" | grep -qE '^sync\(' || \
+   echo "$PR_TITLE" | grep -qE '^chore(\([^)]*\))?: sync ops fork with upstream'; then
   MERGE_STRATEGY="merge"
 fi
 
@@ -307,7 +310,7 @@ Unless `--no-merge` was passed, the preceding block runs the merge in the same t
 
 `tracker_pr_merge` dispatches on the project's `tracker_kind <owner/repo>` (the same per-project resolution `tracker_review_submit` and `tracker_create` use): a `gh`-kind project runs `gh pr merge <pr> --repo <owner/repo> --squash|--merge|--rebase --delete-branch`; a `glab`-kind project runs the `glab mr merge` equivalent (`--squash`/`--rebase`/no-flag-for-a-plain-merge, `--remove-source-branch`). **Note what actually gates this call:** the `gh`/`glab` command above runs *inside* `_lib-tracker.sh`, a sourced shell function — the merge-gate hooks (`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, `require-design-review-for-ui.sh`, `require-architecture-review.sh`) match the OUTER Bash command text this step actually submits (the `tracker_pr_merge "<owner/repo>" "<pr>" "${MERGE_STRATEGY}" true > "$MERGE_RESULT_FILE"` line above), and that text never literally contains `gh pr merge` or `glab mr merge` — those strings live inside already-sourced library code, not in this step's command. So the wrapper call itself is a dedicated, gate-recognised merge shape in its own right: `is_merge_command` and the PR/repo extractors in `_lib-extract-pr.sh` have a `tracker_pr_merge <owner/repo> <pr> ...` branch (#759), and `settings.json` carries a matching `Bash(tracker_pr_merge *)` matcher for all four hooks, alongside the existing `gh`/`glab` matchers (#764/#767/#793). The gates fire on the wrapper form directly — not by recognising the inner CLI command it happens to run, and ONLY when that form is issued as the bare top-level statement shown above — never inside a `$(...)`.
 
-The `block-unreviewed-merge.sh` hook also includes a guard that refuses `--squash` on `sync/`-prefixed PRs — so even a direct `gh pr merge <sync-pr> --squash` (or the glab equivalent) will be blocked, protecting against both accidental and deliberate strategy errors. If anything else is wrong, `MERGE_RC` is non-zero and the failure message is the same one the user would see running the underlying CLI directly. The CEO marker stays on disk so the user can retry the merge after fixing the cause without re-approving.
+The `block-unreviewed-merge.sh` hook also includes a guard that refuses `--squash` or `--rebase` on sync-class PRs, including both `/release-sync` and `/update` branch shapes. A direct merge command is therefore blocked when it would discard the ancestry link. If anything else is wrong, `MERGE_RC` is non-zero and the failure message is the same one the user would see running the underlying CLI directly. The CEO marker stays on disk so the user can retry the merge after fixing the cause without re-approving.
 
 On success (`MERGE_RC` = 0), `MERGE_SHA` already carries the merge commit SHA — `tracker_pr_merge` resolves it itself (gh: `gh pr view --json mergeCommit`; glab: `glab mr view --output json` → `.merge_commit_sha` / `.squash_commit_sha`), so no separate reporting call is needed.
 
