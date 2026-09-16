@@ -1,4 +1,4 @@
-# Portfolio-wide harness adapter management
+# AgDR-0155: Portfolio-wide harness adapter management
 
 > Repositories in this portfolio can use different AI coding harnesses.
 > Adapter installation and drift lack a portfolio-level signal.
