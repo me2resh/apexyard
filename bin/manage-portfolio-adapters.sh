@@ -86,8 +86,8 @@ if ! ensure_split_portfolio_anchor; then
   if [ "$MODE" = check ]; then
     drift=$((drift + 1))
   else
-  echo "ERROR: unable to establish the split-portfolio ops-root anchor" >&2
-  exit 1
+    echo "ERROR: unable to establish the split-portfolio ops-root anchor" >&2
+    exit 1
   fi
 fi
 
@@ -131,6 +131,6 @@ while IFS= read -r row; do
     if [ "$result" = ok ] || [ "$result" = installed ]; then echo "$result $name: $adapter"; else echo "DRIFT $name: $adapter ($result)"; drift=$((drift+1)); fi
   done
 done < <(yq -o=json -I=0 '.projects[] | [ .name, (.workspace // ""), ((.adapters // ["codex", "pi", "opencode", "cursor"]) | join(",")) ]' "$REGISTRY")
-[ "$count" -gt 0 ] || { echo "No registered projects matched."; exit 0; }
 if [ "$MODE" = check ] && [ "$drift" -gt 0 ]; then echo "Portfolio adapter drift: $drift finding(s)."; exit 1; fi
+[ "$count" -gt 0 ] || { echo "No registered projects matched."; exit 0; }
 echo "Portfolio adapter check complete: $count project(s)."

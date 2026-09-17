@@ -33,7 +33,8 @@ files do not contain a machine-specific absolute path.
 The private portfolio root owns the runtime anchor and links. The framework
 installer requires Python to calculate relative paths. The regression suite
 executes a generated Codex hook from a managed workspace and rejects an
-unrelated symlink target. Resolution from a common parent remains governed by
+unrelated symlink target. That assertion unsets the session pin so the fixture
+anchor is the one that runs. Resolution from a common parent remains governed by
 the existing nested-ops-root precedence tests.
 
 ## References

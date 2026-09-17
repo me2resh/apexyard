@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-MAIN_ROOT="$(cd "$(dirname "$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir)")" && pwd)"
+MAIN_ROOT="$ROOT"
+if common_git_dir=$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then
+  MAIN_ROOT="$(cd "$(dirname "$common_git_dir")" && pwd)"
+fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/.claude"
@@ -25,6 +28,23 @@ if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry.ya
 fi
 grep -q 'DRIFT missing: workspace missing' "$TMP/out"
 "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry.yaml" --project ok >/dev/null
+# A docs-only registry never increments count. Unsafe links must still fail.
+cat > "$TMP/registry-docsonly.yaml" <<YAML
+version: 1
+projects:
+  - name: docsonly
+    docs: projects/docsonly
+    status: active
+YAML
+unlink "$TMP/.claude/hooks"
+ln -s "$TMP" "$TMP/.claude/hooks"
+if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$TMP/registry-docsonly.yaml" >"$TMP/docsonly-out" 2>&1; then
+  echo "expected unsafe hooks link with no workspace to fail" >&2
+  exit 1
+fi
+grep -q 'unsafe hooks link target' "$TMP/docsonly-out"
+unlink "$TMP/.claude/hooks"
+ln -s "$MAIN_ROOT/.claude/hooks" "$TMP/.claude/hooks"
 echo "PASS: portfolio adapter management"
 # Repo-less entries must not shift fields or create a bogus workspace path.
 cat > "$TMP/registry-repoless.yaml" <<YAML
@@ -70,7 +90,16 @@ if [ -z "$hook" ]; then
   exit 1
 fi
 set +e
-printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}' | (cd "$workspace" && bash -c "$hook") >/dev/null 2>&1
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}' | (
+  cd "$workspace" || exit 1
+  export CLAUDE_CODE_SESSION_ID=ci-session
+  export APEXYARD_OPS_PIN_DIR="$TMP/pin-dir"
+  mkdir -p "$APEXYARD_OPS_PIN_DIR" "$TMP/pin-ops/.claude/hooks"
+  printf '%s\n' 'exit 0' > "$TMP/pin-ops/.claude/hooks/dispatch-bash.sh"
+  chmod +x "$TMP/pin-ops/.claude/hooks/dispatch-bash.sh"
+  printf '%s\n' "$TMP/pin-ops" > "$APEXYARD_OPS_PIN_DIR/ops-root-ci-session"
+  env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR bash -c "$hook"
+) >/dev/null 2>&1
 rc=$?
 set -e
 if [ "$rc" -ne 2 ]; then
