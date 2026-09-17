@@ -35,8 +35,9 @@
 #       headings. Exit 1 otherwise. Does not write a marker.
 #
 #   review_write_rex_approved <body_file> <sha> <marker_path>
-#       Validate the body, require an APPROVED verdict, then write the
-#       bare SHA plus newline. See AgDR-0161 / me2resh/apexyard#1322.
+#       Validate the body, require a **APPROVED** verdict line and a
+#       matching Reviewed commit footer SHA, then write the bare SHA
+#       plus newline. See AgDR-0161 / me2resh/apexyard#1322.
 #
 # USAGE (in a hook or skill)
 # --------------------------
@@ -328,7 +329,8 @@ review_validate_rex_body() {
   local heading
   while IFS= read -r heading; do
     [ -z "$heading" ] && continue
-    if ! grep -qE "^$(printf '%s' "$heading" | sed 's/[.[\*^$()+?{|]/\\&/g')" "$body_file"; then
+    # Headings are literal prefixes. They contain no regex metacharacters.
+    if ! grep -qE "^${heading}" "$body_file"; then
       echo "review_validate_rex_body: missing heading: ${heading}" >&2
       return 1
     fi
@@ -356,8 +358,9 @@ _review_rex_verdict_block() {
 
 # review_write_rex_approved <body_file> <sha> <marker_path>
 #
-# Validate the local body, refuse a non-APPROVED verdict, then write the
-# bare 40-char SHA plus newline. The merge gate still reads only that SHA.
+# Validate the local body. Refuse a verdict that is not **APPROVED**.
+# Refuse a footer SHA that does not match. Then write the bare 40-char
+# SHA plus newline. The merge gate still reads only that SHA.
 review_write_rex_approved() {
   local body_file="${1:-}"
   local sha="${2:-}"
@@ -374,14 +377,20 @@ review_write_rex_approved() {
 
   review_validate_rex_body "$body_file" || return 1
 
+  if ! grep -F "Reviewed commit" "$body_file" | grep -Fq "$sha"; then
+    echo "review_write_rex_approved: Reviewed commit footer does not match sha" >&2
+    return 1
+  fi
+
   local verdict
   verdict=$(_review_rex_verdict_block "$body_file")
   if echo "$verdict" | grep -q 'CHANGES REQUESTED'; then
     echo "review_write_rex_approved: CHANGES REQUESTED must not write a marker" >&2
     return 1
   fi
-  if ! echo "$verdict" | grep -q 'APPROVED'; then
-    echo "review_write_rex_approved: verdict is not APPROVED" >&2
+  # Exact bold token only. A substring match would accept "NOT APPROVED".
+  if ! echo "$verdict" | grep -qE '^\*\*APPROVED\*\*[[:space:]]*$'; then
+    echo "review_write_rex_approved: verdict is not **APPROVED**" >&2
     return 1
   fi
 

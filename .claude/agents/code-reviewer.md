@@ -793,17 +793,19 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 ### The command
 
-Once `MARKER_HOME`, `PR_HOST_REPO`, and `REX_MARKER` are resolved (see above), use exactly one of these forms:
+Once `MARKER_HOME`, `PR_HOST_REPO`, and `REX_MARKER` are resolved (see above), capture the SHA and pass it through the helper with the same body file you posted. The helper refuses a write when required headings are missing, the footer SHA does not match, or the verdict is not `**APPROVED**` (AgDR-0161, me2resh/apexyard#1322).
 
-# Option A/B/C still capture the SHA. Then pass it through the helper
-# with the same body file you posted. The helper refuses a write when
-# required headings are missing or the verdict is not APPROVED
-# (AgDR-0161, me2resh/apexyard#1322). Do not redirect the SHA onto the
-# marker yourself.
+If `review_write_rex_approved` is not in scope, re-source `_lib-review-markers.sh`. Do not redirect the SHA onto the marker yourself.
 
 ```bash
-# Resolve SHA first (local HEAD, gh pr view, or a captured variable).
-# Then:
+# Preferred: PR HEAD on GitHub (cross-repo or detached HEAD)
+SHA=$(gh pr view {number} --repo "$PR_HOST_REPO" --json headRefOid --jq .headRefOid)
+# Fallback if gh is unavailable: SHA=$(git rev-parse HEAD)
+
+if ! command -v review_write_rex_approved >/dev/null 2>&1; then
+  # shellcheck source=/dev/null
+  . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
+fi
 review_write_rex_approved "$REVIEW_BODY_FILE" "$SHA" "$REX_MARKER"
 ```
 

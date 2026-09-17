@@ -118,6 +118,55 @@ else
   mark_pass "missing body file fails"
 fi
 
+# NOT APPROVED must not write. Substring "APPROVED" is not enough.
+NOTA="$TMP/not-approved.md"
+NOTA_MARKER="$TMP/reviews/not-approved.approved"
+write_complete_body "$NOTA" "NOT APPROVED"
+rm -f "$NOTA_MARKER"
+if review_write_rex_approved "$NOTA" "$SHA" "$NOTA_MARKER" 2>/dev/null; then
+  mark_fail "NOT APPROVED write" "expected refuse"
+elif [ -f "$NOTA_MARKER" ]; then
+  mark_fail "NOT APPROVED write" "marker was created"
+else
+  mark_pass "NOT APPROVED verdict does not write a marker"
+fi
+
+# Footer SHA must match the SHA being written.
+MISMATCH="$TMP/mismatch.md"
+MISMATCH_MARKER="$TMP/reviews/mismatch.approved"
+write_complete_body "$MISMATCH" "APPROVED"
+OTHER="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+rm -f "$MISMATCH_MARKER"
+if review_write_rex_approved "$MISMATCH" "$OTHER" "$MISMATCH_MARKER" 2>/dev/null; then
+  mark_fail "footer SHA mismatch" "expected refuse"
+elif [ -f "$MISMATCH_MARKER" ]; then
+  mark_fail "footer SHA mismatch" "marker was created"
+else
+  mark_pass "footer SHA mismatch does not write a marker"
+fi
+
+# Required headings stay a subset of the Rex Output Format template.
+REX_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
+rex_template=$(awk '/^## Output Format$/{section=1; next}
+  section && /^```markdown$/{template=1; next}
+  template && /^```$/{exit}
+  template {print}' "$REX_FILE")
+heading_drift=0
+while IFS= read -r heading; do
+  [ -z "$heading" ] && continue
+  if ! printf '%s\n' "$rex_template" | grep -qE "^${heading}"; then
+    echo "missing from Rex template: $heading" >&2
+    heading_drift=1
+  fi
+done <<EOF
+${_REVIEW_REX_BODY_HEADINGS}
+EOF
+if [ "$heading_drift" -eq 0 ]; then
+  mark_pass "required headings appear in the Rex Output Format template"
+else
+  mark_fail "heading template lock" "lib headings drifted from the agent template"
+fi
+
 echo
 echo "===== test_validate_rex_review_body.sh ====="
 echo "Passed: $PASS"
