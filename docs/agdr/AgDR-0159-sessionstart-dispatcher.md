@@ -6,21 +6,24 @@ Accepted
 
 ## Context
 
-The framework registered 18 SessionStart commands. Each command repeated the
-same session-pin and ops-root discovery wrapper before invoking one hook. This
-added process and shell-start cost to every session and made the startup path
-more likely to exhaust file descriptors in harnesses that launch the group
-together.
+The framework registered 18 SessionStart commands.
+
+- Each command repeated the session-pin and ops-root discovery wrapper.
+- The repeated wrapper added process and shell-start cost to every session.
+- A harness that launched the group together was more likely to exhaust file descriptors.
 
 ## Decision
 
-Register one SessionStart command that resolves the ops root once and invokes
-`.claude/hooks/dispatch-session-start.sh`. The dispatcher passes the original
-SessionStart payload to the existing hooks. It runs the pin hook first, then
-runs the remaining advisory and housekeeping hooks concurrently, reporting
-their output in configuration order. It keeps the hook scripts as the policy
-source and continues after a nonzero result so one unavailable check cannot
-suppress cleanup, routing, or reindexing.
+Register one SessionStart command that resolves the ops root once.
+
+- The command invokes `.claude/hooks/dispatch-session-start.sh`.
+- The dispatcher passes the original SessionStart payload to the existing hooks.
+- The dispatcher runs the pin hook first.
+- The dispatcher runs the remaining advisory and housekeeping hooks concurrently.
+- The dispatcher reports stdout and stderr on their original streams.
+- Hook scripts remain the policy source.
+- The dispatcher continues after a nonzero result.
+- One unavailable check cannot suppress cleanup, routing, or reindexing.
 
 ## Consequences
 
@@ -28,12 +31,26 @@ The dispatcher is now the SessionStart wiring source. Adding, removing, or
 reordering a SessionStart hook requires updating its ordered list and the
 dispatcher regression test. Hook decisions remain in the existing scripts.
 
-The following hooks are advisory and stay silent when their condition is not
-present: onboarding, upstream drift, jq availability, git-hook installation,
-portfolio configuration, MCP tooling, search configuration, the split-
-portfolio primer, and unqualified review-marker detection. Marker cleanup,
-custom-skill linking, agent-routing application, and search reindexing are
-housekeeping hooks and produce no output unless their own work requires it.
+The following hooks are advisory and stay silent when their condition is not present:
+
+- onboarding
+- upstream drift
+- jq availability
+- git-hook installation
+- portfolio configuration
+- MCP tooling
+- search configuration
+- split-portfolio primer
+- unqualified review-marker detection
+
+The following hooks are housekeeping hooks:
+
+- marker cleanup
+- custom-skill linking
+- agent-routing application
+- search reindexing
+
+They produce no output unless their own work requires it.
 
 The settings fan-out falls from 18 commands to one. The PR records
 SessionStart timing against the issue baseline and verifies that Claude Code,

@@ -61,7 +61,14 @@ if [ -f "$DISPATCHER" ]; then
   DISPATCH_HOOKS=$(grep -E '^\s*#\s*APEXYARD_DISPATCH_GATE:' "$DISPATCHER" \
     | awk -F'|' '{gsub(/[[:space:]]/, "", $3); if ($3 != "") print ".claude/hooks/" $3}')
 fi
-EXEC_HOOKS=$(printf '%s\n%s\n' "$SETTINGS_HOOKS" "$DISPATCH_HOOKS" | grep -E '\.claude/hooks/' | sort -u)
+SESSION_START_DISPATCHER="$ROOT/.claude/hooks/dispatch-session-start.sh"
+SESSION_START_HOOKS=""
+if [ -f "$SESSION_START_DISPATCHER" ]; then
+  SESSION_START_HOOKS=$(grep -E '^# APEXYARD_SESSION_START_HOOK:' "$SESSION_START_DISPATCHER" \
+    | sed -E 's/^# APEXYARD_SESSION_START_HOOK:[[:space:]]*//' \
+    | sed 's#^#.claude/hooks/#')
+fi
+EXEC_HOOKS=$(printf '%s\n%s\n%s\n' "$SETTINGS_HOOKS" "$DISPATCH_HOOKS" "$SESSION_START_HOOKS" | grep -E '\.claude/hooks/' | sort -u)
 
 if [ -z "$EXEC_HOOKS" ]; then
   mark_fail "wrapper extraction" "found 0 exec'd hooks in settings.json or dispatch-bash.sh — extraction regex may have drifted"
@@ -76,7 +83,7 @@ else
   mark_pass "extracted set stays at or above 40 hooks"
 fi
 
-for required in block-unreviewed-merge.sh check-secrets.sh block-main-push.sh dispatch-bash.sh; do
+for required in block-unreviewed-merge.sh check-secrets.sh block-main-push.sh dispatch-bash.sh dispatch-session-start.sh; do
   if printf '%s\n' "$EXEC_HOOKS" | grep -qx ".claude/hooks/$required"; then
     mark_pass "extracted set includes $required"
   else

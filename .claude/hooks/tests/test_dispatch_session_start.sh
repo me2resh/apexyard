@@ -17,6 +17,9 @@ chmod +x "$TMP/.claude/hooks/dispatch-session-start.sh"
 
 scripts='pin-ops-root.sh onboarding-check.sh check-upstream-drift.sh check-jq-installed.sh check-git-hooks-installed.sh check-portfolio-config.sh clear-bootstrap-marker.sh clear-active-reviewer-marker.sh clear-onboarding-depth-mode-marker.sh clear-onboarding-glossary-seen-marker.sh clear-issue-skill-marker.sh link-custom-skills.sh apply-agent-routing.sh remind-mcp-tools.sh validate-search-config.sh print-portfolio-primer.sh reindex-on-session-start.sh warn-unqualified-review-marker.sh'
 for script in $scripts; do
+  grep -q "APEXYARD_SESSION_START_HOOK: $script" "$ROOT/dispatch-session-start.sh"
+done
+for script in $scripts; do
   cat > "$TMP/.claude/hooks/$script" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
