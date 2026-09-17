@@ -63,12 +63,20 @@ YAML
 [ -L "$FIXTURE/portfolio/.claude/settings.json" ]
 workspace="$FIXTURE/portfolio/workspace/ok"
 [ -f "$workspace/.codex/hooks.json" ]
-hook=$(jq -r '.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("block-git-add-all.sh")) | .command' "$workspace/.codex/hooks.json")
+# Wave 2 (AgDR-0157) emits dispatch-bash.sh, not a per-hook command.
+hook=$(jq -r '.hooks.PreToolUse[]?.hooks[]? | select(.command | contains("dispatch-bash.sh")) | .command' "$workspace/.codex/hooks.json")
+if [ -z "$hook" ]; then
+  echo "expected a dispatch-bash.sh PreToolUse command in generated hooks.json" >&2
+  exit 1
+fi
 set +e
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git add -A"}}' | (cd "$workspace" && bash -c "$hook") >/dev/null 2>&1
 rc=$?
 set -e
-[ "$rc" -eq 2 ]
+if [ "$rc" -ne 2 ]; then
+  echo "expected git add -A to be blocked with rc=2, got $rc" >&2
+  exit 1
+fi
 unlink "$FIXTURE/portfolio/.claude/hooks"
 ln -s "$TMP" "$FIXTURE/portfolio/.claude/hooks"
 if "$ROOT/bin/manage-portfolio-adapters.sh" --check --registry "$FIXTURE/portfolio/apexyard.projects.yaml" >"$TMP/unsafe-out" 2>&1; then
