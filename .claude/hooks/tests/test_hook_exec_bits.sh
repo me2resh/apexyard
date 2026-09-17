@@ -77,10 +77,10 @@ else
 fi
 
 extracted_count=$(printf '%s\n' "$EXEC_HOOKS" | grep -c '.' || true)
-if [ "${extracted_count:-0}" -lt 40 ]; then
-  mark_fail "exec-set floor" "extracted ${extracted_count:-0} hooks; the framework must keep at least 40 watched scripts after SessionStart collapse"
+if [ "${extracted_count:-0}" -lt 50 ]; then
+  mark_fail "exec-set floor" "extracted ${extracted_count:-0} hooks; dispatcher collapse must not drop below 50 watched scripts"
 else
-  mark_pass "extracted set stays at or above 40 hooks"
+  mark_pass "extracted set stays at or above 50 hooks"
 fi
 
 for required in block-unreviewed-merge.sh check-secrets.sh block-main-push.sh dispatch-bash.sh dispatch-session-start.sh; do
