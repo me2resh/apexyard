@@ -14,7 +14,7 @@ C4Container
     System_Ext(github, "GitHub")
 
     System_Boundary(apex, "ApexYard (ops fork)") {
-        Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code and Cursor read this first when native load is on. Imports rules and role-triggers.")
+        Container(claudemd, "CLAUDE.md", "Markdown", "Entry point. Claude Code and Cursor read this first when native load is on. Indexes rules by name. Load a rule file on demand.")
         Container(rules, ".claude/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
         Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart. Cursor session-pin overlay lives here too.")
         Container(overlay, ".cursor/", "hooks.json + rules", "Thin Cursor overlay. sessionStart maps session_id onto CLAUDE_CODE_SESSION_ID. Does not copy the Claude Code gates.")
@@ -31,7 +31,7 @@ C4Container
     Rel(ops, claudemd, "Reads / edits", "via Claude Code, Cursor, or editor")
     Rel(claude, claudemd, "Loads on session start")
     Rel(cursor, claudemd, "Loads when third-party configs are on")
-    Rel(claudemd, rules, "Imports via @.claude/rules/*.md")
+    Rel(claudemd, rules, "Indexes by name. Load on demand.")
     Rel(claude, hooks, "Executes on tool events", "bash")
     Rel(cursor, hooks, "Executes .claude/settings.json gates natively", "bash")
     Rel(cursor, overlay, "Runs sessionStart pin")
@@ -61,7 +61,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 ## Key relationships
 
-- **CLAUDE.md → rules** is the single most important arrow. Every rule file is imported via `@.claude/rules/*.md` from `CLAUDE.md`, and Claude Code applies them. Without that import chain, rules are orphaned prose.
+- **CLAUDE.md → rules** is the single most important arrow. CLAUDE.md indexes every rule file by name. The agent Reads a named file when the work needs it. Hooks remain the mechanical gates. Without the index, rules are orphaned prose.
 - **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
@@ -100,3 +100,7 @@ Unconditional safety hooks now always run before command-specific gates. The fir
 **2026-09-17 — SessionStart dispatcher (AgDR-0159, me2resh/apexyard#1318).** SessionStart no longer fans out one process per hook. `.claude/settings.json` registers one dispatcher. `.claude/hooks/dispatch-session-start.sh` runs `pin-ops-root.sh` first. It then runs the remaining SessionStart scripts concurrently. Policy still lives in those scripts.
 
 The C4 containers stay the same. The change is inside the hooks container.
+
+**2026-09-17 — Token-efficiency Wave 2 (AgDR-0160, me2resh/apexyard#1319).** CLAUDE.md is an index. It no longer auto-imports every rule body. Agents Read a named file under `.claude/rules/` when the work needs it. Hard gates stay in the hooks container. AGENTS.md stays a short operator bridge.
+
+The C4 containers stay the same. The CLAUDE.md → rules arrow is now index-plus-on-demand, not glob import.

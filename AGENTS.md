@@ -59,7 +59,7 @@ Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
 
 ### Full detail — read on demand
 
-Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAUDE.md` does, but you *can* `Read` any file on request — so treat these as the source of truth when you need the exact wording, an edge case, or the rationale behind a rule:
+Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` when you need the exact wording, an edge case, or the rationale:
 
 | File | Covers |
 |------|--------|
@@ -78,6 +78,11 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 | `.claude/rules/agent-role-selection.md` | Picking the role-appropriate sub-agent when spawning build work |
 | `.claude/rules/reporting-style.md` | How to narrate status back to the operator |
 | `.claude/rules/right-size-ceremony.md` | Lean / Standard / Heavy tiers for review ceremony and for planning, implementation, and artifact creation |
+| `.claude/rules/skill-first.md` | Ticket, audit, spec, or diagram work |
+| `.claude/rules/reconcile-before-build.md` | Spawning a build agent for a ticket |
+| `.claude/rules/glossary-lookup.md` | An adopter asks what a core SDLC term means |
+| `.claude/rules/code-standards.md` | Writing application code |
+| `.claude/rules/build-handbook-discovery.md` | Starting Build-phase implementation |
 | `.claude/rules/leak-protection.md` | Never leak private project names/repos into public framework issues |
 | `.claude/rules/role-triggers.md` | Full role-activation table + handoff artefacts |
 
@@ -117,7 +122,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
   - `.claude/hooks/` — 42 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 64 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
-  - `.claude/rules/` — 21 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
+  - `.claude/rules/` — 22 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it.
   - `.claude/settings.json` — hook wiring
 - `roles/` — 19 role definitions across Engineering, Product, Design, Security, Data
 - `workflows/` — SDLC, code-review, deployment workflow docs

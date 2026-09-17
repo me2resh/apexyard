@@ -45,7 +45,8 @@ assert "reviewer:runtime-reproduction" grep -qF 'smallest available command or r
 assert "reviewer:claim-states" grep -qF '**Unverified**' "$REVIEWER_FILE"
 assert "reviewer:no-private-identifiers" grep -qF 'do not copy private repository paths' "$REVIEWER_FILE"
 
-assert "wiring:claude" grep -qF '@.claude/rules/evidence-grounding.md' "$SRC_ROOT/CLAUDE.md"
+assert "wiring:claude" grep -qF '.claude/rules/evidence-grounding.md' "$SRC_ROOT/CLAUDE.md"
+assert "wiring:claude-no-at-import" bash -c "! grep -qF '@.claude/rules/evidence-grounding.md' '$SRC_ROOT/CLAUDE.md'"
 assert "wiring:agents" grep -qF '.claude/rules/evidence-grounding.md' "$SRC_ROOT/AGENTS.md"
 assert "wiring:system" grep -qF 'evidence-grounding' "$SRC_ROOT/SYSTEM.md"
 assert "wiring:cursor" grep -qF '.claude/rules/evidence-grounding.md' "$SRC_ROOT/bin/sync-cursor-adapter.sh"

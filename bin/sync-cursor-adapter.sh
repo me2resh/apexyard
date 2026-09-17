@@ -133,8 +133,8 @@ full copy in `~/.cursor/hooks.json` can double-fire or fail closed.
 Remove it with `bin/install-cursor-adapter.sh --uninstall` then
 re-install.
 
-Read `AGENTS.md` for the Cursor operator bridge. Read `CLAUDE.md` and
-`.claude/rules/*.md` for the full rules.
+Read `AGENTS.md` for the Cursor operator bridge. Read `CLAUDE.md` as the
+index. Load a named file under `.claude/rules/` only when the work needs it.
 
 Load-bearing rules before you start:
 
