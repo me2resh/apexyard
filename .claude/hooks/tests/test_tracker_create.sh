@@ -114,7 +114,54 @@ out=$(PATH="$SB/bin:$PATH" tracker_create "o/r" "Add login" "$BODY"); rc=$?
 assert_eq "tracker_create gh failure → non-zero exit" "1" "$rc"
 assert_eq "tracker_create gh failure → empty stdout"  ""  "$out"
 
+# #1327 — the CLI's own error text must reach stderr, not be discarded.
+# Without it every failure reads like an auth problem to the operator.
+cat > "$SB/bin/gh" <<'EOF'
+#!/bin/bash
+echo "could not add label: 'chore' not found" >&2
+exit 1
+EOF
+chmod +x "$SB/bin/gh"
+tracker_clear_cache
+out=$(PATH="$SB/bin:$PATH" tracker_create "o/r" "Add login" "$BODY" "chore" 2>"$SB/err"); rc=$?
+assert_eq "tracker_create gh failure → non-zero exit (stderr case)" "1" "$rc"
+assert_eq "tracker_create gh failure → stdout stays empty"          ""  "$out"
+assert_eq "tracker_create gh failure → gh error reaches stderr" "1" "$(grep -c "could not add label: 'chore' not found" "$SB/err")"
+
 rm -rf "$SB"
+
+# #1327 — same stderr contract for the glab and custom adapters. Both kinds
+# are set through project-config defaults, so no YAML parser is needed.
+SBE=$(make_sandbox)
+cat > "$SBE/bin/glab" <<'EOF'
+#!/bin/bash
+echo "glab: 403 Forbidden" >&2
+exit 1
+EOF
+chmod +x "$SBE/bin/glab"
+BODYE="$SBE/body.md"; printf 'body\n' > "$BODYE"
+for kind in glab custom; do
+  if [ "$kind" = "glab" ]; then
+    printf '{ "tracker": { "kind": "glab" } }\n' > "$SBE/.claude/project-config.defaults.json"
+    expect="glab: 403 Forbidden"
+  else
+    printf '%s\n' '{ "tracker": { "kind": "custom", "create_command": "echo \"custom: rejected\" >&2; false" } }' > "$SBE/.claude/project-config.defaults.json"
+    expect="custom: rejected"
+  fi
+  (
+    cd "$SBE" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBE/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SBE/bin:$PATH" tracker_create "o/r" "t" "$BODYE" 2>"$SBE/err-$kind"); rc=$?
+    printf '%s|%s\n' "$rc" "$out"
+  ) > "$SBE/r-$kind"
+  IFS="|" read -r e_rc e_out < "$SBE/r-$kind"
+  assert_eq "tracker_create $kind failure → non-zero exit"           "1" "$e_rc"
+  assert_eq "tracker_create $kind failure → stdout stays empty"      ""  "$e_out"
+  assert_eq "tracker_create $kind failure → CLI error reaches stderr" "1" "$(grep -c "$expect" "$SBE/err-$kind")"
+done
+rm -rf "$SBE"
 
 # Shape-only contract — kind=none does not call a CLI; it returns 3 and emits
 # the body (if given) to stdout for manual/external filing. NOT a failure path.
