@@ -153,12 +153,6 @@ These one-liners stay here because agents use them on almost every turn. The ful
 
 Read `.claude/rules/git-conventions.md` before you branch, commit, or open a PR.
 
-Format: `{type}/{TICKET-ID}-{description}`. Types: feature, fix, refactor, chore, docs, test.
-
-PR title: `type(TICKET): description`. Examples: `feat(#42): add user auth`, `fix(APE-123): login bug`.
-
-Commit body uses `Closes #N` or `Refs #N`. Never `git add -A`.
-
 Framework PRs merge to `dev`. Managed projects merge to `main`. See `docs/release-process.md` and AgDR-0007.
 
 ---

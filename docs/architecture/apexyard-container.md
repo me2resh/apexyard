@@ -101,6 +101,6 @@ Unconditional safety hooks now always run before command-specific gates. The fir
 
 The C4 containers stay the same. The change is inside the hooks container.
 
-**2026-09-17 — Token-efficiency Wave 2 (AgDR-0160, me2resh/apexyard#1319).** CLAUDE.md is an index. It no longer auto-imports every rule body. Agents Read a named file under `.claude/rules/` when the work needs it. Hard gates stay in the hooks container. AGENTS.md stays a short operator bridge.
+**2026-09-17 — Token-efficiency Wave 2 (AgDR-0160, me2resh/apexyard#1319).** CLAUDE.md is an index. It no longer auto-imports every rule body. Agents Read a named file under `.claude/rules/` when the work needs it. Hard gates stay in the hooks container. AGENTS.md stays a short operator bridge. The Claude Code baseline on `dev` `3953d50` was about 43.1k tokens (15 `@` imports, not a 22-file glob). The Wave 2 test caps the CLAUDE.md catalogue at 9,000 tokens and AGENTS.md at 5,000 tokens.
 
 The C4 containers stay the same. The CLAUDE.md → rules arrow is now index-plus-on-demand, not glob import.
