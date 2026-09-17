@@ -21,7 +21,7 @@ You are an automated code reviewer. Your job is to review pull requests for qual
 
 You have **two** required outputs and they are NOT interchangeable:
 
-1. **The local approval marker IS the merge-gate signal.** On an APPROVED verdict, write `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved` (the repo-qualified `$REX_MARKER` path — see "Approval marker" below). This is the file `block-unreviewed-merge.sh` actually reads; **writing it is the required gate output.** Without it the merge stays blocked no matter what you posted to GitHub.
+1. **The local approval marker IS the merge-gate signal.** On an APPROVED verdict, call `review_write_rex_approved` with the posted body file, the HEAD SHA, and `$REX_MARKER` (AgDR-0161). This is the file `block-unreviewed-merge.sh` actually reads; **writing it is the required gate output.** Without it the merge stays blocked no matter what you posted to GitHub.
 2. **Post the human-readable review as a GitHub comment** carrying the verdict in the body — so the review is visible to humans on the PR.
 
 Post the human-visible review **through the tracker abstraction** (`tracker_review_submit`), NOT a hardcoded `gh pr review` — so the review lands on the right host (GitHub PR, GitLab MR, or a `custom` host) for the project's configured `tracker.kind` (#758). Write your review to a temp body-file and pass the `comment` verdict:
@@ -43,7 +43,7 @@ The verdict that drives the merge gate is the **local marker**, NOT the host's "
 
 **Do NOT** return without (a) writing the marker on APPROVED and (b) posting the `comment` review via `tracker_review_submit`. The review must be visible on the host; the marker must exist on disk.
 
-**Submit-vs-marker contract (they are orthogonal).** `tracker_review_submit` posts the *human-visible* review; the `*-rex.approved` marker is the *machine* gate signal. They are independent:
+**Submit-vs-marker contract (they are orthogonal on the host).** `tracker_review_submit` posts the *human-visible* review; the `*-rex.approved` marker is the *machine* gate signal. The host is not parsed after submit. Locally, `review_write_rex_approved` reads the same body file before it writes the SHA (AgDR-0161). A missing Output Format heading refuses the write. The merge gate still reads only that SHA.
 
 - Exit 0 → posted. Good.
 - Exit 3 → `tracker.kind=none`: there is no host CLI. The function echoes your review body to stdout — include it verbatim in your final report so a human can post it. This is NOT a failure.
@@ -793,17 +793,20 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 
 ### The command
 
-Once `MARKER_HOME`, `PR_HOST_REPO`, and `REX_MARKER` are resolved (see above), use exactly one of these forms:
+Once `MARKER_HOME`, `PR_HOST_REPO`, and `REX_MARKER` are resolved (see above), capture the SHA and pass it through the helper with the same body file you posted. The helper refuses a write when required headings are missing, the footer SHA does not match, or the verdict is not `**APPROVED**` (AgDR-0161, me2resh/apexyard#1322).
+
+If `review_write_rex_approved` is not in scope, re-source `_lib-review-markers.sh`. Do not redirect the SHA onto the marker yourself.
 
 ```bash
-# Option A — from the local HEAD of the PR branch
-git rev-parse HEAD > "$REX_MARKER"
+# Preferred: PR HEAD on GitHub (cross-repo or detached HEAD)
+SHA=$(gh pr view {number} --repo "$PR_HOST_REPO" --json headRefOid --jq .headRefOid)
+# Fallback if gh is unavailable: SHA=$(git rev-parse HEAD)
 
-# Option B — from the PR's HEAD on GitHub (preferred for cross-repo / detached HEAD)
-gh pr view {number} --json headRefOid --jq .headRefOid > "$REX_MARKER"
-
-# Option C — literal SHA write (when you've already captured the SHA in a variable)
-printf '%s\n' "$SHA" > "$REX_MARKER"
+if ! command -v review_write_rex_approved >/dev/null 2>&1; then
+  # shellcheck source=/dev/null
+  . "$MARKER_HOME/.claude/hooks/_lib-review-markers.sh"
+fi
+review_write_rex_approved "$REVIEW_BODY_FILE" "$SHA" "$REX_MARKER"
 ```
 
 Where `{number}` is the PR number and `$REX_MARKER` was computed via `review_marker_path` above.
@@ -847,7 +850,7 @@ The marker lands at `$REX_MARKER` — the repo-qualified path returned by `revie
 
 ### On REQUEST CHANGES or COMMENT verdicts
 
-Do NOT write the marker. The marker's existence is the signal "this PR is ready to merge from the code-review side"; writing it on a non-approved verdict is a lie.
+Do NOT write the marker. The helper also refuses a write when the verdict block contains `CHANGES REQUESTED`. The marker's existence is the signal "this PR is ready to merge from the code-review side"; writing it on a non-approved verdict is a lie.
 
 ### If the marker can't be written (sandbox / permission error)
 
@@ -933,7 +936,7 @@ If no issues remain, write "None" under Issues Found.
    - REQUEST CHANGES with the specific decisions you detected
    - List what needs to be documented
    - The PR author must run `/decide` and link the AgDR before re-review
-8. **Approval marker format is BLOCKING** — on APPROVED verdicts, write the marker at `$REX_MARKER` (the repo-qualified path from `review_marker_path`; form: `.claude/session/reviews/<owner>__<repo>__<pr>-rex.approved`) containing exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. See the "Approval marker — EXACT FORMAT REQUIRED" section above. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
+8. **Approval marker format is BLOCKING** — on APPROVED verdicts, call `review_write_rex_approved "$REVIEW_BODY_FILE" "$SHA" "$REX_MARKER"` (AgDR-0161). The helper writes exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. Do not redirect the SHA onto the marker yourself. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
 9. **Handbooks layer on top of framework rules** — discover and apply handbooks from BOTH the public `handbooks/**/*.md` tree AND (for split-portfolio adopters) the private custom-handbooks dir resolved via `portfolio_custom_handbooks_dir`. See § 8 for the path-convention rules and the discovery shape. Advisory handbooks generate `nit:` / `suggestion:` comments; blocking handbooks (containing `ENFORCEMENT: blocking` at the top of the file) become REQUEST CHANGES verdicts regardless of whether they live in the public or private layer. Adopters extend the standards by adding handbook files; you don't need a code change to teach Rex a new rule.
 10. **Fallow is advisory and fail-soft** — on JS/TS diffs, run the fallow CLI (§ 9) changed-scope and surface a `### Fallow Findings` table + dry-run fix preview. Findings are `nit:` / `suggestion:` only and NEVER flip the verdict on their own. If the `fallow` CLI isn't on PATH, or the diff isn't JS/TS, or `quality.fallow_review` is `false`, skip the step silently and omit the section — no new failure mode. Never run `fallow fix --yes`; the review previews fixes, it doesn't apply them.
 11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs" above. The PR description/Glossary check (§ 6), AgDR detection (§ 7, blocking), handbook findings (§ 8), and the approval-marker mechanics are unchanged at every tier — only the depth of the architecture/quality/testing/performance analysis (§§ 1–5) may be skipped, and only when ALL FIVE eligibility conditions hold, with a security / trust-chain / migration path match disqualifying the whole diff unconditionally (rail 1) and any ambiguity falling back to the full review (rail 2). `block-unreviewed-merge.sh` requires your marker regardless of scope — reduced scope is never a reason to skip writing it, and never a reason to skip posting the review.

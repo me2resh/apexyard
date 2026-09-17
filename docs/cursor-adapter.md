@@ -86,7 +86,8 @@ The overlay omits `failClosed`. A crash does not lock the session.
 
 `.cursor/rules/apexyard.mdc` (`alwaysApply: true`) tells the agent that
 gates are mechanical. It lists the load-bearing rules. It points at
-`CLAUDE.md` and `.claude/rules/*.md`. It does not inline the SDLC.
+`CLAUDE.md` as the index. Load a named file under `.claude/rules/` when
+the work needs it. It does not inline the SDLC.
 
 ## Tracking policy
 

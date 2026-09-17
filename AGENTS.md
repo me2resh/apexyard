@@ -42,24 +42,20 @@ Four hard gates — full detail in `.claude/rules/workflow-gates.md`:
 
 `roles/{department}/*.md` define 20 role identities (Backend/Frontend/Platform Engineer, Tech Lead, QA, Product Manager, Security Auditor, etc.) with CAN/CANNOT boundaries. They activate on specific triggers (a diff touching `**/auth/**` → Security Auditor; a PR carrying a technical design → Solution Architect review), not on every session. Full trigger table: `.claude/rules/role-triggers.md`. When you adopt a role, read its file and stay in it until the task completes.
 
-### Load-bearing conventions (inlined — see `.claude/rules/` for the full text of each)
+### Load-bearing conventions
 
-- **Branch / PR / commit format** — branch `{type}/{TICKET-ID}-{description}` (e.g. `feature/GH-42-csv-export`); PR title `type(TICKET): description` (e.g. `feat(#42): add CSV export`), one ticket ID per title; commit `type: subject` body with `Closes #N` / `Refs #N`. Never `git add -A` — stage specific files. Never push directly to `main` — every change through a PR.
-- **Ticket vocabulary is reserved** — `Ticket`, `#N`, and dependency notation (`blocked by #N`, `depends on #N`) refer ONLY to real tracker issues you can fetch with `gh issue view`. Decomposing work in conversation without a tracker ticket yet? Use `Step N` / `Item N` / plain bullets — never tracker notation for something that doesn't exist as an issue.
-- **Ground every factual claim** — scope observations to the environment and time that produced them; re-check mutable state before relying on it; distinguish observation, user input, inference, proposal, and unknown when ambiguity matters; preserve uncertainty; never invent identifiers, links, results, or completion. Full contract: `.claude/rules/evidence-grounding.md`.
-- **Match work and ceremony to the change** — read the change as Lean, Standard, or Heavy and size the plan, the implementation, the artifacts, and the review to that tier. Start with the smallest change that meets the acceptance criteria; reuse existing files, patterns, and dependencies before adding new ones; give every new dependency, abstraction, service, or durable artifact a demonstrated need; keep advice and quick assessments in the conversation. Security, trust-chain, and migration work is Heavy at any diff size, and ambiguity rounds up. Full heuristic: `.claude/rules/right-size-ceremony.md`.
-- **One ticket at a time** — work one ticket fully (start → PR → review → QA → done) before starting the next. Each PR = one ticket.
-- **Plan before multi-step or risky work** — favor an explicit plan-then-execute shape when a task is ≥4 dependent steps, the path is unclear, or you're about to do something hard-to-reverse (force push, schema migration, batch ticket/PR creation). Pi has no built-in plan-mode primitive — approximate it by writing the plan out and pausing for confirmation before executing.
-- **Report like a colleague** — lead with the outcome in plain language, say why it matters, match structure to content (a table for genuinely tabular data, short prose for one point). Don't dump hook names, marker SHAs, or full CI logs unless something failed or was asked for.
-- **AgDR required for technical decisions** — before choosing a library, framework, architecture pattern, or implementation approach with real trade-offs, write an Agent Decision Record at `docs/agdr/AgDR-NNNN-{slug}.md` (template: `templates/agdr.md`). No hook enforces this for pi — it's self-discipline.
-- **No hardcoded secrets** — API keys, passwords, tokens, connection strings go in environment variables, never in code.
-- **PR quality** — every PR body needs a `## Glossary` table and narrative (not label-only) summary bullets — what changed AND why it matters. See `.claude/rules/pr-quality.md`.
-- **Use controlled technical writing for artifacts** — apply the controlled technical writing profile to each new or changed ticket, PR body, review, AgDR, design, audit, and project document. Use short complete sentences, active voice, one term for one meaning, and clear lists. Keep facts and uncertainty. Apply it to framework and managed-project artifacts. Full rule: .claude/rules/writing-standard.md.
-- **Explicit per-PR approval before merge** — a plan-level "go"/"continue" does not authorize `gh pr merge`. Stop and get an explicit per-PR nod first. See `.claude/rules/pr-workflow.md`.
+Read the named file in the table below when the work matches. Do not restate
+the full rule body here.
+
+- Branch `{type}/{TICKET-ID}-{description}`. PR title `type(TICKET): description`.
+- Never `git add -A`. Never push directly to `main`.
+- One ticket at a time. Each PR is one ticket.
+- Every merge needs an explicit per-PR human nod.
+- No hardcoded secrets.
 
 ### Full detail — read on demand
 
-Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAUDE.md` does, but you *can* `Read` any file on request — so treat these as the source of truth when you need the exact wording, an edge case, or the rationale behind a rule:
+Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` when you need the exact wording, an edge case, or the rationale:
 
 | File | Covers |
 |------|--------|
@@ -69,7 +65,7 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 | `.claude/rules/workflow-gates.md` | The 6 gates (PRD→Done), pre-build gate, migration gate, architecture-review gate, spike exemptions |
 | `.claude/rules/pr-workflow.md` | Pre-push checklist, merge-gate mechanics, build-agents-cannot-self-review |
 | `.claude/rules/pr-quality.md` | Glossary requirement, narrative summary bullets, QA checklist, no red CI |
-| .claude/rules/writing-standard.md | controlled technical writing profile for new and changed artifacts and machine text |
+| `.claude/rules/writing-standard.md` | controlled technical writing profile for new and changed artifacts and machine text |
 | `.claude/rules/agdr-decisions.md` | When an AgDR is required, trigger patterns |
 | `.claude/rules/plan-mode.md` | When to plan before executing |
 | `.claude/rules/loop-mode.md` | When a repetitive build→verify cycle should be looped, with guardrails |
@@ -78,6 +74,11 @@ Pi doesn't resolve Claude-Code-style `@.claude/rules/*.md` imports the way `CLAU
 | `.claude/rules/agent-role-selection.md` | Picking the role-appropriate sub-agent when spawning build work |
 | `.claude/rules/reporting-style.md` | How to narrate status back to the operator |
 | `.claude/rules/right-size-ceremony.md` | Lean / Standard / Heavy tiers for review ceremony and for planning, implementation, and artifact creation |
+| `.claude/rules/skill-first.md` | Ticket, audit, spec, or diagram work |
+| `.claude/rules/reconcile-before-build.md` | Spawning a build agent for a ticket |
+| `.claude/rules/glossary-lookup.md` | An adopter asks what a core SDLC term means |
+| `.claude/rules/code-standards.md` | Writing application code |
+| `.claude/rules/build-handbook-discovery.md` | Starting Build-phase implementation |
 | `.claude/rules/leak-protection.md` | Never leak private project names/repos into public framework issues |
 | `.claude/rules/role-triggers.md` | Full role-activation table + handoff artefacts |
 
@@ -117,7 +118,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
   - `.claude/hooks/` — 42 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 64 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
-  - `.claude/rules/` — 21 modular rule files imported via `@.claude/rules/*.md` from `CLAUDE.md`
+  - `.claude/rules/` — 22 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it.
   - `.claude/settings.json` — hook wiring
 - `roles/` — 19 role definitions across Engineering, Product, Design, Security, Data
 - `workflows/` — SDLC, code-review, deployment workflow docs

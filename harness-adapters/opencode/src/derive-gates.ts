@@ -69,6 +69,7 @@
 
 import {
   deriveGatesFromSettings as deriveCoreGates,
+  deriveGatesFromDispatcher as deriveCoreDispatcherGates,
   extractCommandGlob,
   extractHookRelativePath,
   gateMatchesClaudeMatcher,
@@ -188,6 +189,20 @@ export function deriveGatesFromSettings(settings: RawSettings): GateDefinition[]
     translated.push({ name: coreGate.name, hookRelativePath: coreGate.hookRelativePath, wires });
   }
 
+  return translated;
+}
+
+/** Translates the dispatcher's Bash routing table into opencode gate wires. */
+export function deriveGatesFromDispatcher(source: string): GateDefinition[] {
+  const coreGates = deriveCoreDispatcherGates(source);
+  const translated: GateDefinition[] = [];
+  for (const coreGate of coreGates) {
+    const wires = coreGate.wires.flatMap((wire) => {
+      const tool = CLAUDE_MATCHER_TO_OPENCODE_TOOL[wire.claudeMatcher];
+      return tool ? [{ tool, commandGlob: wire.commandGlob }] : [];
+    });
+    if (wires.length > 0) translated.push({ name: coreGate.name, hookRelativePath: coreGate.hookRelativePath, wires });
+  }
   return translated;
 }
 

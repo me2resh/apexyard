@@ -30,6 +30,15 @@
 #       Returns the absolute path to the reviews directory:
 #       <marker_home>/.claude/session/reviews
 #
+#   review_validate_rex_body <body_file>
+#       Exit 0 when the Rex review body has the required Output Format
+#       headings. Exit 1 otherwise. Does not write a marker.
+#
+#   review_write_rex_approved <body_file> <sha> <marker_path>
+#       Validate the body, require a **APPROVED** verdict line and a
+#       matching Reviewed commit footer SHA, then write the bare SHA
+#       plus newline. See AgDR-0161 / me2resh/apexyard#1322.
+#
 # USAGE (in a hook or skill)
 # --------------------------
 #   . "$(dirname "$0")/_lib-review-markers.sh"
@@ -290,4 +299,101 @@ Delete it and re-run the real review, passing NO marker path:
   rm ${near_miss}
   ${skill} ${pr}
 HINT
+}
+
+# Required Rex Output Format headings (me2resh/apexyard#1322, AgDR-0161).
+# Matched as start-of-line prefixes so `## Code Review: PR #N` still counts.
+_REVIEW_REX_BODY_HEADINGS='## Code Review
+### Summary
+### Checklist Results
+### Issues Found
+### Validation
+### Verdict'
+
+# review_validate_rex_body <body_file>
+#
+# Exit 0 when the file is non-empty and contains every required heading
+# plus a Reviewed commit footer. Exit 1 with a stderr reason otherwise.
+# Does not inspect the host review. Does not write a marker.
+review_validate_rex_body() {
+  local body_file="${1:-}"
+  if [ -z "$body_file" ] || [ ! -f "$body_file" ]; then
+    echo "review_validate_rex_body: body file missing" >&2
+    return 1
+  fi
+  if [ ! -s "$body_file" ]; then
+    echo "review_validate_rex_body: body is empty" >&2
+    return 1
+  fi
+
+  local heading
+  while IFS= read -r heading; do
+    [ -z "$heading" ] && continue
+    # Headings are literal prefixes. They contain no regex metacharacters.
+    if ! grep -qE "^${heading}" "$body_file"; then
+      echo "review_validate_rex_body: missing heading: ${heading}" >&2
+      return 1
+    fi
+  done <<EOF
+${_REVIEW_REX_BODY_HEADINGS}
+EOF
+
+  if ! grep -q 'Reviewed commit' "$body_file"; then
+    echo "review_validate_rex_body: missing Reviewed commit footer" >&2
+    return 1
+  fi
+  return 0
+}
+
+# _review_rex_verdict_block <body_file>
+# Print lines after ### Verdict until the next ### heading, a --- rule, or EOF.
+_review_rex_verdict_block() {
+  awk '
+    /^### Verdict([[:space:]]|$)/ { p=1; next }
+    p && /^### / { exit }
+    p && /^---[[:space:]]*$/ { exit }
+    p { print }
+  ' "$1"
+}
+
+# review_write_rex_approved <body_file> <sha> <marker_path>
+#
+# Validate the local body. Refuse a verdict that is not **APPROVED**.
+# Refuse a footer SHA that does not match. Then write the bare 40-char
+# SHA plus newline. The merge gate still reads only that SHA.
+review_write_rex_approved() {
+  local body_file="${1:-}"
+  local sha="${2:-}"
+  local marker_path="${3:-}"
+
+  if [ -z "$body_file" ] || [ -z "$sha" ] || [ -z "$marker_path" ]; then
+    echo "review_write_rex_approved: need <body_file> <sha> <marker_path>" >&2
+    return 1
+  fi
+  if ! printf '%s' "$sha" | grep -qE '^[0-9a-f]{40}$'; then
+    echo "review_write_rex_approved: sha must be 40 lowercase hex chars" >&2
+    return 1
+  fi
+
+  review_validate_rex_body "$body_file" || return 1
+
+  if ! grep -F "Reviewed commit" "$body_file" | grep -Fq "$sha"; then
+    echo "review_write_rex_approved: Reviewed commit footer does not match sha" >&2
+    return 1
+  fi
+
+  local verdict
+  verdict=$(_review_rex_verdict_block "$body_file")
+  if echo "$verdict" | grep -q 'CHANGES REQUESTED'; then
+    echo "review_write_rex_approved: CHANGES REQUESTED must not write a marker" >&2
+    return 1
+  fi
+  # Exact bold token only. A substring match would accept "NOT APPROVED".
+  if ! echo "$verdict" | grep -qE '^\*\*APPROVED\*\*[[:space:]]*$'; then
+    echo "review_write_rex_approved: verdict is not **APPROVED**" >&2
+    return 1
+  fi
+
+  mkdir -p "$(dirname "$marker_path")"
+  printf '%s\n' "$sha" > "$marker_path"
 }

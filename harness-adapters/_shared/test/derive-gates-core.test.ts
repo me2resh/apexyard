@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  deriveGatesFromDispatcher,
   deriveGatesFromSettings,
   extractCommandGlob,
   extractHookRelativePath,
@@ -164,6 +165,26 @@ test("deriveGatesFromSettings returns an empty table for settings with no PreToo
   assert.deepEqual(deriveGatesFromSettings({ hooks: {} }), []);
 });
 
+test("deriveGatesFromDispatcher parses unconditional and command-specific routing comments", () => {
+  const source = [
+    "# APEXYARD_DISPATCH_GATE: Bash|*|require-active-ticket.sh",
+    "# APEXYARD_DISPATCH_GATE: Bash|gh pr merge *|block-unreviewed-merge.sh",
+    "# APEXYARD_DISPATCH_GATE: Bash|gh api *|block-unreviewed-merge.sh",
+    "run_hook require-active-ticket.sh",
+  ].join("\n");
+  const gates = deriveGatesFromDispatcher(source);
+  const ticket = gates.find((g) => g.name === "require-active-ticket");
+  const merge = gates.find((g) => g.name === "block-unreviewed-merge");
+  assert.ok(ticket);
+  assert.equal(ticket!.wires.length, 1);
+  assert.equal(ticket!.wires[0]?.commandGlob, "*");
+  assert.ok(merge);
+  assert.deepEqual(
+    merge!.wires.map((w) => w.commandGlob).sort(),
+    ["gh api *", "gh pr merge *"],
+  );
+});
+
 // ---------------------------------------------------------------------
 // gateMatchesClaudeMatcher
 // ---------------------------------------------------------------------
@@ -196,11 +217,15 @@ test("gateMatchesClaudeMatcher: a gate never matches a matcher it isn't wired to
 // #840 C5's "reuse where the two runtimes allow" rests on.
 // ---------------------------------------------------------------------
 
-test("deriveGatesFromSettings, run against this repo's real .claude/settings.json, finds the named merge-gate hooks", () => {
+test("deriveGatesFromSettings plus deriveGatesFromDispatcher, run against this repo, finds the named merge-gate hooks", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const settingsPath = join(here, "..", "..", "..", ".claude", "settings.json");
+  const dispatcherPath = join(here, "..", "..", "..", ".claude", "hooks", "dispatch-bash.sh");
   const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
-  const gates = deriveGatesFromSettings(raw);
+  const gates = [
+    ...deriveGatesFromSettings(raw),
+    ...deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8")),
+  ];
   const names = gates.map((g) => g.name);
 
   for (const expected of [
@@ -214,7 +239,7 @@ test("deriveGatesFromSettings, run against this repo's real .claude/settings.jso
     "block-private-refs-in-public-repos",
     "suggest-mcp-search",
   ]) {
-    assert.ok(names.includes(expected), `expected "${expected}" to be derived from the real settings.json`);
+    assert.ok(names.includes(expected), `expected "${expected}" to be derived from settings.json or dispatch-bash.sh`);
   }
 });
 

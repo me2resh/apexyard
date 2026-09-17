@@ -241,6 +241,36 @@ test("registerGateDispatcher, with NO explicit gates, derives from a real settin
   assert.match(result?.reason ?? "", /blocked via real derivation/);
 });
 
+test("registerGateDispatcher derives every dispatcher merge shape and blocks through the existing hook", async () => {
+  const opsRoot = makeIsolatedOpsRoot();
+  writeFileSync(join(opsRoot, ".claude", "hooks", "block-unreviewed-merge.sh"), "#!/bin/bash\necho 'merge blocked via dispatcher' >&2\nexit 2\n", { mode: 0o755 });
+  writeFileSync(
+    join(opsRoot, ".claude", "hooks", "dispatch-bash.sh"),
+    [
+      "# APEXYARD_DISPATCH_GATE: Bash|gh pr merge *|block-unreviewed-merge.sh",
+      "# APEXYARD_DISPATCH_GATE: Bash|gh api *|block-unreviewed-merge.sh",
+      "# APEXYARD_DISPATCH_GATE: Bash|glab mr merge *|block-unreviewed-merge.sh",
+      "# APEXYARD_DISPATCH_GATE: Bash|glab api *|block-unreviewed-merge.sh",
+      "# APEXYARD_DISPATCH_GATE: Bash|tracker_pr_merge *|block-unreviewed-merge.sh",
+    ].join("\n"),
+  );
+  writeBashHookSettings(opsRoot, "dispatch-bash.sh");
+  const { pi, handlers } = makeMockPi();
+  registerGateDispatcher(pi as any, { resolveOpsRoot: () => opsRoot });
+  const toolCall = handlers.get("tool_call")!;
+  for (const command of [
+    "gh pr merge 1",
+    "gh api repos/example/pulls/1",
+    "glab mr merge 1",
+    "glab api projects/1/merge_requests/1",
+    "tracker_pr_merge 1",
+  ]) {
+    const result = await toolCall({ type: "tool_call", toolCallId: command, toolName: "bash", input: { command } }, { cwd: opsRoot });
+    assert.equal(result?.block, true, `expected ${command} to be blocked`);
+    assert.match(result?.reason ?? "", /merge blocked via dispatcher/);
+  }
+});
+
 test("registerGateDispatcher re-derives per call — a settings.json edited mid-session is picked up on the next tool call", async () => {
   const opsRoot = makeIsolatedOpsRoot();
   const { pi, handlers } = makeMockPi();

@@ -67,6 +67,7 @@ import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import {
   buildToolInput,
   claudeToolNameFor,
+  deriveGatesFromDispatcher,
   deriveGatesFromSettings,
   findUnsupportedGateWires,
   gateMatchesToolCall,
@@ -262,7 +263,10 @@ export function deriveGatesFromOpsRoot(opsRoot: string, settingsRelativePath: st
   if (!existsSync(settingsPath)) return [];
   try {
     const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
-    return deriveGatesFromSettings(raw);
+    const dispatcherPath = path.join(opsRoot, ".claude/hooks/dispatch-bash.sh");
+    const dispatcher = existsSync(dispatcherPath) ? deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8")) : [];
+    const settingsGates = deriveGatesFromSettings(raw).filter((gate) => gate.hookRelativePath !== ".claude/hooks/dispatch-bash.sh");
+    return [...settingsGates, ...dispatcher];
   } catch (err) {
     process.stderr.write(
       `apexyard-gate-dispatcher: WARNING — failed to parse ${settingsPath}; NO gates are enforced this session. ` +

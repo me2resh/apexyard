@@ -72,6 +72,9 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | `v5.4.0-to-v5.5.0.sh` | No-op placeholder — v5.5.0 has no per-adopter file or configuration migration. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.5.0-to-v5.5.1.sh` | No-op placeholder — v5.5.1 has no per-adopter file or configuration migration. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.5.1-to-v5.5.2.sh` | No-op placeholder — v5.5.2 has no per-adopter file or configuration migration. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.5.2-to-v5.6.0.sh` | No-op placeholder. Backfilled by #1298 after v5.6.0 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.6.0-to-v5.6.1.sh` | No-op placeholder. Backfilled by #1298 after v5.6.1 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.6.1-to-v5.6.2.sh` | No-op placeholder. Backfilled by #1298 after v5.6.2 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
 

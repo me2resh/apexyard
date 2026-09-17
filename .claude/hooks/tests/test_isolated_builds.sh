@@ -8,7 +8,7 @@
 # the artifacts exist and are wired in, so the rule can't silently rot:
 #
 #   1. .claude/rules/isolated-builds.md exists and carries the ApexYard footer.
-#   2. CLAUDE.md imports it via @.claude/rules/isolated-builds.md.
+#   2. CLAUDE.md indexes it by name at .claude/rules/isolated-builds.md.
 #   3. CLAUDE.md's rules-count line is updated (14) and names "isolated builds".
 #
 # Test style matches the existing tests/*.sh (e.g. test_reporting_style.sh)
@@ -36,11 +36,12 @@ else
   die "rule file missing the ApexYard footer"
 fi
 
-# 2. CLAUDE.md imports the rule
-if grep -q '@.claude/rules/isolated-builds.md' "$CLAUDE_MD" 2>/dev/null; then
-  pass "CLAUDE.md imports isolated-builds.md"
+# 2. CLAUDE.md indexes the rule by name (no @ import — AgDR-0160)
+if grep -qF '.claude/rules/isolated-builds.md' "$CLAUDE_MD" 2>/dev/null && \
+   ! grep -qF '@.claude/rules/isolated-builds.md' "$CLAUDE_MD" 2>/dev/null; then
+  pass "CLAUDE.md indexes isolated-builds.md"
 else
-  die "CLAUDE.md does not import @.claude/rules/isolated-builds.md"
+  die "CLAUDE.md does not index .claude/rules/isolated-builds.md without an @ import"
 fi
 
 # 3. CLAUDE.md rules-count line is present and at least 14 (>= the count as

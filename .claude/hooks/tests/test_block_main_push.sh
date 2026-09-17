@@ -405,8 +405,8 @@ rm -rf "$SB"
 # The settings wrapper uses the session pin to locate this hook. The pin must
 # not make a protected branch in an unrelated scratch repository look governed
 # by the pinned fork. A real command in the pinned fork must remain blocked.
-if grep -qF 'exec env APEXYARD_OPS_SCOPE_GUARD=1' \
-  "$SRC_ROOT/.claude/settings.json"; then
+if grep -qF 'APEXYARD_OPS_SCOPE_GUARD=1' \
+  "$SRC_ROOT/.claude/hooks/dispatch-bash.sh"; then
   echo "PASS [settings wiring enables ops-root scope guard]"
   PASS=$((PASS+1))
 else

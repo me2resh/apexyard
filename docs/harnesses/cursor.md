@@ -14,7 +14,7 @@ The retired full copy is recorded in [AgDR-0091](../agdr/AgDR-0091-cursor-adapte
 
 **`cursor-agent` CLI is not covered.** It ignores `hooks.json`. It uses `~/.cursor/cli-config.json` permissions.
 
-**Advisory.** `.cursor/rules/apexyard.mdc` points at `CLAUDE.md` and `.claude/rules/*.md`.
+**Advisory.** `.cursor/rules/apexyard.mdc` points at `CLAUDE.md` as the index. Load a named rule file when the work needs it.
 
 ## How it works (transport)
 

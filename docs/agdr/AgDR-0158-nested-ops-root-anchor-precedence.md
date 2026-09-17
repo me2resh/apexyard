@@ -1,4 +1,4 @@
-# Prefer explicit v2 anchors for nested ops-root resolution
+# AgDR-0158: Prefer explicit v2 anchors for nested ops-root resolution
 
 > In the context of a framework fork nested under an enclosing Git repository, facing conflicting child-directory anchors and incorrect pin normalization, I decided to prefer a unique `.apexyard-fork` child and preserve ordinary subdirectory paths to keep portfolio and session state on the fork, accepting that multiple explicit v2 children remain ambiguous.
 

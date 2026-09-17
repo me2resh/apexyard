@@ -764,7 +764,9 @@ _tracker_create_gh() {
       [ -n "$l" ] && args+=(--label "$l")
     done
   fi
-  gh "${args[@]}" 2>/dev/null
+  # stderr passes through so the operator sees the real cause (#1327).
+  # Callers capture stdout only; the issue URL is on stdout.
+  gh "${args[@]}"
 }
 
 # Internal adapter: glab (GitLab) → `glab issue create`. GitLab's CLI has no
@@ -782,7 +784,7 @@ _tracker_create_glab() {
     args+=(--label "$labels")
   fi
   args+=(--yes)
-  glab "${args[@]}" 2>/dev/null
+  glab "${args[@]}"
 }
 
 # Internal: resolve the create_command template for the `custom` kind — the
@@ -831,7 +833,7 @@ _tracker_create_custom() {
   local cmd="$tpl"
   cmd="${cmd//\{owner_repo\}/$repo}"
   TRACKER_REPO="$repo" TRACKER_TITLE="$title" TRACKER_BODY_FILE="$body_file" TRACKER_LABELS="$labels" \
-    eval "$cmd" 2>/dev/null
+    eval "$cmd"
 }
 
 # Public: tracker_create <owner/repo> <title> [<body_file>] [<labels_csv>]

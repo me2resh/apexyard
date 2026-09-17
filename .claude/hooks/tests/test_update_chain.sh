@@ -24,8 +24,12 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 LIB_CHAIN="$SRC_ROOT/.claude/hooks/_lib-migration-chain.sh"
 REAL_V1_V2="$SRC_ROOT/.claude/migrations/v1.2.0-to-v1.3.0.sh"
 REAL_NOOP_PLACEHOLDER="$SRC_ROOT/.claude/migrations/v5.2.0-to-v5.3.0.sh"
+REAL_V552_V560="$SRC_ROOT/.claude/migrations/v5.5.2-to-v5.6.0.sh"
+REAL_V560_V561="$SRC_ROOT/.claude/migrations/v5.6.0-to-v5.6.1.sh"
+REAL_V561_V562="$SRC_ROOT/.claude/migrations/v5.6.1-to-v5.6.2.sh"
 
-for f in "$LIB_CHAIN" "$REAL_V1_V2" "$REAL_NOOP_PLACEHOLDER"; do
+for f in "$LIB_CHAIN" "$REAL_V1_V2" "$REAL_NOOP_PLACEHOLDER" \
+         "$REAL_V552_V560" "$REAL_V560_V561" "$REAL_V561_V562"; do
   [ -f "$f" ] || { echo "FAIL: missing $f" >&2; exit 1; }
 done
 
@@ -330,6 +334,33 @@ rm -f "$SB/.claude/migrations/v1.2.0-to-v1.3.0.sh"
               || mark_fail "migration_run hard error" "see output above"
 
 rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 10: shipped chain v5.4.0 → v5.6.2 walks (#1298)
+# The three v5.6.x pair scripts must exist. A missing hop returns empty.
+# ---------------------------------------------------------------------------
+(
+  cd "$SRC_ROOT" || exit 99
+  export OPS_ROOT="$SRC_ROOT"
+  # shellcheck source=/dev/null
+  . "$LIB_CHAIN"
+  chain=$(migration_chain "v5.4.0" "v5.6.2")
+  expected="v5.4.0-to-v5.5.0
+v5.5.0-to-v5.5.1
+v5.5.1-to-v5.5.2
+v5.5.2-to-v5.6.0
+v5.6.0-to-v5.6.1
+v5.6.1-to-v5.6.2"
+  if [ "$chain" = "$expected" ]; then
+    exit 0
+  else
+    echo "GOT:" >&2; echo "$chain" >&2
+    echo "EXPECTED:" >&2; echo "$expected" >&2
+    exit 1
+  fi
+)
+[ "$?" -eq 0 ] && mark_pass "shipped chain v5.4.0→v5.6.2 walks six hops (#1298)" \
+              || mark_fail "shipped v5.4.0→v5.6.2 chain" "see output above"
 
 # ---------------------------------------------------------------------------
 # Summary

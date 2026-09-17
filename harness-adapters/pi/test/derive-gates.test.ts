@@ -20,6 +20,7 @@ import test from "node:test";
 
 import {
   claudeToolNameFor,
+  deriveGatesFromDispatcher,
   deriveGatesFromSettings,
   findUnsupportedGateWires,
   gateMatchesToolCall,
@@ -163,7 +164,8 @@ test("deriveGatesFromSettings, run against this repo's real .claude/settings.jso
   const here = dirname(fileURLToPath(import.meta.url));
   const settingsPath = join(here, "..", "..", "..", ".claude", "settings.json");
   const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
-  const gates = deriveGatesFromSettings(raw);
+  const dispatcherPath = join(here, "..", "..", "..", ".claude", "hooks", "dispatch-bash.sh");
+  const gates = [...deriveGatesFromSettings(raw), ...deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8"))];
   const names = gates.map((g) => g.name);
 
   for (const expected of [
@@ -200,7 +202,8 @@ test("deriveGatesFromSettings, run against this repo's real .claude/settings.jso
   const here = dirname(fileURLToPath(import.meta.url));
   const settingsPath = join(here, "..", "..", "..", ".claude", "settings.json");
   const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
-  const gates = deriveGatesFromSettings(raw);
+  const dispatcherPath = join(here, "..", "..", "..", ".claude", "hooks", "dispatch-bash.sh");
+  const gates = [...deriveGatesFromSettings(raw), ...deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8"))];
   const mergeGate = gates.find((g) => g.name === "block-unreviewed-merge")!;
   const globs = mergeGate.wires.filter((w) => w.tool === "bash").map((w) => w.commandGlob);
   for (const expected of ["gh pr merge *", "gh api *", "glab mr merge *", "glab api *", "tracker_pr_merge *"]) {
