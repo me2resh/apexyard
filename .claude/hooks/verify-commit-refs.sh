@@ -136,39 +136,29 @@ fi
 # cwd-relative git call below must run against the COMMIT's directory, not
 # wherever this script happened to start.
 #
-# Priority (highest first) — corrected per PR #1073 review. The harness
-# `.cwd` field is STRUCTURED: the harness itself sets it for this exact Bash
-# call, and it cannot be influenced by anything the commit message says.
-# Everything else is SCRAPED out of $COMMAND text, which can be tricked by
-# the commit message's own prose, or by an unrelated LATER git invocation in
-# the same compound command. Structured beats scraped, so `.cwd` goes first
-# — this now correctly mirrors suggest-mcp-reindex-after-pull.sh (see its
-# cwd-first fallback chain around lines 109-138: `.cwd` is "the common
-# case", checked FIRST, with command-parsing only as a fallback). An earlier
-# version of this fix put the scraped `-C`/`cd` parsing AHEAD of `.cwd` and
-# justified it as "an explicit in-command override always wins" — that
-# ordering is exactly what made these reachable:
-#   - a commit MESSAGE containing the text `git -C <dir>` got scraped as
-#     real shell syntax, silently disabling ref verification (if <dir>
-#     isn't a git repo) or validating a real ref against the wrong repo (if
-#     it is)
-#   - `git commit -m "..." && git -C /other log` — a `-C` belonging to a
-#     LATER, unrelated git invocation got treated as though it governed
-#     this commit
-#   - `cd /real && git -C /other status && git commit` — same shape,
-#     discarding the real governing `cd /real`
-#   - a relative `cd ../sibling` resolved against the HOOK's OWN cwd — the
-#     very cwd this fix exists to distrust
+# Priority (highest first) — me2resh/apexyard#1340 / AgDR-0163. PR #1073
+# ranked harness `.cwd` above a this-commit `-C` because scrape hijacks were
+# still open. Those hijacks now have separate mitigations (message strip,
+# `-C` bound to THIS `commit` token, absolute paths only). An explicit
+# `git -C <path> commit` names the repository the commit writes. The
+# harness `.cwd` is the session directory. Ranking `.cwd` first made the
+# `-C` parser unreachable in Claude Code and Cursor, where `.cwd` is always
+# set and absolute. That is #1050 recurring.
+#
+# The scrape is still constrained:
+#   - a commit MESSAGE containing `git -C <dir>` is stripped before scan
+#   - `git commit -m "..." && git -C /other log` does not bind `/other`
+#   - `cd /real && git -C /other status && git commit` keeps `/real`
+#   - a relative `cd ../sibling` is not trusted
 #
 # Priority now:
-#   1. the harness-provided `.cwd` (`.tool_input.cwd`) for this Bash call.
-#   2. `git -C <path>` bound DIRECTLY to this commit invocation
+#   1. `git -C <path>` bound DIRECTLY to this commit invocation
 #      (`git -C <path> commit`), scraped from the command with the commit
-#      MESSAGE stripped out first (so prose can never be read as syntax),
-#      and matched only when the `-C` is the last thing before THIS
-#      `commit` token — a `-C` on a different git invocation cannot bind.
-#   3. the LAST `cd <path>` occurring before this commit invocation, same
+#      MESSAGE stripped out first, and matched only when the `-C` is the
+#      last thing before THIS `commit` token.
+#   2. the LAST `cd <path>` occurring before this commit invocation, same
 #      message-stripped, same-invocation-only scoping.
+#   3. the harness-provided `.cwd` (`.tool_input.cwd`) for this Bash call.
 #   4. fall back to the hook's own process cwd — IDENTICAL to the pre-fix
 #      behavior, so a session with no worktree involved sees no change.
 # Only ABSOLUTE paths are trusted out of (1)-(3); a relative path is
@@ -284,7 +274,8 @@ resolve_commit_workdir_from_command() {
 PAYLOAD_CWD=$(echo "$INPUT" | jq -r '.cwd // .tool_input.cwd // empty' 2>/dev/null)
 CMD_SANS_MSG=$(strip_message_from_command "$COMMAND" "$MSG")
 
-# 1. Structured harness cwd wins outright when present and absolute.
+# 1 & 2. This-commit `-C` / `cd` scrape first (AgDR-0163). An explicit
+# `git -C <path> commit` outranks the ambient harness cwd.
 # WORKDIR_SOURCE distinguishes "we resolved a hint" from "nothing resolved
 # and we fell back" — used below to give the "could not resolve tracker
 # repo" warning a sharper message when a HINT was found but didn't pan out
@@ -292,17 +283,13 @@ CMD_SANS_MSG=$(strip_message_from_command "$COMMAND" "$MSG")
 # unremarkable case where no hint existed and the fallback is expected.
 WORKDIR=""
 WORKDIR_SOURCE="fallback"
-if [ -n "$PAYLOAD_CWD" ] && [ "${PAYLOAD_CWD#/}" != "$PAYLOAD_CWD" ]; then
+WORKDIR=$(resolve_commit_workdir_from_command "$CMD_SANS_MSG")
+if [ -n "$WORKDIR" ]; then
+  WORKDIR_SOURCE="scraped_command"
+elif [ -n "$PAYLOAD_CWD" ] && [ "${PAYLOAD_CWD#/}" != "$PAYLOAD_CWD" ]; then
+  # 3. Harness `.cwd` when the scrape found no this-commit path.
   WORKDIR="$PAYLOAD_CWD"
   WORKDIR_SOURCE="payload_cwd"
-fi
-# 2 & 3. Only reached when .cwd is absent — scraped, message-stripped,
-# same-invocation-only command parsing.
-if [ -z "$WORKDIR" ]; then
-  WORKDIR=$(resolve_commit_workdir_from_command "$CMD_SANS_MSG")
-  if [ -n "$WORKDIR" ]; then
-    WORKDIR_SOURCE="scraped_command"
-  fi
 fi
 # 4. No hint resolved anything usable — fall back to this process's own cwd,
 # exactly what every git call below did before this fix.

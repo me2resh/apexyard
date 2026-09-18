@@ -27,19 +27,28 @@
 #     very cwd the round-1 fix exists to distrust
 #   - a quoted path with spaces (`cd "/my path/repo"`) truncated at the
 #     first space, silently reverting to pre-fix behavior
-# The fix: strip the commit message out of the command before scanning
-# (literal substring removal, not a regex), bind `-C` detection to THIS
+# The round-2 mitigations stay: strip the commit message before scanning
+# (literal substring removal, not a regex), and bind `-C` detection to THIS
 # commit invocation only (immediately preceding the `commit` token, not
-# anywhere else in the command), and check the harness `.cwd` FIRST —
-# structured beats scraped — so the scraped fallback only matters when
-# `.cwd` is genuinely absent.
+# anywhere else in the command).
+#
+# Round 4 (me2resh/apexyard#1340, AgDR-0163): those mitigations made the
+# `#1073` "structured beats scraped" ranking the wrong control. Harness
+# `.cwd` is always set in Claude Code / Cursor, so a this-commit
+# `git -C <worktree>` never ran. Ranking now: this-commit scrape, then
+# `.cwd`, then process cwd. A this-commit `-C` outranks payload `.cwd`.
+# A later unrelated `-C` still must not bind. A message that names
+# `git -C` still must not bind. `.cwd` still wins when the command has
+# no this-commit path. For a competing `-C` bound to THIS commit, `-C`
+# is the source of truth. That is the #1340 discriminator.
 #
 # Coverage:
 #   - payload .cwd points at a different repo than the hook's own cwd →
 #     must resolve via .cwd (round-1 core case)
-#   - payload .cwd wins outright even when the command ALSO carries a
-#     competing, plausible-looking `-C` elsewhere (pins "structured beats
-#     scraped" explicitly)
+#   - a this-commit `-C` outranks payload `.cwd` even when `.cwd` would
+#     pass and the `-C` path would block (AgDR-0163 ranking flip)
+#   - payload `.cwd` is the ops fork, this-commit `-C` is the project,
+#     issue exists only in the project → pass (reporter shape, #1340)
 #   - explicit `git -C <path> commit ...`, .cwd ABSENT → resolves via the
 #     command (round-1 fallback case, still covered)
 #   - `cd <path> && git commit ...`, .cwd ABSENT → resolves via the command
@@ -180,13 +189,13 @@ assert_case() {
   rm -rf "$ops" "$proj"
 }
 
-# ---- Case 1b: structured .cwd wins even when a competing -C is present ----
+# ---- Case 1b: a this-commit -C outranks payload .cwd (AgDR-0163) ----
 #
-# Payload .cwd = proj (has the issue). The command ALSO carries a plausible
-# `-C <decoy>` bound directly to this same commit invocation. Per the #1073
-# review, structured beats scraped: .cwd must win outright and the `-C`
-# must never even be considered. Set decoy's mock answer to "no" so a wrong
-# resolution would BLOCK, making this a real discriminator.
+# Payload .cwd = proj (has the issue). The command ALSO carries a
+# `-C <decoy>` bound directly to this same commit invocation. After #1340,
+# that `-C` names the repository the commit writes. Set decoy's mock
+# answer to "no" so a correct `-C` resolution BLOCKS, and a leftover
+# `.cwd`-wins ranking would PASS. rc=2 is the discriminator.
 {
   ops=$(make_repo "me2resh/apexyard")
   proj=$(make_repo "managed-org/example")
@@ -195,12 +204,34 @@ assert_case() {
   mock_gh_set_repo_existence "$proj" 505 "managed-org/example" yes
   mock_gh_set_repo_existence "$proj" 505 "someone-else/decoy" no
 
-  cmd=$(build_command 'fix: cwd beats a competing -C\n\nCloses #505' "" "-C ${decoy} ")
+  cmd=$(build_command 'fix: this-commit -C outranks payload cwd\n\nCloses #505' "" "-C ${decoy} ")
   out=$(run_hook "$ops" "$proj" "$cmd")
   rc=$?
-  assert_case "payload .cwd wins outright over a competing in-command -C" \
-    "$out" "$rc" 0 ""
+  assert_case "this-commit git -C outranks payload .cwd (decoy missing → block)" \
+    "$out" "$rc" 2 "do not exist"
   rm -rf "$ops" "$proj" "$decoy"
+}
+
+# ---- Case 1c: reporter shape — payload .cwd is ops, -C is the project ----
+#
+# Hook process cwd and payload .cwd = "ops" (issue 514 MISSING there).
+# Command is `git -C <proj> commit` with Closes #514, which EXISTS only
+# in proj. This is the live #1340 failure: harness .cwd is always the
+# ops fork, and validate-commit-format.sh blocks `cd && git commit`, so
+# `-C` is the remaining way to reach the worktree. Must PASS.
+{
+  ops=$(make_repo "me2resh/apexyard")
+  proj=$(make_repo "managed-org/example")
+  mock_gh_install "$proj"
+  mock_gh_set_repo_existence "$proj" 514 "managed-org/example" yes
+  mock_gh_set_repo_existence "$proj" 514 "me2resh/apexyard" no
+
+  cmd=$(build_command 'fix: dash-C outranks ops payload cwd\n\nCloses #514' "" "-C ${proj} ")
+  out=$(run_hook "$ops" "$ops" "$cmd")
+  rc=$?
+  assert_case "payload .cwd is ops, git -C <proj> validates against proj (reporter #1340)" \
+    "$out" "$rc" 0 ""
+  rm -rf "$ops" "$proj"
 }
 
 # ---- Case 2: explicit `git -C <path>` in the command, .cwd ABSENT ----
