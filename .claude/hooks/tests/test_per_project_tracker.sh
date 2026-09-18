@@ -156,7 +156,7 @@ printf '%s\n' '{ "tracker": { "kind": "custom", "view_command": "echo \"custom v
 IFS="|" read -r v_rc v_out < "$SBV/r"
 assert_eq "tracker_view custom failure → non-zero exit"            "1" "$v_rc"
 assert_eq "tracker_view custom failure → no stdout"                ""  "$v_out"
-assert_eq "tracker_view custom failure → CLI error reaches stderr" "1" "$(grep -c 'custom view: not found' "$SBV/err")"
+assert_eq "tracker_view custom failure → CLI error reaches stderr" "1" "$(grep -cF 'custom view: not found' "$SBV/err")"
 rm -rf "$SBV"
 
 rm -rf "$SB"

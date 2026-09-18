@@ -79,10 +79,11 @@ version: 1
 #                 review_command  template for posting a PR/MR review
 #               Template commands run with stderr connected to the operator's
 #               terminal, so the CLI names its own failure (#1327 / #1332). Do
-#               not enable verbose output such as `curl -v` or `set -x` inside
-#               a template: it prints request headers, including Authorization,
-#               to the terminal and the agent transcript. Redirect that output
-#               inside the template if you need it.
+#               not enable verbose output such as `curl -v` or `set -x`, either
+#               in a template or in the shell that runs it. Verbose output
+#               prints request headers, including Authorization, to the terminal
+#               and the agent transcript. Redirect that output yourself when you
+#               need it.
 #               This is what lets one portfolio mix trackers — e.g. a GitHub
 #               project alongside a GitLab one (see Example 4 below). The
 #               tracker is selected by the operation's target repo, so the

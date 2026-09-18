@@ -18,6 +18,7 @@
 #   5. kind=none → returns 3, echoes the body (shape-only, not a CLI error)
 #   6. per-project glab override → mr approve / mr note create dispatch [needs YAML]
 #   7. per-project custom review_command → env-passed body, injection-safe [needs YAML]
+#   8. glab / custom review failure → non-zero exit + the CLI's error on stderr (#1332)
 #
 # Exit 0 = all pass. Exit 1 on first failure.
 
@@ -280,7 +281,7 @@ for kind in glab custom; do
   IFS="|" read -r v_rc v_out < "$SBE/r-$kind"
   assert_eq "tracker_review_submit $kind failure → non-zero exit"            "1" "$v_rc"
   assert_eq "tracker_review_submit $kind failure → no stdout"                ""  "$v_out"
-  assert_eq "tracker_review_submit $kind failure → CLI error reaches stderr" "1" "$(grep -c "$expect" "$SBE/err-$kind")"
+  assert_eq "tracker_review_submit $kind failure → CLI error reaches stderr" "1" "$(grep -cF "$expect" "$SBE/err-$kind")"
 done
 rm -rf "$SBE"
 

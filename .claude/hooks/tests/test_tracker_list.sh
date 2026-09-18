@@ -23,6 +23,8 @@
 #           [needs YAML parser]
 #   10. per-project custom list_command → filters via ENV, NO shell injection
 #           [needs YAML parser]
+#   11. gh / glab / custom list failure → `[]` + exit 1 + the CLI's error on
+#           stderr (#1332)
 #
 # Exit 0 = all pass. Exit 1 on first failure.
 
@@ -345,7 +347,7 @@ EOF
   IFS="|" read -r l_rc l_out < "$SBE/r-$kind"
   assert_eq "tracker_list $kind failure → non-zero exit"            "1"  "$l_rc"
   assert_eq "tracker_list $kind failure → empty array on stdout"    "[]" "$l_out"
-  assert_eq "tracker_list $kind failure → CLI error reaches stderr" "1"  "$(grep -c "$expect" "$SBE/err-$kind")"
+  assert_eq "tracker_list $kind failure → CLI error reaches stderr" "1"  "$(grep -cF "$expect" "$SBE/err-$kind")"
 done
 rm -rf "$SBE"
 
