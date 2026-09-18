@@ -155,6 +155,39 @@ assert_eq "kind=none (no body) → exit 3" "3" "$nb_rc"
 assert_eq "kind=none (no body) → empty stdout" "" "$nb_out"
 rm -rf "$SBN"
 
+# #1332 — glab and custom review adapters pass CLI stderr through. Set kind via
+# project-config defaults so this runs without a YAML parser.
+SBE=$(make_sandbox)
+BODYE="$SBE/rev.md"; printf 'body\n' > "$BODYE"
+cat > "$SBE/bin/glab" <<'EOF'
+#!/bin/bash
+echo "glab: 403 Forbidden" >&2
+exit 1
+EOF
+chmod +x "$SBE/bin/glab"
+for kind in glab custom; do
+  if [ "$kind" = "glab" ]; then
+    printf '{ "tracker": { "kind": "glab" } }\n' > "$SBE/.claude/project-config.defaults.json"
+    expect="glab: 403 Forbidden"
+  else
+    printf '%s\n' '{ "tracker": { "kind": "custom", "review_command": "echo \"custom: review rejected\" >&2; false" } }' > "$SBE/.claude/project-config.defaults.json"
+    expect="custom: review rejected"
+  fi
+  (
+    cd "$SBE" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBE/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SBE/bin:$PATH" tracker_review_submit "o/r" 7 comment "$BODYE" 2>"$SBE/err-$kind"); rc=$?
+    printf '%s|%s\n' "$rc" "$out"
+  ) > "$SBE/r-$kind"
+  IFS="|" read -r e_rc e_out < "$SBE/r-$kind"
+  assert_eq "tracker_review_submit $kind failure → non-zero exit"           "1" "$e_rc"
+  assert_eq "tracker_review_submit $kind failure → empty stdout"            "" "$e_out"
+  assert_eq "tracker_review_submit $kind failure → CLI error reaches stderr" "1" "$(grep -c "$expect" "$SBE/err-$kind")"
+done
+rm -rf "$SBE"
+
 # Case 6 — per-project glab override dispatches glab (needs a YAML parser).
 # The glab mock APPENDS each invocation (space-joined) so approve+note (two
 # calls) are both observable.

@@ -1070,6 +1070,8 @@ For Asana (per-task lookup by GID):
 
 If your tracker has no CLI, use `kind: "custom"` with a `view_command` that calls `curl` and a `normalise_jq` filter to map the response into `{state, title, url, labels}`. If you want to disable existence verification entirely (rare — accepted gap when no CLI exists), set `kind: "none"` — the hooks fall back to shape-only validation via `tracker.id_pattern`. The registry-level `ticket_prefix` field is still respected per-project for the `/start-ticket` branch-suggestion step.
 
+Do not enable verbose HTTP tracing inside `create_command`, `list_command`, `review_command`, or `view_command`. Commands such as `curl -v` and `set -x` print request headers, including `Authorization`, to stderr. Stderr from those templates reaches the terminal and the agent transcript. Redirect that output yourself if you need it.
+
 **What if I only have one repo?** Fork apexyard anyway and register that one repo. The skills work the same way. When you add a second project, just append to the registry — no migration, no re-setup.
 
 **Where is the marketing site?** The landing page that used to live in `site/` has moved to its own repo ([me2resh/apexyard-site](https://github.com/me2resh/apexyard-site)) and is deployed at apexyard.ai. It is no longer bundled in the framework fork.

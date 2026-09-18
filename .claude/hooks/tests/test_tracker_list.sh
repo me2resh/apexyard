@@ -146,17 +146,73 @@ out=$(PATH="$SB/bin:$PATH" tracker_list "o/r"); rc=$?
 assert_eq "tracker_list gh empty set → exit 0" "0"  "$rc"
 assert_eq "tracker_list gh empty set → []"     "[]" "$out"
 
-# Case 6 — CLI failure → `[]` + exit 1.
+# Case 6 — CLI failure → `[]` + exit 1. Stderr must still reach the operator.
 cat > "$SB/bin/gh" <<'EOF'
 #!/bin/bash
+echo "gh: GraphQL: Resource not accessible by integration" >&2
 exit 1
 EOF
 chmod +x "$SB/bin/gh"
 tracker_clear_cache
-out=$(PATH="$SB/bin:$PATH" tracker_list "o/r"); rc=$?
+out=$(PATH="$SB/bin:$PATH" tracker_list "o/r" 2>"$SB/err6"); rc=$?
 assert_eq "tracker_list gh failure → exit 1" "1"  "$rc"
 assert_eq "tracker_list gh failure → []"     "[]" "$out"
+assert_eq "tracker_list gh failure → CLI error reaches stderr" "1" "$(grep -c "Resource not accessible by integration" "$SB/err6")"
 rm -rf "$SB"
+
+# #1332 — glab and custom list adapters pass CLI stderr through. Set kind via
+# project-config defaults so this runs without a YAML parser.
+SBE=$(make_sandbox)
+cat > "$SBE/bin/glab" <<'EOF'
+#!/bin/bash
+echo "glab: 403 Forbidden" >&2
+exit 1
+EOF
+chmod +x "$SBE/bin/glab"
+for kind in glab custom; do
+  if [ "$kind" = "glab" ]; then
+    printf '{ "tracker": { "kind": "glab" } }\n' > "$SBE/.claude/project-config.defaults.json"
+    expect="glab: 403 Forbidden"
+  else
+    printf '%s\n' '{ "tracker": { "kind": "custom", "list_command": "echo \"custom: list rejected\" >&2; false" } }' > "$SBE/.claude/project-config.defaults.json"
+    expect="custom: list rejected"
+  fi
+  (
+    cd "$SBE" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBE/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SBE/bin:$PATH" tracker_list "o/r" 2>"$SBE/err-$kind"); rc=$?
+    printf '%s|%s\n' "$rc" "$out"
+  ) > "$SBE/r-$kind"
+  IFS="|" read -r e_rc e_out < "$SBE/r-$kind"
+  assert_eq "tracker_list $kind failure → exit 1"                    "1"  "$e_rc"
+  assert_eq "tracker_list $kind failure → []"                       "[]" "$e_out"
+  assert_eq "tracker_list $kind failure → CLI error reaches stderr" "1"  "$(grep -c "$expect" "$SBE/err-$kind")"
+done
+rm -rf "$SBE"
+
+# #1332 — tracker_view eval also passes CLI stderr through.
+SBV=$(make_sandbox)
+cat > "$SBV/bin/gh" <<'EOF'
+#!/bin/bash
+echo "gh: Could not resolve to an issue" >&2
+exit 1
+EOF
+chmod +x "$SBV/bin/gh"
+(
+  cd "$SBV" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBV/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  out=$(PATH="$SBV/bin:$PATH" tracker_view "1" "o/r" 2>"$SBV/err"); rc=$?
+  printf '%s|%s\n' "$rc" "$out"
+) > "$SBV/r"
+IFS="|" read -r v_rc v_out < "$SBV/r"
+assert_eq "tracker_view gh failure → non-zero exit"           "1" "$v_rc"
+assert_eq "tracker_view gh failure → empty stdout"            "" "$v_out"
+assert_eq "tracker_view gh failure → CLI error reaches stderr" "1" "$(grep -c "Could not resolve to an issue" "$SBV/err")"
+rm -rf "$SBV"
 
 # Case 7 — kind=none → `[]` + exit 1 (no CLI to call).
 SBN=$(make_sandbox)
