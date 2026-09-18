@@ -311,6 +311,44 @@ else
   echo "SKIP: tracker_list custom per-project case (no yq / python3+PyYAML)"
 fi
 
+# --- #1332: a failing list CLI must name its own cause on stderr ------------
+# Without this, tracker_list returns `[]` + exit 1 and the operator cannot tell
+# a permission error from an empty backlog. gh, glab and custom are configured
+# through project-config defaults, so these cases need no YAML parser.
+SBE=$(make_sandbox)
+for kind in gh glab custom; do
+  case "$kind" in
+    gh)     expect="gh: HTTP 403 forbidden" ;;
+    glab)   expect="glab: 401 unauthorized" ;;
+    custom) expect="custom list: rejected" ;;
+  esac
+  if [ "$kind" = "custom" ]; then
+    printf '%s\n' '{ "tracker": { "kind": "custom", "list_command": "echo \"custom list: rejected\" >&2; false" } }' \
+      > "$SBE/.claude/project-config.defaults.json"
+  else
+    printf '{ "tracker": { "kind": "%s" } }\n' "$kind" > "$SBE/.claude/project-config.defaults.json"
+    cat > "$SBE/bin/$kind" <<EOF
+#!/bin/bash
+echo "$expect" >&2
+exit 1
+EOF
+    chmod +x "$SBE/bin/$kind"
+  fi
+  (
+    cd "$SBE" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBE/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SBE/bin:$PATH" tracker_list "o/r" 2>"$SBE/err-$kind"); rc=$?
+    printf '%s|%s\n' "$rc" "$out"
+  ) > "$SBE/r-$kind"
+  IFS="|" read -r l_rc l_out < "$SBE/r-$kind"
+  assert_eq "tracker_list $kind failure → non-zero exit"            "1"  "$l_rc"
+  assert_eq "tracker_list $kind failure → empty array on stdout"    "[]" "$l_out"
+  assert_eq "tracker_list $kind failure → CLI error reaches stderr" "1"  "$(grep -c "$expect" "$SBE/err-$kind")"
+done
+rm -rf "$SBE"
+
 echo "=========================================="
 echo "PASS: $PASS  FAIL: $FAIL"
 if [ "$FAIL" -gt 0 ]; then printf "Failed:%b\n" "$FAILED"; exit 1; fi

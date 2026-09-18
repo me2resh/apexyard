@@ -248,6 +248,42 @@ else
   echo "SKIP: custom per-project case (no yq / python3+PyYAML)"
 fi
 
+# --- #1332: a failing glab or custom review must name its own cause ---------
+# Case 4 already covers gh. These two adapters discarded stderr until #1332,
+# so a rejected review reached the caller as a bare non-zero exit. Both kinds
+# are configured through project-config defaults, so no YAML parser is needed.
+SBE=$(make_sandbox)
+printf 'review body\n' > "$SBE/rev.md"
+cat > "$SBE/bin/glab" <<'EOF'
+#!/bin/bash
+echo "glab: 403 insufficient permissions" >&2
+exit 1
+EOF
+chmod +x "$SBE/bin/glab"
+for kind in glab custom; do
+  if [ "$kind" = "custom" ]; then
+    printf '%s\n' '{ "tracker": { "kind": "custom", "review_command": "echo \"custom review: rejected\" >&2; false" } }' \
+      > "$SBE/.claude/project-config.defaults.json"
+    expect="custom review: rejected"
+  else
+    printf '{ "tracker": { "kind": "glab" } }\n' > "$SBE/.claude/project-config.defaults.json"
+    expect="glab: 403 insufficient permissions"
+  fi
+  (
+    cd "$SBE" || exit 1
+    # shellcheck source=/dev/null
+    . "$SBE/.claude/hooks/_lib-tracker.sh"
+    tracker_clear_cache
+    out=$(PATH="$SBE/bin:$PATH" tracker_review_submit "o/r" 42 comment "$SBE/rev.md" 2>"$SBE/err-$kind"); rc=$?
+    printf '%s|%s\n' "$rc" "$out"
+  ) > "$SBE/r-$kind"
+  IFS="|" read -r v_rc v_out < "$SBE/r-$kind"
+  assert_eq "tracker_review_submit $kind failure → non-zero exit"            "1" "$v_rc"
+  assert_eq "tracker_review_submit $kind failure → no stdout"                ""  "$v_out"
+  assert_eq "tracker_review_submit $kind failure → CLI error reaches stderr" "1" "$(grep -c "$expect" "$SBE/err-$kind")"
+done
+rm -rf "$SBE"
+
 echo "=========================================="
 echo "PASS: $PASS  FAIL: $FAIL"
 if [ "$FAIL" -gt 0 ]; then printf "Failed:%b\n" "$FAILED"; exit 1; fi

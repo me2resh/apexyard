@@ -628,9 +628,9 @@ tracker_view() {
   tpl=$(_tracker_view_template "$owner_repo" "$kind")
   cmd=$(_tracker_substitute "$tpl" "$id" "$owner_repo")
 
-  # Run the command; capture stdout. Suppress stderr (CLI errors are visible
-  # via exit code and absence-of-output).
-  raw=$(eval "$cmd" 2>/dev/null)
+  # Run the command; capture stdout. stderr passes through so the operator
+  # sees the CLI's own error (#1332). Callers capture stdout only.
+  raw=$(eval "$cmd")
   rc=$?
   if [ $rc -ne 0 ] || [ -z "$raw" ]; then
     return 1
@@ -976,7 +976,8 @@ _tracker_list_gh() {
   fi
   [ -n "$search" ] && args+=(--search "$search")
   [ -n "$limit" ]  && args+=(--limit "$limit")
-  gh "${args[@]}" 2>/dev/null
+  # stderr passes through so the operator sees the real cause (#1332).
+  gh "${args[@]}"
 }
 
 # Internal adapter: glab (GitLab) → `glab issue list -O json`. Flags verified
@@ -1010,7 +1011,7 @@ _tracker_list_glab() {
     args+=(--search "$search" --in "title,description")
   fi
   [ -n "$limit" ] && args+=(--per-page "$limit")
-  glab "${args[@]}" 2>/dev/null
+  glab "${args[@]}"
 }
 
 # Internal adapter: custom → operator-supplied list_command template. Same trust
@@ -1030,7 +1031,7 @@ _tracker_list_custom() {
   cmd="${cmd//\{owner_repo\}/$repo}"
   TRACKER_REPO="$repo" TRACKER_STATE="$state" TRACKER_ASSIGNEE="$assignee" TRACKER_AUTHOR="$author" \
     TRACKER_LABELS="$labels" TRACKER_SEARCH="$search" TRACKER_SINCE="$since" TRACKER_LIMIT="$limit" \
-    eval "$cmd" 2>/dev/null
+    eval "$cmd"
 }
 
 # Internal: normalise a gh `issue list --json` array → common array shape.
@@ -1281,16 +1282,18 @@ _tracker_review_glab() {
   local repo="$1" pr="$2" verdict="$3" body_file="$4"
   local body=""
   [ -n "$body_file" ] && [ -f "$body_file" ] && body="$(cat "$body_file")"
+  # stderr passes through on every call so a failed review names its own
+  # cause instead of reaching the caller as a bare non-zero exit (#1332).
   case "$verdict" in
     approve)
-      glab mr approve "$pr" -R "$repo" 2>/dev/null || return 1
+      glab mr approve "$pr" -R "$repo" || return 1
       if [ -n "$body" ]; then
-        glab mr note create "$pr" -R "$repo" -m "$body" 2>/dev/null || return 1
+        glab mr note create "$pr" -R "$repo" -m "$body" || return 1
       fi
       ;;
     comment|request-changes|*)
       [ -n "$body" ] || return 1   # a comment/notes verdict needs a body
-      glab mr note create "$pr" -R "$repo" -m "$body" 2>/dev/null || return 1
+      glab mr note create "$pr" -R "$repo" -m "$body" || return 1
       ;;
   esac
 }
@@ -1336,7 +1339,7 @@ _tracker_review_custom() {
   cmd="${cmd//\{verdict\}/$verdict}"
   TRACKER_REPO="$repo" TRACKER_PR="$pr" TRACKER_VERDICT="$verdict" \
     TRACKER_REVIEW_BODY_FILE="$body_file" \
-    eval "$cmd" 2>/dev/null
+    eval "$cmd"
 }
 
 # Public: tracker_review_submit <owner/repo> <pr> <verdict> [<body_file>]

@@ -132,6 +132,33 @@ else
   echo "SKIP: tracker_view per-project case (needs jq + yq/python3-yaml)"
 fi
 
+# Case 7 (#1332) — a failing custom view_command must name its own cause on
+# stderr. Until #1332 the adapter discarded it, so the caller saw only a
+# non-zero exit. The kind comes from project-config defaults, so this case
+# needs no YAML parser.
+SBV=$(mktemp -d); SBV=$(cd "$SBV" && pwd -P)
+mkdir -p "$SBV/.claude/hooks"
+touch "$SBV/onboarding.yaml"
+printf 'version: 1\nprojects: []\n' > "$SBV/apexyard.projects.yaml"
+for lib in "$TRACKER_LIB" "$CONFIG_LIB" "$PORTFOLIO_LIB" "$OPSROOT_LIB"; do
+  [ -f "$lib" ] && cp "$lib" "$SBV/.claude/hooks/"
+done
+printf '%s\n' '{ "tracker": { "kind": "custom", "view_command": "echo \"custom view: not found\" >&2; false" } }' \
+  > "$SBV/.claude/project-config.defaults.json"
+(
+  cd "$SBV" || exit 1
+  # shellcheck source=/dev/null
+  . "$SBV/.claude/hooks/_lib-tracker.sh"
+  tracker_clear_cache
+  out=$(tracker_view "1" "org/repo-v" 2>"$SBV/err"); rc=$?
+  printf '%s|%s\n' "$rc" "$out"
+) > "$SBV/r"
+IFS="|" read -r v_rc v_out < "$SBV/r"
+assert_eq "tracker_view custom failure → non-zero exit"            "1" "$v_rc"
+assert_eq "tracker_view custom failure → no stdout"                ""  "$v_out"
+assert_eq "tracker_view custom failure → CLI error reaches stderr" "1" "$(grep -c 'custom view: not found' "$SBV/err")"
+rm -rf "$SBV"
+
 rm -rf "$SB"
 echo "=========================================="
 echo "PASS: $PASS  FAIL: $FAIL"
