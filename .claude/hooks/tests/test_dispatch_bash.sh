@@ -15,6 +15,7 @@ reviewer_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hook
 
 mkdir -p "$TMP/hooks"
 cp "$ROOT/dispatch-bash.sh" "$TMP/hooks/dispatch-bash.sh"
+cp "$ROOT/_lib-extract-pr.sh" "$TMP/hooks/_lib-extract-pr.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
 
 scripts='block-ambient-tracker-repo.sh block-privileged-escalation.sh require-skill-for-issue-create.sh require-migration-ticket.sh require-active-ticket.sh suggest-mcp-search.sh warn-review-marker-write.sh warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh block-git-add-all.sh block-main-push.sh validate-branch-name.sh pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh require-agdr-for-arch-changes.sh warn-bootstrap-scope.sh suggest-ticket-template.sh validate-issue-structure.sh block-private-refs-in-public-repos.sh validate-pr-create.sh require-agdr-for-arch-pr.sh nudge-control-adversarial-test.sh block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh detect-role-trigger.sh'
@@ -73,6 +74,25 @@ for command in \
   run "$command"
   [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 done
+
+# /approve-merge wraps tracker_pr_merge in bash -c. Prefix case misses that
+# shape. is_merge_command must still route the four merge gates (AgDR-0162).
+: > "$TMP/log"
+run "bash -c 'tracker_pr_merge acme/app 42 squash true'"
+[ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
+[ "$(grep -c '^require-design-review-for-ui.sh$' "$TMP/log")" -eq 1 ]
+[ "$(grep -c '^block-merge-on-red-ci.sh$' "$TMP/log")" -eq 1 ]
+[ "$(grep -c '^require-architecture-review.sh$' "$TMP/log")" -eq 1 ]
+: > "$TMP/log"
+run "bash -c 'gh pr merge 42 --squash'"
+[ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
+
+# A git commit whose message names the wrapper is not a merge.
+: > "$TMP/log"
+run "git commit -m fix tracker_pr_merge wrapper"
+if grep -q '^block-unreviewed-merge.sh$' "$TMP/log"; then
+  exit 1
+fi
 
 : > "$TMP/log"
 set +e

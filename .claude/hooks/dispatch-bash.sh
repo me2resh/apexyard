@@ -15,6 +15,14 @@ if [ "$COMMAND" = "null" ]; then
   COMMAND=""
 fi
 
+# Merge-shape detection for wrapped commands (AgDR-0162, me2resh/apexyard#1338).
+# Prefix case arms still handle the one-line forms. is_merge_command scans the
+# full payload command, so `bash -c` around tracker_pr_merge still routes.
+if [ -f "$HOOK_DIR/_lib-extract-pr.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-extract-pr.sh"
+fi
+
 run_hook() {
   local script="$1" rc=0
   # A hook may warn or fail for an unrelated reason, but only exit 2 blocks
@@ -108,6 +116,18 @@ for script in \
   run_hook "$script"
 done
 
+_merge_gates_ran=0
+run_merge_gates() {
+  if [ "${_merge_gates_ran}" -eq 1 ]; then
+    return 0
+  fi
+  _merge_gates_ran=1
+  run_hook block-unreviewed-merge.sh
+  run_hook require-design-review-for-ui.sh
+  run_hook block-merge-on-red-ci.sh
+  run_hook require-architecture-review.sh
+}
+
 case "$COMMAND" in
   "git add "*) run_hook block-git-add-all.sh ;;
   "git push "*)
@@ -142,44 +162,42 @@ case "$COMMAND" in
   "gh issue edit "*) run_hook detect-role-trigger.sh ;;
   "gh api "*)
     run_hook block-private-refs-in-public-repos.sh
-    run_hook block-unreviewed-merge.sh
-    run_hook require-design-review-for-ui.sh
-    run_hook block-merge-on-red-ci.sh
-    run_hook require-architecture-review.sh
+    run_merge_gates
     ;;
   "gh pr merge "*)
     run_hook block-private-refs-in-public-repos.sh
-    run_hook block-unreviewed-merge.sh
-    run_hook require-design-review-for-ui.sh
-    run_hook block-merge-on-red-ci.sh
-    run_hook require-architecture-review.sh
+    run_merge_gates
     ;;
   "glab mr merge "*)
-    run_hook block-unreviewed-merge.sh
-    run_hook require-design-review-for-ui.sh
-    run_hook block-merge-on-red-ci.sh
-    run_hook require-architecture-review.sh
+    run_merge_gates
     ;;
   "glab api "*)
-    run_hook block-unreviewed-merge.sh
-    run_hook require-design-review-for-ui.sh
-    run_hook block-merge-on-red-ci.sh
-    run_hook require-architecture-review.sh
+    run_merge_gates
     ;;
   "tracker_pr_merge "*)
-    run_hook block-unreviewed-merge.sh
-    run_hook require-design-review-for-ui.sh
-    run_hook block-merge-on-red-ci.sh
-    run_hook require-architecture-review.sh
+    run_merge_gates
     ;;
 esac
+
+# A wrapper such as `bash -c '… tracker_pr_merge …'` misses the prefix case.
+# Route those payloads with the same parser the merge-gate bodies use.
+# Do not re-route commands the prefix case already claimed, including
+# `git commit` whose message happens to name a merge wrapper.
+if [ "${_merge_gates_ran}" -eq 0 ]; then
+  case "$COMMAND" in
+    "git add "*|"git push "*|"git commit "*|"gh issue create "*|"gh pr create "*|"gh issue comment "*|"gh pr comment "*|"gh pr review "*|"gh issue edit "*)
+      ;;
+    *)
+      if command -v is_merge_command >/dev/null 2>&1 && is_merge_command "$COMMAND"; then
+        run_merge_gates
+      fi
+      ;;
+  esac
+fi
 
 # Command parse failed. Route the raw payload to the merge gates so their
 # jq-independent fallback still blocks merge-shaped commands.
 if [ -z "$COMMAND" ]; then
   printf 'WARN: dispatcher could not parse the Bash command; running merge gates fail-closed.\n' >&2
-  run_hook block-unreviewed-merge.sh
-  run_hook require-design-review-for-ui.sh
-  run_hook block-merge-on-red-ci.sh
-  run_hook require-architecture-review.sh
+  run_merge_gates
 fi
