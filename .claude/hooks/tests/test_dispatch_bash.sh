@@ -87,12 +87,18 @@ run "bash -c 'tracker_pr_merge acme/app 42 squash true'"
 run "bash -c 'gh pr merge 42 --squash'"
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 
-# A git commit whose message names the wrapper is not a merge.
+# Compound commands that start with git add still contain a merge. The
+# prefix case must not skip is_merge_command on that payload.
+: > "$TMP/log"
+run "git add foo && tracker_pr_merge acme/app 42 squash true"
+[ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
+[ "$(grep -c '^require-design-review-for-ui.sh$' "$TMP/log")" -eq 1 ]
+
+# A git commit whose message names the wrapper is fail-closed: the parser
+# sees the token. Merge gates run. They no-op or block on their own parse.
 : > "$TMP/log"
 run "git commit -m fix tracker_pr_merge wrapper"
-if grep -q '^block-unreviewed-merge.sh$' "$TMP/log"; then
-  exit 1
-fi
+[ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 
 : > "$TMP/log"
 set +e

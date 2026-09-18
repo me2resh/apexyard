@@ -181,18 +181,15 @@ esac
 
 # A wrapper such as `bash -c '… tracker_pr_merge …'` misses the prefix case.
 # Route those payloads with the same parser the merge-gate bodies use.
-# Do not re-route commands the prefix case already claimed, including
-# `git commit` whose message happens to name a merge wrapper.
+# If the parser is missing, run the merge gates. A missing control must
+# not fail open (AgDR-0162, Hakim review of me2resh/apexyard#1339).
 if [ "${_merge_gates_ran}" -eq 0 ]; then
-  case "$COMMAND" in
-    "git add "*|"git push "*|"git commit "*|"gh issue create "*|"gh pr create "*|"gh issue comment "*|"gh pr comment "*|"gh pr review "*|"gh issue edit "*)
-      ;;
-    *)
-      if command -v is_merge_command >/dev/null 2>&1 && is_merge_command "$COMMAND"; then
-        run_merge_gates
-      fi
-      ;;
-  esac
+  if ! command -v is_merge_command >/dev/null 2>&1; then
+    printf 'WARN: merge parser missing; running merge gates fail-closed.\n' >&2
+    run_merge_gates
+  elif is_merge_command "$COMMAND"; then
+    run_merge_gates
+  fi
 fi
 
 # Command parse failed. Route the raw payload to the merge gates so their

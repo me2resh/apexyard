@@ -29,7 +29,7 @@ This is a trust-chain control. Parent record: AgDR-0157.
 
 Chosen: **run the four merge gates when `is_merge_command` matches**, because the parser already knows the merge shapes and the gate must fail closed on a wrapper.
 
-The prefix `case` still runs the same gates for the documented one-line forms. A helper runs each merge gate at most once per payload. An empty command still takes the T13 path from AgDR-0157. A `git commit` or other already-routed prefix is not re-routed when its text names a merge wrapper.
+The prefix `case` still runs the same gates for the documented one-line forms. A helper runs each merge gate at most once per payload. An empty command still takes the T13 path from AgDR-0157. If `is_merge_command` is not in scope, the dispatcher still runs the four merge gates. A `git add` or `git commit` payload that also contains a merge shape is gated. A commit message that names the wrapper token is fail-closed.
 
 This PR does not change pi and opencode glob strings. Those adapters still derive prefix globs from the dispatcher comments. That residual is a follow-up.
 
