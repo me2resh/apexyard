@@ -54,7 +54,7 @@ Full detail lives in `.claude/rules/` (`git-conventions.md`, `pr-quality.md`, `p
 Run what CI runs, locally:
 
 ```bash
-bash bin/run-hook-tests.sh        # ~65 hook/behaviour tests — must be green
+bash bin/run-hook-tests.sh        # hook test suite — must be green
 npx markdownlint-cli2 '**/*.md'   # if you touched markdown
 shellcheck .claude/hooks/*.sh     # if you touched hooks
 ```

@@ -530,7 +530,7 @@ Next code review, Rex globs both `handbooks/architecture/*.md` AND `<private>/cu
 
 ### Centralised agent routing — `agent-routing.yaml`
 
-ApexYard ships 24 Claude Code sub-agents (19 role-derived personas + 5 utility agents — Rex, Hakim, Munir, Tariq, Idris). The framework picks sensible per-agent model defaults from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md) (Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work). Adopters override those defaults — switch the QA Engineer to Sonnet for higher-recall AC runs, route the Data Analyst through a local Ollama endpoint, raise the Pen Tester's invocation timeout — via a single YAML file kept in the private portfolio repo.
+ApexYard ships 23 Claude Code sub-agents (20 role-derived personas plus utility agents — Rex, Hakim, Munir, Tariq, Naqid). The framework picks sensible per-agent model defaults from the matrix in [AgDR-0050 § Axis 2](agdr/AgDR-0050-agent-runtime-overhaul.md) (Opus for depth + reasoning, Sonnet for the majority + tool-use-heavy, Haiku for checklist-shaped repeatable work). Adopters override those defaults — switch the QA Engineer to Sonnet for higher-recall AC runs, route the Data Analyst through a local Ollama endpoint, raise the Pen Tester's invocation timeout — via a single YAML file kept in the private portfolio repo.
 
 This sibling pattern to **Custom templates** (path-mirroring overrides; see AgDR-0023) and **Custom skills + handbooks** above puts every adopter-specific routing choice in one centrally-edited surface, source-controlled in the private repo, never leaking to the public fork.
 
@@ -766,7 +766,7 @@ your-org/apexyard/                ← your fork, cloned locally (the "ops repo")
 │   ├── agents/
 │   └── settings.json
 │
-├── roles/                         ← 19 role definitions, upstream from apexyard
+├── roles/                         ← 20 role definitions, upstream from apexyard
 │   ├── engineering/
 │   ├── product/
 │   ├── design/

@@ -1,3 +1,53 @@
+## [v5.6.3] — 2026-09-18
+
+Patch release — 15 fixes, 7 improvements.
+
+v5.6.2 had no Released-From trailer. `/release-sync` for that tag landed at the tip of `dev`, so the default changelog range was empty (#872). This section lists first-parent commits after `08e694b` that were not in v5.6.0–v5.6.2.
+
+### Fixed (fix)
+
+- (#1344) rank git -C commit path above payload cwd — 0c5cf1c
+- (#1339) run merge gates on wrapped merge helper — b768d22
+- (#1337) keep adapter hook tests green without yq — cd26bbc
+- (#1334) pass tracker CLI stderr through remaining adapters — 45506d3
+- (#1316) harden split-portfolio adapter trust — 8b7c02b
+- (#1329) surface tracker CLI errors from tracker_create — 8e0e60a
+- (#1326) restore /update chain across v5.6.0–v5.6.2 — 8883d61
+- (#1314) anchor split-portfolio adapter resolution — 9da26a4
+- (#1310) make AgDR identifiers unique — cca0198
+- (#1309) batch markdownlint pre-push paths on Windows — e9c95e0
+- (#1308) preserve update sync ancestry — df688bc
+- (#1307) classify delegated gate scripts as trust-chain — 160a5c7
+- (#1306) reject hookless split-portfolio session pins — 4f7af44
+- (#1305) prefer v2 fork anchor in nested child scan — bf43d48
+- (#1295) continue after adapter prerequisite drift — 3e4c234
+
+### Changed (refactor / chore / docs)
+
+- (#1333) add ahmedashraffcih to the code contributors row — 3250e2e
+- (#1331) lock SessionStart dispatcher lists and failure paths — d1eea7c
+- (#1330) validate Rex review body before the marker write — c217498
+- (#1324) load rule bodies on demand — 51055e5
+- (#1321) collapse SessionStart hook fan-out — 3953d50
+- (#1320) dispatch Bash PreToolUse hooks once — fdbe2f2
+- (#1312) native-first Cursor overlay — 8e12865
+
+### Closes
+
+- Closes #1294
+- Closes #1298
+- Closes #1301
+- Closes #1304
+- Closes #1311
+- Closes #1313
+- Closes #1315
+- Closes #1317
+- Closes #1318
+- Closes #1319
+- Closes #1322
+- Closes #1323
+- Closes #1338
+
 ## [v5.6.2] — 2026-09-14
 
 Patch release — 1 fix.

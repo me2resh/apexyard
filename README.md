@@ -57,10 +57,10 @@ ApexYard is a set of plain-text files. Claude Code reads them from the repo
 root. No runtime or service is required.
 
 - **20 roles** across 6 departments (engineering, product, design, security, data, architecture) that activate on triggers
-- **49 shell hooks** that mechanically enforce the SDLC — ticket-first edits, a two-marker merge gate, migration gates, secrets scanning, and more
+- **60 shell hooks** that mechanically enforce the SDLC — ticket-first edits, a two-marker merge gate, migration gates, secrets scanning, and more
 - **66 slash-command skills** — from `/setup` and `/handover` to `/decide`, `/code-review`, `/migration`, and `/launch-check`
 - **23 sub-agents** — Rex (code review), Hakim (security), Tariq (design review), plus the department personas
-- **18 rule files**, workflow docs, and document templates (PRD, tech design, ADR, AgDR, C4 diagrams)
+- **22 rule files**, workflow docs, and document templates (PRD, tech design, ADR, AgDR, C4 diagrams)
 
 **See [`docs/whats-inside.md`](docs/whats-inside.md) for the full directory and component list.**
 
@@ -229,19 +229,10 @@ ApexYard is designed to be customized. Every role, workflow, and template can be
 
 ## Contributing
 
-Contributions are welcome — **start with [CONTRIBUTING.md](CONTRIBUTING.md)** for the full fork → PR → review flow, and open issues with the **Bug report** / **Feature request** templates. All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through [SECURITY.md](SECURITY.md) (private reporting), not public issues.
-
-ApexYard runs on its own rules, so the flow mirrors any project under ApexYard governance:
-
-1. **File an issue** — open a GitHub issue with the **Bug report** / **Feature request** template. If you run apexyard yourself, the **`/report-apexyard-bug`** and **`/request-apexyard-feature`** skills file it here for you (they target `me2resh/apexyard` — distinct from `/bug` and `/feature`, which file into your *own* managed project).
-2. **Start the ticket** — `/start-ticket <number>` so the ticket-first hook lets your code edits through.
-3. **Branch + commit** — `{type}/GH-{number}-{short-description}`, conventional commit format (`type(#number): subject`).
-4. **Self-check before pushing** — `npm run lint` / markdownlint / shellcheck as applicable; hooks remind you at `git push`.
-5. **Open a PR** — title `type(#number): description` + a Glossary section in the body.
-6. **Wait for Rex** — the Code Reviewer agent auto-runs on every PR.
-7. **Merge requires two markers** — Rex's approval + explicit per-PR human approval via `/approve-merge <pr>`. Plan-level "go" doesn't count.
-
-For larger changes (new skills, rule changes, workflow redesigns), open a discussion or draft PRD first.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the fork, branch, PR, and review flow.
+Open a Bug report or Feature request issue.
+The [Code of Conduct](CODE_OF_CONDUCT.md) applies to all participation.
+Report security issues in [SECURITY.md](SECURITY.md). Do not open a public issue for those.
 
 ## Contributors
 
@@ -255,6 +246,8 @@ Thanks to everyone who contributes code, documentation, bug reports, ideas, and 
 <a href="https://github.com/hossam-96" title="hossam-96"><img src="https://github.com/hossam-96.png?size=100" width="64" height="64" alt="hossam-96"></a>
 <a href="https://github.com/aniketshukla1" title="aniketshukla1"><img src="https://github.com/aniketshukla1.png?size=100" width="64" height="64" alt="aniketshukla1"></a>
 <a href="https://github.com/ahmedashraffcih" title="ahmedashraffcih"><img src="https://github.com/ahmedashraffcih.png?size=100" width="64" height="64" alt="ahmedashraffcih"></a>
+<a href="https://github.com/ahmedk20" title="ahmedk20"><img src="https://github.com/ahmedk20.png?size=100" width="64" height="64" alt="ahmedk20"></a>
+<a href="https://github.com/moussaws" title="moussaws"><img src="https://github.com/moussaws.png?size=100" width="64" height="64" alt="moussaws"></a>
 </p>
 
 ### Issue contributors
@@ -265,6 +258,7 @@ Thank you to everyone who opened issues, including bug reports, feature requests
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-abdellatif98" title="a-abdellatif98"><img src="https://github.com/a-abdellatif98.png?size=100" width="64" height="64" alt="a-abdellatif98"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aa-elnemr" title="a-elnemr"><img src="https://github.com/a-elnemr.png?size=100" width="64" height="64" alt="a-elnemr"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdelrahman-Shahda" title="Abdelrahman-Shahda"><img src="https://github.com/Abdelrahman-Shahda.png?size=100" width="64" height="64" alt="Abdelrahman-Shahda"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AAbdElrahmaN31" title="AbdElrahmaN31"><img src="https://github.com/AbdElrahmaN31.png?size=100" width="64" height="64" alt="AbdElrahmaN31"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aaelnemr" title="aelnemr"><img src="https://github.com/aelnemr.png?size=100" width="64" height="64" alt="aelnemr"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedashraffcih" title="ahmedashraffcih"><img src="https://github.com/ahmedashraffcih.png?size=100" width="64" height="64" alt="ahmedashraffcih"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aahmedgemi" title="ahmedgemi"><img src="https://github.com/ahmedgemi.png?size=100" width="64" height="64" alt="ahmedgemi"></a>
@@ -281,8 +275,11 @@ Thank you to everyone who opened issues, including bug reports, feature requests
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Adrmas" title="drmas"><img src="https://github.com/drmas.png?size=100" width="64" height="64" alt="drmas"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aengnaruto" title="engnaruto"><img src="https://github.com/engnaruto.png?size=100" width="64" height="64" alt="engnaruto"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahamoda-dev" title="hamoda-dev"><img src="https://github.com/hamoda-dev.png?size=100" width="64" height="64" alt="hamoda-dev"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahossam-96" title="hossam-96"><img src="https://github.com/hossam-96.png?size=100" width="64" height="64" alt="hossam-96"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ahazemahmedx0" title="hazemahmedx0"><img src="https://github.com/hazemahmedx0.png?size=100" width="64" height="64" alt="hazemahmedx0"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHC12026" title="HC12026"><img src="https://github.com/HC12026.png?size=100" width="64" height="64" alt="HC12026"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHOSS11H" title="HOSS11H"><img src="https://github.com/HOSS11H.png?size=100" width="64" height="64" alt="HOSS11H"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AHishamM1" title="HishamM1"><img src="https://github.com/HishamM1.png?size=100" width="64" height="64" alt="HishamM1"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aibrahim-gad" title="ibrahim-gad"><img src="https://github.com/ibrahim-gad.png?size=100" width="64" height="64" alt="ibrahim-gad"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ajafarguzman666-ops" title="jafarguzman666-ops"><img src="https://github.com/jafarguzman666-ops.png?size=100" width="64" height="64" alt="jafarguzman666-ops"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AKarimEbrahemAbdelaziz" title="KarimEbrahemAbdelaziz"><img src="https://github.com/KarimEbrahemAbdelaziz.png?size=100" width="64" height="64" alt="KarimEbrahemAbdelaziz"></a>
@@ -304,15 +301,19 @@ Thank you to everyone who opened issues, including bug reports, feature requests
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOmarElaraby26" title="OmarElaraby26"><img src="https://github.com/OmarElaraby26.png?size=100" width="64" height="64" alt="OmarElaraby26"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Aosama-abu-baker" title="osama-abu-baker"><img src="https://github.com/osama-abu-baker.png?size=100" width="64" height="64" alt="osama-abu-baker"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3AOsamaAlSabry" title="OsamaAlSabry"><img src="https://github.com/OsamaAlSabry.png?size=100" width="64" height="64" alt="OsamaAlSabry"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Apsmend" title="psmend"><img src="https://github.com/psmend.png?size=100" width="64" height="64" alt="psmend"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Arafik-wahid-cubeish" title="rafik-wahid-cubeish"><img src="https://github.com/rafik-wahid-cubeish.png?size=100" width="64" height="64" alt="rafik-wahid-cubeish"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3ARef34t" title="Ref34t"><img src="https://github.com/Ref34t.png?size=100" width="64" height="64" alt="Ref34t"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asts1078" title="sts1078"><img src="https://github.com/sts1078.png?size=100" width="64" height="64" alt="sts1078"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Asudanese" title="sudanese"><img src="https://github.com/sudanese.png?size=100" width="64" height="64" alt="sudanese"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Atifa64" title="tifa64"><img src="https://github.com/tifa64.png?size=100" width="64" height="64" alt="tifa64"></a>
+<a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Avjcv26" title="vjcv26"><img src="https://github.com/vjcv26.png?size=100" width="64" height="64" alt="vjcv26"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Ayehiagamalx" title="yehiagamalx"><img src="https://github.com/yehiagamalx.png?size=100" width="64" height="64" alt="yehiagamalx"></a>
 <a href="https://github.com/me2resh/apexyard/issues?q=is%3Aissue%20author%3Azeyadsleem" title="zeyadsleem"><img src="https://github.com/zeyadsleem.png?size=100" width="64" height="64" alt="zeyadsleem"></a>
 </p>
 
 When updating these credits, include new issue authors as well as pull-request contributors.
-Use public GitHub handles and links, and describe each contribution accurately.
+Use public GitHub handles and links. Describe each contribution accurately.
 
 ## License
 

@@ -37,7 +37,7 @@ apexyard/
 │
 ├── .claude/               # Claude Code primitives (the runnable layer)
 │   ├── settings.json      # Hook wiring (PreToolUse, PostToolUse, SessionStart)
-│   ├── hooks/             # 49 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
+│   ├── hooks/             # 60 shell scripts — ticket-first, migration gate, two-marker merge gate, red-CI block, secrets scan, branch/PR validation, leak protection, MCP-reindex advisories, upstream-drift banner
 │   ├── rules/             # 22 modular rule files. CLAUDE.md indexes them by name.
 │   ├── agents/            # 23 sub-agents — Rex (Code Reviewer), Hakim (Security Auditor), Tariq (Solution Architect), the engineering / product / design / data / security personas, plus utility agents (dependency auditor, The Contrarian)
 │   └── skills/            # 66 slash commands — see CLAUDE.md for the full list
@@ -163,7 +163,7 @@ Code loads it when it is at the repository root.
 
 | Layer | Path | What it is |
 |-------|------|------------|
-| **Hooks** | `.claude/hooks/` | 49 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
+| **Hooks** | `.claude/hooks/` | 60 shell scripts that mechanically enforce SDLC rules — ticket-first edits (Edit/Write/Bash), migration-ticket-first, auto code review, merge gates (Rex + CEO + design + architecture review), red-CI block, commit-format, AgDR-for-arch-changes, branch/PR-title validation, secrets scanning, private-ref leak protection, upstream-drift banner, MCP-reindex advisories |
 | **Rules** | `.claude/rules/` | 22 modular rule files. CLAUDE.md indexes them by name. |
 | **Agents** | `.claude/agents/` | 23 sub-agents — the department personas plus utility agents |
 | **Skills** | `.claude/skills/` | 66 slash commands |

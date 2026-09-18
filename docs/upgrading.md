@@ -75,6 +75,7 @@ The override applies once. After a successful sync, the anchor is rewritten from
 | `v5.5.2-to-v5.6.0.sh` | No-op placeholder. Backfilled by #1298 after v5.6.0 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.6.0-to-v5.6.1.sh` | No-op placeholder. Backfilled by #1298 after v5.6.1 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
 | `v5.6.1-to-v5.6.2.sh` | No-op placeholder. Backfilled by #1298 after v5.6.2 shipped with no pair script. | Nobody (no-op); exists so the chain walks past this hop. |
+| `v5.6.2-to-v5.6.3.sh` | No file move. Prints the Cursor overlay reinstall commands. A leftover full `~/.cursor/hooks.json` can lock the IDE (AgDR-0151). | Cursor adopters who installed the old generated adapter. |
 
 When a future release adds a migration, this table is the source of truth — the release PR template requires a row to be added here.
 

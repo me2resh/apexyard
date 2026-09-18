@@ -20,7 +20,7 @@ C4Container
         Container(overlay, ".cursor/", "hooks.json + rules", "Thin Cursor overlay. sessionStart maps session_id onto CLAUDE_CODE_SESSION_ID. Does not copy the Claude Code gates.")
         Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (66 skills)")
         Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), solution-architect (Tariq), contrarian (Naqid), plus the department-aligned role agents.")
-        Container(roles, "roles/", "Markdown role files", "19 role definitions across engineering / product / design / security / data. Activated by role-triggers.md matcher rules.")
+        Container(roles, "roles/", "Markdown role files", "20 role definitions across engineering / product / design / security / data / architecture. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
         Container(registry, "apexyard.projects.yaml", "YAML", "Portfolio registry. Lists every managed project. Skills iterate this to aggregate across projects.")
         Container(onboarding, "onboarding.yaml", "YAML", "Per-fork configuration — company, team, tech stack, quality bar.")
@@ -70,7 +70,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 
 - Specific hook-to-rule mapping (which hook enforces which rule) — see `docs/rule-audit.md` for that.
 - The full list of 66 skills — see CLAUDE.md § "Available skills".
-- The full list of 19 roles — see `.claude/rules/role-triggers.md`.
+- The full list of 20 roles — see `.claude/rules/role-triggers.md`.
 - The user's local `workspace/<name>/` clones of managed projects — they're gitignored and sit outside the ApexYard boundary (they belong to the managed project, not to ApexYard).
 
 ## Related diagrams
@@ -116,3 +116,5 @@ The C4 containers stay the same. The CLAUDE.md → rules arrow is now index-plus
 **2026-09-18 — Dispatch merge gates inside command wrappers (AgDR-0162, me2resh/apexyard#1338).** The Bash dispatcher matched merge commands by prefix. `/approve-merge` wraps `tracker_pr_merge` in `bash -c`, so the four merge gates never ran. The dispatcher now also routes when `is_merge_command` matches the full payload command. The C4 containers stay the same. The change is inside the hooks container.
 
 **2026-09-18 — Commit-ref `-C` outranks payload cwd (AgDR-0163, me2resh/apexyard#1340).** `verify-commit-refs.sh` ranked harness `.cwd` above a this-commit `git -C` path. Claude Code and Cursor always send `.cwd`, so the `#1050` parser never ran. The hook now ranks the message-stripped, this-invocation scrape first. Payload `.cwd` stays the default when the command has no `-C` or `cd`. The C4 containers stay the same. The change is inside the hooks container.
+
+**2026-09-18 — v5.6.3 count and docs refresh (me2resh/apexyard#1345).** Live summaries now say 60 non-lib hooks, 66 skills, 23 agents, 22 rules, and 20 roles. The C4 roles container count moved from 19 to 20. `/release-sync` for v5.6.2 made `main` an ancestor of `dev`. The C4 containers stay the same.
