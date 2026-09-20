@@ -144,6 +144,52 @@ When the operator asks for the full lifecycle, run these stages in order. Do not
 
 If a required input is missing, stop at that stage and report the missing evidence. Do not silently create a partial Plan or treat an unverified criterion as achieved.
 
+## Interaction script
+
+Ask one question at a time. Show the proposed record before writing it.
+
+### Plan interview
+
+1. `What project outcome are you trying to achieve?`
+2. `What durable intent should the Plan preserve?`
+3. `What outcomes must be true when the work is complete?`
+4. `What acceptance criteria will prove each outcome?`
+5. `What constraints or assumptions must the Plan record?`
+6. Show the complete Plan JSON and ask: `Save this Plan revision?`
+
+If the operator declines, revise only the requested fields and show the draft again. Do not write a Plan without confirmation.
+
+### Snapshot interaction
+
+Confirm the selected project and resolved repository path:
+
+`I will capture branch <branch> and commit <commit> for <project>. Continue?`
+
+The snapshot command is read-only against the repository. Do not ask for or expose credentials.
+
+### Reconciliation interview
+
+For each acceptance criterion, ask:
+
+1. `What repository evidence supports this criterion?`
+2. `Which status applies: not-verified, partially-verified, achieved, or contradicted?`
+3. `What explanation should remain with the evidence?`
+
+Show the complete Reconciliation and ask: `Save this Reconciliation?` A missing answer remains `not-verified`.
+
+### Slice interview
+
+Ask:
+
+1. `Which Plan outcome should this slice advance?`
+2. `What is the smallest bounded objective?`
+3. `Why does the current evidence justify it now?`
+4. `What work is included?`
+5. `What work is excluded?`
+6. Show the complete Execution Slice and ask: `Save this slice for the ApexYard build gate?`
+
+The final question hands off the artifact. It does not authorize code execution or deployment.
+
 ## Required response
 
 Report:
