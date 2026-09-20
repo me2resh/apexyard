@@ -8,6 +8,18 @@ The adapter keeps responsibilities separate:
 - ApexYard owns ticket-first editing, AgDRs, review, QA, deployment, and project resolution.
 - The adapter does not create external issues or execute code.
 
+## Lifecycle workflow
+
+The full workflow is interactive and evidence-based:
+
+1. Collect intent, outcomes, acceptance criteria, constraints, and assumptions for a Plan.
+2. Capture the managed repository branch and commit in a Project Snapshot.
+3. Assess every Plan criterion against the Snapshot and record evidence in a Reconciliation.
+4. Select one bounded outcome and create an Execution Slice with the Plan revision, Reconciliation ID, and repository provenance.
+5. Validate the complete record set and hand the slice to the normal ApexYard build gate.
+
+The CLI supplies deterministic record construction and validation. The skill supplies the operator prompts and evidence workflow. It does not infer intent or mark criteria as achieved without evidence.
+
 Install the `orbit-spec` CLI before using the skill. Set `ORBIT_BIN` when the CLI is installed outside `PATH`.
 
 Example:

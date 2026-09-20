@@ -132,6 +132,18 @@ Validate the complete ORBIT record set before handoff:
 
 Return the CLI exit status. A non-zero result blocks the handoff until the record or provenance is corrected.
 
+## End-to-end planning workflow
+
+When the operator asks for the full lifecycle, run these stages in order. Do not skip a stage because a later record can be written without it.
+
+1. **Plan.** Ask for the project intent, desired outcomes, acceptance criteria, constraints, and assumptions. Draft the Plan JSON in the project record directory. Preserve the operator's wording. Validate it with `orbit plan --input <file> --output <file>`. Do not invent outcomes or criteria.
+2. **Snapshot.** Capture the current branch and commit with `/orbit snapshot`. Treat the result as observed evidence, not as a claim that the Plan is achieved.
+3. **Reconcile.** Read the Plan and Snapshot. For every acceptance criterion, inspect the repository evidence and ask for or record a factual status: `not-verified`, `partially-verified`, `achieved`, or `contradicted`. The CLI creates a `not-verified` scaffold. Fill in evidence and explanations before handoff, then run `orbit validate`.
+4. **Slice.** Ask which one bounded outcome should be advanced, why the evidence justifies it, what is included, and what is excluded. Create the Execution Slice with `/orbit slice`. Keep the Plan revision, Reconciliation ID, and repository commits unchanged.
+5. **Validate and hand off.** Run `/orbit validate`. Report the records and provenance. Hand the slice to the normal ApexYard build gate; do not execute it from this skill.
+
+If a required input is missing, stop at that stage and report the missing evidence. Do not silently create a partial Plan or treat an unverified criterion as achieved.
+
 ## Required response
 
 Report:
