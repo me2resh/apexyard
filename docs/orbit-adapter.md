@@ -33,4 +33,6 @@ Example:
 /orbit validate --project example-app
 ```
 
-The pilot is opt-in. Existing planning skills continue to work independently.
+The validation step passes the managed project's `docs/orbit/` directory to
+`orbit validate --all --root <directory>`. The pilot is opt-in. Existing
+planning skills continue to work independently.

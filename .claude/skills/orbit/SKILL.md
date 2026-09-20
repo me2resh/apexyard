@@ -131,7 +131,7 @@ Validate the complete ORBIT record set before handoff:
 ```bash
 (
   cd "$orbit_root"
-  "$ORBIT_BIN" validate --all
+  "$ORBIT_BIN" validate --all --root "$orbit_root"
 )
 ```
 
