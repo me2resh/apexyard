@@ -1,7 +1,7 @@
 ---
 name: orbit
 description: Run the opt-in ORBIT planning lifecycle for one managed project without replacing ApexYard governance.
-argument-hint: "<plan|snapshot|reconcile|slice|validate> --project <name>"
+argument-hint: "<plan|snapshot|reconcile|slice|validate> --project <name> [--no-challenge]"
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---
 
@@ -148,6 +148,10 @@ If a required input is missing, stop at that stage and report the missing eviden
 
 Ask one question at a time. Show the proposed record before writing it.
 
+After each Plan, Reconciliation, and Execution Slice draft, run `/challenge` with the draft as the target. Naqid must steelman the draft, identify hidden assumptions, failure modes, missing evidence, and cheaper alternatives, then return an advisory verdict. Relay the result without softening it. The operator may revise the draft, accept it, or stop. Naqid never writes records and never blocks an ApexYard gate.
+
+The operator may pass `--no-challenge` when a challenge was already run for the same unchanged draft. Report that the challenge was skipped and preserve the reason.
+
 ### Plan interview
 
 1. `What project outcome are you trying to achieve?`
@@ -155,7 +159,7 @@ Ask one question at a time. Show the proposed record before writing it.
 3. `What outcomes must be true when the work is complete?`
 4. `What acceptance criteria will prove each outcome?`
 5. `What constraints or assumptions must the Plan record?`
-6. Show the complete Plan JSON and ask: `Save this Plan revision?`
+6. Show the complete Plan JSON, run Naqid, then ask: `Save this Plan revision?`
 
 If the operator declines, revise only the requested fields and show the draft again. Do not write a Plan without confirmation.
 
@@ -175,7 +179,7 @@ For each acceptance criterion, ask:
 2. `Which status applies: not-verified, partially-verified, achieved, or contradicted?`
 3. `What explanation should remain with the evidence?`
 
-Show the complete Reconciliation and ask: `Save this Reconciliation?` A missing answer remains `not-verified`.
+Show the complete Reconciliation, run Naqid, and ask: `Save this Reconciliation?` A missing answer remains `not-verified`.
 
 ### Slice interview
 
@@ -186,7 +190,7 @@ Ask:
 3. `Why does the current evidence justify it now?`
 4. `What work is included?`
 5. `What work is excluded?`
-6. Show the complete Execution Slice and ask: `Save this slice for the ApexYard build gate?`
+6. Show the complete Execution Slice, run Naqid, and ask: `Save this slice for the ApexYard build gate?`
 
 The final question hands off the artifact. It does not authorize code execution or deployment.
 
