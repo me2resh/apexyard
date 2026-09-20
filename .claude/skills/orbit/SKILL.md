@@ -127,7 +127,10 @@ The slice is a handoff artifact. ApexYard's normal build, review, QA, and deploy
 Validate the complete ORBIT record set before handoff:
 
 ```bash
-"$ORBIT_BIN" validate --all
+(
+  cd "$orbit_root"
+  "$ORBIT_BIN" validate --all
+)
 ```
 
 Return the CLI exit status. A non-zero result blocks the handoff until the record or provenance is corrected.
