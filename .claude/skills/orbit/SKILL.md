@@ -9,6 +9,8 @@ allowed-tools: Bash, Read, Write, Grep, Glob
 
 Use this skill when an operator explicitly wants ORBIT records for one managed project. The skill is an ApexYard adapter. The ORBIT CLI remains the source of truth for record schemas, lifecycle output, and validation.
 
+Use the controlled technical writing profile for prompts, record explanations, and any durable handoff text.
+
 The skill does not create issues, branches, commits, code changes, deployments, or external tracker records. Existing ApexYard planning skills remain unchanged.
 
 ## Prerequisites
