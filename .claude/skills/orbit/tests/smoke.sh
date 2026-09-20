@@ -6,6 +6,7 @@ skill="$skill_dir/SKILL.md"
 
 grep -q '^name: orbit$' "$skill"
 grep -q 'portfolio_workspace_dir' "$skill"
+grep -q "entry's.*workspace" "$skill"
 grep -q 'ORBIT_BIN' "$skill"
 grep -q 'orbit_root' "$skill"
 grep -q 'validate --all' "$skill"

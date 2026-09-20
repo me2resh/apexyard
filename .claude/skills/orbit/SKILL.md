@@ -36,10 +36,27 @@ registry=$(portfolio_registry)
 workspace_dir=$(portfolio_workspace_dir)
 ```
 
-Require `--project <name>`. Resolve that project in the registry and stop if it is missing or has no local workspace. Set:
+Require `--project <name>`. Resolve that project in the registry and stop if it is missing or has no local workspace. Use the entry's `workspace:` value when it is present. Resolve relative values against the portfolio root; use `portfolio_workspace_dir()` only as the fallback for entries without an explicit workspace path. For example:
+
+```bash
+project_workspace=$(awk -v target="$project" '
+  function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^['"'"']|['"'"']$/, "", line); return line }
+  /^[[:space:]]*- name:/ { if (name == target) { print workspace; exit }; name=value($0); workspace=""; next }
+  /^[[:space:]]*workspace:/ { workspace=value($0) }
+  END { if (name == target) print workspace }
+' "$registry")
+if [ -z "$project_workspace" ]; then
+  project_workspace="$workspace_dir/$project"
+elif [[ "$project_workspace" != /* ]]; then
+  project_workspace="$(cd "$(dirname "$registry")" && pwd)/$project_workspace"
+fi
+project_root="$(cd "$project_workspace" && pwd)"
+```
+
+Stop if the resolved path does not exist or is not a Git repository. Set:
 
 ```text
-project_root = <workspace_dir>/<project>
+project_root = <resolved registry workspace path>
 orbit_root   = <project_root>/docs/orbit
 ```
 
