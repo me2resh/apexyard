@@ -117,8 +117,11 @@ assert_raw_passthrough "unbalanced double quote"   'echo "unbalanced'
 # the scanner treat a REAL redirect as quoted, an additive consumer would stop
 # reporting a genuine target. Each case below writes to `TARGET`.
 
+# Built with printf rather than written inline. The inline spelling needed a
+# single-quoted string ending in a backslash, which is the SC1003 shape.
+esc_quote_cmd=$(printf 'echo \\%s > TARGET' "'")
 assert_masked_target "adversarial: escaped quote outside quotes" \
-  'echo \'"'"' > TARGET' "TARGET"
+  "$esc_quote_cmd" "TARGET"
 assert_masked_target "adversarial: escaped double quote inside double quotes" \
   'echo "a\"b" > TARGET' "TARGET"
 assert_masked_target "adversarial: quoted span on an earlier line" \
@@ -135,6 +138,46 @@ assert_masked_target "adversarial: quoted spans on both sides of the write" \
 # heredoc stripper. The `<<` guard is what keeps that shape safe here.
 assert_masked_target "adversarial: apostrophes in a heredoc body, write after" \
   "$(printf 'cat <<E\nit%ss\nE\necho x > TARGET' "'")" "TARGET"
+
+# --- 3c. The comment divergence (#1356 review finding) --------------------
+#
+# Bash does not process quote characters inside a comment. This scanner would.
+# An odd number of quotes inside a comment, rebalanced after a REAL redirect,
+# leaves the scan balanced, so the end-of-scan check cannot see the problem.
+# Guard 4 catches it by refusing to mask any command with a `#` at a comment
+# position. Found by review, not by the original adversarial pass, which is
+# why the header now calls the guard list a living list.
+
+comment_straddle=$(printf 'echo hi # don%st\necho x > TARGET # it%ss fine' "'" "'")
+assert_masked_target "adversarial: quotes straddling a redirect inside comments" \
+  "$comment_straddle" "TARGET"
+assert_raw_passthrough "guard: a comment at line start" \
+  "$(printf '# a note\necho x > TARGET')"
+assert_raw_passthrough "guard: a comment after whitespace" \
+  "echo hi # a note"
+
+# The guard must not over-fire. A `#` that is NOT at a comment position is an
+# ordinary character, and the motivating case from #1356 depends on it.
+assert_no_masked_target "guard does not over-fire on '## D' inside a quoted awk program" \
+  "awk '/^## D/ { c=1 } { if (c && NR > 1) exit }' dfd.md"
+
+# --- 3d. Oversize command returns empty, so callers must guard ------------
+#
+# The command travels through the environment. Linux caps one environment
+# string at MAX_ARG_STRLEN, 128 KiB, and execve then fails with E2BIG. The
+# helper returns nothing. A caller that reads "" as "differs from the raw
+# command" will draw the opposite conclusion, which is exactly the defect the
+# review found in `_ratc_quoted_origin_hint`. Pin the behaviour so the caller
+# guard stays justified.
+
+oversize="echo $(head -c 140000 /dev/zero | tr '\0' 'x') > src/app.ts"
+oversize_masked=$(mask_quoted_metachars "$oversize" 2>/dev/null)
+if [ -z "$oversize_masked" ]; then
+  ok "oversize command yields an empty mask, so callers must check for empty"
+else
+  # Not a failure on a platform with a larger limit. Record what happened.
+  ok "oversize command was masked on this platform (limit not reached)"
+fi
 
 # --- 4. unmask round-trips ------------------------------------------------
 

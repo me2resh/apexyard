@@ -111,24 +111,6 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# _ratc_evaluate_target FILE_PATH TOOL_NAME
-#
-# Runs the full ticket-gate pipeline for ONE candidate write target:
-# variable-target exemptions, REPO_ROOT/REL_PATH normalisation, path-prefix
-# exemptions, ops-root discovery, the out-of-governance exemption
-# (#883/#885), the bootstrap-skill exemption, and marker resolution
-# (tier 0 per-worktree / tier 1 per-project / tier 2 ops fallback).
-#
-# Returns 0 if this target is exempt OR a matching ticket marker is found.
-# Returns 2 (and prints a BLOCKED message to stderr) if this target
-# requires an active ticket that isn't set.
-#
-# #886: called ONCE PER EXTRACTED BASH WRITE TARGET by the dispatch section
-# below — not just the first. All local state (REPO_ROOT, OPS_ROOT,
-# PROJECT, the markers, ...) is scoped to this function so each call is
-# independent; nothing leaks between targets.
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
 # _ratc_quoted_origin_hint TARGET TOOL_NAME
 #
 # Echoes one explanatory line when the reported Bash write target came from a
@@ -157,6 +139,14 @@ _ratc_quoted_origin_hint() {
   local masked
   masked=$(mask_quoted_metachars "$COMMAND")
 
+  # An empty mask is never a legitimate result for a non-empty command. It
+  # means awk is missing, awk failed, or the command exceeded the kernel's
+  # single-environment-string limit (MAX_ARG_STRLEN, 128 KiB on Linux) so
+  # execve returned E2BIG. Without this guard, "" reads as "differs from
+  # COMMAND" and the note fires on a genuine write that holds no quote at
+  # all. Verified at 140 KB.
+  [ -n "$masked" ] || return 0
+
   # No quoted metacharacter, or an uncertainty guard tripped. Say nothing.
   [ "$masked" != "$COMMAND" ] || return 0
 
@@ -170,12 +160,34 @@ _ratc_quoted_origin_hint() {
 $(bash_extract_write_targets "$masked")
 EOF
 
-  printf '%s' "NOTE: this target comes from inside a quoted argument, so the command may
+  # LEADING newline, not trailing. This substitution replaces the blank line
+  # that used to sit above "Exempt paths", so the note would otherwise butt
+  # straight against the Target line. A trailing newline cannot help here —
+  # command substitution strips trailing newlines, so it renders as a no-op.
+  printf '\n%s' "NOTE: this target comes from inside a quoted argument, so the command may
 write no file. The detector matches raw command text and does not parse
 shell quoting (me2resh/apexyard#1356). Reword the command, or declare a
 ticket, to continue."
 }
 
+# ------------------------------------------------------------------------------
+# _ratc_evaluate_target FILE_PATH TOOL_NAME
+#
+# Runs the full ticket-gate pipeline for ONE candidate write target:
+# variable-target exemptions, REPO_ROOT/REL_PATH normalisation, path-prefix
+# exemptions, ops-root discovery, the out-of-governance exemption
+# (#883/#885), the bootstrap-skill exemption, and marker resolution
+# (tier 0 per-worktree / tier 1 per-project / tier 2 ops fallback).
+#
+# Returns 0 if this target is exempt OR a matching ticket marker is found.
+# Returns 2 (and prints a BLOCKED message to stderr) if this target
+# requires an active ticket that isn't set.
+#
+# #886: called ONCE PER EXTRACTED BASH WRITE TARGET by the dispatch section
+# below — not just the first. All local state (REPO_ROOT, OPS_ROOT,
+# PROJECT, the markers, ...) is scoped to this function so each call is
+# independent; nothing leaks between targets.
+# ------------------------------------------------------------------------------
 _ratc_evaluate_target() {
   local FILE_PATH="$1"
   local TOOL_NAME="$2"

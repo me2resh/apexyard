@@ -48,9 +48,28 @@
 #   - the command holds a heredoc operator (`<<`), whose body bash does not
 #     quote-process but this scanner would
 #   - the command holds a backtick, which nests a fresh quoting context
+#   - the command holds a `#` at a comment position, because bash does not
+#     quote-process a comment body but this scanner would
 #
-# Each fallback preserves the caller's current behaviour. An uncertain parse
-# therefore never hides a character from a caller.
+# Each fallback preserves the caller's current behaviour.
+#
+# SCOPE OF THAT CLAIM — read it before adopting this helper elsewhere.
+# The four guards above cover four KNOWN divergences between this scanner and
+# bash. They are not a proof that no divergence remains. A shape that makes
+# the scanner treat a REAL operator as quoted, and that no guard catches,
+# would hide that character from a caller.
+#
+# Known residue, recorded rather than claimed away (AgDR-0164, AgDR-0113
+# governance rule 2):
+#
+#   - `$'...'` ANSI-C quoting. Bash processes backslash escapes inside it and
+#     this scanner does not. Every variant tried so far left quotes
+#     unbalanced and hit guard 1. It is PROBED, not proven safe.
+#   - The comment divergence above was found by review, not by the original
+#     author's own adversarial pass. Treat the guard list as a living list.
+#
+# Each entry is pinned by a case in `tests/test_mask_quoted.sh` where one
+# exists, and named here where one does not.
 #
 # OFFSETS AND LENGTH ARE PRESERVED
 # ---------------------------------------------------------------------------
@@ -88,6 +107,19 @@ mask_quoted_metachars() {
     *'<<'*) printf '%s' "$cmd"; return 0 ;;
     *'`'*)  printf '%s' "$cmd"; return 0 ;;
   esac
+
+  # A `#` at a comment position opens a bash comment, and bash does NOT
+  # process quote characters inside one. This scanner would. An odd number of
+  # quotes inside a comment, rebalanced later, therefore leaves the scanner
+  # in a quoted state across a REAL redirect while bash is not — and the
+  # balance check at the end of the scan cannot see it. Bail instead of
+  # modelling comments, which would add a second divergence to fix the first.
+  #
+  # A comment position is start-of-line or after whitespace. A `#` anywhere
+  # else is an ordinary character, so `awk '/^## D/ ...'` is unaffected.
+  if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])#'; then
+    printf '%s' "$cmd"; return 0
+  fi
 
   # The command travels through the environment rather than `-v`, so arbitrary
   # backslashes and newlines survive unmangled.
