@@ -21,9 +21,10 @@ LIB_BASH="$SRC_ROOT/.claude/hooks/_lib-detect-bash-write.sh"
 LIB_CFG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
 LIB_PATH_RESOLVE="$SRC_ROOT/.claude/hooks/_lib-path-resolve.sh"
 LIB_ACTIVE_TICKET="$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh"
+LIB_MASK="$SRC_ROOT/.claude/hooks/_lib-mask-quoted.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
-for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$DEFAULTS"; do
+for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$LIB_MASK" "$DEFAULTS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -53,6 +54,7 @@ make_sandbox() {
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$LIB_PATH_RESOLVE" "$sb/.claude/hooks/_lib-path-resolve.sh"
   cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
+  cp "$LIB_MASK" "$sb/.claude/hooks/_lib-mask-quoted.sh"
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
   echo "$sb"
@@ -82,6 +84,7 @@ make_sandbox_no_pathresolve() {
   cp "$LIB_BASH" "$sb/.claude/hooks/_lib-detect-bash-write.sh"
   cp "$LIB_CFG"  "$sb/.claude/hooks/_lib-read-config.sh"
   cp "$LIB_ACTIVE_TICKET" "$sb/.claude/hooks/_lib-active-ticket.sh"
+  cp "$LIB_MASK" "$sb/.claude/hooks/_lib-mask-quoted.sh"
   # NOTE: _lib-path-resolve.sh intentionally NOT copied here.
   cp "$DEFAULTS" "$sb/.claude/project-config.defaults.json"
   chmod +x "$sb/.claude/hooks/require-active-ticket.sh"
@@ -972,6 +975,45 @@ rm -rf "$home_sim"
 sb=$(make_sandbox_no_pathresolve)
 in=$(jq -nc --arg c "echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#1089 fail-closed: in-repo write still BLOCKED when lib missing" 2 "BLOCKED" "$in" "$sb"
+
+# --- Quoted-origin diagnostic (#1356) ----------------------------------
+#
+# The gate verdict does NOT change. A read-only command whose only `>` sits
+# inside a quoted argument still blocks, because AgDR-0113 forbids feeding
+# quote-filtered text to the presence question. What changes is the message:
+# it now says where the target came from. See _lib-mask-quoted.sh.
+
+# A. Quoted metacharacter → still BLOCKED, and the note explains why.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "git log --format='%h > %s'" '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#1356 quoted redirect still blocks, with the origin note" \
+  2 "NOTE: this target comes from inside a quoted argument" "$in" "$sb"
+
+# B. A genuine write must NOT carry the note — it would be misleading.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c "echo hello > notes.txt" '{tool_name:"Bash", tool_input:{command:$c}}')
+got=$(cd "$sb" && echo "$in" | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
+rm -rf "$sb"
+if echo "$got" | grep -qE "NOTE: this target comes from inside a quoted argument"; then
+  echo "FAIL [#1356 genuine write carries no origin note]: note was present" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-genuine-write-no-note "
+else
+  echo "PASS [#1356 genuine write carries no origin note]"
+  PASS=$((PASS+1))
+fi
+
+# C. A quoted TARGET is a real write. It must block and carry no note.
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'echo hello > "src/app.ts"' '{tool_name:"Bash", tool_input:{command:$c}}')
+got=$(cd "$sb" && echo "$in" | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
+rm -rf "$sb"
+if echo "$got" | grep -qE "NOTE: this target comes from inside a quoted argument"; then
+  echo "FAIL [#1356 quoted target is a real write, no note]: note was present" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-quoted-target-no-note "
+else
+  echo "PASS [#1356 quoted target is a real write, no note]"
+  PASS=$((PASS+1))
+fi
 
 # --- Summary -----------------------------------------------------------
 

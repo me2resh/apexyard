@@ -128,6 +128,54 @@ fi
 # PROJECT, the markers, ...) is scoped to this function so each call is
 # independent; nothing leaks between targets.
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# _ratc_quoted_origin_hint TARGET TOOL_NAME
+#
+# Echoes one explanatory line when the reported Bash write target came from a
+# redirect character that sits INSIDE a quoted argument. Echoes nothing
+# otherwise.
+#
+# DIAGNOSIS ONLY (me2resh/apexyard#1356). This function never changes a
+# verdict. It runs after the gate has already decided to block, and it only
+# adds text to the message. AgDR-0113 forbids feeding quote-filtered text to a
+# gate's presence question, because a parser bug there fails OPEN across every
+# consumer at once. An additive answer cannot do that: a bug here yields a
+# worse message, never a skipped gate. See `_lib-mask-quoted.sh`.
+# ------------------------------------------------------------------------------
+_ratc_quoted_origin_hint() {
+  local target="${1-}" tool="${2-}"
+
+  [ "$tool" = "Bash" ] || return 0
+  [ -n "$target" ] || return 0
+  [ -n "${COMMAND:-}" ] || return 0
+  [ -f "$_RATC_HOOK_DIR/_lib-mask-quoted.sh" ] || return 0
+  command -v bash_extract_write_targets >/dev/null 2>&1 || return 0
+
+  # shellcheck source=/dev/null
+  . "$_RATC_HOOK_DIR/_lib-mask-quoted.sh"
+
+  local masked
+  masked=$(mask_quoted_metachars "$COMMAND")
+
+  # No quoted metacharacter, or an uncertainty guard tripped. Say nothing.
+  [ "$masked" != "$COMMAND" ] || return 0
+
+  # If the target still appears once quoted spans are neutralised, it is a
+  # real target. Say nothing.
+  local candidate
+  while IFS= read -r candidate; do
+    [ -z "$candidate" ] && continue
+    [ "$(unmask_quoted_metachars "$candidate")" = "$target" ] && return 0
+  done <<EOF
+$(bash_extract_write_targets "$masked")
+EOF
+
+  printf '%s' "NOTE: this target comes from inside a quoted argument, so the command may
+write no file. The detector matches raw command text and does not parse
+shell quoting (me2resh/apexyard#1356). Reword the command, or declare a
+ticket, to continue."
+}
+
 _ratc_evaluate_target() {
   local FILE_PATH="$1"
   local TOOL_NAME="$2"
@@ -516,7 +564,7 @@ $([ -n "$PER_PROJECT_MARKER" ] && echo "  per-project:  $PER_PROJECT_MARKER")
   ops fallback: $FALLBACK_MARKER
 
 Target: ${FILE_PATH:-<unextractable Bash write target>}
-
+$(_ratc_quoted_origin_hint "$FILE_PATH" "$TOOL_NAME")
 Exempt paths (no ticket required): .claude/, docs/, projects/*/docs/, *.md
 MSG
   return 2
