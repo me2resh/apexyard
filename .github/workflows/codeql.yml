@@ -33,6 +33,15 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # Run only on the upstream repository (#1370). Code scanning is free for
+    # public repositories, but a private fork without GitHub Advanced Security
+    # cannot accept the SARIF upload: the analysis runs and the upload step
+    # fails with "Code scanning is not enabled for this repository". That
+    # leaves a check the adopter can never make green, and because
+    # block-merge-on-red-ci.sh blocks on any failing check, the framework's own
+    # workflow blocks the framework's own merge gate. scorecard.yml already
+    # carries this guard for the same reason.
+    if: github.repository == 'me2resh/apexyard'
     permissions:
       security-events: write   # required to upload CodeQL results
       actions: read
