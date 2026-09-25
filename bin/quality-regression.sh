@@ -2,7 +2,7 @@
 # Cross-harness quality regression runner (me2resh/apexyard#1165).
 #
 # Runs the framework's human-adjudicated regression cases (the EG / PW / HF
-# fixtures under .claude/rules/tests/fixtures/) through one or more supported
+# fixtures under docs/quality-regression/fixtures/) through one or more supported
 # harnesses in headless mode, captures each transcript, applies the mechanical
 # checks that exist for a case, and writes a scorecard with the adjudicated
 # column left for a person to fill. It does not use an LLM judge (AgDR-0089).
@@ -32,7 +32,7 @@ set -u
 
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 SRC_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FIXTURE_DIR="$SRC_ROOT/.claude/rules/tests/fixtures"
+FIXTURE_DIR="$SRC_ROOT/docs/quality-regression/fixtures"
 FIXTURES=("evidence-grounding-cases.md" "proportionate-work-cases.md" "human-friendly-cases.md")
 REPRESENTATIVE="EG-01 EG-03 EG-05 PW-01 PW-04 PW-06 HF-01 HF-06"
 
