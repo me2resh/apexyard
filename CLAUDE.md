@@ -2,7 +2,7 @@
 
 You are the **Chief of Staff** running a portfolio of projects inside apexyard. You don't add apexyard to a project — projects get forged *inside* it. Your job: ensure every project ships production-ready MVPs under a strict SDLC, with shared memory across the portfolio so projects learn from each other's experience. Processes are followed, quality is maintained, and work moves efficiently from idea to production.
 
-Load a named file under `.claude/rules/` when the work matches that rule. Do not load every rule at session start. `.claude/settings.json` sets `claudeMdExcludes` for `**/.claude/rules/**` so Claude Code does not auto-inject those bodies. Mechanical gates live in `.claude/hooks/*.sh`. See AgDR-0160.
+Load a named file under `.claude/rules/` when the work matches that rule. Do not load every rule at session start. `.claude/settings.json` sets `claudeMdExcludes` for `**/.claude/rules/**` so Claude Code does not auto-inject those bodies. This same exclude also drops personal `~/.claude/rules/` files and a managed project's own `workspace/<name>/.claude/rules/` files from the session; keep personal instructions in `~/.claude/CLAUDE.md` instead (AgDR-0160's 2026-09-25 scope note). Mechanical gates live in `.claude/hooks/*.sh`. See AgDR-0160.
 
 ---
 
@@ -122,6 +122,7 @@ Read the named file when the work matches. Do not auto-import these files. Claud
 These one-liners stay here because agents use them on almost every turn. The full text is in the files above. Hooks enforce the hard cases.
 
 - Branch `{type}/{TICKET-ID}-{description}`. PR title `type(TICKET): description`.
+- `Ticket`, `#N`, and `blocked by #N` name only a real tracker issue. Use `Step N` or a plain bullet for a plan item that is not yet filed.
 - Never `git add -A` or `git add .`. Never push directly to `main`.
 - Tests, lint, typecheck, and build must pass before push. Coverage for domain logic stays above 80%.
 - Every merge needs Rex plus an explicit per-PR human nod. A plan-level "go" does not authorize merge.

@@ -117,3 +117,49 @@ The exclude is the mechanical control. The fixture move is defence in
 depth.
 
 See me2resh/apexyard#1354.
+
+## Scope note (2026-09-25) — #1355
+
+Rex reviewed PR #1355 and found a wider effect than the correction above
+states. This section records that effect and the decision to accept it.
+
+`claudeMdExcludes` matches absolute file paths, not project-relative
+paths. Claude Code applies one merged exclude list across User, Project,
+and Local memory for a session. A picomatch test confirmed this. The
+pattern `**/.claude/rules/**` matched
+`/Users/u/.claude/rules/personal.md` (a personal rule file outside this
+repository) and `/Users/u/ops/workspace/app/.claude/rules/x.md` (a
+managed project's own rule file). The same pattern did not match a
+`CLAUDE.md` file at any path.
+
+A narrower pattern cannot fix this in a settings file that stays checked
+into git. A narrower pattern needs an absolute-path anchor, such as a
+literal fork directory name. CLAUDE.md's own setup section says a fork
+commonly gets a different name on clone (for example `ops`). An anchor
+on one clone's path is wrong on every other clone.
+
+Moving every rule body out of `.claude/rules/` would remove the exclude.
+A repository-wide search found more than 260 files that name that path
+in prose or in code. A move at that size does not fit inside one
+bug-fix PR.
+
+**Decision:** keep `"claudeMdExcludes": ["**/.claude/rules/**"]` in
+`.claude/settings.json`. Accept the wider match as a known limitation.
+Defer the directory move to a separate ticket.
+
+**Effect an adopter must know:**
+
+1. Personal rules at `~/.claude/rules/*.md` do not load in this ops
+   fork, and do not load in a registered `workspace/<project>` opened
+   from inside it. Workaround: put personal instructions in
+   `~/.claude/CLAUDE.md` instead. The exclude pattern does not match
+   `CLAUDE.md` files.
+2. A managed project's own `.claude/rules/*.md`, if the project ships
+   one inside `workspace/<project>/`, also does not load while the
+   session runs from inside this ops fork. No workaround exists yet.
+   A managed project that needs its rules always loaded should keep
+   that content in its own `CLAUDE.md` or `AGENTS.md` instead.
+
+See me2resh/apexyard#1355 for the review that found this scope, and
+CLAUDE.md plus `docs/harnesses/claude-code.md` for the operator-facing
+statement of the same trade-off.
