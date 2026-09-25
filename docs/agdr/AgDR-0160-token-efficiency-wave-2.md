@@ -124,42 +124,54 @@ Rex reviewed PR #1355 and found a wider effect than the correction above
 states. This section records that effect and the decision to accept it.
 
 `claudeMdExcludes` matches absolute file paths, not project-relative
-paths. Claude Code applies one merged exclude list across User, Project,
-and Local memory for a session. A picomatch test confirmed this. The
-pattern `**/.claude/rules/**` matched
-`/Users/u/.claude/rules/personal.md` (a personal rule file outside this
-repository) and `/Users/u/ops/workspace/app/.claude/rules/x.md` (a
-managed project's own rule file). The same pattern did not match a
-`CLAUDE.md` file at any path.
+paths. A read of the Claude Code 2.1.282 binary and its settings
+schema confirmed that Claude Code applies one merged exclude list
+across User, Project, and Local memory for a session. A picomatch
+test confirmed the path match itself: the pattern
+`**/.claude/rules/**` matched `/Users/u/.claude/rules/personal.md` (a
+personal rule file outside this repository) and
+`/Users/u/ops/workspace/app/.claude/rules/x.md` (a managed project's
+own rule file). The same pattern did not match `~/.claude/CLAUDE.md`
+or a project-root `CLAUDE.md`. It matches a `CLAUDE.md` file only
+when that file sits inside a `.claude/rules/` directory, for example
+`~/.claude/rules/CLAUDE.md`.
 
 A narrower pattern cannot fix this in a settings file that stays checked
 into git. A narrower pattern needs an absolute-path anchor, such as a
-literal fork directory name. CLAUDE.md's own setup section says a fork
-commonly gets a different name on clone (for example `ops`). An anchor
-on one clone's path is wrong on every other clone.
+literal fork directory name. CLAUDE.md's PORTFOLIO MODEL section says a
+fork commonly gets a different name on clone (for example `ops`). An
+anchor on one clone's path is wrong on every other clone.
 
 Moving every rule body out of `.claude/rules/` would remove the exclude.
 A repository-wide search found more than 260 files that name that path
 in prose or in code. A move at that size does not fit inside one
-bug-fix PR.
+bug-fix PR. #1388 keeps this move on record as a rejected alternative,
+for the same reference-count reason.
 
 **Decision:** keep `"claudeMdExcludes": ["**/.claude/rules/**"]` in
-`.claude/settings.json`. Accept the wider match as a known limitation.
-Defer the directory move to a separate ticket.
+`.claude/settings.json` for now. Accept the wider match as a known
+limitation. The tracked follow-up is #1388: write the exclude per
+clone, into the gitignored `.claude/settings.local.json`, using this
+clone's own absolute path (`"<absolute ops-root>/.claude/rules/**"`),
+instead of the shared pattern in the checked-in `settings.json`.
+`/setup` writes that entry once, and a SessionStart hook repairs it if
+the clone moves. Once #1388 ships, this scope note and the CLAUDE.md
+and harness-doc warnings can come out.
 
-**Effect an adopter must know:**
+**Effect an adopter must know, until #1388 ships:**
 
 1. Personal rules at `~/.claude/rules/*.md` do not load in this ops
    fork, and do not load in a registered `workspace/<project>` opened
    from inside it. Workaround: put personal instructions in
-   `~/.claude/CLAUDE.md` instead. The exclude pattern does not match
-   `CLAUDE.md` files.
+   `~/.claude/CLAUDE.md` instead. The exclude pattern does not match a
+   `CLAUDE.md` file outside a `.claude/rules/` directory.
 2. A managed project's own `.claude/rules/*.md`, if the project ships
    one inside `workspace/<project>/`, also does not load while the
-   session runs from inside this ops fork. No workaround exists yet.
-   A managed project that needs its rules always loaded should keep
-   that content in its own `CLAUDE.md` or `AGENTS.md` instead.
+   session runs from inside this ops fork. No exclude-side workaround
+   exists yet. A managed project that needs its rules always loaded
+   should keep that content in its own `CLAUDE.md` or `AGENTS.md`
+   instead.
 
-See me2resh/apexyard#1355 for the review that found this scope, and
-CLAUDE.md plus `docs/harnesses/claude-code.md` for the operator-facing
-statement of the same trade-off.
+See me2resh/apexyard#1355 for the review that found this scope, #1388
+for the tracked fix, and CLAUDE.md plus `docs/harnesses/claude-code.md`
+for the operator-facing statement of the same trade-off.
