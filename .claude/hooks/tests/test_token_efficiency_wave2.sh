@@ -127,11 +127,8 @@ echo "== Invariant 5: settings.json excludes .claude/rules/** from auto-load"
 if [ ! -f "$SETTINGS_JSON" ]; then
   red "  FAIL: .claude/settings.json missing"
   FAIL=$((FAIL + 1))
-elif ! grep -qF 'claudeMdExcludes' "$SETTINGS_JSON"; then
-  red "  FAIL: settings.json has no claudeMdExcludes key"
-  FAIL=$((FAIL + 1))
-elif ! grep -qE '\*\*/\.claude/rules/\*\*' "$SETTINGS_JSON"; then
-  red "  FAIL: claudeMdExcludes does not cover **/.claude/rules/**"
+elif ! jq -e '(.claudeMdExcludes // []) as $e | (($e | type) == "array") and (($e | index("**/.claude/rules/**")) != null)' "$SETTINGS_JSON" >/dev/null 2>&1; then
+  red "  FAIL: .claudeMdExcludes is not an array containing \"**/.claude/rules/**\""
   FAIL=$((FAIL + 1))
 else
   green "  OK"
