@@ -50,6 +50,23 @@ else
   # broken install fails no worse than it did before this change.
   ACTIVE="$ROOT/.claude/session/active-reviewer"
 fi
+
+# ADVISORY ONLY (me2resh/apexyard#1400 security re-review, LOW 3): a session
+# with an id resolves ACTIVE to the session-suffixed path and never falls
+# back to the bare legacy path once that id exists (AgDR-0166). A caller that
+# still writes the literal `.claude/session/active-reviewer` string — a
+# prompt or doc that predates the #1376 fix, or a stale write left over from
+# before an upgrade — arms no lock for this session: this hook silently
+# never reads that file, so a reviewing session's own git mutations are not
+# blocked, without any message saying why. This warning names that state on
+# stderr. It does not gate on the legacy file — the session-scoped check
+# above and below remains the only thing that blocks.
+LEGACY_ACTIVE="$ROOT/.claude/session/active-reviewer"
+SID="${CLAUDE_CODE_SESSION_ID:-}"
+if [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
+  echo "ADVISORY: a legacy shared active-reviewer marker exists at $LEGACY_ACTIVE, but this session ($SID) reads only $ACTIVE. A writer that used the bare legacy path arms no mutation lock for this session. Resolve the marker path through active_reviewer_marker_path instead of the literal string." >&2
+fi
+
 [ -f "$ACTIVE" ] || exit 0
 
 if [ -z "$COMMAND" ]; then

@@ -180,6 +180,29 @@ run_case_sess '#1376: no session id, legacy shared-path marker of its own -> git
 # from any source, blocked every session's mutations regardless of identity.
 run_case_sess '#1376: legacy shared-path marker does not block a session that has its own id -> git commit allowed' \
   "sess-C" 'git commit -m "unrelated to the legacy marker"' allowed
+
+# (6) me2resh/apexyard#1400 security re-review, LOW 3 — case (5) above is a
+# silent fail-open: the mutation stays UNBLOCKED with no message explaining
+# why a marker plainly sits on disk. This case pins the non-blocking stderr
+# advisory added for that gap: the command must still succeed (rc=0, the
+# lock is genuinely not armed for sess-C), but stderr must name the legacy
+# marker path so the state is visible instead of silent.
+input=$(jq -cn --arg command 'git commit -m "advisory should not block"' '{tool_input:{command:$command}}')
+output=$(
+  cd "$SESS_TMP" || exit 1
+  export CLAUDE_CODE_SESSION_ID="sess-D"
+  printf '%s' "$input" | "$SESS_TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1
+)
+rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$output" | grep -q 'ADVISORY:' && printf '%s' "$output" | grep -q 'active-reviewer'; then
+  echo "PASS: #1400 LOW3: legacy shared-path marker + a session id -> non-blocking stderr advisory, commit still allowed"
+else
+  echo "FAIL: #1400 LOW3: legacy shared-path marker + a session id -> non-blocking stderr advisory, commit still allowed (rc=$rc output=$output)" >&2
+  trap - EXIT
+  rm -rf "$TMP" "$SESS_TMP"
+  exit 1
+fi
+
 rm -f "$SESS_TMP/.claude/session/active-reviewer"
 
 rm -rf "$SESS_TMP"
