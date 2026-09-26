@@ -1076,18 +1076,21 @@ Both follow the architecture-stub conventions: write once, never overwrite (pres
 
 ### 6.2. Lint the generated architecture stubs
 
-Run `lint.sh` against every architecture stub that exists on disk after steps 6 and 6.1 — `container.md`, `context.md`, and any `sequence-<flow>.md`. This block is a fresh process (per the per-block preamble rule above), so re-source the portfolio helper and re-resolve `$projects_dir` rather than reusing a variable from an earlier block; test each path with `-f` and skip the ones that don't exist (deselected, skipped, or no signal). The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts every ` ```mermaid ` block from the file and validates each via `mmdc` (mermaid-cli), so broken syntax is caught at write time, not when a human opens the file on GitHub.
+Run `lint.sh` against every architecture stub that exists on disk after steps 6 and 6.1 — `container.md`, `context.md`, and any `sequence-<flow>.md`. This block is a fresh process (per the per-block preamble rule above), so re-source the portfolio helper and re-resolve `$projects_dir` rather than reusing a variable from an earlier block. Use `find` to list the files, not a glob — under zsh, an unmatched glob (the common case: no `sequence-*.md` stub exists) prints "no matches found" and aborts the loop with exit 1 before any file lints. The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts every ` ```mermaid ` block from the file and validates each via `mmdc` (mermaid-cli), so broken syntax is caught at write time, not when a human opens the file on GitHub.
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
 SKILL_DIR="$(git rev-parse --show-toplevel)/.claude/skills/handover"
 arch_dir="${projects_dir}/<name>/architecture"
-for stub in "$arch_dir/container.md" "$arch_dir/context.md" "$arch_dir"/sequence-*.md; do
-  [ -f "$stub" ] || continue
-  "$SKILL_DIR/lint.sh" "$stub" || lint_rc=$?
+find "$arch_dir" -maxdepth 1 -type f \( -name "container.md" -o -name "context.md" -o -name "sequence-*.md" \) | while IFS= read -r stub; do
+  rc=0
+  "$SKILL_DIR/lint.sh" "$stub" || rc=$?
+  echo "lint: $stub exit=$rc"
 done
 ```
+
+The loop resets `rc` to 0 before each file's lint call, so the per-file reporting rules below read the exit code for that file only, not a leftover from an earlier one.
 
 Handle each file's exit code before reporting it as written:
 

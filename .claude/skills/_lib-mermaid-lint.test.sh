@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test suite for _lib-mermaid-lint.sh and its per-skill wrappers
-# (c4/lint.sh, dfd/lint.sh, tech-vision/lint.sh, handover/lint.sh,
-# plan-initiative/lint.sh).
+# (c4/lint.sh, dfd/lint.sh, feature-diagram/lint.sh, tech-vision/lint.sh,
+# handover/lint.sh, plan-initiative/lint.sh).
 #
 # Coverage:
 #   - Clean Mermaid block       → exit 0
@@ -143,8 +143,8 @@ echo "4) Parse validation (mmdc — opt-in via MERMAID_LINT_FULL_TEST=1)"
 if [ -z "${MERMAID_LINT_FULL_TEST:-}" ]; then
   echo "  SKIP: set MERMAID_LINT_FULL_TEST=1 to exercise the mmdc parse path"
 elif [ "$HAS_NPX" = "1" ]; then
-  bash "$LIB" "$FIXTURES/clean.md" > /dev/null 2>&1
-  RC=$?
+  RC=0
+  bash "$LIB" "$FIXTURES/clean.md" > /dev/null 2>&1 || RC=$?
   if [ "$RC" = "0" ] || [ "$RC" = "3" ]; then
     echo "  PASS: clean fixture → exit $RC (0 if mmdc cached, 3 if network unavailable)"
     PASS=$((PASS + 1))
@@ -157,8 +157,11 @@ elif [ "$HAS_NPX" = "1" ]; then
   # (RC=0). If mmdc wasn't reachable on the clean run, broken will give the
   # same network exit — no information gained from re-running.
   if [ "$RC" = "0" ]; then
-    bash "$LIB" "$FIXTURES/broken.md" > /dev/null 2>&1 || true
-    BRC=$?
+    # `|| true` on the line below would discard the real exit code — `$?`
+    # right after would read `true`'s own status (0), not the lint call's.
+    # Capture the exit code through the `||` assignment instead.
+    BRC=0
+    bash "$LIB" "$FIXTURES/broken.md" > /dev/null 2>&1 || BRC=$?
     if [ "$BRC" = "1" ]; then
       echo "  PASS: broken fixture → exit 1"
       PASS=$((PASS + 1))
@@ -167,8 +170,8 @@ elif [ "$HAS_NPX" = "1" ]; then
       FAIL=$((FAIL + 1))
     fi
 
-    bash "$LIB" "$FIXTURES/mixed.md" > /dev/null 2>&1 || true
-    MRC=$?
+    MRC=0
+    bash "$LIB" "$FIXTURES/mixed.md" > /dev/null 2>&1 || MRC=$?
     if [ "$MRC" = "1" ]; then
       echo "  PASS: mixed (1 clean, 1 broken) → exit 1"
       PASS=$((PASS + 1))
@@ -176,6 +179,22 @@ elif [ "$HAS_NPX" = "1" ]; then
       echo "  FAIL: mixed → exit $MRC (expected 1)"
       FAIL=$((FAIL + 1))
     fi
+
+    # Run the broken fixture through every per-skill wrapper too, not just
+    # the shared lib directly — proves each wrapper's own dispatch path
+    # detects a bad diagram, not only the lib it wraps.
+    for skill in c4 dfd feature-diagram tech-vision handover plan-initiative; do
+      WRAPPER="$SCRIPT_DIR/$skill/lint.sh"
+      WRC=0
+      bash "$WRAPPER" "$FIXTURES/broken.md" > /dev/null 2>&1 || WRC=$?
+      if [ "$WRC" = "1" ]; then
+        echo "  PASS: $skill/lint.sh on broken fixture → exit 1"
+        PASS=$((PASS + 1))
+      else
+        echo "  FAIL: $skill/lint.sh on broken fixture → exit $WRC (expected 1)"
+        FAIL=$((FAIL + 1))
+      fi
+    done
   else
     echo "  SKIP: broken / mixed fixture (mmdc unreachable on clean fixture run)"
   fi
@@ -189,7 +208,7 @@ echo "5) Per-skill wrappers dispatch to the lib"
 # me2resh/apexyard#1382 (remaining part) added handover/lint.sh and
 # plan-initiative/lint.sh — the two Mermaid-emitting skills that had no
 # validation coverage. Same thin-wrapper shape as c4/dfd/tech-vision.
-for skill in c4 dfd tech-vision handover plan-initiative; do
+for skill in c4 dfd feature-diagram tech-vision handover plan-initiative; do
   WRAPPER="$SCRIPT_DIR/$skill/lint.sh"
   if [ ! -x "$WRAPPER" ]; then
     echo "  FAIL: $skill/lint.sh not executable"
@@ -201,6 +220,14 @@ for skill in c4 dfd tech-vision handover plan-initiative; do
 
   bash "$WRAPPER" "$FIXTURES/clean.md" --skip-lint > /dev/null 2>&1
   assert_exit "$skill/lint.sh --skip-lint on clean fixture → exit 0 (no-op)" 0 $?
+
+  # A wrapper that never calls the lib would pass the two assertions above
+  # by doing nothing. A missing-file input proves the opposite: the lib's
+  # own "file not found" check (exit 2) only fires if the wrapper actually
+  # dispatched into it, and this case needs no mmdc to run.
+  MISSING_RC=0
+  bash "$WRAPPER" "$FIXTURES/does-not-exist.md" > /dev/null 2>&1 || MISSING_RC=$?
+  assert_exit "$skill/lint.sh on missing file → exit 2 (proves dispatch)" 2 "$MISSING_RC"
 done
 
 echo ""

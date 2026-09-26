@@ -327,14 +327,17 @@ Append to the **Re-run history** table — one row per invocation:
 
 ### 6.5. Lint the rendered doc
 
-Run `lint.sh` against the file just written. The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts the DAG's ` ```mermaid ` block and validates it via `mmdc` (mermaid-cli), so a broken block is caught at write time, not when a human opens the doc on GitHub. This block is a fresh process (per the per-block preamble rule above), so re-resolve `output_path` rather than reusing the variable from step 2(d):
+Run `lint.sh` against the file just written. The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts the DAG's ` ```mermaid ` block and validates it via `mmdc` (mermaid-cli), so a broken block is caught at write time, not when a human opens the doc on GitHub. This block is a fresh process (per the per-block preamble rule above), so assign `output_path` explicitly to the same path resolved in step 2(d) / step 1 — do not reuse the variable name and leave it unset, or the lint call receives an empty path and exits 2:
 
 ```bash
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
 source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
 projects_dir=$(portfolio_projects_dir)
 SKILL_DIR="$(git rev-parse --show-toplevel)/.claude/skills/plan-initiative"
-# output_path is the same "$projects_dir/.../$slug.md" resolved in step 2(d) / step 1
+# Assign the literal path resolved in step 2(d) / step 1, for example:
+#   scope 1 (project-scoped): output_path="$projects_dir/<project_name>/initiatives/<slug>.md"
+#   scope 2 (framework-wide): output_path="$projects_dir/initiatives/<slug>.md"
+output_path="<path resolved in step 2(d) or step 1>"
 "$SKILL_DIR/lint.sh" "$output_path" || lint_rc=$?
 ```
 
@@ -342,6 +345,7 @@ Handle the exit code before reporting the doc as written:
 
 - **Exit 0** — clean. Report `Mermaid lint: clean` alongside the output path.
 - **Exit 1** — parse error. Print the lint output; fix the offending DAG block (a classDef or edge slipped past substitution) and re-lint, or ask the operator whether to proceed with `--skip-lint`. Never report success on an unfixed failure.
+- **Exit 2** — bad input to the lint call, most often `output_path` unset or pointing at a missing file. Fix the path assignment above and re-lint; never report the doc as written while this persists.
 - **Exit 3** — `mmdc` / Node unavailable. Print the warning `Mermaid not validated: mmdc not available.` and report `Mermaid not validated: mmdc not available` alongside the output path — do not claim the diagram is clean.
 - **`--skip-lint`** (operator-requested) — report `Mermaid lint skipped`.
 
