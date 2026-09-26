@@ -226,10 +226,11 @@ _bdw_starts_with_git_subcommand() {
 #   - `>&9f1` writes a file named `9f1`, because the word is not all digits.
 #   - `>&2`, `1>&2`, `2>&1`, and `>&12` copy a descriptor. The word is all
 #     digits, so the `[0-9]*` prefix must be followed by a non-digit.
-#   - That non-digit cannot be `)`, a backtick, or a quote. Those end the
-#     word in `out=$(cmd 2>&1)`, `` `cmd 2>&1` ``, `bash -c "cmd 2>&1"`,
-#     and `grep '>&2' f`. Without this rule, each read-only command
-#     reported a write to `1)` or `2`, and the gate blocked it.
+#   - That non-digit cannot be `)`, a backtick, a quote, or a backslash.
+#     Those end the word in `out=$(cmd 2>&1)`, `` `cmd 2>&1` ``,
+#     `bash -c "cmd 2>&1"`, `bash -c "sh -c \"cmd 2>&1\""`, and
+#     `grep '>&2' f`. Without this rule, each read-only command reported
+#     a write to `1)`, `1\"`, or `2`, and the gate blocked it.
 #   - One opening quote is allowed, so `>&"out.txt"` still writes
 #     `out.txt`, and `>&"2"` stays a descriptor copy. `>&2"q.ts"` writes a
 #     file named `2q.ts` and is missed. That shape is accepted as residue.
@@ -247,7 +248,7 @@ _bdw_starts_with_git_subcommand() {
 # extractor, and the per-segment extractor) read these two constants. The
 # pattern used to be copied into each function. #886/#926 round 5 showed
 # that copies drift apart, and a drift is a bypass.
-_BDW_REDIRECT_RE='(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*|(^|[^|<&>])>&[[:space:]]*['"'"'"]?[0-9]*[^0-9[:space:]&|;()<>'"'"'"`-][^[:space:]&|;]*'
+_BDW_REDIRECT_RE='(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*|(^|[^|<&>])>&[[:space:]]*['"'"'"]?[0-9]*[^0-9[:space:]&|;()<>'"'"'"`\-][^[:space:]&|;]*'
 # Strips the operator from a matched redirect, leaving the target. `[^>]*`
 # swallows a leading fd digit, `&`, or `<`. The group then removes the rest
 # of the operator: a second `>`, a `|`, or the `&` of `>&`.
@@ -344,26 +345,30 @@ _bdw_match_tee() {
   echo "$1" | grep -qE '\btee\b'
 }
 
-# 3. sed -i, in the spellings GNU and BSD sed accept (me2resh/apexyard#1414).
+# 3. sed -i, in the GNU spellings tested here (me2resh/apexyard#1414).
 #
 # The first version matched only `-i` as a flag of its own, with a word
 # boundary after it. GNU sed also takes `-i` inside a group of short
 # flags, and as the long option `--in-place`. Each form below edits the
-# file, and each one used to pass the gate:
+# file with GNU sed 4.9, and each one used to pass the gate:
 #   - `-Ei`, `-ni`, `-si`: `-i` after other short flags.
 #   - `-ie`, `-iE`: `-i` with an attached backup suffix (`e`, `E`).
 #   - `--in-place`, `--in-place=.bak`: the long option.
 #   - `--i`, `--in`, `--in-pl`: getopt_long accepts any unique prefix of a
 #     long option, and no other GNU sed long option starts with `--i`.
+# BSD sed documents `-I` as an in-place flag as well, so `-I` counts too.
+# GNU sed rejects `-I`, so this adds no GNU false positive. The BSD form
+# was not tested here.
 # Only letters that are real sed short flags may come before `i`: `a`,
 # `b`, `n`, `r`, `s`, `u`, `z`, and `E`. `e`, `f`, and `l` are left out,
 # because in GNU sed they take the rest of the group as an argument. So
 # `-ei` means "run the script `i`", not in-place. The narrow class also
 # keeps later dash-words such as `find ... -print` from matching.
-# Known false positives, accepted: a later dash-word built only from those
-# letters plus `i`, such as `find ... + -size` after a sed command, or the
-# same text inside a quoted sed script.
-_BDW_SED_INPLACE_RE='\bsed[[:space:]]+([^|;&]*[[:space:]])?(-[abnrsuzE]*i|--i(n(-(p(l(a(ce?)?)?)?)?)?)?([=[:space:]]|$))'
+# Known false positives, accepted: a later dash-word that starts with `i`
+# or is built only from those letters plus `i`, such as `find ... +
+# -iname x` or `find ... + -size +1k` after a sed command. The same text
+# inside a quoted sed script also matches.
+_BDW_SED_INPLACE_RE='\bsed[[:space:]]+([^|;&]*[[:space:]])?(-[abnrsuzE]*[iI]|--i(n(-(p(l(a(ce?)?)?)?)?)?)?([=[:space:]]|$))'
 
 _bdw_match_sed_inplace() {
   echo "$1" | grep -qE "$_BDW_SED_INPLACE_RE"
@@ -391,6 +396,8 @@ _bdw_match_sed_inplace() {
 #   - `wfile` with no space. GNU accepts it, but `/warning/` looks the same.
 #   - A space between an address and `w`, such as `/re/ w file`.
 #   - `_` or another uncommon `s` delimiter, such as `s_a_b_w file`.
+#   - A spaced ` | `, ` && `, or ` || ` inside the quoted script, before
+#     the `w`, such as `sed -n '/a | b/w file'`. The region ends there.
 #   - An unquoted script, such as `sed -n w\ file in.txt`.
 #   - A script spread over several lines, where `w` is not on the `sed` line.
 #   - A script read from a file with `sed -f`.
@@ -978,23 +985,67 @@ bash_extract_write_targets() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
 
-  local seg
-  {
+  local seg seg_targets
+  seg_targets=$(
     while IFS= read -r seg; do
       [ -z "$seg" ] && continue
       _bdw_targets_from_segment "$seg"
     done < <(_bdw_split_top_level "$cmd")
+  )
+  {
+    [ -n "$seg_targets" ] && printf '%s\n' "$seg_targets"
     # sed `w` targets come from the WHOLE command (#1414). The segment
     # split above breaks `sed -n 'p;w out' f` at the `;` inside the
     # script, so no single segment holds both `sed` and `w out`.
     #
-    # They are skipped when the command also holds a sed -i edit. The
-    # sed -i extractor reads only a single-quoted script, so it misses
-    # `sed -i "s/a/b/w /dev/stdout" src/app.ts`. The gate then sees no
-    # target and fails closed. A `w` target such as `/dev/stdout` is
-    # exempt, and it would turn that closed gate into a pass. The skip
-    # keeps the old fail-closed result. Cost: a `w` file beside a sed -i
-    # edit is not judged on its own. Before #1414 it was not seen at all.
-    _bdw_match_sed_inplace "$cmd" || _bdw_sed_write_targets "$cmd"
+    # They are held back in one case: the segment pass found no target,
+    # and another write family fired. Then the gate sees an empty list
+    # and fails closed, as it did before #1414. A lone `w` target such as
+    # `/dev/stdout` is exempt, and it would turn that closed gate into a
+    # pass. Examples that stay blocked this way:
+    #   sed -i "s/a/b/w /dev/stdout" src/app.ts
+    #   awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt
+    #   python3 -c '...' ; sed -n 'w /dev/null' in.txt
+    # When the list is not empty, the `w` targets are added. An extra
+    # target can only add a reason to block, because the gate requires
+    # every target to pass.
+    if [ -n "$seg_targets" ] || ! _bdw_detects_other_write "$cmd"; then
+      _bdw_sed_write_targets "$cmd"
+    fi
   } | awk '!seen[$0]++'
+}
+
+# ------------------------------------------------------------------------------
+# Internal: _bdw_detects_other_write COMMAND
+#
+# Returns 0 when any write family other than the sed `w` matcher fires on
+# COMMAND (#1414). It mirrors bash_command_appears_to_write, with two
+# differences. It leaves out _bdw_match_sed_write. It counts rm only when
+# a content-writing mover (cp, mv, dd, install) is also present, the same
+# rule bash_command_is_deletion_only uses. So `rm x; sed -n 'w /tmp/y' f`
+# still gets its `w` target and passes, as `rm x` alone does.
+# ------------------------------------------------------------------------------
+_bdw_detects_other_write() {
+  local c="$1"
+  _bdw_match_redirection_any_segment "$c" && return 0
+  _bdw_match_tee             "$c" && return 0
+  _bdw_match_sed_inplace     "$c" && return 0
+  _bdw_match_awk_inplace     "$c" && return 0
+  if _bdw_match_file_movers "$c" \
+     && echo "$c" | grep -qE '(^|[;&|(]|&&|\|\|)[[:space:]]*(cp|mv|dd|install)([[:space:]]|$)'; then
+    return 0
+  fi
+  _bdw_match_tar_extract     "$c" && return 0
+  _bdw_match_curl_output     "$c" && return 0
+  _bdw_match_wget_output     "$c" && return 0
+  _bdw_match_python_dash_c   "$c" && return 0
+  _bdw_match_python_heredoc  "$c" && return 0
+  _bdw_match_node_dash_e     "$c" && return 0
+  _bdw_match_node_heredoc    "$c" && return 0
+  _bdw_match_ruby_dash_e     "$c" && return 0
+  _bdw_match_ruby_heredoc    "$c" && return 0
+  _bdw_match_perl_dash_e     "$c" && return 0
+  _bdw_match_php_dash_r      "$c" && return 0
+  _bdw_match_script_runner   "$c" && return 0
+  return 1
 }

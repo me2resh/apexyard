@@ -850,6 +850,25 @@ for c in 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts' \
   run_case "#1414 sed -i beside an exempt w file blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
 done
 
+# The same holds for other families with no extractable target. Each of
+# these blocks on dev, and a round-2 draft let them pass.
+for c in "awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt" \
+         "python3 -c \"open('src/app.ts','w').write('x')\"; sed -n 'w /tmp/x' in.txt" \
+         "tar -xf a.tar; sed -n 'w /tmp/x' in.txt" \
+         "go run ./gen && sed -n 's/x/y/w /dev/stdout' out.txt"; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1414 w decoy beside an unextracted write blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
+done
+
+# rm alone is exempt, and a `w` to /tmp beside it stays exempt. An escaped
+# quote after an fd copy stays a read.
+for c in "rm -f old.ts; sed -n 'w /tmp/x' in.txt" 'bash -c "sh -c \"make 2>&1\""'; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1414 sanity: stays ungated: $c" 0 "" "$in" "$sb"
+done
+
 # --- #886/#926 round 4: ZERO whitespace between operator and target -----
 #
 # Hakim's fourth adversarial re-hunt: the mandatory `[[:space:]]+` after

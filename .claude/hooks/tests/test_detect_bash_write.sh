@@ -537,8 +537,30 @@ assert_targets "#1414 sed -i with ;w /tmp/x yields no target" \
   "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          ""
 assert_targets "#1414 sed w then sed -i yields no target" \
   'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts'                       ""
-assert_targets "#1414 sed -i file still extracted beside a w flag" \
-  "sed -i 's/a/b/w /tmp/log' src/app.ts"                                         "src/app.ts"
+assert_targets "#1414 sed -i file and its w file both extracted" \
+  "sed -i 's/a/b/w /tmp/log' src/app.ts"                                         "src/app.ts,/tmp/log"
+assert_targets "#1414 in-repo w file beside an exempt sed -i file" \
+  "sed -i 's/a/b/w src/b.ts' /tmp/x.txt"                                         "/tmp/x.txt,src/b.ts"
+
+# A sed `w` decoy must not hide another family's write that has no
+# extractable target. The segment pass finds nothing, so the `w` target
+# is held back, and the gate fails closed as it did before #1414.
+assert_targets "#1414 awk -i inplace + w decoy yields no target" \
+  "awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt"                        ""
+assert_targets "#1414 python -c + w decoy yields no target" \
+  "python3 -c \"open('src/app.ts','w').write('x')\"; sed -n 'w /tmp/x' in.txt"   ""
+assert_targets "#1414 tar -x + w decoy yields no target" \
+  "tar -xf a.tar; sed -n 'w /tmp/x' in.txt"                                      ""
+assert_targets "#1414 go run + w decoy yields no target" \
+  "go run ./gen && sed -n 's/x/y/w /dev/stdout' out.txt"                         ""
+assert_targets "#1414 rm is not a decoy victim: w target kept" \
+  "rm -f old.ts; sed -n 'w /tmp/x' in.txt"                                       "/tmp/x"
+
+# An escaped quote after an fd copy stays a read.
+assert_read  "#1414 escaped quote after 2>&1 is a read" 'bash -c "sh -c \"make 2>&1\""'
+
+# BSD sed documents -I as in-place. GNU rejects it.
+assert_write "#1414 sed -I (BSD in-place)"        "sed -I '' 's/a/b/' src/app.ts"
 
 # --- #931 residual 1: `<>` read-write open is now DETECTED as a write ---
 #
