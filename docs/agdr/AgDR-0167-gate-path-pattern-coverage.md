@@ -10,33 +10,31 @@ Accepted
 
 All three fixes touch production files under `.claude/hooks/**` — the
 security-critical trust chain (`.claude/rules/role-triggers.md`'s own
-definition). Per `.claude/rules/agdr-decisions.md`'s rail 1, a trust-chain
-change is material regardless of diff size, so this batch is recorded as one
-AgDR rather than left as an unrecorded set of hook edits.
+definition). Rail 1 of `.claude/rules/agdr-decisions.md` makes a trust-chain change
+material at any diff size. This AgDR records the batch as one decision.
 
 **#1390 — design gate blind to Astro/MDX/template UI.** `require-design-review-for-ui.sh`'s
 default UI pattern list predates Astro, MDX, and server-side template
 engines. A PR that changes only `.astro` files merges with no design-review
-marker required. The `/approve-design` skill's step 5 carried a second,
-independently hard-coded copy of the same pattern list — narrower than the
-hook's, and already out of sync before this fix.
+marker required. The `/approve-design` skill's step 5 had a second, hard-coded copy of the
+pattern list. That copy was narrower than the hook's list. It was out of
+sync before this fix.
 
 **#1368 — migration gate catches Alembic's own tooling.** `require-migration-ticket.sh`'s
 generic `*/migrations/*` catch-all matches any file under a `migrations/`
-directory, any extension. Alembic's `env.py` (runtime config) and
-`script.py.mako` (revision template) sit directly under the migrations root
-— under Alembic's default `alembic/` layout, or a renamed `<root>/migrations/`
-`script_location` — and are not migrations themselves.
+directory, any extension. Alembic's `env.py` is its runtime config.
+`script.py.mako` is its revision template. Both files sit directly under the
+migrations root, in the default `alembic/` layout or in a renamed
+`migrations/` layout. Neither file is a migration.
 
 **#1369 — config array overrides silently drop default gate coverage.**
 `_lib-read-config.sh`'s merge is `jq -s '.[0] * .[1]'`, which replaces an
 array wholesale on override. An adopter who overrides `branch.type_whitelist`
 (or any other defaults-JSON array key) to add one entry drops every other
-shipped entry with no signal. The reported severity is highest for
-`migration_paths` / `ui_paths` / `architecture_paths`, but those three are
-override-only keys with no JSON default at all (the hook holds its default in
-bash) — a JSON-level diff structurally cannot see a drop against a default
-that was never JSON.
+shipped entry with no signal. The issue rates `migration_paths`, `ui_paths`,
+and `architecture_paths` as the highest-severity keys. These three keys have
+no JSON default. Each hook holds its default in bash. A JSON diff cannot
+detect a drop against a default that is not JSON.
 
 ## Options Considered
 
@@ -60,9 +58,9 @@ without touching any other behavior.**
   `.ui_paths` override read. `require-design-review-for-ui.sh` and
   `/approve-design`'s step 5 both source it instead of keeping their own
   copy. `.hbs`/`.njk`/`.liquid` cover the issue's own "common HTML template
-  formats" note. A bare `.html$` pattern was deliberately left out — the
-  issue's own author hedged on it, and it is broad enough to catch generated
-  docs/example HTML that isn't a component.
+  formats" note. This batch does not add a bare `.html$` pattern. The issue
+  author was unsure about it. It would also match generated docs and example
+  HTML that are not components.
 - **#1368**: `is_migration_path()` gains two `case` arms, ordered before the
   generic `*/migrations/*` catch-all, exempting `alembic/env.py`,
   `alembic/script.py.mako`, `<root>/migrations/env.py`, and
@@ -73,12 +71,12 @@ without touching any other behavior.**
   The default `alembic/` layout never reached that catch-all. Its arm changes
   no result today. It stays as defense against a future bare `alembic/` case.
 - **#1369**: `_config_load()` calls a new `_config_warn_dropped_defaults()`
-  whenever an overrides file is present. It diffs each array path present in
-  `project-config.defaults.json` against the override, restricted to paths
-  reached only through object keys (never through an array index, so a
-  nested array inside an already-replaced array's own elements — e.g.
-  `skill_intent.map[0].phrases` — is not independently re-diffed). It prints
-  one `WARN:` line per dropped array, naming the key and every dropped entry,
+  whenever an overrides file is present. It compares each array path in
+  `project-config.defaults.json` with the override. It checks only paths
+  that it reaches through object keys, never through an array index. So it
+  does not compare a nested array such as `skill_intent.map[0].phrases` a
+  second time. It prints one `WARN:` line per dropped array, naming the key
+  and every dropped entry,
   to stderr only. The merge result (`_rc_merged`) is unchanged either way.
 
 ## Consequences
@@ -86,9 +84,9 @@ without touching any other behavior.**
 - A PR that changes only `.astro`/`.mdx`/`.hbs`/`.njk`/`.liquid` files now
   requires a design-review marker before merge, closing #1390's reported
   bypass.
-- `/approve-design`'s step 5 and the merge gate both read `_lib-ui-paths.sh`
-  for the default UI list, and both now read `.ui_paths` from the PR's own
-  repo root, not the ops-fork root. The two checks no longer diverge on
+- `/approve-design` step 5 and the merge gate both read the default UI list
+  from `_lib-ui-paths.sh`. Both read `.ui_paths` from the PR's own repo
+  root, not the ops-fork root. The two checks no longer diverge on
   "does this PR touch UI" for that override. Step 5 still does not apply
   `.ui_paths_exclude`, a narrower, pre-existing gap the hook does not share.
 - Editing `env.py` or `script.py.mako` under a renamed `<root>/migrations/`
@@ -98,30 +96,37 @@ without touching any other behavior.**
   directory, or any other existing arm — is gated exactly as before. The
   regression suite's selection-parity check (comparing this hook's target
   selection against its parent commit for two `.sql` payloads) still passes
-  unchanged. The new arms match by filename only. A framework whose
-  `migrations/` package imports every module — Django does, for names that
-  do not start with `_` or `~` — can hold a real migration named `env.py`.
-  That file is a deliberate, visible bypass a human reviewer sees in the
-  diff, not a silent one.
-- An operator who overrides `branch.type_whitelist`, `ticket.prefix_whitelist`,
-  or any other defaults-JSON array key now sees a `WARN:` line naming exactly
-  what the override silently drops, the first time that override is read in
-  a session. Nothing merges differently — array overrides still replace the
-  default wholesale, per the documented, unchanged semantics.
+  unchanged. The new arms match by filename only. Django imports every
+  module in a `migrations/` package, except names that start with `_` or
+  `~`. Such a package can hold a real migration named `env.py`. That file
+  is a deliberate, visible bypass a human reviewer sees in the diff, not a
+  silent one.
+- **Known limits from the security review.** Hakim's LOW-2 proposes a
+  narrower Alembic exemption. It would match `<dir>/env.py` only when
+  `<dir>/versions/` or `<dir>/script.py.mako` also exists. This batch does
+  not add that check. It stays a known limit, not a blocking gap. Hakim's
+  LOW-3 is a pre-existing limit, not introduced by this batch. In POSIX
+  mode, a failed `source` call exits 1. The hook dispatcher treats that
+  exit code as continue, not as blocked. This limit needs its own
+  follow-up issue, tracked separately from #1390, #1368, and #1369.
+- An operator can override `branch.type_whitelist`, `ticket.prefix_whitelist`,
+  or another array key that has a JSON default. The operator now sees a
+  `WARN:` line that names each dropped entry. Nothing merges differently —
+  array overrides still replace the default wholesale, per the documented,
+  unchanged semantics.
 - `migration_paths`, `migration_label`, `ui_paths`, `ui_paths_exclude`,
   `design_paths`, `design_paths_exclude`, and `architecture_paths` remain
   outside this WARN's reach, because none has a JSON default to diff
   against. Closing that gap needs a different mechanism than a
   defaults-vs-override JSON diff. #1365's `_override_only_keys` allowlist is
-  a different, narrower mechanism — it stops `/update` from flagging these
-  keys as deprecated, and does not warn on a dropped default entry. #1401
+  a different, narrower mechanism. It stops `/update` from flagging these
+  keys as deprecated. It does not warn on a dropped default entry. #1401
   tracks the dropped-default gap for these seven keys. #1369's own reporter
   incident used `migration_paths`, one of the seven, so **#1369 is only
   partly addressed by this batch**. #1369 stays open until #1401 closes it.
-- `.claude/project-config.defaults.json` was not edited by this batch — PR
-  #1365 (open, editing the same file to add `_override_only_keys`) is
-  unaffected, and rebasing either PR against the other should be a clean
-  merge.
+- This batch does not edit `.claude/project-config.defaults.json`. Open PR
+  #1365 edits that file to add `_override_only_keys`. The two PRs should
+  rebase cleanly against each other.
 
 ## Artifacts
 

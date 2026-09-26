@@ -58,18 +58,19 @@ the inherited array as a whole. An override containing only
 `portfolio.stale_days`. An override of `ticket.bootstrap_skills` replaces that
 array. The shared config reader gets this behavior from `jq -s '.[0] * .[1]'`.
 
-**The replace is still silent by default — a warning names what it drops (me2resh/apexyard#1369).**
+**A warning names the entries that an array override drops (#1369).**
 An override array that omits entries the matching default array carries
 merges exactly as documented above. The override still wins, unchanged.
 `_lib-read-config.sh` also prints one advisory `WARN:` line to stderr. The
 line names the key and every dropped entry, the first time that override is
 read in a session. This never blocks and never changes the merged value. It
 only makes an otherwise-silent drop visible. It applies only to a key that
-has a default array **in this file**. `migration_paths`, `migration_label`,
-`ui_paths`, `ui_paths_exclude`, `design_paths`, `design_paths_exclude`, and
-`architecture_paths` have no entry here at all — their hook holds the
-built-in default in code, not JSON. A drop against one of those produces no
-warning today. See AgDR-0167 for why, and #1401 for the follow-up that
+has a default array in `.claude/project-config.defaults.json`.
+`migration_paths`, `migration_label`, `ui_paths`, `ui_paths_exclude`,
+`design_paths`, `design_paths_exclude`, and `architecture_paths` have no
+entry in `.claude/project-config.defaults.json` at all — their hook holds
+the built-in default in code, not JSON. A drop against one of those produces
+no warning today. See AgDR-0167 for why, and #1401 for the follow-up that
 tracks closing this gap for those seven keys.
 
 ## Schema (v1)
