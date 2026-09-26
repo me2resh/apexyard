@@ -175,15 +175,25 @@ All subsequent reads in steps 2–6 use `$WORKSPACE_DIR/<name>/` as the repo roo
 >
 > The gap this leaves — a managed-project clone's *own* `.githooks/` still isn't wired up by anything, so its terminal `git push` stays unprotected — is real and deliberately deferred, not silently dropped. The correct shape is for the framework to install **its own** hook into the clone's untracked `.git/hooks/` (never point at a tracked third-party directory), which needs its own design and its own ticket. Do not attempt it here.
 
-### 1.5-reindex. Reindex the cloned repo in MCP (default: always attempt)
+### 1.5-reindex. Reindex the cloned repo in MCP (when the MCP is installed)
 
 After a successful clone (`$CLONE_STATUS=cloned`), trigger an MCP reindex so `search_code` and `search_docs` return results during the deep-dive phases that follow (steps 2–6). Without this step those queries return empty against the just-cloned repo, and the agent silently falls back to `find` + `cat` + `Bash` — defeating the token-cost benefit of cloning early.
+
+The `apexyard-search` MCP server is an optional add-on. Check your tool list for `mcp__apexyard-search__reindex` before the call.
+
+- **Tool absent:** do not call it. Set `REINDEX_STATUS="unavailable"`. Print the line below once, then continue. This is not a failure.
+
+  ```
+  ℹ apexyard-search is not installed — using grep + Read for steps 2–6
+  ```
+
+- **Tool present:** call it.
 
 ```
 mcp__apexyard-search__reindex(scope="project", project="<name>")
 ```
 
-**On MCP unavailable:** the call will error. Catch the error, print a single-line warning, set the marker, and continue. **Do not skip silently** — silent skips are indistinguishable between "server down" and "agent forgot the step", and the second failure mode is what this step exists to prevent.
+**On a failed call:** when the tool is present but the call errors, catch the error, print a single-line warning, set the marker, and continue. **Do not skip silently** — silent skips are indistinguishable between "server down" and "agent forgot the step", and the second failure mode is what this step exists to prevent.
 
 ```
 ⚠ MCP reindex unavailable — falling back to grep + Read for steps 2–6
@@ -193,7 +203,7 @@ mcp__apexyard-search__reindex(scope="project", project="<name>")
 REINDEX_STATUS="indexed"   # or "unavailable" | "skipped" (when $CLONE_STATUS != cloned)
 ```
 
-When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` over `grep` + `Read` for the assessment reads in steps 2–6 (per the MCP-search-first rule). When `unavailable` or `skipped`, fall back to `grep` + `Read` without further apology.
+When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` over `grep` + `Read` for the assessment reads in steps 2–6 (per the MCP-search-first rule). When `unavailable` or `skipped`, fall back to `grep` + `Read` without further apology. Do every read in steps 2–6 with `grep` + `Read`. Do not skip or shorten a step. Do not report a semantic search or an index that did not run.
 
 A `PostToolUse` hook (`suggest-mcp-reindex-after-clone.sh`) fires after the clone command and emits a one-line reminder of this step. Same advisory shape as `detect-role-trigger.sh` — exit 0, non-blocking, removes the "I forgot the rule applied here" failure mode.
 
@@ -1289,10 +1299,10 @@ The repo was cloned in step 1.5-clone (or was already local). Offer follow-up de
 
 **If `$CLONE_STATUS` is `cloned` or `preserved`:**
 
-Print a single follow-up offer after the step 10 summary:
+Print a single follow-up offer after the step 10 summary. Include "and indexed in MCP" only when `$REINDEX_STATUS` is `indexed`.
 
 ```
-✓ <name> is cloned at $WORKSPACE_DIR/<name>/ and indexed in MCP.
+✓ <name> is cloned at $WORKSPACE_DIR/<name>/[ and indexed in MCP].
   Want to run any of the following against the clone now?
 
   1. /threat-model <name>   — STRIDE threat model (recommended for first handover)

@@ -17,7 +17,7 @@ Both are working-as-designed apexyard conventions, not bugs — but they mean **
 
 Run all four before spawning — they're cheap relative to a wasted build:
 
-- **Grep the repo for the feature.** Search for the ticket's key nouns (`mcp__apexyard-search__search_code` first per this repo's MCP-first convention, `grep`/`Explore` as fallback) — does the described behavior already exist in the codebase?
+- **Grep the repo for the feature.** Search for the ticket's key nouns — does the described behavior already exist in the codebase? Use `mcp__apexyard-search__search_code` first when it is in your tool list. The `apexyard-search` MCP server is an optional add-on. Use `grep` or `Explore` when the tool is absent, fails, or finds nothing relevant. The search is required either way. Do not report a semantic search that did not run.
 - **Search merged PRs for the ticket number.** `gh pr list --search "<N> in:title,body" --state merged --repo <owner>/<repo>` — a PR title or body referencing the ticket number, merged, is the strongest possible signal, even while the issue itself still reads OPEN.
 - **Read the issue's own comments.** `gh issue view <N> --repo <owner>/<repo>` — has anyone already noted "shipped in #X" or reversed a design decision the ticket describes? A stale ticket sometimes carries its own answer.
 - **Check for a sibling-repo duplicate.** In a multi-repo portfolio (framework vs. premium fork, or two managed projects sharing a feature area), the same work sometimes ships in the *other* repo first. A quick `gh pr list --search "<keyword>" --state merged --repo <sibling>` catches this before the brief goes out.

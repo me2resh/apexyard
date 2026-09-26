@@ -95,13 +95,21 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 
 1. Fetch PR details and the latest commit SHA
 2. Get the diff
-3. Review against the checklist (architecture, code quality, testing, security, performance)
+3. Review against the checklist (acceptance criteria, architecture, code quality, testing, security, performance)
 4. Check for the required Glossary section
 5. Check for AgDR links if technical decisions were made
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
 ## Review Checklist
+
+### Acceptance Criteria — BLOCKING
+
+- Read every linked issue with its comments: `gh issue view <N> --repo <owner/repo> --comments`
+- Report each acceptance criterion as Met, Not met, or Not verifiable, with evidence
+- A Not met criterion requires CHANGES REQUESTED and no approval marker
+- Write "No linked issue" or "No acceptance criteria in #N" when that applies
+- See the agent's § "Acceptance Criteria" for the full procedure
 
 ### Architecture
 
@@ -155,6 +163,7 @@ Scan the diff for unrecorded decisions:
 Posts a GitHub review comment with:
 
 - Commit SHA reviewed
+- Acceptance criteria: each criterion of each linked issue as Met, Not met, or Not verifiable, with evidence
 - Checklist results
 - Issues found
 - Fallow findings (advisory; JS/TS diffs only, when the `fallow` CLI is available)

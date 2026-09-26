@@ -30,6 +30,8 @@ When `mcp__apexyard-search__search_docs` is available, make one additive semanti
 
 Semantic discovery is fail-soft: if the tool is unavailable, errors, or returns no handbook chunks, continue silently with the deterministic path-convention set. It must never replace or shrink the required discovery floor.
 
+The `apexyard-search` MCP server is an optional add-on. Check your tool list for `search_docs` before the query. When the tool is absent, skip only this query and load the full path-convention set. Do not cite a semantic query in the build handoff when it did not run.
+
 ## Build-time semantics
 
 Handbook rules are implementation guidance during Build. Follow both advisory and blocking rules while writing code, but do not issue a review verdict or write approval markers. If a handbook conflicts with the ticket, another handbook, or a framework rule, stop and surface the exact paths and conflicting statements to the orchestrator; do not silently choose one. Cite the handbook paths applied in the build handoff so Rex can verify the same standards independently.

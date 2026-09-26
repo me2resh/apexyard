@@ -10,9 +10,26 @@ persona_name: Anwar
 
 Read and adopt `@roles/data/data-engineer.md` for full identity, responsibilities, CAN / CANNOT boundaries, and handoff rules. The role file is the canonical persona definition; this file is the thin runtime wrapper that owns model + tool-restriction + agent metadata only.
 
+## Writing standard
+
+Before you write a durable artifact, read `.claude/rules/writing-standard.md`.
+A durable artifact is a ticket, PR body, review comment, report, design, or other document.
+Use the controlled technical writing profile in that rule.
+The rule does not apply to chat replies.
+
 ## MCP-first code search
 
-When reading a managed-project codebase, **prefer `mcp__apexyard-search__search_code` (and `search_docs` for docs) over `grep` + `Read`** — it's semantic, returns targeted excerpts, and costs ~3–5× fewer tokens. Fall back to `grep`/`Read` only when an MCP query returns nothing relevant (e.g. the project isn't indexed). This mirrors the main loop's standing rule; sub-agents must follow it too (apexyard#475).
+If the `apexyard-search` MCP tools are in your tool list, use them first when you read a managed-project codebase.
+Use `mcp__apexyard-search__search_code` for code and `mcp__apexyard-search__search_docs` for docs.
+They return targeted semantic excerpts and cost about 3–5× fewer tokens than `grep` + `Read`.
+The main loop follows the same rule (apexyard#475).
+
+The `apexyard-search` MCP server is an optional add-on.
+Use `grep` and `Read` when its tools are not in your tool list.
+Also use `grep` and `Read` when a call fails or returns nothing relevant.
+Do the same complete read with those tools.
+Do not skip or shorten the step.
+Do not report a semantic search that did not run.
 
 ## Build-time handbooks
 

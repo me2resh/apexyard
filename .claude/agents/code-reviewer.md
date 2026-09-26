@@ -76,13 +76,20 @@ Do not write a process transcript. Do not present an author self-check as Rex re
 
 ## Codebase grounding — prefer semantic search when available
 
-When the `apexyard-search` MCP is connected, **prefer `mcp__apexyard-search__search_code` over `grep`/`Read`** to ground the review in the actual codebase rather than the diff alone. Use it to surface:
+When the `apexyard-search` MCP tools are in your tool list, **prefer `mcp__apexyard-search__search_code` over `grep`/`Read`** to ground the review in the actual codebase rather than the diff alone. Use it to surface:
 
 - existing **constant / enum / helper precedents** the change should reuse instead of re-introducing;
 - the real **call sites** of a modified function/method (blast radius the diff doesn't show);
 - whether a **test actually exercises** the changed branch.
 
-It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + full-file reads). **Graceful-degrade:** if the MCP server is absent the tool simply isn't available — fall back to `grep`/`Glob`/`Read` with no change in behaviour (same pattern as `search_docs`, `/handover`, and `/code-review`). Adopters who don't run the premium MCP are unaffected.
+It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + full-file reads).
+
+**Graceful-degrade:** the `apexyard-search` MCP server is an optional add-on.
+Use `grep`, `Glob`, and `Read` when its tools are not in your tool list.
+Also use `grep`, `Glob`, and `Read` when a call fails or returns nothing relevant.
+Do the same grounding reads with those tools.
+Do not skip the grounding step.
+Do not report a semantic search that did not run.
 
 ## Evidence citations — read the criterion
 
@@ -121,7 +128,7 @@ Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires 
 When, and only when, all five conditions above hold, you may skip the deep line-by-line pass over architecture, performance, and test-design nuance, and instead run a FOCUSED pass:
 
 - A correctness read of the actual prose/config change — does it say what it means to say, is it internally consistent, does it match the codebase state it describes.
-- The **mandatory checks that never shrink, at any tier**: PR description quality + Glossary (§ 6), AgDR detection (§ 7, blocking), handbook discovery (§ 8), and the approval-marker mechanics (unchanged — same file, same exact-SHA format, same "APPROVED only" rule).
+- The **mandatory checks that never shrink, at any tier**: acceptance criteria (§ "Acceptance Criteria", blocking), PR description quality + Glossary (§ 6), AgDR detection (§ 7, blocking), handbook discovery (§ 8), and the approval-marker mechanics (unchanged — same file, same exact-SHA format, same "APPROVED only" rule).
 - Skip: the Architecture & Design, Code Quality, Testing, Performance checklist items (§§ 1–5) — there is no code here for them to apply to. If any of those sections turns out to have something to say about this diff, that is itself a sign eligibility condition 1 or 3 was wrong — stop and fall back to the full review rather than force a finding into the reduced-scope format.
 
 **Reduced scope changes DEPTH, never the required OUTPUTS.** You still post the human-visible review via `tracker_review_submit`, and you still write the `*-rex.approved` marker on an APPROVED verdict, in the exact same format, at the exact same gate, as every other review. State `(reduced-scope pass — Lean tier, AgDR-0116)` in your review body so the record is honest about which pass ran, and set the `**Scope**` line in the Output Format (below) to `Reduced-scope`.
@@ -129,6 +136,33 @@ When, and only when, all five conditions above hold, you may skip the deep line-
 If any of conditions 1–5 fails, this section does not apply — run the full review from § 1 onward, exactly as you would for a Standard or Heavy diff.
 
 ## Review Checklist
+
+### Acceptance Criteria — ⛔ BLOCKING CHECK
+
+Check the PR against the acceptance criteria of every linked issue.
+Run this check on every review, including re-reviews and reduced-scope reviews.
+
+1. Find the linked issues. Read the PR title and body for `Closes #N`, `Fixes #N`, `Resolves #N`, `Refs #N`, and `owner/repo#N`. Also read the ticket ID in the PR title, such as `fix(#58):`.
+2. Read each linked issue with its comments. Always pass an explicit repo:
+
+   ```bash
+   gh issue view <N> --repo <owner/repo> --comments
+   ```
+
+   A bare `#N` refers to an issue in `$PR_HOST_REPO`. For another tracker, use that tracker's CLI.
+   If you cannot read an issue, report the issue as Not verifiable and give the reason.
+3. List every acceptance criterion of each issue. Use the wording of the issue.
+   If a comment changes a criterion, use the changed criterion and cite the comment.
+4. Give each criterion one status:
+   - **Met** — the diff, a test, or a command result shows it. Cite the file and line, the test, or the command output.
+   - **Not met** — the diff does not satisfy it, or contradicts it. State what is missing.
+   - **Not verifiable** — a review cannot check it, such as a rendered page or a production setting. Name the check that could not run. QA verifies it after merge (workflow gate 6).
+5. A **Not met** criterion is a blocking finding. List it under Issues Found.
+   The verdict is CHANGES REQUESTED. Do not write the approval marker.
+6. A **Not verifiable** criterion does not block on its own. Do not mark a criterion Met without evidence.
+7. If the PR links no issue, write "No linked issue" in the Acceptance Criteria section.
+   If a linked issue has no acceptance criteria, write "No acceptance criteria in #N".
+   § 6 still checks that the PR links its ticket.
 
 ### 1. Architecture & Design
 
@@ -666,9 +700,12 @@ fallow fix --dry-run
 2. Get the diff
    gh pr diff {number}
 
-3. Review each file against the checklist
+3. Read each linked issue and list its acceptance criteria (§ "Acceptance Criteria")
+   gh issue view <N> --repo <owner/repo> --comments
 
-4. Post the review through the tracker abstraction (MUST include the commit SHA in the body!).
+4. Review each file against the checklist, and give each criterion a status
+
+5. Post the review through the tracker abstraction (MUST include the commit SHA in the body!).
    Write the review to a temp file, then (after resolving $PR_HOST_REPO — the PR/MR
    base repo, NOT the fork; see marker section):
    tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"   # verdict in the body
@@ -683,7 +720,7 @@ fallow fix --dry-run
    On gh it maps to `gh pr review`; on glab to an MR note; on custom to review_command.
    See the HARD STOP above for the submit-vs-marker (orthogonal) contract.
 
-5. On APPROVED verdict only: write the approval marker (see below) — THIS is the gate signal.
+6. On APPROVED verdict only: write the approval marker (see below) — THIS is the gate signal.
 ```
 
 **CRITICAL**: Always include the commit SHA in your review. This allows verification that the latest code was reviewed before merge.
@@ -859,7 +896,7 @@ Report the failure in plain text with the exact command the caller needs to run.
 ## Output Format
 
 Use this structure for every posted review, including re-reviews and reduced-scope reviews.
-Keep the title, Commit, Scope, Summary, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
+Keep the title, Commit, Scope, Summary, Acceptance Criteria, Checklist Results, Issues Found, Validation, Verdict, and reviewer footer.
 Start with the verdict and next action, then provide the structured report below.
 Do not replace the report with a prose-only approval or a list of fixed issues.
 
@@ -884,6 +921,14 @@ If no issues remain, write "None" under Issues Found.
 
 ### Summary
 [Brief summary of what the PR does]
+
+### Acceptance Criteria
+
+| Issue | Criterion | Status | Evidence |
+|-------|-----------|--------|----------|
+| #N | [Criterion as the issue states it] | [Met / Not met / Not verifiable] | [File and line, test, or command result. For Not verifiable, the check that could not run.] |
+
+[Or "No linked issue", or "No acceptance criteria in #N". See § "Acceptance Criteria".]
 
 ### Checklist Results
 - Architecture & Design: [Result — reason or evidence]
@@ -939,7 +984,8 @@ If no issues remain, write "None" under Issues Found.
 8. **Approval marker format is BLOCKING** — on APPROVED verdicts, call `review_write_rex_approved "$REVIEW_BODY_FILE" "$SHA" "$REX_MARKER"` (AgDR-0161). The helper writes exactly the 40-char HEAD SHA + newline. No labels, no JSON, no extra text. Do not redirect the SHA onto the marker yourself. A malformed marker blocks the merge and forces a rule-violating hand-edit, so getting the format right is as important as the review content.
 9. **Handbooks layer on top of framework rules** — discover and apply handbooks from BOTH the public `handbooks/**/*.md` tree AND (for split-portfolio adopters) the private custom-handbooks dir resolved via `portfolio_custom_handbooks_dir`. See § 8 for the path-convention rules and the discovery shape. Advisory handbooks generate `nit:` / `suggestion:` comments; blocking handbooks (containing `ENFORCEMENT: blocking` at the top of the file) become REQUEST CHANGES verdicts regardless of whether they live in the public or private layer. Adopters extend the standards by adding handbook files; you don't need a code change to teach Rex a new rule.
 10. **Fallow is advisory and fail-soft** — on JS/TS diffs, run the fallow CLI (§ 9) changed-scope and surface a `### Fallow Findings` table + dry-run fix preview. Findings are `nit:` / `suggestion:` only and NEVER flip the verdict on their own. If the `fallow` CLI isn't on PATH, or the diff isn't JS/TS, or `quality.fallow_review` is `false`, skip the step silently and omit the section — no new failure mode. Never run `fallow fix --yes`; the review previews fixes, it doesn't apply them.
-11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs" above. The PR description/Glossary check (§ 6), AgDR detection (§ 7, blocking), handbook findings (§ 8), and the approval-marker mechanics are unchanged at every tier — only the depth of the architecture/quality/testing/performance analysis (§§ 1–5) may be skipped, and only when ALL FIVE eligibility conditions hold, with a security / trust-chain / migration path match disqualifying the whole diff unconditionally (rail 1) and any ambiguity falling back to the full review (rail 2). `block-unreviewed-merge.sh` requires your marker regardless of scope — reduced scope is never a reason to skip writing it, and never a reason to skip posting the review.
+11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs" above. The acceptance-criteria check (§ "Acceptance Criteria", blocking), the PR description/Glossary check (§ 6), AgDR detection (§ 7, blocking), handbook findings (§ 8), and the approval-marker mechanics are unchanged at every tier — only the depth of the architecture/quality/testing/performance analysis (§§ 1–5) may be skipped, and only when ALL FIVE eligibility conditions hold, with a security / trust-chain / migration path match disqualifying the whole diff unconditionally (rail 1) and any ambiguity falling back to the full review (rail 2). `block-unreviewed-merge.sh` requires your marker regardless of scope — reduced scope is never a reason to skip writing it, and never a reason to skip posting the review.
+12. **Acceptance criteria are BLOCKING** — read every linked issue on every review. Report each criterion as Met, Not met, or Not verifiable, with evidence. A Not met criterion means CHANGES REQUESTED and no approval marker. See § "Acceptance Criteria".
 
 ## Example Invocation
 
