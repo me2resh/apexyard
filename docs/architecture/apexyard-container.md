@@ -101,9 +101,13 @@ Unconditional safety hooks now always run before command-specific gates. The fir
 
 The C4 containers stay the same. The change is inside the hooks container.
 
-**2026-09-17 — Token-efficiency Wave 2 (AgDR-0160, me2resh/apexyard#1319).** CLAUDE.md is an index. It no longer auto-imports every rule body. Agents Read a named file under `.claude/rules/` when the work needs it. Hard gates stay in the hooks container. AGENTS.md stays a short operator bridge. The Claude Code baseline on `dev` `3953d50` was about 43.1k tokens (15 `@` imports, not a 22-file glob). The Wave 2 test caps the CLAUDE.md catalogue at 9,000 tokens and AGENTS.md at 5,000 tokens.
+**2026-09-17 — Token-efficiency Wave 2 (AgDR-0160, me2resh/apexyard#1319).** CLAUDE.md is an index. It no longer `@`-imports every rule body. Agents Read a named file under `.claude/rules/` when the work needs it. Hard gates stay in the hooks container. AGENTS.md stays a short operator bridge. The Claude Code baseline on `dev` `3953d50` was about 43.1k tokens (15 `@` imports, not a 22-file glob). The Wave 2 test caps the CLAUDE.md catalogue at 9,000 tokens and AGENTS.md at 5,000 tokens.
 
 The C4 containers stay the same. The CLAUDE.md → rules arrow is now index-plus-on-demand, not glob import.
+
+**2026-09-21 — Rules auto-load tax closed (AgDR-0160 correction, me2resh/apexyard#1354).** Wave 2's "on demand" claim was incomplete. Claude Code still auto-injects every `.claude/rules/**/*.md` file as project memory even with no `@` import. Cost: ~175 KB (~44k tokens) per session, including regression fixtures. Fix: (1) `"claudeMdExcludes": ["**/.claude/rules/**"]` in `.claude/settings.json`; (2) move fixtures to `docs/quality-regression/fixtures/` and rule smoke tests to `.claude/hooks/tests/`. Agents still Read named rule files on demand. Reasoning: exclude is the platform control; relocating non-rule markdown is defence in depth so fixtures cannot re-enter the auto-load tree.
+
+The C4 containers stay the same. The CLAUDE.md → rules path is now index + exclude + Read-on-demand.
 
 **2026-09-17 — /update chain backfill for v5.6.0–v5.6.2 (me2resh/apexyard#1298).** Three releases shipped with no pair script. `migration_chain` refused at v5.5.2 and returned empty. The C4 containers stay the same. The change is three no-op placeholders under `.claude/migrations/`, so `/update` can walk v5.4.0 → v5.6.2 again. The `/release` missing-script check stays advisory, per #1105.
 

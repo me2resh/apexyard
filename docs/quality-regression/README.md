@@ -4,13 +4,13 @@ The framework keeps a small, permanent corpus of real failure cases and a runner
 
 ## The corpus
 
-The cases are the three fixture files the rules already ship. They are the single source of truth; this directory adds only the index, the runner, and the results.
+The cases live in three fixture files under `docs/quality-regression/fixtures/`. They are the single source of truth; this directory also holds the index, the runner results, and the corpus docs.
 
 | File | Prefix | Dimension | Cases |
 |------|--------|-----------|-------|
-| `.claude/rules/tests/fixtures/evidence-grounding-cases.md` | `EG` | grounding — unsupported claims, scope leakage, stale state, invented identifiers, lost modality, false success | 6 |
-| `.claude/rules/tests/fixtures/proportionate-work-cases.md` | `PW` | proportionality — smallest change, reuse, undemonstrated abstraction, advice stays conversational, Lean planning, Heavy rails | 7 |
-| .claude/rules/tests/fixtures/human-friendly-cases.md | HF | controlled technical writing profile for artifacts, clear machine text, evidence retention, and review rejection | 10 |
+| `docs/quality-regression/fixtures/evidence-grounding-cases.md` | `EG` | grounding — unsupported claims, scope leakage, stale state, invented identifiers, lost modality, false success | 6 |
+| `docs/quality-regression/fixtures/proportionate-work-cases.md` | `PW` | proportionality — smallest change, reuse, undemonstrated abstraction, advice stays conversational, Lean planning, Heavy rails | 7 |
+| `docs/quality-regression/fixtures/human-friendly-cases.md` | HF | controlled technical writing profile for artifacts, clear machine text, evidence retention, and review rejection | 10 |
 
 Each case states a **Given** (the situation), a **Prompt** (what the operator says), a **Fail if**, and a **Pass if**. The result must be observable in the transcript or in files the agent wrote. See [`corpus.md`](corpus.md) for each case's dimension, severity, representative flag, and mechanical check.
 
