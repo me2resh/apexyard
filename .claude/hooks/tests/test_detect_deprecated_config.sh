@@ -210,6 +210,90 @@ rm -rf "$SB7"
 # behavioural test on a modern jq can't catch this. A static grep can, on any
 # jq version.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Case 9 (#1363): override-only keys are live config, not deprecated config.
+#
+# Some supported keys are absent from the defaults file by design — the hook
+# that reads each one holds its built-in default in code and consults config
+# only when an adopter overrides it. Before this, /update offered to delete
+# them, and answering `y` silently disabled the gate they configure.
+# ---------------------------------------------------------------------------
+echo
+echo "Case 9: override-only key allowlist (#1363)"
+
+run_case "#1363: an override-only key is not flagged" \
+'{
+  "_override_only_keys": ["migration_paths"],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"]
+}' \
+''
+
+run_case "#1363: a genuinely removed key is still flagged beside an allowlisted one" \
+'{
+  "_override_only_keys": ["migration_paths"],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"],
+  "voice_prompts": {"on_pause": "ping"}
+}' \
+'voice_prompts'
+
+run_case "#1363: defaults with no allowlist keep the previous behaviour" \
+'{
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"]
+}' \
+'migration_paths'
+
+run_case "#1363: non-string allowlist entries are ignored, not fatal" \
+'{
+  "_override_only_keys": ["migration_paths", 42, null],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"],
+  "voice_prompts": {"on_pause": "ping"}
+}' \
+'voice_prompts'
+
+# Every override-only key a shipped hook reads must be in the SHIPPED
+# defaults file's allowlist. This is the case that fails if someone adds a
+# new override-only key to a hook and forgets to declare it.
+echo
+echo "Case 9b: shipped defaults allowlist covers every shipped override-only key"
+SHIPPED_DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/project-config.defaults.json"
+SB9=$(mktemp -d)
+SB9=$(cd "$SB9" && pwd -P)
+cat > "$SB9/overrides.json" <<'JSON'
+{
+  "migration_paths": ["db/migrations/**"],
+  "migration_label": "migration",
+  "ui_paths": ["^src/ui/"],
+  "ui_paths_exclude": ["^docs/examples/"],
+  "design_paths": ["^docs/designs/"],
+  "design_paths_exclude": ["^docs/samples/"],
+  "architecture_paths": ["^infra/"]
+}
+JSON
+# shellcheck source=/dev/null
+. "$LIB_SRC"
+out9=$(detect_deprecated_config_keys "$SHIPPED_DEFAULTS" "$SB9/overrides.json")
+if [ -z "$out9" ]; then
+  PASS=$((PASS + 1))
+  echo "PASS: shipped defaults allowlist covers every shipped override-only key"
+else
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  - shipped allowlist missing key(s): $(echo "$out9" | tr '\n' ' ')"
+  echo "FAIL: shipped allowlist missing: $(echo "$out9" | tr '\n' ' ')"
+fi
+rm -rf "$SB9"
+
 echo
 echo "Case 8: no reserved jq keyword used as a binding name"
 # jq grammar keywords that are invalid as $-variable names.

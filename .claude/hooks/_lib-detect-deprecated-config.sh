@@ -31,6 +31,17 @@
 # these the same way it surfaces upstream-removed keys — the caller's job is
 # to make the offer informational, not destructive. The skill prompts y/n/s
 # and the operator decides whether each flagged key is dead or load-bearing.
+#
+# Override-only keys: some SUPPORTED keys are absent from the defaults file by
+# design, because the hook that reads them holds the built-in default in its
+# own code and consults config only when an adopter overrides it (e.g.
+# `migration_paths`, read by require-migration-ticket.sh). Those are live
+# configuration, not dead config, so the defaults file declares them in
+# `_override_only_keys` and this helper never reports them. Without that, a
+# `y` at the /update prompt silently disabled a gate — see
+# me2resh/apexyard#1363. The allowlist lives in the defaults file rather than
+# here so it travels with the keys themselves and cannot drift from the hooks
+# that read them.
 
 # ---------------------------------------------------------------------------
 # Internal: resolve repo root when no explicit paths are passed.
@@ -89,6 +100,7 @@ detect_deprecated_config_keys() {
   # jq:
   #   - keys: top-level key names in each file
   #   - subtract default keys from override keys
+  #   - subtract the defaults file's own `_override_only_keys` allowlist
   #   - filter out leading-underscore metadata
   #   - emit one per line, sorted for stable output
   # NOTE: the slurpfile binding is named `defaults_doc`, not `def`. `def` is a
@@ -97,9 +109,11 @@ detect_deprecated_config_keys() {
   jq -r --slurpfile defaults_doc "$defaults" '
     [keys[]] as $okeys
     | ($defaults_doc[0] | keys) as $dkeys
+    | (($defaults_doc[0]["_override_only_keys"] // []) | map(select(type == "string"))) as $override_only
     | $okeys
     | map(select(
         (. as $k | $dkeys | index($k) | not)
+        and (. as $k | $override_only | index($k) | not)
         and (startswith("_") | not)
       ))
     | sort
