@@ -1074,6 +1074,28 @@ sequence_template="${SEQUENCE_TEMPLATE:-$(portfolio_resolve_template architectur
 
 Both follow the architecture-stub conventions: write once, never overwrite (preserve on re-handover), and prepend the machine-drafted note. The richer rows (3–6: DFD, Feature Inventory, journey, vision) are **not** generated here — they hand off to `/dfd`, `/extract-features`, `/journey`, `/tech-vision` per step 5.6's hand-off offer.
 
+### 6.2. Lint the generated architecture stubs
+
+Run `lint.sh` against every architecture stub that exists on disk after steps 6 and 6.1 — `container.md`, `context.md`, and any `sequence-<flow>.md`. This block is a fresh process (per the per-block preamble rule above), so re-source the portfolio helper and re-resolve `$projects_dir` rather than reusing a variable from an earlier block; test each path with `-f` and skip the ones that don't exist (deselected, skipped, or no signal). The lint wraps the shared `_lib-mermaid-lint.sh` — it extracts every ` ```mermaid ` block from the file and validates each via `mmdc` (mermaid-cli), so broken syntax is caught at write time, not when a human opens the file on GitHub.
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-portfolio-paths.sh"
+projects_dir=$(portfolio_projects_dir)
+SKILL_DIR="$(git rev-parse --show-toplevel)/.claude/skills/handover"
+arch_dir="${projects_dir}/<name>/architecture"
+for stub in "$arch_dir/container.md" "$arch_dir/context.md" "$arch_dir"/sequence-*.md; do
+  [ -f "$stub" ] || continue
+  "$SKILL_DIR/lint.sh" "$stub" || lint_rc=$?
+done
+```
+
+Handle each file's exit code before reporting it as written:
+
+- **Exit 0** — clean. Report the stub as `written (Mermaid lint: clean)`.
+- **Exit 1** — parse error. Print the lint output and either fix the offending block and re-lint, or leave the file as-is and note `written (Mermaid lint: FAILED — see output above)` in the summary. Never report a failed stub as plain `written`.
+- **Exit 3** — `mmdc` / Node unavailable. Print the warning `Mermaid not validated: mmdc not available.` and report the stub as `written (Mermaid not validated: mmdc not available)`. Do not report success.
+- **`--skip-lint`** (operator-requested) — report `written (Mermaid lint skipped)`.
+
 ### 7. Append to the portfolio registry
 
 **Don't just print the snippet** — offer to append it automatically:
@@ -1622,7 +1644,7 @@ If the project is healthy (recent commits, active PRs/issues), skip the prompt e
 ```
 Handover assessment written: projects/{name}/handover-assessment.md
 Document selection:          {"checklist — generated: {list}; deferred (handed off): {list}" | "--all (full set)" | "none (assessment only)"}
-Architecture stub:           projects/{name}/architecture/container.md ({written | preserved | skipped | skipped (deselected)})
+Architecture stub:           projects/{name}/architecture/container.md ({written (Mermaid lint: clean) | written (Mermaid not validated: mmdc not available) | written (Mermaid lint: FAILED — see output above) | preserved | skipped | skipped (deselected)})
 In-repo AGENTS.md:           {PR opened: <url> | preserved (already present) | declined | not selected | skipped (no clone) | failed: <reason>}
 Governed-by-ApexYard badge:  {PR opened: <url> (<variant>) | skipped (already present) | declined | not selected | skipped (no clone) | skipped (no README) | failed: <reason>}
 Topology bundle:             {"<name>@<version> instantiated (handbooks + AgDR draft + CI pipelines)" | "declined" | "skipped (no pick)" | "pipelines pending — workspace not cloned"}

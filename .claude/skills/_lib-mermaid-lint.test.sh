@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Test suite for _lib-mermaid-lint.sh and the three per-skill wrappers
-# (c4/lint.sh, dfd/lint.sh, tech-vision/lint.sh).
+# Test suite for _lib-mermaid-lint.sh and its per-skill wrappers
+# (c4/lint.sh, dfd/lint.sh, tech-vision/lint.sh, handover/lint.sh,
+# plan-initiative/lint.sh).
 #
 # Coverage:
 #   - Clean Mermaid block       → exit 0
@@ -11,7 +12,9 @@
 #   - Missing file              → exit 2
 #   - Unknown flag              → exit 2
 #   - Node missing              → exit 3     (graceful degrade)
-#   - Each per-skill wrapper dispatches to the shared lib (clean case)
+#   - Each per-skill wrapper dispatches to the shared lib (clean + no-blocks)
+#   - handover/SKILL.md and plan-initiative/SKILL.md state the "Mermaid not
+#     validated" warning (me2resh/apexyard#1382 point 4 — no silent skip)
 #
 # Skips parse-assertion tests when npx is not available — same graceful
 # degrade the lib itself implements.
@@ -183,7 +186,10 @@ fi
 echo ""
 echo "5) Per-skill wrappers dispatch to the lib"
 
-for skill in c4 dfd tech-vision; do
+# me2resh/apexyard#1382 (remaining part) added handover/lint.sh and
+# plan-initiative/lint.sh — the two Mermaid-emitting skills that had no
+# validation coverage. Same thin-wrapper shape as c4/dfd/tech-vision.
+for skill in c4 dfd tech-vision handover plan-initiative; do
   WRAPPER="$SCRIPT_DIR/$skill/lint.sh"
   if [ ! -x "$WRAPPER" ]; then
     echo "  FAIL: $skill/lint.sh not executable"
@@ -192,6 +198,27 @@ for skill in c4 dfd tech-vision; do
   fi
   bash "$WRAPPER" "$FIXTURES/no-blocks.md" > /dev/null 2>&1
   assert_exit "$skill/lint.sh on no-blocks fixture → exit 0" 0 $?
+
+  bash "$WRAPPER" "$FIXTURES/clean.md" --skip-lint > /dev/null 2>&1
+  assert_exit "$skill/lint.sh --skip-lint on clean fixture → exit 0 (no-op)" 0 $?
+done
+
+echo ""
+echo "6) SKILL.md documents the 'not validated' warning, not a silent skip"
+
+# me2resh/apexyard#1382 point 4: when mmdc is unavailable, the skill must
+# print a clear warning rather than silently continue as if it succeeded.
+# Pin the exact phrase in every SKILL.md this batch wired up, so a future
+# edit can't quietly drop the warning text.
+for skill in handover plan-initiative; do
+  SKILL_MD="$SCRIPT_DIR/$skill/SKILL.md"
+  if grep -qF "Mermaid not validated: mmdc not available." "$SKILL_MD" 2>/dev/null; then
+    echo "  PASS: $skill/SKILL.md states the 'Mermaid not validated' warning"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: $skill/SKILL.md does not state the 'Mermaid not validated' warning"
+    FAIL=$((FAIL + 1))
+  fi
 done
 
 echo ""
