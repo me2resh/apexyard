@@ -16,7 +16,7 @@ Private project identifiers (names, repo slugs, workspace paths) belong in your 
 
 ## What gets scrubbed
 
-- `.projects[].name` — whole-word match, case-insensitive. Skipped entirely when the name is the target repo's own bare name (mentioning "apexyard" in an apexyard upstream ticket is fine). Also skipped when the name equals the target repo's **owner login** (me2resh/apexyard#1387), but only inside the `@owner` or `owner/<repo-slug>` forms — a bare, standalone mention of the owner's name still blocks, like any other registered private project's name.
+- `.projects[].name` — whole-word match, case-insensitive. Skipped entirely when the name is the target repo's own bare name (mentioning "apexyard" in an apexyard upstream ticket is fine). Also skipped when the name equals the target repo's **owner login** (me2resh/apexyard#1387). This owner exemption applies only inside the `@owner` or `owner/<repo-slug>` forms. A bare, standalone mention of the owner's name still blocks, like any other registered private project's name.
 - `.projects[].repo` — exact `owner/repo` match, optionally followed by `#<N>` to catch ticket references. Skipped when equal to the target repo.
 - `.projects[].workspace` — whole-word match on the workspace path.
 
