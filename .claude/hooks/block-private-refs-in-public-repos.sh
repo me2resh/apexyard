@@ -1219,12 +1219,35 @@ for n in $NAMES; do
     # registered private project's name. Case-folded by hand (rather than
     # `sed`'s GNU-only `I` suffix or ERE `\b`, both unsupported on BSD/macOS
     # sed) so this stays portable across the hook's supported platforms.
+    #
+    # The two STRIP expressions use a wider boundary class
+    # (`[^A-Za-z0-9_-]`) than the final bare-mention check below. That
+    # class treats `-` as a word character, so it never strips PART of a
+    # hyphen-joined token — it only removes a clean `@owner` or
+    # `owner/<repo-slug>` occurrence. The slug half of the second strip
+    # excludes `.` from `[a-z0-9_-]+` (me2resh/apexyard#1400 security
+    # re-review, LOW 2): a GitHub repo slug segment can itself carry a
+    # dot, so stopping the slug capture at the first `.` means a second,
+    # glued mention right after a dot — `owner/repo.owner` — is never
+    # silently absorbed into the stripped slug. Worst case this narrows
+    # what the strip removes and a legitimate dotted slug ends up
+    # scrutinised again by the bare-mention check below; that fails in
+    # the hook's documented safe direction (more scanning, never less).
     esc_lc=$(printf '%s' "$n" | tr '[:upper:]' '[:lower:]' | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
     haystack_lc=$(printf '%s' "$HAYSTACK" | tr '[:upper:]' '[:lower:]')
     stripped_lc=$(printf '%s' "$haystack_lc" | sed -E \
       -e "s/@${esc_lc}([^A-Za-z0-9_-]|\$)/\\1/g" \
-      -e "s#(^|[^A-Za-z0-9_-])${esc_lc}/[a-z0-9_.-]+#\\1#g")
-    if ! printf '%s' "$stripped_lc" | grep -qE "(^|[^A-Za-z0-9_-])${esc_lc}([^A-Za-z0-9_-]|\$)"; then
+      -e "s#(^|[^A-Za-z0-9_-])${esc_lc}/[a-z0-9_-]+#\\1#g")
+    # The bare-mention check uses a NARROWER boundary class than the strip
+    # expressions above: `[^A-Za-z0-9_]` treats `-` as a boundary, matching
+    # `grep -w`'s own notion of a word character (me2resh/apexyard#1400
+    # security re-review, LOW 1). Before this fix the wider `-`-as-word-char
+    # class let a hyphen-joined form such as `owner-tool` or `foo-owner`
+    # read as one token that never matched the bare-word pattern, so it
+    # passed the owner branch even though the generic per-name check two
+    # lines down (`grep -qiwE`, which already treats `-` as a boundary)
+    # would have blocked the exact same text for any OTHER registered name.
+    if ! printf '%s' "$stripped_lc" | grep -qE "(^|[^A-Za-z0-9_])${esc_lc}([^A-Za-z0-9_]|\$)"; then
       continue
     fi
     # Falls through: a bare mention of the owner's name remains after

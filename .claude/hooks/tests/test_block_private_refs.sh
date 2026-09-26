@@ -1078,6 +1078,38 @@ run_case "#1387: a BARE owner-name mention (no @, no /) still blocks (issue's ow
   2 "project name: me2resh" \
   "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the me2resh project is failing'"
 
+# 77c-77e. me2resh/apexyard#1400 security re-review, LOW 1 — a hyphen-joined
+#          form of the owner-equal name used to bypass the owner branch: its
+#          bare-mention check treated `-` as a word character, so
+#          `me2resh-tool` or `foo-me2resh` read as one token that never
+#          matched the standalone-word pattern. The GENERIC per-name check a
+#          few lines below (`grep -qiwE`, unaffected by this PR) already
+#          treats `-` as a boundary, so the exact same text still blocked
+#          for any OTHER registered name — the owner branch alone had this
+#          gap. Fixed by narrowing the bare-mention boundary class to match
+#          `grep -w`'s own word-character set.
+run_case "#1400 LOW1: hyphen-suffixed owner-equal name still blocks (owner-tool)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'ship the me2resh-tool update'"
+
+run_case "#1400 LOW1: hyphen-prefixed owner-equal name still blocks (foo-owner)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the foo-me2resh integration failed'"
+
+run_case "#1400 LOW1: Rex A1 repro — 'the OWNER-internal rebuild failed' still blocks" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the me2resh-internal rebuild failed'"
+
+# 77f. me2resh/apexyard#1400 security re-review, LOW 2 — the owner/<slug>
+#      strip expression's slug class included `.`, so a second, glued
+#      mention right after a dot (`owner/repo.owner`) was captured INSIDE
+#      the stripped slug and disappeared along with the safe `owner/repo`
+#      form. Removing `.` from the slug class stops the capture at the dot,
+#      leaving the glued mention for the bare-mention check to catch.
+run_case "#1400 LOW2: owner/repo.owner glued mention still blocks (dot no longer in slug class)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'cross-posted as me2resh/apexyard.me2resh for tracking'"
+
 # ---------------------------------------------------------------------------
 # 78-81. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.
 # extract_flag_value/extract_path_flag both require a space between a flag
