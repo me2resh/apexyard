@@ -18,8 +18,9 @@ SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$SRC_ROOT/.claude/hooks/block-unreviewed-merge.sh"
 LIB_PR="$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh"
 LIB_MARKERS="$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
+LIB_BEHIND="$SRC_ROOT/.claude/hooks/_lib-merge-behind.sh"
 
-for f in "$HOOK_SRC" "$LIB_PR" "$LIB_MARKERS"; do
+for f in "$HOOK_SRC" "$LIB_PR" "$LIB_MARKERS" "$LIB_BEHIND"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
     exit 1
@@ -54,6 +55,7 @@ make_sandbox() {
   cp "$HOOK_SRC"    "$sb/.claude/hooks/block-unreviewed-merge.sh"
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
+  cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"
   chmod +x "$sb/.claude/hooks/block-unreviewed-merge.sh"
   # The hook sources the shared config reader (me2resh/apexyard#957, the
   # configurable human_approver_title key) — mirror the same sandbox setup
@@ -76,9 +78,16 @@ make_sandbox() {
 #!/bin/bash
 # Minimal gh shim for test_block_unreviewed_merge.
 case "\$*" in
-  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
-  *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
-  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"headRefOid"*)        echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
+  *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
+  *"pr view"*"baseRefName"*)       echo "\${MOCK_BASE_BRANCH:-dev}" ;;
+  # #1386: is_pr_behind_base reads behind_by from the compare API, not
+  # mergeStateStatus. \$MOCK_BEHIND_BY lets a case say "the PR IS behind"
+  # independent of whatever \$MOCK_MERGE_STATE says — the exact split #1386
+  # reported (a behind PR whose mergeStateStatus reads CLEAN or BLOCKED).
+  *"api "*"compare/"*)             echo "\${MOCK_BEHIND_BY:-0}" ;;
   *) ;;
 esac
 exit 0
@@ -929,6 +938,108 @@ if [ "$got_rc" = "0" ]; then
 else
   echo "FAIL [#1091 control: gh healthy, markers at forge HEAD -> still ALLOWED]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1091-control-healthy "
+fi
+
+# --- me2resh/apexyard#1386: optional behind-base note on an EXISTING block ---
+#
+# block-unreviewed-merge.sh adds NO new blocking condition for a behind-base
+# branch. It only appends a note to a block that already fires for another
+# reason (here: missing Rex marker). These cases pin that:
+#   - the note appears when the compare API reports the PR behind (behind_by > 0)
+#   - the note does NOT appear when the PR is not behind
+#   - the note appears even when mergeStateStatus reports CLEAN — the exact
+#     gap #1386 reported: GitHub only reports mergeStateStatus=BEHIND when
+#     the base ruleset has strict_required_status_checks_policy=true, so a
+#     PR that is genuinely behind an unprotected base reports CLEAN, BLOCKED,
+#     or UNKNOWN instead. A check that read mergeStateStatus alone would
+#     never fire here — see _lib-merge-behind.sh.
+
+# Case: missing rex marker + compare API reports behind_by>0 -> still blocks
+# (rc=2), and the note names the behind-base branch as a likely reason.
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1386 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=5 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no recorded code-reviewer" \
+   && echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [#1386: missing rex marker + behind_by>0 -> blocks AND names behind-base as a reason]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1386: missing rex marker + behind_by>0 -> blocks AND names behind-base as a reason]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1386-behind-note "
+fi
+
+# Case: missing rex marker + compare API reports behind_by=0 -> still blocks
+# (rc=2), but the behind-base note must NOT appear (no false positive on a
+# PR that is NOT behind its base — the block has a different, unrelated
+# cause).
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1387 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=0 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no recorded code-reviewer" \
+   && ! echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [#1386: missing rex marker + behind_by=0 -> blocks, no spurious behind-base note]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1386: missing rex marker + behind_by=0 -> blocks, no spurious behind-base note]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1386-no-spurious-note "
+fi
+
+# Case (B1 regression pin): a PR that IS behind but whose mergeStateStatus
+# reads CLEAN — the exact combination #1386 observed on this repo (dev's
+# ruleset has strict_required_status_checks_policy=false, so a behind PR
+# never reports BEHIND). The note must still appear, because it is driven
+# by the compare API, not by mergeStateStatus.
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1388 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_MERGE_STATE=CLEAN MOCK_BEHIND_BY=8 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [#1386 B1: mergeStateStatus=CLEAN but behind_by>0 -> note still fires]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1386 B1: mergeStateStatus=CLEAN but behind_by>0 -> note still fires]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1386-behind-despite-clean "
+fi
+
+# Case: the note addresses the human approver, not the agent — it must not
+# read as an instruction the agent itself could carry out (Hakim MEDIUM,
+# #1406). "Ask the ... to" and "Do not update it yourself" must both appear.
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1389 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=3 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "ask the .* to update" \
+   && echo "$got_stderr" | grep -qi "do not update it yourself"; then
+  echo "PASS [Hakim MEDIUM #1406: behind-base note addresses the user, not the agent]"; PASS=$((PASS+1))
+else
+  echo "FAIL [Hakim MEDIUM #1406: behind-base note addresses the user, not the agent]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1406-note-addresses-user "
+fi
+
+# Case (A1 advisory): the same note also fires on the OTHER block that can
+# precede a behind-base merge attempt — a stale Rex marker (SHA mismatch),
+# not only a missing one. Rex's A1 suggestion: align the note with both
+# blocks the operator can actually hit.
+sb=$(make_sandbox)
+write_rex_marker "$sb" 1390 "$WRONG_SHA" "$TEST_REPO"
+input=$(jq -nc --arg c "gh pr merge 1390 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=4 PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "HEAD is now" \
+   && echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [A1: stale-Rex-marker block also gets the behind-base note]"; PASS=$((PASS+1))
+else
+  echo "FAIL [A1: stale-Rex-marker block also gets the behind-base note]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}A1-stale-sha-note "
 fi
 
 # --- Summary ----------------------------------------------------------

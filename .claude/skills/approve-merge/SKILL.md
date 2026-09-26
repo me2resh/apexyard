@@ -84,7 +84,7 @@ Only proceed past this step if the user has given an unambiguous per-PR approval
 ### 3. Verify the PR state
 
 ```bash
-gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid
+gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid,mergeStateStatus,baseRefName
 ```
 
 Sanity checks:
@@ -92,6 +92,69 @@ Sanity checks:
 - `state` must be `OPEN`. Refuse if it's `MERGED`, `CLOSED`, or `DRAFT`.
 - `mergeable` should be `MERGEABLE` or `UNKNOWN` (GitHub hasn't computed yet). Refuse on `CONFLICTING`.
 - Capture `headRefOid` — this is the **PR's HEAD on GitHub**, which is the SHA both markers must match. Don't use `git rev-parse HEAD` from the local working tree — it's rarely the PR branch and the merge gate compares against the GitHub-reported HEAD.
+- Capture `baseRefName` for step 3a below. Step 3a does NOT use
+  `mergeStateStatus` to decide "behind" — see step 3a for why.
+
+### 3a. Stop if the PR is behind its base branch (me2resh/apexyard#1386, `merge.require_up_to_date`)
+
+A merge queue creates a race: PR A merges to the base branch first, and PR B's
+last CI run still reflects the old base. Read the config key before deciding
+whether to check:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+REQUIRE_UP_TO_DATE=$(config_get_or '.merge.require_up_to_date' 'true')
+```
+
+**Do not decide "behind" from `mergeStateStatus`.** GitHub only reports
+`mergeStateStatus=BEHIND` when the base branch's ruleset has
+`strict_required_status_checks_policy=true`. That policy is off by default,
+and off on this repo's own `dev` ruleset — so a PR that is genuinely behind
+its base reports `BLOCKED`, `CLEAN`, or `UNKNOWN` instead, and a check that
+reads `mergeStateStatus == BEHIND` alone never fires on the case it exists
+to catch.
+
+When `$REQUIRE_UP_TO_DATE` is `true`, compute "behind" directly from the
+compare API instead, using `$baseRefName` and `$headRefOid` already captured
+in step 3:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-merge-behind.sh"
+BEHIND=$(is_pr_behind_base "$REPO" "<baseRefName>" "<headRefOid>")
+```
+
+`$BEHIND` is one of `true`, `false`, or `unknown`:
+
+- **`true`** — **stop here**. Do not verify the Rex marker, do not write the
+  CEO marker, and do not merge. Tell the user:
+
+  ```
+  PR #<pr> is behind its base branch (<baseRefName>). Before this can merge:
+    1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
+    2. Wait for green CI on the updated branch.
+    3. Get a short Rex re-review of the new merge commit — the SHA will
+       change, so the existing Rex marker will no longer match HEAD.
+    4. Run /approve-merge <pr> again.
+  ```
+
+  Ask the user to run step 1, or to approve you running it — do not update
+  the branch yourself. Updating the branch pushes a merge commit to the
+  PR's head branch. On a fork PR with maintainer edits that branch belongs
+  to the contributor. The update is a separate, visible action the user
+  should see happen, not one this skill takes on its own.
+
+- **`false`** — proceed to step 4.
+
+- **`unknown`** — the lookup failed (network/auth failure) or an argument
+  was empty. Proceed to step 4, but tell the user the behind-base check
+  could not run this time, so they can verify manually if a merge-queue race
+  is a live concern for this PR. This mirrors the fail-soft behaviour every
+  other forge read in this flow already has — an unavailable check does not
+  become a silent pass, but it also does not block a merge on a network
+  hiccup unrelated to the PR's own state.
+
+This check does not change `block-unreviewed-merge.sh` — it stops the merge
+one step earlier, in this skill, before any marker is touched.
 
 ### 4. Verify the Rex marker exists at the PR's HEAD
 

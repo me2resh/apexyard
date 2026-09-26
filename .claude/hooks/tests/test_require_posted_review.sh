@@ -28,6 +28,7 @@ LIB_PR="$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh"
 LIB_MARKERS="$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
 LIB_TRACKER="$SRC_ROOT/.claude/hooks/_lib-tracker.sh"
 LIB_CONFIG="$SRC_ROOT/.claude/hooks/_lib-read-config.sh"
+LIB_BEHIND="$SRC_ROOT/.claude/hooks/_lib-merge-behind.sh"
 
 # shellcheck source=/dev/null
 . "$LIB_MARKERS"
@@ -67,6 +68,7 @@ make_sandbox() {
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
   cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"
+  cp "$LIB_BEHIND"  "$sb/.claude/hooks/_lib-merge-behind.sh"
   [ -f "$LIB_CONFIG" ] && cp "$LIB_CONFIG" "$sb/.claude/hooks/_lib-read-config.sh"
   [ -f "$SRC_ROOT/.claude/project-config.defaults.json" ] && \
     cp "$SRC_ROOT/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"

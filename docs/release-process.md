@@ -61,7 +61,7 @@ After the PR merges, the `auto-tag-on-release-pr-merge.yml` CI workflow fires an
 - Runs the ancestry guard (`git merge-base --is-ancestor <sha> main`)
 - Creates a GitHub Release entry from the CHANGELOG section in the PR body (in the same job — a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow)
 
-Then run `/release-sync vX.Y.Z` to sync main→dev and prevent squash-divergence accumulation.
+Then run `/release-sync vX.Y.Z` to sync main→dev and prevent squash-divergence accumulation. The skill merges main into dev with a plain merge, not a blind `-X ours`. It resolves a conflict toward dev only when the release squash commit is the sole cause. It stops and asks for any conflict that also involves a commit that exists on main and nowhere on dev — see `.claude/skills/release-sync/SKILL.md` § "Merge main with a plain merge" and AgDR-0170.
 
 ## Cutting a release — manual steps (fallback)
 
@@ -245,6 +245,7 @@ Branch protection on `dev` matches the prior `main` setup — required reviews +
 
 - `AgDR-0007` — the original release-cut branch model decision record
 - `AgDR-0076` — the release-automation design record
+- `AgDR-0170` — the decision to replace `-X ours` with a plain merge + commit-attributed conflict resolution in `/release-sync`, and to add a behind-base check to `/approve-merge`
 - `.claude/skills/release/SKILL.md` — the automated flow (this doc is the manual fallback)
 - `bin/release-changelog.sh` — the changelog generation helper
 - `.github/workflows/auto-tag-on-release-pr-merge.yml` — the auto-tag CI workflow
