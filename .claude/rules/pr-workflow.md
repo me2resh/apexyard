@@ -68,14 +68,18 @@ NO EXCEPTIONS. Not for "small fixes". Not for "just a typo".
 ### The PR must be up to date with its base branch (me2resh/apexyard#1386)
 
 A merge queue creates a race. PR A merges to the base branch first. PR B's last
-CI run still reflects the old base. `/approve-merge` checks the PR's
-`mergeStateStatus` on the forge before it merges. The config key
-`merge.require_up_to_date` (default `true`, in `.claude/project-config.defaults.json`
-under `merge`) controls this check. When the check is on and the status is
-`BEHIND`, the skill stops before the merge. It does not merge on a CI result
-computed against a stale base.
+CI run still reflects the old base. `/approve-merge` checks whether the PR is
+behind its base before it merges. The check reads the compare API's
+`behind_by` field, not the forge's `mergeStateStatus` field. GitHub only
+reports `mergeStateStatus=BEHIND` under a strict ruleset policy. This repo's
+own `dev` ruleset does not set that policy. A PR behind an unprotected base
+would otherwise report `BLOCKED`, `CLEAN`, or `UNKNOWN`, and the check would
+never fire. The config key `merge.require_up_to_date` (default `true`, in
+`.claude/project-config.defaults.json` under `merge`) controls this check.
+When the check is on and the PR is behind, the skill stops before the merge.
+It does not merge on a CI result computed against a stale base.
 
-When the skill stops, do this:
+When the skill stops, ask the CEO to do this, or to approve you doing it:
 
 1. Update the branch: `gh pr update-branch <pr> --repo <owner/repo>`.
 2. Wait for green CI on the updated branch.
@@ -83,8 +87,11 @@ When the skill stops, do this:
    existing Rex marker no longer matches HEAD.
 4. Run `/approve-merge <pr>` again.
 
-Do not update the branch before the first review. An update changes the SHA
-and invalidates any Rex approval already recorded. Update the branch once,
+Do not run the update-branch command yourself without that ask. The update
+pushes a merge commit to the PR's head branch. On a fork PR with maintainer
+edits that branch belongs to the contributor, not to this session. Do not
+update the branch before the first review either way — an update changes the
+SHA and invalidates any Rex approval already recorded. Update the branch once,
 just before the merge.
 
 This check adds no new blocking condition to `block-unreviewed-merge.sh`. The

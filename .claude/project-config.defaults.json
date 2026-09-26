@@ -59,7 +59,7 @@
   },
 
   "merge": {
-    "_comment": "Config for /approve-merge's behind-base check (me2resh/apexyard#1386). require_up_to_date defaults to true: before merging, the skill reads the PR's mergeStateStatus from the forge, and when it is BEHIND, stops before the merge instead of using a CI result computed against a stale base. Set to false to disable the check for adopters who accept that risk. This key changes /approve-merge's own behaviour only — it adds no new blocking condition to block-unreviewed-merge.sh.",
+    "_comment": "Config for /approve-merge's behind-base check (me2resh/apexyard#1386). require_up_to_date defaults to true: before merging, the skill computes whether the PR's head is behind its base from the compare API (is_pr_behind_base in _lib-merge-behind.sh), not from the forge's mergeStateStatus field, which only reports BEHIND under a strict ruleset policy. When behind, the skill stops before the merge instead of using a CI result computed against a stale base. Set to false to disable the check for adopters who accept that risk. This key changes /approve-merge's own behaviour only — it adds no new blocking condition to block-unreviewed-merge.sh.",
     "require_up_to_date": true
   },
 

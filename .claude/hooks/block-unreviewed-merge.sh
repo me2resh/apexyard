@@ -63,6 +63,9 @@ INPUT=$(cat)
 . "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 . "$(dirname "$0")/_lib-review-markers.sh"
+# Behind-base detection independent of the forge's mergeStateStatus field
+# (me2resh/apexyard#1386 — see _lib-merge-behind.sh for why).
+. "$(dirname "$0")/_lib-merge-behind.sh"
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -249,6 +252,38 @@ MSG
   exit 2
 fi
 
+# --- Optional behind-base note, shared by the two blocks below (#1386) ---
+# Advisory only — it adds NO new blocking condition. Both call sites already
+# block for another reason (a missing or stale Rex marker); this only
+# appends a likely contributing reason to that existing block.
+#
+# Reads "behind" from the compare API (is_pr_behind_base), not from
+# mergeStateStatus — GitHub only reports mergeStateStatus=BEHIND when the
+# base ruleset has strict_required_status_checks_policy=true, which #1386's
+# own issue body reports is OFF here. A PR that is genuinely behind an
+# unprotected base reports BLOCKED, CLEAN, or UNKNOWN instead, so reading
+# mergeStateStatus alone would miss it. See _lib-merge-behind.sh.
+#
+# The note addresses the human approver, not the agent reading this stderr:
+# updating a PR's branch pushes a merge commit to the PR's head branch, and
+# on a fork PR with maintainer edits that branch belongs to the contributor.
+# Only the user decides whether that push happens.
+print_behind_base_note() {
+  local base behind
+  base=$(gh pr view "$PR_NUMBER" --repo "${CMD_REPO:-}" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  behind=$(is_pr_behind_base "${CMD_REPO:-}" "$base" "$CURRENT_SHA")
+  if [ "$behind" = "true" ]; then
+    cat >&2 <<MSG3
+
+NOTE: PR #${PR_NUMBER} is also behind its base branch (${base:-its base}).
+Ask the ${APPROVER_TITLE} to update the branch or to approve that update.
+The update command is: gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>}
+Do not update it yourself. Then wait for green CI and re-run /code-review
+before /approve-merge.
+MSG3
+  fi
+}
+
 # --- Rex marker check ---
 if [ ! -f "$REX_APPROVAL" ]; then
   cat >&2 <<MSG
@@ -290,19 +325,9 @@ MSG
   if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" rex "$REX_APPROVAL" 2>/dev/null); then
     printf '%s\n' "$_NEAR_MISS_HINT" >&2
   fi
-  # Optional: name a behind-base branch as a likely contributing reason
-  # (me2resh/apexyard#1386). This adds NO new blocking condition — the Rex
-  # marker was already missing, so this merge was already refused above.
-  # Fail-soft: an empty or failed lookup prints nothing extra.
-  _MERGE_STATE=$(gh pr view "$PR_NUMBER" --repo "${CMD_REPO:-}" --json mergeStateStatus -q '.mergeStateStatus' 2>/dev/null)
-  if [ "$_MERGE_STATE" = "BEHIND" ]; then
-    cat >&2 <<MSG3
-
-NOTE: PR #${PR_NUMBER} is also behind its base branch. Update it
-(gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>}), wait for
-green CI, then re-run /code-review before /approve-merge.
-MSG3
-  fi
+  # This merge was already refused above (missing Rex marker); the note
+  # below only names a likely contributing reason. See print_behind_base_note.
+  print_behind_base_note
   exit 2
 fi
 
@@ -314,6 +339,11 @@ BLOCKED: Code-reviewer approved commit ${REX_SHA:0:7} but HEAD is now ${CURRENT_
 New commits were pushed after the Rex review. Re-invoke Rex on the latest
 HEAD before merging.
 MSG
+  # This merge was already refused above (stale Rex marker); the note
+  # below only names a likely contributing reason (#1386). A branch update
+  # would also explain the SHA mismatch itself — the PR moved after Rex's
+  # review, whether from a base-branch update or new commits.
+  print_behind_base_note
   exit 2
 fi
 
