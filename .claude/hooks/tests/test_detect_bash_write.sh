@@ -132,6 +132,80 @@ assert_read  "stderr merge"   "make build 2>&1"
 assert_read  "python read"    'python3 -c "print(open(\"/tmp/x\").read())"'
 assert_read  "node read"      'node -e "console.log(require(\"fs\").readFileSync(\"/tmp/x\", \"utf8\"))"'
 
+# #1372 — the mode must be read from the SECOND argument, not from anywhere
+# inside the parentheses. The "python read" case above passes on `dev` only
+# because `/tmp/x` happens to contain no w, a or +; a realistic path does. A
+# single-argument open() is always mode 'r' in Python.
+assert_read  "python read, path contains 'a'" 'python3 -c "print(open(\"data.txt\").read())"'
+assert_read  "python read, dotted path"       'python3 -c "print(open(\".claude/x.json\").read())"'
+assert_read  "python read, explicit r mode"   'python3 -c "print(open(\"data.txt\", \"r\").read())"'
+assert_read  "python read, binary mode"       'python3 -c "print(open(\"data.txt\", \"rb\").read())"'
+
+# Write modes. None of these call .write(), so the open() mode alone decides —
+# otherwise the neighbouring `\.write\b` clause carries the verdict and the mode
+# is never actually tested. The path contains no w, a or + for the same reason:
+# with a path like "data.txt" the old form matched the filename instead.
+#
+# Only the 'x' case discriminates old from new — 'x' was absent from the old
+# mode class entirely. The 'r+' and keyword-mode cases pass either way (via the
+# literal '+' and 'w'); they are regression guards, not bug pins.
+assert_write "python open x mode"             'python3 -c "open(\"file.txt\", \"x\")"'
+assert_write "python open r+ mode"            'python3 -c "open(\"file.txt\", \"r+\")"'
+assert_write "python open keyword mode"       'python3 -c "open(\"file.txt\", mode=\"w\")"'
+
+# Nested parentheses in the path argument — the most common real write idiom.
+# A `[^)]*` form cannot cross the inner `)`, so it would miss all three. `dev`
+# catches the Path() and os.path.join() forms only by accident, via the `a` in
+# "Path" and "path"; it misses str(p) outright.
+assert_write "python open, nested Path()"     'python3 -c "open(pathlib.Path(d) / \"f\", \"w\")"'
+assert_write "python open, nested str()"      'python3 -c "open(str(p), \"w\")"'
+assert_write "python open, os.path.join"      'python3 -c "open(os.path.join(d, \"f\"), \"w\")"'
+
+# pathlib.Path.open() takes the MODE as its FIRST positional argument, unlike
+# the builtin open(file, mode). So there is no comma, and a clause written for
+# the builtin misses it — while `Path("f").open("w")` truncates a real file on
+# open, before any .write() call. Needs its own clause.
+assert_write "pathlib Path.open w"            'python3 -c "import pathlib; pathlib.Path(\"f.txt\").open(\"w\").close()"'
+assert_write "pathlib Path.open a"            'python3 -c "import pathlib; pathlib.Path(\"f.txt\").open(\"a\")"'
+assert_write "pathlib Path.open x"            'python3 -c "import pathlib; pathlib.Path(\"f.txt\").open(\"x\")"'
+assert_read  "pathlib Path.open r"            'python3 -c "import pathlib; print(pathlib.Path(\"f.txt\").open(\"r\").read())"'
+assert_read  "pathlib Path.open default"      'python3 -c "import pathlib; print(pathlib.Path(\"f.txt\").open().read())"'
+
+# Keyword-argument mode on Path.open(). There is no comma before the mode
+# token, so a clause anchoring the mode immediately after `.open(` misses it —
+# and `Path(p).open(mode="w", encoding=...)` is the more idiomatic form once
+# an encoding is also passed.
+assert_write "pathlib Path.open mode kwarg"   'python3 -c "from pathlib import Path; Path(\"f\").open(mode=\"w\")"'
+assert_write "pathlib Path.open kwarg+enc"    'python3 -c "from pathlib import Path; Path(\"f\").open(mode=\"w\", encoding=\"utf-8\")"'
+assert_read  "pathlib Path.open r kwarg"      'python3 -c "from pathlib import Path; print(Path(\"f\").open(mode=\"r\").read())"'
+
+# The mode is unknowable at the call site, so this is treated as a write.
+assert_write "python open star-args"          'python3 -c "open(*args)"'
+
+# Archive extraction writes files. `dev` caught the tarfile form only because
+# every ".tar" path contains an `a`, and never caught the zipfile form at all.
+assert_write "python tarfile extractall"      'python3 -c "import tarfile; tarfile.open(\"b.tar\").extractall(\".\")"'
+assert_write "python zipfile extractall"      'python3 -c "import zipfile; zipfile.ZipFile(\"b.zip\").extractall(\".\")"'
+
+# tarfile write modes carry a compression suffix after ":" or "|". Those
+# characters would otherwise end the mode token early and read as a read.
+assert_write "python tarfile w:gz"            'python3 -c "import tarfile; tarfile.open(\"out.tgz\", \"w:gz\")"'
+assert_write "python tarfile w|gz stream"     'python3 -c "import tarfile; tarfile.open(\"out.tgz\", \"w|gz\")"'
+assert_write "python tarfile x:bz2"           'python3 -c "import tarfile; tarfile.open(\"out.tbz\", \"x:bz2\")"'
+assert_read  "python tarfile r:gz"            'python3 -c "import tarfile; tarfile.open(\"in.tgz\", \"r:gz\")"'
+
+# A mode held in a variable could be any mode. dev caught these only because a
+# realistic identifier like "path" contains an "a" — rename it and the accident
+# disappears, so match the shape instead.
+assert_write "python open, variable mode"     'python3 -c "open(path, mode)"'
+assert_write "python open, other var names"   'python3 -c "open(filename, filemode)"'
+assert_read  "python open, kwarg not a mode"  'python3 -c "print(open(p, encoding=\"utf-8\").read())"'
+
+# os.open takes integer flags rather than a mode string.
+assert_write "python os.open O_WRONLY"        'python3 -c "import os; os.open(path, os.O_WRONLY|os.O_CREAT)"'
+assert_write "python os.open O_APPEND"        'python3 -c "import os; os.open(path, os.O_APPEND)"'
+assert_read  "python os.open O_RDONLY"        'python3 -c "import os; os.open(path, os.O_RDONLY)"'
+
 # #153 — counterexamples for the new matcher families.
 assert_read  "cp --help"      "cp --help"
 assert_read  "cp --version"   "cp --version"
