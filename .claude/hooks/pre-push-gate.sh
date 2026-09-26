@@ -35,14 +35,70 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
-if ! echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+# Recognise `git push` and the `git -C <dir> push` form the scoping fix
+# below reads a target directory from (me2resh/apexyard#1366). A bare
+# `\bgit\s+push\b` check, alone, never matches the `-C` form at all — the
+# scoping logic further down would be unreachable dead code for it.
+IS_PUSH=0
+if echo "$COMMAND" | grep -qE '\bgit\s+push\b'; then
+  IS_PUSH=1
+elif echo "$COMMAND" | grep -qE '\bgit\s+-C\s+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)\s+push\b'; then
+  IS_PUSH=1
+fi
+if [ "$IS_PUSH" -ne 1 ]; then
   exit 0
 fi
 
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# ---------------------------------------------------------------------------
+# Resolve the repo being pushed, not the session's cwd (me2resh/apexyard#1366).
+#
+# A portfolio session's cwd is often the ops fork while the push itself
+# targets a sibling managed-project clone, via `git -C <dir> push` or a
+# `cd <dir> &&` prefix. Reading the target directory out of the command,
+# instead of assuming $PWD, is the same extraction shape
+# block-main-push.sh added for #1230 — this hook keeps its own copy
+# because the two hooks ask different questions (a skip-check there, the
+# actual run target here), so sharing one function would couple them.
+#
+# `git -C <dir> push` wins over a `cd` prefix when both appear (it names
+# the target more precisely). Neither present: fall back to $PWD, the
+# pre-#1366 behaviour, unchanged for the common single-repo session.
+# ---------------------------------------------------------------------------
+PUSH_TARGET_DIR="$PWD"
+if echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])git[[:space:]]+-C[[:space:]]+[^[:space:];&|]+'; then
+  PUSH_TARGET_DIR=$(echo "$COMMAND" \
+    | grep -oE "git[[:space:]]+-C[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+    | tail -n 1 \
+    | sed -E "s/^git[[:space:]]+-C[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+  case "$PUSH_TARGET_DIR" in
+    /*) ;;
+    *) PUSH_TARGET_DIR="$PWD/$PUSH_TARGET_DIR" ;;
+  esac
+elif echo "$COMMAND" | grep -qE '(^|[;&|[:space:]])cd[[:space:]]+\S'; then
+  CD_TARGET=$(echo "$COMMAND" \
+    | grep -oE "cd[[:space:]]+(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)" \
+    | tail -n 1 \
+    | sed -E "s/^cd[[:space:]]+//; s/^[\"']//; s/[\"']\$//")
+  if [ -n "$CD_TARGET" ]; then
+    case "$CD_TARGET" in
+      /*) PUSH_TARGET_DIR="$CD_TARGET" ;;
+      *) PUSH_TARGET_DIR="$PWD/$CD_TARGET" ;;
+    esac
+  fi
+fi
+
+REPO_ROOT=$(git -C "$PUSH_TARGET_DIR" rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
+
+# Move into the target repo NOW, before the config lookup below. The
+# shared config reader (`_lib-read-config.sh`) resolves its own repo root
+# from `$PWD`, so calling it while `$PWD` is still the session's original
+# directory reads the WRONG repo's `.pre_push.commands` — the second half
+# of #1366 ("the commands can be read from one repo's config and executed
+# against a different repo").
+cd "$REPO_ROOT" || exit 0
 
 # ---------------------------------------------------------------------------
 # Skip marker — check HEAD commit message for the escape hatch.
@@ -69,8 +125,14 @@ CMDS_JSON=""
 if [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
   # shellcheck disable=SC1090,SC1091
   . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
-  # Produce a JSON array of {name, run} objects.
-  CMDS_JSON=$(config_get '.pre_push.commands' 2>/dev/null)
+  # APEXYARD_OPS_DISABLE_PIN=1: the shared reader's `_config_repo_root`
+  # prefers a session-pinned ops root over `$PWD` (apexyard#381), which
+  # is right for a marker write but wrong here — this gate must read the
+  # config of the repo it is ABOUT TO RUN COMMANDS AGAINST ($REPO_ROOT,
+  # already `cd`-ed into above), not the operator's other, pinned fork.
+  # Unset, this was the second half of #1366: commands read from one
+  # repo's config, executed against a different one.
+  CMDS_JSON=$(APEXYARD_OPS_DISABLE_PIN=1 config_get '.pre_push.commands' 2>/dev/null)
 fi
 
 # Check that the config actually contains commands. Silent skip if not —
@@ -83,9 +145,8 @@ fi
 
 # ---------------------------------------------------------------------------
 # Run each command. On first non-zero, block with a summary.
+# `$PWD` is already `$REPO_ROOT` from the cd above.
 # ---------------------------------------------------------------------------
-
-cd "$REPO_ROOT" || exit 0
 
 FAILURES=""
 # printf '%s', NOT echo: CMDS_JSON comes from config_get and may carry a JSON

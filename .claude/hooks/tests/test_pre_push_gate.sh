@@ -40,15 +40,39 @@ make_sandbox() {
 
   # Copy the shared reader + shipped defaults so config lookups resolve
   # the same way they do in a real fork (same pattern as #115 test harness).
+  # Also copy _lib-ops-root.sh + _lib-resolution-cache.sh — both optional
+  # (config_get works without them, the plain pre-#381 way) but their
+  # presence is what lets case14 below exercise the real
+  # pin-vs-cwd resolution path #1366's fix runs through in production.
   local src_root
   src_root=$(cd "$(dirname "$0")/../../.." && pwd)
   if [ -f "$src_root/.claude/hooks/_lib-read-config.sh" ]; then
     cp "$src_root/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
   fi
+  if [ -f "$src_root/.claude/hooks/_lib-ops-root.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
+  fi
+  if [ -f "$src_root/.claude/hooks/_lib-resolution-cache.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-resolution-cache.sh" "$sb/.claude/hooks/_lib-resolution-cache.sh"
+  fi
   if [ -f "$src_root/.claude/project-config.defaults.json" ]; then
     cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   fi
   echo "$sb"
+}
+
+# push_json_for <target-dir> <shape>: a push command that targets a
+# DIFFERENT directory than the session cwd — the shape #1366 reports.
+# shape: "cd" for `cd <dir> && git push origin HEAD`, "-C" for
+# `git -C <dir> push origin HEAD`.
+push_json_for() {
+  local target="$1"
+  local shape="$2"
+  if [ "$shape" = "-C" ]; then
+    printf '{"tool_input":{"command":"git -C %s push origin HEAD"}}' "$target"
+  else
+    printf '{"tool_input":{"command":"cd %s && git push origin HEAD"}}' "$target"
+  fi
 }
 
 push_json() {
@@ -261,7 +285,144 @@ EOF
   rm -rf "$sb"
 }
 
+# -------------------- CASE 12: `cd <B> && git push` runs B's checks, not A's --------------------
+# Regression guard for me2resh/apexyard#1366: the session cwd (sandbox A)
+# carries a FAILING check; the push actually targets sandbox B (a `cd`
+# prefix), which carries a PASSING one. Before the fix, REPO_ROOT was
+# derived from `git rev-parse --show-toplevel` with no `-C`/`cd` awareness,
+# so A's failing check ran (and blocked) regardless of what was pushed.
+case12() {
+  local a b
+  a=$(make_sandbox)
+  b=$(make_sandbox)
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-not-run", "run": "touch A_RAN; exit 1"}]}}
+EOF
+  cat > "$b/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "B-should-run", "run": "touch $b/B_RAN"}]}}
+EOF
+  local payload; payload=$(push_json_for "$b" "cd")
+  run_hook "$a" "$payload" 0 "" "cd-prefix-targets-B-not-A"
+  if [ -f "$a/A_RAN" ]; then
+    echo "FAIL [cd-prefix-targets-B-not-A]: A's command ran; it should not have" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cd-prefix-A-ran "
+  fi
+  if [ ! -f "$b/B_RAN" ]; then
+    echo "FAIL [cd-prefix-targets-B-not-A]: B's command did NOT run; it should have" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}cd-prefix-B-did-not-run "
+  fi
+  rm -rf "$a" "$b"
+}
+
+# -------------------- CASE 13: `git -C <B> push` runs B's checks, not A's --------------------
+# Same as case12, the OTHER shape #1366 names: `git -C <dir> push`. This
+# shape did not even match the hook's own `\bgit\s+push\b` push-detection
+# gate before the fix — the hook exited 0 silently, running NEITHER
+# repo's checks. B_RAN must exist to prove B's check genuinely ran, not
+# that the hook skipped both.
+case13() {
+  local a b
+  a=$(make_sandbox)
+  b=$(make_sandbox)
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-not-run", "run": "touch A_RAN; exit 1"}]}}
+EOF
+  cat > "$b/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "B-should-run", "run": "touch $b/B_RAN"}]}}
+EOF
+  local payload; payload=$(push_json_for "$b" "-C")
+  run_hook "$a" "$payload" 0 "" "dash-C-targets-B-not-A"
+  if [ -f "$a/A_RAN" ]; then
+    echo "FAIL [dash-C-targets-B-not-A]: A's command ran; it should not have" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}dash-C-A-ran "
+  fi
+  if [ ! -f "$b/B_RAN" ]; then
+    echo "FAIL [dash-C-targets-B-not-A]: B's command did NOT run — the -C form was never even detected as a push" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}dash-C-B-did-not-run "
+  fi
+  rm -rf "$a" "$b"
+}
+
+# -------------------- CASE 14: reverse direction --------------------
+# Same pair, pushed the other way: cwd=B, push targets A via a `cd`
+# prefix. A's failing command must now run and block.
+case14() {
+  local a b
+  a=$(make_sandbox)
+  b=$(make_sandbox)
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-run", "run": "exit 1"}]}}
+EOF
+  cat > "$b/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "B-should-not-run", "run": "exit 1"}]}}
+EOF
+  local payload; payload=$(push_json_for "$a" "cd")
+  run_hook "$b" "$payload" 2 "A-should-run: FAILED" "reverse-direction-targets-A"
+  rm -rf "$a" "$b"
+}
+
+# -------------------- CASE 15: a session pin must NOT override the push target --------------------
+# The second half of #1366: the shared config reader prefers a session-
+# pinned ops root over `$PWD` (apexyard#381). Simulate a real session
+# pinned to sandbox C (a stand-in for "the operator's other, unrelated
+# fork") while pushing FROM A TO B via a `cd` prefix. Before the fix, the
+# pin made `config_get` read C's `.pre_push.commands` regardless of which
+# repo the push actually targeted; B_RAN / C_RAN prove which config was
+# actually used.
+case15() {
+  local a b c
+  a=$(make_sandbox)
+  b=$(make_sandbox)
+  c=$(make_sandbox)
+  # C must satisfy _ops_root_pin_valid: an anchor marker + .claude/hooks.
+  touch "$c/.apexyard-fork"
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-not-run", "run": "exit 1"}]}}
+EOF
+  cat > "$b/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "B-should-run", "run": "touch $b/B_RAN"}]}}
+EOF
+  cat > "$c/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "C-should-not-run", "run": "touch $c/C_RAN; exit 1"}]}}
+EOF
+  local pin_dir; pin_dir=$(mktemp -d)
+  printf '%s' "$c" > "$pin_dir/ops-root-test-session-1366"
+  local payload; payload=$(push_json_for "$b" "cd")
+  (
+    cd "$a" || exit 1
+    # Force the pin path regardless of the OUTER test runner's own
+    # isolation setting (bin/run-hook-tests.sh exports this globally —
+    # see its header comment — precisely to avoid a live session pin
+    # escaping onto sandbox tests). This case exists to prove the HOOK
+    # ITSELF disables the pin for its own config lookup, so unset
+    # whatever the outer runner set and let the hook's own behaviour
+    # be what's under test.
+    unset APEXYARD_OPS_DISABLE_PIN
+    export CLAUDE_CODE_SESSION_ID="test-session-1366"
+    export APEXYARD_OPS_PIN_DIR="$pin_dir"
+    echo "$payload" | bash .claude/hooks/pre-push-gate.sh 2>/tmp/pre-push-gate-stderr.$$
+  )
+  local rc=$?
+  local got_stderr; got_stderr=$(cat /tmp/pre-push-gate-stderr.$$ 2>/dev/null)
+  rm -f /tmp/pre-push-gate-stderr.$$
+  if [ "$rc" != "0" ]; then
+    echo "FAIL [pin-does-not-override-push-target]: want rc=0, got $rc (stderr: ${got_stderr:0:200})" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}pin-override-rc "
+  elif [ -f "$c/C_RAN" ]; then
+    echo "FAIL [pin-does-not-override-push-target]: the PINNED repo's command ran instead of the pushed repo's" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}pin-override-C-ran "
+  elif [ ! -f "$b/B_RAN" ]; then
+    echo "FAIL [pin-does-not-override-push-target]: the pushed repo's command did NOT run" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}pin-override-B-did-not-run "
+  else
+    echo "PASS [pin-does-not-override-push-target]"
+    PASS=$((PASS+1))
+  fi
+  rm -rf "$a" "$b" "$c" "$pin_dir"
+}
+
 case1; case2; case3; case4; case5; case6; case7; case8; case9; case10; case11
+case12; case13; case14; case15
 
 echo ""
 echo "==================================="
