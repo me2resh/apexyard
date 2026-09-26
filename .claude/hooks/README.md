@@ -178,20 +178,23 @@ All path patterns use the `(^|/)` anchor so they catch **monorepo layouts** (`ba
 
 **What it does:** if the PR's diff touches any UI file, requires a design-approval marker at `.claude/session/reviews/<owner>__<repo>__<pr>-design.approved` (repo-qualified, see AgDR-0060) with a SHA matching HEAD. Non-UI PRs bypass silently.
 
-**Default UI paths** (regex):
+**Default UI paths** (regex, shared with `/approve-design` step 5 via `.claude/hooks/_lib-ui-paths.sh` — one list, not two, since me2resh/apexyard#1390):
 
 ```
 \.tsx$                    # React (TSX only, NOT plain .ts)
 \.jsx$                    # React (JSX only, NOT plain .js)
 \.vue$
 \.svelte$
+\.astro$                  # Astro components
+\.mdx$                    # MDX (Markdown + JSX)
+\.hbs$ / \.njk$ / \.liquid$  # Handlebars / Nunjucks / Liquid templates
 \.css$ / \.scss$ / \.sass$ / \.less$
 design-tokens
 ```
 
 **Critical note:** `.tsx`/`.jsx` are matched **exactly**, not as `.tsx?` / `.jsx?`. The original draft had the regex-optional form, which also matched plain `.ts` and `.js` files — caught in smoke testing and fixed before merge. Server-side TypeScript/JavaScript should never trigger a design gate.
 
-**Customize:** `.ui_paths` in `.claude/project-config.json`.
+**Customize:** `.ui_paths` in `.claude/project-config.json` (REPLACES the default list wholesale — see `docs/project-config.md`). `_lib-ui-paths.sh` filters out a malformed entry (`null`, an object, a nested array, or a whitespace-only string). If every entry is malformed, the library falls back to the shipped defaults above instead of resolving to an empty, always-passing pattern list (Hakim's LOW-2, me2resh/apexyard#1397).
 
 **Companion skill:** `/approve-design <pr>` (in `.claude/skills/approve-design/`) writes the marker. It follows the same pattern as `/approve-merge`: verify PR state → verify Rex marker at HEAD → write the design marker at the repo root → confirm → stop. The skill definition includes explicit valid/invalid triggers and an anti-pattern section distinguishing mockup approval (design phase) from implementation-review approval (PR phase).
 
