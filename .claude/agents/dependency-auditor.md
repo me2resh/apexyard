@@ -16,6 +16,13 @@ model: sonnet
 
 ---
 
+## Writing standard
+
+Before you write a durable artifact, read `.claude/rules/writing-standard.md`.
+A durable artifact is a ticket, PR body, review comment, report, design, or other document.
+Use the controlled technical writing profile in that rule.
+The rule does not apply to chat replies.
+
 ## Purpose
 
 Monitor dependencies for vulnerabilities, outdated packages, and license compliance.
