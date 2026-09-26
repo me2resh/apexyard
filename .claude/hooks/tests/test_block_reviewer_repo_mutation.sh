@@ -93,4 +93,118 @@ run_case 'heredoc review prose is not a mutation' $'cat <<EOF > /tmp/review-body
 rm -f "$TMP/.claude/session/active-reviewer"
 run_case 'without active review mutations are unchanged' 'git commit -m "orchestrator work"' allowed
 
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1376 — the active-reviewer marker is now keyed on
+# CLAUDE_CODE_SESSION_ID (active_reviewer_marker_path, _lib-review-markers.sh)
+# instead of one fixed path shared by every session and worktree. Before this
+# fix, a review running in one session set the ONE shared marker file above,
+# and this hook read it from EVERY session — an unrelated `git commit` in a
+# totally different worktree got blocked by a review it had no part in.
+#
+# A DEDICATED sandbox (with _lib-review-markers.sh copied in, unlike $TMP
+# above) and an explicit-session-id run helper, so these cases don't disturb
+# the shared $TMP sandbox the rest of this file uses.
+# ---------------------------------------------------------------------------
+
+SESS_TMP=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-review-mutation-sess.XXXXXX")
+mkdir -p "$SESS_TMP/.claude/session" "$SESS_TMP/.claude/hooks"
+touch "$SESS_TMP/.apexyard-fork"
+git -C "$SESS_TMP" init -q
+cp "$HOOK" "$SESS_TMP/.claude/hooks/"
+cp "$SRC_ROOT/.claude/hooks/_lib-strip-heredoc.sh" "$SESS_TMP/.claude/hooks/"
+cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$SESS_TMP/.claude/hooks/"
+
+# shellcheck disable=SC1091
+. "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh"
+
+# run_case_sess <name> <session_id|""> <command> <expected: blocked|allowed>
+run_case_sess() {
+  local name="$1" sess="$2" command="$3" expected="$4"
+  local input output rc
+  input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
+  output=$(
+    cd "$SESS_TMP" || exit 1
+    if [ -n "$sess" ]; then export CLAUDE_CODE_SESSION_ID="$sess"; else unset CLAUDE_CODE_SESSION_ID; fi
+    printf '%s' "$input" | "$SESS_TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1
+  )
+  rc=$?
+  if [ "$expected" = blocked ] && [ "$rc" -eq 2 ] && printf '%s' "$output" | grep -q 'BLOCKED:'; then
+    echo "PASS: $name"
+  elif [ "$expected" = allowed ] && [ "$rc" -eq 0 ]; then
+    echo "PASS: $name"
+  else
+    echo "FAIL: $name (rc=$rc output=$output)" >&2
+    trap - EXIT
+    rm -rf "$TMP" "$SESS_TMP"
+    exit 1
+  fi
+}
+
+# (1) SAME session: session "sess-A" wrote its own marker; that session's git
+# mutation is blocked exactly as before, now proven with the session suffix.
+ACTIVE_A=$(active_reviewer_marker_path "$SESS_TMP" "sess-A")
+mkdir -p "$(dirname "$ACTIVE_A")"
+printf '%s\n' 'me2resh/apexyard#1233:rex' > "$ACTIVE_A"
+run_case_sess '#1376: same session as the marker owner -> git commit still blocked' \
+  "sess-A" 'git commit -m "reviewed"' blocked
+
+# (2) THE REGRESSION THIS FIX CLOSES: a DIFFERENT session's git mutation must
+# NOT be blocked by sess-A's marker. Pre-#1376's single fixed path meant any
+# session's `git commit` was blocked by a review running in a completely
+# different worktree.
+run_case_sess '#1376: a DIFFERENT concurrent session is not blocked by sess-A review -> git commit allowed' \
+  "sess-B" 'git commit -m "unrelated orchestrator work"' allowed
+
+# (3) NO session id at all (a bare/standalone invocation) must not be blocked
+# by another session's marker either — the fixed-path fallback only reads
+# the UNSUFFIXED path, and sess-A wrote a suffixed one.
+run_case_sess '#1376: no session id, a different session marker exists -> git commit allowed' \
+  "" 'git commit -m "standalone invocation"' allowed
+
+rm -f "$ACTIVE_A"
+
+# (4) Parity check: a marker at the LEGACY bare/shared path (no per-session
+# suffix at all) still protects a genuinely session-less review — a
+# git-native hook, CI, or a bare test-harness invocation, none of which set
+# CLAUDE_CODE_SESSION_ID. The fallback in active_reviewer_marker_path exists
+# specifically so this case keeps working unchanged.
+printf '%s\n' 'me2resh/apexyard#1233:rex' > "$SESS_TMP/.claude/session/active-reviewer"
+run_case_sess '#1376: no session id, legacy shared-path marker of its own -> git commit still blocked (fallback parity)' \
+  "" 'git commit -m "should still be blocked"' blocked
+
+# (5) THE REGRESSION THIS FIX CLOSES, mirrored at this hook: a marker sitting
+# at that SAME legacy bare/shared path must NOT block a session that HAS its
+# own distinct id (sess-C resolves its OWN suffixed path, which carries no
+# content here, and never falls back to the bare path once an id exists).
+# Pre-#1376 this hook read the bare path UNCONDITIONALLY — a marker there,
+# from any source, blocked every session's mutations regardless of identity.
+run_case_sess '#1376: legacy shared-path marker does not block a session that has its own id -> git commit allowed' \
+  "sess-C" 'git commit -m "unrelated to the legacy marker"' allowed
+
+# (6) me2resh/apexyard#1400 security re-review, LOW 3 — case (5) above is a
+# silent fail-open: the mutation stays UNBLOCKED with no message explaining
+# why a marker plainly sits on disk. This case pins the non-blocking stderr
+# advisory added for that gap: the command must still succeed (rc=0, the
+# lock is genuinely not armed for sess-C), but stderr must name the legacy
+# marker path so the state is visible instead of silent.
+input=$(jq -cn --arg command 'git commit -m "advisory should not block"' '{tool_input:{command:$command}}')
+output=$(
+  cd "$SESS_TMP" || exit 1
+  export CLAUDE_CODE_SESSION_ID="sess-D"
+  printf '%s' "$input" | "$SESS_TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1
+)
+rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$output" | grep -q 'ADVISORY:' && printf '%s' "$output" | grep -q 'active-reviewer'; then
+  echo "PASS: #1400 LOW3: legacy shared-path marker + a session id -> non-blocking stderr advisory, commit still allowed"
+else
+  echo "FAIL: #1400 LOW3: legacy shared-path marker + a session id -> non-blocking stderr advisory, commit still allowed (rc=$rc output=$output)" >&2
+  trap - EXIT
+  rm -rf "$TMP" "$SESS_TMP"
+  exit 1
+fi
+
+rm -f "$SESS_TMP/.claude/session/active-reviewer"
+
+rm -rf "$SESS_TMP"
+
 echo 'PASS: all review mutation cases'

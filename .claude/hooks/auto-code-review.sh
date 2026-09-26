@@ -33,7 +33,9 @@
 # no-op for that reader.
 #
 # The orchestrator branch also tells the caller to set the active-reviewer
-# session marker (.claude/session/active-reviewer) before spawning Rex.
+# session marker (resolved through active_reviewer_marker_path in
+# _lib-review-markers.sh — session-scoped since #1376, never the literal
+# .claude/session/active-reviewer string) before spawning Rex.
 # #843 made warn-review-marker-write.sh refuse that write without the marker;
 # #1026 returned it to ADVISORY (it warns, never blocks — see AgDR-0111,
 # which supersedes AgDR-0109's block-on-resolved-target decision), so
