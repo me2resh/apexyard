@@ -124,11 +124,12 @@ review_marker_path() {
 #                 pre-#1376 FIXED path (no session suffix). This is the safe
 #                 fallback for callers that legitimately have no Claude Code
 #                 session at all — a standalone git-native hook, CI, or a
-#                 bare test-harness invocation. Exactly one such process acts
-#                 on a given ops fork at a time in that case, so the fixed
-#                 path is no less safe than it was before this function
-#                 existed, and every caller that never set the env var (the
-#                 pre-#1376 test suite included) keeps working unchanged.
+#                 bare test-harness invocation. This function makes no claim
+#                 about how many such processes act on a given ops fork at
+#                 once; the fixed path is exactly as safe (or unsafe) as it
+#                 was before this function existed, and every caller that
+#                 never set the env var (the pre-#1376 test suite included)
+#                 keeps working unchanged.
 #
 # Output (stdout): the absolute marker path.
 active_reviewer_marker_path() {
@@ -144,7 +145,10 @@ active_reviewer_marker_path() {
   # Sanitise: a session id is expected to already be a safe token (the
   # harness's own id), but never trust it as a bare path component. Collapse
   # anything outside [A-Za-z0-9._-] to '_' so the result can never contain a
-  # '/' (or other separator) and escape the reviews directory.
+  # '/' (or other separator) and escape the .claude/session/ directory this
+  # marker lives in (NOT the .claude/session/reviews/ directory — the
+  # active-reviewer marker and the *.approved review markers are siblings,
+  # not the same directory).
   local safe_sid
   safe_sid=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_')
   printf '%s.%s' "$base" "$safe_sid"

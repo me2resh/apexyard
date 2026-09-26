@@ -93,8 +93,12 @@ instead of the literal string:
   session id.
 - Every future writer or reader of this marker must resolve its path
   through `active_reviewer_marker_path`. It must never use the literal
-  `.claude/session/active-reviewer` string. A literal-path caller silently
-  reopens the cross-session leak this decision closes.
+  `.claude/session/active-reviewer` string. A literal-path READER reopens
+  the cross-session leak this decision closes. It reads the bare file
+  regardless of which session set it. A literal-path WRITER does not
+  reopen that leak. It disarms the mutation lock for its own session
+  instead. A session-scoped reader never looks at the bare path once a
+  session id exists (me2resh/apexyard#1400 security re-review).
 - Three test files pin the fix: `test_warn_review_marker_write.sh`,
   `test_block_reviewer_repo_mutation.sh`, and
   `test_clear_active_reviewer_marker.sh`. The fix-pinning cases in each
