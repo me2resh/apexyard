@@ -60,6 +60,10 @@ projects:
     repo: test-org/widget-forge
     workspace: workspace/widget-forge
     status: active
+  - name: me2resh
+    repo: owner-collision/me2resh-tool
+    workspace: workspace/me2resh-tool
+    status: active
 YAML
 
 # A directory to cd into so the hook walks up to find the registry.
@@ -1010,7 +1014,61 @@ run_case "#1206 H2: tracker_pr_merge wrapper inside \$(...) still anchors and sc
   "MERGE_RESULT=\$(tracker_pr_merge \"me2resh/apexyard\" \"12\" \"squash\" true \"widget-forge leak\")"
 
 # ---------------------------------------------------------------------------
-# 72-75. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.
+# 72-77. me2resh/apexyard#1387 — a registered project's `name` colliding with
+# the OWNER login of the public repo being written to (not just its bare
+# repo name) was treated as a leak. The fixture registry above adds a
+# project literally named "me2resh" (owner-collision/me2resh-tool) to
+# reproduce it: before the fix, writing the target repo out in full as
+# "me2resh/apexyard", or plainly @-mentioning its owner, blocked on
+# "project name: me2resh" even though nothing private was referenced.
+#
+# The fix exempts the target repo's OWNER login the same way it already
+# exempted the bare repo name (step 8 in the source file) — never the target
+# repo's whole slug or owner, but a genuinely different private project must
+# still block exactly as before.
+# ---------------------------------------------------------------------------
+
+# 72. The exact repro: writing the target out as "<owner>/<repo>" in body
+#     prose used to block on the coincidental "me2resh" project-name match.
+run_case "#1387: writing the target repo as <owner>/<repo> in the body must not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'fix: patch' --body 'filed against me2resh/apexyard directly'"
+
+# 73. Plainly @-mentioning the owner (no slash, no repo name at all) — the
+#     issue's own repro notes a review "could not @-mention its author".
+run_case "#1387: @-mentioning the repo owner in the body must not block" \
+  0 "" \
+  "gh pr review 12 --repo me2resh/apexyard --comment --body 'nice catch @me2resh, one nit below'"
+
+# 74. Owner mention in the title, not just the body.
+run_case "#1387: owner mention in the title must not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'me2resh/apexyard: fix release notes' --body 'clean body'"
+
+# 75. Regression guard — a GENUINELY different private project's name must
+#     still block. The owner exemption must not widen into "any name is
+#     fine now".
+run_case "#1387: an unrelated private project name still blocks (owner exemption is narrow)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'discovered during curios-dog rebuild'"
+
+# 76. Regression guard — the target's own bare repo name exemption (pre-
+#     existing, #1387 must not disturb it) still works alongside the new
+#     owner exemption.
+run_case "#1387: the target's own bare repo name still exempt (pre-existing behaviour preserved)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'apexyard: fix release notes' --body 'clean body'"
+
+# 77. Regression guard — an owner mention alongside a GENUINE leak in the
+#     same body must still catch the real leak. The exemption skips only
+#     the owner's own name entry; it must not short-circuit scanning the
+#     rest of the body for an unrelated private project.
+run_case "#1387: owner mention plus a real leak in the same body still blocks on the real leak" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'filed against me2resh/apexyard; also discovered during curios-dog rebuild'"
+
+# ---------------------------------------------------------------------------
+# 78-81. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.
 # extract_flag_value/extract_path_flag both require a space between a flag
 # and its value; the equals form matched neither, so a leak sent through it
 # reached the empty-haystack short-circuit unscanned. --input already fixed
