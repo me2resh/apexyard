@@ -60,9 +60,36 @@ Agents must use the normal, least-privileged workflow. They must not use adminis
 ```
 [ ] Code Reviewer approved for THIS commit SHA?     NO → WAIT
 [ ] Human approver approved THIS specific PR?       NO → WAIT, ASK EXPLICITLY
+[ ] PR up to date with its base branch?             NO → STOP, see below
 ```
 
 NO EXCEPTIONS. Not for "small fixes". Not for "just a typo".
+
+### The PR must be up to date with its base branch (me2resh/apexyard#1386)
+
+A merge queue creates a race. PR A merges to the base branch first. PR B's last
+CI run still reflects the old base. `/approve-merge` checks the PR's
+`mergeStateStatus` on the forge before it merges. The config key
+`merge.require_up_to_date` (default `true`, in `.claude/project-config.defaults.json`
+under `merge`) controls this check. When the check is on and the status is
+`BEHIND`, the skill stops before the merge. It does not merge on a CI result
+computed against a stale base.
+
+When the skill stops, do this:
+
+1. Update the branch: `gh pr update-branch <pr> --repo <owner/repo>`.
+2. Wait for green CI on the updated branch.
+3. Get a short Rex re-review of the new merge commit. The SHA changed, so the
+   existing Rex marker no longer matches HEAD.
+4. Run `/approve-merge <pr>` again.
+
+Do not update the branch before the first review. An update changes the SHA
+and invalidates any Rex approval already recorded. Update the branch once,
+just before the merge.
+
+This check adds no new blocking condition to `block-unreviewed-merge.sh`. The
+gate's marker and SHA checks stay unchanged. The stop happens inside
+`/approve-merge`, before the merge command runs.
 
 This rule (and the rest of this file) uses "CEO" as the default human-approver display title — override the printed word via `.claude/project-config.json` → `review_markers.human_approver_title` (default unchanged); the marker filename, structured fields, and gate logic are the same regardless (me2resh/apexyard#957).
 

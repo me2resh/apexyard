@@ -84,7 +84,7 @@ Only proceed past this step if the user has given an unambiguous per-PR approval
 ### 3. Verify the PR state
 
 ```bash
-gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid
+gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid,mergeStateStatus,baseRefName
 ```
 
 Sanity checks:
@@ -92,6 +92,37 @@ Sanity checks:
 - `state` must be `OPEN`. Refuse if it's `MERGED`, `CLOSED`, or `DRAFT`.
 - `mergeable` should be `MERGEABLE` or `UNKNOWN` (GitHub hasn't computed yet). Refuse on `CONFLICTING`.
 - Capture `headRefOid` — this is the **PR's HEAD on GitHub**, which is the SHA both markers must match. Don't use `git rev-parse HEAD` from the local working tree — it's rarely the PR branch and the merge gate compares against the GitHub-reported HEAD.
+- Capture `mergeStateStatus` and `baseRefName` for step 3a below.
+
+### 3a. Stop if the PR is behind its base branch (me2resh/apexyard#1386, `merge.require_up_to_date`)
+
+A merge queue creates a race: PR A merges to the base branch first, and PR B's
+last CI run still reflects the old base. Read the config key before deciding
+whether to check:
+
+```bash
+source "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+REQUIRE_UP_TO_DATE=$(config_get_or '.merge.require_up_to_date' 'true')
+```
+
+When `$REQUIRE_UP_TO_DATE` is `true` and step 3's `mergeStateStatus` is
+`BEHIND`, **stop here**. Do not verify the Rex marker, do not write the CEO
+marker, and do not merge. Tell the user:
+
+```
+PR #<pr> is behind its base branch (<baseRefName>). Before this can merge:
+  1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
+  2. Wait for green CI on the updated branch.
+  3. Get a short Rex re-review of the new merge commit — the SHA will
+     change, so the existing Rex marker will no longer match HEAD.
+  4. Run /approve-merge <pr> again.
+```
+
+Do not update the branch yourself as part of this skill — updating the branch
+before the review is redone invalidates the review, and the update is a
+separate, visible action the user should see happen. This check does not
+change `block-unreviewed-merge.sh` — it stops the merge one step earlier, in
+this skill, before any marker is touched.
 
 ### 4. Verify the Rex marker exists at the PR's HEAD
 

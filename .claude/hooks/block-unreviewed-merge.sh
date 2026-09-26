@@ -290,6 +290,19 @@ MSG
   if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" rex "$REX_APPROVAL" 2>/dev/null); then
     printf '%s\n' "$_NEAR_MISS_HINT" >&2
   fi
+  # Optional: name a behind-base branch as a likely contributing reason
+  # (me2resh/apexyard#1386). This adds NO new blocking condition — the Rex
+  # marker was already missing, so this merge was already refused above.
+  # Fail-soft: an empty or failed lookup prints nothing extra.
+  _MERGE_STATE=$(gh pr view "$PR_NUMBER" --repo "${CMD_REPO:-}" --json mergeStateStatus -q '.mergeStateStatus' 2>/dev/null)
+  if [ "$_MERGE_STATE" = "BEHIND" ]; then
+    cat >&2 <<MSG3
+
+NOTE: PR #${PR_NUMBER} is also behind its base branch. Update it
+(gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>}), wait for
+green CI, then re-run /code-review before /approve-merge.
+MSG3
+  fi
   exit 2
 fi
 

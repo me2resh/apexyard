@@ -76,9 +76,10 @@ make_sandbox() {
 #!/bin/bash
 # Minimal gh shim for test_block_unreviewed_merge.
 case "\$*" in
-  *"pr view"*"headRefOid"*)     echo "$FIXED_SHA" ;;
-  *"pr view"*"headRefName"*)    echo "feature/GH-99-test" ;;
-  *"pr view"*"headRepository"*) echo "me2resh/apexyard" ;;
+  *"pr view"*"headRefOid"*)        echo "$FIXED_SHA" ;;
+  *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
+  *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
   *) ;;
 esac
 exit 0
@@ -929,6 +930,49 @@ if [ "$got_rc" = "0" ]; then
 else
   echo "FAIL [#1091 control: gh healthy, markers at forge HEAD -> still ALLOWED]: rc=$got_rc stderr=${got_stderr:0:300}" >&2
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1091-control-healthy "
+fi
+
+# --- me2resh/apexyard#1386: optional behind-base note on an EXISTING block ---
+#
+# block-unreviewed-merge.sh adds NO new blocking condition for a behind-base
+# branch. It only appends a note to a block that already fires for another
+# reason (here: missing Rex marker). These two cases pin that both halves
+# hold: the note appears when the mock reports BEHIND, and it does NOT
+# appear (no false positive) when the mock reports CLEAN — the same missing-
+# rex-marker scenario case 2 above already covers, restated here so a
+# regression in the note is caught even if case 2's assertion is loosened.
+
+# Case: missing rex marker + PR reported BEHIND -> still blocks (rc=2), and
+# the note names the behind-base branch as a likely contributing reason.
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1386 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_MERGE_STATE=BEHIND PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no recorded code-reviewer" \
+   && echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [#1386: missing rex marker + BEHIND -> blocks AND names behind-base as a reason]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1386: missing rex marker + BEHIND -> blocks AND names behind-base as a reason]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1386-behind-note "
+fi
+
+# Case: missing rex marker + PR reported CLEAN -> still blocks (rc=2), but
+# the behind-base note must NOT appear (no false positive on a PR that is
+# NOT behind its base — the block has a different, unrelated cause).
+sb=$(make_sandbox)
+input=$(jq -nc --arg c "gh pr merge 1387 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_MERGE_STATE=CLEAN PATH="$sb/bin:$PATH" bash -c \
+  "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_rc=$?
+rm -rf "$sb"
+if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no recorded code-reviewer" \
+   && ! echo "$got_stderr" | grep -qi "also behind its base branch"; then
+  echo "PASS [#1386: missing rex marker + CLEAN -> blocks, no spurious behind-base note]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1386: missing rex marker + CLEAN -> blocks, no spurious behind-base note]: rc=$got_rc stderr=${got_stderr:0:400}" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1386-no-spurious-note "
 fi
 
 # --- Summary ----------------------------------------------------------
