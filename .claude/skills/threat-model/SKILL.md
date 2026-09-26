@@ -108,11 +108,15 @@ The DFD's structured elements feed Step 2:
 The threat-model audit output will inline three sections from `dfd.md` so the artefact is self-contained. Extract them now into separate variables so they can be embedded in the Step 5b body:
 
 ```bash
-# Extract the ```mermaid ... ``` fenced block under `## Diagram`
+# Extract the Mermaid source from the fenced block under `## Diagram`.
+# Print only the lines inside the fence. Step 5b adds its own fence.
+# Do not copy the DFD's fence lines or the prose around the diagram.
 dfd_mermaid=$(awk '
-  /^## Diagram/        { in_diagram = 1; next }
-  /^## /               { if (in_diagram) exit }
-  in_diagram           { print }
+  /^## Diagram/                            { in_diagram = 1; next }
+  in_diagram && /^## /                     { exit }
+  in_diagram && /^```mermaid[[:space:]]*$/ { in_fence = 1; next }
+  in_fence && /^```[[:space:]]*$/          { exit }
+  in_fence                                 { print }
 ' "$dfd")
 
 # Extract the `## Trust boundaries` section (heading + body, up to next `## `)
@@ -235,7 +239,8 @@ body=$(mktemp); cat > "$body" <<EOF
 > snapshot the DFD as-it-was-then, not as-it-is-now.
 
 \`\`\`mermaid
-${dfd_mermaid}\`\`\`
+${dfd_mermaid}
+\`\`\`
 
 ${dfd_trust}
 
