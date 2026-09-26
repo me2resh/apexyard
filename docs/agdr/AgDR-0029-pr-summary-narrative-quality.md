@@ -67,5 +67,5 @@ Concretely:
 - Rule: `.claude/rules/pr-quality.md` § "Summary bullets — narrative quality (MANDATORY)"
 - Workflow cross-link: `workflows/code-review.md` § "PR Description Format"
 - Rex agent: `.claude/agents/code-reviewer.md` § 6 — new sub-section "Label-only summary bullets — advisory check (non-blocking)"
-- Smoke test: `.claude/rules/tests/test_pr_quality_narrative_rule.sh`
+- Smoke test: `.claude/hooks/tests/test_pr_quality_narrative_rule.sh`
 - Related: AgDR-0020 (adopter handbooks for Rex — same advisory-by-default pattern), #232 (handbook discovery system that established the advisory/blocking convention)

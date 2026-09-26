@@ -5,7 +5,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/writing-standard.md"
-CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/human-friendly-cases.md"
+CASES_FILE="$SRC_ROOT/docs/quality-regression/fixtures/human-friendly-cases.md"
 AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0134-controlled-technical-writing-profile.md"
 REX_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
 

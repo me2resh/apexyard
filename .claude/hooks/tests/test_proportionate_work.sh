@@ -9,7 +9,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/right-size-ceremony.md"
-CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/proportionate-work-cases.md"
+CASES_FILE="$SRC_ROOT/docs/quality-regression/fixtures/proportionate-work-cases.md"
 AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0125-proportionate-work-extends-right-size-tiers.md"
 
 PASS=0
