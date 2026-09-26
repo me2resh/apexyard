@@ -101,14 +101,15 @@ without touching any other behavior.**
   `~`. Such a package can hold a real migration named `env.py`. That file
   is a deliberate, visible bypass a human reviewer sees in the diff, not a
   silent one.
-- **Known limits from the security review.** Hakim's LOW-2 proposes a
-  narrower Alembic exemption. It would match `<dir>/env.py` only when
+- **Known limits from the security review.** Hakim's LOW-1 found that the
+  Alembic exemption matches by file name only. The Django bullet above
+  records that limit. A narrower check would match `<dir>/env.py` only when
   `<dir>/versions/` or `<dir>/script.py.mako` also exists. This batch does
-  not add that check. It stays a known limit, not a blocking gap. Hakim's
-  LOW-3 is a pre-existing limit, not introduced by this batch. In POSIX
-  mode, a failed `source` call exits 1. The hook dispatcher treats that
-  exit code as continue, not as blocked. This limit needs its own
-  follow-up issue, tracked separately from #1390, #1368, and #1369.
+  not add that check. Hakim's LOW-2 found that malformed `.ui_paths`
+  entries narrowed the design gate. Commit `d406c18` fixes it. A separate
+  limit is pre-existing. In POSIX mode, a failed `source` call exits 1. The
+  hook dispatcher treats that exit code as continue, not as blocked. #1403
+  tracks this limit.
 - An operator can override `branch.type_whitelist`, `ticket.prefix_whitelist`,
   or another array key that has a JSON default. The operator now sees a
   `WARN:` line that names each dropped entry. Nothing merges differently —
