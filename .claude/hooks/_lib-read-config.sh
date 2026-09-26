@@ -203,8 +203,10 @@ _config_overrides_file() {
 #   one holds its own built-in default in bash, not in this JSON. A generic
 #   defaults-vs-override JSON diff structurally cannot see a drop against a
 #   default that was never JSON in the first place. That is a real, narrower
-#   gap this function does not close; #1365's `_override_only_keys` allowlist
-#   is the existing, separate mechanism for that set of keys.
+#   gap this function does not close. #1365's `_override_only_keys` allowlist
+#   is a different, narrower mechanism. It stops `/update` from flagging
+#   these keys as deprecated. It does not warn on a dropped default entry.
+#   #1401 tracks closing the dropped-default gap for these keys.
 # ------------------------------------------------------------------------------
 _config_warn_dropped_defaults() {
   local defaults="$1" overrides="$2"

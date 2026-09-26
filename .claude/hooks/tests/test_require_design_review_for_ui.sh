@@ -110,6 +110,14 @@ make_sandbox() {
   if [ -f "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" ]; then
     cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
   fi
+  # The hook itself, so a test can corrupt the SANDBOX's own
+  # _lib-ui-paths.sh and see the effect. run_gate always invokes $HOOK_SRC
+  # (the source tree's absolute path), so `dirname "$0"` there resolves back
+  # to the source tree regardless of what this sandbox holds — the earlier
+  # cp above never actually reached the hook. run_gate_sandboxed below runs
+  # this copy instead, so `dirname "$0"` resolves inside the sandbox
+  # (me2resh/apexyard#1397 HIGH-1).
+  cp "$HOOK_SRC" "$sb/.claude/hooks/require-design-review-for-ui.sh"
   echo "$sb"
 }
 
@@ -147,6 +155,18 @@ run_gate() {
   local input
   input=$(printf '{"tool_input":{"command":"%s"}}' "$command")
   ( cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash "$HOOK_SRC" >/dev/null 2>&1 <<< "$input" )
+  echo $?
+}
+
+# Runs the SANDBOX's own copy of the hook, not $HOOK_SRC — so `dirname "$0"`
+# resolves to $sb/.claude/hooks and the hook sources the sandbox's own
+# _lib-ui-paths.sh. A test can corrupt or remove that one file and see the
+# effect (me2resh/apexyard#1397 HIGH-1) without touching the real source tree.
+run_gate_sandboxed() {
+  local sb="$1" command="$2"
+  local input
+  input=$(printf '{"tool_input":{"command":"%s"}}' "$command")
+  ( cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash "$sb/.claude/hooks/require-design-review-for-ui.sh" >/dev/null 2>&1 <<< "$input" )
   echo $?
 }
 
@@ -420,6 +440,45 @@ printf '%s\n' '#!/bin/bash' 'exit 1' > "$sb/bin/gh"
 chmod +x "$sb/bin/gh"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "#1151 unresolvable diff blocks" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "G) #1397 HIGH-1: _lib-ui-paths.sh fails to load -> fail CLOSED"
+# Runs the hook from ITS OWN sandbox copy (run_gate_sandboxed), so corrupting
+# the sandbox's _lib-ui-paths.sh actually reaches the hook under test.
+
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate_sandboxed "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1397 sandboxed baseline: healthy library, UI file, no marker -> blocks" "2" "$code"
+rm -rf "$sb"
+
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+rm -f "$sb/.claude/hooks/_lib-ui-paths.sh"
+code=$(run_gate_sandboxed "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1397 missing library -> blocks, was fail-open before the fix" "2" "$code"
+rm -rf "$sb"
+
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+: > "$sb/.claude/hooks/_lib-ui-paths.sh"
+code=$(run_gate_sandboxed "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1397 empty library -> blocks" "2" "$code"
+rm -rf "$sb"
+
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+chmod 000 "$sb/.claude/hooks/_lib-ui-paths.sh"
+code=$(run_gate_sandboxed "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1397 unreadable (mode 000) library -> blocks" "2" "$code"
+chmod 644 "$sb/.claude/hooks/_lib-ui-paths.sh"
+rm -rf "$sb"
+
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/handlers/user.ts"' "$SHA"
+code=$(run_gate_sandboxed "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1397 control: healthy library, non-UI file -> still allowed" "0" "$code"
 rm -rf "$sb"
 
 echo ""

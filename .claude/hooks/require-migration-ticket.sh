@@ -247,13 +247,16 @@ is_migration_path() {
     # Alembic
     */alembic/versions/*.py) return 0 ;;
     # Alembic tooling files are not migrations themselves (me2resh/apexyard#1368).
-    # env.py is the runtime config Alembic loads to run migrations; script.py.mako
-    # is the template new revisions are generated from. Neither is a revision
-    # script, so exempt both under Alembic's default `alembic/` layout AND a
-    # renamed `<root>/migrations/` script_location — otherwise the generic
-    # `*/migrations/*` catch-all below (or a bare `alembic/` case, if one is ever
-    # added) would treat them as migrations. Ordered BEFORE that catch-all:
-    # `case` stops at the first matching arm.
+    # env.py is the runtime config Alembic loads to run migrations.
+    # script.py.mako is the template new revisions are generated from.
+    # Neither is a revision script. The reported bug is only under a renamed
+    # `<root>/migrations/` script_location — a path segment literally named
+    # `migrations` reaches the generic `*/migrations/*` catch-all below. The
+    # default `alembic/` layout never reached that catch-all, so the
+    # `*/alembic/env.py|*/alembic/script.py.mako` arm changes no result on
+    # current defaults. It stays for defense: a future bare `alembic/` case
+    # would otherwise treat these two files as migrations. Both arms sit
+    # BEFORE the catch-all — `case` stops at the first matching arm.
     */alembic/env.py|*/alembic/script.py.mako) return 1 ;;
     */migrations/env.py|*/migrations/script.py.mako) return 1 ;;
     # Rails / ActiveRecord

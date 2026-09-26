@@ -115,9 +115,15 @@ Check whether the PR's diff includes files that would trigger the design-review 
 Read the pattern list from `_lib-ui-paths.sh` — the same source `require-design-review-for-ui.sh` reads — instead of a separate hard-coded copy. The two lists drifted apart before this (me2resh/apexyard#1390); sourcing the shared library keeps them in sync going forward:
 
 ```bash
-# MARKER_HOME already resolved in step 4.
+# MARKER_HOME and REPO_ROOT already resolved in step 4. Source the library
+# from MARKER_HOME (the hook scripts live in the ops fork), but pass
+# REPO_ROOT — the PR's own git root — to look up `.ui_paths`. That is the
+# same root require-design-review-for-ui.sh reads. Passing MARKER_HOME here
+# instead reads the wrong project-config.json inside a workspace/ clone,
+# so a project-level `.ui_paths` override could make this check and the
+# gate disagree (me2resh/apexyard#1397).
 . "$MARKER_HOME/.claude/hooks/_lib-ui-paths.sh"
-UI_GLOB_PATTERN=$(ui_effective_globs_pipe "$MARKER_HOME")
+UI_GLOB_PATTERN=$(ui_effective_globs_pipe "$REPO_ROOT")
 gh pr diff <pr> --name-only | grep -qE "$UI_GLOB_PATTERN"
 ```
 
