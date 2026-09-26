@@ -235,6 +235,61 @@ assert_raw_passthrough "guard: \$(( inside double quotes" \
 assert_no_masked_target "guard does not over-fire on an escaped dollar" \
   'echo "\$(x) > y"'
 
+# --- 3c3. Security review and third code review shapes (#1356) ------------
+#
+# A security review and a third code review found more divergences. For each
+# shape bash 5.3 writes TARGET, and the helper at 112b8b8 hid the redirect.
+# Each guard below returns the raw command instead.
+
+bs='\\'
+nl=$'\n'
+p25=$'\025'
+
+# `$'...'` processes backslash escapes, so `\'` does not close the span.
+assert_no_target_hidden "adversarial: \$'...' with an escaped quote" \
+  "echo \$'${bs}'' > TARGET ${bs}'"
+assert_no_target_hidden "adversarial: \$'...' in a natural form" \
+  "echo \$'it${bs}'s' > TARGET; echo 'C:${bs}'"
+assert_no_target_hidden "adversarial: printf \$'...' then a stray escaped quote" \
+  "printf \$'it${bs}'s${bs}n' > TARGET; echo ${bs}'"
+assert_raw_passthrough "guard: \$' outside quotes" "echo \$'a > b'"
+# A `$'` that only ends a single-quoted regex is not ANSI-C quoting.
+assert_no_masked_target "guard does not over-fire on a regex anchor before a quote" \
+  "grep -E 'x>\$' f"
+
+# Bash 5.3 function substitution runs a command inside double quotes.
+assert_no_target_hidden "adversarial: \${ cmd; } inside double quotes" \
+  'x="${ echo hi > TARGET; }"'
+assert_no_target_hidden "adversarial: \${| cmd; } inside double quotes" \
+  'x="${| echo hi > TARGET; REPLY=1; }"'
+assert_raw_passthrough "guard: \${ plus a space inside double quotes" \
+  "x=\"\${ echo 'a > b'; }\""
+# Bash honours single quotes in the word of a double-quoted `${x#word}`.
+# The third code review found this shape. The guard now returns the raw
+# command for any `${`, `$(`, or `$[` inside double quotes.
+assert_no_target_hidden "adversarial: single quotes inside a double-quoted \${x#word}" \
+  "echo \"\${x#'\"'}\" > TARGET ${bs}'"
+assert_raw_passthrough "guard: \${VAR} inside double quotes, by design" \
+  "echo \"\${HOME}\" 'a > b'"
+assert_raw_passthrough "guard: \$[ inside double quotes" \
+  'echo "$[ 1 > 0 ]"'
+# A plain `$name` inside double quotes is still masked normally.
+assert_no_masked_target "guard does not over-fire on a plain \$name inside double quotes" \
+  "echo \"\$HOME\" 'a > b'"
+
+# A backslash-newline pair joins lines before bash tokenises them.
+assert_no_target_hidden "adversarial: line continuation splits \$(" \
+  "x=\"\$${bs}${nl}(echo hi > TARGET)\""
+assert_no_target_hidden "adversarial: line continuation splits <<" \
+  "cat <${bs}${nl}<E${nl}'${nl}E${nl}echo x > TARGET${nl}cat <${bs}${nl}<F${nl}'${nl}F"
+assert_raw_passthrough "guard: backslash-newline anywhere in the command" \
+  "echo 'a > b' ${bs}${nl}  more"
+
+# A placeholder byte already in the command cannot round-trip through
+# unmask_quoted_metachars. The helper must hand such a command back as is.
+assert_raw_passthrough "guard: placeholder byte inside a real target" \
+  "echo ';' ; echo x > a${p25}b"
+
 # --- 3d. Oversize command: empty or unchanged, never altered ---------------
 #
 # The command travels through the environment. Linux caps one environment
@@ -266,9 +321,10 @@ fi
 # --- 5. GOVERNANCE PIN (AgDR-0113) ---------------------------------------
 #
 # The presence question must keep reading RAW command text. This helper is
-# additive-only. If someone wires masking into bash_command_appears_to_write,
-# these cases fail — that is the signal to re-read AgDR-0113 first, because a
-# parser bug there fails OPEN across all three consuming hooks at once.
+# additive-only. These cases fail if someone makes
+# bash_command_appears_to_write quote-aware. That failure is the signal to
+# re-read AgDR-0113 first. A parser bug there fails OPEN across all three
+# consuming hooks at once.
 
 for c in "git log --format='%h > %s'" \
          "echo '  >> ZERO MATCHES'" \

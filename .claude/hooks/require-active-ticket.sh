@@ -113,25 +113,26 @@ fi
 # ------------------------------------------------------------------------------
 # _ratc_quoted_origin_hint TARGET TOOL_NAME
 #
-# Echoes one explanatory line when the reported Bash write target came from a
-# redirect character that sits INSIDE a quoted argument. Echoes nothing
-# otherwise.
+# Echoes an explanatory note when every write sign in the Bash command sits
+# INSIDE a quoted argument. Echoes nothing otherwise. TARGET may be empty,
+# for a command whose target the detector could not extract.
 #
 # DIAGNOSIS ONLY (me2resh/apexyard#1356). This function never changes a
 # verdict. It runs after the gate has already decided to block, and it only
 # adds text to the message. AgDR-0113 forbids feeding quote-filtered text to a
 # gate's presence question, because a parser bug there fails OPEN across every
-# consumer at once. An additive answer cannot do that: a bug here yields a
-# worse message, never a skipped gate. See `_lib-mask-quoted.sh`.
+# consumer at once. The gate's own presence check below still reads the raw
+# command. This function asks the same question of the MASKED command, but
+# only to choose a message. A bug here yields a worse message, never a
+# skipped gate. See `_lib-mask-quoted.sh` and AgDR-0171.
 # ------------------------------------------------------------------------------
 _ratc_quoted_origin_hint() {
-  local target="${1-}" tool="${2-}"
+  local tool="${2-}"
 
   [ "$tool" = "Bash" ] || return 0
-  [ -n "$target" ] || return 0
   [ -n "${COMMAND:-}" ] || return 0
   [ -f "$_RATC_HOOK_DIR/_lib-mask-quoted.sh" ] || return 0
-  command -v bash_extract_write_targets >/dev/null 2>&1 || return 0
+  command -v bash_command_appears_to_write >/dev/null 2>&1 || return 0
 
   # shellcheck source=/dev/null
   . "$_RATC_HOOK_DIR/_lib-mask-quoted.sh"
@@ -150,22 +151,24 @@ _ratc_quoted_origin_hint() {
   # No quoted metacharacter, or an uncertainty guard tripped. Say nothing.
   [ "$masked" != "$COMMAND" ] || return 0
 
-  # If the target still appears once quoted spans are neutralised, it is a
-  # real target. Say nothing.
-  local candidate
-  while IFS= read -r candidate; do
-    [ -z "$candidate" ] && continue
-    [ "$(unmask_quoted_metachars "$candidate")" = "$target" ] && return 0
-  done <<EOF
-$(bash_extract_write_targets "$masked")
-EOF
+  # Some write sign still sits outside quotes, so at least one target may be
+  # real. Say nothing. This is a presence check, not a target extraction. It
+  # costs one regex pass, where a second extraction grows with the number of
+  # targets and doubled the block-path time on large commands.
+  bash_command_appears_to_write "$masked" && return 0
 
+  # The quoted text may still run as code, through eval, sh -c, awk, and
+  # similar programs. So the note states both readings and claims neither.
+  # It offers one remedy only. Advice to reword a command would steer an
+  # agent toward a detector gap when the write is real.
+  #
   # No surrounding blank lines here. The caller adds them, because command
   # substitution strips trailing newlines from whatever this prints.
-  printf '%s' "NOTE: this target comes from inside a quoted argument, so the command may
-write no file. The detector matches raw command text and does not parse
-shell quoting (me2resh/apexyard#1356). Reword the command, or declare a
-ticket, to continue."
+  printf '%s' "NOTE: the detector found this write only inside quoted text. It matches raw
+command text and does not parse shell quoting (me2resh/apexyard#1356). If
+the quoted text is only data, the command probably writes no file. If eval,
+sh -c, awk, or another program runs the quoted text, the write is real.
+Declare a ticket to continue."
 }
 
 # ------------------------------------------------------------------------------

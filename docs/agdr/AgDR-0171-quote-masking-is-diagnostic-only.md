@@ -46,29 +46,38 @@ The helper returns the raw command whenever it cannot be confident:
 - the command holds a heredoc operator, whose body bash does not quote-process
 - the command holds a backtick, which opens a fresh quoting context
 - the command holds a `#` at a comment position, whose body bash does not quote-process
-- a double-quoted span holds `$(`, whose body bash parses in a fresh quoting context
+- the command holds a backslash-newline pair, which joins lines before bash tokenises them
+- the command already holds a placeholder byte, which could not round-trip
+- a `$'` sits outside quotes, where ANSI-C quoting lets a backslash escape the quote
+- a double-quoted span holds `$(`, `${`, or `$[`, whose body bash parses by its own rules
 
 A comment position is the start of the command, or a place after whitespace or after one of `; & | ( ) < >`.
 
 Each fallback preserves the caller's current behaviour.
 
-Review found the last two guards, not the author's own adversarial pass. The first review found a comment after whitespace. Two apostrophes inside comments, on each side of a real redirect, left the scan balanced. The scanner then masked that redirect, and the balance check could not see it. A second review found the same shape with a comment after an operator. It also found a redirect inside `"$( )"`. The residue section below records this history rather than a general claim of safety.
+Reviews found the last five guards, not the author's own adversarial pass. Three code reviews and one security review each found a shape that hid a real redirect. The guards for `$` inside double quotes grew three times. So the final guard returns the raw command for any `$` followed by `(`, `{`, or `[`, instead of listing forms one at a time. The residue section below records this history rather than a general claim of safety.
 
 The caller also checks for an empty mask before it reads the result. The command travels through the environment, and Linux caps one environment string at 128 KiB. A larger command makes `execve` fail, and the helper returns nothing. An unguarded caller would read that as "the command changed".
 
-`require-active-ticket.sh` calls the helper only after the gate has decided to block. The hook adds a note to the message when the reported target came from inside quotes. No return code depends on the helper.
+`require-active-ticket.sh` calls the helper only after the gate has decided to block. No return code depends on the helper. The hook then asks `bash_command_appears_to_write` about the masked command. The note prints only when the masked command no longer looks like a write. So a real write outside quotes always suppresses the note.
+
+This is the same function the gate uses, asked of filtered text. AgDR-0113 allows that only for an additive question, and this question is additive. It chooses a message after the verdict is fixed. The gate's own call still reads the raw command. A presence check also costs one regex pass. A second target extraction grows with the number of targets, and it doubled the block-path time on a command with 800 targets.
+
+The note states both readings, because quoted text can still run as code. It says the command probably writes no file if the quoted text is only data. It says the write is real if eval, sh -c, awk, or another program runs that text. Its only remedy is to declare a ticket. An earlier draft also said "reword the command". A security review showed that advice could steer an agent toward a detector gap when the write is real.
 
 ## Consequences
 
 The block still happens. Option C does not fix the false positive. It makes the failure readable, and it names the issue so the operator can act.
 
-The maintainer listed four read-only commands on #1356 that a fix must allow. All four still block under this change. For three of them, the message now explains the quoted origin. For `grep -E '^>' f`, the detector finds no target, so the message has no target to explain. `test_require_active_ticket_bash.sh` pins all four as current behaviour.
+The maintainer listed four read-only commands on #1356 that a fix must allow. All four still block under this change. The message now explains all four, including `grep -E '^>' f`, whose target the detector cannot extract. `test_require_active_ticket_bash.sh` pins all four as current behaviour.
+
+A command that trips a guard gets no note. The full `/threat-model` Step 1b block is one example. It opens with a `#` comment, so guard 4 trips, and the block message shows `Target: 1)` without a note. That is the safe direction: a missing note, never a false one.
 
 Three consumers keep their current behaviour: `require-active-ticket.sh`, `require-migration-ticket.sh`, and `warn-review-marker-write.sh`. None of them changes how it decides.
 
 `test_mask_quoted.sh` pins the governance choice. Three cases assert that `bash_command_appears_to_write` still reports a write for quoted-metacharacter commands. Those cases fail if someone wires masking into the presence check. The failure is the signal to re-read AgDR-0113 first.
 
-The real fix stays open. It needs a decision about whether the presence question may read filtered text, and under which guards. That question is posted on #1356.
+The real fix stays open. It needs a decision about whether the presence question may read filtered text, and under which guards. That question is posted on #1356. The security review adds evidence for that decision. A quote-aware presence check would allow `bash -c 'echo x > f'`, `eval`, and `awk '{ print > "f" }'`. The raw check blocks all three today.
 
 `_lib-mask-quoted.sh` is written as a shared helper. Other hooks can adopt it for additive questions without a rewrite.
 
@@ -76,25 +85,27 @@ The real fix stays open. It needs a decision about whether the presence question
 
 AgDR-0113 closes with two binding rules for a security AgDR. Cite the test or write the claim as residue. State the scope at which each claim holds. This section applies both rules.
 
-**Scope of the safety claim.** The five guards cover five known divergences between this scanner and bash. They are not a proof that none remains. If a shape makes the scanner treat a real operator as quoted, and no guard catches it, the scanner hides that character from a caller. The design bounds the consequence, not the parser. The helper feeds one additive consumer. So a hidden character produces a wrong message, never a skipped gate.
+**Scope of the safety claim.** The eight guards cover the known divergences between this scanner and bash. They are not a proof that none remains. If a shape makes the scanner treat a real operator as quoted, and no guard catches it, the scanner hides that character from a caller. The design bounds the consequence, not the parser. The helper feeds one additive consumer. So a hidden character produces a wrong message, never a skipped gate.
 
 | Claim | Scope at which it holds | Pinned by |
 |---|---|---|
-| No verdict depends on the helper | Whole change. Verified by reading every call site. | Hook test A and the four current-behaviour cases in `test_require_active_ticket_bash.sh`. Each quoted-only command still exits 2. |
+| No verdict depends on the helper | Whole change. Verified by reading every call site. | The 14 `quoted_note_case` checks in `test_require_active_ticket_bash.sh` each assert exit 2. |
 | The presence question reads raw text | `bash_command_appears_to_write`, 3 commands | `test_mask_quoted.sh` section 5 |
 | The detector is untouched | Whole change | Not pinned by a test. `git diff origin/dev...HEAD -- .claude/hooks/_lib-detect-bash-write.sh` prints nothing. |
-| A real write is never hidden | The 15 adversarial shapes tested, not the general case | `test_mask_quoted.sh` sections 3b, 3c, and 3c2 |
-| Each guard is needed | Each of the five guards | Removing any one guard makes at least one case in `test_mask_quoted.sh` fail. Checked by hand during review, not by a test. |
-| An oversize command yields no note | A 140,018-byte command on Linux | Hook test E in `test_require_active_ticket_bash.sh` |
+| A real write is never hidden | The 23 adversarial shapes tested, not the general case | `test_mask_quoted.sh` sections 3b, 3c, 3c2, and 3c3 |
+| A real write outside quotes suppresses the note | Two commands with a quoted `>` before a real redirect | Case C in `test_require_active_ticket_bash.sh` |
+| Each guard is needed | Each of the eight guards | Removing any one guard makes at least one case in `test_mask_quoted.sh` fail. Checked by hand during review, not by a test. |
+| An oversize command yields no note | A 140,018-byte command on Linux | Case F in `test_require_active_ticket_bash.sh` |
 | Quoted targets still resolve | Single and double quotes, and a masked character inside a target name | `test_mask_quoted.sh` section 2 |
 | awk portability | mawk, nawk, and busybox awk. **gawk is untested.** | Cross-run during review, no gawk available |
 
 **Open residue, named rather than claimed away:**
 
-1. **`$'...'` ANSI-C quoting.** Bash processes backslash escapes inside it and this scanner does not. Every variant tried during review left quotes unbalanced and hit guard 1. It is probed, not proven safe. No test pins it, because no failing case was constructed.
-2. **Reviewers found the last two guards**, not the author's adversarial pass. That pass had already asserted the general property both times. Treat the guard list as a living list, in the same sense as `_lib-detect-bash-write.sh`'s own matcher table.
-3. **The 128 KiB threshold is Linux-specific.** macOS was not tested. The caller guard does not depend on the exact limit, only on an empty result.
-4. **`shellcheck` and `markdownlint` did not run** on the authoring machine. Neither tool is installed. CI is the only verification for both.
+1. **Quoted text that runs as code.** `bash -c`, `eval`, `awk`, `trap`, `find -exec`, and similar programs run quoted text. No quote tracker can see that. The note states both readings for this reason. Case E pins the wording.
+2. **Reviewers found the last five guards**, not the author's adversarial pass. That pass had already asserted the general property each time. Treat the guard list as a living list, in the same sense as `_lib-detect-bash-write.sh`'s own matcher table.
+3. **Bash 5.3 shapes were tested on bash 5.3.9 only.** Function substitution first appeared in bash 5.3. On older bash, the guard can only drop a note.
+4. **The 128 KiB threshold is Linux-specific.** macOS was not tested. The caller guard does not depend on the exact limit, only on an empty result.
+5. **`shellcheck` and `markdownlint` did not run** on the authoring machine. Neither tool is installed. CI is the only verification for both.
 
 ## Artifacts
 

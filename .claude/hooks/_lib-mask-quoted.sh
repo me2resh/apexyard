@@ -27,17 +27,20 @@
 #   > question being asked at all, silently and fail-open across every
 #   > consumer simultaneously.
 #
-# So this helper MUST NOT feed a gate's presence question — the boolean that
-# decides whether a hook looks at a command at all. Today that means it must
-# not feed `bash_command_appears_to_write`. Three hooks read that function
+# So masked text MUST NOT decide a gate's verdict. The presence question is
+# the boolean that decides whether a hook looks at a command at all. A gate
+# must always ask it of the RAW command. Three hooks read
+# `bash_command_appears_to_write` for their verdict
 # (`require-active-ticket.sh`, `require-migration-ticket.sh`,
-# `warn-review-marker-write.sh`), so one state-machine bug here would fail
-# OPEN across all three at once. AgDR-0113 records eight shapes where the
-# heredoc stripper did exactly that.
+# `warn-review-marker-write.sh`). One state-machine bug here would fail OPEN
+# across all three at once. AgDR-0113 records eight shapes where the heredoc
+# stripper did exactly that.
 #
-# It is safe for ADDITIVE questions: which target did the operator name, and
-# should the diagnostic explain that the match came from quoted text. A bug in
-# an additive answer yields a worse message, never a skipped gate.
+# It is safe for ADDITIVE questions, asked after the verdict is fixed. An
+# example: should the block message explain that every write sign sits in
+# quoted text? `require-active-ticket.sh` asks that of the masked command,
+# with the same presence function, only to choose a message. A bug in an
+# additive answer yields a worse message, never a skipped gate.
 #
 # UNCERTAINTY FALLS BACK TO THE RAW COMMAND
 # ---------------------------------------------------------------------------
@@ -52,14 +55,20 @@
 #     quote-process a comment body but this scanner would. A comment
 #     position is the start of the command, or a place after whitespace or
 #     after one of `; & | ( ) < >`.
-#   - a double-quoted span holds `$(`. Bash starts a fresh quoting context
-#     inside a command substitution, so a `>` there is a real redirect. This
-#     scanner would still count it as quoted.
+#   - the command holds a backslash-newline pair, which joins two lines
+#     before bash tokenises them and can split `<<` or `$(`
+#   - the command already holds a placeholder byte, which could not
+#     round-trip through the unmask step
+#   - a `$'` sits outside quotes. ANSI-C quoting lets a backslash escape the
+#     quote, so the span does not close where this scanner expects.
+#   - a double-quoted span holds `$(`, `${`, or `$[`. Bash parses each body
+#     by its own rules. A command substitution starts a fresh quoting
+#     context, and a `${x#word}` expansion honours single quotes.
 #
 # Each fallback preserves the caller's current behaviour.
 #
 # SCOPE OF THAT CLAIM — read it before adopting this helper elsewhere.
-# The five guards above cover five KNOWN divergences between this scanner and
+# The eight guards above cover the KNOWN divergences between this scanner and
 # bash. They are not a proof that no divergence remains. A shape that makes
 # the scanner treat a REAL operator as quoted, and that no guard catches,
 # would hide that character from a caller.
@@ -68,23 +77,21 @@
 # first of AgDR-0113's two closing rules requires it: cite the test, or write
 # the claim as residue.
 #
-#   - `$'...'` ANSI-C quoting. Bash processes backslash escapes inside it and
-#     this scanner does not. Every variant tried so far left quotes
-#     unbalanced and hit guard 1. It is PROBED, not proven safe.
-#   - Review found the last two guards, not the original author. The first
-#     review found the comment shape after whitespace. A second review found
-#     the comment shape after an operator, and the `"$( )"` shape. Treat the
+#   - Reviews, not the original author, found the last five guards. Three
+#     code reviews and one security review each found a new shape. Treat the
 #     guard list as a living list.
+#   - Quoted text can still run as code, through eval, sh -c, awk, and
+#     similar programs. No quote tracker can see that. Callers must not read
+#     "masked" as "not a write".
 #
-# Each entry is pinned by a case in `tests/test_mask_quoted.sh` where one
-# exists, and named here where one does not.
+# Each guard is pinned by a case in `tests/test_mask_quoted.sh`.
 #
 # OFFSETS AND LENGTH ARE PRESERVED
 # ---------------------------------------------------------------------------
 # Masking substitutes one byte for one byte, so a masked string indexes the
-# same as the raw string. A quoted write target keeps working: for
-# `echo x > "out.txt"` nothing inside the quotes is a metacharacter, and for
-# `echo x > "a>b"` the extracted target round-trips through
+# same as the raw string. A quoted write target keeps working. For
+# `echo x > "out.txt"`, nothing inside the quotes is a metacharacter. For
+# `echo x > "a>b"`, the extracted target round-trips through
 # `unmask_quoted_metachars` back to `a>b`.
 #
 # Exposed functions:
@@ -97,9 +104,9 @@
 #       reverses the substitution. Apply it to any value extracted from masked
 #       text before showing it to a human or comparing it with raw text.
 
-# Placeholder bytes. Chosen from the C0 control range, which does not appear in
-# real command text. Each metacharacter gets a DISTINCT placeholder so the
-# substitution round-trips exactly.
+# Placeholder bytes, chosen from the C0 control range. Real command text
+# rarely holds them, and a guard returns the raw command when it does. Each
+# metacharacter gets a DISTINCT placeholder so the substitution round-trips.
 #   >  ->  \021    <  ->  \022    |  ->  \023    &  ->  \024    ;  ->  \025
 
 # ------------------------------------------------------------------------------
@@ -111,17 +118,24 @@ mask_quoted_metachars() {
 
   # Uncertainty guards. Any hit returns the raw command, so the caller sees
   # exactly what it sees today.
+  #
+  # A backslash-newline pair joins two lines before bash tokenises them, so
+  # it can split `<<` or `$(` past the checks below. A placeholder byte that
+  # is already in the command would not round-trip through the unmask step.
+  local bs_nl=$'\\\n' placeholder=$'[\021-\025]'
   case "$cmd" in
-    *'<<'*) printf '%s' "$cmd"; return 0 ;;
-    *'`'*)  printf '%s' "$cmd"; return 0 ;;
+    *'<<'*)       printf '%s' "$cmd"; return 0 ;;
+    *'`'*)        printf '%s' "$cmd"; return 0 ;;
+    *"$bs_nl"*)   printf '%s' "$cmd"; return 0 ;;
+    *$placeholder*) printf '%s' "$cmd"; return 0 ;;
   esac
 
   # A `#` at a comment position opens a bash comment, and bash does NOT
-  # process quote characters inside one. This scanner would. An odd number of
-  # quotes inside a comment, rebalanced later, therefore leaves the scanner
-  # in a quoted state across a REAL redirect while bash is not — and the
-  # balance check at the end of the scan cannot see it. Bail instead of
-  # modelling comments, which would add a second divergence to fix the first.
+  # process quote characters inside one. This scanner would. Take an odd
+  # number of quotes inside a comment, rebalanced later. The scanner then
+  # stays in a quoted state across a REAL redirect, and bash does not. The
+  # balance check at the end of the scan cannot see it. So bail instead of
+  # modelling comments, which would add a second divergence.
   #
   # A comment starts where a word starts. A word starts at the start of the
   # command, after whitespace, or after an operator character. A `#` anywhere
@@ -172,6 +186,10 @@ mask_quoted_metachars() {
             if (i <= n) out = out substr(s, i, 1)
             continue
           }
+          # A dollar sign before a single quote opens ANSI-C quoting. There a
+          # backslash can escape the quote, so the span does not close where
+          # this scanner expects. Hand back the raw command instead.
+          if (c == "$" && substr(s, i + 1, 1) == SQ) { printf "%s", s; exit }
           if (c == SQ) { state = 1; out = out c; continue }
           if (c == DQ) { state = 2; out = out c; continue }
           out = out c
@@ -186,11 +204,12 @@ mask_quoted_metachars() {
           continue
         }
 
-        # state == 2, inside double quotes. A `$(` opens a command
-        # substitution, and bash parses its body in a fresh quoting context.
-        # This scanner does not model that, so hand back the raw command.
-        # This also covers `$((`, where a `>` is a comparison, not a redirect.
-        if (c == "$" && substr(s, i + 1, 1) == "(") { printf "%s", s; exit }
+        # state == 2, inside double quotes. Bash parses the body of `$( )`,
+        # `${ }`, and `$[ ]` by its own rules. A command substitution starts a
+        # fresh quoting context. A `${x#word}` expansion honours single quotes
+        # in its word. This scanner models neither, so it hands back the raw
+        # command. A plain `$name` is still masked normally.
+        if (c == "$" && substr(s, i + 1, 1) ~ /[({[]/) { printf "%s", s; exit }
 
         # A backslash still escapes, so the escaped character cannot close
         # the span.
