@@ -674,7 +674,20 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
-ACTIVE_REVIEWER_MARKER="$MARKER_HOME/.claude/session/active-reviewer"
+# Session-scoped (me2resh/apexyard#1376): active_reviewer_marker_path keys the
+# path on CLAUDE_CODE_SESSION_ID, so this warning is suppressed only by the
+# marker THIS session's own sanctioned review wrote — never by a marker a
+# different session set for a different PR.
+if [ -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-review-markers.sh"
+fi
+if command -v active_reviewer_marker_path >/dev/null 2>&1; then
+  ACTIVE_REVIEWER_MARKER=$(active_reviewer_marker_path "$MARKER_HOME")
+else
+  # Defensive fallback if the lib is missing — pre-#1376 fixed path.
+  ACTIVE_REVIEWER_MARKER="$MARKER_HOME/.claude/session/active-reviewer"
+fi
 
 if [ "$RESOLVED_VIA" = "literal" ]; then
   # Parse the (repo, pr) this write targets from the marker's own filename.

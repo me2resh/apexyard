@@ -39,7 +39,7 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843, when reviewing a PR)
 
-Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-architecture.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026 — AgDR-0111). Use the SAME resolved `owner/repo` from step 1 (below) — the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
+Before spawning the Solution Architect agent (Tariq) for a PR review, write the active-reviewer session marker. It records that this review pass is the sanctioned one and suppresses `warn-review-marker-write.sh`'s advisory warning on the `*-architecture.approved` write (same convention as `/code-review`'s rex marker; that hook warns and never blocks since #1026 — AgDR-0111). The marker is scoped to THIS Claude Code session (me2resh/apexyard#1376) — resolve its path through `active_reviewer_marker_path`, never write the bare `.claude/session/active-reviewer` path directly. Use the SAME resolved `owner/repo` from step 1 (below) — the sibling-repo resolution in split-portfolio v2 matters here too. At skill entry:
 
 ```bash
 ops_root=$(git rev-parse --show-toplevel)
@@ -49,14 +49,16 @@ while [ -n "$r" ] && [ "$r" != "/" ]; do
   [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
   r=$(dirname "$r")
 done
-mkdir -p "$ops_root/.claude/session"
-printf '%s\n' "<owner/repo>#<pr>:architecture" > "$ops_root/.claude/session/active-reviewer"
+. "$ops_root/.claude/hooks/_lib-review-markers.sh"
+active_marker=$(active_reviewer_marker_path "$ops_root")
+mkdir -p "$(dirname "$active_marker")"
+printf '%s\n' "<owner/repo>#<pr>:architecture" > "$active_marker"
 ```
 
 On skill exit (after the review is posted, whether or not the marker gets written), clear it:
 
 ```bash
-rm -f "$ops_root/.claude/session/active-reviewer"
+rm -f "$active_marker"
 ```
 
 Doc-only reviews (no PR yet) never write a marker, so this step is a no-op for them. Nothing mechanically stops a build-class sub-agent writing the same file; what makes this marker legitimate is that a real, independent review happened. See `.claude/hooks/warn-review-marker-write.sh` and `.claude/rules/pr-workflow.md` § "Build agents cannot self-review".
