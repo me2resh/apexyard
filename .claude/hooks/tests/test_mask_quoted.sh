@@ -348,25 +348,30 @@ done
 # asks the presence question of masked text only to choose a message. Hook
 # case A in test_require_active_ticket_bash.sh pins its exit code at 2.
 #
-# The check searches the hooks tree, .githooks, and bin, and skips tests. It
-# also pins the library's function list, so a new wrapper in the library
-# fails. It matches names in source text. It catches honest edits, not a
-# deliberate attempt to hide a call.
+# The check searches the hooks tree, .githooks, bin, and .claude/settings.json,
+# and skips tests. It compares full paths from the repository root, so a
+# file with an allowed name in another folder fails. It also lists the
+# functions that bash defines when it sources the library, so a new wrapper
+# fails in any definition style. It matches names in source text. It catches
+# honest edits, not a deliberate attempt to hide a call.
 
 REPO_ROOT="$(cd "$LIB_DIR/../.." && pwd)"
 users=$(grep -rlE '_lib-mask-quoted|mask_quoted_metachars' \
-    "$LIB_DIR" "$REPO_ROOT/.githooks" "$REPO_ROOT/bin" 2>/dev/null \
-  | grep -v '/tests/' \
-  | while IFS= read -r f; do basename "$f"; done | sort -u | tr '\n' ' ')
-if [ "$users" = "_lib-mask-quoted.sh require-active-ticket.sh " ]; then
+    "$LIB_DIR" "$REPO_ROOT/.githooks" "$REPO_ROOT/bin" \
+    "$REPO_ROOT/.claude/settings.json" 2>/dev/null \
+  | grep -v '/tests/' | sed "s|^$REPO_ROOT/||" | sort | tr '\n' ' ')
+if [ "$users" = ".claude/hooks/_lib-mask-quoted.sh .claude/hooks/require-active-ticket.sh " ]; then
   ok "only the library and require-active-ticket.sh name the masker"
 else
   bad "only the library and require-active-ticket.sh name the masker" \
       "found in: $users — see AgDR-0113 and AgDR-0171 before adding a caller"
 fi
 
-funcs=$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*\(\)' "$LIB_MASK" | sort | tr '\n' ' ')
-if [ "$funcs" = "mask_quoted_metachars() unmask_quoted_metachars() " ]; then
+# shellcheck disable=SC2016  # $1 and $3 expand in the child shell and in awk
+funcs=$(env -i PATH="$PATH" bash --norc --noprofile -c \
+    '. "$1" >/dev/null 2>&1; declare -F | awk "{ print \$3 }"' _ "$LIB_MASK" \
+  | sort | tr '\n' ' ')
+if [ "$funcs" = "mask_quoted_metachars unmask_quoted_metachars " ]; then
   ok "the library defines only the mask and unmask functions"
 else
   bad "the library defines only the mask and unmask functions" \

@@ -38,9 +38,10 @@
 #
 # It is safe for ADDITIVE questions, asked after the verdict is fixed. An
 # example: should the block message explain that every write sign the
-# detector found sits in quoted text? `require-active-ticket.sh` asks that of the masked command,
-# with the same presence function, only to choose a message. A bug in an
-# additive answer yields a worse message, never a skipped gate.
+# detector found sits in quoted text? `require-active-ticket.sh` asks that
+# of the masked command, with the same presence function, only to choose a
+# message. A bug in an additive answer yields a worse message, never a
+# skipped gate.
 #
 # UNCERTAINTY FALLS BACK TO THE RAW COMMAND
 # ---------------------------------------------------------------------------
