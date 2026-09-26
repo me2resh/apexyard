@@ -68,7 +68,7 @@ The branch is based on `upstream/dev` (NOT `upstream/main`). This is intentional
 ### 5. Merge main with a plain merge (apexyard#1394)
 
 ```bash
-RELEASE_SHA=$(git rev-parse "<version>")
+RELEASE_SHA=$(git rev-parse "<version>^{commit}")
 
 git merge --no-ff -m "sync: merge main into dev after <version> release
 
@@ -79,6 +79,14 @@ of dev so future dev→main release PRs only see genuinely-new commits.
 Refs #403" upstream/main
 ```
 
+**Peel the tag with `^{commit}`.** The auto-tag workflow creates an
+**annotated** tag (`git tag -a`). `git rev-parse "<version>"` on an annotated
+tag returns the tag *object*'s SHA, not the commit it points at — a
+different value from the release squash commit on `main`. The `^{commit}`
+suffix peels the tag to the commit it names, regardless of tag type. Without
+it, `$RELEASE_SHA` never matches any commit in step 5a's touching-commit
+list, so the squash-duplicate case below never classifies correctly.
+
 `$RELEASE_SHA` is the exact commit the version tag names — the release squash
 commit on `main`. Step 5a uses it to tell a squash-duplicate conflict apart
 from a conflict that touches genuinely new content.
@@ -87,13 +95,18 @@ from a conflict that touches genuinely new content.
 in favour of `dev`, with no check on which commit introduced the conflicting
 content on `main`. Most of the time that content is the release squash
 commit's duplicate of what `dev` already carries, and dropping it is correct.
-But `main` can also carry a commit that was never on `dev` at all — a PR
-merged straight to `main`, a hand-edited file, a hotfix. `-X ours` drops that
-commit's content too, silently and with no warning. This is exactly what
-happened in apexyard#1348: sync commit `04bd8c7` hit a `README.md` conflict and
-dropped two contributor rows that existed only on `main`. A plain merge
-surfaces every conflict instead of resolving it blindly, so step 5a below can
-tell the two cases apart.
+But `main` can carry content `dev` never had, from two different sources: a
+commit that was never on `dev` at all (a PR merged straight to `main`, a
+hand-edited file, a hotfix), or edits made directly on the release branch
+before it was squashed — so the release squash commit itself is not
+guaranteed to match `dev`, even when it is the only commit in the touching
+list. `-X ours` drops either case's content too, silently and with no
+warning. This is exactly what happened in apexyard#1348: sync commit
+`04bd8c7` hit a `README.md` conflict, and the release squash commit that
+caused it had added two contributor rows directly on the release branch —
+content `dev` did not have at the cut point the release was made from. A
+plain merge surfaces every conflict instead of resolving it blindly, so
+step 5a below can tell these cases apart from a genuine squash duplicate.
 
 If the merge completes with no conflicts, skip to step 5b.
 
@@ -112,14 +125,41 @@ git log upstream/dev..upstream/main --format=%H -- "<file>"
 
 Compare the result against `$RELEASE_SHA` from step 5:
 
-- **Squash-duplicate.** `$RELEASE_SHA` is the ONLY commit in that list. `dev`
-  already carries the un-squashed equivalent of that content, so `dev`'s side
-  is correct. Resolve toward `dev`:
+- **Squash-duplicate candidate.** `$RELEASE_SHA` is the ONLY commit in that
+  list. This is NOT yet enough to resolve toward `dev` — the release squash
+  commit can itself carry edits `dev` never had, made directly on the
+  release branch before the squash merge (this is what actually happened in
+  apexyard#1348: two contributor rows were added on the release branch, so
+  `$RELEASE_SHA` being the sole touching commit did not mean `dev` already
+  had the content). Confirm it against the release commit's own
+  `Released-From` trailer — the exact `dev` SHA the release was cut from:
 
   ```bash
-  git checkout --ours -- "<file>"
-  git add "<file>"
+  RELEASED_FROM=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' "$RELEASE_SHA")
   ```
+
+  - **`$RELEASED_FROM` is non-empty AND `git diff "$RELEASED_FROM" "$RELEASE_SHA" -- "<file>"` is empty.**
+    The release commit changed nothing in this file relative to the exact
+    `dev` commit it was cut from — `dev`'s current content is confirmed
+    equivalent. Resolve toward `dev`:
+
+    ```bash
+    git checkout --ours -- "<file>"
+    git add "<file>"
+    ```
+
+    `git checkout --ours` takes the WHOLE file from `dev`'s side of the
+    merge, not just the conflicting hunks — different from `-X ours`, which
+    resolved every hunk in the file that way regardless of conflict. Here
+    the whole-file swap is safe because the diff above already confirmed the
+    two sides are equivalent for this file.
+
+  - **Otherwise** — the trailer is missing, or the diff is non-empty. Either
+    means this file cannot be confirmed safe to resolve automatically: a
+    missing trailer means there is nothing to compare against, and a
+    non-empty diff means the release branch changed this file relative to
+    the `dev` cut point. Route it to the same stop-and-ask path as a
+    main-only commit, below — do not guess.
 
 - **Main-only commit.** Any OTHER commit appears in that list — a commit that
   exists on `main` and nowhere on `dev`. Picking either side blindly would
@@ -207,11 +247,16 @@ cleanly against the sync branch:
 ```bash
 FAILED_COMMITS=""
 for commit in $(git log upstream/dev..upstream/main --format=%H --no-merges); do
-  if ! git apply --check --reverse <(git show "$commit") >/dev/null 2>&1; then
+  if ! git apply --check --reverse <(git show --binary "$commit") >/dev/null 2>&1; then
     FAILED_COMMITS="$FAILED_COMMITS $commit"
   fi
 done
 ```
+
+`--binary` matters: without it, `git show` prints a text placeholder for a
+binary-file change instead of a patch, and `git apply` cannot reverse-apply
+a placeholder — so any commit that touched a binary file would show as a
+false failure on every run, textual content included or not.
 
 A commit's patch reverse-applying cleanly means the change it introduced on
 `main` is present, unchanged, in the sync branch right now. A name in
@@ -252,10 +297,11 @@ gh pr create \
   an ancestor of `dev` so the next `dev→main` release PR only sees genuinely-new
   commits instead of fighting the accumulated squash divergence
 - **Merge strategy: plain merge, conflicts attributed by commit** — a conflict caused
-  only by the release squash commit resolves toward `dev` (it already has the
-  un-squashed equivalent); a conflict that also involves a main-only commit stops
-  and asks instead of guessing. Replaces the blind `-X ours` strategy that dropped
-  main-only content with no warning (apexyard#1394).
+  only by the release squash commit resolves toward `dev`, but only after confirming
+  the release commit changed nothing in that file relative to its `Released-From`
+  `dev` cut point. A conflict that also involves a main-only commit, or that fails
+  that confirmation, stops and asks instead of guessing. Replaces the blind `-X ours`
+  strategy that dropped main-only content with no warning (apexyard#1394).
 - **`CHANGELOG.md` is carried forward separately** — the plain merge keeps dev's
   CHANGELOG, so a second commit on top of the merge restores `main`'s
   `CHANGELOG.md` verbatim. Path-specific, audit-trail-visible, idempotent. See apexyard#448.
@@ -297,7 +343,7 @@ Refs #403, #448, #1002, #1394
 | Term | Definition |
 |------|------------|
 | Squash divergence | When a release PR is squash-merged to main, the resulting commit has a different SHA than the equivalent dev history, so dev still carries the un-squashed commits as "unsynced" |
-| Squash-duplicate conflict | A merge conflict where the release squash commit is the ONLY main-only commit that touched the file. `dev` already carries the content, so the conflict resolves toward `dev`. |
+| Squash-duplicate conflict | A merge conflict where the release squash commit is the ONLY main-only commit that touched the file, AND its content matches the `dev` commit named in its `Released-From` trailer for that file. Confirmed equivalent, so the conflict resolves toward `dev`. |
 | Main-only commit | A commit that exists on `main` and nowhere on `dev` — a PR merged straight to `main`, a hand-edited file, a hotfix. A conflict that involves one stops the sync and asks, rather than guessing. |
 | `sync/main-to-dev-after-<version>` | Short-lived branch used to carry the merge commit from main into dev; deleted after the PR merges |
 | CHANGELOG carry-forward | Path-specific step 5b that restores `main`'s `CHANGELOG.md` on the sync branch after the merge in step 5 would otherwise keep dev's stale copy. Atomic separate commit, idempotent re-run. See apexyard#448. |
@@ -353,7 +399,7 @@ After merge: git merge-base --is-ancestor <release-squash-sha> upstream/dev shou
 1. **Framework-only.** Refuse on managed projects.
 2. **No auto-merge.** The PR must go through Rex + CEO approval like every other PR.
 3. **Branch base is always `upstream/dev`.** Never branch from main for this operation.
-4. **Plain merge, conflicts attributed by commit (apexyard#1394).** Never use `-X ours`. A conflict caused only by the release squash commit resolves toward `dev`; a conflict involving a main-only commit stops and asks. Do not offer to resolve a main-only-commit conflict automatically.
+4. **Plain merge, conflicts attributed by commit (apexyard#1394).** Never use `-X ours`. A conflict caused only by the release squash commit resolves toward `dev` only after its `Released-From`-anchored diff confirms the file is unchanged. A conflict involving a main-only commit, or one that fails that confirmation, stops and asks. Do not offer to resolve either case automatically.
 5. **`--merge` (true merge) on PR merge.** Never `--squash` or `--rebase`. The merge commit IS the ancestry-closure artefact; destroying it defeats the skill's purpose. `/approve-merge` enforces this automatically on `sync/`-prefixed PRs; a guard in `block-unreviewed-merge.sh` refuses `--squash` on them as a mechanical backstop.
 6. **No-op on already-synced repos.** Idempotent: if main has nothing dev doesn't, exit 0.
 7. **Version argument is required.** The version labels the sync branch and PR body for auditability.

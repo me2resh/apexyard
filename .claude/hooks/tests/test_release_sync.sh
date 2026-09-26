@@ -18,14 +18,25 @@
 #   7.  version argument validation → malformed version rejected
 #   8-10. CHANGELOG carry-forward (apexyard#448) — unaffected by the merge
 #         strategy change, kept as regression coverage
-#   11. apexyard#1348 repro — blind `-X ours` drops a main-only commit's
-#       content; commit-attributed resolution keeps it (apexyard#1394)
-#   12. post-merge content check (step 5c) — flags the #1348 loss, passes
+#   11. general main-only-commit shape → blind `-X ours` drops the row;
+#       commit-attributed resolution keeps it (apexyard#1394). NOT the real
+#       apexyard#1348 shape — see case 13.
+#   12. post-merge content check (step 5c) → flags the case-11 loss, passes
 #       clean on the correctly-resolved merge (apexyard#1394)
+#   B2. annotated-tag peeling → bare rev-parse is the tag object,
+#       `^{commit}` is the commit (me2resh/apexyard#1406 Rex finding B2)
+#   13. the REAL apexyard#1348 shape → the release squash commit is the
+#       SOLE touching commit AND carries a release-branch-only edit; the
+#       Released-From confirmation must call it unsafe (#1406 Rex finding B3)
+#   14. B3 control → a genuine squash-duplicate (no release-branch edit)
+#       still classifies safe, so the common case stays unattended
 #
 # Exit 0 if all pass; 1 on first failure.
 
 set -u
+
+SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+SKILL_MD="$SRC_ROOT/.claude/skills/release-sync/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -33,6 +44,49 @@ FAILED=""
 
 mark_pass() { printf "  ✓ %s\n" "$1"; PASS=$((PASS+1)); }
 mark_fail() { printf "  ✗ %s: %s\n" "$1" "$2" >&2; FAIL=$((FAIL+1)); FAILED="${FAILED}\n  - $1"; }
+
+# ---------------------------------------------------------------------------
+# B4 (me2resh/apexyard#1406 Rex finding): static assertions on SKILL.md
+# itself, not on a copy of its logic. The earlier version of this file
+# reached 17/17 pass against the pre-fix SKILL.md, which still said
+# `-X ours` — because every other case here exercises a re-implementation
+# of the skill's git operations, never the skill's own text. Each assertion
+# below is written so it fails on the pre-fix file:
+#   - the step 5 merge command still says -X ours
+#   - the tag resolution does not peel to the commit
+#   - step 5c (the post-merge content check) is absent
+#   - the Released-From confirmation (B3's fix) is absent
+# ---------------------------------------------------------------------------
+if [ ! -f "$SKILL_MD" ]; then
+  mark_fail "B4: SKILL.md exists" "not found at $SKILL_MD"
+else
+  # Match an actual invocation (`git merge ... -X ours`), not the prose
+  # that explains why the skill no longer uses it — that prose legitimately
+  # says the phrase "-X ours" several times.
+  if grep -qE 'git merge[^`]*-X ours' "$SKILL_MD"; then
+    mark_fail "B4: step 5 merge has no -X ours" "found a 'git merge ... -X ours' invocation in $SKILL_MD"
+  else
+    mark_pass "B4: step 5 merge has no -X ours"
+  fi
+
+  if grep -q '\^{commit}' "$SKILL_MD"; then
+    mark_pass "B4: tag resolution peels to the commit (^{commit})"
+  else
+    mark_fail "B4: tag resolution peels to the commit (^{commit})" "no '^{commit}' found in $SKILL_MD"
+  fi
+
+  if grep -q '^### 5c\.' "$SKILL_MD"; then
+    mark_pass "B4: step 5c (post-merge content check) is present"
+  else
+    mark_fail "B4: step 5c (post-merge content check) is present" "no '### 5c.' heading found in $SKILL_MD"
+  fi
+
+  if grep -q 'Released-From' "$SKILL_MD"; then
+    mark_pass "B4/B3: the Released-From confirmation is present"
+  else
+    mark_fail "B4/B3: the Released-From confirmation is present" "no 'Released-From' reference found in $SKILL_MD"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Helper: build a synthetic two-branch git repo that simulates apexyard's
@@ -76,7 +130,7 @@ build_repo() {
     echo "feature-c" > feature-c.md
     git add feature-b.md feature-c.md
     git commit -q -m "release(#10): v1.0.0 — squash of B and C"
-    git tag v1.0.0
+    git tag -a v1.0.0 -m "v1.0.0"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
   ) || return 1
 }
 
@@ -200,8 +254,8 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   printf "main-version\n" > conflicting.md
   git add conflicting.md
   git commit -q -m "release(#10): squash with main version"
-  git tag v9.9.9
-  RELEASE_SHA=$(git rev-parse v9.9.9)
+  git tag -a v9.9.9 -m "v9.9.9"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
+  RELEASE_SHA=$(git rev-parse "v9.9.9^{commit}")
 
   # Plain merge (NOT -X ours) — conflicts, since both sides touched the file.
   git checkout -q -b sync-branch dev
@@ -252,8 +306,8 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   echo "unrelated" > unrelated.md
   git add unrelated.md
   git commit -q -m "release(#10): squash, unrelated file only"
-  git tag v9.9.8
-  RELEASE_SHA=$(git rev-parse v9.9.8)
+  git tag -a v9.9.8 -m "v9.9.8"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
+  RELEASE_SHA=$(git rev-parse "v9.9.8^{commit}")
 
   printf "main-only-hotfix\n" > conflicting.md
   git add conflicting.md
@@ -404,7 +458,7 @@ build_sync_branch_with_changelog_drift() {
       "## [1.0.0] — 2026-01-01" "" "- initial release" > CHANGELOG.md
     git add CHANGELOG.md
     git commit -q -m "chore: advance CHANGELOG to v2.1.0"
-    git tag v2.1.0
+    git tag -a v2.1.0 -m "v2.1.0"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
 
     # Sync branch: simulate the post-step-5 state where the sync branch's
     # CHANGELOG drifted from main's. We branch from base (so CHANGELOG is
@@ -515,11 +569,16 @@ build_sync_branch_with_changelog_drift "$SB"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
-# Helper: build the apexyard#1348 shape — main has the release squash PLUS a
-# separate main-only commit (the two contributor rows) touching the SAME
-# file the squash also touches. This is the exact shape a blind `-X ours`
+# Helper: build a general main-only-commit shape — main has the release
+# squash PLUS a SEPARATE main-only commit (the contributor row) touching the
+# SAME file the squash also touches. This is the shape a blind `-X ours`
 # cannot get right: the squash commit's presence in the conflict-causing
 # list does not mean it is the ONLY commit that matters.
+#
+# This is NOT the real apexyard#1348 shape — #1348's contributor rows were
+# added directly on the release branch, inside the squash commit, with no
+# separate later commit. See build_repo_with_release_branch_edit below for
+# that shape (Rex's B3 finding on #1406).
 #
 # build_repo_with_main_only_hotfix <root>
 #   - main:   base -> release squash (touches README.md) -> hotfix commit
@@ -548,11 +607,14 @@ build_repo_with_main_only_hotfix() {
     printf '%s\n' "# README" "" "- core-maintainer" "- squash-of-dev-content" > README.md
     git add README.md
     git commit -q -m "release(#10): v1.0.0 squash"
-    git tag v1.0.0
+    git tag -a v1.0.0 -m "v1.0.0"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
 
-    # A commit that landed straight on main, never on dev — the row this
-    # class of bug drops (apexyard#1348's actual incident: two contributor
-    # rows lost this way).
+    # A commit that landed straight on main, never on dev, via a SEPARATE
+    # hotfix commit — a general main-only-commit shape. This is NOT the real
+    # apexyard#1348 shape (see build_repo_with_release_branch_edit below and
+    # Rex's B3 finding on #1406): #1348's contributor rows were added
+    # directly on the release branch, inside the squash commit itself, not
+    # by a later separate commit. Kept as its own general-case coverage.
     printf '%s\n' "# README" "" "- core-maintainer" "- squash-of-dev-content" "- new-contributor-row" > README.md
     git add README.md
     git commit -q -m "docs: add new-contributor-row (main-only, never on dev)"
@@ -560,20 +622,22 @@ build_repo_with_main_only_hotfix() {
 }
 
 # ---------------------------------------------------------------------------
-# Case 11 (apexyard#1348, apexyard#1394): blind `-X ours` drops the
-# main-only contributor row; commit-attributed resolution keeps it.
+# Case 11 (general main-only-commit shape, apexyard#1394): blind `-X ours`
+# drops a main-only row added by a SEPARATE hotfix commit; commit-attributed
+# resolution keeps it. This models a main-only commit in general — NOT the
+# real apexyard#1348 shape. See case 13 below for that.
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 build_repo_with_main_only_hotfix "$SB"
 (
   cd "$SB" || exit 99
-  RELEASE_SHA=$(git rev-parse v1.0.0)
+  RELEASE_SHA=$(git rev-parse "v1.0.0^{commit}")
 
   # --- OLD behaviour: blind -X ours ---
   git checkout -q -b sync-old dev
   git merge --no-ff -X ours -q main -m "sync: old blind strategy" 2>/dev/null
   if grep -q "new-contributor-row" README.md; then
-    echo "pre-condition broken: -X ours did not reproduce the #1348 drop" >&2
+    echo "pre-condition broken: -X ours did not reproduce the drop" >&2
     exit 1
   fi
 
@@ -598,8 +662,8 @@ build_repo_with_main_only_hotfix "$SB"
   fi
   exit 0
 )
-[ "$?" -eq 0 ] && mark_pass "apexyard#1348 repro: -X ours drops the main-only row; attributed resolution keeps it" \
-              || mark_fail "1348 repro" "see output above"
+[ "$?" -eq 0 ] && mark_pass "main-only commit (separate hotfix): -X ours drops the row; attributed resolution keeps it" \
+              || mark_fail "main-only-commit repro" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
@@ -609,12 +673,14 @@ rm -rf "$SB"
 # ---------------------------------------------------------------------------
 main_only_commit_applies() {
   local commit="$1"
-  git apply --check --reverse <(git show "$commit") >/dev/null 2>&1
+  git apply --check --reverse <(git show --binary "$commit") >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------------------
-# Case 12 (apexyard#1394): post-merge content check (step 5c) — flags the
-# #1348-style loss under the old strategy, passes clean under the new one.
+# Case 12 (general main-only-commit shape, apexyard#1394): post-merge
+# content check (step 5c) — flags the loss under the old strategy, passes
+# clean under the new one. Same caveat as case 11: models a main-only
+# commit in general, not the real apexyard#1348 shape (see case 13).
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 build_repo_with_main_only_hotfix "$SB"
@@ -646,8 +712,204 @@ build_repo_with_main_only_hotfix "$SB"
   fi
   exit 0
 )
-[ "$?" -eq 0 ] && mark_pass "post-merge check (step 5c): flags the #1348 loss, clean after attributed resolution" \
+[ "$?" -eq 0 ] && mark_pass "post-merge check (step 5c): flags a main-only-commit loss, clean after attributed resolution" \
               || mark_fail "post-merge content check" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case (B2): an annotated tag's bare rev-parse names the tag OBJECT, not
+# the commit it points at. The `^{commit}` suffix peels it to the commit,
+# regardless of tag type. This is what auto-tag-on-release-pr-merge.yml
+# actually creates (`git tag -a`) — a lightweight tag would not show this
+# split, which is why the pre-fix skill's own tests (using lightweight
+# tags) never caught B2.
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+(
+  cd "$SB" || exit 99
+  git init -q
+  git config user.email "test@test.com"
+  git config user.name "test"
+  echo "base" > f.md
+  git add f.md
+  git commit -q -m "chore: base"
+  COMMIT_SHA=$(git rev-parse HEAD)
+  git tag -a v3.0.0 -m "v3.0.0"
+
+  BARE=$(git rev-parse v3.0.0)
+  PEELED=$(git rev-parse "v3.0.0^{commit}")
+
+  if [ "$BARE" = "$COMMIT_SHA" ]; then
+    echo "expected the bare tag rev-parse to differ from the commit on an annotated tag, got the same value" >&2
+    exit 1
+  fi
+  if [ "$PEELED" != "$COMMIT_SHA" ]; then
+    echo "expected the peeled tag rev-parse to equal the commit SHA, got '$PEELED' vs '$COMMIT_SHA'" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "B2: annotated tag — bare rev-parse is the tag object, ^{commit} is the commit" \
+              || mark_fail "B2 tag peeling" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Helper: classify_squash_duplicate_safe <release_sha> <file>
+# Mirrors SKILL.md step 5a's Released-From confirmation exactly. Given a
+# file already classified "squash-duplicate" by classify_conflict_file
+# (release_sha is the ONLY main-not-on-dev commit that touched it), decide
+# whether it is actually safe to resolve toward dev:
+#   - "safe"   the release commit's Released-From trailer names a dev
+#              commit, and the file is unchanged between that commit and
+#              the release commit — confirmed equivalent to dev.
+#   - "unsafe" the trailer is missing, or the file differs — route to the
+#              same stop-and-ask path as a main-only-commit conflict.
+# ---------------------------------------------------------------------------
+classify_squash_duplicate_safe() {
+  local release_sha="$1" file="$2"
+  local released_from
+  released_from=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' "$release_sha" 2>/dev/null)
+  if [ -z "$released_from" ]; then
+    echo "unsafe"
+    return
+  fi
+  if git diff --quiet "$released_from" "$release_sha" -- "$file" 2>/dev/null; then
+    echo "safe"
+  else
+    echo "unsafe"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Helper: build the REAL apexyard#1348 shape (Rex's B3 finding on #1406).
+# The release squash commit is the ONLY commit main has that dev does not —
+# so classify_conflict_file alone reports "squash-duplicate" — but its
+# content for the conflicting file does NOT match the dev commit named in
+# its own Released-From trailer. The contributor row was written directly
+# on the release branch, before the squash, and never merged to dev first.
+# This is what #1348 case 11 above does NOT model: there, the lost row came
+# from a SEPARATE later commit; here, the release squash commit itself
+# carries content dev never had, while still being the sole touching commit.
+#
+# build_repo_with_release_branch_edit <root>
+#   - dev:  base -> feature commit (adds "new-dev-feature" to README.md)
+#   - main: base -> release squash, Released-From: <dev tip>, README.md =
+#           dev's content PLUS a row added directly on the release branch
+# ---------------------------------------------------------------------------
+build_repo_with_release_branch_edit() {
+  local root="$1"
+  mkdir -p "$root"
+  (
+    cd "$root" || exit 1
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "test"
+
+    printf '%s\n' "# README" "" "- core-maintainer" > README.md
+    git add README.md
+    git commit -q -m "chore: base commit"
+
+    git checkout -q -b dev
+    printf '%s\n' "# README" "" "- core-maintainer" "- new-dev-feature" > README.md
+    git add README.md
+    git commit -q -m "feat(#1): document new-dev-feature"
+    DEV_TIP=$(git rev-parse dev)
+
+    git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
+    printf '%s\n' "# README" "" "- core-maintainer" "- new-dev-feature" "- new-contributor-row" > README.md
+    git add README.md
+    git commit -q -m "release(#10): v1.0.0 squash
+
+Adds a contributor row written directly on the release branch, before
+the squash, never merged to dev first.
+
+Released-From: $DEV_TIP"
+    git tag -a v1.0.0-real1348 -m "v1.0.0-real1348"
+  ) || return 1
+}
+
+# ---------------------------------------------------------------------------
+# Case 13 (B3, the REAL apexyard#1348 shape): a squash-duplicate candidate
+# whose release-branch edit the naive classification alone would miss.
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_repo_with_release_branch_edit "$SB"
+(
+  cd "$SB" || exit 99
+  RELEASE_SHA=$(git rev-parse "v1.0.0-real1348^{commit}")
+
+  git checkout -q -b sync-branch dev
+  git merge --no-ff -q main -m "sync: attributed strategy" 2>/dev/null
+
+  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" README.md)
+  if [ "$CLASS" != "squash-duplicate" ]; then
+    echo "expected README.md to classify as squash-duplicate (release_sha is the sole touching commit), got '$CLASS'" >&2
+    exit 1
+  fi
+
+  # --- Pre-fix behaviour: classification alone says "safe", checkout
+  # --ours drops the release-branch row. This is the #1348 loss reproduced.
+  git checkout -q --ours -- README.md
+  if grep -q "new-contributor-row" README.md; then
+    echo "pre-condition broken: naive squash-duplicate resolution did not reproduce the #1348 drop" >&2
+    exit 1
+  fi
+
+  # --- B3 fix: the Released-From confirmation must say "unsafe" for this
+  # file, routing it to stop-and-ask instead of a blind checkout --ours.
+  SAFE=$(classify_squash_duplicate_safe "$RELEASE_SHA" README.md)
+  if [ "$SAFE" != "unsafe" ]; then
+    echo "expected classify_squash_duplicate_safe to say 'unsafe' (release branch edited this file), got '$SAFE'" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "B3: real #1348 shape — squash-duplicate confirmation catches the release-branch edit" \
+              || mark_fail "B3 real #1348 shape" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 14 (B3 control): a genuine squash-duplicate — the release commit
+# changed nothing relative to its Released-From dev commit — must still be
+# classified "safe", so the common case keeps resolving toward dev
+# unattended and does not regress into asking on every sync.
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@test.com"
+  git config user.name "test"
+
+  printf "shared\n" > shared.md
+  git add shared.md
+  git commit -q -m "base"
+
+  git checkout -q -b dev
+  printf "dev-version\n" > conflicting.md
+  git add conflicting.md
+  git commit -q -m "feat: dev version"
+  DEV_TIP=$(git rev-parse dev)
+
+  # A genuine squash-duplicate: the release commit's content for this file
+  # is IDENTICAL to dev's tip content (the release branch added nothing new
+  # here) — the case the fix must still resolve toward dev unattended.
+  git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
+  printf "dev-version\n" > conflicting.md
+  git add conflicting.md
+  git commit -q -m "release(#10): squash, no release-branch edit to this file
+
+Released-From: $DEV_TIP"
+  git tag -a v9.9.7 -m "v9.9.7"
+  RELEASE_SHA=$(git rev-parse "v9.9.7^{commit}")
+
+  SAFE=$(classify_squash_duplicate_safe "$RELEASE_SHA" conflicting.md)
+  [ "$SAFE" = "safe" ] && exit 0
+  echo "expected a genuine squash-duplicate to classify 'safe', got '$SAFE'" >&2
+  exit 1
+)
+[ "$?" -eq 0 ] && mark_pass "B3 control: genuine squash-duplicate (no release-branch edit) stays safe" \
+              || mark_fail "B3 control: genuine squash-duplicate stays safe" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
