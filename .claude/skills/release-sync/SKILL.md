@@ -185,10 +185,22 @@ fi
 
 **Path-specific by design (v1).** This step is hardcoded to `CHANGELOG.md` — the one file the release flow writes on `main`. Generalising to other "main-leads" files is deferred until a second one shows up (and would warrant the YAML config knob mentioned in #448 § "Design Notes").
 
+**Why a separate commit rather than amending the merge.** The carry-forward is a deliberate, audit-trail-visible step. Leaving it as its own commit makes the operation reviewable in the sync PR (Rex sees two commits and can sanity-check each); amending would hide the carry-forward inside the merge commit and obscure the audit trail.
+
+**Idempotent.** Re-running `/release-sync` on an already-synced repo finds `git diff --quiet upstream/main -- CHANGELOG.md` returns 0, the `if` block is skipped, and no commit is created. The existing "already in sync" guard in step 2 still catches the all-empty case; this guard handles the narrower "code is synced but CHANGELOG drifted in a prior unfixed run" case.
+
+**What this step does NOT do.**
+
+- Does **not** touch any file other than `CHANGELOG.md`.
+- Does **not** modify `main`'s tree — only updates the sync branch's `CHANGELOG.md` to match.
+- Does **not** rewrite history — the carry-forward is a fresh commit on top of the merge commit.
+- Does **not** run if `main`'s `CHANGELOG.md` equals dev's (post-merge) — the `if` guard skips the entire block.
+- Does **not** preserve in-flight `CHANGELOG.md` edits on `dev`. Under the release-cut model `dev` does NOT add CHANGELOG entries between releases — only `/release` writes there — so this is the expected steady-state. If an adopter has hand-edited `CHANGELOG.md` on `dev`, the carry-forward overwrites those edits. The right shape for that case is to land the edits via the `/release` skill (or a chore PR) before invoking `/release-sync`.
+
 ### 5c. Post-merge check — every main-only commit's content must still be present (apexyard#1394)
 
-After the merge commit exists (steps 5 + 5a) and before pushing, verify that no
-main-only commit's content was lost. For every non-merge commit in
+After the merge commit exists (steps 5, 5a, and 5b) and before pushing, verify
+that no main-only commit's content was lost. For every non-merge commit in
 `upstream/dev..upstream/main`, check that its patch still reverse-applies
 cleanly against the sync branch:
 
@@ -218,18 +230,6 @@ new content placed after it in a hand-resolved file — put a manual
 resolution's own new lines before the preserved block, not after, when a
 commit's changes sit at the tail of the file. Treat a failure as
 "investigate", not as an automatic abort.
-
-**Why a separate commit rather than amending the merge.** The carry-forward is a deliberate, audit-trail-visible step. Leaving it as its own commit makes the operation reviewable in the sync PR (Rex sees two commits and can sanity-check each); amending would hide the carry-forward inside the merge commit and obscure the audit trail.
-
-**Idempotent.** Re-running `/release-sync` on an already-synced repo finds `git diff --quiet upstream/main -- CHANGELOG.md` returns 0, the `if` block is skipped, and no commit is created. The existing "already in sync" guard in step 2 still catches the all-empty case; this guard handles the narrower "code is synced but CHANGELOG drifted in a prior unfixed run" case.
-
-**What this step does NOT do.**
-
-- Does **not** touch any file other than `CHANGELOG.md`.
-- Does **not** modify `main`'s tree — only updates the sync branch's `CHANGELOG.md` to match.
-- Does **not** rewrite history — the carry-forward is a fresh commit on top of the merge commit.
-- Does **not** run if `main`'s `CHANGELOG.md` equals dev's (post-merge) — the `if` guard skips the entire block.
-- Does **not** preserve in-flight `CHANGELOG.md` edits on `dev`. Under the release-cut model `dev` does NOT add CHANGELOG entries between releases — only `/release` writes there — so this is the expected steady-state. If an adopter has hand-edited `CHANGELOG.md` on `dev`, the carry-forward overwrites those edits. The right shape for that case is to land the edits via the `/release` skill (or a chore PR) before invoking `/release-sync`.
 
 ### 6. Push and open the PR
 
