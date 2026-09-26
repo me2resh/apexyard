@@ -498,7 +498,12 @@ case "$TOOL_NAME" in
         # `$DIR/mystery.approved` shape) combined with a BSD sed -i
         # mis-extraction would otherwise still slip past both checks.
         IS_EXTRACTION_FRAGILE=0
-        echo "$COMMAND" | grep -qE '\bsed[[:space:]]+([^|;&]*[[:space:]])?-i\b|\bawk[[:space:]]+[^|;&]*-i[[:space:]]+inplace\b' && IS_EXTRACTION_FRAGILE=1
+        # The sed half reads the library's own pattern when it is loaded
+        # (#1414). A private copy here had drifted: it missed `sed -Ei ''`
+        # and `sed --in-place`, which the library now detects. The old
+        # literal is the fallback for a missing library.
+        _rmw_sed_inplace_re="${_BDW_SED_INPLACE_RE:-\\bsed[[:space:]]+([^|;&]*[[:space:]])?-i\\b}"
+        echo "$COMMAND" | grep -qE "${_rmw_sed_inplace_re}|\\bawk[[:space:]]+[^|;&]*-i[[:space:]]+inplace\\b" && IS_EXTRACTION_FRAGILE=1
 
         if [ -n "$WRITE_TARGETS" ]; then
           while IFS= read -r wt; do

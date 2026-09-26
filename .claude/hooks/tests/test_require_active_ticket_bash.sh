@@ -829,10 +829,25 @@ EOF
   run_case "#1414 allowed WITH ticket: $c" 0 "" "$in" "$sb"
 done
 
-for c in "echo x >&2" "sed -n '/warning/p' src/app.ts" "sed 's/w/x/' src/app.ts"; do
+for c in "echo x >&2" "sed -n '/warning/p' src/app.ts" "sed 's/w/x/' src/app.ts" \
+         'out=$(npm test 2>&1)' 'bash -c "npm test 2>&1"' \
+         "find . -name '*.md' -exec sed -n 1p {} + -print"; do
   sb=$(make_sandbox)
   in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
   run_case "#1414 sanity: read stays ungated: $c" 0 "" "$in" "$sb"
+done
+
+# A sed -i edit whose file operand is not extracted must still block when
+# the same command names an exempt sed `w` file. Each of these edits
+# src/app.ts. The first three blocked before #1414, and a first draft of
+# the fix let them pass.
+for c in 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts' \
+         "sed -i 's/a/b/;w /tmp/x' src/app.ts" \
+         'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts' \
+         'sed --in-place "s/a/b/w /dev/stderr" src/app.ts'; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1414 sed -i beside an exempt w file blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
 done
 
 # --- #886/#926 round 4: ZERO whitespace between operator and target -----

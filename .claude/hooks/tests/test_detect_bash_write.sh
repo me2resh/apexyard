@@ -489,9 +489,56 @@ assert_targets "#1414 sed w target"        "sed -n 'w out.txt' in.txt"          
 assert_targets "#1414 sed s///w target"    "sed 's/a/b/w out.txt' in.txt"       "out.txt"
 assert_targets "#1414 sed w after ; in the script" \
   "sed -n 'p;w out.txt' in.txt"                                                  "out.txt"
-assert_target  "#1414 sed w single target" "sed -n '/re/w out.txt' in.txt"      "out.txt"
+assert_target  "#1414 sed w: single-target extractor returns empty (plural only)" \
+  "sed -n '/re/w out.txt' in.txt"                                                ""
 assert_not_deletion_only "#1414 rm + sed w hides a real write" \
   "rm old.ts; sed -n 'w src/app.ts' in.txt"
+
+# fd copies that end at `)`, a backtick, or a quote stay reads. Each of
+# these reported a write to `1)`, `` 1` ``, or `2` before the fix.
+assert_read  "#1414 \$(cmd 2>&1) is a read"       'out=$(npm test 2>&1)'
+assert_read  "#1414 backtick cmd 2>&1 is a read"  'result=`ls 2>&1`'
+assert_read  "#1414 (cmd 2>&1) subshell is a read" '(cd sub && make 2>&1)'
+assert_read  "#1414 bash -c \"cmd 2>&1\" is a read" 'bash -c "npm test 2>&1"'
+assert_read  "#1414 bash -c 'cmd >&2' is a read"  "bash -c 'echo hi >&2'"
+assert_read  "#1414 grep '>&2' is a read"         "grep -rn '>&2' .claude/hooks/"
+assert_read  "#1414 >&\"2\" quoted fd copy"        'echo x >&"2"'
+assert_read  "#1414 \$(cmd 2>&1) || echo"          'r=$(npm test 2>&1) || echo "$r"'
+assert_write "#1414 >&2} writes a file named 2}"  "echo x >&2}"
+
+# More sed -i spellings, and dash-words that are not sed flags.
+assert_write "#1414 sed --i (prefix)"             "sed --i 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in (prefix)"            "sed --in 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-pl=.bak (prefix)"    "sed --in-pl=.bak 's/a/b/' src/app.ts"
+assert_read  "#1414 find ... -exec sed ... -print" "find . -name '*.md' -exec sed -n 1p {} + -print"
+assert_read  "#1414 sed s/ -api/x/ is a read"     "sed 's/ -api/x/' in.txt"
+assert_read  "#1414 commit message mentioning sed -pi" 'git commit -m "fix sed -pi flag doc"'
+
+# More sed w positions.
+assert_write "#1414 sed s#a#b#w"                  "sed 's#a#b#w out.txt' in.txt"
+assert_write "#1414 sed s/a/b/pw"                 "sed 's/a/b/pw out.txt' in.txt"
+assert_write "#1414 sed /re/Iw"                   "sed -n '/re/Iw out.txt' in.txt"
+assert_write "#1414 sed s,a,b,w"                  "sed 's,a,b,w out.txt' in.txt"
+assert_write "#1414 sed s:a:b:w"                  "sed 's:a:b:w out.txt' in.txt"
+assert_write "#1414 sed s@a@b@w"                  "sed 's@a@b@w out.txt' in.txt"
+assert_write "#1414 sed s%a%b%w"                  "sed 's%a%b%w out.txt' in.txt"
+assert_write "#1414 sed \\,re,w"                  "sed -n '\\,re,w out.txt' in.txt"
+assert_write "#1414 sed ' w file' (space after quote)" "sed -n ' w out.txt' in.txt"
+assert_read  "#1414 sed then | grep 'w x' is a read" "sed -n 1p in.txt | grep 'w x'"
+
+# A sed -i edit whose file the extractor misses must not be hidden by an
+# exempt `w` target. Before the fix these extracted only the `w` target,
+# and the gate passed them. Now they extract nothing, and the gate fails
+# closed, as it did before #1414.
+assert_write   "#1414 sed -i with s///w /dev/stdout" 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'
+assert_targets "#1414 sed -i + exempt w target yields no target" \
+  'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'                                  ""
+assert_targets "#1414 sed -i with ;w /tmp/x yields no target" \
+  "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          ""
+assert_targets "#1414 sed w then sed -i yields no target" \
+  'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts'                       ""
+assert_targets "#1414 sed -i file still extracted beside a w flag" \
+  "sed -i 's/a/b/w /tmp/log' src/app.ts"                                         "src/app.ts"
 
 # --- #931 residual 1: `<>` read-write open is now DETECTED as a write ---
 #
