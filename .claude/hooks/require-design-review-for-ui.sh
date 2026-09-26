@@ -21,8 +21,15 @@
 #   - *.tsx, *.jsx (React)
 #   - *.vue (Vue)
 #   - *.svelte (Svelte)
+#   - *.astro (Astro)
+#   - *.mdx (MDX — Markdown with embedded components)
+#   - *.hbs, *.njk, *.liquid (Handlebars / Nunjucks / Liquid templates)
 #   - *.css, *.scss, *.sass, *.less (styles)
 #   - design-tokens.* (design systems)
+#
+# The full default pattern list lives in _lib-ui-paths.sh — the single
+# source shared with the /approve-design skill's own UI-touch check (step 5),
+# so the two lists cannot drift apart (me2resh/apexyard#1390).
 #
 # Projects that want a broader/narrower list can override via
 # .claude/project-config.json:
@@ -148,26 +155,10 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
-# Default UI path patterns (regex). Note: .tsx$ / .jsx$ are EXACT — they must
-# not match plain .ts / .js, which are often backend/server files. The
-# original draft had \.tsx?$ which matched .ts too; caught in smoke test.
-UI_GLOBS='\.tsx$
-\.jsx$
-\.vue$
-\.svelte$
-\.css$
-\.scss$
-\.sass$
-\.less$
-design-tokens'
-
-# Allow project-config to override
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  CUSTOM=$(jq -r '.ui_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-  if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
-    UI_GLOBS="$CUSTOM"
-  fi
-fi
+# Default + effective UI path patterns (regex) — sourced from _lib-ui-paths.sh,
+# the single list shared with /approve-design's step 5 (me2resh/apexyard#1390).
+. "$(dirname "$0")/_lib-ui-paths.sh"
+UI_GLOBS=$(ui_effective_globs "$REPO_ROOT")
 
 # Get the PR's changed files. The diff endpoint rejects responses over 300
 # files; the files API is paginated and supports larger PRs. It caps at 3,000

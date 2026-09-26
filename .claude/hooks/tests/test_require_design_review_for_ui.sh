@@ -44,20 +44,20 @@ assert_eq() {
 }
 
 # ---------------------------------------------------------------------------
-# A) UI_GLOBS — the default UI patterns the hook ships with. Kept in sync with
-# the hook by copying the same list; the matcher replays the hook's grep, which
-# is case-SENSITIVE (grep -qE, NOT -i) — .tsx$/.jsx$ are exact so they do not
-# match plain .ts/.js backend files.
+# A) UI_GLOBS — the default UI patterns the hook ships with. Sourced from the
+# SAME _lib-ui-paths.sh the hook (and /approve-design) read (me2resh/apexyard#1390)
+# — no separate copy to drift out of sync. The matcher replays the hook's
+# grep, which is case-SENSITIVE (grep -qE, NOT -i) — .tsx$/.jsx$ are exact so
+# they do not match plain .ts/.js backend files.
 # ---------------------------------------------------------------------------
-UI_GLOBS='\.tsx$
-\.jsx$
-\.vue$
-\.svelte$
-\.css$
-\.scss$
-\.sass$
-\.less$
-design-tokens'
+LIB_UI_PATHS="$SRC_ROOT/.claude/hooks/_lib-ui-paths.sh"
+if [ ! -f "$LIB_UI_PATHS" ]; then
+  echo "FAIL: required source missing: $LIB_UI_PATHS" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+. "$LIB_UI_PATHS"
+UI_GLOBS=$(ui_default_globs)
 
 classify_file() {
   local file="$1"
@@ -76,6 +76,11 @@ assert_eq "tsx component matches"   "match"    "$(classify_file 'src/components/
 assert_eq "jsx component matches"   "match"    "$(classify_file 'src/App.jsx')"
 assert_eq "vue component matches"   "match"    "$(classify_file 'src/Card.vue')"
 assert_eq "svelte component matches" "match"   "$(classify_file 'src/Nav.svelte')"
+assert_eq "astro component matches" "match"    "$(classify_file 'src/layouts/Base.astro')"
+assert_eq "mdx component matches"   "match"    "$(classify_file 'src/pages/about.mdx')"
+assert_eq "hbs template matches"    "match"    "$(classify_file 'views/index.hbs')"
+assert_eq "njk template matches"    "match"    "$(classify_file 'templates/index.njk')"
+assert_eq "liquid template matches" "match"    "$(classify_file 'templates/index.liquid')"
 assert_eq "css matches"             "match"    "$(classify_file 'styles/main.css')"
 assert_eq "scss matches"            "match"    "$(classify_file 'styles/theme.scss')"
 assert_eq "design-tokens matches"   "match"    "$(classify_file 'src/design-tokens.json')"
@@ -101,6 +106,7 @@ make_sandbox() {
   cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
+  cp "$SRC_ROOT/.claude/hooks/_lib-ui-paths.sh" "$sb/.claude/hooks/_lib-ui-paths.sh"
   if [ -f "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" ]; then
     cp "$SRC_ROOT/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
   fi
@@ -155,6 +161,14 @@ assert_eq "blocks without marker" "2" "$code"
 rm -rf "$sb"
 
 echo ""
+echo "B) #1390 regression — Astro-only PR + NO marker -> BLOCK (exit 2)"
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "#1390 blocks astro-only PR without marker" "2" "$code"
+rm -rf "$sb"
+
+echo ""
 echo "B) UI PR + matching marker -> ALLOW (exit 0)"
 sb=$(make_sandbox)
 install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
@@ -178,6 +192,16 @@ sb=$(make_sandbox)
 install_mock_gh "$sb" '"src/handlers/user.ts" "cmd/main.go"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "no-op on non-UI PR" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) .ui_paths override still REPLACES the shared default list (#1390 refactor didn't change override semantics)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "overridden .ui_paths no longer matches .astro" "0" "$code"
 rm -rf "$sb"
 
 echo ""
