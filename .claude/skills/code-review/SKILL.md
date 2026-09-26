@@ -34,6 +34,10 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 /code-review 30 your-org/your-repo
 ```
 
+## Running tests in a scratch clone
+
+Rex may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path, or a `git archive | tar -x` export into a literal non-git directory once me2resh/apexyard#1396 is fixed. If a hook blocks a command, stop and report the exact command, hook, and message — never rephrase or disguise it. Full pattern: `.claude/agents/code-reviewer.md` § "Running tests in a scratch clone".
+
 ## Process
 
 Before you draft or post a review, read .claude/rules/writing-standard.md.
