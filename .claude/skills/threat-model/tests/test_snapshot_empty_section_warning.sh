@@ -137,6 +137,26 @@ else
 fi
 
 echo ""
+echo "5) Step 1b under dash, a POSIX shell"
+# The step must not use bash-only syntax such as ${!name}. dash stops with
+# "Bad substitution" on that syntax, so this case catches it.
+if command -v dash >/dev/null 2>&1; then
+  dfd="$WORK/no-trust.md" dash -c '. "$1"; echo DONE' dash "$WORK/step1b.sh" \
+    2> "$WORK/err.txt" > "$WORK/out.txt"
+  rc=$?
+  if [ "$rc" -eq 0 ] && grep -qx 'DONE' "$WORK/out.txt" \
+     && [ "$(grep -c . "$WORK/err.txt")" -eq 1 ] \
+     && grep -q 'WARNING: .*## Trust boundaries' "$WORK/err.txt"; then
+    ok "the step runs under dash and prints only the expected warning"
+  else
+    bad "the step runs under dash and prints only the expected warning" \
+      "rc=$rc stderr: $(head -c 200 "$WORK/err.txt")"
+  fi
+else
+  echo "  SKIP: dash is not installed"
+fi
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

@@ -150,7 +150,7 @@ Don't ask questions whose answer is already in the discovery report.
 
 ### 5. Generate the output(s)
 
-`generate-mermaid.sh` writes the whole `dfd.md` itself. It does not read `templates/architecture/dfd.md`. An override at `<private_repo>/custom-templates/architecture/dfd.md` has no effect on generated output. The template is the starting point for a DFD written by hand. A DFD from either source must follow the heading contract in rule 10 below.
+`generate-mermaid.sh` writes the whole `dfd.md` itself. It does not read `templates/architecture/dfd.md`. An override at `<private_repo>/custom-templates/architecture/dfd.md` has no effect on generated output. The template is the starting point for a DFD written by hand. A DFD from either source must follow the heading-contract rule under Rules below.
 
 #### 5a. Mermaid markdown (always)
 
