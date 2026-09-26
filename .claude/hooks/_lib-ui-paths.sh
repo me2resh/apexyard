@@ -43,11 +43,22 @@ GLOBS
 # `.ui_paths` override when one is set. `.ui_paths` REPLACES the defaults
 # wholesale — same array-override semantics as every other project-config
 # array key (see docs/project-config.md). One pattern per line.
+#
+# The `.ui_paths` read keeps only non-blank string entries (Hakim's LOW-2,
+# me2resh/apexyard#1397). A raw `.[]` turns a non-string override entry
+# (`null`, an object, or a nested array) into the literal pattern `null`,
+# `{"a":1}`, etc. — a pattern that matches almost no real file. Every
+# entry an adopter's `.ui_paths` array carries that isn't a usable regex
+# silently narrows the design gate toward "nothing matches" instead of
+# falling back to the shipped defaults. Filtering to non-blank strings
+# and falling back to the defaults when nothing valid remains keeps the
+# override intentional: a malformed override degrades to the safe
+# (fail-closed) default list rather than to an empty, always-passing gate.
 ui_effective_globs() {
   local repo_root="$1"
   if [ -n "$repo_root" ] && [ -f "${repo_root}/.claude/project-config.json" ] && command -v jq >/dev/null 2>&1; then
     local custom
-    custom=$(jq -r '.ui_paths // [] | .[]' "${repo_root}/.claude/project-config.json" 2>/dev/null)
+    custom=$(jq -r '.ui_paths // [] | map(select(type == "string" and test("\\S"))) | .[]' "${repo_root}/.claude/project-config.json" 2>/dev/null)
     if [ -n "$custom" ]; then
       printf '%s\n' "$custom"
       return 0

@@ -92,6 +92,19 @@ assert_eq "plain .js no-match"      "no-match" "$(classify_file 'scripts/build.j
 assert_eq "readme no-match"         "no-match" "$(classify_file 'README.md')"
 assert_eq "go file no-match"        "no-match" "$(classify_file 'cmd/main.go')"
 
+echo ""
+echo "A) ui_effective_globs_pipe — the single grep -E argument /approve-design step 5 reads"
+PIPE_DEFAULT=$(ui_effective_globs_pipe "")
+assert_eq "pipe form matches .astro (default list)" "0" "$(printf 'src/layouts/Base.astro' | grep -qE "$PIPE_DEFAULT"; echo $?)"
+assert_eq "pipe form does not match plain .ts (default list)" "1" "$(printf 'src/handlers/user.ts' | grep -qE "$PIPE_DEFAULT"; echo $?)"
+
+pipe_sb=$(mktemp -d)
+mkdir -p "$pipe_sb/.claude"
+printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$pipe_sb/.claude/project-config.json"
+PIPE_OVERRIDE=$(ui_effective_globs_pipe "$pipe_sb")
+assert_eq "pipe form reads .ui_paths override" "\\.foo\$" "$PIPE_OVERRIDE"
+rm -rf "$pipe_sb"
+
 # ---------------------------------------------------------------------------
 # B) End-to-end gate via self-contained mock gh.
 # ---------------------------------------------------------------------------
@@ -222,6 +235,57 @@ printf '%s\n' '{"ui_paths": ["\\.foo$"]}' > "$sb/.claude/project-config.json"
 install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
 code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
 assert_eq "overridden .ui_paths no longer matches .astro" "0" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) malformed .ui_paths entries fall back to the shipped defaults, not to an empty (always-passing) list (Hakim LOW-2, me2resh/apexyard#1397)"
+echo "B) [null] -> the pattern list falls back to defaults -> UI PR with no marker BLOCKS (exit 2)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": [null]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "[null] override falls back to defaults, blocks .tsx PR" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) [{}] (an object entry) -> falls back to defaults -> BLOCKS (exit 2)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": [{"a": 1}]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "[{}] override falls back to defaults, blocks .astro PR" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) [[]] (a nested array entry) -> falls back to defaults -> BLOCKS (exit 2)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": [["x"]]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "[[]] override falls back to defaults, blocks .tsx PR" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) [\" \"] (a whitespace-only string entry) -> falls back to defaults -> BLOCKS (exit 2)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": [" "]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/layouts/SiteMenu.astro"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "[' '] override falls back to defaults, blocks .astro PR" "2" "$code"
+rm -rf "$sb"
+
+echo ""
+echo "B) a mix of malformed and valid .ui_paths entries keeps only the valid one (no fallback)"
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude"
+printf '%s\n' '{"ui_paths": [null, "\\.foo$", " "]}' > "$sb/.claude/project-config.json"
+install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+code=$(run_gate "$sb" "gh pr merge 77 --repo o/r --squash")
+assert_eq "mixed override keeps only the valid entry, .tsx (not .foo) is a no-op" "0" "$code"
 rm -rf "$sb"
 
 echo ""
