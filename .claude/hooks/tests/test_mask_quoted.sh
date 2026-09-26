@@ -287,8 +287,12 @@ assert_raw_passthrough "guard: backslash-newline anywhere in the command" \
 
 # A placeholder byte already in the command cannot round-trip through
 # unmask_quoted_metachars. The helper must hand such a command back as is.
-assert_raw_passthrough "guard: placeholder byte inside a real target" \
-  "echo ';' ; echo x > a${p25}b"
+# Each of the five bytes gets its own case, so a byte dropped from the
+# guard's list fails a case.
+for pb in $'\021' $'\022' $'\023' $'\024' "$p25"; do
+  assert_raw_passthrough "guard: placeholder byte $(printf '%s' "$pb" | od -An -to1 | tr -d ' ') inside a real target" \
+    "echo ';' ; echo x > a${pb}b"
+done
 
 # --- 3d. Oversize command: empty or unchanged, never altered ---------------
 #
@@ -339,18 +343,34 @@ for c in "git log --format='%h > %s'" \
 done
 
 # Pin 2: masking added at a gate's call site would pass pin 1. So only two
-# hooks may call mask_quoted_metachars: this library, and the note function
-# _ratc_quoted_origin_hint in require-active-ticket.sh. That function asks
-# the presence question of masked text only to choose a message. Hook case A
-# in test_require_active_ticket_bash.sh pins its exit code at 2.
+# files may name the masker or its library: the library itself, and
+# require-active-ticket.sh, where the note function _ratc_quoted_origin_hint
+# asks the presence question of masked text only to choose a message. Hook
+# case A in test_require_active_ticket_bash.sh pins its exit code at 2.
+#
+# The check searches the hooks tree, .githooks, and bin, and skips tests. It
+# also pins the library's function list, so a new wrapper in the library
+# fails. It matches names in source text. It catches honest edits, not a
+# deliberate attempt to hide a call.
 
-users=$(grep -l 'mask_quoted_metachars' "$LIB_DIR"/*.sh 2>/dev/null \
-  | while IFS= read -r f; do basename "$f"; done | sort | tr '\n' ' ')
+REPO_ROOT="$(cd "$LIB_DIR/../.." && pwd)"
+users=$(grep -rlE '_lib-mask-quoted|mask_quoted_metachars' \
+    "$LIB_DIR" "$REPO_ROOT/.githooks" "$REPO_ROOT/bin" 2>/dev/null \
+  | grep -v '/tests/' \
+  | while IFS= read -r f; do basename "$f"; done | sort -u | tr '\n' ' ')
 if [ "$users" = "_lib-mask-quoted.sh require-active-ticket.sh " ]; then
-  ok "only the library and require-active-ticket.sh call the masker"
+  ok "only the library and require-active-ticket.sh name the masker"
 else
-  bad "only the library and require-active-ticket.sh call the masker" \
+  bad "only the library and require-active-ticket.sh name the masker" \
       "found in: $users — see AgDR-0113 and AgDR-0171 before adding a caller"
+fi
+
+funcs=$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*\(\)' "$LIB_MASK" | sort | tr '\n' ' ')
+if [ "$funcs" = "mask_quoted_metachars() unmask_quoted_metachars() " ]; then
+  ok "the library defines only the mask and unmask functions"
+else
+  bad "the library defines only the mask and unmask functions" \
+      "found: $funcs — a new wrapper could feed masked text to a gate"
 fi
 
 outside=$(awk '

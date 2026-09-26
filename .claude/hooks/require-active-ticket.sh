@@ -153,8 +153,7 @@ _ratc_quoted_origin_hint() {
 
   # Some write sign still sits outside quotes, so at least one target may be
   # real. Say nothing. This is a presence check, not a target extraction. It
-  # costs far less. On 800 masked quoted commands, one local run measured
-  # about 0.9 s for this check and about 10 s for an extraction.
+  # costs far less. AgDR-0171 records the measured cost.
   #
   # DIAGNOSIS ONLY. Never copy this call into a verdict. A gate must ask this
   # question of the RAW command (AgDR-0113 governance rule 2). Here the answer

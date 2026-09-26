@@ -59,7 +59,7 @@ Reviews found the last five guards, not the author's own adversarial pass. Three
 
 The caller also checks for an empty mask before it reads the result. The command travels through the environment, and Linux caps one environment string at 128 KiB. A larger command makes `execve` fail, and the helper returns nothing. An unguarded caller would read that as "the command changed".
 
-`require-active-ticket.sh` calls the helper only after the gate has decided to block. No return code depends on the helper. The hook then asks `bash_command_appears_to_write` about the masked command. The note prints only when the masked command no longer looks like a write. So a write outside quotes that the detector recognises always suppresses the note.
+`require-active-ticket.sh` calls the helper only after the gate has decided to block. No return code depends on the helper. The hook then asks `bash_command_appears_to_write` about the masked command. The note prints only when the masked command no longer looks like a write. So a write outside quotes that the detector recognises suppresses the note, wherever the scanner's quote state matches bash. See Residue and scope.
 
 This is the same function the gate uses, asked of filtered text. AgDR-0113 allows that only for an additive question, and this question is additive. It chooses a message after the verdict is fixed. The gate's own call still reads the raw command. A comment at the masked call says so. A presence check also costs far less than a second target extraction. On a masked command of 800 quoted `grep` calls, one local run measured about 0.9 s for the presence check. A target extraction on the same text took about 10 s.
 
@@ -75,11 +75,11 @@ A command that trips a guard gets no note. The full `/threat-model` Step 1b bloc
 
 Three consumers keep their current behaviour: `require-active-ticket.sh`, `require-migration-ticket.sh`, and `warn-review-marker-write.sh`. None of them changes how it decides.
 
-`test_mask_quoted.sh` section 5 pins the governance choice in two ways. Three cases assert that `bash_command_appears_to_write` still reports a write for quoted-metacharacter commands. Those cases fail if someone makes that function itself quote-aware. They cannot see masking added at a gate's call site. So a static check also asserts that only the library and the note function call `mask_quoted_metachars`. Hook case A pins the exit code at that one call site. A failure in either pin is the signal to re-read AgDR-0113 first.
+`test_mask_quoted.sh` section 5 pins the governance choice in two ways. Three cases assert that `bash_command_appears_to_write` still reports a write for quoted-metacharacter commands. Those cases fail if someone makes that function itself quote-aware. They cannot see masking added at a gate's call site. So a static check also asserts that only the library and `require-active-ticket.sh` name the masker or its library. Inside that hook, it asserts that only the note function calls the masker. It also pins the library's function list, so a new wrapper fails. The check matches names, so it catches honest edits, not deliberate hiding. Hook case A pins the exit code in `require-active-ticket.sh`. A failure in either pin is the signal to re-read AgDR-0113 first.
 
 The real fix stays open. It needs a decision about whether the presence question may read filtered text, and under which guards. That question is posted on #1356. The security review adds evidence for that decision. A quote-aware presence check would allow `bash -c 'echo x > f'`, `eval`, and `awk '{ print > "f" }'`. The raw check blocks all three today.
 
-`_lib-mask-quoted.sh` is written as a shared helper. Other hooks can adopt it for additive questions without a rewrite.
+`_lib-mask-quoted.sh` is written as a shared helper. Another hook can use it for an additive question. That change must update pin 2 on purpose, after a reviewer re-reads AgDR-0113.
 
 ## Residue and scope
 
@@ -91,30 +91,31 @@ AgDR-0113 closes with two binding rules for a security AgDR. Cite the test or wr
 |---|---|---|
 | No verdict depends on the helper | Whole change. Verified by reading every call site. | The 14 `quoted_note_case` checks in `test_require_active_ticket_bash.sh` each assert exit 2. |
 | The presence function reads raw text | `bash_command_appears_to_write` itself, 3 commands | `test_mask_quoted.sh` section 5, pin 1 |
-| No gate calls the masker | Every `.claude/hooks/*.sh` file, and every line of `require-active-ticket.sh` outside the note function | `test_mask_quoted.sh` section 5, pin 2. Hook case A pins the exit code at the one allowed call site. |
+| No gate calls the masker | By name only. Pin 2 finds the text `_lib-mask-quoted` or `mask_quoted_metachars` in files under `.claude/hooks/`, `.githooks/`, and `bin/`, outside test folders. It also pins the library's function list. It does not find a call through a dynamic name or `eval`, or a copy of the scanner under a new name. It catches honest edits, not deliberate hiding. | `test_mask_quoted.sh` section 5, pin 2. For `require-active-ticket.sh` only, hook case A also pins the exit code, however the masker is called. |
 | The detector is untouched | Whole change | Not pinned by a test. `git diff origin/dev...HEAD -- .claude/hooks/_lib-detect-bash-write.sh` prints nothing. |
 | A real write is never hidden | The 23 adversarial shapes tested, not the general case | `test_mask_quoted.sh` sections 3b, 3c, 3c2, and 3c3 |
 | A write outside quotes suppresses the note | Two commands with a quoted `>` before a redirect the detector recognises | Case C in `test_require_active_ticket_bash.sh` |
 | Each guard is needed | Each of the eight guards | Removing any one guard makes at least one case in `test_mask_quoted.sh` fail. Checked by hand during review, not by a test. |
 | An oversize command yields no note | A 140,018-byte command on Linux | Case F in `test_require_active_ticket_bash.sh` |
 | Quoted targets still resolve | Single and double quotes, and a masked character inside a target name | `test_mask_quoted.sh` section 2 |
-| awk portability | mawk and busybox awk. On the test machine `nawk` resolves to mawk. **gawk and BWK awk are untested.** | `test_mask_quoted.sh` passed 69 of 69 under each awk in a local run. |
+| awk portability | mawk and busybox awk. On the test machine `nawk` resolves to mawk. **gawk and BWK awk are untested.** | `test_mask_quoted.sh` passed 74 of 74 under each awk in a local run. |
 
 **Open residue, named rather than claimed away:**
 
 1. **Quoted text that runs as code.** `bash -c`, `eval`, `awk`, `trap`, `find -exec`, and similar programs run quoted text. No quote tracker can see that. The note states both readings for this reason. Case E pins the wording.
-2. **Writes the detector does not recognise.** On this branch, `bash_command_appears_to_write` reports no write for `touch`, `ln -s`, `mkdir`, `truncate`, or a redirect written as `>&word`. When one of these sits beside a quoted `>`, the note still prints. The note says the detector does not see every kind of write, so its text stays true. The verdict still blocks. Without the quoted `>`, the detector allows such a command today.
-3. **Reviewers found the last five guards**, not the author's adversarial pass. That pass had already asserted the general property each time. Treat the guard list as a living list, in the same sense as `_lib-detect-bash-write.sh`'s own matcher table.
-4. **Bash 5.3 shapes were tested on bash 5.3.9 only.** Function substitution first appeared in bash 5.3. On older bash, the guard can only drop a note.
-5. **The 128 KiB threshold is Linux-specific.** macOS was not tested. The caller guard does not depend on the exact limit, only on an empty result.
-6. **Double-byte locales are untested.** In GBK, Big5, or Shift-JIS, byte `0x5C` can be the second byte of a character. awk may then read it as a backslash inside double quotes, and bash would not. This is inferred, not observed. Only the note could go wrong.
-7. **The note adds time before exit 2.** One local run on Linux compared this branch with `dev`, five times per command:
+2. **Writes the detector does not recognise.** On this branch, `bash_command_appears_to_write` reports no write for, for example, `touch`, `ln -s`, `mkdir`, `truncate`, `rsync`, or a redirect written as `>&word`. When one of these sits beside a quoted `>`, the note still prints. The note says the detector does not see every kind of write, so its text stays true. The verdict still blocks. Without the quoted `>`, the hook allows such a command today (exit 0).
+3. **Two consumers have no behaviour check against masking.** `require-migration-ticket.sh` and `warn-review-marker-write.sh` also read `bash_command_appears_to_write`. Their test suites have no quoted-write case, such as `bash -c 'echo x > <path>'`. So only pin 2 guards them, and pin 2 matches names only. A behaviour case in each suite would check the verdict itself. This PR does not add those cases.
+4. **Reviewers found the last five guards**, not the author's adversarial pass. That pass had already asserted the general property each time. Treat the guard list as a living list, in the same sense as `_lib-detect-bash-write.sh`'s own matcher table.
+5. **Bash 5.3 shapes were tested on bash 5.3.9 only.** Function substitution first appeared in bash 5.3. On older bash, the guard can only drop a note.
+6. **The 128 KiB threshold is Linux-specific.** macOS was not tested. The caller guard does not depend on the exact limit, only on an empty result.
+7. **Double-byte locales are untested.** In GBK, Big5, or Shift-JIS, byte `0x5C` can be the second byte of a character. awk may then read it as a backslash inside double quotes, and bash would not. This is inferred, not observed. Only the note could go wrong.
+8. **The note adds time before exit 2.** Time matters because the note runs before the hook returns. `.claude/settings.json` sets no hook timeout. The harness default timeout, and what the harness does when a hook times out, were not checked. If a timed-out hook lets the tool call run, a slow block path fails open. One local run on Linux compared this branch with `dev`, five times per command:
    - `grep -E 'a>b' f`: about 90 ms on `dev`, about 130 ms here.
    - 800 quoted `grep 'a>b'` commands: about 6.8 s on `dev`, about 7.8 s here.
-   - 800 real redirects: no clear difference, because the masked command still looks like a write.
+   - 800 real redirects with no quotes: no clear difference. The mask leaves the command unchanged, so the note function returns early.
 
-   `.claude/settings.json` sets no hook timeout. The harness default timeout was not checked.
-8. **`shellcheck` and `markdownlint` did not run** on the authoring machine. Neither tool is installed. CI is the only verification for both.
+   Target extraction runs first, on `dev` too, and it costs far more. For `grep 'a>b' f` followed by 2,000 `; :` segments, one local run measured about 53 s for extraction and about 5.4 s for the masked presence check. So the note adds a fraction to a block path that is already slow. The slow extraction predates this change.
+9. **`shellcheck` and `markdownlint` did not run** on the authoring machine. Neither tool is installed. CI runs markdownlint on every `.md` file. CI runs shellcheck on `.claude/hooks/`.
 
 ## Artifacts
 

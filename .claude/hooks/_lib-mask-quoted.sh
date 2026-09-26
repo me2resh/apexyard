@@ -37,8 +37,8 @@
 # stripper did exactly that.
 #
 # It is safe for ADDITIVE questions, asked after the verdict is fixed. An
-# example: should the block message explain that every write sign sits in
-# quoted text? `require-active-ticket.sh` asks that of the masked command,
+# example: should the block message explain that every write sign the
+# detector found sits in quoted text? `require-active-ticket.sh` asks that of the masked command,
 # with the same presence function, only to choose a message. A bug in an
 # additive answer yields a worse message, never a skipped gate.
 #
@@ -67,7 +67,9 @@
 #
 # Each fallback preserves the caller's current behaviour.
 #
-# SCOPE OF THAT CLAIM — read it before adopting this helper elsewhere.
+# SCOPE OF THAT CLAIM — read it before adopting this helper elsewhere. A new
+# caller also fails pin 2 in tests/test_mask_quoted.sh until that pin is
+# updated on purpose.
 # The eight guards above cover the KNOWN divergences between this scanner and
 # bash. They are not a proof that no divergence remains. A shape that makes
 # the scanner treat a REAL operator as quoted, and that no guard catches,

@@ -931,8 +931,8 @@ run_case "#886 sanity: '||' then '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
 # The gate verdict does NOT change. A read-only command whose only `>` sits
 # inside a quoted argument still blocks, because AgDR-0113 forbids feeding
 # quote-filtered text to the presence question. What changes is the message.
-# When every write sign sits inside quotes, a note says so, and states both
-# readings. See _lib-mask-quoted.sh and AgDR-0171.
+# When every write sign the detector found sits inside quotes, a note says
+# so, and states both readings. See _lib-mask-quoted.sh and AgDR-0171.
 #
 # This section sits before the #1089 section on purpose. Other open PRs append
 # their cases at the end of the file, and a separate spot keeps merges clean.
@@ -986,7 +986,8 @@ quoted_note_case "#1356 quoted target is a real write, no note" \
 
 # C. A quoted `>` before a real write outside quotes. The security review
 # found that the note used to fire here, because the first target came from
-# the quotes. A write sign outside quotes now suppresses the note.
+# the quotes. A write sign the detector found outside quotes now suppresses
+# the note.
 quoted_note_case "#1356 quoted '>' then a real redirect, no note" \
   no-note "$(bash_input "echo 'a>b' > src/app.ts")"
 quoted_note_case "#1356 git log --format then a real redirect, no note" \
@@ -1015,6 +1016,7 @@ got=$(cd "$sb" && bash_input "bash -c 'echo x > src/app.ts'" \
   | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
 rm -rf "$sb"
 if echo "$got" | grep -qE "$NOTE_RE" \
+   && echo "$got" | grep -q "this match is a false positive" \
    && echo "$got" | grep -q "it may write a file" \
    && echo "$got" | grep -q "does not see every kind of write" \
    && ! echo "$got" | grep -qi "reword"; then
