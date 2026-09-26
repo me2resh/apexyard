@@ -21,7 +21,7 @@ assert() {
 
 assert "runner:exists" test -x "$RUNNER"
 check_out=$(bash "$RUNNER" --check-only --cases all 2>&1)
-expected_cases=$(grep -hE '^## [A-Z][A-Z]-[0-9][0-9] ' "$SRC_ROOT"/.claude/rules/tests/fixtures/*.md | wc -l | tr -d " ")
+expected_cases=$(grep -hE '^## [A-Z][A-Z]-[0-9][0-9] ' "$SRC_ROOT"/docs/quality-regression/fixtures/*.md | wc -l | tr -d " ")
 assert "runner:parses-fixture-count" bash -c "echo \"\$1\" | grep -q \"^cases parsed: \$2 \"" _ "$check_out" "$expected_cases"
 assert "runner:builds-fixture-count" bash -c "echo \"\$1\" | grep -q \"^prompts built: \$2\"" _ "$check_out" "$expected_cases"
 rep_out=$(bash "$RUNNER" --check-only 2>&1)

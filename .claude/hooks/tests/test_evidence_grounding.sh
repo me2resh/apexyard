@@ -9,7 +9,7 @@ set -u
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 RULE_FILE="$SRC_ROOT/.claude/rules/evidence-grounding.md"
 REVIEWER_FILE="$SRC_ROOT/.claude/agents/code-reviewer.md"
-CASES_FILE="$SRC_ROOT/.claude/rules/tests/fixtures/evidence-grounding-cases.md"
+CASES_FILE="$SRC_ROOT/docs/quality-regression/fixtures/evidence-grounding-cases.md"
 AGDR_FILE="$SRC_ROOT/docs/agdr/AgDR-0124-universal-evidence-grounding-contract.md"
 
 PASS=0

@@ -101,7 +101,7 @@ Stating that plainly matters, because it changes how much weight the rule can ca
 
 The cost of taking the Lean path on a change that turns out to need more is a follow-up review — cheap, and rail 2 makes it rare. The cost of running the full chain on every trivial change is the gatekeeper queue and token burn that prompted this rule.
 
-The "Proportionate work" section has the same enforcement shape. A hook can count files in a diff, but it cannot know whether a new module was needed or whether a question deserved a document. Regression cases for the build-side rules live at `.claude/rules/tests/fixtures/proportionate-work-cases.md`; a static test pins that the rule, its wiring, and those cases stay present. It does not score model behavior — cross-harness evaluation is me2resh/apexyard#1165.
+The "Proportionate work" section has the same enforcement shape. A hook can count files in a diff, but it cannot know whether a new module was needed or whether a question deserved a document. Regression cases for the build-side rules live at `docs/quality-regression/fixtures/proportionate-work-cases.md`; a static test pins that the rule, its wiring, and those cases stay present. It does not score model behavior — cross-harness evaluation is me2resh/apexyard#1165.
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test_token_efficiency_wave2.sh — pin Wave 2 on-demand rule loading
-# from AgDR-0160 / me2resh/apexyard#1319.
+# from AgDR-0160 / me2resh/apexyard#1319, plus the #1354 exclude fix.
 #
 # Invariants:
 #   1. CLAUDE.md does not auto-import rule files (@.claude/rules/ is absent).
@@ -9,6 +9,10 @@
 #      (chars÷4). The 54k figure from the ticket overstated the load.
 #   4. AGENTS.md stays below 5,000 tokens so Cursor/pi do not ingest a
 #      second full rule restatement.
+#   5. settings.json excludes .claude/rules/** from Claude Code auto-load
+#      (claudeMdExcludes) — removing @ imports alone is not enough (#1354).
+#   6. No .md fixtures remain under .claude/rules/ (fixtures belong under
+#      docs/quality-regression/fixtures/).
 #
 # Usage: bash .claude/hooks/tests/test_token_efficiency_wave2.sh
 # Exit 0 on success, 1 on any hard-cap failure.
@@ -20,6 +24,7 @@ ROOT="${TOKEN_EFFICIENCY_ROOT:-$(cd "$TEST_DIR/../../.." && pwd)}"
 
 CLAUDE_MD="$ROOT/CLAUDE.md"
 AGENTS_MD="$ROOT/AGENTS.md"
+SETTINGS_JSON="$ROOT/.claude/settings.json"
 RULES_DIR="$ROOT/.claude/rules"
 
 FAIL=0
@@ -116,6 +121,29 @@ else
   else
     green "  OK"
   fi
+fi
+
+echo "== Invariant 5: settings.json excludes .claude/rules/** from auto-load"
+if [ ! -f "$SETTINGS_JSON" ]; then
+  red "  FAIL: .claude/settings.json missing"
+  FAIL=$((FAIL + 1))
+elif ! jq -e '(.claudeMdExcludes // []) as $e | (($e | type) == "array") and (($e | index("**/.claude/rules/**")) != null)' "$SETTINGS_JSON" >/dev/null 2>&1; then
+  red "  FAIL: .claudeMdExcludes is not an array containing \"**/.claude/rules/**\""
+  FAIL=$((FAIL + 1))
+else
+  green "  OK"
+fi
+
+echo "== Invariant 6: no .md fixtures under .claude/rules/"
+# Only top-level .claude/rules/*.md are behavioural rules. Nested .md
+# (former tests/fixtures) must not live in the discovery tree.
+nested_md=$(find "$RULES_DIR" -mindepth 2 -type f -name '*.md' 2>/dev/null || true)
+if [ -n "$nested_md" ]; then
+  red "  FAIL: nested .md under .claude/rules/ (must not auto-load as rules):"
+  printf '    %s\n' "$nested_md"
+  FAIL=$((FAIL + 1))
+else
+  green "  OK"
 fi
 
 echo ""

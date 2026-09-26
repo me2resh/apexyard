@@ -88,3 +88,90 @@ AGENTS.md index.
 - AgDR-0044
 - AgDR-0157
 - AgDR-0159
+
+## Correction (2026-09-21) — #1354
+
+Wave 2 assumed that removing `@.claude/rules/` imports from `CLAUDE.md`
+was enough to drop rule bodies from the session-start catalogue. That
+assumption was false.
+
+Claude Code also auto-loads every markdown file under `.claude/rules/`
+as project memory. It does this without any `@` path and without a
+`paths:` frontmatter filter. The measured cost on #1354 was about
+175 KB (~44k tokens) of rule text on every session, including the three
+regression fixture files that lived under `.claude/rules/tests/`.
+
+**Corrected decision**
+
+1. Keep the CLAUDE.md index and the "Read on demand" instruction from
+   this record.
+2. Add `"claudeMdExcludes": ["**/.claude/rules/**"]` to
+   `.claude/settings.json` so Claude Code does not inject rule bodies
+   at session start.
+3. Keep fixtures and rule smoke tests outside `.claude/rules/` so they
+   cannot re-enter the auto-load tree if the exclude is removed.
+4. Agents still `Read` a named rule file when the work needs it.
+
+Removing `@` imports alone remains necessary. It is not sufficient.
+The exclude is the mechanical control. The fixture move is defence in
+depth.
+
+See me2resh/apexyard#1354.
+
+## Scope note (2026-09-25) — #1355
+
+Rex reviewed PR #1355 and found a wider effect than the correction above
+states. This section records that effect and the decision to accept it.
+
+`claudeMdExcludes` matches absolute file paths, not project-relative
+paths. A read of the Claude Code 2.1.282 binary and its settings
+schema confirmed that Claude Code applies one merged exclude list
+across User, Project, and Local memory for a session. A picomatch
+test confirmed the path match itself: the pattern
+`**/.claude/rules/**` matched `/Users/u/.claude/rules/personal.md` (a
+personal rule file outside this repository) and
+`/Users/u/ops/workspace/app/.claude/rules/x.md` (a managed project's
+own rule file). The same pattern did not match `~/.claude/CLAUDE.md`
+or a project-root `CLAUDE.md`. It matches a `CLAUDE.md` file only
+when that file sits inside a `.claude/rules/` directory, for example
+`~/.claude/rules/CLAUDE.md`.
+
+A narrower pattern cannot fix this in a settings file that stays checked
+into git. A narrower pattern needs an absolute-path anchor, such as a
+literal fork directory name. CLAUDE.md's PORTFOLIO MODEL section says a
+fork commonly gets a different name on clone (for example `ops`). An
+anchor on one clone's path is wrong on every other clone.
+
+Moving every rule body out of `.claude/rules/` would remove the exclude.
+A repository-wide search found more than 260 files that name that path
+in prose or in code. A move at that size does not fit inside one
+bug-fix PR. #1388 keeps this move on record as a rejected alternative,
+for the same reference-count reason.
+
+**Decision:** keep `"claudeMdExcludes": ["**/.claude/rules/**"]` in
+`.claude/settings.json` for now. Accept the wider match as a known
+limitation. The tracked follow-up is #1388: write the exclude per
+clone, into the gitignored `.claude/settings.local.json`, using this
+clone's own absolute path (`"<absolute ops-root>/.claude/rules/**"`),
+instead of the shared pattern in the checked-in `settings.json`.
+`/setup` writes that entry once, and a SessionStart hook repairs it if
+the clone moves. Once #1388 ships, this scope note and the CLAUDE.md
+and harness-doc warnings can come out.
+
+**Effect an adopter must know, until #1388 ships:**
+
+1. Personal rules at `~/.claude/rules/*.md` do not load in this ops
+   fork, and do not load in a registered `workspace/<project>` opened
+   from inside it. Workaround: put personal instructions in
+   `~/.claude/CLAUDE.md` instead. The exclude pattern does not match a
+   `CLAUDE.md` file outside a `.claude/rules/` directory.
+2. A managed project's own `.claude/rules/*.md`, if the project ships
+   one inside `workspace/<project>/`, also does not load while the
+   session runs from inside this ops fork. No exclude-side workaround
+   exists yet. A managed project that needs its rules always loaded
+   should keep that content in its own `CLAUDE.md` or `AGENTS.md`
+   instead.
+
+See me2resh/apexyard#1355 for the review that found this scope, #1388
+for the tracked fix, and CLAUDE.md plus `docs/harnesses/claude-code.md`
+for the operator-facing statement of the same trade-off.
