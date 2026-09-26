@@ -973,6 +973,52 @@ sb=$(make_sandbox_no_pathresolve)
 in=$(jq -nc --arg c "echo x > src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#1089 fail-closed: in-repo write still BLOCKED when lib missing" 2 "BLOCKED" "$in" "$sb"
 
+# --- #1396: honor the active ticket for an unextractable Bash target ---
+#
+# active_ticket_marker_for_path used to return an empty marker as soon as
+# the target path could not be resolved (`[ -n "$resolved" ] || return 0`),
+# BEFORE it ever looked at current-ticket. The gate then blocked the write
+# even though a ticket was active. The fix: skip only the per-worktree and
+# per-project tiers when the target is unknown (there is no project to
+# resolve), and still check the ops-level current-ticket fallback.
+
+# 79. python3 -c with a COMPUTED path (no literal string) → unextractable
+#     target, but a current-ticket marker IS active → allowed (#1396 repro).
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=1396
+title=test
+url=https://example.com
+EOF
+in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Path(p).write_text(x)"' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#1396 unextractable target honors active ticket" 0 "" "$in" "$sb"
+
+# 80. Same command, NO ticket at all → still BLOCKED (the fix must not
+#     turn into a blanket exemption for unextractable targets).
+sb=$(make_sandbox)
+in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Path(p).write_text(x)"' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#1396 unextractable target still blocked w/o any ticket" 2 "BLOCKED" "$in" "$sb"
+
+# 81. Same command, a per-project marker exists for a DIFFERENT project but
+#     no current-ticket fallback → still BLOCKED (the per-project/per-
+#     worktree tiers are correctly skipped for an unknown target — they
+#     require a resolved project, which an unextractable target never has —
+#     and skipping them must not accidentally fall back to granting one of
+#     their markers).
+sb=$(make_sandbox)
+mkdir -p "$sb/.claude/session/tickets"
+cat > "$sb/.claude/session/tickets/myproj" <<EOF
+repo=me2resh/apexyard
+number=513
+title=unrelated project ticket
+EOF
+in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Path(p).write_text(x)"' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#1396 unextractable target ignores an unrelated per-project marker" 2 "BLOCKED" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

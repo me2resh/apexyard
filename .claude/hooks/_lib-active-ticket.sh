@@ -101,8 +101,19 @@ active_ticket_marker_for_path() {
   local resolved project marker="" wt safe dir gd gcd
   resolved=$(_at_resolve_path "$1")
   local home="${MARKER_HOME:-${OPS_ROOT:-${REPO_ROOT:-.}}}"
-  [ -n "$resolved" ] || return 0
-  project=$(_at_project_for_resolved_path "$resolved")
+  # #1396: an empty $resolved means the caller passed an unextractable Bash
+  # write target (bash_extract_write_targets couldn't parse it, or the tool
+  # call carried no file_path at all). Do NOT return here. The project and
+  # per-worktree tiers below both depend on a resolved path (there is no
+  # project to look up), so they are naturally skipped when project stays
+  # empty. But the ops-level current-ticket fallback a few lines down does
+  # NOT depend on the path at all — it must still run, so an active ticket
+  # for the session still gates an unextractable write. This does not
+  # exempt the write: it only lets the tier-2 marker resolve the way it
+  # already does for a fully-known path with no matching project.
+  if [ -n "$resolved" ]; then
+    project=$(_at_project_for_resolved_path "$resolved")
+  fi
 
   if [ -n "$project" ]; then
     wt="${CLAUDE_WORKTREE_BRANCH:-}"
