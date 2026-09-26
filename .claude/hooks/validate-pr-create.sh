@@ -399,15 +399,26 @@ if [ -n "$TICKET_REF" ]; then
   fi
 
   if [ -n "$TICKET_NUM" ] && { [ "$TRACKER_KIND" != "gh" ] || [ -n "$TRACKER_REPO" ]; }; then
+    # Capture the tracker CLI's own stderr instead of discarding it, so the
+    # paths below that block or warn can name the real cause (#1336). The
+    # upstream lookup overwrites the file, so what survives is the LAST failed
+    # lookup — the quieter of the two options, and the one the two-step lookup
+    # (#207) needs: an ordinary fork-then-upstream miss resolves successfully
+    # and never reaches a branch that reads the file.
+    TRACKER_ERR=$(mktemp)
+    # If mktemp failed, redirect to /dev/null rather than to an empty path,
+    # which bash reports as an ambiguous redirect on every lookup.
+    [ -n "$TRACKER_ERR" ] || TRACKER_ERR=/dev/null
+    trap 'rm -f "$TRACKER_ERR"' EXIT
     # Dispatch via the tracker lib. For non-gh kinds the {owner_repo}
     # placeholder is supplied but the template may not reference it.
-    ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$TRACKER_REPO" 2>/dev/null)
+    ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$TRACKER_REPO" 2>"$TRACKER_ERR")
     # Short-circuit: only consult upstream (gh only) when primary missed.
     # Records which tracker actually matched so the CLOSED-state error names
     # the right repo.
     MATCHED_REPO="$TRACKER_REPO"
     if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
-      ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$UPSTREAM_REPO" 2>/dev/null)
+      ISSUE_JSON=$(tracker_view "$TICKET_NUM" "$UPSTREAM_REPO" 2>"$TRACKER_ERR")
       if [ -n "$ISSUE_JSON" ]; then
         MATCHED_REPO="$UPSTREAM_REPO"
       fi
@@ -421,6 +432,10 @@ if [ -n "$TICKET_REF" ]; then
       # references a real, valid non-GitHub ticket. Hard existence enforcement
       # is retained ONLY for tracker.kind == gh (the block below).
       echo "WARN: validate-pr-create.sh: tracker '${TRACKER_KIND}' not queryable here — ${TICKET_REF} accepted on shape only (no existence check)." >&2
+      if [ -s "$TRACKER_ERR" ]; then
+        echo "Tracker CLI said:" >&2
+        sed 's/^/  /' "$TRACKER_ERR" >&2
+      fi
       ISSUE_JSON=""
       TICKET_NUM=""
     elif [ -z "$ISSUE_JSON" ]; then
@@ -444,6 +459,10 @@ If you were about to file work that has no ticket yet, create one first:
   gh issue create --repo ${TRACKER_REPO} --title "..."
 and use the returned number in your PR title.
 MSG
+      if [ -s "$TRACKER_ERR" ]; then
+        echo "Tracker CLI said:" >&2
+        sed 's/^/  /' "$TRACKER_ERR" >&2
+      fi
       exit 2
     fi
 

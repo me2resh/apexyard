@@ -411,13 +411,29 @@ fi
 MISSING=""
 CLOSED=""
 SHAPE_ONLY=""
+# Capture the tracker CLI's own stderr instead of discarding it, so the paths
+# below that block or warn can name the real cause (#1336). A ref that resolves
+# on the upstream fallback (#207) never records anything, so the ordinary
+# fork-to-upstream case stays silent.
+#
+# The snapshot matters: `2>` truncates on open, so a later ref's lookup — even a
+# successful one that writes nothing — would otherwise wipe the error belonging
+# to the ref that actually went missing. Copy the text out at the moment a ref
+# fails, and report that.
+TRACKER_ERR=$(mktemp)
+# If mktemp failed, redirect to /dev/null rather than to an empty path, which
+# bash reports as an ambiguous redirect on every lookup.
+[ -n "$TRACKER_ERR" ] || TRACKER_ERR=/dev/null
+trap 'rm -f "$TRACKER_ERR"' EXIT
+TRACKER_ERR_TEXT=""
+
 for REF in $REFS; do
   NUM=$(echo "$REF" | tr -d '#')
   # Dispatch via the tracker lib. For non-gh kinds `--repo` may be a no-op.
-  ISSUE_JSON=$(tracker_view "$NUM" "$TRACKER_REPO" 2>/dev/null)
+  ISSUE_JSON=$(tracker_view "$NUM" "$TRACKER_REPO" 2>"$TRACKER_ERR")
   # Short-circuit: only consult upstream when the primary tracker missed.
   if [ -z "$ISSUE_JSON" ] && [ -n "$UPSTREAM_REPO" ]; then
-    ISSUE_JSON=$(tracker_view "$NUM" "$UPSTREAM_REPO" 2>/dev/null)
+    ISSUE_JSON=$(tracker_view "$NUM" "$UPSTREAM_REPO" 2>"$TRACKER_ERR")
   fi
   if [ -z "$ISSUE_JSON" ] && [ "$TRACKER_KIND" != "gh" ]; then
     # Non-gh tracker (Linear / Jira / Asana / custom) returned nothing — the
@@ -427,10 +443,12 @@ for REF in $REFS; do
     # Hard existence enforcement (adding to MISSING → exit 2) is retained ONLY
     # for tracker.kind == gh.
     SHAPE_ONLY="${SHAPE_ONLY}${REF} "
+    [ -s "$TRACKER_ERR" ] && TRACKER_ERR_TEXT=$(cat "$TRACKER_ERR")
     continue
   fi
   if [ -z "$ISSUE_JSON" ]; then
     MISSING="${MISSING}${REF} "
+    [ -s "$TRACKER_ERR" ] && TRACKER_ERR_TEXT=$(cat "$TRACKER_ERR")
     continue
   fi
   ISSUE_STATE=$(echo "$ISSUE_JSON" | jq -r '.state // empty' 2>/dev/null)
@@ -467,11 +485,19 @@ and use the returned number in your commit message.
 If the reference is truly informational (cross-repo link that can't be verified
 with \`gh issue view\`), write it as a plain URL instead of #N notation.
 MSG
+  if [ -n "$TRACKER_ERR_TEXT" ]; then
+    echo "Tracker CLI said:" >&2
+    printf '%s\n' "$TRACKER_ERR_TEXT" | sed 's/^/  /' >&2
+  fi
   exit 2
 fi
 
 if [ -n "$SHAPE_ONLY" ]; then
   echo "WARN: verify-commit-refs.sh: tracker '${TRACKER_KIND}' not queryable here — ${SHAPE_ONLY}accepted on shape only (no existence check). See #501." >&2
+  if [ -n "$TRACKER_ERR_TEXT" ]; then
+    echo "Tracker CLI said:" >&2
+    printf '%s\n' "$TRACKER_ERR_TEXT" | sed 's/^/  /' >&2
+  fi
 fi
 
 if [ -n "$CLOSED" ]; then
