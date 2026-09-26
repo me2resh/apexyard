@@ -71,6 +71,18 @@ Add / remove rows to match your real arrows. The four columns are deliberate:
 
 ---
 
+## Data classifications
+
+| Label | Data element | Where it crosses | Notes |
+|-------|--------------|-------------------|-------|
+| PII | User email, name, phone | Frontend → API, API → Primary Store | Redact in logs; encrypt at rest |
+| Credentials | Password hash, session token | External User → Frontend, Frontend → API | Never log; short-lived where possible |
+| Secrets | API keys, DB credentials | API → Secrets Store | Rotate on schedule; never commit |
+
+Add one row per data category that crosses a trust boundary. `/compliance-check` reads this table to flag cross-border transfers, third-party processors, and PII landing in unencrypted stores. `/threat-model` inlines this section verbatim into its DFD snapshot — keep it under this exact heading; see the heading contract note in [`dfd/SKILL.md`](../../.claude/skills/dfd/SKILL.md).
+
+---
+
 ## Notes
 
 Each crossing of a trust boundary is where STRIDE threats apply most acutely:
