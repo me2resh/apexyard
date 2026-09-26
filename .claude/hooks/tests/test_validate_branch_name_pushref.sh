@@ -358,6 +358,32 @@ run_custom_trunk_case "#888: real malformed feature branch still blocks with tru
 run_custom_trunk_case "#888: bogus branch still blocks with trunk override present" \
   "git push origin bogus-branch" 2
 
+# ---- #1362: dependency-bot branch prefixes ------------------------------
+#
+# Bots name their own branches and have no ticket to reference, so a
+# maintainer could never push the changelog fragment the merge gates demand.
+# CI already exempts these prefixes (pr-title-check.yml, #588). The negatives
+# below pin the exemption to an ANCHORED prefix: a name that merely contains
+# the word, or nests it under another path, must still block.
+
+run_case "#1362: dependabot/ branch is exempt" \
+  "git push origin dependabot/npm_and_yarn/undici-8.9.0" 0
+
+run_case "#1362: renovate/ branch is exempt" \
+  "git push origin renovate/major-node-types" 0
+
+run_case "#1362: nested feature/dependabot/ still blocks" \
+  "git push origin feature/dependabot/bump-undici" 2
+
+run_case "#1362: dependabot-manual/ lookalike still blocks" \
+  "git push origin dependabot-manual/bump-undici" 2
+
+run_case "#1362: branch merely containing 'dependabot' still blocks" \
+  "git push origin chore/update-dependabot-config" 2
+
+run_case "#1362: renovate-bot/ lookalike still blocks" \
+  "git push origin renovate-bot/bump-node" 2
+
 # ---- Summary ------------------------------------------------------------
 
 echo ""

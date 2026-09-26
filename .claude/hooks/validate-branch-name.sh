@@ -259,6 +259,27 @@ if echo "$CURRENT_BRANCH" | grep -qE '^sync/main-to-dev-after-v[0-9]+\.[0-9]+\.[
   exit 0
 fi
 
+# Allow dependency-bot branches (me2resh/apexyard#1362). Dependabot and Renovate
+# name their own branches and cannot be told to use {type}/{TICKET}-{desc};
+# there is also no ticket to reference at the moment the bot opens the PR.
+# Without this, a maintainer cannot push anything to a bot branch — not even
+# the changelog fragment and ticket reference the repository's own gates demand
+# before the PR can merge — so the bot PR becomes unmergeable by construction.
+#
+# CI already made this call: .github/workflows/pr-title-check.yml exempts
+# `dependabot/`, `sync/` and `release/` head refs (#588), and states that its
+# pattern is "intentionally aligned with the local hooks ... so anything that
+# passes the hooks also passes this CI check". The hook exempted `sync/` and
+# `release/` but not the bot prefixes, so the two disagreed.
+#
+# Deliberately narrow: the prefixes are anchored and the rest of the name is
+# the bot's to choose. Human branches are unaffected, and every other gate
+# (ticket-first, secrets, commit format, the merge gates) still applies to
+# whatever is pushed. The exemption is about the branch NAME only.
+if echo "$CURRENT_BRANCH" | grep -qE '^(dependabot|renovate)/'; then
+  exit 0
+fi
+
 # Allow the two branches /handover prescribes for its opt-in writes INTO AN
 # ADOPTED REPO (me2resh/apexyard#1161). Steps 8.5 and 8.6 push `docs/agents-md`
 # (the generated AGENTS.md) and `docs/apexyard-badge` (the README badge) into
