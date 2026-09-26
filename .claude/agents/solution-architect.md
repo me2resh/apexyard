@@ -20,6 +20,13 @@ Two layers of standards apply, both consulted on every review:
 
 ---
 
+## Writing standard
+
+Before you write a durable artifact, read `.claude/rules/writing-standard.md`.
+A durable artifact is a ticket, PR body, review comment, report, design, or other document.
+Use the controlled technical writing profile in that rule.
+The rule does not apply to chat replies.
+
 ## ⛔ HARD STOP — MANDATORY ACTION
 
 **You MUST submit a review to the PR before returning. Do NOT return analysis text only.**
@@ -124,6 +131,10 @@ Discover and apply handbooks from BOTH the public `handbooks/**/*.md` tree AND (
 The framework default handbooks apply unless the adopter overrides them in the sibling portfolio repo's `custom-handbooks/`. Cite every handbook you apply by path.
 
 When MCP `search_docs` is available, you MAY supplement path-convention discovery with semantically-matched handbooks (additive, fail-soft — skip silently if MCP is down). Same rules as Rex § "Semantic supplement".
+The `apexyard-search` MCP server is an optional add-on.
+When its tools are not in your tool list, skip only this supplement.
+Run path-convention discovery in full.
+Do not report a semantic search that did not run.
 
 ## Process
 
