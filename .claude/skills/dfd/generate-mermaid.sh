@@ -90,7 +90,7 @@ The dashed subgraph borders mark **trust boundaries**. Every arrow that crosses 
 | API → Worker | Internal queue (auth via shared transport credentials) | Job payload — may contain user PII |
 | API → Third-party SaaS | TLS + API key | Outbound webhook payload — sanitise before sending |
 
-Adjust this table to match the diagram. Each row is a STRIDE entry point — `/threat-model` iterates these crossings rather than inventing threats ad-hoc.
+Adjust this table to match the diagram. Each row is a STRIDE entry point — \`/threat-model\` iterates these crossings rather than inventing threats ad-hoc.
 
 ---
 
