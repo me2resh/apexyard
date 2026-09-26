@@ -8,13 +8,20 @@
 # refactored into a shell helper.
 #
 # Tests covered:
-#   1. "already in sync" path  → git log dev..main empty → no-op expected
-#   2. diverged path           → commits on main not on dev → sync needed
-#   3. branch name shape       → sync/main-to-dev-after-vX.Y.Z
-#   4. merge strategy direction → -X ours keeps dev content on conflict
-#   5. idempotent re-run       → second sync on already-synced repo → no-op
-#   6. backwards guard         → dev has no commits not on main → still detects main-only commits
-#   7. version argument validation → malformed version rejected
+#   1.  "already in sync" path   → git log dev..main empty → no-op expected
+#   2.  diverged path            → commits on main not on dev → sync needed
+#   3.  branch name shape        → sync/main-to-dev-after-vX.Y.Z
+#   4.  squash-duplicate conflict → resolves toward dev (apexyard#1394)
+#   4b. main-only-commit conflict → must NOT auto-resolve (apexyard#1394)
+#   5.  idempotent re-run        → second sync on already-synced repo → no-op
+#   6.  backwards guard          → dev has no commits not on main → still detects main-only commits
+#   7.  version argument validation → malformed version rejected
+#   8-10. CHANGELOG carry-forward (apexyard#448) — unaffected by the merge
+#         strategy change, kept as regression coverage
+#   11. apexyard#1348 repro — blind `-X ours` drops a main-only commit's
+#       content; commit-attributed resolution keeps it (apexyard#1394)
+#   12. post-merge content check (step 5c) — flags the #1348 loss, passes
+#       clean on the correctly-resolved merge (apexyard#1394)
 #
 # Exit 0 if all pass; 1 on first failure.
 
@@ -147,7 +154,27 @@ ACTUAL="sync/main-to-dev-after-${VERSION}"
   || mark_fail "branch name shape" "got $ACTUAL expected $EXPECTED_BRANCH"
 
 # ---------------------------------------------------------------------------
-# Case 4: merge strategy direction — -X ours keeps dev content on conflict
+# Helper: classify_conflict_file <dev_ref> <main_ref> <release_sha> <file>
+# Mirrors SKILL.md step 5a exactly: list the commits on main-not-on-dev that
+# touched <file>; if the ONLY one is <release_sha>, the conflict is a
+# squash-duplicate (safe to resolve toward dev); any other commit in that
+# list makes it a main-only-commit conflict (must stop and ask).
+# ---------------------------------------------------------------------------
+classify_conflict_file() {
+  local dev_ref="$1" main_ref="$2" release_sha="$3" file="$4"
+  local touching
+  touching=$(git log "${dev_ref}..${main_ref}" --format=%H -- "$file" 2>/dev/null)
+  if [ -z "$touching" ]; then
+    echo "no-conflict"
+  elif [ "$touching" = "$release_sha" ]; then
+    echo "squash-duplicate"
+  else
+    echo "main-only-commit"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Case 4: squash-duplicate conflict resolves toward dev (apexyard#1394)
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 (
@@ -167,24 +194,81 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   git add conflicting.md
   git commit -q -m "feat: dev version"
 
-  # main adds main-version of conflicting.md (simulates squash)
+  # main adds main-version of conflicting.md via the ONLY release squash
+  # commit on main — the classic squash-duplicate shape.
   git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
   printf "main-version\n" > conflicting.md
   git add conflicting.md
-  git commit -q -m "release: squash with main version"
+  git commit -q -m "release(#10): squash with main version"
+  git tag v9.9.9
+  RELEASE_SHA=$(git rev-parse v9.9.9)
 
-  # Now simulate the sync: branch from dev, merge main with -X ours
+  # Plain merge (NOT -X ours) — conflicts, since both sides touched the file.
   git checkout -q -b sync-branch dev
-  git merge --no-ff -X ours -q main -m "sync: merge main into dev" 2>/dev/null
+  git merge --no-ff -q main -m "sync: merge main into dev" 2>/dev/null
 
-  # Verify dev content wins the conflict
+  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" conflicting.md)
+  if [ "$CLASS" != "squash-duplicate" ]; then
+    echo "expected classification 'squash-duplicate', got '$CLASS'" >&2
+    exit 1
+  fi
+
+  # Resolve toward dev, per the classification, and finish the merge.
+  git checkout --ours -- conflicting.md
+  git add conflicting.md
+  git commit --no-edit -q
+
   CONTENT=$(cat conflicting.md)
   [ "$CONTENT" = "dev-version" ] && exit 0
-  echo "expected 'dev-version', got '$CONTENT'" >&2
+  echo "expected 'dev-version' after squash-duplicate resolution, got '$CONTENT'" >&2
   exit 1
 )
-[ "$?" -eq 0 ] && mark_pass "merge -X ours: dev content wins on conflict" \
-              || mark_fail "merge -X ours direction" "see output above"
+[ "$?" -eq 0 ] && mark_pass "squash-duplicate conflict: classified correctly, resolves toward dev" \
+              || mark_fail "squash-duplicate resolution" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Case 4b: main-only-commit conflict must NOT auto-resolve (apexyard#1394)
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+(
+  cd "$SB" || exit 1
+  git init -q
+  git config user.email "test@test.com"
+  git config user.name "test"
+
+  printf "shared\n" > shared.md
+  git add shared.md
+  git commit -q -m "base"
+
+  git checkout -q -b dev
+  printf "dev-version\n" > conflicting.md
+  git add conflicting.md
+  git commit -q -m "feat: dev version"
+
+  git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
+  # The release squash commit does NOT touch conflicting.md this time —
+  # only a SEPARATE, main-only hotfix commit does.
+  echo "unrelated" > unrelated.md
+  git add unrelated.md
+  git commit -q -m "release(#10): squash, unrelated file only"
+  git tag v9.9.8
+  RELEASE_SHA=$(git rev-parse v9.9.8)
+
+  printf "main-only-hotfix\n" > conflicting.md
+  git add conflicting.md
+  git commit -q -m "fix: hotfix landed straight on main, never on dev"
+
+  git checkout -q -b sync-branch dev
+  git merge --no-ff -q main -m "sync: merge main into dev" 2>/dev/null
+
+  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" conflicting.md)
+  [ "$CLASS" = "main-only-commit" ] && exit 0
+  echo "expected classification 'main-only-commit', got '$CLASS'" >&2
+  exit 1
+)
+[ "$?" -eq 0 ] && mark_pass "main-only-commit conflict: classified correctly, must stop and ask" \
+              || mark_fail "main-only-commit classification" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
@@ -195,9 +279,11 @@ build_repo "$SB"
 
 (
   cd "$SB" || exit 99
-  # First sync: branch from dev, merge main
+  # First sync: branch from dev, merge main (plain merge — build_repo's
+  # feature-b.md/feature-c.md are identical add-add on both sides, so this
+  # does not conflict and needs no attribution step).
   git checkout -q -b sync/main-to-dev-after-v1.0.0 dev
-  git merge --no-ff -X ours -q main -m "sync: first pass" 2>/dev/null
+  git merge --no-ff -q main -m "sync: first pass" 2>/dev/null
 
   # Simulate merging sync branch back to dev
   git checkout -q dev
@@ -228,9 +314,9 @@ build_repo "$SB"
   git add new-work.md
   git commit -q -m "feat(#99): new work after release"
 
-  # Sync: branch from dev, merge main
+  # Sync: branch from dev, merge main (plain merge — no conflict here either)
   git checkout -q -b sync/main-to-dev-after-v1.0.0 dev
-  git merge --no-ff -X ours -q main -m "sync: v1.0.0" 2>/dev/null
+  git merge --no-ff -q main -m "sync: v1.0.0" 2>/dev/null
 
   # Merge sync back to dev
   git checkout -q dev
@@ -426,6 +512,142 @@ build_sync_branch_with_changelog_drift "$SB"
 )
 [ "$?" -eq 0 ] && mark_pass "carry-forward (apexyard#448): touches only CHANGELOG.md" \
               || mark_fail "carry-forward scope" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Helper: build the apexyard#1348 shape — main has the release squash PLUS a
+# separate main-only commit (the two contributor rows) touching the SAME
+# file the squash also touches. This is the exact shape a blind `-X ours`
+# cannot get right: the squash commit's presence in the conflict-causing
+# list does not mean it is the ONLY commit that matters.
+#
+# build_repo_with_main_only_hotfix <root>
+#   - main:   base -> release squash (touches README.md) -> hotfix commit
+#             (also touches README.md, adds a contributor row main-only)
+#   - dev:    base -> feature commit (touches README.md differently)
+# ---------------------------------------------------------------------------
+build_repo_with_main_only_hotfix() {
+  local root="$1"
+  mkdir -p "$root"
+  (
+    cd "$root" || exit 1
+    git init -q
+    git config user.email "test@test.com"
+    git config user.name "test"
+
+    printf '%s\n' "# README" "" "- core-maintainer" > README.md
+    git add README.md
+    git commit -q -m "chore: base commit"
+
+    git checkout -q -b dev
+    printf '%s\n' "# README" "" "- core-maintainer" "- new-dev-feature" > README.md
+    git add README.md
+    git commit -q -m "feat(#1): document new-dev-feature"
+
+    git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
+    printf '%s\n' "# README" "" "- core-maintainer" "- squash-of-dev-content" > README.md
+    git add README.md
+    git commit -q -m "release(#10): v1.0.0 squash"
+    git tag v1.0.0
+
+    # A commit that landed straight on main, never on dev — the row this
+    # class of bug drops (apexyard#1348's actual incident: two contributor
+    # rows lost this way).
+    printf '%s\n' "# README" "" "- core-maintainer" "- squash-of-dev-content" "- new-contributor-row" > README.md
+    git add README.md
+    git commit -q -m "docs: add new-contributor-row (main-only, never on dev)"
+  ) || return 1
+}
+
+# ---------------------------------------------------------------------------
+# Case 11 (apexyard#1348, apexyard#1394): blind `-X ours` drops the
+# main-only contributor row; commit-attributed resolution keeps it.
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_repo_with_main_only_hotfix "$SB"
+(
+  cd "$SB" || exit 99
+  RELEASE_SHA=$(git rev-parse v1.0.0)
+
+  # --- OLD behaviour: blind -X ours ---
+  git checkout -q -b sync-old dev
+  git merge --no-ff -X ours -q main -m "sync: old blind strategy" 2>/dev/null
+  if grep -q "new-contributor-row" README.md; then
+    echo "pre-condition broken: -X ours did not reproduce the #1348 drop" >&2
+    exit 1
+  fi
+
+  # --- NEW behaviour: plain merge, classify, stop on main-only-commit ---
+  git checkout -q dev
+  git checkout -q -b sync-new dev
+  git merge --no-ff -q main -m "sync: new attributed strategy" 2>/dev/null
+  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" README.md)
+  if [ "$CLASS" != "main-only-commit" ]; then
+    echo "expected README.md to classify as main-only-commit, got '$CLASS'" >&2
+    exit 1
+  fi
+  # Per the skill: a main-only-commit conflict is resolved by hand, not
+  # blindly. Simulate the user's resolution keeping BOTH sides' content.
+  printf '%s\n' "# README" "- new-dev-feature" "" "- core-maintainer" "- squash-of-dev-content" "- new-contributor-row" > README.md
+  git add README.md
+  git commit --no-edit -q
+
+  if ! grep -q "new-contributor-row" README.md; then
+    echo "new strategy still lost the main-only row" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "apexyard#1348 repro: -X ours drops the main-only row; attributed resolution keeps it" \
+              || mark_fail "1348 repro" "see output above"
+rm -rf "$SB"
+
+# ---------------------------------------------------------------------------
+# Helper: main_only_commit_applies <commit>
+# Mirrors SKILL.md step 5c: a commit's patch reverse-applying cleanly means
+# its content is present, unchanged, in the current working tree.
+# ---------------------------------------------------------------------------
+main_only_commit_applies() {
+  local commit="$1"
+  git apply --check --reverse <(git show "$commit") >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# Case 12 (apexyard#1394): post-merge content check (step 5c) — flags the
+# #1348-style loss under the old strategy, passes clean under the new one.
+# ---------------------------------------------------------------------------
+SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
+build_repo_with_main_only_hotfix "$SB"
+(
+  cd "$SB" || exit 99
+  # Resolve the hotfix commit by its message, not by position — avoids any
+  # assumption about commit ordering on main.
+  HOTFIX_SHA=$(git log -1 --format=%H --grep="new-contributor-row" main)
+
+  # --- Old strategy: check fails (content lost) ---
+  git checkout -q -b sync-old-check dev
+  git merge --no-ff -X ours -q main -m "sync: old" 2>/dev/null
+  if main_only_commit_applies "$HOTFIX_SHA"; then
+    echo "pre-condition broken: old strategy's tree still passes the check" >&2
+    exit 1
+  fi
+
+  # --- New strategy: resolve by hand (keep both sides), check passes ---
+  git checkout -q dev
+  git checkout -q -b sync-new-check dev
+  git merge --no-ff -q main -m "sync: new" 2>/dev/null
+  printf '%s\n' "# README" "- new-dev-feature" "" "- core-maintainer" "- squash-of-dev-content" "- new-contributor-row" > README.md
+  git add README.md
+  git commit --no-edit -q
+
+  if ! main_only_commit_applies "$HOTFIX_SHA"; then
+    echo "post-merge check still fails after attributed resolution" >&2
+    exit 1
+  fi
+  exit 0
+)
+[ "$?" -eq 0 ] && mark_pass "post-merge check (step 5c): flags the #1348 loss, clean after attributed resolution" \
+              || mark_fail "post-merge content check" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
