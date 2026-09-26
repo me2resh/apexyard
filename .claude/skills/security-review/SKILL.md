@@ -51,7 +51,7 @@ Invoke for PRs that touch:
 
 ## Running tests in a scratch clone
 
-Hakim may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path, or a `git archive | tar -x` export into a literal non-git directory once me2resh/apexyard#1396 is fixed. If a hook blocks a command, stop and report the exact command, hook, and message — never rephrase or disguise it. Full pattern: `.claude/agents/security-reviewer.md` § "Running tests in a scratch clone".
+Hakim may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path. Or export the PR head with `git archive | tar -x` into a literal non-git directory. The export step still needs an active session ticket. A later write to a literal path inside that directory can use the me2resh/apexyard#883 exemption. If a hook blocks a command, stop that step. Report the exact command, the hook, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook. Full pattern: `.claude/agents/security-reviewer.md` § "Running tests in a scratch clone".
 
 ## Process
 
