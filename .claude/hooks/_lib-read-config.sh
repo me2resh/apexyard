@@ -243,7 +243,13 @@ _config_warn_dropped_defaults() {
   [ -n "$findings" ] && [ "$findings" != "[]" ] || return 0
 
   local finding key drop
-  while IFS= read -r finding; do
+  # Pipe into the loop rather than `done < <(...)` process substitution.
+  # Process substitution is a bash/ksh/zsh extension; sourcing this file
+  # under a POSIX-mode shell (`/bin/sh`, or bash with `POSIXLY_CORRECT` set)
+  # hits a syntax error on that construct and leaves config_get undefined
+  # for the rest of the process (Hakim's LOW-A, #1403). The loop only writes
+  # to stderr, so running it in the pipeline's subshell loses nothing.
+  printf '%s' "$findings" | jq -c '.[]' 2>/dev/null | while IFS= read -r finding; do
     [ -z "$finding" ] && continue
     key=$(printf '%s' "$finding" | jq -r '.path' 2>/dev/null)
     # Elements are usually strings (ticket types, path globs); `tojson` for
@@ -252,7 +258,7 @@ _config_warn_dropped_defaults() {
     # produce an empty list.
     drop=$(printf '%s' "$finding" | jq -r '.dropped | map(if type == "string" then . else tojson end) | join(", ")' 2>/dev/null)
     echo "WARN: .claude/project-config.json overrides array '.${key}' and drops these shipped default entries: ${drop}. Array overrides REPLACE the defaults wholesale (see docs/project-config.md) — if you meant to ADD to the list rather than replace it, include these entries in the override too." >&2
-  done < <(printf '%s' "$findings" | jq -c '.[]' 2>/dev/null)
+  done
 
   return 0
 }

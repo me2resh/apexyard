@@ -14,6 +14,9 @@
 #   5. Override key has no matching default array (override-only key, e.g.
 #      migration_paths) -> no WARN (out of this function's scope by design;
 #      see the function's own header comment).
+#   7. _lib-read-config.sh sources cleanly under a POSIX-mode shell
+#      (`/bin/sh` and `bash` with `POSIXLY_CORRECT=1`), and `config_get`
+#      is defined afterward (Hakim's LOW-A regression, #1403).
 
 set -u
 
@@ -172,6 +175,42 @@ else
   record_fail "6c: WARN for the top-level array-of-objects renders dropped objects (not empty)" "stderr: $STDERR_OUT"
 fi
 rm -rf "$sb"
+
+# ---------------------------------------------------------------------------
+# 7. Sourcing under a POSIX-mode shell must not raise a syntax error, and
+#    config_get must be defined afterward. `_config_warn_dropped_defaults`'s
+#    loop used `done < <(...)` process substitution, a bash/ksh/zsh
+#    extension no POSIX shell parses. `/bin/sh` and `bash POSIXLY_CORRECT=1`
+#    both reject it, which aborts the whole `source` and leaves config_get
+#    undefined for the rest of the process (Hakim's LOW-A, #1403).
+# ---------------------------------------------------------------------------
+posix_probe_script() {
+  local lib_path="$1"
+  cat <<PROBE
+. '$lib_path'
+if command -v config_get >/dev/null 2>&1; then
+  echo config_get_defined
+else
+  echo config_get_missing
+fi
+PROBE
+}
+
+probe="$(posix_probe_script "$LIB_READ_CONFIG")"
+
+out_sh=$(printf '%s\n' "$probe" | /bin/sh 2>&1)
+if [ "$(printf '%s\n' "$out_sh" | tail -1)" = "config_get_defined" ]; then
+  record_pass "7a: sources cleanly under /bin/sh, config_get defined"
+else
+  record_fail "7a: sources cleanly under /bin/sh, config_get defined" "output: $out_sh"
+fi
+
+out_posix=$(POSIXLY_CORRECT=1 bash -c "$probe" 2>&1)
+if [ "$(printf '%s\n' "$out_posix" | tail -1)" = "config_get_defined" ]; then
+  record_pass "7b: sources cleanly under bash POSIXLY_CORRECT=1, config_get defined"
+else
+  record_fail "7b: sources cleanly under bash POSIXLY_CORRECT=1, config_get defined" "output: $out_posix"
+fi
 
 echo
 echo "===== test_config_warn_dropped_defaults.sh ====="
