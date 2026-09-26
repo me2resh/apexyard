@@ -35,6 +35,10 @@ See [`.claude/rules/role-triggers.md`](../../rules/role-triggers.md) for the ful
 /design-review docs/designs/checkout.md   # doc-only review (no PR yet)
 ```
 
+## Running tests in a scratch clone
+
+Tariq may need to run tests or attack probes against the PR head, outside this repository's working tree. Use a plain `git clone` into a literal scratch path. Or export the PR head with `git archive | tar -x` into a literal non-git directory. The export step still needs an active session ticket. A later write to a literal path inside that directory can use the me2resh/apexyard#883 exemption. If a hook blocks a command, stop that step. Report the exact command, the hook, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook. Full pattern: `.claude/agents/solution-architect.md` § "Running tests in a scratch clone".
+
 ## Process
 
 ### 0. Write the active-reviewer marker (REQUIRED — me2resh/apexyard#843, when reviewing a PR)

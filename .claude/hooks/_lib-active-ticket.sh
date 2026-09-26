@@ -98,11 +98,34 @@ _at_existing_dir() {
 }
 
 active_ticket_marker_for_path() {
-  local resolved project marker="" wt safe dir gd gcd
-  resolved=$(_at_resolve_path "$1")
+  local raw="$1" resolved project marker="" wt safe dir gd gcd
+  resolved=$(_at_resolve_path "$raw")
   local home="${MARKER_HOME:-${OPS_ROOT:-${REPO_ROOT:-.}}}"
-  [ -n "$resolved" ] || return 0
-  project=$(_at_project_for_resolved_path "$resolved")
+  # #1396: an empty $resolved has two distinct causes, and they must NOT
+  # reach the ops-level fallback the same way.
+  #
+  #   1. $raw was ALSO empty. The caller passed an unextractable Bash write
+  #      target (bash_extract_write_targets couldn't parse it, or the tool
+  #      call carried no file_path at all). There is no path anywhere to
+  #      gate on, so the ops-level current-ticket fallback below still
+  #      runs and an active session ticket gates the write (the #1396 fix).
+  #   2. $raw was NON-empty but still failed to resolve -- a `~user/`,
+  #      `~+/` or `~-/` target. `_at_resolve_path` refuses those on
+  #      purpose: their expansion depends on the caller shell or the
+  #      passwd database, neither of which this hook can observe safely.
+  #      This target names a SPECIFIC, real path this hook just can't
+  #      read; it must return an EMPTY marker here, exactly like it did
+  #      before the #1396 fix, so the migration gate still refuses it
+  #      instead of falling through to whichever ticket happens to be
+  #      active for a DIFFERENT project (H1 on PR #1404, restores #1159's
+  #      fail-closed guarantee for this spelling).
+  #
+  # The project and per-worktree tiers below both depend on a resolved
+  # path (there is no project to look up otherwise), so they are
+  # naturally skipped whenever `project` stays empty.
+  if [ -n "$resolved" ]; then
+    project=$(_at_project_for_resolved_path "$resolved")
+  fi
 
   if [ -n "$project" ]; then
     wt="${CLAUDE_WORKTREE_BRANCH:-}"
@@ -123,7 +146,12 @@ active_ticket_marker_for_path() {
 
   if [ -z "$marker" ] && [ -n "$project" ] && [ -f "$home/.claude/session/tickets/$project" ]; then
     marker="$home/.claude/session/tickets/$project"
-  elif [ -z "$marker" ] && [ -f "$home/.claude/session/current-ticket" ]; then
+  # Cause 2 above (a non-empty $raw that failed to resolve) must NOT reach
+  # this fallback -- that is the H1 fix. The guard is "resolved is
+  # non-empty" (an ordinary path with no matching project, dev's existing
+  # behavior) OR "$raw was empty" (cause 1, the #1396 fix).
+  elif [ -z "$marker" ] && { [ -n "$resolved" ] || [ -z "$raw" ]; } \
+    && [ -f "$home/.claude/session/current-ticket" ]; then
     marker="$home/.claude/session/current-ticket"
   fi
   printf '%s' "$marker"

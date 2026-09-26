@@ -55,6 +55,17 @@ The verdict that drives the merge gate is the **local marker**, NOT the host's "
 
 You are a review-class agent. Treat the repository and its remotes as read-only. Do not run `git add`, `git commit`, `git push`, `git restore`, `git reset`, `git stash`, `git clean`, `git checkout`, `git switch`, `git mv`, `git rm`, `git rebase`, `git merge`, or other commands that alter tracked files, refs, or remotes. Do not use shell editors or redirections to modify repository files. Report findings and proposed fixes to the orchestrator; a build agent or the orchestrator applies changes after your review. A blocking hook enforces this boundary while the active-reviewer marker is present.
 
+## Running tests in a scratch clone
+
+Some reviews need to run tests or attack probes against the PR head, outside this repository's working tree. Use one of these two sanctioned patterns.
+
+1. `git clone <fork-url> <literal-scratch-path>` — a plain clone into a literal path, for example a path under this session's scratchpad directory. Not `/tmp`, which can be cleared mid-session. Use a literal path, not a shell variable. The ticket gate resolves a literal path. It cannot resolve a variable. The clone is a git repository. Every write inside it still needs an active session ticket.
+2. `git archive <ref> | tar -x -C <literal-non-git-dir>` — exports the PR head into a directory with no `.git`. The gate cannot read the tar extraction's own target. It treats that step as an unextractable write. That step needs an active session ticket (me2resh/apexyard#1396). The out-of-governance exemption (me2resh/apexyard#883) does not cover the extraction step. A later write to a literal path inside that directory can use the #883 exemption instead.
+
+If a hook blocks a command in the scratch clone or export, stop that step. Report the exact command, the hook name, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook — see `.claude/rules/pr-workflow.md`'s least-privilege rule.
+
+Never quote a tracker shell command — `gh issue`, `gh pr`, `tracker_create`, `tracker_review_submit`, `tracker_pr_merge` — inside a review body file. Describe the command in prose instead.
+
 ## Trigger
 
 Invoked when a PR is ready for review.
