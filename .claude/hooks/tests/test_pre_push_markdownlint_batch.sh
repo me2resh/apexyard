@@ -40,5 +40,16 @@ else
   bad "no-unbounded-markdownlint" "an unbounded markdownlint xargs invocation remains"
 fi
 
+# #1367: the version must be pinned in BOTH places. An unpinned
+# `npx --yes markdownlint-cli2` resolves to whatever is latest at that moment,
+# so an upstream release can turn a green gate red with no local change.
+# Anchored on the npx invocation so prose mentioning the tool doesn't match;
+# fires when the package name there is NOT followed by `@<version>`.
+if ! grep -Eq 'npx[[:space:]]+--yes[[:space:]]+markdownlint-cli2[^@]' "$SCRIPT" "$EXAMPLE"; then
+  ok "markdownlint-version-pinned"
+else
+  bad "markdownlint-version-pinned" "markdownlint-cli2 is invoked without an @version pin"
+fi
+
 echo "${PASS} passed, ${FAIL} failed"
 [ "$FAIL" -eq 0 ]

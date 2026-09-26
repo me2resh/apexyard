@@ -162,7 +162,14 @@ echo "pre-push checks:" >&2
 # empty repo produces a confusing non-zero rather than a clean skip. (It does
 # NOT fall back to a default glob: .markdownlint.json is a rules-only format
 # and cannot carry `globs`.)
-MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2 2>&1"
+#
+# The version is pinned (#1367). Without a pin, npx resolves the package to
+# whatever is latest at that moment, so a new rule in an upstream release turns
+# a green gate red with no change on the adopter's side. 0.23.1 is the version
+# bundled by markdownlint-cli2-action v24.1.0, which .github/workflows/
+# markdown-lint.yml pins — so local pre-push and CI now judge by the same
+# ruleset. Bump both together, deliberately, like any other dependency.
+MARKDOWNLINT_CMD="command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found — markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=\$(git ls-files '*.md' 2>/dev/null); [ -z \"\$md_files\" ] && { echo 'INFO: no tracked markdown files found — markdownlint check skipped.'; exit 0; }; echo \"\$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2@0.23.1 2>&1"
 run_check "markdownlint" "$MARKDOWNLINT_CMD" || true
 
 # 2. shellcheck — .claude/hooks/*.sh, severity=warning

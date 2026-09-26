@@ -5,7 +5,7 @@
     "commands": [
       {
         "name": "markdownlint",
-        "run": "command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found \u2014 markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=$(git ls-files '*.md' 2>/dev/null); [ -z \"$md_files\" ] && { echo 'INFO: no tracked markdown files found \u2014 markdownlint check skipped.'; exit 0; }; echo \"$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2 2>&1"
+        "run": "command -v npx >/dev/null 2>&1 || { echo 'INFO: npx not found \u2014 markdownlint check skipped. Install Node.js (https://nodejs.org) to enable it locally.'; exit 0; }; md_files=$(git ls-files '*.md' 2>/dev/null); [ -z \"$md_files\" ] && { echo 'INFO: no tracked markdown files found \u2014 markdownlint check skipped.'; exit 0; }; echo \"$md_files\" | tr '\\n' '\\0' | xargs -0 -s 7000 npx --yes markdownlint-cli2@0.23.1 2>&1"
       },
       {
         "name": "shellcheck",
