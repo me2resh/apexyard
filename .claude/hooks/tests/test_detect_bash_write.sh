@@ -556,6 +556,49 @@ assert_targets "#1414 go run + w decoy yields no target" \
 assert_targets "#1414 rm is not a decoy victim: w target kept" \
   "rm -f old.ts; sed -n 'w /tmp/x' in.txt"                                       "/tmp/x"
 
+# One case for each family in _bdw_detects_other_write whose write has no
+# extractable target. Each pins that family's entry. Dropping one from the
+# helper would let the exempt `w` decoy unlock that family's write.
+while IFS= read -r fam_cmd; do
+  [ -z "$fam_cmd" ] && continue
+  assert_targets "#1414 w decoy beside: ${fam_cmd:0:44}" \
+    "$fam_cmd; sed -n 'w /tmp/x' in.txt"                                         ""
+done <<'FAMILIES'
+node -e "require('fs').writeFileSync('src/app.ts','x')"
+ruby -e "File.write('src/app.ts','x')"
+perl -e "unlink 'src/app.ts'"
+php -r "file_put_contents('src/app.ts','x');"
+deno run --allow-write gen.ts
+bun run gen.ts
+go run ./gen
+python3 -c "open('src/app.ts','w').write('x')"
+dd if=/dev/zero of=src/app.ts count=1
+install -m 644 a.ts src/app.ts
+curl --output=src/app.ts https://example.com/f
+wget --output-document=src/app.ts https://example.com/f
+tar -xf a.tar
+awk -i inplace 1 src/app.ts
+sed -i "s/a/b/" src/app.ts
+FAMILIES
+
+# Redirects and tee normally yield a target. Their entries matter only
+# when the target strips to nothing, as with an empty quoted word. These
+# two cases pin those entries, so the helper keeps parity with
+# bash_command_appears_to_write.
+assert_targets "#1414 w decoy beside a redirect to an empty word" \
+  "echo x > \"\"; sed -n 'w /tmp/x' in.txt"                                      ""
+assert_targets "#1414 w decoy beside tee with an empty word" \
+  "echo x | tee \"\"; sed -n 'w /tmp/x' in.txt"                                  ""
+
+# The heredoc families need the decoy first, because a heredoc ends on a
+# line that holds only its terminator.
+assert_targets "#1414 w decoy before a python heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" ""
+assert_targets "#1414 w decoy before a node heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" ""
+assert_targets "#1414 w decoy before a ruby heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" ""
+
 # An escaped quote after an fd copy stays a read.
 assert_read  "#1414 escaped quote after 2>&1 is a read" 'bash -c "sh -c \"make 2>&1\""'
 

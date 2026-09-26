@@ -232,8 +232,9 @@ _bdw_starts_with_git_subcommand() {
 #     `grep '>&2' f`. Without this rule, each read-only command reported
 #     a write to `1)`, `1\"`, or `2`, and the gate blocked it.
 #   - One opening quote is allowed, so `>&"out.txt"` still writes
-#     `out.txt`, and `>&"2"` stays a descriptor copy. `>&2"q.ts"` writes a
-#     file named `2q.ts` and is missed. That shape is accepted as residue.
+#     `out.txt`, and `>&"2"` stays a descriptor copy. Two evasive shapes
+#     are missed and accepted as residue: `>&2"q.ts"` writes `2q.ts`, and
+#     `>&\src/app.ts` writes `src/app.ts`.
 #   - `}` stays allowed: bash writes a file named `2}` for `>&2}`.
 #   - `>&-` and `>&3-` close or move a descriptor. A word that starts with
 #     `-` is rejected.
@@ -614,6 +615,9 @@ bash_command_appears_to_write() {
   # _bdw_match_redirection_any_segment for why matching the WHOLE, unsplit
   # command here (as this used to) missed `|`/`||`-adjacent redirects
   # (`false ||> file`, `echo x |> file`).
+  #
+  # Keep this list in step with _bdw_detects_other_write (#1414). A family
+  # added here and not there reopens the sed `w` decoy gap for it.
   _bdw_match_redirection_any_segment "$cmd" && return 0
   _bdw_match_tee             "$cmd" && return 0
   _bdw_match_sed_inplace     "$cmd" && return 0
@@ -999,10 +1003,12 @@ bash_extract_write_targets() {
     # script, so no single segment holds both `sed` and `w out`.
     #
     # They are held back in one case: the segment pass found no target,
-    # and another write family fired. Then the gate sees an empty list
-    # and fails closed, as it did before #1414. A lone `w` target such as
-    # `/dev/stdout` is exempt, and it would turn that closed gate into a
-    # pass. Examples that stay blocked this way:
+    # and another write family fired. Then require-active-ticket.sh sees
+    # an empty list and fails closed, as it did before #1414. A lone `w`
+    # target such as `/dev/stdout` is exempt, and it would turn that closed
+    # gate into a pass. require-migration-ticket.sh exits 0 on an empty
+    # list, so it does not judge a held-back `w` file, as on dev. Examples
+    # that stay blocked by the ticket gate this way:
     #   sed -i "s/a/b/w /dev/stdout" src/app.ts
     #   awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt
     #   python3 -c '...' ; sed -n 'w /dev/null' in.txt
