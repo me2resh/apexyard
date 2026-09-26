@@ -194,7 +194,7 @@ design-tokens
 
 **Critical note:** `.tsx`/`.jsx` are matched **exactly**, not as `.tsx?` / `.jsx?`. The original draft had the regex-optional form, which also matched plain `.ts` and `.js` files — caught in smoke testing and fixed before merge. Server-side TypeScript/JavaScript should never trigger a design gate.
 
-**Customize:** `.ui_paths` in `.claude/project-config.json` (REPLACES the default list wholesale — see `docs/project-config.md`). `_lib-ui-paths.sh` filters out a malformed entry (`null`, an object, a nested array, or a whitespace-only string). If every entry is malformed, the library falls back to the shipped defaults above instead of resolving to an empty, always-passing pattern list (Hakim's LOW-2, me2resh/apexyard#1397).
+**Customize:** `.ui_paths` in `.claude/project-config.json` (REPLACES the default list wholesale — see `docs/project-config.md`). `_lib-ui-paths.sh` filters out a malformed entry (`null`, an object, a nested array, or a whitespace-only string). If every entry is malformed, the library falls back to the shipped defaults above instead of resolving to an empty, always-passing pattern list. Hakim's LOW-2 (me2resh/apexyard#1397) reported this gap.
 
 **Companion skill:** `/approve-design <pr>` (in `.claude/skills/approve-design/`) writes the marker. It follows the same pattern as `/approve-merge`: verify PR state → verify Rex marker at HEAD → write the design marker at the repo root → confirm → stop. The skill definition includes explicit valid/invalid triggers and an anti-pattern section distinguishing mockup approval (design phase) from implementation-review approval (PR phase).
 

@@ -63,9 +63,11 @@ An override array that omits entries the matching default array carries
 merges exactly as documented above. The override still wins, unchanged.
 `_lib-read-config.sh` also prints one advisory `WARN:` line to stderr. The
 line names the key and every dropped entry, the first time that override is
-read in a session. This never blocks and never changes the merged value. It
-only makes an otherwise-silent drop visible. It applies only to a key that
-has a default array in `.claude/project-config.defaults.json`.
+read in a session. Without a session ID, the cross-process cache has no key
+to read or write, so the warning prints again in every new process. This
+never blocks and never changes the merged value. It only makes an
+otherwise-silent drop visible. It applies only to a key that has a default
+array in `.claude/project-config.defaults.json`.
 `migration_paths`, `migration_label`, `ui_paths`, `ui_paths_exclude`,
 `design_paths`, `design_paths_exclude`, and `architecture_paths` have no
 entry in `.claude/project-config.defaults.json` at all — their hook holds
