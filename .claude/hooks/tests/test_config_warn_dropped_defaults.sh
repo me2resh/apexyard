@@ -14,9 +14,13 @@
 #   5. Override key has no matching default array (override-only key, e.g.
 #      migration_paths) -> no WARN (out of this function's scope by design;
 #      see the function's own header comment).
-#   7. _lib-read-config.sh sources cleanly under a POSIX-mode shell
-#      (`/bin/sh` and `bash` with `POSIXLY_CORRECT=1`), and `config_get`
-#      is defined afterward (Hakim's LOW-A regression, #1403).
+#   7. _lib-read-config.sh sources cleanly under bash running in POSIX mode
+#      (`bash --posix` and `bash` with `POSIXLY_CORRECT=1`), and
+#      `config_get` is defined afterward (Hakim's LOW-A regression, #1403).
+#      Case 7a uses `bash --posix`, not `/bin/sh`: on Linux, `/bin/sh` is
+#      dash, a stricter POSIX shell this library was never written to
+#      support, and it fails on pre-existing bash-only syntax unrelated to
+#      LOW-A (see the case 7a comment below for the tracking reference).
 
 set -u
 
@@ -177,12 +181,21 @@ fi
 rm -rf "$sb"
 
 # ---------------------------------------------------------------------------
-# 7. Sourcing under a POSIX-mode shell must not raise a syntax error, and
+# 7. Sourcing under bash in POSIX mode must not raise a syntax error, and
 #    config_get must be defined afterward. `_config_warn_dropped_defaults`'s
 #    loop used `done < <(...)` process substitution, a bash/ksh/zsh
-#    extension no POSIX shell parses. `/bin/sh` and `bash POSIXLY_CORRECT=1`
-#    both reject it, which aborts the whole `source` and leaves config_get
-#    undefined for the rest of the process (Hakim's LOW-A, #1403).
+#    extension that bash itself rejects once POSIX mode is on. Both
+#    `bash --posix` and `bash` with `POSIXLY_CORRECT=1` reject it, which
+#    aborts the whole `source` and leaves config_get undefined for the rest
+#    of the process (Hakim's LOW-A, #1403).
+#
+#    Case 7a runs the probe under `bash --posix`, not `/bin/sh`. On macOS
+#    `/bin/sh` is bash in POSIX mode, so the two are equivalent there. On
+#    Linux CI runners `/bin/sh` is dash, an unrelated, stricter POSIX shell
+#    this library was never written to support: dash fails at line 35's
+#    pre-existing `${BASH_SOURCE[0]:-}` (a bash-only array expansion), which
+#    is not the LOW-A regression this case guards. That gap is tracked
+#    under #1403 and is not fixed by this case.
 # ---------------------------------------------------------------------------
 posix_probe_script() {
   local lib_path="$1"
@@ -198,11 +211,11 @@ PROBE
 
 probe="$(posix_probe_script "$LIB_READ_CONFIG")"
 
-out_sh=$(printf '%s\n' "$probe" | /bin/sh 2>&1)
+out_sh=$(bash --posix -c "$probe" 2>&1)
 if [ "$(printf '%s\n' "$out_sh" | tail -1)" = "config_get_defined" ]; then
-  record_pass "7a: sources cleanly under /bin/sh, config_get defined"
+  record_pass "7a: sources cleanly under bash --posix, config_get defined"
 else
-  record_fail "7a: sources cleanly under /bin/sh, config_get defined" "output: $out_sh"
+  record_fail "7a: sources cleanly under bash --posix, config_get defined" "output: $out_sh"
 fi
 
 out_posix=$(POSIXLY_CORRECT=1 bash -c "$probe" 2>&1)

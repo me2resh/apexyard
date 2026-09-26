@@ -244,11 +244,12 @@ _config_warn_dropped_defaults() {
 
   local finding key drop
   # Pipe into the loop rather than `done < <(...)` process substitution.
-  # Process substitution is a bash/ksh/zsh extension; sourcing this file
+  # Process substitution is a bash/ksh/zsh extension. Sourcing this file
   # under a POSIX-mode shell (`/bin/sh`, or bash with `POSIXLY_CORRECT` set)
-  # hits a syntax error on that construct and leaves config_get undefined
-  # for the rest of the process (Hakim's LOW-A, #1403). The loop only writes
-  # to stderr, so running it in the pipeline's subshell loses nothing.
+  # hits a syntax error on that construct. The syntax error leaves
+  # config_get undefined for the rest of the process (Hakim's LOW-A,
+  # #1403). The loop only writes to stderr, so running it in the
+  # pipeline's subshell loses nothing.
   printf '%s' "$findings" | jq -c '.[]' 2>/dev/null | while IFS= read -r finding; do
     [ -z "$finding" ] && continue
     key=$(printf '%s' "$finding" | jq -r '.path' 2>/dev/null)
