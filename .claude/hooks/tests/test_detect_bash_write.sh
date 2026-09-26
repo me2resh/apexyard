@@ -422,6 +422,189 @@ fi
 assert_targets "python -c (miss) contributes nothing" \
   'python3 -c "open(\"/tmp/x\",\"w\").write(\"hi\")"'                                 ""
 
+# --- #1414: `>&word`, grouped/long sed -i, and sed `w` -----------------
+#
+# Each write below changed a file and passed the gate on dev at 5be9ecb
+# (bash 5.3.9, GNU sed 4.9). The read cases pin the exclusions that keep
+# the fix from blocking common read-only commands.
+
+# `>&word` is the second spelling of "send stdout and stderr to a file".
+assert_write "#1414 '>&word'"              "echo x >&src/app.ts"
+assert_write "#1414 '>& word'"             "echo x >& src/app.ts"
+assert_write "#1414 '1>&word'"             "echo x 1>&src/app.ts"
+assert_write "#1414 word ending in a digit" "echo x2>&out.txt"
+assert_write "#1414 '>&' word not all digits" "echo x >&9f1"
+assert_write "#1414 '>&' quoted word"      'echo x >&"out.txt"'
+assert_read  "#1414 '>&2' descriptor copy" "echo x >&2"
+assert_read  "#1414 '1>&2' descriptor copy" "echo x 1>&2"
+assert_read  "#1414 '>&12' descriptor copy" "echo x >&12"
+assert_read  "#1414 '>&-' closes stdout"   "echo x >&-"
+assert_read  "#1414 '3>&-' closes fd 3"    "exec 3>&-"
+assert_read  "#1414 '>&3-' moves fd 3"     "echo x >&3-"
+assert_read  "#1414 '3>&1' descriptor copy" "exec 3>&1"
+assert_targets "#1414 '>&word' target"     "echo x >&src/app.ts"                "src/app.ts"
+assert_targets "#1414 '>& word' target"    "echo x >& src/app.ts"               "src/app.ts"
+assert_targets "#1414 fd copy then '>&word'" "echo a >&2; echo b >&out.txt"     "out.txt"
+assert_target  "#1414 '>&word' single target" "echo x >&src/app.ts"             "src/app.ts"
+assert_not_deletion_only "#1414 rm + '>&word' hides a real write" \
+  "rm old.ts; echo x >&src/app.ts"
+
+# sed -i inside a group of short flags, with a suffix, or as --in-place.
+assert_write "#1414 sed -Ei"               "sed -Ei 's/a/b/' src/app.ts"
+assert_write "#1414 sed -ni"               "sed -ni 's/a/b/p' src/app.ts"
+assert_write "#1414 sed -si"               "sed -si 's/a/b/' src/app.ts"
+assert_write "#1414 sed -ie (suffix e)"    "sed -ie 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-place"        "sed --in-place 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-place=.bak"   "sed --in-place=.bak 's/a/b/' src/app.ts"
+assert_read  "#1414 sed -ei runs script i" "sed -ei src/app.ts"
+assert_read  "#1414 sed -f script file"    "sed -f script.sed src/app.ts"
+assert_read  "#1414 sed --posix"           "sed --posix 's/a/b/' src/app.ts"
+assert_targets "#1414 sed -Ei target"      "sed -Ei 's/a/b/' src/app.ts"        "src/app.ts"
+assert_targets "#1414 sed --in-place target" "sed --in-place 's/a/b/' src/app.ts" "src/app.ts"
+
+# sed `w` / `W` command and the `s///w` flag.
+assert_write "#1414 sed w command"         "sed -n 'w out.txt' in.txt"
+assert_write "#1414 sed /re/w"             "sed -n '/re/w out.txt' in.txt"
+assert_write "#1414 sed s///w flag"        "sed 's/a/b/w out.txt' in.txt"
+assert_write "#1414 sed s///gw flags"      "sed 's/a/b/gw out.txt' in.txt"
+assert_write "#1414 sed 1w"                "sed -n '1w out.txt' in.txt"
+assert_write "#1414 sed \$w"               "sed -n '\$w out.txt' in.txt"
+assert_write "#1414 sed 1,3w"              "sed -n '1,3w out.txt' in.txt"
+assert_write "#1414 sed 1!w"               "sed -n '1!w out.txt' in.txt"
+assert_write "#1414 sed p;w"               "sed -n 'p;w out.txt' in.txt"
+assert_write "#1414 sed p; w"              "sed -n 'p; w out.txt' in.txt"
+assert_write "#1414 sed s|a|b|w"           "sed 's|a|b|w out.txt' in.txt"
+assert_write "#1414 sed W command"         "sed -n 'W out.txt' in.txt"
+assert_write "#1414 sed -e 'w file'"       "sed -n -e 'w out.txt' in.txt"
+assert_read  "#1414 sed s/w/x/ is a read"  "sed 's/w/x/' in.txt"
+assert_read  "#1414 sed /warning/p is a read" "sed -n '/warning/p' in.txt"
+assert_read  "#1414 sed /^w/p is a read"   "sed -n '/^w/p' in.txt"
+assert_read  "#1414 sed s/www/x/g is a read" "sed 's/www/x/g' in.txt"
+assert_read  "#1414 sed y/w/x/ is a read"  "sed 'y/w/x/' in.txt"
+assert_read  "#1414 sed s#w#x# is a read"  "sed 's#w#x#' in.txt"
+assert_read  "#1414 sed s/a w b/c/ is a read" "sed 's/a w b/c/' in.txt"
+assert_read  "#1414 quoted operand starting with w" "sed -n p 'words.txt'"
+assert_read  "#1414 'w x' with no sed"     "echo 'w x'"
+assert_targets "#1414 sed w target"        "sed -n 'w out.txt' in.txt"          "out.txt"
+assert_targets "#1414 sed s///w target"    "sed 's/a/b/w out.txt' in.txt"       "out.txt"
+assert_targets "#1414 sed w after ; in the script" \
+  "sed -n 'p;w out.txt' in.txt"                                                  "out.txt"
+assert_target  "#1414 sed w: single-target extractor returns empty (plural only)" \
+  "sed -n '/re/w out.txt' in.txt"                                                ""
+assert_not_deletion_only "#1414 rm + sed w hides a real write" \
+  "rm old.ts; sed -n 'w src/app.ts' in.txt"
+
+# fd copies that end at `)`, a backtick, or a quote stay reads. Each of
+# these reported a write to `1)`, `` 1` ``, or `2` before the fix.
+assert_read  "#1414 \$(cmd 2>&1) is a read"       'out=$(npm test 2>&1)'
+assert_read  "#1414 backtick cmd 2>&1 is a read"  'result=`ls 2>&1`'
+assert_read  "#1414 (cmd 2>&1) subshell is a read" '(cd sub && make 2>&1)'
+assert_read  "#1414 bash -c \"cmd 2>&1\" is a read" 'bash -c "npm test 2>&1"'
+assert_read  "#1414 bash -c 'cmd >&2' is a read"  "bash -c 'echo hi >&2'"
+assert_read  "#1414 grep '>&2' is a read"         "grep -rn '>&2' .claude/hooks/"
+assert_read  "#1414 >&\"2\" quoted fd copy"        'echo x >&"2"'
+assert_read  "#1414 \$(cmd 2>&1) || echo"          'r=$(npm test 2>&1) || echo "$r"'
+assert_write "#1414 >&2} writes a file named 2}"  "echo x >&2}"
+
+# More sed -i spellings, and dash-words that are not sed flags.
+assert_write "#1414 sed --i (prefix)"             "sed --i 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in (prefix)"            "sed --in 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-pl=.bak (prefix)"    "sed --in-pl=.bak 's/a/b/' src/app.ts"
+assert_read  "#1414 find ... -exec sed ... -print" "find . -name '*.md' -exec sed -n 1p {} + -print"
+assert_read  "#1414 sed s/ -api/x/ is a read"     "sed 's/ -api/x/' in.txt"
+assert_read  "#1414 commit message mentioning sed -pi" 'git commit -m "fix sed -pi flag doc"'
+
+# More sed w positions.
+assert_write "#1414 sed s#a#b#w"                  "sed 's#a#b#w out.txt' in.txt"
+assert_write "#1414 sed s/a/b/pw"                 "sed 's/a/b/pw out.txt' in.txt"
+assert_write "#1414 sed /re/Iw"                   "sed -n '/re/Iw out.txt' in.txt"
+assert_write "#1414 sed s,a,b,w"                  "sed 's,a,b,w out.txt' in.txt"
+assert_write "#1414 sed s:a:b:w"                  "sed 's:a:b:w out.txt' in.txt"
+assert_write "#1414 sed s@a@b@w"                  "sed 's@a@b@w out.txt' in.txt"
+assert_write "#1414 sed s%a%b%w"                  "sed 's%a%b%w out.txt' in.txt"
+assert_write "#1414 sed \\,re,w"                  "sed -n '\\,re,w out.txt' in.txt"
+assert_write "#1414 sed ' w file' (space after quote)" "sed -n ' w out.txt' in.txt"
+assert_read  "#1414 sed then | grep 'w x' is a read" "sed -n 1p in.txt | grep 'w x'"
+
+# A sed -i edit whose file the extractor misses must not be hidden by an
+# exempt `w` target. Before the fix these extracted only the `w` target,
+# and the gate passed them. Now they extract nothing, and the gate fails
+# closed, as it did before #1414.
+assert_write   "#1414 sed -i with s///w /dev/stdout" 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'
+assert_targets "#1414 sed -i + exempt w target yields no target" \
+  'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'                                  ""
+assert_targets "#1414 sed -i with ;w /tmp/x yields no target" \
+  "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          ""
+assert_targets "#1414 sed w then sed -i yields no target" \
+  'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts'                       ""
+assert_targets "#1414 sed -i file and its w file both extracted" \
+  "sed -i 's/a/b/w /tmp/log' src/app.ts"                                         "src/app.ts,/tmp/log"
+assert_targets "#1414 in-repo w file beside an exempt sed -i file" \
+  "sed -i 's/a/b/w src/b.ts' /tmp/x.txt"                                         "/tmp/x.txt,src/b.ts"
+
+# A sed `w` decoy must not hide another family's write that has no
+# extractable target. The segment pass finds nothing, so the `w` target
+# is held back, and the gate fails closed as it did before #1414.
+assert_targets "#1414 awk -i inplace + w decoy yields no target" \
+  "awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt"                        ""
+assert_targets "#1414 python -c + w decoy yields no target" \
+  "python3 -c \"open('src/app.ts','w').write('x')\"; sed -n 'w /tmp/x' in.txt"   ""
+assert_targets "#1414 tar -x + w decoy yields no target" \
+  "tar -xf a.tar; sed -n 'w /tmp/x' in.txt"                                      ""
+assert_targets "#1414 go run + w decoy yields no target" \
+  "go run ./gen && sed -n 's/x/y/w /dev/stdout' out.txt"                         ""
+assert_targets "#1414 rm is not a decoy victim: w target kept" \
+  "rm -f old.ts; sed -n 'w /tmp/x' in.txt"                                       "/tmp/x"
+
+# One case for each family in _bdw_detects_other_write whose write has no
+# extractable target. Each pins that family's entry. Dropping one from the
+# helper would let the exempt `w` decoy unlock that family's write.
+while IFS= read -r fam_cmd; do
+  [ -z "$fam_cmd" ] && continue
+  assert_targets "#1414 w decoy beside: ${fam_cmd:0:44}" \
+    "$fam_cmd; sed -n 'w /tmp/x' in.txt"                                         ""
+done <<'FAMILIES'
+node -e "require('fs').writeFileSync('src/app.ts','x')"
+ruby -e "File.write('src/app.ts','x')"
+perl -e "unlink 'src/app.ts'"
+php -r "file_put_contents('src/app.ts','x');"
+deno run --allow-write gen.ts
+bun run gen.ts
+go run ./gen
+python3 -c "open('src/app.ts','w').write('x')"
+dd if=/dev/zero of=src/app.ts count=1
+install -m 644 a.ts src/app.ts
+curl --output=src/app.ts https://example.com/f
+wget --output-document=src/app.ts https://example.com/f
+tar -xf a.tar
+awk -i inplace 1 src/app.ts
+sed -i "s/a/b/" src/app.ts
+FAMILIES
+
+# Redirects and tee normally yield a target. Their entries matter only
+# when the target strips to nothing, as with an empty quoted word. These
+# two cases pin those entries, so the helper keeps parity with
+# bash_command_appears_to_write.
+assert_targets "#1414 w decoy beside a redirect to an empty word" \
+  "echo x > \"\"; sed -n 'w /tmp/x' in.txt"                                      ""
+assert_targets "#1414 w decoy beside tee with an empty word" \
+  "echo x | tee \"\"; sed -n 'w /tmp/x' in.txt"                                  ""
+
+# The heredoc families need the decoy first, because a heredoc ends on a
+# line that holds only its terminator.
+assert_targets "#1414 w decoy before a python heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" ""
+assert_targets "#1414 w decoy before a node heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" ""
+assert_targets "#1414 w decoy before a ruby heredoc" \
+  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" ""
+
+# An escaped quote after an fd copy stays a read.
+assert_read  "#1414 escaped quote after 2>&1 is a read" 'bash -c "sh -c \"make 2>&1\""'
+
+# BSD sed documents -I as in-place. GNU rejects it.
+assert_write "#1414 sed -I (BSD in-place)"        "sed -I '' 's/a/b/' src/app.ts"
+
 # --- #931 residual 1: `<>` read-write open is now DETECTED as a write ---
 #
 # `[n]<>word` opens `word` for both reading AND writing — a real,
