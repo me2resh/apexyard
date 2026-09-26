@@ -244,6 +244,7 @@ One-line summary per skill; canonical details live in each `.claude/skills/<name
 | `/roadmap` | Update or create the product roadmap |
 | `/stakeholder-update` | Generate weekly / monthly / launch stakeholder updates |
 | `/fan-out` | Spawn N parallel agents in one message (per-task agent type, worktree isolation) |
+| `/duty` | On-call / support shift mode — liveness-gated tick, union ownership partition, operator-approved learning loop |
 
 The hooks, agents, and skills are picked up automatically by Claude Code when this directory lives at the project root. Rule bodies stay on disk and are excluded from auto-load via `claudeMdExcludes` in `.claude/settings.json`. CLAUDE.md indexes them by name. Load a rule file when the work needs it.
 
