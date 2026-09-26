@@ -11,7 +11,7 @@
 #   - GOVERNANCE PIN: the gate's presence question is still answered from raw
 #     text, per AgDR-0113
 #
-# Exit 0 if all cases pass; 1 on failure.
+# Exit 0 if all cases pass. Exit 1 on failure.
 
 set -u
 
@@ -321,10 +321,11 @@ fi
 # --- 5. GOVERNANCE PIN (AgDR-0113) ---------------------------------------
 #
 # The presence question must keep reading RAW command text. This helper is
-# additive-only. These cases fail if someone makes
-# bash_command_appears_to_write quote-aware. That failure is the signal to
-# re-read AgDR-0113 first. A parser bug there fails OPEN across all three
-# consuming hooks at once.
+# additive-only. A parser bug in a gate's presence question fails OPEN across
+# all three consuming hooks at once. Two pins below guard that boundary.
+#
+# Pin 1: these cases fail if someone makes bash_command_appears_to_write
+# itself quote-aware. That failure is the signal to re-read AgDR-0113 first.
 
 for c in "git log --format='%h > %s'" \
          "echo '  >> ZERO MATCHES'" \
@@ -336,6 +337,39 @@ for c in "git log --format='%h > %s'" \
         "detector went quote-aware — see AgDR-0113 before changing this"
   fi
 done
+
+# Pin 2: masking added at a gate's call site would pass pin 1. So only two
+# hooks may call mask_quoted_metachars: this library, and the note function
+# _ratc_quoted_origin_hint in require-active-ticket.sh. That function asks
+# the presence question of masked text only to choose a message. Hook case A
+# in test_require_active_ticket_bash.sh pins its exit code at 2.
+
+users=$(grep -l 'mask_quoted_metachars' "$LIB_DIR"/*.sh 2>/dev/null \
+  | while IFS= read -r f; do basename "$f"; done | sort | tr '\n' ' ')
+if [ "$users" = "_lib-mask-quoted.sh require-active-ticket.sh " ]; then
+  ok "only the library and require-active-ticket.sh call the masker"
+else
+  bad "only the library and require-active-ticket.sh call the masker" \
+      "found in: $users — see AgDR-0113 and AgDR-0171 before adding a caller"
+fi
+
+outside=$(awk '
+  /^_ratc_quoted_origin_hint\(\) \{/ { inside = 1 }
+  inside && /^\}/                    { inside = 0; next }
+  !inside && /mask_quoted_metachars/ && !/^[[:space:]]*#/ { print NR ": " $0 }
+' "$LIB_DIR/require-active-ticket.sh")
+calls=$(awk '
+  /^_ratc_quoted_origin_hint\(\) \{/ { inside = 1 }
+  inside && /^\}/                    { inside = 0; next }
+  inside && /mask_quoted_metachars/ && !/^[[:space:]]*#/ { n++ }
+  END { print n + 0 }
+' "$LIB_DIR/require-active-ticket.sh")
+if [ -z "$outside" ] && [ "$calls" -ge 1 ]; then
+  ok "require-active-ticket.sh calls the masker only inside the note function"
+else
+  bad "require-active-ticket.sh calls the masker only inside the note function" \
+      "calls inside: $calls, outside: ${outside:-none}"
+fi
 
 # --- Summary --------------------------------------------------------------
 

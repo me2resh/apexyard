@@ -99,10 +99,15 @@
 #       echoes COMMAND with `>`, `<`, `|`, `&`, `;` replaced by placeholder
 #       bytes wherever they sit inside a single- or double-quoted span.
 #       Echoes COMMAND unchanged when any uncertainty guard above trips.
+#       Echoes NOTHING when awk is missing or fails, for example when the
+#       command exceeds the kernel's single-environment-string limit (E2BIG).
+#       A caller must treat empty output as "no answer".
 #
 #   unmask_quoted_metachars TEXT
 #       reverses the substitution. Apply it to any value extracted from masked
-#       text before showing it to a human or comparing it with raw text.
+#       text before showing it to a human or comparing it with raw text. Do
+#       not apply it to a command the masker returned unchanged. That command
+#       may hold real placeholder bytes, which unmask would rewrite.
 
 # Placeholder bytes, chosen from the C0 control range. Real command text
 # rarely holds them, and a guard returns the raw command when it does. Each
@@ -122,7 +127,7 @@ mask_quoted_metachars() {
   # A backslash-newline pair joins two lines before bash tokenises them, so
   # it can split `<<` or `$(` past the checks below. A placeholder byte that
   # is already in the command would not round-trip through the unmask step.
-  local bs_nl=$'\\\n' placeholder=$'[\021-\025]'
+  local bs_nl=$'\\\n' placeholder=$'[\021\022\023\024\025]'
   case "$cmd" in
     *'<<'*)       printf '%s' "$cmd"; return 0 ;;
     *'`'*)        printf '%s' "$cmd"; return 0 ;;

@@ -111,11 +111,11 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# _ratc_quoted_origin_hint TARGET TOOL_NAME
+# _ratc_quoted_origin_hint TOOL_NAME
 #
-# Echoes an explanatory note when every write sign in the Bash command sits
-# INSIDE a quoted argument. Echoes nothing otherwise. TARGET may be empty,
-# for a command whose target the detector could not extract.
+# Echoes an explanatory note when every write sign the detector found in the
+# Bash command sits INSIDE a quoted argument. Echoes nothing otherwise. It
+# reads the command from $COMMAND.
 #
 # DIAGNOSIS ONLY (me2resh/apexyard#1356). This function never changes a
 # verdict. It runs after the gate has already decided to block, and it only
@@ -127,7 +127,7 @@ fi
 # skipped gate. See `_lib-mask-quoted.sh` and AgDR-0171.
 # ------------------------------------------------------------------------------
 _ratc_quoted_origin_hint() {
-  local tool="${2-}"
+  local tool="${1-}"
 
   [ "$tool" = "Bash" ] || return 0
   [ -n "${COMMAND:-}" ] || return 0
@@ -153,22 +153,27 @@ _ratc_quoted_origin_hint() {
 
   # Some write sign still sits outside quotes, so at least one target may be
   # real. Say nothing. This is a presence check, not a target extraction. It
-  # costs one regex pass, where a second extraction grows with the number of
-  # targets and doubled the block-path time on large commands.
+  # costs far less. On 800 masked quoted commands, one local run measured
+  # about 0.9 s for this check and about 10 s for an extraction.
+  #
+  # DIAGNOSIS ONLY. Never copy this call into a verdict. A gate must ask this
+  # question of the RAW command (AgDR-0113 governance rule 2). Here the answer
+  # only chooses whether to print the note.
   bash_command_appears_to_write "$masked" && return 0
 
-  # The quoted text may still run as code, through eval, sh -c, awk, and
-  # similar programs. So the note states both readings and claims neither.
-  # It offers one remedy only. Advice to reword a command would steer an
-  # agent toward a detector gap when the write is real.
+  # The note speaks about the quoted match only, not the whole command. The
+  # quoted text may still run as code through eval, sh -c, or awk. The
+  # command may also write in a way the detector does not see, such as touch
+  # or ln. The note offers one remedy only. Advice to reword a command would
+  # steer an agent toward a detector gap when the write is real.
   #
   # No surrounding blank lines here. The caller adds them, because command
   # substitution strips trailing newlines from whatever this prints.
-  printf '%s' "NOTE: the detector found this write only inside quoted text. It matches raw
+  printf '%s' "NOTE: the detector found this match only inside quoted text. It matches raw
 command text and does not parse shell quoting (me2resh/apexyard#1356). If
-the quoted text is only data, the command probably writes no file. If eval,
-sh -c, awk, or another program runs the quoted text, the write is real.
-Declare a ticket to continue."
+the quoted text is only data, this match is a false positive. If eval,
+sh -c, awk, or another program runs the quoted text, it may write a file.
+The detector does not see every kind of write. Declare a ticket to continue."
 }
 
 # ------------------------------------------------------------------------------
@@ -561,7 +566,7 @@ _ratc_evaluate_target() {
   # trailing newline that a command substitution inside the heredoc would
   # strip. With no note, the variable is empty and the one blank line stays.
   local QUOTED_HINT
-  QUOTED_HINT=$(_ratc_quoted_origin_hint "$FILE_PATH" "$TOOL_NAME")
+  QUOTED_HINT=$(_ratc_quoted_origin_hint "$TOOL_NAME")
   [ -n "$QUOTED_HINT" ] && QUOTED_HINT=$'\n'"$QUOTED_HINT"$'\n'
   cat >&2 <<MSG
 BLOCKED: No active ticket set for this session.
