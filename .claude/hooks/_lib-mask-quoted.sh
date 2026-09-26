@@ -49,24 +49,32 @@
 #     quote-process but this scanner would
 #   - the command holds a backtick, which nests a fresh quoting context
 #   - the command holds a `#` at a comment position, because bash does not
-#     quote-process a comment body but this scanner would
+#     quote-process a comment body but this scanner would. A comment
+#     position is the start of the command, or a place after whitespace or
+#     after one of `; & | ( ) < >`.
+#   - a double-quoted span holds `$(`. Bash starts a fresh quoting context
+#     inside a command substitution, so a `>` there is a real redirect. This
+#     scanner would still count it as quoted.
 #
 # Each fallback preserves the caller's current behaviour.
 #
 # SCOPE OF THAT CLAIM — read it before adopting this helper elsewhere.
-# The four guards above cover four KNOWN divergences between this scanner and
+# The five guards above cover five KNOWN divergences between this scanner and
 # bash. They are not a proof that no divergence remains. A shape that makes
 # the scanner treat a REAL operator as quoted, and that no guard catches,
 # would hide that character from a caller.
 #
-# Known residue, recorded rather than claimed away (AgDR-0164, AgDR-0113
-# governance rule 2):
+# Known residue, recorded rather than claimed away. AgDR-0171 records it. The
+# first of AgDR-0113's two closing rules requires it: cite the test, or write
+# the claim as residue.
 #
 #   - `$'...'` ANSI-C quoting. Bash processes backslash escapes inside it and
 #     this scanner does not. Every variant tried so far left quotes
 #     unbalanced and hit guard 1. It is PROBED, not proven safe.
-#   - The comment divergence above was found by review, not by the original
-#     author's own adversarial pass. Treat the guard list as a living list.
+#   - Review found the last two guards, not the original author. The first
+#     review found the comment shape after whitespace. A second review found
+#     the comment shape after an operator, and the `"$( )"` shape. Treat the
+#     guard list as a living list.
 #
 # Each entry is pinned by a case in `tests/test_mask_quoted.sh` where one
 # exists, and named here where one does not.
@@ -115,9 +123,13 @@ mask_quoted_metachars() {
   # balance check at the end of the scan cannot see it. Bail instead of
   # modelling comments, which would add a second divergence to fix the first.
   #
-  # A comment position is start-of-line or after whitespace. A `#` anywhere
-  # else is an ordinary character, so `awk '/^## D/ ...'` is unaffected.
-  if printf '%s' "$cmd" | grep -qE '(^|[[:space:]])#'; then
+  # A comment starts where a word starts. A word starts at the start of the
+  # command, after whitespace, or after an operator character. A `#` anywhere
+  # else is an ordinary character, so `awk '/^## D/ ...'` is unaffected. The
+  # guard also trips on a `#` inside a quoted span after a space. That costs
+  # nothing, because a trip only returns the raw command.
+  local comment_re='(^|[[:space:];&|()<>])#'
+  if [[ $cmd =~ $comment_re ]]; then
     printf '%s' "$cmd"; return 0
   fi
 
@@ -174,8 +186,14 @@ mask_quoted_metachars() {
           continue
         }
 
-        # state == 2, inside double quotes. A backslash still escapes, so the
-        # escaped character cannot close the span.
+        # state == 2, inside double quotes. A `$(` opens a command
+        # substitution, and bash parses its body in a fresh quoting context.
+        # This scanner does not model that, so hand back the raw command.
+        # This also covers `$((`, where a `>` is a comparison, not a redirect.
+        if (c == "$" && substr(s, i + 1, 1) == "(") { printf "%s", s; exit }
+
+        # A backslash still escapes, so the escaped character cannot close
+        # the span.
         if (c == BS) {
           out = out c
           i++

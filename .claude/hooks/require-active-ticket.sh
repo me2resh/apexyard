@@ -137,7 +137,7 @@ _ratc_quoted_origin_hint() {
   . "$_RATC_HOOK_DIR/_lib-mask-quoted.sh"
 
   local masked
-  masked=$(mask_quoted_metachars "$COMMAND")
+  masked=$(mask_quoted_metachars "$COMMAND" 2>/dev/null)
 
   # An empty mask is never a legitimate result for a non-empty command. It
   # means awk is missing, awk failed, or the command exceeded the kernel's
@@ -160,11 +160,9 @@ _ratc_quoted_origin_hint() {
 $(bash_extract_write_targets "$masked")
 EOF
 
-  # LEADING newline, not trailing. This substitution replaces the blank line
-  # that used to sit above "Exempt paths", so the note would otherwise butt
-  # straight against the Target line. A trailing newline cannot help here —
-  # command substitution strips trailing newlines, so it renders as a no-op.
-  printf '\n%s' "NOTE: this target comes from inside a quoted argument, so the command may
+  # No surrounding blank lines here. The caller adds them, because command
+  # substitution strips trailing newlines from whatever this prints.
+  printf '%s' "NOTE: this target comes from inside a quoted argument, so the command may
 write no file. The detector matches raw command text and does not parse
 shell quoting (me2resh/apexyard#1356). Reword the command, or declare a
 ticket, to continue."
@@ -554,6 +552,14 @@ _ratc_evaluate_target() {
   fi
 
   # Nothing found — emit a guide that names both possibilities.
+  #
+  # The quoted-origin note, when present, sits between the Target line and
+  # "Exempt paths" with a blank line on each side. A plain variable keeps the
+  # trailing newline that a command substitution inside the heredoc would
+  # strip. With no note, the variable is empty and the one blank line stays.
+  local QUOTED_HINT
+  QUOTED_HINT=$(_ratc_quoted_origin_hint "$FILE_PATH" "$TOOL_NAME")
+  [ -n "$QUOTED_HINT" ] && QUOTED_HINT=$'\n'"$QUOTED_HINT"$'\n'
   cat >&2 <<MSG
 BLOCKED: No active ticket set for this session.
 
@@ -576,7 +582,7 @@ $([ -n "$PER_PROJECT_MARKER" ] && echo "  per-project:  $PER_PROJECT_MARKER")
   ops fallback: $FALLBACK_MARKER
 
 Target: ${FILE_PATH:-<unextractable Bash write target>}
-$(_ratc_quoted_origin_hint "$FILE_PATH" "$TOOL_NAME")
+${QUOTED_HINT}
 Exempt paths (no ticket required): .claude/, docs/, projects/*/docs/, *.md
 MSG
   return 2

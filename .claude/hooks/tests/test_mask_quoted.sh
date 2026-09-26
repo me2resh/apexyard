@@ -66,8 +66,36 @@ assert_masked_target() {
   fi
 }
 
+# The safety property for a command that really writes. Every target the
+# detector finds in the RAW command must still appear after masking. Exact
+# spelling does not matter here. The raw extractor has its own tokenising
+# limits, and masking must not change them.
+assert_no_target_hidden() {
+  local label="$1" cmd="$2" raw_t missing=""
+  while IFS= read -r raw_t; do
+    [ -z "$raw_t" ] && continue
+    masked_targets "$cmd" | grep -q -x -F -- "$raw_t" || missing="$missing '$raw_t'"
+  done <<EOF
+$(bash_extract_write_targets "$cmd")
+EOF
+  if [ -z "$(bash_extract_write_targets "$cmd")" ]; then
+    bad "$label" "the raw command yields no target, so this case proves nothing"
+  elif [ -z "$missing" ]; then
+    ok "$label"
+  else
+    bad "$label" "masking hid:$missing"
+  fi
+}
+
+# Each passthrough case must hold a quoted metacharacter. Without one, the
+# masked text equals the raw text whether or not a guard trips, so the case
+# could never fail.
 assert_raw_passthrough() {
   local label="$1" cmd="$2" got
+  case "$cmd" in
+    *'>'*|*'<'*|*'|'*|*'&'*|*';'*) ;;
+    *) bad "$label" "case holds no metacharacter, so it proves nothing"; return ;;
+  esac
   got=$(mask_quoted_metachars "$cmd")
   if [ "$got" = "$cmd" ]; then ok "$label"; else bad "$label" "command was modified"; fi
 }
@@ -105,10 +133,12 @@ assert_masked_target "apostrophe inside a double-quoted argument" \
 
 # --- 3. Uncertainty guards hand back the raw command ---------------------
 
-assert_raw_passthrough "heredoc operator present"  'cat <<EOF'
-assert_raw_passthrough "backtick present"          'echo `date`'
-assert_raw_passthrough "unbalanced single quote"   "echo 'unbalanced"
-assert_raw_passthrough "unbalanced double quote"   'echo "unbalanced'
+# Each command also holds a quoted `>`. Without the guard, masking would
+# replace it, and the case would fail.
+assert_raw_passthrough "heredoc operator present"  "cat <<EOF 'a > b'"
+assert_raw_passthrough "backtick present"          "echo \`date\` 'a > b'"
+assert_raw_passthrough "unbalanced single quote"   "echo 'a > b"
+assert_raw_passthrough "unbalanced double quote"   'echo "a > b'
 
 # --- 3b. Adversarial: a real write must never be hidden -------------------
 #
@@ -135,48 +165,92 @@ assert_masked_target "adversarial: quoted span after the write" \
 assert_masked_target "adversarial: quoted spans on both sides of the write" \
   "echo 'a>b' > TARGET && echo 'c>d'" "TARGET"
 # AgDR-0113 records that odd quote counts inside a heredoc body broke the
-# heredoc stripper. The `<<` guard is what keeps that shape safe here.
-assert_masked_target "adversarial: apostrophes in a heredoc body, write after" \
-  "$(printf 'cat <<E\nit%ss\nE\necho x > TARGET' "'")" "TARGET"
+# heredoc stripper. Here one apostrophe sits in a heredoc body on each side of
+# a real write, so the scan ends balanced. Only the `<<` guard catches it.
+assert_masked_target "adversarial: apostrophes in two heredoc bodies straddle a write" \
+  "$(printf 'cat <<E\nit%ss\nE\necho x > TARGET\ncat <<F\nit%ss\nF' "'" "'")" "TARGET"
 
-# --- 3c. The comment divergence (#1356 review finding) --------------------
+# --- 3c. The comment divergence (#1356 review findings) -------------------
 #
 # Bash does not process quote characters inside a comment. This scanner would.
 # An odd number of quotes inside a comment, rebalanced after a REAL redirect,
 # leaves the scan balanced, so the end-of-scan check cannot see the problem.
 # Guard 4 catches it by refusing to mask any command with a `#` at a comment
-# position. Found by review, not by the original adversarial pass, which is
-# why the header now calls the guard list a living list.
+# position. A comment starts where a word starts: at the start of the
+# command, after whitespace, or after an operator character. The first review
+# found the whitespace shape. A second review found the operator shapes. That
+# is why the header calls the guard list a living list.
 
-comment_straddle=$(printf 'echo hi # don%st\necho x > TARGET # it%ss fine' "'" "'")
+q="'"
+comment_straddle="echo hi # don${q}t
+echo x > TARGET # it${q}s fine"
 assert_masked_target "adversarial: quotes straddling a redirect inside comments" \
   "$comment_straddle" "TARGET"
 assert_raw_passthrough "guard: a comment at line start" \
-  "$(printf '# a note\necho x > TARGET')"
+  "# a note
+echo 'a > b'"
 assert_raw_passthrough "guard: a comment after whitespace" \
-  "echo hi # a note"
+  "echo 'a > b' # a note"
+
+# The same straddle, with each comment directly after an operator character.
+# Each command is valid bash, and bash writes TARGET. The four-guard helper
+# at 004e0b9 hid the target in every one of them.
+assert_no_target_hidden "adversarial: comment after ';'" \
+  "echo hi;# don${q}t
+echo x > TARGET;# it${q}s fine"
+assert_no_target_hidden "adversarial: comment after '&'" \
+  "echo hi &# don${q}t
+echo x > TARGET &# it${q}s fine"
+assert_no_target_hidden "adversarial: comment after '|'" \
+  "echo hi |# don${q}t
+cat > TARGET;# it${q}s fine"
+assert_no_target_hidden "adversarial: comment after ')'" \
+  "(echo hi)# don${q}t
+(echo x > TARGET)# it${q}s fine"
+assert_no_target_hidden "adversarial: comment after '('" \
+  "(# don${q}t
+echo x > TARGET)# it${q}s fine"
+for op in ';' '&' '|' '(' ')' '<' '>'; do
+  assert_raw_passthrough "guard: a comment directly after '$op'" "echo 'a > b' ${op}# a note"
+done
 
 # The guard must not over-fire. A `#` that is NOT at a comment position is an
 # ordinary character, and the motivating case from #1356 depends on it.
 assert_no_masked_target "guard does not over-fire on '## D' inside a quoted awk program" \
   "awk '/^## D/ { c=1 } { if (c && NR > 1) exit }' dfd.md"
 
-# --- 3d. Oversize command returns empty, so callers must guard ------------
+# --- 3c2. Command substitution inside double quotes (#1356 review) --------
+#
+# Bash parses the body of `$( )` in a fresh quoting context, even inside
+# double quotes. So the `>` below is a real redirect. The four-guard helper
+# kept it masked as quoted text. Guard 5 returns the raw command instead.
+
+assert_no_target_hidden "adversarial: redirect inside \"\$( )\"" \
+  'x="$(echo hi > TARGET)"'
+assert_raw_passthrough "guard: \$( inside double quotes" \
+  'x="$(echo hi > TARGET)"'
+assert_raw_passthrough "guard: \$(( inside double quotes" \
+  'echo "$(( 2 > 1 ))"'
+# An escaped dollar opens no substitution, so masking still applies.
+assert_no_masked_target "guard does not over-fire on an escaped dollar" \
+  'echo "\$(x) > y"'
+
+# --- 3d. Oversize command: empty or unchanged, never altered ---------------
 #
 # The command travels through the environment. Linux caps one environment
 # string at MAX_ARG_STRLEN, 128 KiB, and execve then fails with E2BIG. The
-# helper returns nothing. A caller that reads "" as "differs from the raw
-# command" will draw the opposite conclusion, which is exactly the defect the
-# review found in `_ratc_quoted_origin_hint`. Pin the behaviour so the caller
-# guard stays justified.
+# helper then returns nothing. A caller that reads "" as "differs from the
+# raw command" draws the opposite conclusion. The hook test pins the caller
+# guard for that case. This case pins the helper side. The command holds no
+# quote, so the only correct non-empty answer is the command unchanged.
 
 oversize="echo $(head -c 140000 /dev/zero | tr '\0' 'x') > src/app.ts"
 oversize_masked=$(mask_quoted_metachars "$oversize" 2>/dev/null)
-if [ -z "$oversize_masked" ]; then
-  ok "oversize command yields an empty mask, so callers must check for empty"
+if [ -z "$oversize_masked" ] || [ "$oversize_masked" = "$oversize" ]; then
+  ok "oversize command yields an empty mask or the command unchanged"
 else
-  # Not a failure on a platform with a larger limit. Record what happened.
-  ok "oversize command was masked on this platform (limit not reached)"
+  bad "oversize command yields an empty mask or the command unchanged" \
+      "got ${#oversize_masked} bytes that differ from the command"
 fi
 
 # --- 4. unmask round-trips ------------------------------------------------

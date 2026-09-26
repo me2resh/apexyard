@@ -983,36 +983,103 @@ run_case "#1089 fail-closed: in-repo write still BLOCKED when lib missing" 2 "BL
 # quote-filtered text to the presence question. What changes is the message:
 # it now says where the target came from. See _lib-mask-quoted.sh.
 
-# A. Quoted metacharacter → still BLOCKED, and the note explains why.
-sb=$(make_sandbox)
-in=$(jq -nc --arg c "git log --format='%h > %s'" '{tool_name:"Bash", tool_input:{command:$c}}')
-run_case "#1356 quoted redirect still blocks, with the origin note" \
-  2 "NOTE: this target comes from inside a quoted argument" "$in" "$sb"
+NOTE_RE="NOTE: this target comes from inside a quoted argument"
 
-# B. A genuine write must NOT carry the note — it would be misleading.
-sb=$(make_sandbox)
-in=$(jq -nc --arg c "echo hello > notes.txt" '{tool_name:"Bash", tool_input:{command:$c}}')
-got=$(cd "$sb" && echo "$in" | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
-rm -rf "$sb"
-if echo "$got" | grep -qE "NOTE: this target comes from inside a quoted argument"; then
-  echo "FAIL [#1356 genuine write carries no origin note]: note was present" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-genuine-write-no-note "
-else
-  echo "PASS [#1356 genuine write carries no origin note]"
-  PASS=$((PASS+1))
-fi
+# Runs the hook with no ticket. Asserts exit 2, then asserts that the origin
+# note is present ("note") or absent ("no-note").
+quoted_note_case() {
+  local label="$1" want="$2" input="$3" sb got rc
+  sb=$(make_sandbox)
+  got=$(cd "$sb" && echo "$input" | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
+  rc=$?
+  rm -rf "$sb"
+  if [ "$rc" != 2 ]; then
+    echo "FAIL [$label]: want rc=2, got $rc" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if echo "$got" | grep -qE "$NOTE_RE"; then
+    [ "$want" = note ] && { echo "PASS [$label]"; PASS=$((PASS+1)); return; }
+    echo "FAIL [$label]: note was present" >&2
+  else
+    [ "$want" = no-note ] && { echo "PASS [$label]"; PASS=$((PASS+1)); return; }
+    echo "FAIL [$label]: note was absent" >&2
+  fi
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+}
+
+bash_input() { jq -nc --arg c "$1" '{tool_name:"Bash", tool_input:{command:$c}}'; }
+
+# A. Quoted metacharacter: still BLOCKED, and the note explains why.
+quoted_note_case "#1356 quoted redirect still blocks, with the origin note" \
+  note "$(bash_input "git log --format='%h > %s'")"
+
+# The maintainer's must-pass cases on #1356. This PR does NOT make them pass.
+# These cases pin what the PR does instead, so a reviewer can see it.
+quoted_note_case "#1356 current behaviour: grep -E 'a>b' blocks, with the note" \
+  note "$(bash_input "grep -E 'a>b' f")"
+quoted_note_case "#1356 current behaviour: awk '\$1 > 0' blocks, with the note" \
+  note "$(bash_input "awk '\$1 > 0' f")"
+# The detector finds no target here, so there is no target to explain.
+quoted_note_case "#1356 current behaviour: grep -E '^>' blocks, no target, no note" \
+  no-note "$(bash_input "grep -E '^>' f")"
+
+# B. A genuine write must NOT carry the note. It would be misleading.
+quoted_note_case "#1356 genuine write carries no origin note" \
+  no-note "$(bash_input "echo hello > notes.txt")"
 
 # C. A quoted TARGET is a real write. It must block and carry no note.
+quoted_note_case "#1356 quoted target is a real write, no note" \
+  no-note "$(bash_input 'echo hello > "src/app.ts"')"
+
+# D. The bypass shapes from the second review. Each one really writes
+# src/app.ts. The four-guard helper at 004e0b9 printed the note for each.
+q="'"
+quoted_note_case "#1356 comment after ';' around a real write, no note" \
+  no-note "$(bash_input "echo hi;# don${q}t
+echo x > src/app.ts;# it${q}s fine")"
+quoted_note_case "#1356 redirect inside \"\$( )\", no note" \
+  no-note "$(bash_input 'x="$(echo hi > src/app.ts)"')"
+
+# E. Oversize genuine write. The helper passes the command through the
+# environment, so a command over MAX_ARG_STRLEN (128 KiB on Linux) makes
+# execve fail with E2BIG and the mask comes back empty. The hint must treat
+# that as "no answer", not as "differs from the raw command". The input is
+# built with printf, a builtin, because jq --arg would hit the same limit.
+xs=$(head -c 140000 /dev/zero | tr '\0' 'x')
+quoted_note_case "#1356 oversize genuine write (140 KB) carries no origin note" \
+  no-note "$(printf '{"tool_name":"Bash","tool_input":{"command":"echo %s > src/app.ts"}}' "$xs")"
+
+# F. Layout. The note sits between the Target line and "Exempt paths", with a
+# blank line on each side. With no note, one blank line separates the two.
+target_block() { awk '/^Target: /{f=1} f{print} /^Exempt paths/{exit}'; }
+
 sb=$(make_sandbox)
-in=$(jq -nc --arg c 'echo hello > "src/app.ts"' '{tool_name:"Bash", tool_input:{command:$c}}')
-got=$(cd "$sb" && echo "$in" | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null)
+got=$(cd "$sb" && bash_input "git log --format='%h > %s'" \
+  | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null | target_block)
 rm -rf "$sb"
-if echo "$got" | grep -qE "NOTE: this target comes from inside a quoted argument"; then
-  echo "FAIL [#1356 quoted target is a real write, no note]: note was present" >&2
-  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-quoted-target-no-note "
+n=$(printf '%s\n' "$got" | wc -l)
+if [ -z "$(printf '%s\n' "$got" | sed -n 2p)" ] \
+   && printf '%s\n' "$got" | sed -n 3p | grep -qE "^$NOTE_RE" \
+   && [ -z "$(printf '%s\n' "$got" | sed -n "$((n-1))p")" ] \
+   && printf '%s\n' "$got" | sed -n "${n}p" | grep -q '^Exempt paths'; then
+  echo "PASS [#1356 note has a blank line on each side]"; PASS=$((PASS+1))
 else
-  echo "PASS [#1356 quoted target is a real write, no note]"
-  PASS=$((PASS+1))
+  echo "FAIL [#1356 note has a blank line on each side]: got:" >&2
+  printf '%s\n' "$got" | sed 's/^/    |/' >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-note-layout "
+fi
+
+sb=$(make_sandbox)
+got=$(cd "$sb" && bash_input "echo hello > notes.txt" \
+  | bash .claude/hooks/require-active-ticket.sh 2>&1 >/dev/null | target_block)
+rm -rf "$sb"
+want=$(printf 'Target: notes.txt\n\nExempt paths (no ticket required): .claude/, docs/, projects/*/docs/, *.md')
+if [ "$got" = "$want" ]; then
+  echo "PASS [#1356 no note keeps the original layout]"; PASS=$((PASS+1))
+else
+  echo "FAIL [#1356 no note keeps the original layout]: got:" >&2
+  printf '%s\n' "$got" | sed 's/^/    |/' >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}#1356-no-note-layout "
 fi
 
 # --- Summary -----------------------------------------------------------
