@@ -61,14 +61,19 @@
 #     - cmd > file, cmd >> file, cmd 2> file
 #     - cmd &> file, cmd >| file (force-clobber), cmd <> file (read-write
 #       open, #931)
+#     - cmd >& file, cmd 1>& file (the second both-streams form, #1414)
 #     - tee
 #
 #   NOT matched as a write (deliberate exclusion, #931):
 #     - cmd >(subshell), cmd <(subshell) — process substitution. Looks
 #       adjacent to a redirect but is a command, not a file target.
+#     - cmd >&2, cmd 2>&1, cmd >&- — descriptor copies and closes (#1414
+#       keeps them out of the new `>&word` form).
 #
 #   In-place text editors
-#     - sed -i (in-place edit, GNU + BSD `''` form)
+#     - sed -i (in-place edit, GNU + BSD `''` form), including grouped
+#       short flags (-Ei, -ni, -ie) and --in-place (#1414)
+#     - sed w / W command and the s///w flag, narrow form (#1414)
 #     - awk -i inplace
 #
 #   File-moving builtins (#153)
@@ -207,8 +212,39 @@ _bdw_starts_with_git_subcommand() {
 # `<(…)` (process substitution on the read side) was never matched here
 # to begin with (`<` alone isn't a write operator in this file), so no
 # change was needed for that half.
+#
+# `>&word` REDIRECT-BOTH-STREAMS, second form (me2resh/apexyard#1414).
+# Bash documents two spellings for "send stdout and stderr to a file":
+# `&>word` and `>&word`. The first was covered in round 3. The second was
+# not, because the target class above rejects a leading `&`. That
+# rejection is what keeps the descriptor copies `2>&1` and `>&2` out, so
+# it cannot simply be relaxed. A second alternative handles `>&` instead.
+# It matches only when the word after `>&` is a file name:
+#   - `>&file`, `>& file`, `1>&file`, and `x2>&file` write `file`.
+#   - `>&9f1` writes a file named `9f1`, because the word is not all digits.
+#   - `>&2`, `1>&2`, `2>&1`, and `>&12` copy a descriptor. The word is all
+#     digits, so the `[0-9]*` prefix must be followed by a non-digit.
+#   - `>&-` and `>&3-` close or move a descriptor. A word that starts with
+#     `-` is rejected.
+#   - `2>&file` makes bash stop with "ambiguous redirect", and it writes
+#     nothing. It still matches here. That only costs a ticket check on a
+#     command that fails anyway.
+#   - `>>&` is a bash syntax error, so `>` is excluded before `>&`.
+#   - `>&$fd` matches with the target `$fd`. The descriptor number is not
+#     knowable from the text, so the gate treats it like `> $fd`.
+#
+# All three users of the redirect pattern (this matcher, the single-target
+# extractor, and the per-segment extractor) read these two constants. The
+# pattern used to be copied into each function. #886/#926 round 5 showed
+# that copies drift apart, and a drift is a bypass.
+_BDW_REDIRECT_RE='(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*|(^|[^|<&>])>&[[:space:]]*[0-9]*[^0-9[:space:]&|;(<>-][^[:space:]&|;]*'
+# Strips the operator from a matched redirect, leaving the target. `[^>]*`
+# swallows a leading fd digit, `&`, or `<`. The group then removes the rest
+# of the operator: a second `>`, a `|`, or the `&` of `>&`.
+_BDW_REDIRECT_STRIP='s/^[^>]*>(&|>?\|?)[[:space:]]*//'
+
 _bdw_match_redirection() {
-  echo "$1" | grep -qE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*'
+  echo "$1" | grep -qE "$_BDW_REDIRECT_RE"
 }
 
 # ------------------------------------------------------------------------------
@@ -298,9 +334,68 @@ _bdw_match_tee() {
   echo "$1" | grep -qE '\btee\b'
 }
 
-# 3. sed -i.
+# 3. sed -i, in every spelling GNU sed accepts (me2resh/apexyard#1414).
+#
+# The first version matched only `-i` as a flag of its own, with a word
+# boundary after it. GNU sed also takes `-i` inside a group of short
+# flags, and as the long option `--in-place`. Each form below edits the
+# file, and each one used to pass the gate:
+#   - `-Ei`, `-ni`, `-si`: `-i` after other short flags.
+#   - `-ie`, `-iE`: `-i` with an attached backup suffix (`e`, `E`).
+#   - `--in-place`, `--in-place=.bak`: the long option.
+# Inside a short-flag group, `e`, `f`, and `l` take an argument, and the
+# argument swallows the rest of the group. So `-ei` means "run the script
+# `i`", not in-place. The letter class before `i` leaves out those three
+# letters, so `-ei`, `-fi`, and `-li` stay reads.
+_BDW_SED_INPLACE_RE='\bsed[[:space:]]+([^|;&]*[[:space:]])?(-[A-Za-dg-km-z]*i|--in-place\b)'
+
 _bdw_match_sed_inplace() {
-  echo "$1" | grep -qE '\bsed[[:space:]]+([^|;&]*[[:space:]])?-i\b'
+  echo "$1" | grep -qE "$_BDW_SED_INPLACE_RE"
+}
+
+# 3b. sed `w` / `W` command and the `s///w` flag (me2resh/apexyard#1414).
+#
+# GNU sed writes to the file named after `w` (all lines) or `W` (the
+# first line of the pattern space). The `s` command takes `w` as a flag
+# too. None of these needs `-i`, so the in-place matcher above never sees
+# them.
+#
+# Telling a `w` command from a `w` inside a regex, such as
+# `sed -n '/warning/p'`, needs a real sed parser. This file prefers a
+# missed write to a blocked read (see the header), so the pattern is
+# narrow on purpose. It matches a `w` or `W` that:
+#   - comes after `sed` on the same line
+#   - sits at a command position: at the start of a quoted script, after
+#     `;` or `{`, or right after an address or `s` delimiter with optional
+#     `s` flags (`/re/w`, `1w`, `$w`, `1!w`, `s/a/b/gw`, `s|a|b|w`)
+#   - is followed by whitespace and then a file name
+# Known misses, accepted as residue:
+#   - `wfile` with no space. GNU accepts it, but `/warning/` looks the same.
+#   - A space between an address and `w`, such as `/re/ w file`.
+#   - A script spread over several lines, where `w` is not on the `sed` line.
+#   - A script read from a file with `sed -f`.
+# Known false positive, accepted: a regex that begins with the word `w`
+# and a space, such as `sed -n '/w x/p'`.
+_BDW_SED_WRITE_POS='([;{][[:space:]]*|['"'"'"]|[/|#!$0-9][gpiIeMm0-9]*)[wW][[:space:]]+'
+
+_bdw_match_sed_write() {
+  echo "$1" | grep -qE "\\bsed\\b.*${_BDW_SED_WRITE_POS}[^[:space:]'\"]"
+}
+
+# Echoes each file named by a sed `w` command or `s///w` flag, one per
+# line. It reads the whole command, not one segment, because the segment
+# split below is not quote-aware: `sed -n 'p;w out' f` splits at the `;`
+# inside the script. GNU sed reads the file name to the end of the script
+# line, so the name runs to the closing quote. Trailing whitespace is cut.
+_bdw_sed_write_targets() {
+  local cmd="$1" region
+  [ -z "$cmd" ] && return 0
+  _bdw_match_sed_write "$cmd" || return 0
+  printf '%s\n' "$cmd" | grep -oE '\bsed\b.*' | while IFS= read -r region; do
+    printf '%s\n' "$region" \
+      | grep -oE "${_BDW_SED_WRITE_POS}[^'\"]+" \
+      | sed -E 's/^[^wW]*[wW][[:space:]]+//; s/[[:space:]]+$//'
+  done
 }
 
 # 4. awk -i inplace.
@@ -481,6 +576,7 @@ bash_command_appears_to_write() {
   _bdw_match_redirection_any_segment "$cmd" && return 0
   _bdw_match_tee             "$cmd" && return 0
   _bdw_match_sed_inplace     "$cmd" && return 0
+  _bdw_match_sed_write       "$cmd" && return 0
   _bdw_match_awk_inplace     "$cmd" && return 0
   _bdw_match_file_movers     "$cmd" && return 0
   _bdw_match_tar_extract     "$cmd" && return 0
@@ -533,6 +629,7 @@ bash_command_is_deletion_only() {
   _bdw_match_redirection_any_segment "$cmd" && return 1
   _bdw_match_tee            "$cmd" && return 1
   _bdw_match_sed_inplace    "$cmd" && return 1
+  _bdw_match_sed_write      "$cmd" && return 1
   _bdw_match_awk_inplace    "$cmd" && return 1
   _bdw_match_tar_extract    "$cmd" && return 1
   _bdw_match_curl_output    "$cmd" && return 1
@@ -616,10 +713,14 @@ bash_extract_write_target() {
   # `<>file` strips down to `file` for free. The leading-`(` exclusion on
   # the target class (apexyard#931, same round) also applies here,
   # unchanged, for `diff a >(sort)` → no target.
+  #
+  # The pattern and the strip now come from _BDW_REDIRECT_RE and
+  # _BDW_REDIRECT_STRIP, shared with the matcher and the per-segment
+  # extractor (#1414, which also adds the `>&word` form).
   local target
-  target=$(echo "$cmd" | grep -oE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*' \
+  target=$(echo "$cmd" | grep -oE "$_BDW_REDIRECT_RE" \
                 | head -n 1 \
-                | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
+                | sed -E "$_BDW_REDIRECT_STRIP")
   if [ -n "$target" ]; then
     target="${target%\"}"; target="${target#\"}"
     target="${target%\'}"; target="${target#\'}"
@@ -641,12 +742,21 @@ bash_extract_write_target() {
   fi
 
   # sed -i: capture the file argument (last positional after the script).
-  if echo "$cmd" | grep -qE '\bsed[[:space:]]+([^|;&]*[[:space:]])?-i\b'; then
+  # The trigger shares _BDW_SED_INPLACE_RE with the matcher, so the
+  # grouped and long spellings (#1414) reach this extraction too.
+  if echo "$cmd" | grep -qE "$_BDW_SED_INPLACE_RE"; then
     target=$(echo "$cmd" | sed -E "s/.*'[^']*'[[:space:]]+([^[:space:]&|;]+).*/\1/")
     if echo "$target" | grep -qE '^[A-Za-z0-9./_~-]+$'; then
       echo "$target"
       return 0
     fi
+  fi
+
+  # sed `w` / `W` command or `s///w` flag (#1414): the first named file.
+  target=$(_bdw_sed_write_targets "$cmd" | head -n 1)
+  if [ -n "$target" ]; then
+    echo "$target"
+    return 0
   fi
 
   # curl -o / --output: capture the path argument (#153).
@@ -765,11 +875,14 @@ _bdw_targets_from_segment() {
   # leading `&`), and a leading `(` after the operator is excluded so
   # `diff a >(sort)` (process substitution) no longer contributes the
   # bogus target `(sort)`.
+  #
+  # `>&word` (#1414): the shared _BDW_REDIRECT_RE / _BDW_REDIRECT_STRIP
+  # pair now carries this form for all three users of the pattern.
   while IFS= read -r line; do
     [ -z "$line" ] && continue
-    target=$(printf '%s\n' "$line" | sed -E 's/^[^>]*>>?\|?[[:space:]]*//')
+    target=$(printf '%s\n' "$line" | sed -E "$_BDW_REDIRECT_STRIP")
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE '(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*')
+  done < <(printf '%s\n' "$seg" | grep -oE "$_BDW_REDIRECT_RE")
 
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".
@@ -841,5 +954,9 @@ bash_extract_write_targets() {
       [ -z "$seg" ] && continue
       _bdw_targets_from_segment "$seg"
     done < <(_bdw_split_top_level "$cmd")
+    # sed `w` targets come from the WHOLE command (#1414). The segment
+    # split above breaks `sed -n 'p;w out' f` at the `;` inside the
+    # script, so no single segment holds both `sed` and `w out`.
+    _bdw_sed_write_targets "$cmd"
   } | awk '!seen[$0]++'
 }

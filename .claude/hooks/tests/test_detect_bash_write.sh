@@ -422,6 +422,77 @@ fi
 assert_targets "python -c (miss) contributes nothing" \
   'python3 -c "open(\"/tmp/x\",\"w\").write(\"hi\")"'                                 ""
 
+# --- #1414: `>&word`, grouped/long sed -i, and sed `w` -----------------
+#
+# Each write below changed a file and passed the gate on dev at 5be9ecb
+# (bash 5.3.9, GNU sed 4.9). The read cases pin the exclusions that keep
+# the fix from blocking common read-only commands.
+
+# `>&word` is the second spelling of "send stdout and stderr to a file".
+assert_write "#1414 '>&word'"              "echo x >&src/app.ts"
+assert_write "#1414 '>& word'"             "echo x >& src/app.ts"
+assert_write "#1414 '1>&word'"             "echo x 1>&src/app.ts"
+assert_write "#1414 word ending in a digit" "echo x2>&out.txt"
+assert_write "#1414 '>&' word not all digits" "echo x >&9f1"
+assert_write "#1414 '>&' quoted word"      'echo x >&"out.txt"'
+assert_read  "#1414 '>&2' descriptor copy" "echo x >&2"
+assert_read  "#1414 '1>&2' descriptor copy" "echo x 1>&2"
+assert_read  "#1414 '>&12' descriptor copy" "echo x >&12"
+assert_read  "#1414 '>&-' closes stdout"   "echo x >&-"
+assert_read  "#1414 '3>&-' closes fd 3"    "exec 3>&-"
+assert_read  "#1414 '>&3-' moves fd 3"     "echo x >&3-"
+assert_read  "#1414 '3>&1' descriptor copy" "exec 3>&1"
+assert_targets "#1414 '>&word' target"     "echo x >&src/app.ts"                "src/app.ts"
+assert_targets "#1414 '>& word' target"    "echo x >& src/app.ts"               "src/app.ts"
+assert_targets "#1414 fd copy then '>&word'" "echo a >&2; echo b >&out.txt"     "out.txt"
+assert_target  "#1414 '>&word' single target" "echo x >&src/app.ts"             "src/app.ts"
+assert_not_deletion_only "#1414 rm + '>&word' hides a real write" \
+  "rm old.ts; echo x >&src/app.ts"
+
+# sed -i inside a group of short flags, with a suffix, or as --in-place.
+assert_write "#1414 sed -Ei"               "sed -Ei 's/a/b/' src/app.ts"
+assert_write "#1414 sed -ni"               "sed -ni 's/a/b/p' src/app.ts"
+assert_write "#1414 sed -si"               "sed -si 's/a/b/' src/app.ts"
+assert_write "#1414 sed -ie (suffix e)"    "sed -ie 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-place"        "sed --in-place 's/a/b/' src/app.ts"
+assert_write "#1414 sed --in-place=.bak"   "sed --in-place=.bak 's/a/b/' src/app.ts"
+assert_read  "#1414 sed -ei runs script i" "sed -ei src/app.ts"
+assert_read  "#1414 sed -f script file"    "sed -f script.sed src/app.ts"
+assert_read  "#1414 sed --posix"           "sed --posix 's/a/b/' src/app.ts"
+assert_targets "#1414 sed -Ei target"      "sed -Ei 's/a/b/' src/app.ts"        "src/app.ts"
+assert_targets "#1414 sed --in-place target" "sed --in-place 's/a/b/' src/app.ts" "src/app.ts"
+
+# sed `w` / `W` command and the `s///w` flag.
+assert_write "#1414 sed w command"         "sed -n 'w out.txt' in.txt"
+assert_write "#1414 sed /re/w"             "sed -n '/re/w out.txt' in.txt"
+assert_write "#1414 sed s///w flag"        "sed 's/a/b/w out.txt' in.txt"
+assert_write "#1414 sed s///gw flags"      "sed 's/a/b/gw out.txt' in.txt"
+assert_write "#1414 sed 1w"                "sed -n '1w out.txt' in.txt"
+assert_write "#1414 sed \$w"               "sed -n '\$w out.txt' in.txt"
+assert_write "#1414 sed 1,3w"              "sed -n '1,3w out.txt' in.txt"
+assert_write "#1414 sed 1!w"               "sed -n '1!w out.txt' in.txt"
+assert_write "#1414 sed p;w"               "sed -n 'p;w out.txt' in.txt"
+assert_write "#1414 sed p; w"              "sed -n 'p; w out.txt' in.txt"
+assert_write "#1414 sed s|a|b|w"           "sed 's|a|b|w out.txt' in.txt"
+assert_write "#1414 sed W command"         "sed -n 'W out.txt' in.txt"
+assert_write "#1414 sed -e 'w file'"       "sed -n -e 'w out.txt' in.txt"
+assert_read  "#1414 sed s/w/x/ is a read"  "sed 's/w/x/' in.txt"
+assert_read  "#1414 sed /warning/p is a read" "sed -n '/warning/p' in.txt"
+assert_read  "#1414 sed /^w/p is a read"   "sed -n '/^w/p' in.txt"
+assert_read  "#1414 sed s/www/x/g is a read" "sed 's/www/x/g' in.txt"
+assert_read  "#1414 sed y/w/x/ is a read"  "sed 'y/w/x/' in.txt"
+assert_read  "#1414 sed s#w#x# is a read"  "sed 's#w#x#' in.txt"
+assert_read  "#1414 sed s/a w b/c/ is a read" "sed 's/a w b/c/' in.txt"
+assert_read  "#1414 quoted operand starting with w" "sed -n p 'words.txt'"
+assert_read  "#1414 'w x' with no sed"     "echo 'w x'"
+assert_targets "#1414 sed w target"        "sed -n 'w out.txt' in.txt"          "out.txt"
+assert_targets "#1414 sed s///w target"    "sed 's/a/b/w out.txt' in.txt"       "out.txt"
+assert_targets "#1414 sed w after ; in the script" \
+  "sed -n 'p;w out.txt' in.txt"                                                  "out.txt"
+assert_target  "#1414 sed w single target" "sed -n '/re/w out.txt' in.txt"      "out.txt"
+assert_not_deletion_only "#1414 rm + sed w hides a real write" \
+  "rm old.ts; sed -n 'w src/app.ts' in.txt"
+
 # --- #931 residual 1: `<>` read-write open is now DETECTED as a write ---
 #
 # `[n]<>word` opens `word` for both reading AND writing — a real,

@@ -806,6 +806,35 @@ sb=$(make_sandbox)
 in=$(jq -nc --arg c "cat < src/app.ts" '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#886 sanity: plain '<' read is not gated" 0 "" "$in" "$sb"
 
+# --- #1414: `>&word`, grouped/long sed -i, and sed `w` -----------------
+#
+# Each write below exited 0 with no ticket on dev at 5be9ecb, and wrote
+# the file. The fix must block each one without a ticket and allow it
+# with one. The fd copy and the sed reads must stay ungated.
+
+for c in "echo x >&src/app.ts" "echo x >& src/app.ts" \
+         "sed -n 'w src/app.ts' in.txt" "sed 's/a/b/w src/app.ts' in.txt" \
+         "sed -n 'p;w src/app.ts' in.txt" "sed -Ei 's/a/b/' src/app.ts" \
+         "sed --in-place 's/a/b/' src/app.ts"; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1414 blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
+
+  sb=$(make_sandbox)
+  cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=1414
+title=detector misses test
+EOF
+  run_case "#1414 allowed WITH ticket: $c" 0 "" "$in" "$sb"
+done
+
+for c in "echo x >&2" "sed -n '/warning/p' src/app.ts" "sed 's/w/x/' src/app.ts"; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1414 sanity: read stays ungated: $c" 0 "" "$in" "$sb"
+done
+
 # --- #886/#926 round 4: ZERO whitespace between operator and target -----
 #
 # Hakim's fourth adversarial re-hunt: the mandatory `[[:space:]]+` after
