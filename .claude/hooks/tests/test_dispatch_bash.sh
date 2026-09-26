@@ -30,7 +30,7 @@ if [ "$name" = block-git-add-all.sh ] && grep -q 'git add -A' <<<"$input"; then
   exit 2
 fi
 if [ "${DISPATCH_FAIL_SCRIPT:-}" = "$name" ]; then
-  exit 1
+  exit "${DISPATCH_FAIL_EXIT:-1}"
 fi
 EOF
   chmod +x "$TMP/hooks/$script"
@@ -53,6 +53,28 @@ fi
 run 'gh pr merge 42'
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 
+# me2resh/apexyard#1405 review (Rex item 1, Hakim H1 item 3): the literal
+# "git push "* case arm never matches a `cd <dir> &&` prefix or a
+# `git -C <dir> push` form, so the #1366 pre-push-gate.sh fix never runs
+# for either reported shape in production. is_push_command's fallback
+# below must route both to the four push-arm hooks.
+for command in \
+  'cd /tmp/some-dir && git push origin HEAD' \
+  'git -C /tmp/some-dir push origin HEAD'; do
+  : > "$TMP/log"
+  run "$command"
+  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^validate-branch-name.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^pre-push-gate.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^block-agent-routing-drift.sh$' "$TMP/log")" -eq 1 ]
+done
+
+# The literal-prefix case arm and the fallback detector must not double-run
+# the push hooks for the shape the prefix arm already matches.
+: > "$TMP/log"
+run 'git push origin HEAD'
+[ "$(grep -c '^pre-push-gate.sh$' "$TMP/log")" -eq 1 ]
+
 # A non-blocking hook failure must not suppress later gates.
 : > "$TMP/log"
 set +e
@@ -63,6 +85,45 @@ set -e
 [ "$rc" -eq 0 ]
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 [ "$(grep -c '^require-architecture-review.sh$' "$TMP/log")" -eq 1 ]
+
+# me2resh/apexyard#1403: a merge-gate hook that cannot run its own check —
+# reproduced here by a stub that sources a missing sibling library, which
+# under POSIX mode ends the shell with exit 1 (not 2) before the hook's
+# real logic ever runs — must still BLOCK the merge, not warn-and-continue
+# like an ordinary advisory hook. `glab mr merge` reaches run_merge_gates
+# with no preceding hook, keeping each sub-test isolated to exactly one
+# merge-gate script at a time.
+for gate in block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh; do
+  cp "$TMP/hooks/$gate" "$TMP/hooks/$gate.orig"
+  cat > "$TMP/hooks/$gate" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+. "$(dirname "$0")/_lib-does-not-exist.sh"
+echo "unreachable: POSIX mode should have exited already"
+EOF
+  chmod +x "$TMP/hooks/$gate"
+
+  : > "$TMP/log"
+  set +e
+  printf '{"tool_name":"Bash","tool_input":{"command":"glab mr merge 42"}}' \
+    | POSIXLY_CORRECT=1 DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh" >/dev/null 2>"$TMP/stderr"
+  rc=$?
+  set -e
+
+  cp "$TMP/hooks/$gate.orig" "$TMP/hooks/$gate"
+  rm -f "$TMP/hooks/$gate.orig"
+
+  if [ "$rc" -ne 2 ]; then
+    echo "FAIL: $gate under POSIX + missing library did not block (rc=$rc, want 2)" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+  if ! grep -qi 'BLOCKED' "$TMP/stderr"; then
+    echo "FAIL: $gate blocked (rc=2) but printed no BLOCKED message" >&2
+    cat "$TMP/stderr" >&2
+    exit 1
+  fi
+done
 
 for command in \
   'gh pr merge 42' \
