@@ -1014,7 +1014,7 @@ run_case "#1206 H2: tracker_pr_merge wrapper inside \$(...) still anchors and sc
   "MERGE_RESULT=\$(tracker_pr_merge \"me2resh/apexyard\" \"12\" \"squash\" true \"widget-forge leak\")"
 
 # ---------------------------------------------------------------------------
-# 72-77. me2resh/apexyard#1387 — a registered project's `name` colliding with
+# 72-77b. me2resh/apexyard#1387 — a registered project's `name` colliding with
 # the OWNER login of the public repo being written to (not just its bare
 # repo name) was treated as a leak. The fixture registry above adds a
 # project literally named "me2resh" (owner-collision/me2resh-tool) to
@@ -1022,10 +1022,12 @@ run_case "#1206 H2: tracker_pr_merge wrapper inside \$(...) still anchors and sc
 # "me2resh/apexyard", or plainly @-mentioning its owner, blocked on
 # "project name: me2resh" even though nothing private was referenced.
 #
-# The fix exempts the target repo's OWNER login the same way it already
-# exempted the bare repo name (step 8 in the source file) — never the target
-# repo's whole slug or owner, but a genuinely different private project must
-# still block exactly as before.
+# The fix exempts the target repo's OWNER login (step 8 in the source file),
+# but only inside the two safe forms the issue asked to unblock: `@owner` and
+# `owner/<repo-slug>`. A BARE, standalone mention of the owner's name (case
+# 77b) still blocks, exactly like any other registered private project's
+# name — the issue asked to keep the block in that case, and a genuinely
+# different private project must still block exactly as before too.
 # ---------------------------------------------------------------------------
 
 # 72. The exact repro: writing the target out as "<owner>/<repo>" in body
@@ -1066,6 +1068,15 @@ run_case "#1387: the target's own bare repo name still exempt (pre-existing beha
 run_case "#1387: owner mention plus a real leak in the same body still blocks on the real leak" \
   2 "project name: curios-dog" \
   "gh issue create --repo me2resh/apexyard --title 'fix' --body 'filed against me2resh/apexyard; also discovered during curios-dog rebuild'"
+
+# 77b. Rex code-review finding (PR #1400) — the issue asked to KEEP the block
+#      when the owner-equal name appears alone (no `@`, no `/`). The exemption
+#      strips only the `@owner` and `owner/<repo-slug>` forms; a bare,
+#      standalone mention must still block exactly like any other registered
+#      private project's name. This is the narrowing the review requested.
+run_case "#1387: a BARE owner-name mention (no @, no /) still blocks (issue's own scope)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the me2resh project is failing'"
 
 # ---------------------------------------------------------------------------
 # 78-81. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.

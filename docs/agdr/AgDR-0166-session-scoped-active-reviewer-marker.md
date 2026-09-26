@@ -97,8 +97,11 @@ instead of the literal string:
   reopens the cross-session leak this decision closes.
 - Three test files pin the fix: `test_warn_review_marker_write.sh`,
   `test_block_reviewer_repo_mutation.sh`, and
-  `test_clear_active_reviewer_marker.sh`. Each new case was confirmed to
-  fail against the pre-decision hooks and to pass after the fix.
+  `test_clear_active_reviewer_marker.sh`. The fix-pinning cases in each
+  file fail against the pre-decision hooks and pass after the fix. The
+  regression-guard cases in each file pass against both the pre-decision
+  and the post-decision hooks — they pin pre-existing behavior the fix
+  must not disturb, not the new session-scoping behavior itself.
 
 ## Artifacts
 

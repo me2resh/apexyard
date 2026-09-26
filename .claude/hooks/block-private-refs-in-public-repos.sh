@@ -1169,13 +1169,17 @@ EOF
 #
 #   - `name` → whole-word match (grep -wE). Skip the target's own bare repo
 #     name, so mentioning "apexyard" in an apexyard upstream ticket is fine.
-#     ALSO skip the target repo's OWNER login (me2resh/apexyard#1387): a
-#     registered project's `name` can coincidentally equal the owner of the
-#     public repo being written to (e.g. a private project literally named
-#     "me2resh"), and without this exemption every mention of the owner —
-#     writing the repo as "<owner>/<repo>", or plainly @-mentioning the
-#     owner in review prose — read as a leak of that unrelated project. Also
-#     skip the name whose `repo:` matches $TARGET_REPO (belt-and-braces).
+#     ALSO exempt the target repo's OWNER login (me2resh/apexyard#1387), but
+#     narrowly: a registered project's `name` can coincidentally equal the
+#     owner of the public repo being written to (e.g. a private project
+#     literally named "me2resh"), and writing the repo out as
+#     "<owner>/<repo>", or plainly @-mentioning the owner in review prose,
+#     must not read as a leak of that unrelated project. The exemption
+#     covers ONLY those two forms — `@owner` and `owner/<repo-slug>`. A
+#     bare, standalone mention of the owner's name (no `@`, no `/`) still
+#     blocks, exactly like any other registered private project's name; the
+#     issue asked to keep the block in that case. See the owner-branch below
+#     for how the two safe forms are stripped before the bare-match check.
 #   - `repo` slug → exact match, with optional `#<N>` suffix.
 #   - `workspace` path → whole-word match.
 # ---------------------------------------------------------------------------
@@ -1200,11 +1204,33 @@ record_if_match() {
 }
 
 for n in $NAMES; do
-  # Exempt the target repo's own bare name AND its owner login
-  # (me2resh/apexyard#1387 — see the step-8 comment above).
-  if [ "$n" = "$TARGET_NAME" ] || [ "$n" = "$TARGET_OWNER" ]; then continue; fi
+  # Exempt the target repo's own bare name entirely (pre-existing).
+  if [ "$n" = "$TARGET_NAME" ]; then continue; fi
+
   # Whole-word, case-insensitive. Escape regex-special chars in $n.
   esc=$(printf '%s' "$n" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
+
+  if [ "$n" = "$TARGET_OWNER" ]; then
+    # me2resh/apexyard#1387 — narrow owner exemption. Strip only the two
+    # safe forms (`@owner`, `owner/<repo-slug>`) from a lower-cased copy of
+    # the haystack, then check whether the owner's name still appears as a
+    # bare, standalone word. If it does, this is not a safe mention and
+    # falls through to the ordinary block below, same as any other
+    # registered private project's name. Case-folded by hand (rather than
+    # `sed`'s GNU-only `I` suffix or ERE `\b`, both unsupported on BSD/macOS
+    # sed) so this stays portable across the hook's supported platforms.
+    esc_lc=$(printf '%s' "$n" | tr '[:upper:]' '[:lower:]' | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
+    haystack_lc=$(printf '%s' "$HAYSTACK" | tr '[:upper:]' '[:lower:]')
+    stripped_lc=$(printf '%s' "$haystack_lc" | sed -E \
+      -e "s/@${esc_lc}([^A-Za-z0-9_-]|\$)/\\1/g" \
+      -e "s#(^|[^A-Za-z0-9_-])${esc_lc}/[a-z0-9_.-]+#\\1#g")
+    if ! printf '%s' "$stripped_lc" | grep -qE "(^|[^A-Za-z0-9_-])${esc_lc}([^A-Za-z0-9_-]|\$)"; then
+      continue
+    fi
+    # Falls through: a bare mention of the owner's name remains after
+    # stripping the safe forms, so it blocks like any other name below.
+  fi
+
   if echo "$HAYSTACK" | grep -qiwE "$esc"; then
     LEAKS="$LEAKS
   - project name: $n"
