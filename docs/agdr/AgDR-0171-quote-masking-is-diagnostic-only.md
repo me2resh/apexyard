@@ -114,7 +114,7 @@ AgDR-0113 closes with two binding rules for a security AgDR. Cite the test or wr
    - 800 quoted `grep 'a>b'` commands: about 6.8 s on `dev`, about 7.8 s here.
    - 800 real redirects with no quotes: no clear difference. The mask leaves the command unchanged, so the note function returns early.
 
-   Target extraction runs first, on `dev` too, and it costs far more. For `grep 'a>b' f` followed by 2,000 `; :` segments, one local run measured about 53 s for extraction and about 5.4 s for the masked presence check. A review run on a busier machine measured about 361 s and about 87 s. These figures vary strongly by machine. In both runs extraction cost more. So the note adds a fraction to a block path that is already slow. The slow extraction predates this change.
+   Target extraction runs first, on `dev` too, and it costs far more. For `grep 'a>b' f` followed by 2,000 `; :` segments, one local run measured about 53 s for extraction and about 5.4 s for the masked presence check. A review run in a different environment measured about 361 s and about 87 s. The cause of the difference was not established. In both runs extraction cost more. So the note adds a fraction to a block path that is already slow. The slow extraction predates this change.
 9. **`shellcheck` and `markdownlint` did not run** on the authoring machine. Neither tool is installed. CI runs markdownlint on every `.md` file. CI runs shellcheck on `.claude/hooks/`.
 
 ## Artifacts
