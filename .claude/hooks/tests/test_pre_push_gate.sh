@@ -388,6 +388,7 @@ EOF
   local pin_dir; pin_dir=$(mktemp -d)
   printf '%s' "$c" > "$pin_dir/ops-root-test-session-1366"
   local payload; payload=$(push_json_for "$b" "cd")
+  local stderr_file; stderr_file=$(mktemp)
   (
     cd "$a" || exit 1
     # Force the pin path regardless of the OUTER test runner's own
@@ -400,11 +401,11 @@ EOF
     unset APEXYARD_OPS_DISABLE_PIN
     export CLAUDE_CODE_SESSION_ID="test-session-1366"
     export APEXYARD_OPS_PIN_DIR="$pin_dir"
-    echo "$payload" | bash .claude/hooks/pre-push-gate.sh 2>/tmp/pre-push-gate-stderr.$$
+    echo "$payload" | bash .claude/hooks/pre-push-gate.sh 2>"$stderr_file"
   )
   local rc=$?
-  local got_stderr; got_stderr=$(cat /tmp/pre-push-gate-stderr.$$ 2>/dev/null)
-  rm -f /tmp/pre-push-gate-stderr.$$
+  local got_stderr; got_stderr=$(cat "$stderr_file" 2>/dev/null)
+  rm -f "$stderr_file"
   if [ "$rc" != "0" ]; then
     echo "FAIL [pin-does-not-override-push-target]: want rc=0, got $rc (stderr: ${got_stderr:0:200})" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}pin-override-rc "
@@ -421,8 +422,141 @@ EOF
   rm -rf "$a" "$b" "$c" "$pin_dir"
 }
 
+# -------------------- CASE 16: trailing text after the push must not steer resolution --------------------
+# Regression guard for me2resh/apexyard#1405's Hakim review (H1 items 1,
+# 3-7): text AFTER the push token — an unrelated `-C`/`cd`, a shell
+# comment, an `echo`, the ordinary trailing commands `cd -`/`cd ..`, or a
+# push-option value — must never be read as this push's target. The
+# session's own FAILING check must still block every one of these shapes;
+# a clean repo named only in the trailing text must never run instead.
+case16() {
+  local sb b
+  sb=$(make_sandbox)
+  b=$(make_sandbox)
+  cat > "$sb/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "session-should-run", "run": "exit 1"}]}}
+EOF
+  cat > "$b/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "clean-should-not-run", "run": "touch $b/CLEAN_RAN"}]}}
+EOF
+  local shapes=(
+    "git push origin HEAD && git -C $b status"
+    "git push origin HEAD && cd $b"
+    "git push origin HEAD # cd $b"
+    "git push origin HEAD && echo cd $b"
+    "git push origin HEAD && cd -"
+    "git push origin HEAD && cd .."
+    "git push origin HEAD && cd ~/nonexistent-h1405"
+    "git push origin HEAD -o 'cd $b'"
+  )
+  local i=0 cmd payload
+  for cmd in "${shapes[@]}"; do
+    i=$((i + 1))
+    rm -f "$b/CLEAN_RAN"
+    payload=$(printf '{"tool_input":{"command":"%s"}}' "$cmd")
+    run_hook "$sb" "$payload" 2 "session-should-run: FAILED" "trailing-text-does-not-bypass-$i"
+    if [ -f "$b/CLEAN_RAN" ]; then
+      echo "FAIL [trailing-text-does-not-bypass-$i]: the trailing text's repo ran instead of the session repo" >&2
+      FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}trailing-bypass-$i "
+    fi
+  done
+  rm -rf "$sb" "$b"
+}
+
+# -------------------- CASE 17: `cd B && git -C sub push` joins to B, not to $PWD --------------------
+# Regression guard for me2resh/apexyard#1405 review item 2 (Rex) / A2
+# (Hakim): a RELATIVE `-C` value must join to the preceding `cd` target,
+# not to the session's own $PWD. `sub` is a relative name that resolves
+# ONLY when joined to `base`; joining it to the session dir would resolve
+# to a nonexistent path and fail closed instead of running sub's check.
+case17() {
+  local a base sub sub_name
+  a=$(make_sandbox)
+  base=$(mktemp -d)
+  sub=$(make_sandbox)
+  sub_name="target"
+  mv "$sub" "$base/$sub_name"
+  sub="$base/$sub_name"
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-not-run", "run": "touch A_RAN; exit 1"}]}}
+EOF
+  cat > "$sub/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "sub-should-run", "run": "touch $sub/SUB_RAN"}]}}
+EOF
+  local payload; payload=$(printf '{"tool_input":{"command":"%s"}}' "cd $base && git -C $sub_name push origin HEAD")
+  run_hook "$a" "$payload" 0 "" "cd-plus-relative-dash-C-joins-to-cd-target"
+  if [ -f "$a/A_RAN" ]; then
+    echo "FAIL [cd-plus-relative-dash-C-joins-to-cd-target]: A's command ran; it should not have" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}composed-cd-C-A-ran "
+  fi
+  if [ ! -f "$sub/SUB_RAN" ]; then
+    echo "FAIL [cd-plus-relative-dash-C-joins-to-cd-target]: sub's command did NOT run" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}composed-cd-C-sub-did-not-run "
+  fi
+  rm -rf "$a" "$base"
+}
+
+# -------------------- CASE 18: an unresolved explicit target BLOCKS, never silently skips --------------------
+# Regression guard for me2resh/apexyard#1405 review item 2 (Rex) / H1
+# item 2 (Hakim): a `cd`/`-C` target that is present but does not resolve
+# to a git repository (an unset shell variable, a command substitution, a
+# typo) must BLOCK, not exit 0 as though there were nothing to check.
+case18() {
+  local a
+  a=$(make_sandbox)
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "should-not-matter", "run": "exit 0"}]}}
+EOF
+  local payload; payload=$(printf '{"tool_input":{"command":"%s"}}' "cd /this-directory-does-not-exist-h1405 && git push origin HEAD")
+  run_hook "$a" "$payload" 2 "BLOCKED: pre-push-gate cannot resolve" "unresolved-explicit-target-fails-closed"
+  rm -rf "$a"
+}
+
+# -------------------- CASE 19: `cd ~/repo` resolves via $HOME, not a literal path join --------------------
+# Regression guard for me2resh/apexyard#1405 review item 2 (Rex) / H1
+# item 5 (Hakim): a tilde-prefixed `cd` target must expand against $HOME
+# and resolve to a real repo, not fail closed for lack of trying.
+case19() {
+  local a fake_home target
+  a=$(make_sandbox)
+  fake_home=$(mktemp -d)
+  target=$(make_sandbox)
+  mv "$target" "$fake_home/repo"
+  target="$fake_home/repo"
+  cat > "$a/.claude/project-config.json" <<'EOF'
+{"pre_push": {"commands": [{"name": "A-should-not-run", "run": "touch A_RAN; exit 1"}]}}
+EOF
+  cat > "$target/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "tilde-should-run", "run": "touch $target/TILDE_RAN"}]}}
+EOF
+  local payload; payload=$(printf '{"tool_input":{"command":"%s"}}' "cd ~/repo && git push origin HEAD")
+  local stderr_file; stderr_file=$(mktemp)
+  (
+    cd "$a" || exit 1
+    export HOME="$fake_home"
+    echo "$payload" | bash .claude/hooks/pre-push-gate.sh 2>"$stderr_file"
+  )
+  local rc=$?
+  local got_stderr; got_stderr=$(cat "$stderr_file" 2>/dev/null)
+  rm -f "$stderr_file"
+  if [ "$rc" != "0" ]; then
+    echo "FAIL [tilde-cd-resolves-via-home]: want rc=0, got $rc (stderr: ${got_stderr:0:200})" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}tilde-cd-rc "
+  elif [ -f "$a/A_RAN" ]; then
+    echo "FAIL [tilde-cd-resolves-via-home]: the session repo's command ran instead of ~/repo's" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}tilde-cd-A-ran "
+  elif [ ! -f "$target/TILDE_RAN" ]; then
+    echo "FAIL [tilde-cd-resolves-via-home]: ~/repo's command did NOT run" >&2
+    FAIL=$((FAIL + 1)); FAILED_CASES="${FAILED_CASES}tilde-cd-target-did-not-run "
+  else
+    echo "PASS [tilde-cd-resolves-via-home]"
+    PASS=$((PASS + 1))
+  fi
+  rm -rf "$a" "$fake_home"
+}
+
 case1; case2; case3; case4; case5; case6; case7; case8; case9; case10; case11
-case12; case13; case14; case15
+case12; case13; case14; case15; case16; case17; case18; case19
 
 echo ""
 echo "==================================="

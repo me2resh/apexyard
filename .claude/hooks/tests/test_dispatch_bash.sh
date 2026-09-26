@@ -53,6 +53,28 @@ fi
 run 'gh pr merge 42'
 [ "$(grep -c '^block-unreviewed-merge.sh$' "$TMP/log")" -eq 1 ]
 
+# me2resh/apexyard#1405 review (Rex item 1, Hakim H1 item 3): the literal
+# "git push "* case arm never matches a `cd <dir> &&` prefix or a
+# `git -C <dir> push` form, so the #1366 pre-push-gate.sh fix never runs
+# for either reported shape in production. is_push_command's fallback
+# below must route both to the four push-arm hooks.
+for command in \
+  'cd /tmp/some-dir && git push origin HEAD' \
+  'git -C /tmp/some-dir push origin HEAD'; do
+  : > "$TMP/log"
+  run "$command"
+  [ "$(grep -c '^block-main-push.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^validate-branch-name.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^pre-push-gate.sh$' "$TMP/log")" -eq 1 ]
+  [ "$(grep -c '^block-agent-routing-drift.sh$' "$TMP/log")" -eq 1 ]
+done
+
+# The literal-prefix case arm and the fallback detector must not double-run
+# the push hooks for the shape the prefix arm already matches.
+: > "$TMP/log"
+run 'git push origin HEAD'
+[ "$(grep -c '^pre-push-gate.sh$' "$TMP/log")" -eq 1 ]
+
 # A non-blocking hook failure must not suppress later gates.
 : > "$TMP/log"
 set +e

@@ -139,6 +139,31 @@ for script in \
   run_hook "$script"
 done
 
+_push_hooks_ran=0
+run_push_hooks() {
+  if [ "${_push_hooks_ran}" -eq 1 ]; then
+    return 0
+  fi
+  _push_hooks_ran=1
+  run_hook block-main-push.sh
+  run_hook validate-branch-name.sh
+  run_hook pre-push-gate.sh
+  run_hook block-agent-routing-drift.sh
+}
+
+# is_push_command: recognises `git push` and `git -C <dir> push` anywhere in
+# the command text, not only as a literal prefix (me2resh/apexyard#1366,
+# #1405 review items 1 / H1 item 3). Mirrors pre-push-gate.sh's own
+# push-clause regex, which the hook needs anyway to resolve the pushed
+# repo — two independent copies of the same pattern, the same shape as the
+# other `\bgit\s+push\b` checks already duplicated across this framework's
+# hooks (block-main-push.sh, validate-branch-name.sh, and others each carry
+# their own).
+is_push_command() {
+  local cmd="$1"
+  echo "$cmd" | grep -qE '\bgit[[:space:]]+(-C[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)[[:space:]]+)?push\b'
+}
+
 _merge_gates_ran=0
 run_merge_gates() {
   if [ "${_merge_gates_ran}" -eq 1 ]; then
@@ -153,12 +178,7 @@ run_merge_gates() {
 
 case "$COMMAND" in
   "git add "*) run_hook block-git-add-all.sh ;;
-  "git push "*)
-    run_hook block-main-push.sh
-    run_hook validate-branch-name.sh
-    run_hook pre-push-gate.sh
-    run_hook block-agent-routing-drift.sh
-    ;;
+  "git push "*) run_push_hooks ;;
   "git commit "*)
     run_hook check-secrets.sh
     run_hook block-onboarding-in-git.sh
@@ -201,6 +221,25 @@ case "$COMMAND" in
     run_merge_gates
     ;;
 esac
+
+# A `cd <dir> && git push` or `git -C <dir> push` command misses the literal
+# "git push "* case arm above — the exact gap me2resh/apexyard#1405's review
+# reported (Rex item 1, Hakim H1 item 3): the #1366 pre-push-gate.sh fix
+# never runs for either reported shape in production. Route those payloads
+# with the same push detector pre-push-gate.sh needs anyway to resolve its
+# own target. `is_push_command` is defined in this file, not sourced from an
+# optional lib, so — unlike the merge parser below — there is no missing-
+# detector case to fail closed on here.
+#
+# The `if` wrapper is load-bearing under `set -e`: a bare `A && B` statement
+# where B is the LAST command in the list still aborts the whole dispatcher
+# on B's non-zero exit — is_push_command returning 1 for the common,
+# non-push case would otherwise kill every unrelated Bash call.
+if [ "${_push_hooks_ran}" -eq 0 ]; then
+  if is_push_command "$COMMAND"; then
+    run_push_hooks
+  fi
+fi
 
 # A wrapper such as `bash -c '… tracker_pr_merge …'` misses the prefix case.
 # Route those payloads with the same parser the merge-gate bodies use.
