@@ -129,13 +129,19 @@ dfd_classifications=$(awk '
   capture                    { print }
 ' "$dfd")
 
+# Warn when a section extracts to nothing, and name the heading tried. A DFD
+# may classify no data, so this warns and continues. It does not stop.
+[ -n "$dfd_mermaid" ] || echo "WARNING: $dfd has no content for the Mermaid block under ## Diagram. The audit snapshot will omit it." >&2
+[ -n "$dfd_trust" ] || echo "WARNING: $dfd has no content for the ## Trust boundaries section. The audit snapshot will omit it." >&2
+[ -n "$dfd_classifications" ] || echo "WARNING: $dfd has no content for the ## Data classifications section. The audit snapshot will omit it." >&2
+
 # Discovery provenance is intentionally NOT extracted — too noisy for an
 # audit snapshot. Readers click through to the live DFD for that.
 
 dfd_captured_at=$(date -u +"%Y-%m-%d")
 ```
 
-These three blocks become the `## DFD (snapshot as of YYYY-MM-DD)` section at the top of the audit body in Step 5b.
+These three blocks become the `## DFD (snapshot as of YYYY-MM-DD)` section at the top of the audit body in Step 5b. If a block is empty, Step 1b prints a warning that names the heading it tried. Report that warning to the operator.
 
 ### Step 2: Apply STRIDE to each entry point
 
