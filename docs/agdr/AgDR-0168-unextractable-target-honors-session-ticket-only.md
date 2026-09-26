@@ -11,7 +11,7 @@ category: security
 
 # Unextractable Bash write target honors only the session ticket
 
-> In the context of the ticket-gate hook `require-active-ticket.sh`, facing an unextractable Bash write target that used to be blocked even with an active ticket, I decided to check only the ops-level `current-ticket` fallback for such a target, skipping the per-worktree and per-project tiers, to achieve the ticket described in the framework rule (`require-active-ticket.sh` never falls through unexempted) without widening any exemption, accepting that an unextractable target still cannot use a per-project or per-worktree marker.
+> The ticket-gate hook `require-active-ticket.sh` blocked an unextractable Bash write target, even with an active ticket. I decided to check only the ops-level `current-ticket` marker for that target, skipping the per-worktree and per-project tiers. An active session ticket now gates the write. No new exemption exists. The target still cannot use a per-project or per-worktree marker, because it carries no project to resolve them against.
 
 ## Context
 
@@ -27,6 +27,11 @@ gate" rather than being exempted outright.
 Two concrete unextractable-target commands hit this: a `sed -i` on a path
 held in a shell variable, and a `git archive | tar -x` export into a scratch
 directory (me2resh/apexyard#1396, me2resh/apexyard#1402).
+
+Commit `56aacc0` (#1231) moved this marker lookup into the shared library
+and added the early return that caused the regression. Before that
+refactor, an empty target still reached `current-ticket`. This fix
+restores that earlier behavior. It does not widen the gate.
 
 ## Options Considered
 
@@ -54,9 +59,18 @@ it is gated against whichever ticket the session actually has active.
   project to resolve those tiers against. A session working only inside a
   registered project, with no ops-level ticket set, still blocks an
   unextractable write for that project — this is unchanged and intentional.
-- `require-migration-ticket.sh` shares the same library function, so a
-  migration-path write with an unextractable target gets the identical
-  fix. No separate change was needed there.
+- `require-migration-ticket.sh` shares the same library function, but it
+  never sends a fully empty target. The gate exits before the library
+  runs whenever it cannot extract any target at all.
+- A tilde-spelled migration target (`~user/`, `~+/`, `~-/`) is a
+  different case. It stays a non-empty string through normalisation. The
+  resolver returns an empty path for it. An earlier commit in this PR let
+  that case fall through to the ops-level `current-ticket` marker. That
+  marker could approve a write meant for a different project
+  (me2resh/apexyard#1159's wrong-ticket approval). Hakim's security
+  review on PR #1404 flagged this as finding H1. A follow-up commit in
+  this PR restores the fail-closed behavior. The function now returns an
+  empty marker when a non-empty target fails to resolve.
 
 ## Artifacts
 
@@ -65,4 +79,6 @@ it is gated against whichever ticket the session actually has active.
   unblocks
 - `.claude/hooks/_lib-active-ticket.sh` — the changed function
 - `.claude/hooks/tests/test_require_active_ticket_bash.sh` — regression
-  cases 79-81
+  cases 79-82
+- `.claude/hooks/tests/test_require_migration_ticket.sh` — the inverted-
+  fixture regression cases added for finding H1
