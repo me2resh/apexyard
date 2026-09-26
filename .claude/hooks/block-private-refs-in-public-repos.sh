@@ -1167,17 +1167,23 @@ EOF
 # ---------------------------------------------------------------------------
 # 8. Build the match list.
 #
-#   - `name` → whole-word match (grep -wE). Skip the target's own name, and
-#     skip names that collide with the target repo's own name, so mentioning
-#     "apexyard" in an apexyard upstream ticket is fine. Also skip the name
-#     whose `repo:` matches $TARGET_REPO (belt-and-braces).
+#   - `name` → whole-word match (grep -wE). Skip the target's own bare repo
+#     name, so mentioning "apexyard" in an apexyard upstream ticket is fine.
+#     ALSO skip the target repo's OWNER login (me2resh/apexyard#1387): a
+#     registered project's `name` can coincidentally equal the owner of the
+#     public repo being written to (e.g. a private project literally named
+#     "me2resh"), and without this exemption every mention of the owner —
+#     writing the repo as "<owner>/<repo>", or plainly @-mentioning the
+#     owner in review prose — read as a leak of that unrelated project. Also
+#     skip the name whose `repo:` matches $TARGET_REPO (belt-and-braces).
 #   - `repo` slug → exact match, with optional `#<N>` suffix.
 #   - `workspace` path → whole-word match.
 # ---------------------------------------------------------------------------
 
-# Derive the target's bare repo name for exemption (e.g. "apexyard" from
-# "me2resh/apexyard").
+# Derive the target's bare repo name and owner login for exemption (e.g.
+# "apexyard" and "me2resh" from "me2resh/apexyard").
 TARGET_NAME=$(echo "$TARGET_REPO" | awk -F/ '{print $NF}')
+TARGET_OWNER=$(echo "$TARGET_REPO" | awk -F/ '{print $1}')
 
 LEAKS=""
 
@@ -1194,8 +1200,9 @@ record_if_match() {
 }
 
 for n in $NAMES; do
-  # Exempt the target repo's own name.
-  if [ "$n" = "$TARGET_NAME" ]; then continue; fi
+  # Exempt the target repo's own bare name AND its owner login
+  # (me2resh/apexyard#1387 — see the step-8 comment above).
+  if [ "$n" = "$TARGET_NAME" ] || [ "$n" = "$TARGET_OWNER" ]; then continue; fi
   # Whole-word, case-insensitive. Escape regex-special chars in $n.
   esc=$(printf '%s' "$n" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   if echo "$HAYSTACK" | grep -qiwE "$esc"; then
