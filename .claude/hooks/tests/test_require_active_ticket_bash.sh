@@ -1019,6 +1019,22 @@ in=$(jq -nc --arg c 'python3 -c "import pathlib; p = compute_path(); pathlib.Pat
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#1396 unextractable target ignores an unrelated per-project marker" 2 "BLOCKED" "$in" "$sb"
 
+# 82. The #1396 issue's own reported repro: an in-place `sed -i` edit on a
+#     path held in a shell variable, not the python3 shape cases 79-81 use.
+#     bash_extract_write_targets does not extract a sed -i target at all, so
+#     this is the same unextractable-target class — a current-ticket marker
+#     IS active → allowed.
+sb=$(make_sandbox)
+cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=1396
+title=test
+url=https://example.com
+EOF
+in=$(jq -nc --arg c 'sed -i "s/x/y/" "$VAR"' \
+  '{tool_name:"Bash", tool_input:{command:$c}}')
+run_case "#1396 reported repro: sed -i on a variable path honors active ticket" 0 "" "$in" "$sb"
+
 # --- Summary -----------------------------------------------------------
 
 echo ""
