@@ -73,6 +73,13 @@
 # until #1026 returned the hook to advisory — see "#1026 — BACK TO ADVISORY"
 # below. The (repo, pr, kind) match still decides whether the banner fires:
 #
+# NOTE (me2resh/apexyard#1376): the literal path below is the pre-#1376
+# shape, kept here because it is the clearest illustration of the
+# (repo, pr, kind) match. The marker path is now session-scoped — resolved
+# through `active_reviewer_marker_path` in `_lib-review-markers.sh`, never
+# the literal `.claude/session/active-reviewer` string — and the actual
+# read a few hundred lines below already calls that resolver.
+#
 #   .claude/session/active-reviewer contains:  me2resh/apexyard#843:rex
 #   allows a write to:                         me2resh__apexyard__843-rex.approved
 #   blocks a write to:                         me2resh__apexyard__843-security.approved  (kind mismatch)
