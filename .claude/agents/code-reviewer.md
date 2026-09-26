@@ -150,7 +150,7 @@ Run this check on every review, including re-reviews and reduced-scope reviews.
    ```
 
    A bare `#N` refers to an issue in `$PR_HOST_REPO`. For another tracker, use that tracker's CLI.
-   If you cannot read an issue, report each of its criteria as Not verifiable and give the reason.
+   If you cannot read an issue, report the issue as Not verifiable and give the reason.
 3. List every acceptance criterion of each issue. Use the wording of the issue.
    If a comment changes a criterion, use the changed criterion and cite the comment.
 4. Give each criterion one status:

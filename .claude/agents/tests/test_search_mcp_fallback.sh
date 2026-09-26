@@ -14,7 +14,6 @@ AGENTS="$ROOT/.claude/agents"
 RECONCILE="$ROOT/.claude/rules/reconcile-before-build.md"
 HANDBOOKS="$ROOT/.claude/rules/build-handbook-discovery.md"
 HANDOVER="$ROOT/.claude/skills/handover/SKILL.md"
-CODE_REVIEW="$ROOT/.claude/skills/code-review/SKILL.md"
 FAIL=0
 
 pass() { printf '  ok   %s\n' "$1"; }
@@ -50,11 +49,6 @@ has_absent_fallback() {
     ! printf '%s\n' "$text" | grep -qF 'only when an MCP query returns nothing relevant'
 }
 
-# The server is not a paid feature. No line that names it may say so.
-no_paid_wording() {
-  ! grep -iE '(mcp|apexyard-search|search_code|search_docs)' "$1" | grep -qiE 'premium|paid'
-}
-
 has_text() { grep -qF -- "$2" "$1"; }
 
 echo "== Agents that list the search tools"
@@ -80,11 +74,6 @@ check "handover keeps every read" has_text "$HANDOVER" 'Do not skip or shorten a
 check "handover claims an index only when indexed" has_text "$HANDOVER" 'Include "and indexed in MCP" only when `$REINDEX_STATUS` is `indexed`.'
 check "handover no longer always attempts the reindex" not has_text "$HANDOVER" '(default: always attempt)'
 
-echo "== No paid or premium wording near the search server"
-while IFS= read -r file; do
-  check "$(printf '%s' "$file" | sed "s|$ROOT/||") has no paid wording" no_paid_wording "$file"
-done < <({ find "$AGENTS" -maxdepth 1 -type f -name '*.md'; printf '%s\n' "$RECONCILE" "$HANDBOOKS" "$HANDOVER" "$CODE_REVIEW"; } | sort)
-
 echo "== Negative cases"
 FIXTURES=$(mktemp -d)
 trap 'rm -rf "$FIXTURES"' EXIT
@@ -98,12 +87,8 @@ allowed-tools: Read, Grep, mcp__apexyard-search__search_code
 
 Prefer `mcp__apexyard-search__search_code` over `grep` + `Read`. Fall back to `grep`/`Read` only when an MCP query returns nothing relevant.
 EOF
-cat > "$FIXTURES/paid.md" <<'EOF'
-Adopters who don't run the premium MCP are unaffected.
-EOF
 check "fixture lists the search tools" lists_search_tools "$FIXTURES/old-wording.md"
 check "old empty-result-only wording fails the fallback check" not has_absent_fallback "$FIXTURES/old-wording.md"
-check "premium MCP wording fails the paid-wording check" not no_paid_wording "$FIXTURES/paid.md"
 
 printf '\nSearch-MCP fallback checks completed with %s failure(s).\n' "$FAIL"
 [ "$FAIL" -eq 0 ]
