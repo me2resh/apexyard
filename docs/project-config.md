@@ -58,6 +58,23 @@ the inherited array as a whole. An override containing only
 `portfolio.stale_days`. An override of `ticket.bootstrap_skills` replaces that
 array. The shared config reader gets this behavior from `jq -s '.[0] * .[1]'`.
 
+**A warning names the entries that an array override drops (#1369).**
+An override array that omits entries the matching default array carries
+merges exactly as documented above. The override still wins, unchanged.
+`_lib-read-config.sh` also prints one advisory `WARN:` line to stderr. The
+line names the key and every dropped entry, the first time that override is
+read in a session. Without a session ID, the cross-process cache has no key
+to read or write, so the warning prints again in every new process. This
+never blocks and never changes the merged value. It only makes an
+otherwise-silent drop visible. It applies only to a key that has a default
+array in `.claude/project-config.defaults.json`.
+`migration_paths`, `migration_label`, `ui_paths`, `ui_paths_exclude`,
+`design_paths`, `design_paths_exclude`, and `architecture_paths` have no
+entry in `.claude/project-config.defaults.json` at all — their hook holds
+the built-in default in code, not JSON. A drop against one of those produces
+no warning today. See AgDR-0167 for why, and #1401 for the follow-up that
+tracks closing this gap for those seven keys.
+
 ## Schema (v1)
 
 ```json

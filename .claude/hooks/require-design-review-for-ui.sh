@@ -21,8 +21,15 @@
 #   - *.tsx, *.jsx (React)
 #   - *.vue (Vue)
 #   - *.svelte (Svelte)
+#   - *.astro (Astro)
+#   - *.mdx (MDX — Markdown with embedded components)
+#   - *.hbs, *.njk, *.liquid (Handlebars / Nunjucks / Liquid templates)
 #   - *.css, *.scss, *.sass, *.less (styles)
 #   - design-tokens.* (design systems)
+#
+# The full default pattern list lives in _lib-ui-paths.sh — the single
+# source shared with the /approve-design skill's own UI-touch check (step 5),
+# so the two lists cannot drift apart (me2resh/apexyard#1390).
 #
 # Projects that want a broader/narrower list can override via
 # .claude/project-config.json:
@@ -148,25 +155,21 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
-# Default UI path patterns (regex). Note: .tsx$ / .jsx$ are EXACT — they must
-# not match plain .ts / .js, which are often backend/server files. The
-# original draft had \.tsx?$ which matched .ts too; caught in smoke test.
-UI_GLOBS='\.tsx$
-\.jsx$
-\.vue$
-\.svelte$
-\.css$
-\.scss$
-\.sass$
-\.less$
-design-tokens'
-
-# Allow project-config to override
-if [ -n "$REPO_ROOT" ] && [ -f "${REPO_ROOT}/.claude/project-config.json" ]; then
-  CUSTOM=$(jq -r '.ui_paths // [] | join("|")' "${REPO_ROOT}/.claude/project-config.json" 2>/dev/null)
-  if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "null" ]; then
-    UI_GLOBS="$CUSTOM"
-  fi
+# Default + effective UI path patterns (regex) — sourced from _lib-ui-paths.sh,
+# the single list shared with /approve-design's step 5 (me2resh/apexyard#1390).
+# Fail closed if the library cannot be sourced or resolves to an empty list.
+# Without this guard a missing, unreadable, empty, or broken library left
+# UI_GLOBS empty and the pattern loop below matched no file, so the gate
+# exited 0 on every PR — the opposite of this hook's CONTROL / fail-closed
+# contract (AgDR-0104 decision 1). me2resh/apexyard#1397 HIGH-1.
+if ! . "$HOOK_DIR/_lib-ui-paths.sh" 2>/dev/null || ! command -v ui_effective_globs >/dev/null 2>&1; then
+  echo "BLOCKED: design-review gate could not load its UI pattern list (_lib-ui-paths.sh). Refusing to merge until the list can be read." >&2
+  exit 2
+fi
+UI_GLOBS=$(ui_effective_globs "$REPO_ROOT")
+if [ -z "$(printf '%s' "$UI_GLOBS" | tr -d '[:space:]')" ]; then
+  echo "BLOCKED: design-review gate resolved an empty UI pattern list. Refusing to merge until the list can be read." >&2
+  exit 2
 fi
 
 # Get the PR's changed files. The diff endpoint rejects responses over 300

@@ -187,6 +187,83 @@ _config_overrides_file() {
   [ -n "$root" ] && echo "$root/.claude/project-config.json"
 }
 
+# ------------------------------------------------------------------------------
+# _config_warn_dropped_defaults <defaults_file> <overrides_file>
+#   Advisory-only WARN, to stderr, when the override JSON sets an array key
+#   that ALSO has a default array in project-config.defaults.json, and the
+#   override array is missing one or more entries the default array carries
+#   (me2resh/apexyard#1369). Array overrides still REPLACE the default array
+#   wholesale — this function changes NOTHING about that merge outcome, it
+#   only names what got dropped so the drop isn't silent. Never blocks.
+#
+#   Scope: only array keys PRESENT in project-config.defaults.json. A handful
+#   of security-relevant keys — migration_paths, migration_label, ui_paths,
+#   ui_paths_exclude, design_paths, design_paths_exclude, architecture_paths —
+#   are deliberately ABSENT from the defaults file; the hook that reads each
+#   one holds its own built-in default in bash, not in this JSON. A generic
+#   defaults-vs-override JSON diff structurally cannot see a drop against a
+#   default that was never JSON in the first place. That is a real, narrower
+#   gap this function does not close. #1365's `_override_only_keys` allowlist
+#   is a different, narrower mechanism. It stops `/update` from flagging
+#   these keys as deprecated. It does not warn on a dropped default entry.
+#   #1401 tracks closing the dropped-default gap for these keys.
+# ------------------------------------------------------------------------------
+_config_warn_dropped_defaults() {
+  local defaults="$1" overrides="$2"
+  [ -f "$overrides" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+
+  local findings
+  findings=$(jq -n \
+    --slurpfile d "$defaults" \
+    --slurpfile o "$overrides" \
+    '
+      ($d[0]) as $def
+      | ($o[0]) as $ovr
+      # Only paths reached through object keys, never through an array
+      # INDEX — `all($p[]; type == "string")` excludes any path with a
+      # numeric component. Without this filter, `paths(type=="array")` also
+      # visits an array nested inside one of a parent array'"'"'s own elements
+      # (e.g. skill_intent.map[0].phrases): a spurious, index-coincidental
+      # comparison once the parent array (skill_intent.map) has already been
+      # reported as wholesale-replaced.
+      | [ $def | paths(type=="array") | select(all(.[]; type == "string")) ] as $dpaths
+      | [
+          $dpaths[]
+          | . as $p
+          | ($def | getpath($p)) as $dval
+          | ($ovr | getpath($p)) as $oval
+          | select($oval != null and ($oval | type) == "array")
+          | ($dval - $oval) as $dropped
+          | select(($dropped | length) > 0)
+          | {path: ($p | join(".")), dropped: $dropped}
+        ]
+    ' 2>/dev/null)
+
+  [ -n "$findings" ] && [ "$findings" != "[]" ] || return 0
+
+  local finding key drop
+  # Pipe into the loop rather than `done < <(...)` process substitution.
+  # Process substitution is a bash/ksh/zsh extension. Sourcing this file
+  # under a POSIX-mode shell (`/bin/sh`, or bash with `POSIXLY_CORRECT` set)
+  # hits a syntax error on that construct. The syntax error leaves
+  # config_get undefined for the rest of the process (Hakim's LOW-A,
+  # #1403). The loop only writes to stderr, so running it in the
+  # pipeline's subshell loses nothing.
+  printf '%s' "$findings" | jq -c '.[]' 2>/dev/null | while IFS= read -r finding; do
+    [ -z "$finding" ] && continue
+    key=$(printf '%s' "$finding" | jq -r '.path' 2>/dev/null)
+    # Elements are usually strings (ticket types, path globs); `tojson` for
+    # anything else (e.g. skill_intent.map's array-of-objects) instead of
+    # letting a plain `join` error out on a non-string element and silently
+    # produce an empty list.
+    drop=$(printf '%s' "$finding" | jq -r '.dropped | map(if type == "string" then . else tojson end) | join(", ")' 2>/dev/null)
+    echo "WARN: .claude/project-config.json overrides array '.${key}' and drops these shipped default entries: ${drop}. Array overrides REPLACE the defaults wholesale (see docs/project-config.md) — if you meant to ADD to the list rather than replace it, include these entries in the override too." >&2
+  done
+
+  return 0
+}
+
 _config_load() {
   # Check jq availability once per process.
   if ! command -v jq >/dev/null 2>&1; then
@@ -229,6 +306,10 @@ _config_load() {
     # jq recursively merges objects, replaces arrays wholesale, and lets the
     # override win scalar conflicts.
     _rc_merged=$(jq -s '.[0] * .[1]' "$defaults" "$overrides" 2>/dev/null) || _rc_merged=$(cat "$defaults")
+    # Advisory-only: names any default array entries the override silently
+    # dropped. Never changes _rc_merged — see _config_warn_dropped_defaults's
+    # own header (me2resh/apexyard#1369).
+    _config_warn_dropped_defaults "$defaults" "$overrides"
   else
     _rc_merged=$(cat "$defaults")
   fi
