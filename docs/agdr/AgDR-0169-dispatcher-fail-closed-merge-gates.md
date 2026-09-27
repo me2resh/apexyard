@@ -58,14 +58,20 @@ four merge gates instead of the advisory `run_hook`. Every other hook
 keeps `run_hook`'s existing warn-and-continue behavior. Advisory hooks
 are unaffected.
 
-This closes the gap in `dispatch-bash.sh`. It does not edit
-`require-design-review-for-ui.sh`, `block-unreviewed-merge.sh`,
-`block-merge-on-red-ci.sh`, or `require-architecture-review.sh`. It does
-not fix the individual hooks' own unguarded source lines. A hook run
-directly, outside the dispatcher, keeps the pre-existing exposure. The
-dispatcher is the only place every merge attempt is proven to pass
-through, per AgDR-0157 and AgDR-0162. It is the right single point for
-this rule.
+This closes the gap in `dispatch-bash.sh`. At the point this decision
+was first recorded, it did not edit `require-design-review-for-ui.sh`,
+`block-unreviewed-merge.sh`, `block-merge-on-red-ci.sh`, or
+`require-architecture-review.sh`. It also did not fix the individual
+hooks' own unguarded source lines.
+
+**This part of the record is now out of date.** Addendum 1 and Addendum
+2 below each add a guard to all four hooks. The guard is a shared
+`_require_lib` function in most cases. One library needed a different,
+equivalent, readability-checked guard instead. A hook run directly,
+outside the dispatcher, no longer keeps the pre-existing exposure. Its
+own guard now blocks it, in both default and POSIX-mode bash. The
+dispatcher fix stays in place as the backstop for a failure mode a
+per-hook guard has not anticipated yet, per AgDR-0157 and AgDR-0162.
 
 ## Consequences
 
@@ -75,16 +81,28 @@ this rule.
 - The four merge gates are the only hooks under this rule. Adding a
   fifth merge gate later means adding it to `run_merge_gates`. That
   gate gets the fail-closed behavior for free.
-- `test_dispatch_bash.sh` covers each of the four merge gates dying
-  under four distinct failure modes. It confirms the dispatcher blocks
-  each one. See "Test coverage" below for the exact modes and shell
-  settings.
+- `test_dispatch_bash.sh` covers `block-unreviewed-merge.sh` dying under
+  four distinct failure modes — exit 1, exit 127, a bash syntax error,
+  and a process killed by `SIGTERM` — and confirms the dispatcher blocks
+  each one. It covers all four merge gates dying under one shared
+  failure mode: a missing required library under POSIX mode. It does
+  not cover the other three failure modes on the other three gates. See
+  "Test coverage" below for the exact modes and shell settings.
 - A merge gate's own internal fix stays independently valuable. One
   example is guarding its own `.` sources. Its exit code changes from
   an unplanned 1 to a planned, hook-specific 2. This dispatcher fix is
   the backstop for every hook that has not done that internal work yet.
   It is also the backstop for any new failure mode that internal work
   does not anticipate.
+- The dispatcher's own guard for `_lib-extract-pr.sh` (Addendum 2,
+  Follow-up 3) has an availability cost. When that library is missing
+  or unreadable, every Bash command blocks, not only a merge command.
+  The dispatcher decides this before it routes the command to any
+  gate. An agent cannot fix this from inside the same session. The
+  repair is a `chmod` or a file restore. That repair is itself a Bash
+  command, and the same guard blocks it too. The operator must restore
+  the file outside the agent, for example from a host shell or a fresh
+  clone.
 
 ## Addendum — the dispatcher fix alone did not close the default-bash case (me2resh/apexyard#1405 second review, Hakim H2)
 
@@ -127,14 +145,29 @@ the first round's fix.
 
 | Gate | Required, hard-guarded | Required, restructured guard | Optional, unchanged |
 |------|------------------------|-------------------------------|----------------------|
-| `block-unreviewed-merge.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh` | — | `_lib-pr-repo.sh` (`if [ -f ]`), `_lib-read-config.sh` (readability-checked, see below) |
+| `block-unreviewed-merge.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh` | — | `_lib-pr-repo.sh` (`if [ -f ]`), `_lib-read-config.sh` (readability-checked, see below), `_lib-ops-root.sh` (`if [ -f ]`), `_lib-merge-behind.sh` (readability-checked, advisory-only, added by me2resh/apexyard#1386) |
 | `block-merge-on-red-ci.sh` | `_lib-extract-pr.sh` | — | `_lib-pr-repo.sh` (`if [ -f ]`) |
-| `require-design-review-for-ui.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh`, `_lib-pr-repo.sh` | `_lib-ui-paths.sh` | — |
-| `require-architecture-review.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh`, `_lib-pr-repo.sh` | — | — |
+| `require-design-review-for-ui.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh`, `_lib-pr-repo.sh` | `_lib-ui-paths.sh` | `_lib-ops-root.sh` (`if [ -f ]`) |
+| `require-architecture-review.sh` | `_lib-extract-pr.sh`, `_lib-review-markers.sh`, `_lib-pr-repo.sh` | — | `_lib-ops-root.sh` (`if [ -f ]`) |
 
 `block-merge-on-red-ci.sh` decides on CI status, not on approval
 markers. It never sources `_lib-review-markers.sh`. This corrects the
-first addendum.
+first addendum. The first addendum also left `_lib-ops-root.sh` out of
+the table entirely. It is optional (`if [ -f ]`) in three of the four
+gates — every gate except `block-merge-on-red-ci.sh`.
+
+`_lib-tracker.sh` does not fit the three columns above, so it is not a
+table row. `block-unreviewed-merge.sh` loads it only inside the opt-in
+`review_markers.require_posted_review` check (default off). When that
+flag is on and the file is missing, the gate already blocks with its
+own message, present before this AgDR. No dispatcher-level fix was
+needed for that path.
+
+`_lib-merge-behind.sh`, added by the dev merge in #1386, is optional
+for a different reason. `_lib-pr-repo.sh` and `_lib-ops-root.sh` above
+silently drop a feature when absent. `_lib-merge-behind.sh` only
+appends an advisory note to a block that already fires for another
+reason. Its absence changes no gate decision.
 
 **Follow-up 1 — `_lib-pr-repo.sh` was unguarded in two gates.** Hakim's
 review of #1405 found that `require-architecture-review.sh` and
@@ -167,6 +200,28 @@ script still died with a raw, uninformative exit 1. The fix adds a
 `[ ! -r "$HOOK_DIR/_lib-ui-paths.sh" ]` check as the first term of the
 same `||` chain. `||` short-circuits. A missing file never reaches the
 `.` call. The BLOCKED branch now runs in both shell modes.
+
+**Follow-up 3 — the dispatcher's own `_lib-extract-pr.sh` guard failed
+open on an unreadable file (Hakim A1, this PR's review).**
+`dispatch-bash.sh` sources `_lib-extract-pr.sh` for its own merge-shape
+routing, ahead of every gate. That source line checked `[ -f ]`, then
+sourced the file with a bare `.`, under the dispatcher's own `set -e`.
+A file that exists but cannot be read still fails that source. The
+dispatcher then exited with whatever code the failed `.` builtin
+reports (1), before any gate ran. Claude Code only blocks a tool call
+on exit 2. So this let every Bash command through unblocked, not only
+merges. Follow-up 1 and Follow-up 2 closed the same class of gap
+inside the per-hook guards. This one sits one layer up, at the point
+that decides whether a gate runs at all.
+
+**Fix:** the check is now `[ -r ]`. An explicit branch checks for
+exists-but-unreadable before any attempt to source the file. That
+branch prints a BLOCKED message naming the file and exits 2. A file
+that is entirely missing stays the tolerated partial-install case it
+already was. `is_merge_command` stays undefined in that case. The
+dispatcher's existing fail-closed check further down the script still
+runs the merge gates on a merge-shaped command. See the Consequences
+section above for the availability cost this fix accepts.
 
 **`_lib-read-config.sh` stays optional, by design, in
 `block-unreviewed-merge.sh`.** This library backs two independent
@@ -207,18 +262,27 @@ work on #1403. Neither is silently dropped.
 
 ## Test coverage
 
-`test_dispatch_bash.sh` reproduces four ways a merge-gate hook can die
-with a visible non-zero, non-2 exit. It confirms the dispatcher blocks
-each one at the merge-gate boundary:
+`test_dispatch_bash.sh` reproduces four ways `block-unreviewed-merge.sh`
+can die with a visible non-zero, non-2 exit. It confirms the dispatcher
+blocks each one at the merge-gate boundary:
 
 - exit 1
 - exit 127 (an undefined command inside the hook)
 - a bash syntax error (bash itself reports exit 2 for this one)
 - a process killed by `SIGTERM`
 
+These four scenarios cover this one gate only. The other three gates
+do not have their own copies of this same test group.
+
 It also reproduces the original report. Each of the four merge gates,
 stubbed to source a missing library, blocked under
-`POSIXLY_CORRECT=1`.
+`POSIXLY_CORRECT=1`. This one scenario runs against all four.
+
+It also covers the dispatcher's own `_lib-extract-pr.sh` guard
+(Addendum 2, Follow-up 3). An unreadable copy blocks with a message
+naming the file. A missing copy stays a tolerated no-op for a
+non-merge command. That second case is the control. It would catch an
+overly-broad fix that also blocked on absence.
 
 Each of the four hooks' own test files additionally removes each
 required library the hook sources, one at a time. Each removal expects
