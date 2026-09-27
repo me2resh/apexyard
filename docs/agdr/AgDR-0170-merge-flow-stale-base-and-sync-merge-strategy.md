@@ -13,12 +13,12 @@ category: patterns
 
 # Stop a merge that is behind its base, and stop a sync merge that guesses on conflicts
 
-> In the context of the merge flow, facing two silent-loss risks — a merge queue
-> that races a stale CI result, and a `-X ours` sync merge that drops content
-> a reviewer never saw — I decided to add a behind-base stop to `/approve-merge`
-> and to replace `-X ours` with a plain merge that stops and asks on every
-> conflict in `/release-sync`, accepting one extra forge read per merge attempt
-> and a slower sync on the rare conflicting release.
+> In the context of the merge flow, we faced two silent-loss risks. A queue
+> merge can use a stale CI result. A `-X ours` sync merge can drop content
+> that no reviewer saw. I decided to add a behind-base stop to
+> `/approve-merge`. I also decided to replace `-X ours` with a plain merge
+> that stops and asks on every conflict. The cost is one extra forge read per
+> merge attempt and a slower sync on the rare conflicting release.
 
 ## Context
 
@@ -31,11 +31,11 @@ Two related but separate problems surfaced against the merge flow (apexyard#1386
 - **`/release-sync` step 5 used `git merge -X ours`.** The strategy resolves
   every conflict in favor of `dev`, with no check on which commit caused the
   conflict. Most conflicts come from the release squash commit duplicating
-  content `dev` already has. But `main` can carry content `dev` never had,
-  from a commit that never touched `dev` at all (a PR merged straight to
-  `main`, a hotfix, a hand-edited file), or from an edit the release squash
-  commit itself carries, made directly on the release branch before the
-  squash. `-X ours` drops either case's content too, with no warning.
+  content `dev` already has. But `main` can carry content that `dev` never
+  had. One source is a commit that never reached `dev`, such as a PR merged
+  straight to `main`, a hotfix, or a hand-edited file. Another source is an
+  edit made on the release branch before the squash. `-X ours` drops the
+  content from either source with no warning.
 
 Sync commit `04bd8c7` (apexyard#1348) is the incident that exposed this. The
 release squash commit was the only commit that touched `README.md` among the
@@ -44,8 +44,8 @@ commit is the sole touching commit" would call this conflict safe and
 resolve it toward `dev`. The release squash commit had added two contributor
 rows directly on the release branch, before the squash. `dev` did not have
 those rows at the point the release was cut. `-X ours` dropped them with no
-warning, because it resolves toward `dev` unconditionally, not because it
-ran the "sole touching commit" check and got it wrong.
+warning. It resolves toward `dev` unconditionally, not because it ran the
+"sole touching commit" check and got it wrong.
 
 Both problems share a root cause. A merge step resolved ambiguity by picking
 a side, instead of stopping to ask which side is correct.
@@ -57,17 +57,16 @@ a side, instead of stopping to ask which side is correct.
 | Add a new blocking condition to `block-unreviewed-merge.sh` for a behind-base branch | One control, not two places to look | The hook cannot safely retry after an update. The SHA changes, so the existing Rex marker becomes invalid mid-block. A hook-level block also cannot print the multi-step recovery in a way the skill can naturally sequence |
 | Check behind-base inside `/approve-merge`, before the merge runs (chosen) | The skill already reads the PR's state from the forge in step 3. Adding one field and one stop is a small, sequenced addition. The skill can name the exact recovery steps and re-run itself | Skips the check entirely if an operator merges by hand, outside the skill. Accepted, because the skill is the only sanctioned merge path (`pr-workflow.md`) |
 | Keep `-X ours` in `/release-sync`, and just document the risk | No procedure change | Leaves the exact regression that already happened once (apexyard#1348) unfixed. Documentation does not stop a silent drop |
-| Replace `-X ours` with a plain merge, and try to classify each conflict as a safe squash duplicate or an unsafe main-only commit | Automates the common case. No human answer needed on a confirmed squash duplicate | A squash-duplicate rule that trusts "sole touching commit" is exactly the rule that missed apexyard#1348. A confirmation step against a release trailer narrows the miss but still guesses when the trailer is absent or ambiguous. Every added classification rule is another rule that can be wrong in a way nobody notices until the next incident |
+| Replace `-X ours` with a plain merge, and try to classify each conflict as a safe squash duplicate or an unsafe main-only commit | Automates the common case. No human answer needed on a confirmed squash duplicate | A squash-duplicate rule that trusts "sole touching commit" would have missed apexyard#1348. A confirmation step against a release trailer narrows the miss but still guesses when the trailer is absent or ambiguous. Every added classification rule is another rule that can be wrong in a way nobody notices until the next incident |
 | Replace `-X ours` with a plain merge, and stop and ask on every conflict, with no automatic classification (chosen) | Removes the guessing step entirely. A rule with no exceptions cannot miss an exception. The procedure is simpler to state and to verify than a classification tree | Slower on a release with a genuine, easily-resolved conflict. Every such release now needs one human answer instead of zero |
 | Attribute conflicts per-hunk instead of per-file | More precise. A file can mix content from more than one commit | Not reliably scriptable in a shell-driven skill. Per-file is the granularity the skill already reads, and the decision below asks a human for every conflict regardless of granularity |
 
 ## Decision
 
 Chosen: **a behind-base stop inside `/approve-merge`, plus a plain merge that
-stops and asks on every conflict in `/release-sync`**, because both fixes
-catch a specific class of silent loss at the step that already has the
-information to catch it, without adding a new blocking condition to
-`block-unreviewed-merge.sh`.
+stops and asks on every conflict in `/release-sync`**. Each fix catches one
+class of silent loss at the step that already has the needed information.
+Neither fix adds a blocking condition to `block-unreviewed-merge.sh`.
 
 `/approve-merge` computes whether the PR is behind its base from the compare
 API's `behind_by` field (`is_pr_behind_base` in the new
@@ -76,18 +75,19 @@ API's `behind_by` field (`is_pr_behind_base` in the new
 policy. This repo's own `dev` ruleset does not set that policy. A PR behind
 an unprotected base reports `BLOCKED`, `CLEAN`, or `UNKNOWN` instead. A check
 reading `mergeStateStatus` alone never fires on the case it exists to catch.
-When the check reports the PR behind, or when the compare call itself fails,
-and `merge.require_up_to_date` is `true` (the default), the skill stops
-before touching either marker. A failed check is never read as "up to date".
-On a genuine behind-base PR, the skill asks the human approver to update the
-branch, wait for green CI, get a short Rex re-review of the new head, and
-re-run `/approve-merge`. `block-unreviewed-merge.sh` gets no new blocking
-condition. It optionally names a behind-base branch as a likely contributing
-reason when it already blocks on a missing or stale Rex marker, using the
-same compare-API check. That note is additive text on an existing block, not
-a new one. Both the skill's stop and the hook's note address the human
-approver, not the agent reading the block, because the recovery step pushes
-a commit to the PR's own branch.
+The skill stops before it touches either marker in two cases. In the first
+case, the check reports the PR behind. In the second case, the compare call
+fails. Both cases apply when `merge.require_up_to_date` is `true`, which is
+the default. A failed check is never read as "up to date". On a
+behind-base PR, the skill asks the human approver to update the branch and
+wait for green CI. The approver then gets a short Rex re-review of the new
+head and runs `/approve-merge` again. `block-unreviewed-merge.sh` gets no
+new blocking condition. When the hook already blocks on a missing or stale
+Rex marker, it can name a behind-base branch as a likely reason. It uses the
+same compare-API check. That note is additive text on an existing block,
+not a new one. Both the skill's stop and the hook's note address the human
+approver, not the agent reading the block. The recovery step pushes a
+commit to the PR's own branch.
 
 `/release-sync` step 5 now runs a plain `git merge --no-ff`, not `-X ours`,
 and resolves the version tag to a commit with `^{commit}`. An annotated
@@ -109,15 +109,15 @@ before push if one does not.
 - A behind-base PR now costs one extra round trip: update, wait for CI,
   re-review, re-approve. This is the intended cost. It replaces merging on a
   stale CI result.
-- A failed compare-API call now also stops the merge, where it previously
-  proceeded with a warning. This trades a rare false stop, on a network or
-  auth hiccup, for never treating an unknown state as "up to date".
+- A failed compare-API call also stops the merge. This trades a rare false
+  stop, on a network or auth hiccup, for never treating an unknown state as
+  "up to date".
 - `/release-sync` no longer resolves any conflict without a human answer.
-  Every conflicting release now needs one answer per conflicting file,
-  including a release that would have been a genuine, harmless squash
-  duplicate under the old rule. This is slower for that common case, and it
-  is the point: the old rule's job was to skip exactly this kind of file,
-  and apexyard#1348 shows the skip is not safe to automate.
+  Every conflicting release now needs one answer per conflicting file. This
+  includes a release that the old rule would have treated as a harmless
+  squash duplicate. This is slower for that common case, and the cost is
+  intended. `-X ours` skipped exactly this kind of file. apexyard#1348 shows
+  that this skip is not safe to automate.
 - The post-merge check in step 5c is best-effort. A commit whose content was
   legitimately superseded by a later main commit can show as a false
   failure. The skill treats a failure as "investigate", not as an automatic
