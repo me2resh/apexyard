@@ -410,6 +410,44 @@ assert_eq "#1151 unresolvable diff blocks" "2" "$code"
 rm -rf "$sb"
 
 echo ""
+echo "G) missing required library blocks (me2resh/apexyard#1405 H2)"
+# me2resh/apexyard#1405 second-round review, Hakim H2: a missing required
+# library must BLOCK in DEFAULT bash, not just under POSIXLY_CORRECT — see
+# block-unreviewed-merge.sh's own copy of this test for the full
+# rationale. Runs an independent, self-contained copy of the hook (own
+# HOOK_DIR) so removing a library here cannot affect the real repo.
+# _lib-pr-repo.sh is included here (unlike its optional treatment in
+# block-unreviewed-merge.sh / block-merge-on-red-ci.sh) because this hook
+# has always sourced it unconditionally and now guards it the same way.
+for lib in _lib-extract-pr.sh _lib-review-markers.sh _lib-pr-repo.sh; do
+  for mode in default posix; do
+    sb=$(mktemp -d)
+    mkdir -p "$sb/.claude/hooks"
+    cp "$HOOK_SRC" "$sb/.claude/hooks/require-architecture-review.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
+    chmod +x "$sb/.claude/hooks/require-architecture-review.sh"
+    rm -f "$sb/.claude/hooks/$lib"
+    input=$(printf '{"tool_input":{"command":"%s"}}' "gh pr merge 500 --repo o/r --squash")
+    if [ "$mode" = "posix" ]; then
+      got_stderr=$(cd "$sb" && bash -c "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/require-architecture-review.sh" 2>&1 >/dev/null)
+    else
+      got_stderr=$(cd "$sb" && bash -c "echo '$input' | bash .claude/hooks/require-architecture-review.sh" 2>&1 >/dev/null)
+    fi
+    got_rc=$?
+    rm -rf "$sb"
+    label="missing-$lib-blocks-in-$mode-bash"
+    if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+      echo "PASS [$label]"; PASS=$((PASS+1))
+    else
+      echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+      FAIL=$((FAIL+1))
+    fi
+  done
+done
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

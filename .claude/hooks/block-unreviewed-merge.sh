@@ -54,15 +54,54 @@
 
 INPUT=$(cat)
 
+# _require_lib <path>: source a REQUIRED library or fail closed.
+#
+# Without this guard, a missing/unreadable library leaves is_merge_command
+# (and the other functions the library defines) undefined. In default
+# (non-POSIX) bash, sourcing a missing file with a bare `.` returns 1 and
+# the script keeps running — the later `if ! is_merge_command "$COMMAND";
+# then exit 0; fi` check then calls an undefined function, bash reports
+# "command not found" (exit 127), the negated check reads that as "not a
+# merge command", and the hook exits 0. That exit is a clean, deliberate-
+# looking 0, not a crash, so the dispatcher's fail-closed wrapper
+# (AgDR-0169) cannot see it — this gate silently opens. See
+# me2resh/apexyard#1405 review finding H2 and AgDR-0169.
+#
+# Checking readability with `[ -r ]` BEFORE ever calling `.` also matters
+# under `bash --posix` / `POSIXLY_CORRECT=1`: a special builtin such as `.`
+# that fails to find its argument ends a non-interactive POSIX-mode shell
+# immediately, even inside an `if`/`||` guard around the `.` call itself —
+# verified empirically (see AgDR-0169). `[ -r ]` is an ordinary test
+# builtin, so it never triggers that behavior; this function never calls
+# `.` on a path it has not already confirmed is readable.
+_require_lib() {
+  local lib="$1"
+  if [ ! -r "$lib" ]; then
+    echo "BLOCKED: merge gate cannot load a required library." >&2
+    echo "Missing or unreadable: $lib" >&2
+    echo "A merge gate that cannot load its own logic fails closed" >&2
+    echo "instead of skipping the check. Restore the file and retry." >&2
+    exit 2
+  fi
+  # shellcheck disable=SC1090,SC1091
+  if ! . "$lib"; then
+    echo "BLOCKED: merge gate failed to load a required library." >&2
+    echo "Source failed: $lib" >&2
+    echo "A merge gate that cannot load its own logic fails closed" >&2
+    echo "instead of skipping the check. Fix the file and retry." >&2
+    exit 2
+  fi
+}
+
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
 # Sourced BEFORE the jq-based command parse below (moved up from its
 # original position after the parse) so is_merge_command is available as
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
-. "$(dirname "$0")/_lib-extract-pr.sh"
+_require_lib "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
-. "$(dirname "$0")/_lib-review-markers.sh"
+_require_lib "$(dirname "$0")/_lib-review-markers.sh"
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -136,9 +175,23 @@ fi
 # filename (still "-ceo.approved"), the structured fields (sha=,
 # approved_by=user, skill_version=), or any gate logic — those are parsed
 # and compared exactly as before, regardless of this value. Default "CEO"
-# is a zero-behaviour-change no-op.
-# shellcheck source=/dev/null
-. "$(dirname "$0")/_lib-read-config.sh" 2>/dev/null || true
+# is a zero-behaviour-change no-op. This library is genuinely OPTIONAL
+# here — a missing file falls straight through to the "CEO" default two
+# lines down — so it stays a soft, non-blocking read, unlike _require_lib
+# above for the two hard-required libraries.
+#
+# The `[ -r ]` check runs BEFORE the `.` call, not after via `|| true`:
+# under `bash --posix` / POSIXLY_CORRECT=1, `. "$missing" 2>/dev/null ||
+# true` still ends the whole shell immediately on a missing file — a
+# special builtin's failure is fatal for a non-interactive POSIX-mode
+# shell even inside an `||` guard around the failing command itself
+# (verified empirically; see AgDR-0169 and me2resh/apexyard#1405 review).
+# Never calling `.` on a path that is not already known to be readable
+# avoids that fatal case entirely, in both default and POSIX-mode bash.
+if [ -r "$(dirname "$0")/_lib-read-config.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$(dirname "$0")/_lib-read-config.sh"
+fi
 if command -v config_get_or >/dev/null 2>&1; then
   APPROVER_TITLE=$(config_get_or '.review_markers.human_approver_title' 'CEO')
 else

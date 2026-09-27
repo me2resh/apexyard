@@ -546,6 +546,75 @@ assert_eq "#1397 control: healthy library, non-UI file -> still allowed" "0" "$c
 rm -rf "$sb"
 
 echo ""
+echo "H) missing required library blocks (me2resh/apexyard#1405 H2)"
+# me2resh/apexyard#1405 second-round review, Hakim H2: a missing required
+# library must BLOCK in DEFAULT bash, not just under POSIXLY_CORRECT — see
+# block-unreviewed-merge.sh's own copy of this test for the full
+# rationale. Runs an independent, self-contained copy of the hook (own
+# HOOK_DIR) so removing a library here cannot affect the real repo.
+# _lib-pr-repo.sh is included here (unlike its optional treatment in
+# block-unreviewed-merge.sh / block-merge-on-red-ci.sh) because this hook
+# has always sourced it unconditionally and now guards it the same way.
+for lib in _lib-extract-pr.sh _lib-review-markers.sh _lib-pr-repo.sh; do
+  for mode in default posix; do
+    sb=$(mktemp -d)
+    mkdir -p "$sb/.claude/hooks"
+    cp "$HOOK_SRC" "$sb/.claude/hooks/require-design-review-for-ui.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-extract-pr.sh" "$sb/.claude/hooks/_lib-extract-pr.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-review-markers.sh" "$sb/.claude/hooks/_lib-review-markers.sh"
+    cp "$SRC_ROOT/.claude/hooks/_lib-pr-repo.sh" "$sb/.claude/hooks/_lib-pr-repo.sh"
+    chmod +x "$sb/.claude/hooks/require-design-review-for-ui.sh"
+    rm -f "$sb/.claude/hooks/$lib"
+    input=$(printf '{"tool_input":{"command":"%s"}}' "gh pr merge 500 --repo o/r --squash")
+    if [ "$mode" = "posix" ]; then
+      got_stderr=$(cd "$sb" && bash -c "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/require-design-review-for-ui.sh" 2>&1 >/dev/null)
+    else
+      got_stderr=$(cd "$sb" && bash -c "echo '$input' | bash .claude/hooks/require-design-review-for-ui.sh" 2>&1 >/dev/null)
+    fi
+    got_rc=$?
+    rm -rf "$sb"
+    label="missing-$lib-blocks-in-$mode-bash"
+    if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+      echo "PASS [$label]"; PASS=$((PASS+1))
+    else
+      echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+      FAIL=$((FAIL+1))
+    fi
+  done
+done
+
+# me2resh/apexyard#1403 comment (Adel's follow-up on Hakim's matrix): a
+# missing _lib-ui-paths.sh must ALSO block in POSIX mode by itself, not
+# only via the dispatcher's fail-closed wrapper. Before this hook's
+# readability pre-check, sourcing a missing _lib-ui-paths.sh from inside
+# `if ! . ... || ...` still ended a non-interactive POSIX-mode shell
+# immediately — the BLOCKED branch a few lines below was unreachable, so
+# only the dispatcher (AgDR-0169) caught this case. Confirms the gate now
+# blocks by itself in both modes.
+for mode in default posix; do
+  sb=$(make_sandbox)
+  install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+  rm -f "$sb/.claude/hooks/_lib-ui-paths.sh"
+  input=$(printf '{"tool_input":{"command":"%s"}}' "gh pr merge 77 --repo o/r --squash")
+  if [ "$mode" = "posix" ]; then
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/require-design-review-for-ui.sh" 2>&1 >/dev/null)
+  else
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | bash .claude/hooks/require-design-review-for-ui.sh" 2>&1 >/dev/null)
+  fi
+  got_rc=$?
+  rm -rf "$sb"
+  label="missing-_lib-ui-paths.sh-blocks-in-$mode-bash-by-itself"
+  if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1))
+  fi
+done
+
+echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"
 echo "==================================="

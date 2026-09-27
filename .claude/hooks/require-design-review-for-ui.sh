@@ -61,17 +61,63 @@
 
 INPUT=$(cat)
 
+# _require_lib <path>: source a REQUIRED library or fail closed.
+#
+# Without this guard, a missing/unreadable library leaves is_merge_command
+# (and the other functions the library defines) undefined. In default
+# (non-POSIX) bash, sourcing a missing file with a bare `.` returns 1 and
+# the script keeps running — the later `if ! is_merge_command "$COMMAND";
+# then exit 0; fi` check then calls an undefined function, bash reports
+# "command not found" (exit 127), the negated check reads that as "not a
+# merge command", and the hook exits 0. That exit is a clean, deliberate-
+# looking 0, not a crash, so the dispatcher's fail-closed wrapper
+# (AgDR-0169) cannot see it — this gate silently opens. See
+# me2resh/apexyard#1405 review finding H2 and AgDR-0169.
+#
+# Checking readability with `[ -r ]` BEFORE ever calling `.` also matters
+# under `bash --posix` / `POSIXLY_CORRECT=1`: a special builtin such as `.`
+# that fails to find its argument ends a non-interactive POSIX-mode shell
+# immediately, even inside an `if`/`||` guard around the `.` call itself —
+# verified empirically (see AgDR-0169). `[ -r ]` is an ordinary test
+# builtin, so it never triggers that behavior; this function never calls
+# `.` on a path it has not already confirmed is readable.
+_require_lib() {
+  local lib="$1"
+  if [ ! -r "$lib" ]; then
+    echo "BLOCKED: merge gate cannot load a required library." >&2
+    echo "Missing or unreadable: $lib" >&2
+    echo "A merge gate that cannot load its own logic fails closed" >&2
+    echo "instead of skipping the check. Restore the file and retry." >&2
+    exit 2
+  fi
+  # shellcheck disable=SC1090,SC1091
+  if ! . "$lib"; then
+    echo "BLOCKED: merge gate failed to load a required library." >&2
+    echo "Source failed: $lib" >&2
+    echo "A merge gate that cannot load its own logic fails closed" >&2
+    echo "instead of skipping the check. Fix the file and retry." >&2
+    exit 2
+  fi
+}
+
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
 # Handles `gh pr merge <N>` and `gh api repos/<owner>/<repo>/pulls/<N>/merge`.
 # Sourced BEFORE the jq-based command parse below (moved up from its
 # original position after the parse) so is_merge_command is available as
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
-. "$(dirname "$0")/_lib-extract-pr.sh"
+_require_lib "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
-. "$(dirname "$0")/_lib-review-markers.sh"
+_require_lib "$(dirname "$0")/_lib-review-markers.sh"
 # cd-target → origin recovery for the no---repo split-portfolio merge (#687).
-. "$(dirname "$0")/_lib-pr-repo.sh"
+# Required here (unlike its optional `if [ -f ]` treatment in
+# block-unreviewed-merge.sh / block-merge-on-red-ci.sh) — this hook has
+# always sourced it unconditionally, so _require_lib preserves that
+# "required" semantic while making a missing file fail closed instead of
+# either silently continuing (default bash) or fatally exiting the whole
+# script before this hook's own BLOCKED logic can run (POSIX mode). See
+# me2resh/apexyard#1405 review (Hakim's second matrix) and AgDR-0169.
+_require_lib "$(dirname "$0")/_lib-pr-repo.sh"
 
 # Parse .tool_input.command via jq. #965: this used to be the ONLY parse
 # path, and an empty/failed result — jq missing from PATH, or jq erroring
@@ -162,7 +208,20 @@ MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 # UI_GLOBS empty and the pattern loop below matched no file, so the gate
 # exited 0 on every PR — the opposite of this hook's CONTROL / fail-closed
 # contract (AgDR-0104 decision 1). me2resh/apexyard#1397 HIGH-1.
-if ! . "$HOOK_DIR/_lib-ui-paths.sh" 2>/dev/null || ! command -v ui_effective_globs >/dev/null 2>&1; then
+#
+# The `[ ! -r ]` readability check runs FIRST in this `||` chain, and `||`
+# short-circuits — so a missing file never reaches the `.` call at all.
+# That matters under `bash --posix` / `POSIXLY_CORRECT=1`: a special
+# builtin such as `.` that fails to find its argument ends a non-
+# interactive POSIX-mode shell immediately, even from inside this exact
+# `if ! . ... || ...` condition — verified empirically (see AgDR-0169 and
+# me2resh/apexyard#1405's second review round). Before this fix, the
+# BLOCKED branch below was unreachable in POSIX mode: the fatal exit
+# happened mid-evaluation of the `if`'s test list, before bash ever got to
+# decide the branch. `[ ! -r ]` is an ordinary test builtin, so it never
+# triggers that fatal case, and the BLOCKED message now prints in both
+# default and POSIX-mode bash.
+if [ ! -r "$HOOK_DIR/_lib-ui-paths.sh" ] || ! . "$HOOK_DIR/_lib-ui-paths.sh" 2>/dev/null || ! command -v ui_effective_globs >/dev/null 2>&1; then
   echo "BLOCKED: design-review gate could not load its UI pattern list (_lib-ui-paths.sh). Refusing to merge until the list can be read." >&2
   exit 2
 fi

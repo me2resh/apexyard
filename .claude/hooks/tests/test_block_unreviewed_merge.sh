@@ -931,6 +931,79 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}1091-control-healthy "
 fi
 
+# me2resh/apexyard#1405 second-round review, Hakim H2: a missing required
+# library (_lib-extract-pr.sh or _lib-review-markers.sh) must BLOCK the
+# merge in DEFAULT bash, not just under POSIXLY_CORRECT. Before the
+# per-hook `_require_lib` guard, a missing library made `is_merge_command`
+# undefined; the negated `if ! is_merge_command "$COMMAND"; then exit 0;
+# fi` check then read the resulting "command not found" (127) as "not a
+# merge command" and exited 0 — a clean, deliberate-looking allow that the
+# dispatcher's fail-closed wrapper (AgDR-0169) cannot see, because nothing
+# about that exit code says a gate failed to load.
+for lib in _lib-extract-pr.sh _lib-review-markers.sh; do
+  for mode in default posix; do
+    sb=$(make_sandbox)
+    write_rex_marker "$sb" 300
+    write_ceo_marker_structured "$sb" 300
+    rm -f "$sb/.claude/hooks/$lib"
+    input=$(jq -nc --arg c "gh pr merge 300 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+    if [ "$mode" = "posix" ]; then
+      got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+        "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+    else
+      got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+        "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+    fi
+    got_rc=$?
+    rm -rf "$sb"
+    label="missing-$lib-blocks-in-$mode-bash"
+    if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+      echo "PASS [$label]"; PASS=$((PASS+1))
+    else
+      echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+      FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+    fi
+  done
+done
+
+# me2resh/apexyard#1403 comment (deferred item, addressed here): a missing
+# _lib-read-config.sh must not crash the whole script with a raw bash
+# "No such file or directory" error under POSIX mode. The library's read
+# of `review_markers.human_approver_title` (line ~180) is genuinely
+# OPTIONAL — this hook falls back to the "CEO" display title when the
+# library is absent — so that read gets a readability check BEFORE the
+# `.` call, not a `_require_lib`-style hard block. A SEPARATE, pre-existing
+# read further down (`review_markers.require_posted_review`, #1051) is
+# deliberately fail-closed when config_get_or is undefined: it must not
+# assume that check is off just because it cannot read the setting. So the
+# net, correct behaviour is: the gate still BLOCKS overall (via that
+# pre-existing check), but with the SAME clean BLOCKED message in both
+# default and POSIX-mode bash — never a raw, un-actionable bash crash that
+# only POSIX mode used to produce.
+for mode in default posix; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 301
+  write_ceo_marker_structured "$sb" 301
+  rm -f "$sb/.claude/hooks/_lib-read-config.sh"
+  input=$(jq -nc --arg c "gh pr merge 301 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+  if [ "$mode" = "posix" ]; then
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  else
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  fi
+  got_rc=$?
+  rm -rf "$sb"
+  label="missing-optional-_lib-read-config.sh-clean-block-in-$mode-bash"
+  if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+  fi
+done
+
 # --- Summary ----------------------------------------------------------
 
 echo ""

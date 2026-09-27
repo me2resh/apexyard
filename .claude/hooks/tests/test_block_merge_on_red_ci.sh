@@ -564,6 +564,32 @@ tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
 run_case "#973: jq broken, JSON-escaped-tab NON-merge command -> stays a no-op" 0 "" "$sb" \
   "$tab_nonmerge_cmd"
 
+# me2resh/apexyard#1405 second-round review, Hakim H2: a missing required
+# library (_lib-extract-pr.sh) must BLOCK in DEFAULT bash, not just under
+# POSIXLY_CORRECT — see block-unreviewed-merge.sh's own copy of this test
+# for the full rationale.
+for mode in default posix; do
+  sb=$(make_sandbox green success)
+  rm -f "$sb/.claude/hooks/_lib-extract-pr.sh"
+  input=$(jq -nc --arg c "gh pr merge 400 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+  if [ "$mode" = "posix" ]; then
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+  else
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+  fi
+  got_rc=$?
+  rm -rf "$sb"
+  label="missing-_lib-extract-pr.sh-blocks-in-$mode-bash"
+  if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qi "BLOCKED"; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: want rc=2 + BLOCKED, got rc=$got_rc stderr=${got_stderr:0:300}" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+  fi
+done
+
 echo ""
 echo "=== test_block_merge_on_red_ci: $PASS passed, $FAIL failed ==="
 if [ "$FAIL" -gt 0 ]; then
