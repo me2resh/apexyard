@@ -47,6 +47,29 @@ run_hook() {
   fi
 }
 
+# run_merge_gate_hook: the four MERGE-GATE hooks fail CLOSED, not open, on
+# any exit other than 0 or 2 (me2resh/apexyard#1403, AgDR-0169).
+#
+# run_hook above WARNS and continues past a non-2 non-zero exit, which is
+# right for an advisory check but wrong for a gate whose only job is to
+# decide whether a merge may proceed. A merge gate that cannot run its own
+# check (a missing sourced library under POSIX mode, for one) still exits
+# non-zero, just not 2 — and a normal Claude Code session never sets
+# POSIXLY_CORRECT, but other harnesses and CI shells may. `run_hook` would
+# log that as a WARN and let the merge through unreviewed. This wrapper
+# treats it as a BLOCKED instead.
+run_merge_gate_hook() {
+  local script="$1" rc=0
+  if "$HOOK_DIR/$script" <<<"$INPUT"; then :; else rc=$?; fi
+  if [ "$rc" -eq 2 ]; then
+    exit 2
+  fi
+  if [ "$rc" -ne 0 ]; then
+    printf 'BLOCKED: %s exited %s instead of a normal PASS. A merge gate that cannot run its own check fails closed, not open.\n' "$script" "$rc" >&2
+    exit 2
+  fi
+}
+
 # APEXYARD_DISPATCH_GATE: Bash|*|block-ambient-tracker-repo.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-privileged-escalation.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-skill-for-issue-create.sh
@@ -122,10 +145,10 @@ run_merge_gates() {
     return 0
   fi
   _merge_gates_ran=1
-  run_hook block-unreviewed-merge.sh
-  run_hook require-design-review-for-ui.sh
-  run_hook block-merge-on-red-ci.sh
-  run_hook require-architecture-review.sh
+  run_merge_gate_hook block-unreviewed-merge.sh
+  run_merge_gate_hook require-design-review-for-ui.sh
+  run_merge_gate_hook block-merge-on-red-ci.sh
+  run_merge_gate_hook require-architecture-review.sh
 }
 
 case "$COMMAND" in
