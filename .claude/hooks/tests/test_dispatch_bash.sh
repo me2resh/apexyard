@@ -240,4 +240,63 @@ for command in \
   [ "$rc" -eq 2 ]
 done
 
+# me2resh/apexyard#1403 review finding A1: an unreadable (not missing)
+# _lib-extract-pr.sh must BLOCK (exit 2) with a message naming the file,
+# not silently exit 1. Before the fix, the dispatcher's own `[ -f ]` guard
+# let `set -e` kill the whole script the moment the `.` source failed on a
+# file it could not read, and Claude Code only blocks a tool call on exit
+# 2 — an unreadable library used to let every Bash command through
+# unblocked, not just merges.
+#
+# Both sandboxes below are full copies of $TMP/hooks (dispatch-bash.sh plus
+# every stub gate script already set up earlier in this test file), so a
+# non-merge command like `echo hello` runs the same as it does in the
+# healthy case above and the only variable under test is the state of
+# _lib-extract-pr.sh itself.
+unreadable_lib_dir="$(mktemp -d)"
+missing_lib_dir="$(mktemp -d)"
+trap 'rm -rf "$TMP" "$broken_jq" "$unreadable_lib_dir" "$missing_lib_dir"' EXIT
+
+cp -r "$TMP/hooks" "$unreadable_lib_dir/hooks"
+chmod 000 "$unreadable_lib_dir/hooks/_lib-extract-pr.sh"
+
+set +e
+printf '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' \
+  | DISPATCH_LOG="$TMP/log" bash "$unreadable_lib_dir/hooks/dispatch-bash.sh" >/dev/null 2>"$TMP/stderr"
+rc=$?
+set -e
+
+if [ "$rc" -ne 2 ]; then
+  echo "FAIL: unreadable _lib-extract-pr.sh did not block (rc=$rc, want 2)" >&2
+  cat "$TMP/stderr" >&2
+  exit 1
+fi
+if ! grep -qi 'BLOCKED' "$TMP/stderr"; then
+  echo "FAIL: unreadable _lib-extract-pr.sh blocked (rc=2) but printed no BLOCKED message" >&2
+  cat "$TMP/stderr" >&2
+  exit 1
+fi
+if ! grep -q '_lib-extract-pr.sh' "$TMP/stderr"; then
+  echo "FAIL: block message does not name the unreadable file" >&2
+  cat "$TMP/stderr" >&2
+  exit 1
+fi
+
+# Control: a MISSING (not unreadable) library must stay a tolerated
+# partial-install case, not a new block — this test would also catch an
+# overly broad fix that blocks on absence too.
+cp -r "$TMP/hooks" "$missing_lib_dir/hooks"
+rm -f "$missing_lib_dir/hooks/_lib-extract-pr.sh"
+
+set +e
+printf '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' \
+  | DISPATCH_LOG="$TMP/log" bash "$missing_lib_dir/hooks/dispatch-bash.sh" >/dev/null 2>"$TMP/stderr"
+rc=$?
+set -e
+if [ "$rc" -eq 2 ]; then
+  echo "FAIL: a MISSING (not unreadable) _lib-extract-pr.sh should not itself block a non-merge command" >&2
+  cat "$TMP/stderr" >&2
+  exit 1
+fi
+
 echo "PASS: bash dispatcher"

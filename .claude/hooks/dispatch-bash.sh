@@ -18,7 +18,30 @@ fi
 # Merge-shape detection for wrapped commands (AgDR-0162, me2resh/apexyard#1338).
 # Prefix case arms still handle the one-line forms. is_merge_command scans the
 # full payload command, so `bash -c` around tracker_pr_merge still routes.
-if [ -f "$HOOK_DIR/_lib-extract-pr.sh" ]; then
+#
+# Check [ -r ], not [ -f ] (A1, me2resh/apexyard#1403 review): under
+# `set -e`, sourcing a file that EXISTS but is unreadable makes the `.`
+# builtin fail, and the whole dispatcher then exits with that failure's
+# code (1) before any merge gate has run. Claude Code only blocks a tool
+# call on exit 2, so an unreadable library used to let every Bash command
+# through unblocked, not just merges — a silent fail-open, not a fail-closed
+# exit 1 as the exit code alone might suggest.
+#
+# A file that is MISSING entirely is a tolerated partial-install case:
+# is_merge_command stays undefined, and the fail-closed check further down
+# this script still runs the merge gates on any merge-shaped command. A file
+# that EXISTS and cannot be READ is a different, more suspicious case — a
+# broken permission or a tampered file, not a partial install — so it gets
+# an explicit block instead of silently falling through to that same path.
+if [ -e "$HOOK_DIR/_lib-extract-pr.sh" ] && [ ! -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
+  echo "BLOCKED: dispatcher found _lib-extract-pr.sh but cannot read it." >&2
+  echo "Unreadable: $HOOK_DIR/_lib-extract-pr.sh" >&2
+  echo "A dispatcher that cannot load its own merge-shape parser fails" >&2
+  echo "closed instead of silently skipping the check. Restore read" >&2
+  echo "permissions on the file and retry." >&2
+  exit 2
+fi
+if [ -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-extract-pr.sh"
 fi
