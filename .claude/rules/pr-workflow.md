@@ -89,7 +89,7 @@ When the skill stops, ask the CEO to do this, or to approve you doing it:
    existing Rex marker no longer matches HEAD.
 4. Run `/approve-merge <pr>` again.
 
-Do not run the update-branch command yourself without that ask. The update
+Do not run the update-branch command yourself without the user's approval. The update
 pushes a merge commit to the PR's head branch. On a fork PR with maintainer
 edits that branch belongs to the contributor, not to this session. Do not
 update the branch before the first review either way — an update changes the
