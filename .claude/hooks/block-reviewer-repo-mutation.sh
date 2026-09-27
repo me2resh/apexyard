@@ -9,11 +9,24 @@
 # review-class work is in flight, so Bash git mutations must be rejected before
 # they can alter the reviewed branch or working tree. Read-only git commands
 # remain available for evidence gathering and review submission.
+#
+# SESSION-SCOPED marker (me2resh/apexyard#1376): the marker path is keyed on
+# CLAUDE_CODE_SESSION_ID via active_reviewer_marker_path (_lib-review-markers.sh),
+# so this hook only ever sees the marker THIS session's own review wrote. A
+# review running in a different session (a different worktree, a different
+# terminal, on the same ops fork) can no longer block — or, on the overwrite
+# race the fixed shared path used to have, fail to block — this session.
 
 set -u
 
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
+
+HOOK_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
+if [ -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-review-markers.sh"
+fi
 
 # If the hook cannot parse the tool payload, do not invent a block when there
 # is no active review. With an active marker, fail closed for payloads that
@@ -30,7 +43,30 @@ if [ -z "$ROOT" ] || [ ! -d "$ROOT/.claude/session" ]; then
 fi
 
 [ -n "$ROOT" ] || exit 0
-ACTIVE="$ROOT/.claude/session/active-reviewer"
+if command -v active_reviewer_marker_path >/dev/null 2>&1; then
+  ACTIVE=$(active_reviewer_marker_path "$ROOT")
+else
+  # Defensive fallback if the lib is missing — pre-#1376 fixed path, so a
+  # broken install fails no worse than it did before this change.
+  ACTIVE="$ROOT/.claude/session/active-reviewer"
+fi
+
+# ADVISORY ONLY (me2resh/apexyard#1400 security re-review, LOW 3): a session
+# with an id resolves ACTIVE to the session-suffixed path and never falls
+# back to the bare legacy path once that id exists (AgDR-0166). A caller that
+# still writes the literal `.claude/session/active-reviewer` string — a
+# prompt or doc that predates the #1376 fix, or a stale write left over from
+# before an upgrade — arms no lock for this session: this hook silently
+# never reads that file, so a reviewing session's own git mutations are not
+# blocked, without any message saying why. This warning names that state on
+# stderr. It does not gate on the legacy file — the session-scoped check
+# above and below remains the only thing that blocks.
+LEGACY_ACTIVE="$ROOT/.claude/session/active-reviewer"
+SID="${CLAUDE_CODE_SESSION_ID:-}"
+if [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
+  echo "ADVISORY: a legacy shared active-reviewer marker exists at $LEGACY_ACTIVE, but this session ($SID) reads only $ACTIVE. A writer that used the bare legacy path arms no mutation lock for this session. Resolve the marker path through active_reviewer_marker_path instead of the literal string." >&2
+fi
+
 [ -f "$ACTIVE" ] || exit 0
 
 if [ -z "$COMMAND" ]; then
@@ -43,7 +79,6 @@ fi
 
 # Remove confirmed heredoc bodies before inspecting command text. Review prose
 # often mentions git verbs; only the command portion should be classified.
-HOOK_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
 if [ -f "$HOOK_DIR/_lib-strip-heredoc.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-strip-heredoc.sh"

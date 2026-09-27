@@ -60,6 +60,10 @@ projects:
     repo: test-org/widget-forge
     workspace: workspace/widget-forge
     status: active
+  - name: me2resh
+    repo: owner-collision/me2resh-tool
+    workspace: workspace/me2resh-tool
+    status: active
 YAML
 
 # A directory to cd into so the hook walks up to find the registry.
@@ -1010,7 +1014,104 @@ run_case "#1206 H2: tracker_pr_merge wrapper inside \$(...) still anchors and sc
   "MERGE_RESULT=\$(tracker_pr_merge \"me2resh/apexyard\" \"12\" \"squash\" true \"widget-forge leak\")"
 
 # ---------------------------------------------------------------------------
-# 72-75. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.
+# 72-77b. me2resh/apexyard#1387 — a registered project's `name` colliding with
+# the OWNER login of the public repo being written to (not just its bare
+# repo name) was treated as a leak. The fixture registry above adds a
+# project literally named "me2resh" (owner-collision/me2resh-tool) to
+# reproduce it: before the fix, writing the target repo out in full as
+# "me2resh/apexyard", or plainly @-mentioning its owner, blocked on
+# "project name: me2resh" even though nothing private was referenced.
+#
+# The fix exempts the target repo's OWNER login (step 8 in the source file),
+# but only inside the two safe forms the issue asked to unblock: `@owner` and
+# `owner/<repo-slug>`. A BARE, standalone mention of the owner's name (case
+# 77b) still blocks, exactly like any other registered private project's
+# name — the issue asked to keep the block in that case, and a genuinely
+# different private project must still block exactly as before too.
+# ---------------------------------------------------------------------------
+
+# 72. The exact repro: writing the target out as "<owner>/<repo>" in body
+#     prose used to block on the coincidental "me2resh" project-name match.
+run_case "#1387: writing the target repo as <owner>/<repo> in the body must not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'fix: patch' --body 'filed against me2resh/apexyard directly'"
+
+# 73. Plainly @-mentioning the owner (no slash, no repo name at all) — the
+#     issue's own repro notes a review "could not @-mention its author".
+run_case "#1387: @-mentioning the repo owner in the body must not block" \
+  0 "" \
+  "gh pr review 12 --repo me2resh/apexyard --comment --body 'nice catch @me2resh, one nit below'"
+
+# 74. Owner mention in the title, not just the body.
+run_case "#1387: owner mention in the title must not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'me2resh/apexyard: fix release notes' --body 'clean body'"
+
+# 75. Regression guard — a GENUINELY different private project's name must
+#     still block. The owner exemption must not widen into "any name is
+#     fine now".
+run_case "#1387: an unrelated private project name still blocks (owner exemption is narrow)" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'discovered during curios-dog rebuild'"
+
+# 76. Regression guard — the target's own bare repo name exemption (pre-
+#     existing, #1387 must not disturb it) still works alongside the new
+#     owner exemption.
+run_case "#1387: the target's own bare repo name still exempt (pre-existing behaviour preserved)" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'apexyard: fix release notes' --body 'clean body'"
+
+# 77. Regression guard — an owner mention alongside a GENUINE leak in the
+#     same body must still catch the real leak. The exemption skips only
+#     the owner's own name entry; it must not short-circuit scanning the
+#     rest of the body for an unrelated private project.
+run_case "#1387: owner mention plus a real leak in the same body still blocks on the real leak" \
+  2 "project name: curios-dog" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'filed against me2resh/apexyard; also discovered during curios-dog rebuild'"
+
+# 77b. Rex code-review finding (PR #1400) — the issue asked to KEEP the block
+#      when the owner-equal name appears alone (no `@`, no `/`). The exemption
+#      strips only the `@owner` and `owner/<repo-slug>` forms; a bare,
+#      standalone mention must still block exactly like any other registered
+#      private project's name. This is the narrowing the review requested.
+run_case "#1387: a BARE owner-name mention (no @, no /) still blocks (issue's own scope)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the me2resh project is failing'"
+
+# 77c-77e. me2resh/apexyard#1400 security re-review, LOW 1 — a hyphen-joined
+#          form of the owner-equal name used to bypass the owner branch: its
+#          bare-mention check treated `-` as a word character, so
+#          `me2resh-tool` or `foo-me2resh` read as one token that never
+#          matched the standalone-word pattern. The GENERIC per-name check a
+#          few lines below (`grep -qiwE`, unaffected by this PR) already
+#          treats `-` as a boundary, so the exact same text still blocked
+#          for any OTHER registered name — the owner branch alone had this
+#          gap. Fixed by narrowing the bare-mention boundary class to match
+#          `grep -w`'s own word-character set.
+run_case "#1400 LOW1: hyphen-suffixed owner-equal name still blocks (owner-tool)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'ship the me2resh-tool update'"
+
+run_case "#1400 LOW1: hyphen-prefixed owner-equal name still blocks (foo-owner)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the foo-me2resh integration failed'"
+
+run_case "#1400 LOW1: Rex A1 repro — 'the OWNER-internal rebuild failed' still blocks" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'the me2resh-internal rebuild failed'"
+
+# 77f. me2resh/apexyard#1400 security re-review, LOW 2 — the owner/<slug>
+#      strip expression's slug class included `.`, so a second, glued
+#      mention right after a dot (`owner/repo.owner`) was captured INSIDE
+#      the stripped slug and disappeared along with the safe `owner/repo`
+#      form. Removing `.` from the slug class stops the capture at the dot,
+#      leaving the glued mention for the bare-mention check to catch.
+run_case "#1400 LOW2: owner/repo.owner glued mention still blocks (dot no longer in slug class)" \
+  2 "project name: me2resh" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'cross-posted as me2resh/apexyard.me2resh for tracking'"
+
+# ---------------------------------------------------------------------------
+# 78-81. me2resh/apexyard#1206 (Hakim MEDIUM) — the --flag=value equals form.
 # extract_flag_value/extract_path_flag both require a space between a flag
 # and its value; the equals form matched neither, so a leak sent through it
 # reached the empty-haystack short-circuit unscanned. --input already fixed

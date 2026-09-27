@@ -114,7 +114,9 @@ flowchart LR
   `tracker_pr_merge`). Each is a place where the *shape of a shell command string* is the only signal
   the gate has to work with.
 - **Data stores (4 classes):** local session-state markers (`.claude/session/reviews/`,
-  `.claude/session/active-reviewer`, `.claude/session/tickets/`) — gitignored, filesystem-writable by
+  `.claude/session/active-reviewer.<session-id>` — session-scoped since me2resh/apexyard#1376,
+  resolved through `active_reviewer_marker_path`, never the bare literal path —
+  `.claude/session/tickets/`) — gitignored, filesystem-writable by
   any tool call in the session; the private portfolio registry (`apexyard.projects.yaml`) — git-tracked
   but private-by-convention; per-fork config (`.claude/project-config.json`) — **untracked by design**,
   so edits leave no git trail; and the forge itself (GitHub/GitLab) — the only store in this diagram an

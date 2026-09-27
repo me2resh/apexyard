@@ -73,6 +73,13 @@
 # until #1026 returned the hook to advisory — see "#1026 — BACK TO ADVISORY"
 # below. The (repo, pr, kind) match still decides whether the banner fires:
 #
+# NOTE (me2resh/apexyard#1376): the literal path below is the pre-#1376
+# shape, kept here because it is the clearest illustration of the
+# (repo, pr, kind) match. The marker path is now session-scoped — resolved
+# through `active_reviewer_marker_path` in `_lib-review-markers.sh`, never
+# the literal `.claude/session/active-reviewer` string — and the actual
+# read a few hundred lines below already calls that resolver.
+#
 #   .claude/session/active-reviewer contains:  me2resh/apexyard#843:rex
 #   allows a write to:                         me2resh__apexyard__843-rex.approved
 #   blocks a write to:                         me2resh__apexyard__843-security.approved  (kind mismatch)
@@ -674,7 +681,20 @@ if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
 fi
 MARKER_HOME="${OPS_ROOT:-${REPO_ROOT:-.}}"
 
-ACTIVE_REVIEWER_MARKER="$MARKER_HOME/.claude/session/active-reviewer"
+# Session-scoped (me2resh/apexyard#1376): active_reviewer_marker_path keys the
+# path on CLAUDE_CODE_SESSION_ID, so this warning is suppressed only by the
+# marker THIS session's own sanctioned review wrote — never by a marker a
+# different session set for a different PR.
+if [ -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-review-markers.sh"
+fi
+if command -v active_reviewer_marker_path >/dev/null 2>&1; then
+  ACTIVE_REVIEWER_MARKER=$(active_reviewer_marker_path "$MARKER_HOME")
+else
+  # Defensive fallback if the lib is missing — pre-#1376 fixed path.
+  ACTIVE_REVIEWER_MARKER="$MARKER_HOME/.claude/session/active-reviewer"
+fi
 
 if [ "$RESOLVED_VIA" = "literal" ]; then
   # Parse the (repo, pr) this write targets from the marker's own filename.

@@ -128,9 +128,110 @@ case3() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# me2resh/apexyard#1376 — the marker this hook sweeps is now keyed on
+# CLAUDE_CODE_SESSION_ID. Before this fix, a SessionStart sweep in ANY
+# session removed the ONE fixed marker file regardless of who wrote it — so
+# a fresh session starting up could silently disable
+# block-reviewer-repo-mutation.sh for a review genuinely still in flight in a
+# DIFFERENT, concurrently-running session/worktree. A dedicated sandbox (with
+# _lib-review-markers.sh copied in, unlike make_sandbox above) and a
+# session-aware run helper cover this without touching cases 1-3.
+# ---------------------------------------------------------------------------
+
+LIB_MARKERS="$(cd "$(dirname "$0")/.." && pwd)/_lib-review-markers.sh"
+if [ ! -f "$LIB_MARKERS" ]; then
+  echo "FAIL: _lib-review-markers.sh not found at $LIB_MARKERS" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+. "$LIB_MARKERS"
+
+make_sandbox_scoped() {
+  local sb; sb=$(make_sandbox)
+  cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
+  echo "$sb"
+}
+
+# run_hook_sess <sandbox> <session_id|""> <expect_grep|""> <case_name>
+run_hook_sess() {
+  local sb="$1" sess="$2" expect_grep="$3" case_name="$4"
+  local stderr_file
+  stderr_file=$(mktemp)
+  (
+    cd "$sb" || exit 1
+    if [ -n "$sess" ]; then export CLAUDE_CODE_SESSION_ID="$sess"; else unset CLAUDE_CODE_SESSION_ID; fi
+    "$sb/.claude/hooks/clear-active-reviewer-marker.sh" 2>"$stderr_file"
+  )
+  local rc=$?
+  local ok=1
+
+  if [ "$rc" != "0" ]; then
+    echo "FAIL [$case_name]: exit $rc (expected 0)" >&2
+    ok=0
+  fi
+  if [ -z "$expect_grep" ]; then
+    if [ -s "$stderr_file" ]; then
+      echo "FAIL [$case_name]: expected silent, got stderr" >&2
+      ok=0
+    fi
+  else
+    if ! grep -qE "$expect_grep" "$stderr_file"; then
+      echo "FAIL [$case_name]: stderr did not match /$expect_grep/" >&2
+      ok=0
+    fi
+  fi
+
+  if [ "$ok" = "1" ]; then
+    PASS=$((PASS+1))
+    echo "PASS [$case_name]"
+  else
+    sed 's/^/    stderr: /' "$stderr_file" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="$FAILED_CASES $case_name"
+  fi
+  rm -f "$stderr_file"
+}
+
+# -------------------- CASE 4: same session's own stale marker -- cleared --------------------
+case4() {
+  local sb; sb=$(make_sandbox_scoped)
+  local marker; marker=$(active_reviewer_marker_path "$sb" "sess-A")
+  mkdir -p "$(dirname "$marker")"
+  printf '%s\n' "me2resh/apexyard#843:rex" > "$marker"
+  run_hook_sess "$sb" "sess-A" "cleared stale active-reviewer marker.*me2resh/apexyard#843:rex" "same-session-stale-marker-cleared"
+  if [ -f "$marker" ]; then
+    echo "FAIL [same-session-stale-marker-cleared]: marker file still present after sweep" >&2
+    FAIL=$((FAIL+1)); PASS=$((PASS-1))
+  fi
+  rm -rf "$sb"
+}
+
+# -------------------- CASE 5: THE REGRESSION THIS FIX CLOSES -- a DIFFERENT
+# session's marker must survive the sweep --------------------
+# Session "sess-A" is mid-review (its marker is live, not stale). SessionStart
+# fires in a NEW, unrelated session "sess-B". Pre-#1376's single fixed path
+# meant sess-B's own startup swept sess-A's marker out from under its
+# still-running review, silently disabling block-reviewer-repo-mutation.sh for
+# it. Post-#1376, sess-B's sweep only ever targets its OWN suffixed path.
+case5() {
+  local sb; sb=$(make_sandbox_scoped)
+  local marker_a; marker_a=$(active_reviewer_marker_path "$sb" "sess-A")
+  mkdir -p "$(dirname "$marker_a")"
+  printf '%s\n' "me2resh/apexyard#843:rex" > "$marker_a"
+  run_hook_sess "$sb" "sess-B" "" "different-session-marker-survives-sweep"
+  if [ ! -f "$marker_a" ]; then
+    echo "FAIL [different-session-marker-survives-sweep]: sess-B's sweep removed sess-A's live marker (#1376 regression)" >&2
+    FAIL=$((FAIL+1)); PASS=$((PASS-1))
+  fi
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
+case4
+case5
 
 echo ""
 echo "==================================="
