@@ -102,6 +102,17 @@ _require_lib() {
 _require_lib "$(dirname "$0")/_lib-extract-pr.sh"
 # Repo-qualified marker path helper (#485).
 _require_lib "$(dirname "$0")/_lib-review-markers.sh"
+# Behind-base detection independent of the forge's mergeStateStatus field
+# (me2resh/apexyard#1386 — see _lib-merge-behind.sh for why). Optional, not
+# a _require_lib dependency: this library only appends an advisory note to
+# a block path that already exits 2 for another reason (a missing or stale
+# Rex marker). Its absence removes that note, not the block itself, so a
+# missing/unreadable file here must not turn an otherwise-working gate into
+# a blanket block on every Bash command (AgDR-0169).
+if [ -r "$(dirname "$0")/_lib-merge-behind.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$(dirname "$0")/_lib-merge-behind.sh"
+fi
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -302,6 +313,52 @@ MSG
   exit 2
 fi
 
+# --- Optional behind-base note, shared by the two blocks below (#1386) ---
+# Advisory only — it adds NO new blocking condition. Both call sites already
+# block for another reason (a missing or stale Rex marker); this only
+# appends a likely contributing reason to that existing block.
+#
+# Reads "behind" from the compare API (is_pr_behind_base), not from
+# mergeStateStatus — GitHub only reports mergeStateStatus=BEHIND when the
+# base ruleset has strict_required_status_checks_policy=true, which #1386's
+# own issue body reports is OFF here. A PR that is genuinely behind an
+# unprotected base reports BLOCKED, CLEAN, or UNKNOWN instead, so reading
+# mergeStateStatus alone would miss it. See _lib-merge-behind.sh.
+#
+# The note addresses the human approver, not the agent reading this stderr:
+# updating a PR's branch pushes a merge commit to the PR's head branch, and
+# on a fork PR with maintainer edits that branch belongs to the contributor.
+# Only the user decides whether that push happens.
+print_behind_base_note() {
+  # Skip entirely when _lib-merge-behind.sh did not load (optional, see the
+  # [ -r ] guard above). is_pr_behind_base is then undefined, and calling
+  # an undefined function here would print noise to stderr for no gain —
+  # the note is advisory, so its absence is silent, not an error.
+  if ! command -v is_pr_behind_base >/dev/null 2>&1; then
+    return 0
+  fi
+  # Skip both lookups when the merge command names no repo. An empty
+  # --repo lets `gh` resolve the ambient repo from local git remotes
+  # instead (the #887 class) — the note could then describe a different
+  # repo's PR with the same number. Fail silent, not silently wrong.
+  if [ -z "${CMD_REPO:-}" ]; then
+    return 0
+  fi
+  local base behind
+  base=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  behind=$(is_pr_behind_base "$CMD_REPO" "$base" "$CURRENT_SHA")
+  if [ "$behind" = "true" ]; then
+    cat >&2 <<MSG3
+
+NOTE: PR #${PR_NUMBER} is also behind its base branch (${base:-its base}).
+Ask the ${APPROVER_TITLE} to update the branch or to approve that update.
+The update command is: gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO}
+Do not update it yourself. Then wait for green CI and re-run /code-review
+before /approve-merge.
+MSG3
+  fi
+}
+
 # --- Rex marker check ---
 if [ ! -f "$REX_APPROVAL" ]; then
   cat >&2 <<MSG
@@ -343,6 +400,9 @@ MSG
   if _NEAR_MISS_HINT=$(unqualified_marker_hint "$MARKER_HOME" "$PR_NUMBER" rex "$REX_APPROVAL" 2>/dev/null); then
     printf '%s\n' "$_NEAR_MISS_HINT" >&2
   fi
+  # This merge was already refused above (missing Rex marker); the note
+  # below only names a likely contributing reason. See print_behind_base_note.
+  print_behind_base_note
   exit 2
 fi
 
@@ -354,6 +414,11 @@ BLOCKED: Code-reviewer approved commit ${REX_SHA:0:7} but HEAD is now ${CURRENT_
 New commits were pushed after the Rex review. Re-invoke Rex on the latest
 HEAD before merging.
 MSG
+  # This merge was already refused above (stale Rex marker); the note
+  # below only names a likely contributing reason (#1386). A branch update
+  # would also explain the SHA mismatch itself — the PR moved after Rex's
+  # review, whether from a base-branch update or new commits.
+  print_behind_base_note
   exit 2
 fi
 

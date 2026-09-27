@@ -84,7 +84,7 @@ Only proceed past this step if the user has given an unambiguous per-PR approval
 ### 3. Verify the PR state
 
 ```bash
-gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid
+gh pr view <pr> --repo "$REPO" --json state,isDraft,mergeable,headRefOid,mergeStateStatus,baseRefName
 ```
 
 Sanity checks:
@@ -92,20 +92,27 @@ Sanity checks:
 - `state` must be `OPEN`. Refuse if it's `MERGED`, `CLOSED`, or `DRAFT`.
 - `mergeable` should be `MERGEABLE` or `UNKNOWN` (GitHub hasn't computed yet). Refuse on `CONFLICTING`.
 - Capture `headRefOid` — this is the **PR's HEAD on GitHub**, which is the SHA both markers must match. Don't use `git rev-parse HEAD` from the local working tree — it's rarely the PR branch and the merge gate compares against the GitHub-reported HEAD.
+- Capture `baseRefName` for step 3a below. Step 3a does NOT use
+  `mergeStateStatus` to decide "behind" — see step 3a for why.
 
-### 4. Verify the Rex marker exists at the PR's HEAD
+### 3a. Stop if the PR is behind its base branch (me2resh/apexyard#1386, `merge.require_up_to_date`)
 
-The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action.
+A merge queue creates a race: PR A merges to the base branch first, and PR B's
+last CI run still reflects the old base.
+
+First resolve the **ops fork root**, not git toplevel. Inside
+`workspace/<project>/`, git toplevel is the project clone, and
+`_lib-read-config.sh` and `_lib-merge-behind.sh` do not exist there
+(me2resh/apexyard#229, #230). Step 4 below reuses this same `MARKER_HOME` —
+resolve it once, here:
 
 ```bash
-# Resolve the OPS FORK ROOT, not git toplevel. Inside workspace/<project>/,
-# git toplevel is the project clone; markers live in the ops fork above.
-# See me2resh/apexyard#229 + #230. Resolve PIN-FIRST — the same strategy the
-# merge gate uses (_lib-ops-root.sh::resolve_ops_root). The session pin points
-# at the real ops fork even from a workspace clone; a plain walk-up resolves to
-# the private portfolio sibling in split-portfolio mode (it has onboarding.yaml
-# + apexyard.projects.yaml) where _lib-review-markers.sh doesn't exist, so the
-# CEO marker lands where the gate can't see it (me2resh/apexyard#559).
+# Resolve the OPS FORK ROOT the same way the merge gate does
+# (_lib-ops-root.sh::resolve_ops_root). Pin-first, then a fallback walk-up.
+# The session pin points at the real ops fork even from a workspace clone;
+# a plain walk-up resolves to the private portfolio sibling in
+# split-portfolio mode (it has onboarding.yaml + apexyard.projects.yaml)
+# where these libs don't exist (me2resh/apexyard#559).
 OPS_ROOT=""
 PIN_FILE="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}/ops-root-${CLAUDE_CODE_SESSION_ID:-}"
 if [ -z "${APEXYARD_OPS_DISABLE_PIN:-}" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -f "$PIN_FILE" ]; then
@@ -127,6 +134,91 @@ if [ -z "$OPS_ROOT" ]; then
   done
 fi
 MARKER_HOME="${OPS_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+```
+
+Load the config library from `$MARKER_HOME`, not git toplevel. Stop if it
+fails to load — a load failure is not evidence the check is off:
+
+```bash
+if ! source "$MARKER_HOME/.claude/hooks/_lib-read-config.sh"; then
+  echo "Cannot load _lib-read-config.sh from $MARKER_HOME. Stopping — the behind-base check cannot run." >&2
+  exit 1
+fi
+REQUIRE_UP_TO_DATE=$(config_get_or '.merge.require_up_to_date' 'true')
+```
+
+**Treat any value other than the literal `false` as on.** An empty value, an
+unset variable, or a config key that is missing are all "on", not "off" — the
+check defaults to on, and only an explicit `false` turns it off.
+
+**Do not decide "behind" from `mergeStateStatus`.** GitHub only reports
+`mergeStateStatus=BEHIND` when the base branch's ruleset has
+`strict_required_status_checks_policy=true`. That policy is off by default,
+and off on this repo's own `dev` ruleset — so a PR that is genuinely behind
+its base reports `BLOCKED`, `CLEAN`, or `UNKNOWN` instead, and a check that
+reads `mergeStateStatus == BEHIND` alone never fires on the case it exists
+to catch.
+
+Unless `$REQUIRE_UP_TO_DATE` is the literal `false`, compute "behind" directly
+from the compare API instead, using `$baseRefName` and `$headRefOid` already
+captured in step 3. Load `_lib-merge-behind.sh` from `$MARKER_HOME` too, and
+stop if it fails to load:
+
+```bash
+if ! source "$MARKER_HOME/.claude/hooks/_lib-merge-behind.sh"; then
+  echo "Cannot load _lib-merge-behind.sh from $MARKER_HOME. Stopping — the behind-base check cannot run." >&2
+  exit 1
+fi
+BEHIND=$(is_pr_behind_base "$REPO" "<baseRefName>" "<headRefOid>")
+```
+
+**Stop on any `$BEHIND` value other than the literal `false`.** This includes
+`true`, `unknown`, an empty value, and an unset variable — none of those are
+evidence the PR is up to date.
+
+- **`false`** — proceed to step 4.
+
+- **`true`** — **stop here**. Do not verify the Rex marker, do not write the
+  CEO marker, and do not merge. Tell the user:
+
+  ```
+  PR #<pr> is behind its base branch (<baseRefName>). Before this can merge:
+    1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
+    2. Wait for green CI on the updated branch.
+    3. Get a short Rex re-review of the new merge commit — the SHA will
+       change, so the existing Rex marker will no longer match HEAD.
+    4. Run /approve-merge <pr> again.
+  ```
+
+  Ask the user to run step 1, or to approve you running it — do not update
+  the branch yourself. Updating the branch pushes a merge commit to the
+  PR's head branch. On a fork PR with maintainer edits that branch belongs
+  to the contributor. The update is a separate, visible action the user
+  should see happen, not one this skill takes on its own.
+
+- **`unknown`, empty, or unset** — the compare call failed, or an argument
+  was empty. **Stop here, the same as `true`.** Do not verify the Rex marker,
+  do not write the CEO marker, and do not merge. A failed check is not
+  evidence the PR is up to date. Tell the user:
+
+  ```
+  PR #<pr>'s behind-base check could not run (the compare API call failed).
+  This can be a network or auth issue. Before this can merge:
+    1. Retry the check, or verify manually whether <baseRefName> has commits
+       this PR's branch does not.
+    2. Run /approve-merge <pr> again once you know the PR's state.
+  ```
+
+This check does not change `block-unreviewed-merge.sh` — it stops the merge
+one step earlier, in this skill, before any marker is touched.
+
+### 4. Verify the Rex marker exists at the PR's HEAD
+
+The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone action.
+
+```bash
+# MARKER_HOME was already resolved in step 3a above — reuse it here, do not
+# re-derive it from git toplevel (me2resh/apexyard#229, #230).
 
 # Source the marker path helper — repo-qualified naming (#485, AgDR-0060).
 # shellcheck source=/dev/null
