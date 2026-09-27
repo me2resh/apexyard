@@ -139,6 +139,147 @@ fi
 rm -rf "$sandbox"
 
 echo
+echo "== Upstream owner/repo exemption (#1431)"
+#
+# An ops fork's `origin` remote is the fork itself. The public framework
+# lives at the `upstream` remote. The hook used to exempt only a registered
+# name or repo slug equal to `origin`'s bare name or slug, so a registry
+# that lists the framework repo itself, or a registered project whose name
+# equals the upstream owner login, blocked the ordinary
+# `<upstream-owner>/<repo>#N` issue-reference form. All fixture names below
+# are SYNTHETIC.
+
+# make_sandbox_with_remotes REGISTRY_YAML ORIGIN_URL [UPSTREAM_URL] — like
+# make_sandbox, but takes the registry content and configures the given
+# remotes (upstream is optional, matching a fork with none configured).
+make_sandbox_with_remotes() {
+  local registry_yaml="$1" origin_url="$2" upstream_url="${3:-}"
+  local sandbox
+  sandbox=$(mktemp -d)
+  mkdir -p "$sandbox/.claude/hooks" "$sandbox/.githooks"
+  cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
+  cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
+  cp "$PRE_COMMIT_SRC" "$sandbox/.githooks/pre-commit"
+  chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" "$sandbox/.claude/hooks/check-private-refs-runtime.sh" "$sandbox/.githooks/pre-commit"
+  printf '%s' "$registry_yaml" > "$sandbox/apexyard.projects.yaml"
+  (
+    cd "$sandbox" || exit 1
+    git init -q
+    git config user.email test@example.com
+    git config user.name Test
+    git add apexyard.projects.yaml
+    git commit -q -m baseline
+    git remote add origin "$origin_url"
+    if [ -n "$upstream_url" ]; then
+      git remote add upstream "$upstream_url"
+    fi
+  )
+  printf '%s\n' "$sandbox"
+}
+
+# "acme-framework" collides with the synthetic upstream owner login.
+# "framework" is that upstream's own bare repo name, registered by its slug
+# ("acme-framework/framework") — the "registry lists the framework repo
+# itself" case the issue names. "secret-app" is an ordinary unrelated
+# private project that must keep blocking throughout.
+UPSTREAM_REGISTRY_YAML='projects:
+  - name: acme-framework
+    repo: acme-org/acme-framework-app
+    workspace: workspace/acme-framework-app
+  - name: framework
+    repo: acme-framework/framework
+    workspace: workspace/framework-mirror
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+FORK_ORIGIN_URL="https://github.com/atlas-fork/ops-fork.git"
+FRAMEWORK_UPSTREAM_URL="https://github.com/acme-framework/framework.git"
+
+# 1. The exact repro: an upstream issue cited as <owner>/<repo>#N. Exercises
+#    the owner-login name exemption and the upstream repo-slug exemption
+#    together (the registered "framework" project's repo IS the upstream
+#    slug).
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'See acme-framework/framework#12 for the same root cause.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "upstream owner/repo#N reference does not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+# 2. A bare, standalone mention of the upstream owner login must still
+#    block, exactly like any other registered private project's name.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'The acme-framework project needs a rename.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "bare upstream-owner mention still blocks" "$sandbox" 2 "File: notes.md" "acme-framework"
+rm -rf "$sandbox"
+
+# 3. An unrelated registered private project's name must still block.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "unrelated registered project name still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# 4. With no upstream remote configured, today's (origin-only) behaviour
+#    holds: the same owner/repo reference has no exemption to fall back on
+#    and still blocks.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL")
+printf 'See acme-framework/framework#12 for the same root cause.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "no upstream remote keeps origin-only behaviour (still blocks)" "$sandbox" 2 "File: notes.md" "acme-framework"
+rm -rf "$sandbox"
+
+# 5. @-mentioning the upstream owner login (no slash, no repo name) is the
+#    other safe form and must not block either.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Thanks @acme-framework, filing the fix now.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "@-mentioning the upstream owner login does not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+# 6. Regression guard — a hyphen-joined form of the owner login is NOT the
+#    safe form and must still block, matching the narrow #1400 boundary
+#    this fix ports.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Ship the acme-framework-cli update first.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "hyphen-joined owner-login form still blocks" "$sandbox" 2 "File: notes.md" "acme-framework"
+rm -rf "$sandbox"
+
+# 7. Regression guard — an owner-form mention alongside a genuine leak in
+#    the same file must still catch the real leak. The owner exemption
+#    skips only the owner's own name entry.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Filed against acme-framework/framework; also seen in secret-app.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "owner mention plus a real leak still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# 8. Fail-before proof — the SAME case-1 content, run against the unfixed
+#    hook as it exists on upstream/dev, must reproduce the bug (block).
+#    Confirms this is a genuine fail→pass fix, not a pre-existing pass.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'See acme-framework/framework#12 for the same root cause.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+pre_fix_hook=$(mktemp)
+if git -C "$ROOT" show upstream/dev:.claude/hooks/check-private-refs-staged.sh > "$pre_fix_hook" 2>/dev/null \
+  && [ -s "$pre_fix_hook" ]; then
+  chmod +x "$pre_fix_hook"
+  cp "$pre_fix_hook" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
+  prefix_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-staged.sh 2>&1); prefix_rc=$?
+  if [ "$prefix_rc" = "2" ]; then
+    pass "fail-before: upstream/dev's hook still blocks the owner/repo form"
+  else
+    fail "fail-before: upstream/dev's hook still blocks the owner/repo form" "expected exit 2, got $prefix_rc: $prefix_output"
+  fi
+else
+  echo "  skip fail-before proof: could not read upstream/dev's copy of the hook"
+fi
+rm -f "$pre_fix_hook"
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
