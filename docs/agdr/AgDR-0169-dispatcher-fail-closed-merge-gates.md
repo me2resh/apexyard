@@ -141,8 +141,8 @@ review of #1405 found that `require-architecture-review.sh` and
 `require-design-review-for-ui.sh` source `_lib-pr-repo.sh` with a bare
 `.`. Neither file guarded it at all. A missing file there silently
 continues in default bash. It loses the cd-target repo recovery from
-#687 and #1151. In POSIX mode it dies the same way the original report
-described for `_lib-extract-pr.sh`. Both gates already treat
+issues #687 and #1151. In POSIX mode it dies the same way the original
+report described for `_lib-extract-pr.sh`. Both gates already treat
 `_lib-pr-repo.sh` as required. This differs from the other two gates,
 which treat it as optional behind an `if [ -f ]` check. The fix keeps
 that required semantic. It applies the same `_require_lib` guard used
