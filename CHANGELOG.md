@@ -31,12 +31,10 @@ Behaviour change: `/approve-merge` now stops a merge when the PR is behind its b
 - Closes #1354
 - Closes #1370
 - Closes #1376
-- Closes #1382
 - Closes #1385
 - Closes #1386
 - Closes #1390
 - Closes #1396
-- Closes #1403
 
 ## [v5.6.3] — 2026-09-18
 
