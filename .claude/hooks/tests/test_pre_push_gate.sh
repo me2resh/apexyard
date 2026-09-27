@@ -36,18 +36,28 @@ FAILED_CASES=""
 # -- sandbox builder -----------------------------------------------------
 # make_sandbox <install_git_native> <fork_shape>
 #
+# Fork status is decided by `resolve_ops_root` (`_lib-ops-root.sh`), the
+# same pin-first resolver the rest of the framework trusts for this
+# question — never by a file the sandbox itself ships (Hakim A5, Rex S1,
+# PR #1428 round 3). Every invocation of the hook against a sandbox runs
+# with CLAUDE_CODE_SESSION_ID and the pin env vars explicitly unset
+# (`env -u`), so `resolve_ops_root` falls straight through to its
+# walk-up and answers purely from the sandbox's own directory tree —
+# deterministic regardless of whatever real session this TEST is running
+# under. The one exception is the spoof case below, which sets up its
+# own session id and pin on purpose.
+#
 # install_git_native=1: core.hooksPath set to .githooks with a real,
 # executable stub pre-push file — the hook should stay silent regardless
 # of fork_shape.
-# fork_shape=fork: plant a `.apexyard-fork` marker — this repo IS an
-# ApexYard fork, so a missing git-native hook gets the full install
-# advice (maintainer decision, PR #1428 round 2 — never suggest that
-# advice outside a fork, since AgDR-0115 forbids the wiring it recommends).
-# fork_shape=fork-legacy: no `.apexyard-fork` marker, but the fork's own
-# `.githooks/pre-push` and `bin/install-git-hooks.sh` files exist — the
-# OTHER way this hook recognises a fork.
-# fork_shape=managed (default): neither. A plain managed-project clone —
-# gets only a short scope note, never install advice.
+# fork_shape=fork: plant a `.apexyard-fork` marker AT THE SANDBOX ROOT —
+# the walk-up resolves the sandbox itself as the ops root, so a missing
+# git-native hook gets the full install advice (maintainer decision, PR
+# #1428 round 2 — never suggest that advice outside the real fork, since
+# AgDR-0115 forbids the wiring it recommends).
+# fork_shape=managed (default): no anchor anywhere in the sandbox's own
+# tree. A plain managed-project clone — gets only a short scope note,
+# never install advice.
 make_sandbox() {
   local install_git_native="${1:-0}"
   local fork_shape="${2:-managed}"
@@ -73,6 +83,9 @@ make_sandbox() {
   if [ -f "$src_root/.claude/hooks/_lib-read-config.sh" ]; then
     cp "$src_root/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
   fi
+  if [ -f "$src_root/.claude/hooks/_lib-ops-root.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-ops-root.sh" "$sb/.claude/hooks/_lib-ops-root.sh"
+  fi
   if [ -f "$src_root/.claude/project-config.defaults.json" ]; then
     cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   fi
@@ -83,17 +96,6 @@ EOF
   case "$fork_shape" in
     fork)
       touch "$sb/.apexyard-fork"
-      ;;
-    fork-legacy)
-      # The fork's own tooling exists (the second detection path this
-      # hook accepts), but core.hooksPath is deliberately left unset
-      # below unless install_git_native=1 — "ships the tooling, has not
-      # opted in yet."
-      mkdir -p "$sb/bin" "$sb/.githooks"
-      printf '#!/bin/bash\nexit 0\n' > "$sb/bin/install-git-hooks.sh"
-      chmod +x "$sb/bin/install-git-hooks.sh"
-      printf '#!/bin/bash\nexit 0\n' > "$sb/.githooks/pre-push"
-      chmod +x "$sb/.githooks/pre-push"
       ;;
     managed | *) ;;
   esac
@@ -130,7 +132,7 @@ run_hook() {
   local label="$5"
   (
     cd "$sb" || exit 1
-    echo "$stdin_payload" | bash .claude/hooks/pre-push-gate.sh 2>/tmp/pre-push-gate-stderr.$$
+    echo "$stdin_payload" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>/tmp/pre-push-gate-stderr.$$
   )
   local got_rc=$?
   local got_stderr
@@ -169,7 +171,7 @@ assert_no_marker() {
 # -------------------- CASE 1: non-git-push command --------------------
 case1() {
   local sb; sb=$(make_sandbox)
-  echo '{"tool_input":{"command":"ls -la"}}' | (cd "$sb" && bash .claude/hooks/pre-push-gate.sh 2>/dev/null)
+  echo '{"tool_input":{"command":"ls -la"}}' | (cd "$sb" && env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>/dev/null)
   local rc=$?
   if [ "$rc" = "0" ]; then
     echo "PASS [non-git-push-silent]"
@@ -187,7 +189,7 @@ case2() {
   run_hook "$sb" "$(push_json)" 0 "NOTE:" "fork-no-git-native-hook-gets-install-advice"
   assert_no_marker "$sb" "fork-no-git-native-hook-gets-install-advice: still runs no commands"
   local out
-  out=$(cd "$sb" && echo "$(push_json)" | bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  out=$(cd "$sb" && echo "$(push_json)" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
   if echo "$out" | grep -qF "core.hooksPath" && echo "$out" | grep -qF "$sb"; then
     echo "PASS [fork-no-git-native-hook-gets-install-advice: names repo and hooksPath]"
     PASS=$((PASS+1))
@@ -204,7 +206,7 @@ case2() {
 case3() {
   local sb; sb=$(make_sandbox 1 fork)
   local out rc
-  out=$(cd "$sb" && echo "$(push_json)" | bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  out=$(cd "$sb" && echo "$(push_json)" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
   rc=$?
   if [ "$rc" = "0" ] && [ -z "$out" ]; then
     echo "PASS [git-native-hook-installed-silent]"
@@ -229,12 +231,16 @@ case4() {
 }
 
 # =====================================================================
-# B2 tests (PR #1428 review, Rex finding B2 — maintainer decision)
+# B2 tests (PR #1428 review, Rex findings B2 and S1, Hakim finding A5 —
+# maintainer decision)
 #
 # ApexYard never suggests installing the git-native hook, or setting
-# core.hooksPath, outside an ApexYard fork. AgDR-0115 already forbids
-# ApexYard from wiring core.hooksPath into a managed-project clone —
-# suggesting it here would point an operator at exactly that.
+# core.hooksPath, outside the resolved ops root. AgDR-0115 already
+# forbids ApexYard from wiring core.hooksPath into a managed-project
+# clone — suggesting it here would point an operator at exactly that.
+# Fork status comes from `resolve_ops_root`, never from a file a repo
+# ships about itself (round 3 — round 2 trusted self-reported files,
+# which a managed clone could spoof).
 # =====================================================================
 
 # ---- B2-1: managed clone (no fork markers at all) -> short note only ----
@@ -243,7 +249,7 @@ case_b2_managed_clone_short_note() {
   run_hook "$sb" "$(push_json)" 0 "NOTE:.*not an ApexYard fork" "B2-managed-clone-gets-short-note"
   assert_no_marker "$sb" "B2-managed-clone-gets-short-note: still runs no commands"
   local out
-  out=$(cd "$sb" && echo "$(push_json)" | bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  out=$(cd "$sb" && echo "$(push_json)" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
   if echo "$out" | grep -qF "core.hooksPath"; then
     echo "FAIL [B2-managed-clone-never-suggests-hookspath]: $out" >&2
     FAIL=$((FAIL+1))
@@ -272,22 +278,45 @@ case_b2_managed_clone_short_note() {
   rm -rf "$sb"
 }
 
-# ---- B2-2: the legacy fork-shape (own .githooks/pre-push + installer, no
-# .apexyard-fork marker) still counts as a fork, and still gets advice ----
-case_b2_legacy_fork_shape_gets_advice() {
-  local sb; sb=$(make_sandbox 0 fork-legacy)
-  run_hook "$sb" "$(push_json)" 0 "NOTE:" "B2-legacy-fork-shape-gets-install-advice"
+# ---- B2-3 (Hakim A5 / Rex S1): a repo that SHIPS `.apexyard-fork` but is
+# NOT the resolved ops root gets no install advice. The hook must trust
+# `resolve_ops_root`'s pin over a marker the working-directory repo
+# reports about itself. Set up a real, pin-valid ops root elsewhere, pin
+# a session to it, and prove the spoofed sandbox — despite shipping its
+# own `.apexyard-fork` — gets only the managed-clone note.
+case_b2_spoofed_fork_marker_gets_no_advice() {
+  local sb; sb=$(make_sandbox 0 fork)
+
+  local real_root; real_root=$(mktemp -d)
+  touch "$real_root/.apexyard-fork"
+  mkdir -p "$real_root/.claude/hooks"
+
+  local pin_dir; pin_dir=$(mktemp -d)
+  local sid="test-session-spoof"
+  printf '%s\n' "$real_root" > "$pin_dir/ops-root-${sid}"
+
   local out
-  out=$(cd "$sb" && echo "$(push_json)" | bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  out=$(cd "$sb" && echo "$(push_json)" | \
+    env -u APEXYARD_OPS_DISABLE_PIN CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+    bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+
   if echo "$out" | grep -qF "core.hooksPath"; then
-    echo "PASS [B2-legacy-fork-shape-mentions-hookspath]"
+    echo "FAIL [B2-spoofed-fork-marker-gets-no-hookspath-advice]: $out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}B2-spoofed-fork-marker-gets-no-hookspath-advice "
+  else
+    echo "PASS [B2-spoofed-fork-marker-gets-no-hookspath-advice]"
+    PASS=$((PASS+1))
+  fi
+  if echo "$out" | grep -qF "not an ApexYard fork"; then
+    echo "PASS [B2-spoofed-fork-marker-gets-managed-clone-note]"
     PASS=$((PASS+1))
   else
-    echo "FAIL [B2-legacy-fork-shape-mentions-hookspath]: $out" >&2
+    echo "FAIL [B2-spoofed-fork-marker-gets-managed-clone-note]: $out" >&2
     FAIL=$((FAIL+1))
-    FAILED_CASES="${FAILED_CASES}B2-legacy-fork-shape-mentions-hookspath "
+    FAILED_CASES="${FAILED_CASES}B2-spoofed-fork-marker-gets-managed-clone-note "
   fi
-  rm -rf "$sb"
+  rm -rf "$sb" "$real_root" "$pin_dir"
 }
 
 # =====================================================================
@@ -346,7 +375,7 @@ case_h1_quoted_string
 case_h1_commit_message
 case_h1_echo
 case_b2_managed_clone_short_note
-case_b2_legacy_fork_shape_gets_advice
+case_b2_spoofed_fork_marker_gets_no_advice
 
 echo ""
 echo "==================================="

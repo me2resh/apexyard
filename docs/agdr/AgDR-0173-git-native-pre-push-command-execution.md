@@ -55,11 +55,13 @@ category: security
   markdown linter, a shell linter, and a subpack smoke test. It does not
   read a repository's own `.pre_push.commands`.
 - AgDR-0115 already forbids ApexYard from setting `core.hooksPath` in a
-  managed-project clone. `bin/install-git-hooks.sh` refuses to install
-  hooks at all through `/handover`, for the same reason. Pointing git at
-  a just-cloned repository's own scripts, with no provenance check, is a
-  real hazard (the #1087 HIGH-1 finding). Any pre-push design for #1366
-  has to hold that line, not work around it.
+  managed-project clone. `/handover` never calls `bin/install-git-hooks.sh`
+  against a freshly cloned managed project, for the same reason (Rex
+  finding S2, PR #1428 round 3). The script itself has no such refusal.
+  The caller simply never invokes it there. Pointing git at a just-
+  cloned repository's own scripts, with no provenance check, is a real
+  hazard (the #1087 HIGH-1 finding). Any pre-push design for #1366 has
+  to hold that line, not work around it.
 
 ## Options Considered
 
@@ -96,10 +98,23 @@ fork.
 checks the session's own working-directory repo. It names that repo in
 every message, and states plainly that the check covers only that repo.
 
-It prints install advice only when that repo is itself an ApexYard
-fork. That means a `.apexyard-fork` marker, or the fork's own
-`.githooks/pre-push` plus `bin/install-git-hooks.sh`. It also requires
-that the git-native hook is not yet installed.
+It prints install advice only when that repo is itself the resolved ops
+root. That is the real ApexYard fork, not merely a repo that ships
+fork-shaped files (Hakim finding A5, Rex finding S1, PR #1428 round 3).
+
+Fork status comes from `resolve_ops_root` (`_lib-ops-root.sh`). It is
+the same pin-first resolver the rest of the framework trusts for this
+question. It is called with the working-directory repo as the walk-up
+start. A round-2 draft
+of this hook instead trusted a `.apexyard-fork` marker, or a
+`.githooks/pre-push` plus `bin/install-git-hooks.sh` pair, present in
+the working-directory repo itself. Round 3's review showed a managed
+repo can ship either shape and talk the hook into recommending
+`core.hooksPath` for itself. `resolve_ops_root` closes that gap, because
+a session's pinned ops root always outranks a candidate repo's own
+files. When `resolve_ops_root` cannot resolve anything, this hook treats
+the repo as not the ops root. It never guesses in favor of giving
+advice.
 
 In any other repo, including a managed-project clone, it prints a short
 note instead. That note says ApexYard runs no local pre-push checks
@@ -153,14 +168,24 @@ describes.
 - Docs updated for accuracy: `docs/getting-started.md` § "Terminal push
   hook", `docs/rule-audit.md`, `.claude/skills/setup/SKILL.md`, and the
   `.pre_push` comment in `.claude/project-config.defaults.json`.
+- Test isolation (Rex finding R1, PR #1428 round 3): `bin/run-hook-tests.sh`
+  exports `APEXYARD_DISABLE_RESOLUTION_CACHE=1` for its whole suite (test
+  isolation, #528/AgDR-0120). A case that proves the resolution-cache
+  fix compares a fixed script against a scratch copy with the fix
+  removed. Both copies must run with that variable explicitly unset.
+  Otherwise the suite-level export decides the outcome, not the
+  script's own line. `test_run_configured_pre_push_checks.sh`'s case 8
+  does this.
 
 ## Artifacts
 
 - me2resh/apexyard#1366 (the bug this record closes)
 - me2resh/apexyard#1405 (the closed PR whose review found H1, H3, L2 and
   motivated this design)
-- me2resh/apexyard#1428 (this PR, round 2 review findings that added the
-  managed-clone scope rule and the resolution-cache fix)
+- me2resh/apexyard#1428 (this PR — round 2 findings added the
+  managed-clone scope rule and the resolution-cache fix, round 3
+  findings replaced the self-reported fork check with `resolve_ops_root`
+  and fixed the CI test-isolation gap)
 - AgDR-0104 (command-text parsing cannot be made sound)
 - AgDR-0114 (the git-native protected-branch layer this design reuses)
 - AgDR-0115 (ApexYard never sets `core.hooksPath` in a managed clone —

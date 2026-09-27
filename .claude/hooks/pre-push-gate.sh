@@ -47,21 +47,35 @@
 #
 # So this hook checks two things about ONLY the session's own
 # working-directory repo, never the command text:
-#   1. Is this repo an ApexYard fork at all? (a `.apexyard-fork` marker,
-#      or the fork's own `.githooks/pre-push` plus `bin/install-git-hooks.sh`)
-#   2. If it is, has it installed the git-native hook?
+#   1. Is this repo THE ops root — the actual ApexYard fork, not merely
+#      a repo that ships fork-shaped files? Resolved via the pin-first
+#      `resolve_ops_root` from `_lib-ops-root.sh`, the same resolver the
+#      rest of the framework trusts for this question. A managed repo
+#      can ship its own `.apexyard-fork` marker, or a copy of
+#      `.githooks/pre-push` plus `bin/install-git-hooks.sh` — none of
+#      that makes it the fork (Hakim finding A5, Rex finding S1, PR
+#      #1428 review). Trusting a candidate's own files here would let a
+#      managed repo talk this hook into recommending `core.hooksPath`
+#      for itself, exactly the AgDR-0115 violation this hook exists to
+#      avoid. If `resolve_ops_root` cannot resolve anything, this hook
+#      treats the repo as NOT the ops root — it never suggests the
+#      install advice on an unresolved guess.
+#   2. If it is the ops root, has it installed the git-native hook?
 #
-# It reads nothing but that repo's own files and `git config` — never
-# the command text — so it has nothing left to get wrong about "which
-# repo." Before this redesign, the Claude-layer gate ran a repository's
-# commands itself, sometimes against the wrong repo (#1366). After it,
-# only the fork's git-native hook runs them, and only inside a fork.
+# It reads nothing but that repo's own files, `git config`, and the pin
+# / walk-up `resolve_ops_root` already uses — never the command text —
+# so it has nothing left to get wrong about "which repo." Before this
+# redesign, the Claude-layer gate ran a repository's commands itself,
+# sometimes against the wrong repo (#1366). After it, only the fork's
+# git-native hook runs them, and only inside the real fork.
 #
 # Install the git-native hook once per ApexYard-fork clone:
 #   git config core.hooksPath .githooks
 #   (or: bash bin/install-git-hooks.sh)
 #
 # See docs/agdr/AgDR-0173-git-native-pre-push-command-execution.md.
+
+HOOK_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd -P)"
 
 INPUT=$(cat)
 COMMAND=""
@@ -107,16 +121,25 @@ if [ -n "$HOOKS_PATH" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Is this repo an ApexYard fork at all? Only a fork gets the install
-# advice. A managed-project clone gets a short scope note instead — never
-# the `core.hooksPath` suggestion AgDR-0115 forbids for that case.
+# Is this repo THE resolved ops root — the actual ApexYard fork? Only
+# that repo gets the install advice. Every other repo, including one
+# that ships fork-shaped files of its own, gets a short scope note
+# instead — never the `core.hooksPath` suggestion AgDR-0115 forbids for
+# that case (Hakim A5, Rex S1). Resolution is pin-first, via the same
+# `resolve_ops_root` the rest of the framework trusts for this question,
+# not a self-reported marker file this repo could ship on its own.
 # ---------------------------------------------------------------------------
 
 IS_APEXYARD_FORK=0
-if [ -f "$REPO_ROOT/.apexyard-fork" ]; then
-  IS_APEXYARD_FORK=1
-elif [ -f "$REPO_ROOT/.githooks/pre-push" ] && [ -f "$REPO_ROOT/bin/install-git-hooks.sh" ]; then
-  IS_APEXYARD_FORK=1
+if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
+  # shellcheck disable=SC1090,SC1091
+  . "$HOOK_DIR/_lib-ops-root.sh"
+  if command -v resolve_ops_root >/dev/null 2>&1; then
+    OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
+    if [ -n "$OPS_ROOT" ] && [ "$OPS_ROOT" = "$REPO_ROOT" ]; then
+      IS_APEXYARD_FORK=1
+    fi
+  fi
 fi
 
 if [ "$IS_APEXYARD_FORK" != "1" ]; then

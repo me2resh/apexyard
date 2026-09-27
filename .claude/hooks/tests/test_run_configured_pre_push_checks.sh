@@ -240,7 +240,15 @@ EOF
 
   # Fixed script (this PR's file, with the disable export): the poisoned
   # entry must be ignored. Only REAL_RAN may appear.
-  (cd "$sb" && CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+  #
+  # env -u APEXYARD_DISABLE_RESOLUTION_CACHE (Rex R1, CI run 36344247604):
+  # bin/run-hook-tests.sh exports this var for the WHOLE suite (test
+  # isolation, #528/AgDR-0120), so both this subshell and the unfixed
+  # one below must explicitly unset it — otherwise the ambient suite-
+  # level export, not the script's own line, is what disables the
+  # cache, and the unfixed control below can never fall for the poison.
+  (cd "$sb" && env -u APEXYARD_DISABLE_RESOLUTION_CACHE \
+    CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
     bash bin/run-configured-pre-push-checks.sh >/dev/null 2>&1)
   if [ -f "$sb/REAL_RAN" ] && [ ! -f "$sb/POISON_RAN" ]; then
     echo "PASS [A1-cache-poison-ignored-by-fixed-script]"
@@ -261,7 +269,8 @@ EOF
   grep -v 'export APEXYARD_DISABLE_RESOLUTION_CACHE=1' \
     "$sb/bin/run-configured-pre-push-checks.sh" > "$unfixed"
   chmod +x "$unfixed"
-  (cd "$sb" && CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+  (cd "$sb" && env -u APEXYARD_DISABLE_RESOLUTION_CACHE \
+    CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
     bash bin/run-configured-pre-push-checks-unfixed.sh >/dev/null 2>&1)
   if [ -f "$sb/POISON_RAN" ]; then
     echo "PASS [A1-fail-before-unfixed-script-falls-for-poison]"
