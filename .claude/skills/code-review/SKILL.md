@@ -44,7 +44,9 @@ The reviewer mutation lock blocks `git clone`, `git fetch`, and `git checkout` w
 
 Before you draft or post a review, read .claude/rules/writing-standard.md.
 Use the controlled technical writing profile. The review is a durable artifact.
-If the artifact fails the profile, you must request changes.
+Treat a writing-profile fault in the PR as advisory, per the Code Reviewer
+agent's § "Blocking-Severity Bar", unless the fault changes meaning or drops
+evidence — request changes only for that kind of fault.
 State the verdict and next action first. State the reason and evidence after it.
 Use the Code Reviewer agent's required Output Format for first reviews, re-reviews, and reduced-scope reviews.
 Retain its required sections and give each checklist result a reason or evidence reference.

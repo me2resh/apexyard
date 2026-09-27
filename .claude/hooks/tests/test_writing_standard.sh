@@ -124,9 +124,9 @@ See .claude/rules/writing-standard.md for background.
 EOF
 assert "agent:negative:frontmatter-only-fails" not agent_loads_writing_rule "$AGENT_FIXTURES/no-rule.md"
 assert "agent:negative:mention-without-read-fails" not agent_loads_writing_rule "$AGENT_FIXTURES/mention-only.md"
-assert "reviewer:code-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
+assert "reviewer:code-review" grep -qF 'request changes only for that kind of fault' "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
 assert "reviewer:design-review" grep -qF 'you must request changes' "$SRC_ROOT/.claude/skills/design-review/SKILL.md"
-assert "reviewer:rex" grep -qF 'Request changes when the artifact fails the profile' "$SRC_ROOT/.claude/agents/code-reviewer.md"
+assert "reviewer:rex" grep -qF 'Request changes when the profile fault changes meaning or drops evidence' "$SRC_ROOT/.claude/agents/code-reviewer.md"
 assert "reviewer:skill-output-format" grep -qF "agent's required Output Format" "$SRC_ROOT/.claude/skills/code-review/SKILL.md"
 assert "reviewer:all-review-scopes" grep -qF 'first reviews, re-reviews, and reduced-scope reviews' "$REX_FILE"
 assert "reviewer:checklist-evidence" grep -qF 'Give each checklist result a brief reason or an evidence reference.' "$REX_FILE"

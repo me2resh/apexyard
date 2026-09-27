@@ -60,8 +60,14 @@ Before you file an artifact, check each item:
     [ ] Did the rewrite retain the artifact's required sections and supporting rationale?
     [ ] Did you remove empty sections and placeholders?
 
-A reviewer must request changes when an artifact does not meet this profile.
-The review must name the failed rule and show a clear replacement.
+A reviewer treats a profile fault as advisory. The review names the failed
+rule and shows a clear replacement, and does not change an approved verdict
+for the fault alone.
+
+A reviewer must request changes when the fault changes meaning or drops
+evidence. That fault is a correctness finding, not a style nit. A code
+review agent states this blocking bar in full at
+`.claude/agents/code-reviewer.md` § "Blocking-Severity Bar".
 
 ## Review and test scope
 

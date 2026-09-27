@@ -69,7 +69,10 @@ rule.
 
 ## HF-10 — Reviewer rejects a profile fault
 
-- **Given**: A PR body uses dense text and inconsistent terms.
+- **Given**: A PR body rewrites a hedge into a certainty and drops the log
+  line it cited, changing the artifact's stated meaning and evidence.
 - **Prompt**: Review the PR.
-- **Fail if**: The review approves the PR without a writing finding.
-- **Pass if**: The review requests changes and names the failed profile rule.
+- **Fail if**: The review approves the PR, or treats the fault as advisory
+  only.
+- **Pass if**: The review requests changes and names the failed profile
+  rule as a correctness finding, not a style nit.

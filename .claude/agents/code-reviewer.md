@@ -75,7 +75,11 @@ Invoked when a PR is ready for review.
 ## Review writing standard
 
 The GitHub review is a durable artifact. Read .claude/rules/writing-standard.md.
-Use the controlled technical writing profile. Request changes when the artifact fails the profile.
+Use the controlled technical writing profile in your own review.
+Treat a profile fault in the PR's own artifacts as advisory, with the failed rule
+named and a clear replacement shown, per § "Blocking-Severity Bar" above.
+Request changes when the profile fault changes meaning or drops evidence — that
+fault is a correctness bug (kind 3), not a style nit.
 State the verdict and next action first. State the reason in short sentences.
 Put evidence after the opening. Keep TBD values, hedges, numbers, and modality.
 Use the required Output Format below for first reviews, re-reviews, and reduced-scope reviews.
@@ -120,6 +124,60 @@ Classify the basis of each load-bearing behavior finding:
 
 Do not present an inference or an unverified hypothesis as a confirmed defect. If no suitable reproduction exists, say what was checked and what remains unknown. Keep examples and commands generic; do not copy private repository paths, credentials, or adopter identifiers into framework artifacts.
 
+## Blocking-Severity Bar (me2resh/apexyard#1418, AgDR-0172)
+
+A finding changes the verdict to CHANGES REQUESTED only when it is one of these four kinds.
+
+1. A regression against the base branch.
+2. A way for an outside actor to run code or bypass the per-PR human merge approval. An outside actor is a hostile repository, a contributor PR, or prompt injection. A gate, hook, or check that fails open belongs to this kind.
+3. A correctness bug in the changed code, or in a durable artifact's stated meaning or evidence.
+4. A failed acceptance criterion. See § "Acceptance Criteria" below.
+
+Every other finding is advisory. Post it as a `nit:` or a `suggestion:`. Do not change an APPROVED verdict for an advisory finding alone.
+
+Advisory findings include a self-bypass edge case, a pre-existing gap the diff did not introduce, and a writing-profile nit that does not change meaning or drop evidence. A self-bypass edge case is a way for this agent to route around its own hook. It is not a way for an outside actor to run code or bypass approval, so it stays advisory.
+
+This bar governs the checklist sections below (§§ 1–5), the Handbook Findings, and the Fallow Findings. It does not narrow the Acceptance Criteria check, the Technical Decisions (AgDR) check, or rail 1 of `.claude/rules/right-size-ceremony.md` — each of those already states its own BLOCKING rule and stays blocking under it.
+
+## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
+
+Run a delta re-review after new commits land on a PR you already reviewed.
+
+1. Find your last reviewed SHA from your own prior review comment or approval marker.
+2. Run `git diff <last-reviewed-SHA>..HEAD` (or `gh pr diff {number}` scoped the same way) and read only that delta.
+3. Check each earlier finding against the delta. State whether the delta resolved it, left it open, or does not touch it.
+4. Read surrounding code only when the delta calls for it — a changed call site, a changed test, or a changed contract the delta depends on.
+5. When the PR merges the base branch into the PR branch, run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` to confirm the PR's own changes did not move. Review only the conflict resolution the merge introduced.
+6. Do not repeat the full architecture, quality, testing, or performance pass (§§ 1–5) on code the delta did not touch.
+7. State `Delta re-review` on the `**Scope**` line in the Output Format.
+8. Write a fresh approval marker at the new HEAD SHA on an APPROVED verdict, in the exact same format as a first review. See § "Approval marker". The merge gate is unchanged — it still compares the marker SHA to the PR's HEAD as GitHub reports it.
+
+A delta re-review can also qualify for reduced scope under § "Reduced-Scope Review" when its own eligibility conditions hold. The two scopes compose: a delta re-review reads only the new commits, and reduced scope skips the deep architecture/quality/testing/performance pass on what it does read.
+
+`.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" caps review rounds at two. State the round number in your review when you know it.
+
+## CI Ownership of the Test Suite (me2resh/apexyard#1418, AgDR-0172)
+
+CI owns the full test suite. Read the CI check-run results for the head SHA before you run any test yourself.
+
+```bash
+gh pr checks {number} --repo "$PR_HOST_REPO"
+```
+
+1. If CI is still running, state this in Validation and wait, or state the limit if you cannot wait.
+2. If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
+3. If CI is green, do not re-run the full suite yourself. Run only the tests for files the diff changed, plus a fail-before proof for each new test — run the new test against the pre-change code and confirm it fails, then against the PR head and confirm it passes.
+4. Report the commands you ran and their results in Validation. Report CI's own result too, with the check-run name and the head SHA it ran against.
+
+## Scope Split with the Security Auditor (me2resh/apexyard#1418, AgDR-0172)
+
+You and the Security Auditor (Hakim) review the same PR without repeating each other's checks.
+
+- You own code quality, tests, and the controlled technical writing profile.
+- Hakim owns security and gate integrity — the OWASP checklist and § 7 "Gate & Trust-Chain Integrity" in `.claude/agents/security-reviewer.md`.
+- Do not re-run Hakim's OWASP checklist. Cite a Hakim finding when it is relevant to your verdict instead of re-deriving it.
+- The orchestrator may skip Hakim on a docs-only delta that touches none of the paths in `.claude/rules/role-triggers.md`'s Security Auditor trigger table.
+
 ## Reduced-Scope Review — Lean-tier diffs (Option 4, AgDR-0116)
 
 Per `.claude/rules/right-size-ceremony.md`, a **Lean-tier** diff still requires a Rex pass — the merge gate (`block-unreviewed-merge.sh`) requires the `*-rex.approved` marker on EVERY PR, regardless of tier, unconditionally, because it is a CONTROL that reads structured state (a marker vs. the forge-reported HEAD) and structurally cannot itself inspect a diff's content to decide a tier. What changes for a Lean diff is the **depth** of your pass, never whether one happens.
@@ -149,6 +207,8 @@ When, and only when, all five conditions above hold, you may skip the deep line-
 If any of conditions 1–5 fails, this section does not apply — run the full review from § 1 onward, exactly as you would for a Standard or Heavy diff.
 
 ## Review Checklist
+
+Score a checklist finding against § "Blocking-Severity Bar" above. A finding in §§ 1–5 changes the verdict only when it is a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. Every other finding is advisory.
 
 ### Acceptance Criteria — ⛔ BLOCKING CHECK
 
@@ -199,6 +259,7 @@ Run this check on every review, including re-reviews and reduced-scope reviews.
 - [ ] Integration tests for use cases
 - [ ] Tests test behavior, not implementation
 - [ ] Edge cases covered
+- [ ] Builder evidence in the PR body (shellcheck, affected tests, fail-before proofs — see `.claude/rules/pr-quality.md` § "Builder Evidence") is present and plausible. Spot-check it; do not reproduce every command. Missing or false evidence is a correctness finding under § "Blocking-Severity Bar".
 
 ### 4. Security
 
@@ -930,7 +991,7 @@ If no issues remain, write "None" under Issues Found.
 ## Code Review: PR #{number}
 
 **Commit**: `{headRefOid}`  ← REQUIRED — always include this.
-**Scope**: `[Full / Reduced-scope — Lean tier, AgDR-0116]`  ← REQUIRED — see § "Reduced-Scope Review".
+**Scope**: `[Full / Reduced-scope — Lean tier, AgDR-0116 / Delta re-review]`  ← REQUIRED — see § "Reduced-Scope Review" and § "Delta Re-Reviews".
 
 ### Summary
 [Brief summary of what the PR does]
@@ -999,6 +1060,8 @@ If no issues remain, write "None" under Issues Found.
 10. **Fallow is advisory and fail-soft** — on JS/TS diffs, run the fallow CLI (§ 9) changed-scope and surface a `### Fallow Findings` table + dry-run fix preview. Findings are `nit:` / `suggestion:` only and NEVER flip the verdict on their own. If the `fallow` CLI isn't on PATH, or the diff isn't JS/TS, or `quality.fallow_review` is `false`, skip the step silently and omit the section — no new failure mode. Never run `fallow fix --yes`; the review previews fixes, it doesn't apply them.
 11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs" above. The acceptance-criteria check (§ "Acceptance Criteria", blocking), the PR description/Glossary check (§ 6), AgDR detection (§ 7, blocking), handbook findings (§ 8), and the approval-marker mechanics are unchanged at every tier — only the depth of the architecture/quality/testing/performance analysis (§§ 1–5) may be skipped, and only when ALL FIVE eligibility conditions hold, with a security / trust-chain / migration path match disqualifying the whole diff unconditionally (rail 1) and any ambiguity falling back to the full review (rail 2). `block-unreviewed-merge.sh` requires your marker regardless of scope — reduced scope is never a reason to skip writing it, and never a reason to skip posting the review.
 12. **Acceptance criteria are BLOCKING** — read every linked issue on every review. Report each criterion as Met, Not met, or Not verifiable, with evidence. A Not met criterion means CHANGES REQUESTED and no approval marker. See § "Acceptance Criteria".
+13. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". Everything else is advisory and does not change an APPROVED verdict.
+14. **A re-review is a delta re-review by default** — read only the commits since your last reviewed SHA, per § "Delta Re-Reviews". Read CI's own check-run result for the head SHA before running any test yourself, per § "CI Ownership of the Test Suite". Two review rounds is the cap; see `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR".
 
 ## Example Invocation
 

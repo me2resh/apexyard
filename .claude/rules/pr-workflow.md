@@ -309,6 +309,29 @@ Using `gh api .../merge` as a workaround for other issues (e.g. cross-repo resol
 
 A review is bound to a specific commit SHA — pushing additional commits invalidates the prior review.
 
+### Re-invoke as a delta re-review (me2resh/apexyard#1418)
+
+Re-invoke the reviewer as a delta re-review, not a fresh full review. The
+reviewer reads only `git diff <last-reviewed-SHA>..HEAD` and checks each
+earlier finding against that delta. See `.claude/agents/code-reviewer.md`
+§ "Delta Re-Reviews" and `.claude/agents/security-reviewer.md` § "Delta
+Re-Reviews" for the full procedure. A merge of the base branch into the PR
+branch gets a `git range-diff` check instead of a full re-read.
+
+The reviewer still writes a fresh approval marker at the new HEAD SHA on an
+APPROVED verdict. The merge gate is unchanged — it still compares the
+marker SHA to the PR's HEAD as GitHub reports it.
+
+### A cap of two review rounds
+
+Round one is the first review. Round two is the first re-review. Stop
+counting rounds at two. After round two, do not start a third round. File
+each remaining non-blocking finding as a follow-up ticket instead, and
+proceed to merge once every blocking finding under
+`.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" is resolved. A
+blocking finding in round two still blocks — the cap limits rounds, not
+blocking findings.
+
 ## Resuming PR Sessions
 
 Use the `--from-pr` flag to resume a Claude Code session linked to a specific PR:
