@@ -256,27 +256,146 @@ git -C "$sandbox" add notes.md
 assert_hook "owner mention plus a real leak still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
 rm -rf "$sandbox"
 
-# 8. Fail-before proof — the SAME case-1 content, run against the unfixed
-#    hook as it exists on upstream/dev, must reproduce the bug (block).
+# 8. Fail-before proof — the SAME case-1 content, run against the hook as it
+#    existed at a PINNED pre-#1431 commit, must reproduce the bug (block).
 #    Confirms this is a genuine fail→pass fix, not a pre-existing pass.
+#
+#    Pinned to a fixed SHA rather than `upstream/dev`'s moving tip — once
+#    this PR merges, `upstream/dev` HOLDS the fix, and a case that reads
+#    "the hook on upstream/dev" would then read the FIXED hook and fail
+#    forever in any fork with an `upstream` remote configured (Rex, PR
+#    #1432). PRE_1431_SHA is the commit at the tip of `upstream/dev` when
+#    this fix branched from it — the last commit before any of #1431's
+#    changes — so it always reads the unfixed hook, regardless of where
+#    `upstream/dev` moves afterward.
+PRE_1431_SHA="9e3b2d90e17b5816e35f8ed1db5e3c83535aab16"
 sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
 printf 'See acme-framework/framework#12 for the same root cause.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 pre_fix_hook=$(mktemp)
-if git -C "$ROOT" show upstream/dev:.claude/hooks/check-private-refs-staged.sh > "$pre_fix_hook" 2>/dev/null \
+if git -C "$ROOT" show "${PRE_1431_SHA}:.claude/hooks/check-private-refs-staged.sh" > "$pre_fix_hook" 2>/dev/null \
   && [ -s "$pre_fix_hook" ]; then
   chmod +x "$pre_fix_hook"
   cp "$pre_fix_hook" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   prefix_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-staged.sh 2>&1); prefix_rc=$?
   if [ "$prefix_rc" = "2" ]; then
-    pass "fail-before: upstream/dev's hook still blocks the owner/repo form"
+    pass "fail-before: the pre-#1431 hook ($PRE_1431_SHA) still blocks the owner/repo form"
   else
-    fail "fail-before: upstream/dev's hook still blocks the owner/repo form" "expected exit 2, got $prefix_rc: $prefix_output"
+    fail "fail-before: the pre-#1431 hook ($PRE_1431_SHA) still blocks the owner/repo form" "expected exit 2, got $prefix_rc: $prefix_output"
   fi
 else
-  echo "  skip fail-before proof: could not read upstream/dev's copy of the hook"
+  echo "  skip fail-before proof: could not read $PRE_1431_SHA's copy of the hook (not fetched in this clone)"
 fi
 rm -f "$pre_fix_hook"
+rm -rf "$sandbox"
+
+# 9. Origin-owner-only case — the owner-login exemption must work on its
+#    own for `origin`, with no `upstream` remote configured at all. This
+#    isolates the ORIGIN half of the owner branch from the upstream half
+#    case 2/5/6 already cover.
+ORIGIN_OWNER_REGISTRY_YAML='projects:
+  - name: atlas-fork
+    repo: acme-org/atlas-fork-tool
+    workspace: workspace/atlas-fork-tool
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
+printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner-only: owner/repo form of ORIGIN's own owner does not block (no upstream)" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
+printf 'The atlas-fork account needs review.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner-only: a bare mention of ORIGIN's owner still blocks (no upstream)" "$sandbox" 2 "File: notes.md" "atlas-fork"
+rm -rf "$sandbox"
+
+# 10. Upstream-slug-only case — the repo-slug exemption must work on its
+#     own, decoupled from any name-based owner/bare-name match. The
+#     registered project below is named "mirror-project" (no coincidental
+#     match to the upstream owner or bare name); its `repo` field alone
+#     happens to equal the upstream slug, the way an adopter might register
+#     the framework itself under a custom project name.
+SLUG_ONLY_REGISTRY_YAML='projects:
+  - name: mirror-project
+    repo: acme-framework/framework
+    workspace: workspace/mirror-project
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$SLUG_ONLY_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'See acme-framework/framework#5 for background.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "upstream-slug-only: repo-slug exemption fires with no coincidental name match" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+# 11. Hakim MEDIUM — the upstream bare-name exemption must require the
+#     registry's OWN pairing of that name to the upstream slug, not a bare
+#     string coincidence. Here "framework" is registered, but its `repo`
+#     points at a DIFFERENT, private repo — not the upstream slug — so the
+#     coincidental name match must not exempt it.
+MISMATCHED_NAME_REGISTRY_YAML='projects:
+  - name: acme-framework
+    repo: acme-org/acme-framework-app
+    workspace: workspace/acme-framework-app
+  - name: framework
+    repo: acme-org/framework-internal
+    workspace: workspace/framework-internal
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$MISMATCHED_NAME_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'A generic framework bug. No project named.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "MEDIUM: bare-name match to upstream without a matching repo still blocks" "$sandbox" 2 "File: notes.md" "framework-internal"
+rm -rf "$sandbox"
+
+# 12-13. Hakim HIGH-1 — a raw non-UTF-8 byte in the staged blob must not
+# make the owner branch fail open. In a UTF-8 locale, unpatched `tr`/BSD
+# `sed` stop with "illegal byte sequence" on the byte below, the pipeline's
+# exit code goes non-zero, and the pre-fix helper read ANY failure as "no
+# bare mention remains" — exempting a file that was never actually scanned.
+# The byte is written with `printf '\xe9'` (a lone Latin-1 continuation
+# byte, invalid standalone UTF-8) on line 1; a bare upstream-owner mention
+# on line 2 must still block.
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'note \xe9 byte\nThe acme-framework project needs a rename.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "HIGH-1: a non-UTF-8 byte does not make the owner branch fail open" "$sandbox" 2 "File: notes.md" "acme-framework"
+rm -rf "$sandbox"
+
+# 13. Fail-before for HIGH-1 — pinned to THIS PR's own round-1 commit, not
+# to any upstream SHA. `owner_bare_mention_remains` did not exist before
+# this PR at all, so there is no pre-#1431 commit where this specific
+# regression could have existed; the only meaningful "before" state is the
+# round-1 commit that introduced the helper, before round 2's LC_ALL=C /
+# fail-closed fix.
+ROUND1_SHA="706c323a0daf7f8645f1b75e974705efb5104767"
+sandbox=$(make_sandbox_with_remotes "$UPSTREAM_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'note \xe9 byte\nThe acme-framework project needs a rename.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+round1_hook=$(mktemp)
+if git -C "$ROOT" show "${ROUND1_SHA}:.claude/hooks/check-private-refs-staged.sh" > "$round1_hook" 2>/dev/null \
+  && [ -s "$round1_hook" ]; then
+  chmod +x "$round1_hook"
+  cp "$round1_hook" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
+  round1_output=$(cd "$sandbox" && LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 .claude/hooks/check-private-refs-staged.sh 2>&1); round1_rc=$?
+  if [ "$round1_rc" = "2" ]; then
+    pass "fail-before HIGH-1: round-1 commit ($ROUND1_SHA) already blocks (locale did not reproduce the bug here)"
+  elif [ "$round1_rc" = "0" ]; then
+    pass "fail-before HIGH-1: round-1 commit ($ROUND1_SHA) fails open under a UTF-8 locale, as expected pre-fix"
+  else
+    fail "fail-before HIGH-1: round-1 commit ($ROUND1_SHA)" "unexpected exit $round1_rc: $round1_output"
+  fi
+else
+  echo "  skip fail-before HIGH-1 proof: could not read $ROUND1_SHA's copy of the hook (not fetched in this clone)"
+fi
+rm -f "$round1_hook"
 rm -rf "$sandbox"
 
 echo

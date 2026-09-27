@@ -53,19 +53,25 @@ fi
 names=()
 repos=()
 workspaces=()
+name_repo_pairs=()
 while IFS= read -r entry; do
   case "$entry" in
     NAME=*) names+=("${entry#NAME=}") ;;
     REPO=*) repos+=("${entry#REPO=}") ;;
     WORKSPACE=*) workspaces+=("${entry#WORKSPACE=}") ;;
+    NAMEREPO=*) name_repo_pairs+=("${entry#NAMEREPO=}") ;;
   esac
 done < <(awk '
   function unquote(value) { gsub(/^['\''\"]|['\''\"]$/, "", value); return value }
   /^[[:space:]]*- name:/ {
-    print "NAME=" unquote($3); current_list = ""; next
+    pending_name = unquote($3)
+    print "NAME=" pending_name; current_list = ""; next
   }
   /^[[:space:]]*repo:/ {
-    print "REPO=" unquote($2); current_list = ""; next
+    repo_val = unquote($2)
+    print "REPO=" repo_val
+    if (pending_name != "") { print "NAMEREPO=" pending_name "\t" repo_val }
+    pending_name = ""; current_list = ""; next
   }
   /^[[:space:]]*workspace:/ {
     print "WORKSPACE=" unquote($2); current_list = ""; next
@@ -77,9 +83,9 @@ done < <(awk '
       item = items[i]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
       if (item != "") print "REPO=" unquote(item)
     }
-    current_list = ""; next
+    pending_name = ""; current_list = ""; next
   }
-  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { current_list = "repos"; next }
+  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
   /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
   /^[[:space:]]*-[[:space:]]+/ {
     if (current_list == "repos") {
@@ -90,6 +96,21 @@ done < <(awk '
 ' "$REGISTRY")
 
 [ "${#names[@]}" -gt 0 ] || [ "${#repos[@]}" -gt 0 ] || [ "${#workspaces[@]}" -gt 0 ] || exit 0
+
+# #1431 round 2 (Hakim MEDIUM) — a registered project's `name` can
+# coincidentally equal `upstream`'s bare repo name without that entry
+# actually BEING upstream (a different, private repo happens to share the
+# same bare name). Only exempt the name outright when the SAME registry
+# entry's own `repo` field equals `upstream_repo` — a real association, not
+# a name-string coincidence. This does not apply to `origin`'s pre-existing
+# bare-name exemption, which this PR does not change.
+registry_name_repo_matches() {
+  local target_name="$1" target_repo="$2" pair
+  for pair in "${name_repo_pairs[@]}"; do
+    [ "$pair" = "${target_name}"$'\t'"${target_repo}" ] && return 0
+  done
+  return 1
+}
 
 registry_rel=""
 case "$REGISTRY" in
@@ -112,16 +133,48 @@ staged_blob_matches() {
 # Strip only those two safe forms from a lower-cased copy of the staged blob,
 # then check whether the owner's name still appears as a bare, standalone
 # word. A bare mention still blocks, like any other registered name.
+#
+# #1431 round 2 (Hakim HIGH-1) — a staged blob can hold a raw non-UTF-8 byte
+# (a stray Latin-1 byte, say). In a UTF-8 locale, `tr` and BSD `sed` both
+# stop with "illegal byte sequence" on that byte, the pipeline's exit code
+# goes non-zero, and the old code treated ANY failure here as "no bare
+# mention remains" — exempting the file outright on a scan that never ran.
+# Two fixes: every `tr`/`sed`/`grep` call below runs under `LC_ALL=C`, so a
+# raw byte is just a byte, not an encoding error; and a failure at any step
+# (including `git show` itself) now returns 0 — "a bare mention remains" —
+# so the caller falls through to the ordinary block instead of exempting an
+# unscanned file. Fail closed, not open. `#` also joins the escaped
+# characters, because the second `sed` below uses `#` as its own delimiter;
+# an unescaped `#` in a registered name would end that pattern early.
 owner_bare_mention_remains() {
   local path="$1" owner_name="$2"
-  local content esc_lc haystack_lc stripped_lc
-  content=$(git show ":$path" 2>/dev/null) || return 1
-  esc_lc=$(printf '%s' "$owner_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
-  haystack_lc=$(printf '%s' "$content" | tr '[:upper:]' '[:lower:]')
-  stripped_lc=$(printf '%s' "$haystack_lc" | sed -E \
+  local content esc_lc haystack_lc stripped_lc rc
+
+  content=$(git show ":$path" 2>/dev/null)
+  rc=$?
+  [ "$rc" -eq 0 ] || return 0
+
+  esc_lc=$(printf '%s' "$owner_name" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+  rc=$?
+  [ "$rc" -eq 0 ] || return 0
+  esc_lc=$(printf '%s' "$esc_lc" | LC_ALL=C sed -E 's/[][\\/.^$*+?(){}|#]/\\&/g')
+  rc=$?
+  [ "$rc" -eq 0 ] || return 0
+
+  haystack_lc=$(printf '%s' "$content" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+  rc=$?
+  [ "$rc" -eq 0 ] || return 0
+
+  stripped_lc=$(printf '%s' "$haystack_lc" | LC_ALL=C sed -E \
     -e "s/@${esc_lc}([^A-Za-z0-9_-]|\$)/\\1/g" \
     -e "s#(^|[^A-Za-z0-9_-])${esc_lc}/[a-z0-9_-]+#\\1#g")
-  printf '%s' "$stripped_lc" | grep -qE "(^|[^A-Za-z0-9_])${esc_lc}([^A-Za-z0-9_]|\$)"
+  rc=$?
+  [ "$rc" -eq 0 ] || return 0
+
+  printf '%s' "$stripped_lc" | LC_ALL=C grep -qE "(^|[^A-Za-z0-9_])${esc_lc}([^A-Za-z0-9_]|\$)"
+  rc=$?
+  [ "$rc" -eq 1 ] && return 1
+  return 0
 }
 
 block() {
@@ -145,7 +198,10 @@ while IFS= read -r -d '' path; do
   for name in "${names[@]}"; do
     [ -n "$name" ] || continue
     [ "$name" = "$current_name" ] && continue
-    [ -n "$upstream_name" ] && [ "$name" = "$upstream_name" ] && continue
+    if [ -n "$upstream_name" ] && [ "$name" = "$upstream_name" ] \
+      && registry_name_repo_matches "$name" "$upstream_repo"; then
+      continue
+    fi
 
     if [ "$name" = "$current_owner" ] || { [ -n "$upstream_owner" ] && [ "$name" = "$upstream_owner" ]; }; then
       owner_bare_mention_remains "$path" "$name" || continue
