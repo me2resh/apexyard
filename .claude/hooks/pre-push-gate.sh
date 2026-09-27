@@ -26,16 +26,38 @@
 # PR #1405's review all stop applying: none of them describe a way to
 # fool git about its own working directory.
 #
-# This hook's only remaining job is a one-line reminder, printed only
-# when the session's own working-directory repo has not installed that
-# git-native hook. It reads nothing but that repo's own `git config` —
-# never the command text — so it has nothing left to get wrong about
-# "which repo." A clone that never installs the git-native hook and never
-# runs CI locally is not blocked here. CI is the actual backstop, the
-# same accepted trade-off `bin/run-pre-push-checks.sh` already documents
-# for a fresh clone with no git hooks installed at all.
+# This hook's only remaining job is a reminder about the SESSION's OWN
+# working-directory repo. It never reasons about a different repository
+# a push might target (a sibling checkout, a `workspace/<name>/` clone).
+# It names the repo it checked, every time, so the scope is never
+# ambiguous (PR #1428 review, Rex finding B1).
 #
-# Install the git-native hook once per clone:
+# MAINTAINER DECISION (PR #1428 round 2): ApexYard runs configured local
+# pre-push commands only inside an ApexYard fork that has installed the
+# git-native hook. A managed-project clone gets NO local pre-push checks
+# from ApexYard, ever — that clone's own CI is its backstop. This matches
+# AgDR-0115, which already forbids ApexYard from setting `core.hooksPath`
+# in a managed clone. So this hook never suggests that install in a repo
+# that is not an ApexYard fork (PR #1428 review, Rex finding B2) — doing
+# so would point an operator at wiring AgDR-0115 already rejected, and a
+# managed repo that ships its own `.githooks/` would get ITS OWN scripts
+# executed if the operator followed that advice (the #1087 HIGH-1 hazard
+# `.claude/skills/handover/SKILL.md` already documents for a related
+# case).
+#
+# So this hook checks two things about ONLY the session's own
+# working-directory repo, never the command text:
+#   1. Is this repo an ApexYard fork at all? (a `.apexyard-fork` marker,
+#      or the fork's own `.githooks/pre-push` plus `bin/install-git-hooks.sh`)
+#   2. If it is, has it installed the git-native hook?
+#
+# It reads nothing but that repo's own files and `git config` — never
+# the command text — so it has nothing left to get wrong about "which
+# repo." Before this redesign, the Claude-layer gate ran a repository's
+# commands itself, sometimes against the wrong repo (#1366). After it,
+# only the fork's git-native hook runs them, and only inside a fork.
+#
+# Install the git-native hook once per ApexYard-fork clone:
 #   git config core.hooksPath .githooks
 #   (or: bash bin/install-git-hooks.sh)
 #
@@ -84,10 +106,30 @@ if [ -n "$HOOKS_PATH" ]; then
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# Is this repo an ApexYard fork at all? Only a fork gets the install
+# advice. A managed-project clone gets a short scope note instead — never
+# the `core.hooksPath` suggestion AgDR-0115 forbids for that case.
+# ---------------------------------------------------------------------------
+
+IS_APEXYARD_FORK=0
+if [ -f "$REPO_ROOT/.apexyard-fork" ]; then
+  IS_APEXYARD_FORK=1
+elif [ -f "$REPO_ROOT/.githooks/pre-push" ] && [ -f "$REPO_ROOT/bin/install-git-hooks.sh" ]; then
+  IS_APEXYARD_FORK=1
+fi
+
+if [ "$IS_APEXYARD_FORK" != "1" ]; then
+  echo "NOTE: this session's working-directory repo ($REPO_ROOT) is not an ApexYard fork. This check covers only that repo. ApexYard runs no local pre-push checks here — this repo's own CI is the backstop." >&2
+  exit 0
+fi
+
 cat >&2 <<MSG
-NOTE: this session's working-directory repo ($REPO_ROOT) has not
-installed the git-native pre-push hook. Configured .pre_push.commands
-now run only through that hook, not through this Claude Code check.
+NOTE: this session's working-directory repo ($REPO_ROOT) is an ApexYard
+fork that has not installed the git-native pre-push hook. This check
+covers only that repo, not a different repository this push might
+target. Configured .pre_push.commands run only through that hook, not
+through this Claude Code check.
 
 Install it once per clone:
   git config core.hooksPath .githooks

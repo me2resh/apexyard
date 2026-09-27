@@ -197,6 +197,84 @@ EOF
   rm -rf "$outer"
 }
 
+# -------- CASE 8: session resolution cache is disabled, not trusted --------
+# Hakim's A1 (PR #1428 review): config_get first checks a session-scoped
+# cross-process cache file, keyed only by a (mtime, size) fingerprint with
+# no path in it. A git hook shares its Claude Code session id with the
+# session that invoked the push. This plants a cache entry with the
+# fingerprint the sandbox's real config files carry, but a DIFFERENT
+# command inside it, then proves the script never reads it.
+#
+# _sig mirrors _lib-resolution-cache.sh's _resolution_cache_file_sig: GNU
+# `stat -c`, falling back to BSD/macOS `stat -f`.
+_sig() {
+  local f="$1" out
+  out=$(stat -c '%Y:%s' "$f" 2>/dev/null)
+  if [ -n "$out" ]; then printf '%s' "$out"; return 0; fi
+  out=$(stat -f '%m:%z' "$f" 2>/dev/null)
+  printf '%s' "$out"
+}
+
+case8() {
+  local sb; sb=$(make_sandbox)
+  # The resolution cache library must be present for this case — it is
+  # what config_get consults before the disable-export takes effect.
+  local src_root
+  src_root=$(cd "$(dirname "$0")/../../.." && pwd)
+  if [ -f "$src_root/.claude/hooks/_lib-resolution-cache.sh" ]; then
+    cp "$src_root/.claude/hooks/_lib-resolution-cache.sh" "$sb/.claude/hooks/_lib-resolution-cache.sh"
+  fi
+  cat > "$sb/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "real", "run": "touch '$sb/REAL_RAN'"}]}}
+EOF
+
+  local pin_dir; pin_dir=$(mktemp -d)
+  local sid="test-session-8"
+  local fp
+  fp="$(_sig "$sb/.claude/project-config.defaults.json")|$(_sig "$sb/.claude/project-config.json")"
+  mkdir -p "$pin_dir"
+  {
+    printf '%s\n' "$fp"
+    printf '%s\n' '{"pre_push": {"commands": [{"name": "poison", "run": "touch '"$sb"'/POISON_RAN"}]}}'
+  } > "$pin_dir/resolve-cache-${sid}-config-json"
+
+  # Fixed script (this PR's file, with the disable export): the poisoned
+  # entry must be ignored. Only REAL_RAN may appear.
+  (cd "$sb" && CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+    bash bin/run-configured-pre-push-checks.sh >/dev/null 2>&1)
+  if [ -f "$sb/REAL_RAN" ] && [ ! -f "$sb/POISON_RAN" ]; then
+    echo "PASS [A1-cache-poison-ignored-by-fixed-script]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [A1-cache-poison-ignored-by-fixed-script]: REAL_RAN=$([ -f "$sb/REAL_RAN" ] && echo yes || echo no) POISON_RAN=$([ -f "$sb/POISON_RAN" ] && echo yes || echo no)" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}A1-cache-poison-ignored-by-fixed-script "
+  fi
+  rm -f "$sb/REAL_RAN" "$sb/POISON_RAN"
+
+  # Fail-before proof: strip the disable-export line from a scratch copy
+  # of the SAME script and re-run against the SAME poisoned cache entry.
+  # The unfixed copy must fall for the poison — proving the export is the
+  # thing standing between the two outcomes, not something else in the
+  # fixture.
+  local unfixed="$sb/bin/run-configured-pre-push-checks-unfixed.sh"
+  grep -v 'export APEXYARD_DISABLE_RESOLUTION_CACHE=1' \
+    "$sb/bin/run-configured-pre-push-checks.sh" > "$unfixed"
+  chmod +x "$unfixed"
+  (cd "$sb" && CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+    bash bin/run-configured-pre-push-checks-unfixed.sh >/dev/null 2>&1)
+  if [ -f "$sb/POISON_RAN" ]; then
+    echo "PASS [A1-fail-before-unfixed-script-falls-for-poison]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [A1-fail-before-unfixed-script-falls-for-poison]: expected the unfixed copy to run the poisoned command" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}A1-fail-before-unfixed-script-falls-for-poison "
+  fi
+
+  rm -rf "$sb" "$pin_dir"
+}
+
 case1
 case2
 case3
@@ -204,6 +282,7 @@ case4
 case5
 case6
 case7
+case8
 
 echo ""
 echo "==================================="

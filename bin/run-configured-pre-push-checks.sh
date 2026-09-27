@@ -55,6 +55,18 @@ fi
 
 CMDS_JSON=""
 if [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
+  # Disable the session-scoped resolution cache (Hakim's A1, PR #1428
+  # review). config_get otherwise consults a cache file keyed by a weak
+  # fingerprint (modification time and size, no path). A git hook shares
+  # its Claude Code session ID with the session that invoked the push,
+  # so a same-second, same-size coincidence could hand this script a
+  # cached config from a DIFFERENT repository, or let it plant one for
+  # an ops-fork gate to read later. Setting this before the library loads
+  # forces a fresh read every time, exactly like the existing config
+  # tests that already export it for the same class of reason
+  # (test_config_warn_dropped_defaults.sh,
+  # test_config_merge_semantics.sh).
+  export APEXYARD_DISABLE_RESOLUTION_CACHE=1
   # shellcheck disable=SC1090,SC1091
   . "$REPO_ROOT/.claude/hooks/_lib-read-config.sh"
   # Pin the config root to THIS repository. _config_repo_root's ops-fork
@@ -66,9 +78,10 @@ if [ -f "$REPO_ROOT/.claude/hooks/_lib-read-config.sh" ]; then
   # so that repository's own config is the only correct answer — even
   # when it sits nested under an ops fork's workspace/<name>/, the exact
   # layout where the walk-up would otherwise return the ops fork instead
-  # (me2resh/apexyard#1405 review, finding B1). Setting the cache
-  # directly, rather than calling a setter, matches the one other place
-  # in the tree that already does this for the same reason.
+  # (me2resh/apexyard#1405 review, finding B1). This direct assignment
+  # has no matching precedent elsewhere in the tree. Every other
+  # assignment to this variable resets it to empty, in a test, rather
+  # than pinning it to a target (Rex's A5, PR #1428 review).
   _CONFIG_ROOT_CACHE="$REPO_ROOT"
   CMDS_JSON=$(config_get '.pre_push.commands' 2>/dev/null)
 fi

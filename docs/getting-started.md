@@ -150,9 +150,13 @@ Create an AgDR.
 
 ## Terminal push hook (`core.hooksPath`)
 
-The framework ships a `.githooks/pre-push` hook for `git push`. Once installed, it runs for a terminal push AND a Claude Code-driven push — git invokes it the same way either time. It runs two check sets in order: the framework's own hardcoded set (markdownlint, shellcheck, the subpack extraction smoke test, via `bin/run-pre-push-checks.sh`), then this repo's own configured `.pre_push.commands` (via `bin/run-configured-pre-push-checks.sh`).
+The framework ships a `.githooks/pre-push` hook for `git push`. Once installed, it runs for a terminal push AND a Claude Code-driven push — git invokes it the same way either time. It runs two check sets in order. First, the framework's own hardcoded set (markdownlint, shellcheck, the subpack extraction smoke test), via `bin/run-pre-push-checks.sh`. Then this repo's own configured `.pre_push.commands`, via `bin/run-configured-pre-push-checks.sh`.
 
-The Claude Code hook (`pre-push-gate.sh`) no longer runs any checks itself (me2resh/apexyard#1366, AgDR-0173). It used to pick a target repository out of the Bash command's text, and that could not be made sound — a heredoc, a quoted string, or a commit message could all look like a push without being one. It now only reminds a session, once, to install the git hook above when this clone hasn't. Until then, CI is the backstop for `.pre_push.commands` on this clone.
+**Plain rule (AgDR-0173, AgDR-0115): ApexYard runs `.pre_push.commands` only inside an ApexYard fork that has this hook installed. A managed-project clone gets no local pre-push check from ApexYard, ever.** ApexYard never sets `core.hooksPath` in a managed clone (AgDR-0115) — that clone's own CI is its backstop.
+
+Before AgDR-0173, the Claude Code hook (`pre-push-gate.sh`) ran a repository's `.pre_push.commands` itself, sometimes against the wrong repository (me2resh/apexyard#1366). It picked a target repository out of the Bash command's text. That could not be made sound. A heredoc, a quoted string, or a commit message could all look like a push without being one.
+
+After AgDR-0173, `pre-push-gate.sh` runs no repository's commands at all. It only reminds a session, on every matching push, to install the git hook above. It does this only when the session's own working-directory repo is itself an ApexYard fork. In a managed-project clone it prints at most a one-line note that ApexYard runs no checks there. It never suggests installing `core.hooksPath` in a repo that is not an ApexYard fork.
 
 ### Installed automatically by `/setup`
 

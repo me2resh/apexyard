@@ -11,7 +11,7 @@
 [ ] Build succeeds?           NO → fix before pushing
 ```
 
-The `pre-push-gate.sh` hook reminds you of this on every `git push`.
+In an ApexYard fork, the `.githooks/pre-push` git-native hook enforces this once installed (`git config core.hooksPath .githooks`). The `pre-push-gate.sh` Claude Code hook only reminds you to install it, and only when it is missing. See AgDR-0173.
 
 Per-project commands depend on your stack. Common pattern:
 
