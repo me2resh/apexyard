@@ -21,6 +21,8 @@ Run, and paste the commands and their results into a `## Testing` section:
 3. A fail-before proof for each new test — run the new test against the
    pre-change code and confirm it fails, then against the changed code and
    confirm it passes.
+4. The sentence checker (`bin/check-writing-profile.sh`) on every changed
+   Markdown file. It is advisory. Paste its output, even when it is empty.
 
 The reviewer spot-checks this evidence and does not reproduce all of it.
 Missing or implausible evidence is advisory on its own. The reviewer runs
