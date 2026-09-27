@@ -77,7 +77,9 @@ would otherwise report `BLOCKED`, `CLEAN`, or `UNKNOWN`, and the check would
 never fire. The config key `merge.require_up_to_date` (default `true`, in
 `.claude/project-config.defaults.json` under `merge`) controls this check.
 When the check is on and the PR is behind, the skill stops before the merge.
-It does not merge on a CI result computed against a stale base.
+It does not merge on a CI result computed against a stale base. A failed
+compare-API call also stops the merge. The skill never treats a failed check
+as evidence the PR is up to date.
 
 When the skill stops, ask the CEO to do this, or to approve you doing it:
 

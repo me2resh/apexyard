@@ -145,13 +145,18 @@ BEHIND=$(is_pr_behind_base "$REPO" "<baseRefName>" "<headRefOid>")
 
 - **`false`** — proceed to step 4.
 
-- **`unknown`** — the lookup failed (network/auth failure) or an argument
-  was empty. Proceed to step 4, but tell the user the behind-base check
-  could not run this time, so they can verify manually if a merge-queue race
-  is a live concern for this PR. This mirrors the fail-soft behaviour every
-  other forge read in this flow already has — an unavailable check does not
-  become a silent pass, but it also does not block a merge on a network
-  hiccup unrelated to the PR's own state.
+- **`unknown`** — the compare call failed, or an argument was empty. **Stop
+  here, the same as `true`.** Do not verify the Rex marker, do not write the
+  CEO marker, and do not merge. A failed check is not evidence the PR is
+  up to date. Tell the user:
+
+  ```
+  PR #<pr>'s behind-base check could not run (the compare API call failed).
+  This can be a network or auth issue. Before this can merge:
+    1. Retry the check, or verify manually whether <baseRefName> has commits
+       this PR's branch does not.
+    2. Run /approve-merge <pr> again once you know the PR's state.
+  ```
 
 This check does not change `block-unreviewed-merge.sh` — it stops the merge
 one step earlier, in this skill, before any marker is touched.
