@@ -1,3 +1,43 @@
+## [v5.7.0] — 2026-09-27
+
+Minor release — 2 features, 9 fixes, 1 improvement.
+
+Behaviour change: `/approve-merge` now stops a merge when the PR is behind its base branch (#1406). The check is on by default. Set `merge.require_up_to_date` to `false` in `.claude/project-config.json` to turn it off.
+
+### Added (feat)
+
+- (#1420) make reviews faster with a severity bar, delta re-reviews and CI-first testing — 020fbab
+- (#1351) add opt-in ORBIT planning adapter — 6d8f24b
+
+### Fixed (fix)
+
+- (#1419) block a merge when a merge gate cannot load a library — cdb57f1
+- (#1406) stop a merge when the PR is behind its base, and make /release-sync keep main-only changes — c16860e
+- (#1404) honor the active ticket for unparsed write targets, and document a reviewer test path — 9d46ee2
+- (#1400) scope the active-reviewer marker per session and stop owner-name leak false blocks — 5c12554
+- (#1397) cover .astro in the design gate, exempt Alembic env.py, and warn when config overrides drop defaults — d60a0d4
+- (#1399) validate Mermaid in every diagram-producing skill and align the DFD template with threat-model — 5be9ecb
+- (#1355) stop Claude Code always-loading rule bodies — 6870a8b
+- (#1373) skip CodeQL analysis outside the upstream repository — c66d7c5
+- (#1353) pass Orbit record root to validation — 7e561ec
+
+### Changed (refactor / chore / docs)
+
+- (#1398) load the writing rule in every agent, add a no-search-MCP fallback, and make Rex verify acceptance criteria — 2b6ed42
+
+### Closes
+
+- Closes #1350
+- Closes #1354
+- Closes #1370
+- Closes #1376
+- Closes #1382
+- Closes #1385
+- Closes #1386
+- Closes #1390
+- Closes #1396
+- Closes #1403
+
 ## [v5.6.3] — 2026-09-18
 
 Patch release — 15 fixes, 7 improvements.
