@@ -98,6 +98,62 @@ review_marker_path() {
   printf '%s/%s__%s-%s.approved' "$reviews_dir" "$safe_repo" "$pr" "$role"
 }
 
+# ---------------------------------------------------------------------------
+# ACTIVE-REVIEWER MARKER PATH — session-scoped (me2resh/apexyard#1376)
+# ---------------------------------------------------------------------------
+#
+# Before this fix, .claude/session/active-reviewer was ONE fixed path shared
+# by every Claude Code session and worktree on the same ops fork. A review
+# running in session B set that one file, and block-reviewer-repo-mutation.sh
+# read it from EVERY session — so session A's unrelated `git commit` was
+# blocked by a review it had no part in. Two concurrent reviews (different
+# sessions) also overwrote each other's marker, and the first to finish
+# deleted the file out from under the other's still-running review.
+#
+# active_reviewer_marker_path scopes the marker filename to the session that
+# wrote it, so a review in one session can be read only by hooks running in
+# that SAME session — never granting, and never blocking, mutations in any
+# other session.
+#
+# active_reviewer_marker_path [marker_home] [session_id]
+#
+# Args:
+#   marker_home — the ops-fork root (or "." when unresolved). Defaults to ".".
+#   session_id  — defaults to $CLAUDE_CODE_SESSION_ID. When both this arg and
+#                 the env var are empty, the function falls back to the
+#                 pre-#1376 FIXED path (no session suffix). This is the safe
+#                 fallback for callers that legitimately have no Claude Code
+#                 session at all — a standalone git-native hook, CI, or a
+#                 bare test-harness invocation. This function makes no claim
+#                 about how many such processes act on a given ops fork at
+#                 once; the fixed path is exactly as safe (or unsafe) as it
+#                 was before this function existed, and every caller that
+#                 never set the env var (the pre-#1376 test suite included)
+#                 keeps working unchanged.
+#
+# Output (stdout): the absolute marker path.
+active_reviewer_marker_path() {
+  local marker_home="${1:-.}"
+  local sid="${2:-${CLAUDE_CODE_SESSION_ID:-}}"
+  local base="${marker_home}/.claude/session/active-reviewer"
+
+  if [ -z "$sid" ]; then
+    printf '%s' "$base"
+    return 0
+  fi
+
+  # Sanitise: a session id is expected to already be a safe token (the
+  # harness's own id), but never trust it as a bare path component. Collapse
+  # anything outside [A-Za-z0-9._-] to '_' so the result can never contain a
+  # '/' (or other separator) and escape the .claude/session/ directory this
+  # marker lives in (NOT the .claude/session/reviews/ directory — the
+  # active-reviewer marker and the *.approved review markers are siblings,
+  # not the same directory).
+  local safe_sid
+  safe_sid=$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_')
+  printf '%s.%s' "$base" "$safe_sid"
+}
+
 # pr_base_repo <pr> <repo>
 #
 # Echoes the PR/MR's BASE (host) repo as "owner/repo" — the repo the PR *lives

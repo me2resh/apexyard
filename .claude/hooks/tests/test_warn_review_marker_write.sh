@@ -943,6 +943,172 @@ case45() {
   rm -rf "$sb"
 }
 
+# ---------------------------------------------------------------------------
+# (46-48) me2resh/apexyard#1376 — the active-reviewer marker is now keyed on
+# CLAUDE_CODE_SESSION_ID (active_reviewer_marker_path, _lib-review-markers.sh)
+# instead of one fixed path shared by every session. These three cases use a
+# DEDICATED sandbox that also carries _lib-review-markers.sh (the existing
+# make_sandbox deliberately omits it, so cases 1-45 above exercise the
+# pre-#1376 fixed-path fallback unchanged) and a session-aware run helper
+# that sets CLAUDE_CODE_SESSION_ID explicitly per invocation rather than
+# trusting the ambient environment.
+# ---------------------------------------------------------------------------
+
+make_sandbox_scoped() {
+  local sb; sb=$(make_sandbox)
+  cp "$LIB_MARKERS" "$sb/.claude/hooks/_lib-review-markers.sh"
+  echo "$sb"
+}
+
+# Direct unit assertions on active_reviewer_marker_path itself (sourced from
+# LIB_MARKERS above), pinning the two properties the hook-level cases below
+# cannot exercise: the no-session fallback shape, and path-traversal safety
+# on a hostile session id. Neither is a "case" (no hook invocation), so they
+# are asserted inline rather than through run_hook_sess.
+# Isolated in a subshell that unsets CLAUDE_CODE_SESSION_ID: this suite may
+# itself run inside a live Claude Code session (a real, non-empty session id
+# ambient in the environment), and passing "" as the explicit arg is not
+# enough on its own to force the "both empty" fallback — bash's ${2:-default}
+# treats an empty positional arg the same as an unset one, so it falls through
+# to ${CLAUDE_CODE_SESSION_ID:-} exactly as documented. Unsetting here is what
+# actually produces the "both empty" case this assertion means to pin.
+_p=$(unset CLAUDE_CODE_SESSION_ID; active_reviewer_marker_path "/x" "")
+if [ "$_p" = "/x/.claude/session/active-reviewer" ]; then
+  echo "PASS [active_reviewer_marker_path: empty session id falls back to the bare pre-#1376 path]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [active_reviewer_marker_path: empty session id fallback]: got '$_p'" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES active_reviewer_marker_path-fallback"
+fi
+
+_p=$(active_reviewer_marker_path "/x" "../../etc/passwd")
+case "$_p" in
+  /x/.claude/session/active-reviewer.*)
+    if printf '%s' "$_p" | grep -qF '/'; then
+      # The suffix itself must contain no '/' — only the expected directory
+      # separators up to and including "active-reviewer." are allowed.
+      _suffix="${_p#/x/.claude/session/active-reviewer.}"
+      if printf '%s' "$_suffix" | grep -qF '/'; then
+        echo "FAIL [active_reviewer_marker_path: hostile session id escapes the reviews dir]: got '$_p'" >&2
+        FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES active_reviewer_marker_path-traversal"
+      else
+        echo "PASS [active_reviewer_marker_path: hostile session id is sanitised, no path traversal]"
+        PASS=$((PASS+1))
+      fi
+    fi
+    ;;
+  *)
+    echo "FAIL [active_reviewer_marker_path: unexpected shape for a hostile session id]: got '$_p'" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES active_reviewer_marker_path-shape"
+    ;;
+esac
+
+# run_hook_sess <sandbox> <session_id|""> <label> <json> <expect_exit> [<grep_pattern>]
+run_hook_sess() {
+  local sb="$1" sess="$2" label="$3" json="$4" expect_exit="$5"
+  local grep_pattern="${6:-}"
+  local stderr_file rc
+
+  stderr_file=$(mktemp)
+  (
+    cd "$sb" || exit 1
+    if [ -n "$sess" ]; then
+      export CLAUDE_CODE_SESSION_ID="$sess"
+    else
+      unset CLAUDE_CODE_SESSION_ID
+    fi
+    printf '%s' "$json" | "$sb/.claude/hooks/warn-review-marker-write.sh" 2>"$stderr_file"
+  )
+  rc=$?
+
+  if [ "$rc" != "$expect_exit" ]; then
+    echo "FAIL [$label]: hook exited $rc, expected $expect_exit" >&2
+    sed 's/^/    stderr: /' "$stderr_file" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES $label"; rm -f "$stderr_file"; return
+  fi
+
+  local stderr_content
+  stderr_content=$(cat "$stderr_file")
+
+  if [ -n "$grep_pattern" ]; then
+    if ! echo "$stderr_content" | grep -qE "$grep_pattern"; then
+      echo "FAIL [$label]: stderr did not match /$grep_pattern/" >&2
+      echo "  stderr (first 400 chars): ${stderr_content:0:400}" >&2
+      FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES $label"; rm -f "$stderr_file"; return
+    fi
+  fi
+
+  rm -f "$stderr_file"
+  echo "PASS [$label]"
+  PASS=$((PASS+1))
+}
+
+# (46) SAME session: session "sess-A" writes its own active-reviewer marker,
+# then the SAME session's rex-marker write is suppressed — exactly like the
+# pre-#1376 same-process case, now proven with the session suffix in play.
+# Asserted on a genuinely SILENT allow (empty stderr), not merely exit 0 —
+# the hook is unconditionally advisory (exit 0 on every path, matched or
+# not), so exit code alone cannot distinguish "suppressed" from "warned".
+case46() {
+  local sb; sb=$(make_sandbox_scoped)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  local active; active=$(active_reviewer_marker_path "$sb" "sess-A")
+  mkdir -p "$(dirname "$active")"
+  printf '%s\n' "${REPO}#42:rex" > "$active"
+
+  local stderr_file; stderr_file=$(mktemp)
+  ( cd "$sb" || exit 1; export CLAUDE_CODE_SESSION_ID="sess-A"; printf '%s' "$(write_json "$marker")" | "$sb/.claude/hooks/warn-review-marker-write.sh" 2>"$stderr_file" )
+  local rc=$?
+  local label="Write rex marker, matching SAME-session active-reviewer marker -> silently ALLOWED (#1376)"
+  if [ "$rc" = "0" ] && [ ! -s "$stderr_file" ]; then
+    echo "PASS [$label]"; PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: rc=$rc, stderr=$(cat "$stderr_file")" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES $label"
+  fi
+  rm -f "$stderr_file"
+  rm -rf "$sb"
+}
+
+# (47) THE REGRESSION THIS FIX CLOSES. Before #1376, warn-review-marker-write.sh
+# read ONE FIXED path — $MARKER_HOME/.claude/session/active-reviewer — with no
+# session awareness at all, so any content sitting there authorised EVERY
+# session's write regardless of which session actually wrote it. This case
+# seeds content at that exact bare, unscoped path (never a per-session
+# suffix) and runs the hook under a session id that never wrote it. The
+# pre-#1376 hook would find the match and allow SILENTLY; the fixed hook
+# resolves a suffixed path for a session id that IS set, never even looks at
+# the bare path, finds no marker of its own, and must WARN.
+case47() {
+  local sb; sb=$(make_sandbox_scoped)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  local bare="$sb/.claude/session/active-reviewer"
+  mkdir -p "$(dirname "$bare")"
+  printf '%s\n' "${REPO}#42:rex" > "$bare"
+  run_hook_sess "$sb" "sess-B" \
+    "Write rex marker, matching content only at the legacy shared path -> a session with its own id must not be authorised by it, DETECTED/warns (#1376)" \
+    "$(write_json "$marker")" 0 "WARNING"
+  rm -rf "$sb"
+}
+
+# (48) TWO CONCURRENT SESSIONS, the everyday shape named in the issue (a
+# review running in one worktree/terminal while an unrelated session works
+# in another). Session "sess-A" writes its OWN suffixed marker; session
+# "sess-B" attempts the identical rex-marker write. sess-B has no marker of
+# its own, so the write is DETECTED — sess-A's review can never grant or
+# block sess-B's unrelated work.
+case48() {
+  local sb; sb=$(make_sandbox_scoped)
+  local marker; marker=$(review_marker_path "$REPO" 42 rex "$sb")
+  local active_a; active_a=$(active_reviewer_marker_path "$sb" "sess-A")
+  mkdir -p "$(dirname "$active_a")"
+  printf '%s\n' "${REPO}#42:rex" > "$active_a"
+  run_hook_sess "$sb" "sess-B" \
+    "Write rex marker, matching marker belongs to a DIFFERENT concurrent session -> DETECTED, warns (#1376)" \
+    "$(write_json "$marker")" 0 "WARNING"
+  rm -rf "$sb"
+}
+
 case1
 case2
 case3
@@ -988,6 +1154,9 @@ case42
 case43
 case44
 case45
+case46
+case47
+case48
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -439,6 +439,47 @@ fi
 rm -rf "$SB"
 
 # =============================================================================
+# me2resh/apexyard#1368 — Alembic tooling files (env.py, script.py.mako) are
+# NOT migrations: pass-through (allow, no tracker call), even with no active
+# ticket at all — same shape as Case 10's non-migration-path check.
+# =============================================================================
+for ALEMBIC_TOOLING_PATH in \
+  "alembic/env.py" \
+  "alembic/script.py.mako" \
+  "db/migrations/env.py" \
+  "db/migrations/script.py.mako"
+do
+  SB=$(make_fork)
+  install_mock "$SB" gh 'exit 99'
+  if run_hook "$SB" "$SB/$ALEMBIC_TOOLING_PATH" 0; then
+    record_pass "#1368 Alembic tooling ($ALEMBIC_TOOLING_PATH) → pass-through allow, no ticket needed"
+  else
+    record_fail "#1368 Alembic tooling ($ALEMBIC_TOOLING_PATH) → pass-through allow, no ticket needed"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
+# me2resh/apexyard#1368 negative controls — real revision scripts must still
+# be gated: no active ticket → block (Gate 1), same as any other migration
+# path. Proves the tooling exemption above did not weaken detection of
+# alembic/versions/*.py or the generic migrations/* catch-all.
+# =============================================================================
+for REAL_MIGRATION_PATH in \
+  "alembic/versions/0001_add_users.py" \
+  "db/migrations/0001_add_users.py"
+do
+  SB=$(make_fork)
+  install_mock "$SB" gh 'exit 99'
+  if run_hook "$SB" "$SB/$REAL_MIGRATION_PATH" 2; then
+    record_pass "#1368 control: real revision script ($REAL_MIGRATION_PATH) still requires a ticket → block"
+  else
+    record_fail "#1368 control: real revision script ($REAL_MIGRATION_PATH) still requires a ticket → block"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
 # Case 12: jira happy path (#761). Body is now mapped for jira, so an OPEN,
 # migration-labelled ticket whose ADF description (Jira Cloud) links a migration
 # AgDR passes Gate 3 → allow (0). This replaces the pre-#761 case that asserted
