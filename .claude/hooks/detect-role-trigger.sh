@@ -268,7 +268,8 @@ detect_path_triggers() {
     .claude/hooks/*|*/.claude/hooks/*|\
     .claude/settings.json|*/.claude/settings.json|\
     .githooks/*|*/.githooks/*|\
-    bin/run-pre-push-checks.sh|*/bin/run-pre-push-checks.sh)
+    bin/run-pre-push-checks.sh|*/bin/run-pre-push-checks.sh|\
+    bin/run-configured-pre-push-checks.sh|*/bin/run-configured-pre-push-checks.sh)
       emit_banner \
         "Security Auditor" \
         "roles/security/security-auditor.md" \

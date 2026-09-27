@@ -150,9 +150,9 @@ Create an AgDR.
 
 ## Terminal push hook (`core.hooksPath`)
 
-The framework ships a `.githooks/pre-push` hook that runs the same check set as the Claude Code `pre-push-gate.sh` hook — markdownlint, shellcheck, and the subpack extraction smoke test — for terminal `git push` commands.
+The framework ships a `.githooks/pre-push` hook for `git push`. Once installed, it runs for a terminal push AND a Claude Code-driven push — git invokes it the same way either time. It runs two check sets in order: the framework's own hardcoded set (markdownlint, shellcheck, the subpack extraction smoke test, via `bin/run-pre-push-checks.sh`), then this repo's own configured `.pre_push.commands` (via `bin/run-configured-pre-push-checks.sh`).
 
-The Claude Code hook (`pre-push-gate.sh`) only fires on pushes made _through Claude Code_. The git hook covers pushes made directly from the terminal.
+The Claude Code hook (`pre-push-gate.sh`) no longer runs any checks itself (me2resh/apexyard#1366, AgDR-0173). It used to pick a target repository out of the Bash command's text, and that could not be made sound — a heredoc, a quoted string, or a commit message could all look like a push without being one. It now only reminds a session, once, to install the git hook above when this clone hasn't. Until then, CI is the backstop for `.pre_push.commands` on this clone.
 
 ### Installed automatically by `/setup`
 

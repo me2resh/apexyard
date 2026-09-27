@@ -182,6 +182,15 @@ in=$(jq -nc \
 run_case "trust chain: delegated bin gate fires Security Auditor [#1302]" 0 \
   "ROLE TRIGGER: Security Auditor" "$in"
 
+# 2e-vi. The second delegated runner added for #1366/AgDR-0173 is the same
+# class of control (it runs a repo's own configured pre-push commands) and
+# must fire the same trigger.
+in=$(jq -nc \
+  --arg p "bin/run-configured-pre-push-checks.sh" \
+  '{hook_event_name:"PreToolUse", tool_name:"Edit", tool_input:{file_path:$p}}')
+run_case "trust chain: second delegated bin gate fires Security Auditor [#1366]" 0 \
+  "ROLE TRIGGER: Security Auditor" "$in"
+
 # 2e-v. A .claude path that is NOT trust-chain (a skill doc) stays silent.
 in=$(jq -nc \
   --arg p ".claude/skills/roadmap/SKILL.md" \

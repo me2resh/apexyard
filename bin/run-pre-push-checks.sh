@@ -1,37 +1,43 @@
 #!/bin/bash
 # bin/run-pre-push-checks.sh — run the framework pre-push check set.
 #
-# Shared implementation used by:
-#   - .githooks/pre-push   (terminal `git push`)
-#   - .claude/hooks/pre-push-gate.sh reads .pre_push.commands from
-#     .claude/project-config.json directly and calls bash -c on each entry,
-#     so it doesn't invoke this script — but the command strings in config are
-#     defined to match what this script does.
+# Invoked by .githooks/pre-push (terminal `git push`, or a Claude Code
+# push once core.hooksPath is set — git invokes this hook the same way
+# regardless of which process ran `git push`).
 #
-# This script is the canonical reference for "what checks run before push".
-# If you add a check, add it here AND mirror it in
-# .claude/project-config.example.json → pre_push.commands so both paths stay
-# in sync.
+# This script hardcodes the FRAMEWORK's own checks (a markdown linter,
+# a shell linter, subpacks). It is the canonical reference for "what
+# checks run before push on this repo". If you add a check, add it here.
+#
+# An adopter's own configured checks (`.pre_push.commands` in
+# `.claude/project-config.json`) are a SEPARATE, sibling script:
+# bin/run-configured-pre-push-checks.sh, also invoked by
+# .githooks/pre-push. `.claude/hooks/pre-push-gate.sh` (the Claude Code
+# PreToolUse hook) used to run that command list itself; it no longer
+# does (me2resh/apexyard#1366, AgDR-0173) — see that file's header for
+# why parsing a Bash command's text to pick a target repo could not be
+# made sound.
 #
 # NOTE (apexyard#1031): `.claude/project-config.json` is now gitignored AND
 # untracked, so a fresh clone does not have one. Be precise about what that
 # costs, because the obvious reassurance is wrong:
 #
-#   - a Claude Code push → pre-push-gate.sh → reads .pre_push.commands from
-#     config. With no project-config.json the list is empty and the gate is
-#     a no-op.
-#   - terminal `git push` → .githooks/pre-push → this script. This does NOT
-#     silently cover the gap: .githooks only runs where someone has opted in
+#   - This script's own hardcoded checks run whenever .githooks/pre-push
+#     runs, with or without a project-config.json — they don't read it.
+#   - bin/run-configured-pre-push-checks.sh's `.pre_push.commands` list
+#     comes from project-config.json. With no override file the list is
+#     empty and that script is a no-op.
+#   - Either way, .githooks/pre-push only runs where someone has opted in
 #     with `git config core.hooksPath .githooks`, which is per-clone local
 #     config and documented as optional (docs/getting-started.md
-#     § "Terminal push hook"). On a fresh clone it is unset, so this path is
-#     inactive too.
+#     § "Terminal push hook"). On a fresh clone it is unset, so BOTH
+#     scripts are inactive regardless of project-config.json.
 #
-# So on a fresh clone BOTH pre-push paths are inactive. That is acceptable
-# only because pre-push is a latency optimisation rather than the guardrail:
-# the real backstop is CI, where markdown-lint.yml, shellcheck.yml and
-# extract-subpacks-on-release.yml all run on `pull_request`. Nothing broken
-# can merge whether or not a contributor has a local config.
+# That is acceptable only because pre-push is a latency optimisation
+# rather than the guardrail: the real backstop is CI, where
+# markdown-lint.yml, shellcheck.yml and extract-subpacks-on-release.yml
+# all run on `pull_request`. Nothing broken can merge whether or not a
+# contributor has installed the git-native hook.
 #
 # Contributors who want the local fast feedback do both, once:
 #   cp .claude/project-config.example.json .claude/project-config.json

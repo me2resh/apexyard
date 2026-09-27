@@ -1,11 +1,23 @@
 #!/bin/bash
-# Smoke tests for .claude/hooks/pre-push-gate.sh
+# Smoke tests for .claude/hooks/pre-push-gate.sh — the advisory-only
+# rewrite from me2resh/apexyard#1366 / AgDR-0173.
+#
+# The pre-#1366 version of this hook read a `.pre_push.commands` list and
+# ran it with `bash -c`. PR #1405's review found that any command-text
+# based target resolution could be fooled by read-only text that merely
+# MENTIONS a push — a heredoc body, a quoted separator, a commit message,
+# an echo (Hakim's H1 finding, still reproducing on that PR's last
+# commit). This hook no longer runs ANY repository's commands, so there
+# is nothing left for that class of bug to exploit. The negative cases
+# below (H1-*) prove exactly that: even with a `.pre_push.commands` entry
+# configured to leave a marker file, none of the read-only shapes cause
+# the marker to appear.
 #
 # Each case:
 #   - sets up an isolated sandbox repo under $TMPDIR
-#   - seeds a project-config.json with a specific `.pre_push.commands` array
 #   - pipes a synthetic PreToolUse JSON blob into the hook
-#   - asserts exit code + stderr contents
+#   - asserts exit code + stderr contents + (H1 cases) absence of a
+#     side-effect marker file
 #
 # Exit 0 if all cases pass; exit 1 on first failure with a clear message.
 
@@ -22,7 +34,12 @@ FAIL=0
 FAILED_CASES=""
 
 # -- sandbox builder -----------------------------------------------------
+# no_hooks_path=1 (default): core.hooksPath left unset — the hook should
+# print the install reminder.
+# no_hooks_path=0: core.hooksPath set to .githooks with a real, executable
+# stub pre-push file — the hook should stay silent.
 make_sandbox() {
+  local install_git_native="${1:-0}"
   local sb
   sb=$(mktemp -d)
   (
@@ -38,8 +55,8 @@ make_sandbox() {
   cp "$HOOK_SRC" "$sb/.claude/hooks/pre-push-gate.sh"
   chmod +x "$sb/.claude/hooks/pre-push-gate.sh"
 
-  # Copy the shared reader + shipped defaults so config lookups resolve
-  # the same way they do in a real fork (same pattern as #115 test harness).
+  # Marker file used by the H1 cases below to prove NO command ran. A real
+  # .pre_push.commands entry that would leave this marker if it ever ran.
   local src_root
   src_root=$(cd "$(dirname "$0")/../../.." && pwd)
   if [ -f "$src_root/.claude/hooks/_lib-read-config.sh" ]; then
@@ -48,6 +65,17 @@ make_sandbox() {
   if [ -f "$src_root/.claude/project-config.defaults.json" ]; then
     cp "$src_root/.claude/project-config.defaults.json" "$sb/.claude/project-config.defaults.json"
   fi
+  cat > "$sb/.claude/project-config.json" <<EOF
+{"pre_push": {"commands": [{"name": "leave-marker", "run": "touch '$sb/MARKER_RAN'"}]}}
+EOF
+
+  if [ "$install_git_native" = "1" ]; then
+    mkdir -p "$sb/.githooks"
+    printf '#!/bin/bash\nexit 0\n' > "$sb/.githooks/pre-push"
+    chmod +x "$sb/.githooks/pre-push"
+    (cd "$sb" && git config core.hooksPath .githooks)
+  fi
+
   echo "$sb"
 }
 
@@ -55,6 +83,14 @@ push_json() {
   cat <<EOF
 {"tool_input":{"command":"git push origin HEAD"}}
 EOF
+}
+
+json_cmd() {
+  # Build a {"tool_input":{"command": <cmd>}} payload with jq -n so the
+  # command text is safely quoted regardless of what it contains
+  # (quotes, newlines, backslashes) — the exact classes of text the
+  # ORIGINAL hook mis-parsed. See #1405 review, finding B3.
+  jq -n --arg c "$1" '{tool_input:{command:$c}}'
 }
 
 run_hook() {
@@ -89,6 +125,18 @@ run_hook() {
   PASS=$((PASS+1))
 }
 
+assert_no_marker() {
+  local sb="$1" label="$2"
+  if [ -f "$sb/MARKER_RAN" ]; then
+    echo "FAIL [$label]: MARKER_RAN exists — a repository command ran" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}${label} "
+  else
+    echo "PASS [$label]"
+    PASS=$((PASS+1))
+  fi
+}
+
 # -------------------- CASE 1: non-git-push command --------------------
 case1() {
   local sb; sb=$(make_sandbox)
@@ -104,164 +152,97 @@ case1() {
   rm -rf "$sb"
 }
 
-# -------------------- CASE 2: empty commands → no-op --------------------
+# ---- CASE 2: git push, no git-native hook installed -> reminder printed ----
 case2() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": []}}
-EOF
-  run_hook "$sb" "$(push_json)" 0 "" "empty-commands-noop"
+  local sb; sb=$(make_sandbox 0)
+  run_hook "$sb" "$(push_json)" 0 "NOTE:" "no-git-native-hook-reminds"
+  assert_no_marker "$sb" "no-git-native-hook-reminds: still runs no commands"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 3: passing command --------------------
+# ---- CASE 3: git push, git-native hook installed -> silent, no reminder ----
 case3() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [{"name": "echo-ok", "run": "true"}]}}
-EOF
-  run_hook "$sb" "$(push_json)" 0 "" "passing-command"
+  local sb; sb=$(make_sandbox 1)
+  local out rc
+  out=$(cd "$sb" && echo "$(push_json)" | bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  rc=$?
+  if [ "$rc" = "0" ] && [ -z "$out" ]; then
+    echo "PASS [git-native-hook-installed-silent]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [git-native-hook-installed-silent]: want rc=0 and empty stderr, got rc=$rc stderr='$out'" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}git-native-hook-installed-silent "
+  fi
+  assert_no_marker "$sb" "git-native-hook-installed: still runs no commands"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 4: failing command --------------------
+# ---- CASE 4: core.hooksPath set, but the target file is missing ----
+# (e.g. .githooks/ dir removed after the config was set) -> reminder still
+# printed, since the git-native layer will not actually run.
 case4() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [{"name": "deliberate-fail", "run": "echo oops; exit 1"}]}}
-EOF
-  run_hook "$sb" "$(push_json)" 2 "deliberate-fail: FAILED" "failing-command-blocks"
+  local sb; sb=$(make_sandbox 0)
+  (cd "$sb" && git config core.hooksPath .githooks)
+  run_hook "$sb" "$(push_json)" 0 "NOTE:" "hookspath-set-but-file-missing-still-reminds"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 5: skip marker in HEAD commit --------------------
-case5() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [{"name": "should-skip", "run": "exit 1"}]}}
-EOF
-  # Amend the HEAD commit message to include the skip marker.
-  (cd "$sb" && git commit --amend -q -m "init
+# =====================================================================
+# H1 negative tests (me2resh/apexyard#1366 / PR #1405 review / AgDR-0173)
+#
+# Each case configures a REAL .pre_push.commands entry that would leave
+# MARKER_RAN if it ever executed, then feeds the hook a command whose TEXT
+# merely mentions "git push" without being one. The old hook (still on
+# `dev` as of this writing) ran the command list on every one of these —
+# see the fail-before proof in the PR evidence. This hook must not.
+# =====================================================================
 
-<!-- pre-push: skip -->")
-  run_hook "$sb" "$(push_json)" 0 "pre-push gate bypassed by skip marker" "skip-marker-bypasses"
+# ---- H1-1: heredoc body mentioning a push ----
+case_h1_heredoc() {
+  local sb; sb=$(make_sandbox 0)
+  local cmd
+  cmd=$(printf 'cat <<EOF\nsee git push origin main for details\nEOF\n')
+  run_hook "$sb" "$(json_cmd "$cmd")" 0 "" "H1-heredoc-body-does-not-run-commands"
+  assert_no_marker "$sb" "H1-heredoc-body-does-not-run-commands"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 6: multiple commands, first fails --------------------
-case6() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [
-  {"name": "lint", "run": "exit 1"},
-  {"name": "test", "run": "true"}
-]}}
-EOF
-  run_hook "$sb" "$(push_json)" 2 "lint: FAILED" "fail-fast-on-first-red"
+# ---- H1-2: quoted string mentioning a push ----
+case_h1_quoted_string() {
+  local sb; sb=$(make_sandbox 0)
+  local cmd='grep -n "git push origin main" some-file.txt'
+  run_hook "$sb" "$(json_cmd "$cmd")" 0 "" "H1-quoted-string-does-not-run-commands"
+  assert_no_marker "$sb" "H1-quoted-string-does-not-run-commands"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 7: no config at all → no-op --------------------
-case7() {
-  local sb; sb=$(make_sandbox)
-  # No project-config.json at all; defaults ship with empty commands.
-  run_hook "$sb" "$(push_json)" 0 "" "no-config-noop"
+# ---- H1-3: commit message mentioning a push ----
+case_h1_commit_message() {
+  local sb; sb=$(make_sandbox 0)
+  local cmd='git commit -m "docs: explain git push origin main in the runbook"'
+  run_hook "$sb" "$(json_cmd "$cmd")" 0 "" "H1-commit-message-does-not-run-commands"
+  assert_no_marker "$sb" "H1-commit-message-does-not-run-commands"
   rm -rf "$sb"
 }
 
-
-# -------------------- CASE 8: untracked bad markdown → no failure --------------------
-# Regression guard for #548: a markdownlint command driven by git ls-files must
-# NOT lint untracked files, so a lint-dirty untracked .md must not block the push.
-# The command string avoids \0 / null-delimiter JSON escapes (jq rejects \0);
-# filenames in sandboxes are space-free so plain xargs (newline-split) is safe here.
-case8() {
-  local sb; sb=$(make_sandbox)
-  # Configure markdownlint using git ls-files (the fixed command shape).
-  # shellcheck disable=SC2016
-  printf '%s\n' \
-    '{"pre_push": {"commands": [{"name": "markdownlint", "run": "command -v npx >/dev/null 2>&1 || { echo INFO; exit 0; }; md_files=$(git ls-files '"'"'*.md'"'"' 2>/dev/null); [ -z \"$md_files\" ] && { echo INFO_SKIP; exit 0; }; echo \"$md_files\" | xargs npx --yes markdownlint-cli2 2>&1"}]}}' \
-    > "$sb/.claude/project-config.json"
-  # Drop a lint-dirty untracked markdown file.
-  # Critically, this file is NOT `git add`-ed, so git ls-files will not see it.
-  mkdir -p "$sb/.claude/skills/external-skill"
-  printf '# Bad heading  \n- item without blank line\n' \
-    > "$sb/.claude/skills/external-skill/DOCS.md"
-  # Push must succeed: the untracked file must be invisible to markdownlint.
-  run_hook "$sb" "$(push_json)" 0 "" "untracked-bad-md-ignored"
+# ---- H1-4: echo mentioning a push ----
+case_h1_echo() {
+  local sb; sb=$(make_sandbox 0)
+  local cmd='echo "reminder: run git push origin main after review"'
+  run_hook "$sb" "$(json_cmd "$cmd")" 0 "" "H1-echo-does-not-run-commands"
+  assert_no_marker "$sb" "H1-echo-does-not-run-commands"
   rm -rf "$sb"
 }
 
-# -------------------- CASE 9: tracked bad markdown → failure --------------------
-# Regression guard for #548: a lint error in a TRACKED markdown file must still
-# block the push, so the fix does not weaken the gate for real content.
-# Same command shape as case8 (space-safe xargs without -0, valid JSON).
-case9() {
-  local sb; sb=$(make_sandbox)
-  # shellcheck disable=SC2016
-  printf '%s\n' \
-    '{"pre_push": {"commands": [{"name": "markdownlint", "run": "command -v npx >/dev/null 2>&1 || { echo INFO; exit 0; }; md_files=$(git ls-files '"'"'*.md'"'"' 2>/dev/null); [ -z \"$md_files\" ] && { echo INFO_SKIP; exit 0; }; echo \"$md_files\" | xargs npx --yes markdownlint-cli2 2>&1"}]}}' \
-    > "$sb/.claude/project-config.json"
-  # Create a lint-dirty markdown file and COMMIT it so git ls-files sees it.
-  # MD047 (files-end-with-single-newline) is reliably detectable without a
-  # markdownlint config: just omit the trailing newline.
-  printf '# README\nno-trailing-newline' > "$sb/README.md"
-  (cd "$sb" && git add README.md && git commit -q -m "chore: add bad README")
-  # Use a local npx stub so this gate test never depends on registry access or
-  # a package download. The test is about propagating a tracked lint failure,
-  # not about testing markdownlint-cli2 itself.
-  mkdir -p "$sb/bin"
-  cat > "$sb/bin/npx" <<'EOF'
-#!/bin/bash
-echo "MD047: Files should end with a single newline" >&2
-exit 1
-EOF
-  chmod +x "$sb/bin/npx"
-  PATH="$sb/bin:$PATH"
-  run_hook "$sb" "$(push_json)" 2 "markdownlint: FAILED" "tracked-bad-md-fails"
-  rm -rf "$sb"
-}
-
-# -------------------- CASE 10: marker MENTIONED in prose → does NOT bypass --------------------
-# Regression guard for #1097: the skip marker used to be grep-matched
-# unanchored, so a commit message that merely *discusses* the marker
-# (documentation, a review comment quoted verbatim, a revert body) matched
-# too and silently disabled every check. The match must be whole-line
-# (grep -x): a sentence that contains the marker string inline is NOT a
-# deliberate bypass, so the check must still run (and still block on a
-# failing command).
-case10() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [{"name": "should-not-skip", "run": "echo oops; exit 1"}]}}
-EOF
-  # The marker appears INSIDE a sentence, not as its own line — this must
-  # NOT be treated as a deliberate bypass.
-  (cd "$sb" && git commit --amend -q -m "docs: explain the escape hatch
-
-This documents the <!-- pre-push: skip --> marker so contributors know
-it exists. It should not itself act as a bypass.")
-  run_hook "$sb" "$(push_json)" 2 "should-not-skip: FAILED" "marker-mentioned-in-prose-does-not-bypass"
-  rm -rf "$sb"
-}
-
-# -------------------- CASE 11: marker on its OWN LINE → still bypasses --------------------
-# The other direction of #1097's fix: a deliberate bypass — the marker as
-# a line by itself, exactly the shape the documented amend snippet emits —
-# must keep working after anchoring the match to -x.
-case11() {
-  local sb; sb=$(make_sandbox)
-  cat > "$sb/.claude/project-config.json" <<'EOF'
-{"pre_push": {"commands": [{"name": "should-skip", "run": "exit 1"}]}}
-EOF
-  (cd "$sb" && git commit --amend -q -m "fix: emergency hotfix
-
-<!-- pre-push: skip -->")
-  run_hook "$sb" "$(push_json)" 0 "pre-push gate bypassed by skip marker" "marker-own-line-still-bypasses"
-  rm -rf "$sb"
-}
-
-case1; case2; case3; case4; case5; case6; case7; case8; case9; case10; case11
+case1
+case2
+case3
+case4
+case_h1_heredoc
+case_h1_quoted_string
+case_h1_commit_message
+case_h1_echo
 
 echo ""
 echo "==================================="

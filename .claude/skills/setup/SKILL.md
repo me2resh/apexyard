@@ -77,7 +77,7 @@ See AgDR-0011 + me2resh/apexyard#150 for the design rationale.
 
 ### Step 0.5: Install the tracked git hooks (REQUIRED)
 
-`core.hooksPath` is a **per-clone** git config value — it lives in `.git/config`, never committed, so every fresh clone of the ops fork starts unset regardless of how many sibling clones already have it configured. Left unset, `.githooks/pre-push` (tracked, but inert without this) never runs on a terminal `git push` — only Claude-Code-driven pushes go through the equivalent `pre-push-gate.sh` PreToolUse hook. Run the installer once per fork, here, so a fresh `/setup` always leaves the clone protected on both paths:
+`core.hooksPath` is a **per-clone** git config value — it lives in `.git/config`, never committed, so every fresh clone of the ops fork starts unset regardless of how many sibling clones already have it configured. Left unset, `.githooks/pre-push` (tracked, but inert without this) never runs — not on a terminal `git push`, and not on a Claude Code-driven one either, since git invokes the same hook the same way regardless of which process ran the push. There is no equivalent Claude Code path anymore: `pre-push-gate.sh` only reminds a session to install this hook when a clone hasn't (#1366, AgDR-0173); it does not run this repo's configured `.pre_push.commands` itself. Run the installer once per fork, here, so a fresh `/setup` always leaves the clone actually protected:
 
 ```bash
 bash bin/install-git-hooks.sh

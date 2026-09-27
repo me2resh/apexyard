@@ -1,15 +1,25 @@
 #!/bin/bash
-# .githooks/pre-push — terminal-push companion to .claude/hooks/pre-push-gate.sh,
-# AND (as of me2resh/apexyard#1086 step 2) the git-native enforcement layer
-# for "no direct pushes to a protected branch" on terminal `git push`.
+# .githooks/pre-push — the git-native enforcement layer for terminal
+# `git push`: "no direct pushes to a protected branch" (#1086 step 2) AND
+# (as of me2resh/apexyard#1366, AgDR-0173) THE place a repo's own
+# configured pre-push checks actually run.
 #
-# pre-push-gate.sh fires only on Claude Code-driven pushes (it is a
-# PreToolUse hook). This git hook covers the same check set for terminal
-# `git push` commands so both paths are equally protected.
+# This hook delegates its checks to two scripts, in order:
+#   1. bin/run-pre-push-checks.sh          — this repo's own hardcoded
+#      framework check set (markdownlint, shellcheck, subpacks).
+#   2. bin/run-configured-pre-push-checks.sh — this repo's own configured
+#      `.pre_push.commands` (.claude/project-config.json).
 #
-# Both paths enforce the same skip marker, the same tool-missing graceful-
-# degrade logic, and the same command set. The command set is defined in
-# bin/run-pre-push-checks.sh, which this hook delegates to.
+# .claude/hooks/pre-push-gate.sh (the Claude Code PreToolUse hook) used to
+# run script 2's job itself, choosing a target repo out of the Bash
+# command's TEXT. That could not be made sound — see AgDR-0104 and
+# AgDR-0173 — so it no longer runs any repository's commands at all; it
+# only reminds a session that hasn't installed this git hook to do so.
+# This git hook is what actually runs `.pre_push.commands` now, for BOTH
+# a terminal `git push` and a Claude Code-driven one: git invokes this
+# hook (when core.hooksPath is set) no matter which process ran `git
+# push`, with its own working directory set to the repository being
+# pushed — there is no command text to parse here at all.
 #
 # Opt-in once per clone (or run bin/install-git-hooks.sh, which does this
 # for you and is now invoked by /setup and /handover — #1086 step 1):
@@ -84,9 +94,9 @@ if [ -z "$REPO_ROOT" ]; then
 fi
 
 # Read every ref line git is offering, ONCE, up front. Nothing downstream in
-# this hook — nor bin/run-pre-push-checks.sh, delegated to at the bottom —
-# reads stdin again. See the "STDIN HAND-OFF" note near the bottom of this
-# file for why that delegation is safe.
+# this hook — nor either script it delegates to at the bottom — reads
+# stdin again. See the "STDIN HAND-OFF" note near the bottom of this file
+# for why that delegation is safe.
 STDIN_REFS=$(cat)
 
 ALL_ZERO_SHA='0000000000000000000000000000000000000000'
@@ -163,19 +173,39 @@ MSG
   fi
 fi
 
+# ---------------------------------------------------------------------------
+# STDIN HAND-OFF NOTE (#1086 step 2, extended #1366/AgDR-0173):
+# bin/run-pre-push-checks.sh and bin/run-configured-pre-push-checks.sh were
+# both audited and read stdin nowhere — every check runs via `bash -c
+# "$cmd"` with no `read` of its own — so consuming stdin above via `cat`
+# is safe; neither script ever expected it.
+# ---------------------------------------------------------------------------
+
 RUNNER="$REPO_ROOT/bin/run-pre-push-checks.sh"
-if [ ! -f "$RUNNER" ]; then
-  # Runner not present (e.g. old clone before this hook was added).
+if [ -f "$RUNNER" ]; then
+  bash "$RUNNER"
+  RC=$?
+  if [ "$RC" -ne 0 ]; then
+    # Fail-fast: a failing framework check already blocks. No need to also
+    # run this repo's configured commands.
+    exit "$RC"
+  fi
+else
+  # Runner not present (e.g. old clone before this hook was added, or a
+  # managed project that never ships this framework-specific script).
   # Fail open so contributors aren't hard-blocked on a missing binary.
-  echo "WARN: $RUNNER not found — pre-push checks skipped. Pull latest to enable them." >&2
+  echo "WARN: $RUNNER not found — this repo's own pre-push checks skipped. Pull latest to enable them." >&2
+fi
+
+CONFIGURED_RUNNER="$REPO_ROOT/bin/run-configured-pre-push-checks.sh"
+if [ ! -f "$CONFIGURED_RUNNER" ]; then
+  # Old clone before this script shipped. Fail open, same shape as the
+  # RUNNER-missing case above.
+  echo "WARN: $CONFIGURED_RUNNER not found — configured .pre_push.commands skipped at the git layer. Pull latest to enable them." >&2
   exit 0
 fi
 
-# STDIN HAND-OFF NOTE (#1086 step 2): bin/run-pre-push-checks.sh was audited
-# and does not read stdin anywhere — its markdownlint / shellcheck / subpacks
-# checks all run via `bash -c "$cmd"` with no `read` of their own — so
-# consuming stdin above via `cat` is safe; the runner never expected it.
-# `exec` is kept here (rather than `bash "$RUNNER"; exit $?`) to preserve
-# the exact prior behaviour byte-for-byte: this hook's own exit status IS
-# the runner's exit status via process replacement.
-exec bash "$RUNNER"
+# `exec` here (rather than `bash "$CONFIGURED_RUNNER"; exit $?`) preserves
+# this hook's own exit status as the LAST script's exit status via process
+# replacement, same as the single-script version this replaces.
+exec bash "$CONFIGURED_RUNNER"
