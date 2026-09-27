@@ -16,9 +16,9 @@ category: patterns
 > In the context of the merge flow, facing two silent-loss risks — a merge queue
 > that races a stale CI result, and a `-X ours` sync merge that drops content
 > a reviewer never saw — I decided to add a behind-base stop to `/approve-merge`
-> and to replace `-X ours` with a plain merge plus commit-attributed conflict
-> resolution in `/release-sync`, accepting one extra forge read per merge
-> attempt and a wider sync-merge procedure.
+> and to replace `-X ours` with a plain merge that stops and asks on every
+> conflict in `/release-sync`, accepting one extra forge read per merge attempt
+> and a slower sync on the rare conflicting release.
 
 ## Context
 
@@ -26,110 +26,110 @@ Two related but separate problems surfaced against the merge flow (apexyard#1386
 
 - **A merge queue creates a race.** PR A merges to the base branch. PR B's
   last CI run still reflects the old base. `/approve-merge` had no check for
-  this. A merge could complete on a CI result that never ran against the real
-  merge result.
+  this. A merge could complete on a CI result that never ran against the
+  real merge result.
 - **`/release-sync` step 5 used `git merge -X ours`.** The strategy resolves
   every conflict in favor of `dev`, with no check on which commit caused the
   conflict. Most conflicts come from the release squash commit duplicating
-  content `dev` already has, and `-X ours` is correct there. But `main` can
-  carry content `dev` never had — from a commit that never touched `dev` at
-  all (a PR merged straight to `main`, a hotfix, a hand-edited file), or from
-  edits the release squash commit itself carries, made directly on the
-  release branch before the squash. `-X ours` drops either case's content
-  too, with no warning. Sync commit `04bd8c7` (apexyard#1348) did the second
-  kind: the release squash commit added two contributor rows to `README.md`
-  directly on the release branch, so `dev` did not have them at the point the
-  release was cut from, and `-X ours` dropped both when it resolved the
-  conflict toward `dev`.
+  content `dev` already has. But `main` can carry content `dev` never had,
+  from a commit that never touched `dev` at all (a PR merged straight to
+  `main`, a hotfix, a hand-edited file), or from an edit the release squash
+  commit itself carries, made directly on the release branch before the
+  squash. `-X ours` drops either case's content too, with no warning.
 
-Both problems share a root cause: a merge step resolved ambiguity by picking
-a side, instead of checking which commit introduced the conflicting content.
+Sync commit `04bd8c7` (apexyard#1348) is the incident that exposed this. The
+release squash commit was the only commit that touched `README.md` among the
+commits on `main` and not on `dev`. A rule that trusts "the release squash
+commit is the sole touching commit" would call this conflict safe and
+resolve it toward `dev`. The release squash commit had added two contributor
+rows directly on the release branch, before the squash. `dev` did not have
+those rows at the point the release was cut. `-X ours` dropped them with no
+warning, because it resolves toward `dev` unconditionally, not because it
+ran the "sole touching commit" check and got it wrong.
+
+Both problems share a root cause. A merge step resolved ambiguity by picking
+a side, instead of stopping to ask which side is correct.
 
 ## Options Considered
 
 | Option | Pros | Cons |
 |--------|------|------|
-| Add a new blocking condition to `block-unreviewed-merge.sh` for a behind-base branch | One control, not two places to look | The hook cannot safely retry after an update — the SHA changes, so the existing Rex marker becomes invalid mid-block. A hook-level block also cannot print the multi-step recovery in a way the skill can naturally sequence |
-| Check behind-base inside `/approve-merge`, before the merge runs (chosen) | The skill already reads the PR's state from the forge in step 3; adding one field and one stop is a small, sequenced addition. The skill can name the exact recovery steps and re-run itself | Skips the check entirely if an operator merges by hand, outside the skill — accepted, because the skill is the only sanctioned merge path (`pr-workflow.md`) |
+| Add a new blocking condition to `block-unreviewed-merge.sh` for a behind-base branch | One control, not two places to look | The hook cannot safely retry after an update. The SHA changes, so the existing Rex marker becomes invalid mid-block. A hook-level block also cannot print the multi-step recovery in a way the skill can naturally sequence |
+| Check behind-base inside `/approve-merge`, before the merge runs (chosen) | The skill already reads the PR's state from the forge in step 3. Adding one field and one stop is a small, sequenced addition. The skill can name the exact recovery steps and re-run itself | Skips the check entirely if an operator merges by hand, outside the skill. Accepted, because the skill is the only sanctioned merge path (`pr-workflow.md`) |
 | Keep `-X ours` in `/release-sync`, and just document the risk | No procedure change | Leaves the exact regression that already happened once (apexyard#1348) unfixed. Documentation does not stop a silent drop |
-| Replace `-X ours` with a plain merge, attribute each conflict to the commit that caused it, and stop on any main-only-commit conflict (chosen) | Distinguishes a squash-duplicate conflict (safe to resolve toward dev) from a main-only-commit conflict (unsafe to guess). Adds a post-merge check that a main-only commit's content survived | Wider procedure: more steps, and a stop-and-ask path that a fully automated run cannot resolve alone |
-| Attribute conflicts per-hunk instead of per-file | More precise — a file can mix squash-duplicate and main-only-commit hunks | Not reliably scriptable in a shell-driven skill. Per-file attribution is the granularity the skill already read; the same limitation is stated in the skill and this record |
+| Replace `-X ours` with a plain merge, and try to classify each conflict as a safe squash duplicate or an unsafe main-only commit | Automates the common case. No human answer needed on a confirmed squash duplicate | A squash-duplicate rule that trusts "sole touching commit" is exactly the rule that missed apexyard#1348. A confirmation step against a release trailer narrows the miss but still guesses when the trailer is absent or ambiguous. Every added classification rule is another rule that can be wrong in a way nobody notices until the next incident |
+| Replace `-X ours` with a plain merge, and stop and ask on every conflict, with no automatic classification (chosen) | Removes the guessing step entirely. A rule with no exceptions cannot miss an exception. The procedure is simpler to state and to verify than a classification tree | Slower on a release with a genuine, easily-resolved conflict. Every such release now needs one human answer instead of zero |
+| Attribute conflicts per-hunk instead of per-file | More precise. A file can mix content from more than one commit | Not reliably scriptable in a shell-driven skill. Per-file is the granularity the skill already reads, and the decision below asks a human for every conflict regardless of granularity |
 
 ## Decision
 
-Chosen: **a behind-base stop inside `/approve-merge`, plus a plain-merge-first
-sync strategy in `/release-sync`**, because both fixes catch a specific class
-of silent loss at the step that already has the information to catch it,
-without adding a new blocking condition to `block-unreviewed-merge.sh`.
+Chosen: **a behind-base stop inside `/approve-merge`, plus a plain merge that
+stops and asks on every conflict in `/release-sync`**, because both fixes
+catch a specific class of silent loss at the step that already has the
+information to catch it, without adding a new blocking condition to
+`block-unreviewed-merge.sh`.
 
 `/approve-merge` computes whether the PR is behind its base from the compare
 API's `behind_by` field (`is_pr_behind_base` in the new
 `_lib-merge-behind.sh`), not from `mergeStateStatus`. GitHub only reports
 `mergeStateStatus=BEHIND` under a strict required-status-checks ruleset
 policy. This repo's own `dev` ruleset does not set that policy. A PR behind
-an unprotected base reports `BLOCKED`, `CLEAN`, or `UNKNOWN` instead, so a
-check reading `mergeStateStatus` alone never fires on the case it exists to
-catch. When the check reports the PR behind and
-`merge.require_up_to_date` is `true` (the default), the skill stops before
-touching either marker. It names four recovery steps: update the branch, wait
-for green CI, get a short Rex re-review of the new head, and re-run
-`/approve-merge`. `block-unreviewed-merge.sh` gets no new blocking condition.
-It optionally names a behind-base branch as a likely contributing reason when
-it already blocks on a missing or stale Rex marker, using the same
-compare-API check. That note is additive text on an existing block, not a
-new one, and both approaches address the human approver — not the agent
-reading the block — because the recovery step pushes a commit to the PR's
-own branch.
+an unprotected base reports `BLOCKED`, `CLEAN`, or `UNKNOWN` instead. A check
+reading `mergeStateStatus` alone never fires on the case it exists to catch.
+When the check reports the PR behind, or when the compare call itself fails,
+and `merge.require_up_to_date` is `true` (the default), the skill stops
+before touching either marker. A failed check is never read as "up to date".
+On a genuine behind-base PR, the skill asks the human approver to update the
+branch, wait for green CI, get a short Rex re-review of the new head, and
+re-run `/approve-merge`. `block-unreviewed-merge.sh` gets no new blocking
+condition. It optionally names a behind-base branch as a likely contributing
+reason when it already blocks on a missing or stale Rex marker, using the
+same compare-API check. That note is additive text on an existing block, not
+a new one. Both the skill's stop and the hook's note address the human
+approver, not the agent reading the block, because the recovery step pushes
+a commit to the PR's own branch.
 
 `/release-sync` step 5 now runs a plain `git merge --no-ff`, not `-X ours`,
-and resolves the version tag to a commit with `^{commit}` (an annotated tag's
-bare SHA names the tag object, not the commit). On a conflict, step 5a lists
-the commits on `main` that are not on `dev` and touched the conflicting file.
-When the release squash commit is the only such commit, the file resolves
-toward `dev` only after confirming, against the release commit's
-`Released-From` trailer, that it changed nothing in that file relative to the
-exact `dev` commit the release was cut from — a plain squash-only match is
-not enough on its own, because the release branch can carry its own edits
-(this is the #1348 shape). When that confirmation fails, or any other commit
-appears in the touching list, the sync stops and asks, showing the diff and
-the commit list. Step 5c then checks, for every main-only commit, that its
-patch still reverse-applies cleanly against the sync branch, including a
-binary-file change. It stops before push if one does not.
+and resolves the version tag to a commit with `^{commit}`. An annotated
+tag's bare SHA names the tag object, not the commit. On a conflict, step 5a
+stops and shows the user the diff and the commits on `main`, not on `dev`,
+that touched the file. This holds even when the release squash commit is
+the only such commit. The skill runs no classification and confirms nothing
+against a release trailer. It asks a human every time a conflict occurs, and
+the human decides which side, or which combination, is correct. Step 5c
+then checks, for every main-only commit, that its patch still reverse-applies
+cleanly against the sync branch, including a binary-file change. It stops
+before push if one does not.
 
 ## Consequences
 
-- `/approve-merge` makes one additional forge read per invocation (the
-  compare API call `is_pr_behind_base` makes). No added latency on the
-  common case where the PR is not behind.
+- `/approve-merge` makes one additional forge read per invocation, the
+  compare API call `is_pr_behind_base` makes. No added latency on the common
+  case where the PR is not behind.
 - A behind-base PR now costs one extra round trip: update, wait for CI,
-  re-review, re-approve. This is the intended cost — it replaces merging on a
+  re-review, re-approve. This is the intended cost. It replaces merging on a
   stale CI result.
-- `/release-sync` no longer resolves any conflict blindly. A sync with a
-  genuine main-only-commit conflict, or a squash-duplicate candidate whose
-  `Released-From`-anchored diff is non-empty or whose trailer is missing,
-  now requires a human answer instead of completing unattended. This is
-  slower for the rare case that has one, and unchanged for the common case
-  (a confirmed squash duplicate, or no conflict). A release tagged before
-  AgDR-0094 introduced the `Released-From` trailer has no trailer to
-  confirm against, so every squash-duplicate candidate on such a release
-  routes to a human — the safe default when the record cannot confirm
-  equivalence.
+- A failed compare-API call now also stops the merge, where it previously
+  proceeded with a warning. This trades a rare false stop, on a network or
+  auth hiccup, for never treating an unknown state as "up to date".
+- `/release-sync` no longer resolves any conflict without a human answer.
+  Every conflicting release now needs one answer per conflicting file,
+  including a release that would have been a genuine, harmless squash
+  duplicate under the old rule. This is slower for that common case, and it
+  is the point: the old rule's job was to skip exactly this kind of file,
+  and apexyard#1348 shows the skip is not safe to automate.
 - The post-merge check in step 5c is best-effort. A commit whose content was
   legitimately superseded by a later main commit can show as a false
   failure. The skill treats a failure as "investigate", not as an automatic
   abort, and this record states that limit rather than hiding it.
-- Conflict attribution operates at file granularity, not hunk granularity. A
-  file that mixes a squash-duplicate hunk with a main-only-commit hunk is
-  classified as main-only-commit and routed to a human, which is the safe
-  direction to round up on.
 - `merge.require_up_to_date` is a new config key
   (`.claude/project-config.defaults.json` → `merge`, default `true`). An
   adopter who disables it accepts the original race condition knowingly.
 
 ## Artifacts
 
-- `.claude/skills/approve-merge/SKILL.md` — step 3a (behind-base stop)
-- `.claude/skills/release-sync/SKILL.md` — steps 5, 5a, 5c (plain merge, conflict attribution, post-merge check)
+- `.claude/skills/approve-merge/SKILL.md` — step 3a (behind-base stop, including the failed-check case)
+- `.claude/skills/release-sync/SKILL.md` — steps 5, 5a, 5c (plain merge, stop-and-ask on every conflict, post-merge check)
 - `.claude/hooks/block-unreviewed-merge.sh` — optional behind-base note on an existing block
 - `.claude/hooks/_lib-merge-behind.sh` — `is_pr_behind_base`, the shared compare-API behind check
 - `.claude/project-config.defaults.json` — `merge.require_up_to_date`
