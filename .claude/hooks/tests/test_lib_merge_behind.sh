@@ -16,6 +16,10 @@
 #   4. non-numeric / empty behind_by -> "unknown"
 #   5. missing argument (repo, base, or head) -> "unknown", no gh call made
 #   6. large behind_by (19, matching #1386's own reported evidence) -> "true"
+#   7. gh api call prints "0" but exits non-zero -> "unknown", not "false"
+#      (Hakim LOW-2, PR me2resh/apexyard#1406) — stdout alone is never
+#      trusted; a non-zero exit code always wins, even over a well-formed
+#      number.
 #
 # Exit 0 if all pass; 1 on first failure.
 
@@ -138,6 +142,29 @@ got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; is_pr_behind_base me2resh/apexyard
 rm -rf "$sb"
 [ "$got" = "true" ] && mark_pass "behind_by=19 (#1386's own evidence) -> true" \
                      || mark_fail "behind_by=19" "got '$got'"
+
+# ---------------------------------------------------------------------------
+# Case 7 (Hakim LOW-2): gh api prints "0" but exits non-zero -> "unknown"
+#
+# Before the fix, the function read stdout only, so a well-formed "0" on a
+# failed call returned "false" — the safe-looking value on a call that did
+# not actually succeed. The exit code must win over stdout.
+# ---------------------------------------------------------------------------
+sb=$(mktemp -d)
+mkdir -p "$sb/bin"
+cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+case "$*" in
+  *"api "*"compare/"*) echo "0" ;;
+  *) ;;
+esac
+exit 1
+EOF
+chmod +x "$sb/bin/gh"
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; is_pr_behind_base me2resh/apexyard dev abc1234")
+rm -rf "$sb"
+[ "$got" = "unknown" ] && mark_pass "gh api prints '0' but exits non-zero -> unknown" \
+                        || mark_fail "gh api prints '0' but exits non-zero" "got '$got'"
 
 # ---------------------------------------------------------------------------
 # Summary

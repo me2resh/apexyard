@@ -23,9 +23,10 @@
 #       Echoes one of: true | false | unknown
 #       - "true"    the base branch has commits the head does not (behind_by > 0)
 #       - "false"   the head has every commit the base branch has (behind_by == 0)
-#       - "unknown" the lookup failed (network/auth) or an argument was empty —
-#                    the caller decides what "unknown" means; this function
-#                    never blocks and always exits 0.
+#       - "unknown" the lookup failed (network/auth, a non-zero exit code
+#                    even when stdout printed a number) or an argument was
+#                    empty — the caller decides what "unknown" means; this
+#                    function never blocks and always exits 0.
 #
 # The caller supplies the base branch name and the head SHA — this library
 # does not itself resolve them, so it stays testable with a stubbed `gh`
@@ -38,8 +39,13 @@ is_pr_behind_base() {
     return 0
   fi
 
-  local behind_by
+  local behind_by rc
   behind_by=$(gh api "repos/${repo}/compare/${base}...${head_sha}" -q '.behind_by' 2>/dev/null)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "unknown"
+    return 0
+  fi
 
   case "$behind_by" in
     ''|*[!0-9]*)
