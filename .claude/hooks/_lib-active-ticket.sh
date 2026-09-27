@@ -98,7 +98,7 @@ _at_existing_dir() {
 }
 
 active_ticket_marker_for_path() {
-  local raw="$1" resolved project marker="" wt safe dir gd gcd
+  local raw="$1" resolved project="" marker="" wt safe dir gd gcd
   resolved=$(_at_resolve_path "$raw")
   local home="${MARKER_HOME:-${OPS_ROOT:-${REPO_ROOT:-.}}}"
   # #1396: an empty $resolved has two distinct causes, and they must NOT

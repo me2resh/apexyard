@@ -16,17 +16,15 @@ category: security
 ## Context
 
 `active_ticket_marker_for_path` (in `_lib-active-ticket.sh`) resolves the
-marker that governs a write target. For a target the Bash-write detector
-could not parse (`bash_extract_write_targets` returns empty), the function
-received an empty path and returned an empty marker immediately, before it
-ever checked the session's `current-ticket` fallback. The gate then blocked
-the write, even with an active ticket declared, contradicting the hook's own
-header comment that an unextractable target "falls through to the ticket
-gate" rather than being exempted outright.
+marker that governs a write target. Some Bash targets cannot be parsed. For those, the function received an
+empty path. It returned an empty marker before it checked
+`current-ticket`. The gate then blocked the write, even with an active
+ticket. The hook's header comment says that such a target falls through
+to the ticket gate.
 
-Two concrete unextractable-target commands hit this: a `sed -i` on a path
-held in a shell variable, and a `git archive | tar -x` export into a scratch
-directory (me2resh/apexyard#1396, me2resh/apexyard#1402).
+Two commands hit this. One was an in-place sed edit on a variable path.
+The other was an archive export into a scratch directory
+(me2resh/apexyard#1396, me2resh/apexyard#1402).
 
 Commit `56aacc0` (#1231) moved this marker lookup into the shared library
 and added the early return that caused the regression. Before that
@@ -38,16 +36,15 @@ restores that earlier behavior. It does not widen the gate.
 | Option | Pros | Cons |
 |--------|------|------|
 | Exempt an unextractable target from the gate entirely | Simplest change | Widens a security gate — any write the detector cannot parse would bypass the ticket requirement, reopening the class of bypass #151 closed |
-| Skip only the per-worktree/per-project tiers, and still check `current-ticket` | Matches the header comment's stated intent; no new exemption; an unextractable target still needs an active session ticket | The target still cannot bind to a specific project's marker — a session with only a per-project marker (no `current-ticket`) still blocks an unextractable target for that project |
-| Block unextractable targets with no fallback at all (status quo) | No behavior change | Contradicts the hook's documented intent; blocks a session that already declared a ticket, forcing an operator to fall back to Edit/Write tools for a legitimate Bash write |
+| Skip only the per-worktree/per-project tiers, and still check `current-ticket` | Matches the header comment's stated intent. Adds no new exemption. An unextractable target still needs an active session ticket. | The target cannot bind to a project marker. A session with only a per-project marker still blocks an unextractable target. |
+| Block unextractable targets with no fallback at all (status quo) | No behavior change | Contradicts the hook's documented intent. Blocks a session that already declared a ticket. Forces the Edit or Write tool for a valid Bash write. |
 
 ## Decision
 
-Chosen: **skip only the per-worktree/per-project tiers, and still check
-`current-ticket`**, because it is the minimal change that restores the
-hook's documented behavior — an active session ticket still gates the
-write — without adding a new exemption path. The write is never exempted;
-it is gated against whichever ticket the session actually has active.
+Chosen: **skip only the per-worktree and per-project tiers, and still
+check `current-ticket`**. This is the smallest change that restores the
+documented behavior. An active session ticket still gates the write. The
+write is never exempted.
 
 ## Consequences
 
@@ -56,9 +53,9 @@ it is gated against whichever ticket the session actually has active.
   me2resh/apexyard#1396.
 - A per-worktree or per-project-only marker (no `current-ticket`) still
   does not satisfy an unextractable target, because the target carries no
-  project to resolve those tiers against. A session working only inside a
-  registered project, with no ops-level ticket set, still blocks an
-  unextractable write for that project — this is unchanged and intentional.
+  project to resolve those tiers against. A session with only a
+  per-project ticket still blocks an unextractable write for that
+  project. This is unchanged and intentional.
 - `require-migration-ticket.sh` shares the same library function, but it
   never sends a fully empty target. The gate exits before the library
   runs whenever it cannot extract any target at all.
