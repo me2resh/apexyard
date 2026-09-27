@@ -269,15 +269,22 @@ fi
 # on a fork PR with maintainer edits that branch belongs to the contributor.
 # Only the user decides whether that push happens.
 print_behind_base_note() {
+  # Skip both lookups when the merge command names no repo. An empty
+  # --repo lets `gh` resolve the ambient repo from local git remotes
+  # instead (the #887 class) — the note could then describe a different
+  # repo's PR with the same number. Fail silent, not silently wrong.
+  if [ -z "${CMD_REPO:-}" ]; then
+    return 0
+  fi
   local base behind
-  base=$(gh pr view "$PR_NUMBER" --repo "${CMD_REPO:-}" --json baseRefName -q '.baseRefName' 2>/dev/null)
-  behind=$(is_pr_behind_base "${CMD_REPO:-}" "$base" "$CURRENT_SHA")
+  base=$(gh pr view "$PR_NUMBER" --repo "$CMD_REPO" --json baseRefName -q '.baseRefName' 2>/dev/null)
+  behind=$(is_pr_behind_base "$CMD_REPO" "$base" "$CURRENT_SHA")
   if [ "$behind" = "true" ]; then
     cat >&2 <<MSG3
 
 NOTE: PR #${PR_NUMBER} is also behind its base branch (${base:-its base}).
 Ask the ${APPROVER_TITLE} to update the branch or to approve that update.
-The update command is: gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO:-<owner/repo>}
+The update command is: gh pr update-branch ${PR_NUMBER} --repo ${CMD_REPO}
 Do not update it yourself. Then wait for green CI and re-run /code-review
 before /approve-merge.
 MSG3
