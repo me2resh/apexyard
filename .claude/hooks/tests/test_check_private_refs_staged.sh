@@ -355,6 +355,43 @@ git -C "$sandbox" add notes.md
 assert_hook "MEDIUM: bare-name match to upstream without a matching repo still blocks" "$sandbox" 2 "File: notes.md" "framework-internal"
 rm -rf "$sandbox"
 
+# 11b. Rex round 3 — registry_name_repo_matches loops over
+# name_repo_pairs[@] with no guard. Under `set -u`, bash 3.2 (macOS's
+# `/bin/bash`, this hook's own shebang) treats an EMPTY array's `[@]`
+# expansion as an unbound variable and aborts the whole hook with exit 1
+# — every commit blocked, not just the leaky ones. bash 4.4+ fixed that
+# specific case, so a Homebrew/Linux bash never sees it, which is why CI
+# missed it. name_repo_pairs is empty whenever every registry entry uses
+# the PLURAL `repos:` form — no singular `repo:` field ever fires the
+# awk pairing branch. The fixture below is plural-only on purpose.
+PLURAL_ONLY_REGISTRY_YAML='projects:
+  - name: framework
+    repos:
+      - acme-org/framework-mirror-a
+      - acme-org/framework-mirror-b
+    workspace: workspace/framework-mirror
+  - name: secret-app
+    repos:
+      - acme-org/secret-app
+    workspace: workspace/secret-app
+'
+# A genuinely clean file — no registered name, repo, or workspace path at
+# all. The crash this guards against fires on EVERY staged file once a
+# registered name equals upstream_name, regardless of that file's own
+# content: the NAME loop always reaches the empty-array call for
+# "framework" before it ever checks what the file says.
+sandbox=$(make_sandbox_with_remotes "$PLURAL_ONLY_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Nothing private mentioned here.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "round 3: plural-only registry with no name-repo pairs does not abort (clean file passes)" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$PLURAL_ONLY_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "round 3: plural-only registry with no name-repo pairs still blocks a real leak" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
 # 12-13. Hakim HIGH-1 — a raw non-UTF-8 byte in the staged blob must not
 # make the owner branch fail open. In a UTF-8 locale, unpatched `tr`/BSD
 # `sed` stop with "illegal byte sequence" on the byte below, the pipeline's

@@ -38,6 +38,7 @@ current_owner=${current_repo%%/*}
 # `<upstream-owner>/<repo>#N` must not read as a leak either. Resolve
 # `upstream` the same way as `origin`. A fork with no `upstream` remote
 # leaves these empty and keeps today's origin-only behaviour.
+# Hakim advisory: every exemption below trusts that `upstream` IS the public framework repo; a misconfigured `upstream` pointed at a private repo gets the same exemption.
 upstream_repo=""
 upstream_url=$(git remote get-url upstream 2>/dev/null || true)
 if [ -n "$upstream_url" ]; then
@@ -106,6 +107,7 @@ done < <(awk '
 # bare-name exemption, which this PR does not change.
 registry_name_repo_matches() {
   local target_name="$1" target_repo="$2" pair
+  [ "${#name_repo_pairs[@]}" -gt 0 ] || return 1
   for pair in "${name_repo_pairs[@]}"; do
     [ "$pair" = "${target_name}"$'\t'"${target_repo}" ] && return 0
   done
