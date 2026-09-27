@@ -77,7 +77,7 @@ Invoked when a PR is ready for review.
 The GitHub review is a durable artifact. Read .claude/rules/writing-standard.md.
 Use the controlled technical writing profile in your own review.
 Treat a profile fault in the PR's own artifacts as advisory, with the failed rule
-named and a clear replacement shown, per § "Blocking-Severity Bar" above.
+named and a clear replacement shown, per § "Blocking-Severity Bar" below.
 Request changes when the profile fault changes meaning or drops evidence — that
 fault is a correctness bug (kind 3), not a style nit.
 State the verdict and next action first. State the reason in short sentences.
@@ -137,7 +137,7 @@ Every other finding is advisory. Post it as a `nit:` or a `suggestion:`. Do not 
 
 Advisory findings include a self-bypass edge case, a pre-existing gap the diff did not introduce, and a writing-profile nit that does not change meaning or drop evidence. A self-bypass edge case is a way for this agent to route around its own hook. It is not a way for an outside actor to run code or bypass approval, so it stays advisory.
 
-This bar governs the checklist sections below (§§ 1–5), the Handbook Findings, and the Fallow Findings. It does not narrow the Acceptance Criteria check, the Technical Decisions (AgDR) check, or rail 1 of `.claude/rules/right-size-ceremony.md` — each of those already states its own BLOCKING rule and stays blocking under it.
+This bar governs the checklist sections below (§§ 1–5), an advisory Handbook Finding, and the Fallow Findings. It does not narrow the Acceptance Criteria check, the Technical Decisions (AgDR) check, the mandatory Glossary requirement in § 6, a handbook marked `ENFORCEMENT: blocking` (§ 8), or rail 1 of `.claude/rules/right-size-ceremony.md` — each of those already states its own BLOCKING rule and stays blocking under it.
 
 ## Delta Re-Reviews (me2resh/apexyard#1418, AgDR-0172)
 
@@ -147,14 +147,15 @@ Run a delta re-review after new commits land on a PR you already reviewed.
 2. Run `git diff <last-reviewed-SHA>..HEAD` (or `gh pr diff {number}` scoped the same way) and read only that delta.
 3. Check each earlier finding against the delta. State whether the delta resolved it, left it open, or does not touch it.
 4. Read surrounding code only when the delta calls for it — a changed call site, a changed test, or a changed contract the delta depends on.
-5. When the PR merges the base branch into the PR branch, run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` to confirm the PR's own changes did not move. Review only the conflict resolution the merge introduced.
-6. Do not repeat the full architecture, quality, testing, or performance pass (§§ 1–5) on code the delta did not touch.
-7. State `Delta re-review` on the `**Scope**` line in the Output Format.
-8. Write a fresh approval marker at the new HEAD SHA on an APPROVED verdict, in the exact same format as a first review. See § "Approval marker". The merge gate is unchanged — it still compares the marker SHA to the PR's HEAD as GitHub reports it.
+5. When the PR merges the base branch into the PR branch, find `<new-base>` from the merge commit's own parents (`git log --merges -1 --format=%P HEAD` on the merge commit, or the second parent of the merge). Run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` to confirm the PR's own changes did not move, AND read the merge commit's own combined diff with `git show --remerge-diff <merge-sha>` — not scoped to conflicted hunks only. `git range-diff` skips merge commits, so a change the merge itself introduced (one no parent had) would otherwise go unread. Review the conflict resolution the merge introduced.
+6. When the PR was rebased or force-pushed instead of merged, the last reviewed SHA is not an ancestor of the new HEAD. Run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` for this case too, using the old and new PR commit ranges, and read step 2's plain diff only where `range-diff` shows a genuinely new change.
+7. Do not repeat the full architecture, quality, testing, or performance pass (§§ 1–5) on code the delta did not touch.
+8. State `Delta re-review` on the `**Scope**` line in the Output Format. A delta re-review may run at a lower effort level than a first review (me2resh/apexyard#1418 item 2) — the scope reduction in steps 1–7 above already reflects this; do not add a second, undocumented shortcut on top of it.
+9. Write a fresh approval marker at the new HEAD SHA on an APPROVED verdict, in the exact same format as a first review. See § "Approval marker". The merge gate is unchanged — it still compares the marker SHA to the PR's HEAD as GitHub reports it.
 
 A delta re-review can also qualify for reduced scope under § "Reduced-Scope Review" when its own eligibility conditions hold. The two scopes compose: a delta re-review reads only the new commits, and reduced scope skips the deep architecture/quality/testing/performance pass on what it does read.
 
-`.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" caps review rounds at two. State the round number in your review when you know it.
+`.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" stops a NEW round after round two only for a non-blocking finding. A blocking finding left open in round two, or found in any later round, still gets a delta re-review of its fix — the cap never blocks the one path a blocking finding needs to clear. State the round number in your review when you know it.
 
 ## CI Ownership of the Test Suite (me2resh/apexyard#1418, AgDR-0172)
 
@@ -168,6 +169,7 @@ gh pr checks {number} --repo "$PR_HOST_REPO"
 2. If CI is red, this is a blocking finding under § "Blocking-Severity Bar" — a regression (kind 1) or a correctness bug (kind 3), whichever applies. Do not approve.
 3. If CI is green, do not re-run the full suite yourself. Run only the tests for files the diff changed, plus a fail-before proof for each new test — run the new test against the pre-change code and confirm it fails, then against the PR head and confirm it passes.
 4. Report the commands you ran and their results in Validation. Report CI's own result too, with the check-run name and the head SHA it ran against.
+5. Do not approve while CI for the head SHA is pending or absent. Post `COMMENT` and state the limit. `block-merge-on-red-ci.sh` already blocks a merge on pending, failed, or unresolvable CI — an APPROVED verdict ahead of that result would only invite a later re-review for no reason.
 
 ## Scope Split with the Security Auditor (me2resh/apexyard#1418, AgDR-0172)
 
@@ -259,7 +261,7 @@ Run this check on every review, including re-reviews and reduced-scope reviews.
 - [ ] Integration tests for use cases
 - [ ] Tests test behavior, not implementation
 - [ ] Edge cases covered
-- [ ] Builder evidence in the PR body (shellcheck, affected tests, fail-before proofs — see `.claude/rules/pr-quality.md` § "Builder Evidence") is present and plausible. Spot-check it; do not reproduce every command. Missing or false evidence is a correctness finding under § "Blocking-Severity Bar".
+- [ ] Builder evidence in the PR body (shellcheck, affected tests, fail-before proofs — see `.claude/rules/pr-quality.md` § "Builder Evidence") is present and plausible, or the PR states it needs none (docs-only, no tests). Spot-check it; do not reproduce every command. Missing or implausible evidence is advisory until you run the check yourself — a check that then fails is a correctness finding under § "Blocking-Severity Bar".
 
 ### 4. Security
 
@@ -1060,8 +1062,8 @@ If no issues remain, write "None" under Issues Found.
 10. **Fallow is advisory and fail-soft** — on JS/TS diffs, run the fallow CLI (§ 9) changed-scope and surface a `### Fallow Findings` table + dry-run fix preview. Findings are `nit:` / `suggestion:` only and NEVER flip the verdict on their own. If the `fallow` CLI isn't on PATH, or the diff isn't JS/TS, or `quality.fallow_review` is `false`, skip the step silently and omit the section — no new failure mode. Never run `fallow fix --yes`; the review previews fixes, it doesn't apply them.
 11. **Reduced-scope (Lean tier) changes DEPTH, never REQUIRED OUTPUTS or RAIL 1** — see § "Reduced-Scope Review — Lean-tier diffs" above. The acceptance-criteria check (§ "Acceptance Criteria", blocking), the PR description/Glossary check (§ 6), AgDR detection (§ 7, blocking), handbook findings (§ 8), and the approval-marker mechanics are unchanged at every tier — only the depth of the architecture/quality/testing/performance analysis (§§ 1–5) may be skipped, and only when ALL FIVE eligibility conditions hold, with a security / trust-chain / migration path match disqualifying the whole diff unconditionally (rail 1) and any ambiguity falling back to the full review (rail 2). `block-unreviewed-merge.sh` requires your marker regardless of scope — reduced scope is never a reason to skip writing it, and never a reason to skip posting the review.
 12. **Acceptance criteria are BLOCKING** — read every linked issue on every review. Report each criterion as Met, Not met, or Not verifiable, with evidence. A Not met criterion means CHANGES REQUESTED and no approval marker. See § "Acceptance Criteria".
-13. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". Everything else is advisory and does not change an APPROVED verdict.
-14. **A re-review is a delta re-review by default** — read only the commits since your last reviewed SHA, per § "Delta Re-Reviews". Read CI's own check-run result for the head SHA before running any test yourself, per § "CI Ownership of the Test Suite". Two review rounds is the cap; see `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR".
+13. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". Everything else is advisory and does not change an APPROVED verdict, except the Acceptance Criteria check, the AgDR check, the mandatory Glossary (§ 6), and a handbook marked `ENFORCEMENT: blocking` — each of those stays blocking under its own rule.
+14. **A re-review is a delta re-review by default** — read only the commits since your last reviewed SHA, per § "Delta Re-Reviews". Read CI's own check-run result for the head SHA before running any test yourself, per § "CI Ownership of the Test Suite". The two-round cap in `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" stops a NEW round only for a non-blocking finding — a blocking finding in round two, or any later round, still gets a delta re-review of its fix.
 
 ## Example Invocation
 

@@ -324,13 +324,17 @@ marker SHA to the PR's HEAD as GitHub reports it.
 
 ### A cap of two review rounds
 
-Round one is the first review. Round two is the first re-review. Stop
-counting rounds at two. After round two, do not start a third round. File
-each remaining non-blocking finding as a follow-up ticket instead, and
-proceed to merge once every blocking finding under
-`.claude/agents/code-reviewer.md` § "Blocking-Severity Bar" is resolved. A
-blocking finding in round two still blocks — the cap limits rounds, not
-blocking findings.
+Round one is the first review. Round two is the first re-review. The cap
+stops a new round only for a non-blocking finding. After round two, do not
+start a new round to chase a remaining non-blocking finding — file it as a
+follow-up ticket instead.
+
+A blocking finding under `.claude/agents/code-reviewer.md` § "Blocking-Severity
+Bar" still blocks in round two, and in any round after it. Its fix always
+gets a delta re-review, whatever the round count — the merge gate needs a
+fresh Rex marker at the new HEAD, and only a review can write one. The cap
+limits how many rounds chase non-blocking findings; it never blocks the one
+path a blocking finding needs to clear.
 
 ## Resuming PR Sessions
 

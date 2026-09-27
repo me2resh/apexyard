@@ -39,7 +39,7 @@ A right-sizing heuristic is only safe if it fails in the harmless direction:
 
 ## One ticket per trust-chain PR (me2resh/apexyard#1418)
 
-A PR that changes `.claude/hooks/**`, `.claude/settings.json`, `.githooks/**`, or a delegated gate runner such as `bin/run-pre-push-checks.sh` carries one ticket. This is the trust-chain path set from rail 1 above. Batching several tickets into one PR stays acceptable only for a Lean docs or config-text change — the same path class rail 1 already excludes from the trust chain.
+A PR that touches any path rail 1 above names as trust-chain carries one ticket. Batching several tickets into one PR stays acceptable only for a Lean docs or config-text change — the same path class rail 1 already excludes from the trust chain.
 
 A trust-chain PR that batches several tickets makes each review round cost more: a reviewer cannot state one blocking finding against one criterion, because the PR carries several unrelated criteria at once, and a delta re-review (see `.claude/agents/code-reviewer.md` § "Delta Re-Reviews") cannot cleanly separate which ticket a later commit fixes. Splitting the PR by ticket keeps each review round scoped to one change.
 

@@ -60,7 +60,7 @@ does not touch reviewer agent prose.
 
 ## Decision
 
-Chosen: **all five bolded options above**, because together they remove the
+Chosen: **all five options marked "(chosen)" above**, because together they remove the
 measured causes of slow review-fix loops without touching any Heavy-tier
 safeguard. `.claude/rules/right-size-ceremony.md` rail 1 (security and
 trust-chain never go Lean) and rail 2 (ambiguity rounds up) stay unchanged,

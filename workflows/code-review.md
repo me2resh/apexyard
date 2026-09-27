@@ -17,7 +17,7 @@ Code review is a **role-activated** workflow. The roles below activate automatic
 | **UI Designer** (conditional) | Owns the **routine per-PR design gate** — activates when the PR diff touches UI components, design tokens, or visible layout, reviews the implementation diff, and records approval via `/approve-design`. The [Head of Design](../roles/design/head-of-design.md) is the **escalation path** (design-system changes, cross-product visual standards, disagreements, no UI Designer available), not the routine reviewer. See AgDR-0106. | [`roles/design/ui-designer.md`](../roles/design/ui-designer.md) |
 | **QA Engineer** | Not a reviewer — takes over at the QA phase after merge to verify acceptance criteria. | [`roles/engineering/qa-engineer.md`](../roles/engineering/qa-engineer.md) |
 
-Rex and the Security Auditor split scope and do not repeat each other's checks: Rex owns code quality, tests, and the writing profile; the Security Auditor owns security and gate integrity. See `.claude/agents/code-reviewer.md` § "Scope Split with the Security Auditor" and `.claude/agents/security-reviewer.md` § "Scope Split with the Code Reviewer".
+Rex and the Security Auditor split scope and do not repeat each other's checks. Rex owns code quality, tests, and the writing profile. The Security Auditor owns security and gate integrity. See `.claude/agents/code-reviewer.md` § "Scope Split with the Security Auditor" and `.claude/agents/security-reviewer.md` § "Scope Split with the Code Reviewer".
 
 ---
 
@@ -75,7 +75,7 @@ Fixes #[ticket-id]
 2. **Check correctness** — confirm the requested behavior and test the important edge cases.
 3. **Check quality** — review architecture, conventions, readability, and maintenance cost.
 4. **Check security** — look for validation gaps, authorization errors, and leaked sensitive data.
-5. **Check tests** — confirm that tests cover the behavior and protect against regressions. Read CI's own check-run result for the head SHA first; run only the tests for changed files plus a fail-before proof for each new test, and spot-check the builder's pasted evidence rather than reproduce all of it (see `.claude/rules/pr-quality.md` § "Builder Evidence").
+5. **Check tests** — confirm that tests cover the behavior and protect against regressions. Read CI's own check-run result for the head SHA first. Run only the tests for changed files plus a fail-before proof for each new test. Spot-check the builder's pasted evidence rather than reproduce all of it (see `.claude/rules/pr-quality.md` § "Builder Evidence").
 
 ### Giving Feedback
 

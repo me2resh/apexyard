@@ -22,10 +22,14 @@ Run, and paste the commands and their results into a `## Testing` section:
    pre-change code and confirm it fails, then against the changed code and
    confirm it passes.
 
-The reviewer spot-checks this evidence and does not reproduce all of it. A
-reviewer who finds the evidence missing, or the results implausible, runs
-the check itself. Missing or false evidence is a correctness finding under
+The reviewer spot-checks this evidence and does not reproduce all of it.
+Missing or implausible evidence is advisory on its own. The reviewer runs
+the check itself before treating it as a finding, and a check that fails
+on that run is a correctness finding under
 `.claude/agents/code-reviewer.md` § "Blocking-Severity Bar".
+
+A docs-only PR with no tests to run needs no test evidence. State that in
+the `## Testing` section instead of leaving it empty.
 
 ## Glossary (MANDATORY)
 

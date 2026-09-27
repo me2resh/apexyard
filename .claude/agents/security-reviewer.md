@@ -112,10 +112,11 @@ Run a delta re-review after new commits land on a PR you already reviewed.
 2. Run `git diff <last-reviewed-SHA>..HEAD` and read only that delta.
 3. Check each earlier finding against the delta. State whether the delta resolved it, left it open, or does not touch it.
 4. Read surrounding code only when the delta calls for it — a changed call site or a changed contract the delta depends on.
-5. When the PR merges the base branch into the PR branch, run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` to confirm the PR's own changes did not move. Review only the conflict resolution.
-6. State `Delta re-review` in the review body's Scope line (see Output Format below).
+5. When the PR merges the base branch into the PR branch, find `<new-base>` from the merge commit's own parents (`git log --merges -1 --format=%P HEAD` on the merge commit). Run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` to confirm the PR's own changes did not move, AND read the merge commit's own combined diff with `git show --remerge-diff <merge-sha>` — not scoped to conflicted hunks only, since `git range-diff` skips merge commits and would otherwise miss a change the merge itself introduced. Review the conflict resolution.
+6. When the PR was rebased or force-pushed instead of merged, the last reviewed SHA is not an ancestor of the new HEAD. Run `git range-diff <old-base>..<old-head> <new-base>..<new-head>` for this case too, using the old and new PR commit ranges.
+7. State `Delta re-review` in the review body's Scope line (see Output Format below). A delta re-review may run at a lower effort level than a first review (me2resh/apexyard#1418 item 2) — steps 1–6 above already narrow the scope; do not add a second shortcut on top of it.
 
-`.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" caps review rounds at two.
+`.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" stops a NEW round after round two only for a non-blocking finding. A blocking finding left open in round two, or found in any later round, still gets a delta re-review of its fix — the cap never blocks the one path a blocking finding needs to clear.
 
 ## CI Ownership of the Test Suite (me2resh/apexyard#1418, AgDR-0172)
 
@@ -125,7 +126,7 @@ CI owns the full test suite. Read the CI check-run results for the head SHA befo
 gh pr checks {number} --repo "$PR_HOST_REPO"
 ```
 
-Run only the test or probe the security checklist needs to confirm a specific finding. A red CI check is itself a blocking finding under § "Blocking-Severity Bar" kind 1 or kind 3.
+Run only the test or probe the security checklist needs to confirm a specific finding. A red CI check is itself a blocking finding under § "Blocking-Severity Bar" kind 1 or kind 3. Do not approve while CI for the head SHA is pending or absent — post `COMMENT` and state the limit.
 
 ## Scope Split with the Code Reviewer (me2resh/apexyard#1418, AgDR-0172)
 
@@ -323,7 +324,7 @@ tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; subm
 5. **Consider context** — internal tools may have different requirements than public-facing code
 6. **No false sense of security** — passing review does not guarantee no vulnerabilities
 7. **A finding blocks only under the Blocking-Severity Bar** — a regression, a code-execution or approval-bypass vector, a correctness bug, or a failed acceptance criterion. See § "Blocking-Severity Bar". A MEDIUM or LOW finding stays advisory unless it independently meets one of the four kinds.
-8. **A re-review is a delta re-review by default** — read only the commits since your last reviewed SHA, per § "Delta Re-Reviews". Read CI's own check-run result for the head SHA before running a test or probe yourself, per § "CI Ownership of the Test Suite". Two review rounds is the cap; see `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR".
+8. **A re-review is a delta re-review by default** — read only the commits since your last reviewed SHA, per § "Delta Re-Reviews". Read CI's own check-run result for the head SHA before running a test or probe yourself, per § "CI Ownership of the Test Suite". The two-round cap in `.claude/rules/pr-workflow.md` § "After Pushing Commits to an Open PR" stops a NEW round only for a non-blocking finding — a blocking finding always gets a delta re-review of its fix, whatever the round count.
 
 ## Example Invocation
 
