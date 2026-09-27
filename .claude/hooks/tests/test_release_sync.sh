@@ -8,28 +8,36 @@
 # refactored into a shell helper.
 #
 # Tests covered:
+#   B4-1/B4-2. static assertions on release-sync/SKILL.md itself: no -X ours
+#       in the step 5 merge; tag resolution peels with ^{commit}
+#       (me2resh/apexyard#1406 Rex finding B4)
+#   B4-3. static assertion on approve-merge/SKILL.md itself: the behind check
+#       uses the compare API, not mergeStateStatus (#1406 Rex finding B4)
 #   1.  "already in sync" path   → git log dev..main empty → no-op expected
 #   2.  diverged path            → commits on main not on dev → sync needed
 #   3.  branch name shape        → sync/main-to-dev-after-vX.Y.Z
-#   4.  squash-duplicate conflict → resolves toward dev (apexyard#1394)
-#   4b. main-only-commit conflict → must NOT auto-resolve (apexyard#1394)
+#   4.  sole-touching-commit conflict → must STOP and ask, never auto-resolve,
+#       even when the release squash commit is the only commit that touched
+#       the file (#1406 maintainer direction: drop the squash-duplicate
+#       auto-resolution rule entirely)
+#   4b. main-only-commit conflict → must STOP and ask, never auto-resolve
 #   5.  idempotent re-run        → second sync on already-synced repo → no-op
 #   6.  backwards guard          → dev has no commits not on main → still detects main-only commits
 #   7.  version argument validation → malformed version rejected
 #   8-10. CHANGELOG carry-forward (apexyard#448) — unaffected by the merge
 #         strategy change, kept as regression coverage
-#   11. general main-only-commit shape → blind `-X ours` drops the row;
-#       commit-attributed resolution keeps it (apexyard#1394). NOT the real
-#       apexyard#1348 shape — see case 13.
-#   12. post-merge content check (step 5c) → flags the case-11 loss, passes
-#       clean on the correctly-resolved merge (apexyard#1394)
+#   11. general main-only-commit shape → blind `-X ours` drops the row; a
+#       plain merge plus a user-driven resolution keeps it (apexyard#1394)
+#   12. post-merge content check (step 5c) → flags the case-11 loss under the
+#       old strategy, passes clean on the user-resolved merge (apexyard#1394)
 #   B2. annotated-tag peeling → bare rev-parse is the tag object,
 #       `^{commit}` is the commit (me2resh/apexyard#1406 Rex finding B2)
-#   13. the REAL apexyard#1348 shape → the release squash commit is the
-#       SOLE touching commit AND carries a release-branch-only edit; the
-#       Released-From confirmation must call it unsafe (#1406 Rex finding B3)
-#   14. B3 control → a genuine squash-duplicate (no release-branch edit)
-#       still classifies safe, so the common case stays unattended
+#   13. the REAL apexyard#1348 shape → the release squash commit is the SOLE
+#       touching commit AND carries a release-branch-only edit; the plain
+#       merge still conflicts, and the conflict is never auto-resolved — a
+#       user-driven resolution is what keeps the release-branch content
+#       (#1406 Rex finding B3; the fix is "never auto-resolve", not a
+#       smarter auto-resolution rule)
 #
 # Exit 0 if all pass; 1 on first failure.
 
@@ -37,6 +45,7 @@ set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 SKILL_MD="$SRC_ROOT/.claude/skills/release-sync/SKILL.md"
+APPROVE_MERGE_SKILL_MD="$SRC_ROOT/.claude/skills/approve-merge/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -46,19 +55,18 @@ mark_pass() { printf "  ✓ %s\n" "$1"; PASS=$((PASS+1)); }
 mark_fail() { printf "  ✗ %s: %s\n" "$1" "$2" >&2; FAIL=$((FAIL+1)); FAILED="${FAILED}\n  - $1"; }
 
 # ---------------------------------------------------------------------------
-# B4 (me2resh/apexyard#1406 Rex finding): static assertions on SKILL.md
-# itself, not on a copy of its logic. The earlier version of this file
-# reached 17/17 pass against the pre-fix SKILL.md, which still said
-# `-X ours` — because every other case here exercises a re-implementation
-# of the skill's git operations, never the skill's own text. Each assertion
-# below is written so it fails on the pre-fix file:
+# B4 (me2resh/apexyard#1406 Rex finding): static assertions on the real
+# SKILL.md files, not on a copy of their logic. An earlier version of this
+# file reached 17/17 pass against the pre-fix release-sync SKILL.md, which
+# still said `-X ours` — because every other case here exercises a
+# re-implementation of the skill's git operations, never the skill's own
+# text. Each assertion below is written so it fails on the pre-fix file:
 #   - the step 5 merge command still says -X ours
 #   - the tag resolution does not peel to the commit
-#   - step 5c (the post-merge content check) is absent
-#   - the Released-From confirmation (B3's fix) is absent
+#   - the approve-merge behind check does not use the compare API
 # ---------------------------------------------------------------------------
 if [ ! -f "$SKILL_MD" ]; then
-  mark_fail "B4: SKILL.md exists" "not found at $SKILL_MD"
+  mark_fail "B4: release-sync SKILL.md exists" "not found at $SKILL_MD"
 else
   # Match an actual invocation (`git merge ... -X ours`), not the prose
   # that explains why the skill no longer uses it — that prose legitimately
@@ -74,17 +82,15 @@ else
   else
     mark_fail "B4: tag resolution peels to the commit (^{commit})" "no '^{commit}' found in $SKILL_MD"
   fi
+fi
 
-  if grep -q '^### 5c\.' "$SKILL_MD"; then
-    mark_pass "B4: step 5c (post-merge content check) is present"
+if [ ! -f "$APPROVE_MERGE_SKILL_MD" ]; then
+  mark_fail "B4: approve-merge SKILL.md exists" "not found at $APPROVE_MERGE_SKILL_MD"
+else
+  if grep -q 'is_pr_behind_base' "$APPROVE_MERGE_SKILL_MD"; then
+    mark_pass "B4: /approve-merge uses the compare API for the behind check"
   else
-    mark_fail "B4: step 5c (post-merge content check) is present" "no '### 5c.' heading found in $SKILL_MD"
-  fi
-
-  if grep -q 'Released-From' "$SKILL_MD"; then
-    mark_pass "B4/B3: the Released-From confirmation is present"
-  else
-    mark_fail "B4/B3: the Released-From confirmation is present" "no 'Released-From' reference found in $SKILL_MD"
+    mark_fail "B4: /approve-merge uses the compare API for the behind check" "no 'is_pr_behind_base' reference found in $APPROVE_MERGE_SKILL_MD"
   fi
 fi
 
@@ -208,27 +214,40 @@ ACTUAL="sync/main-to-dev-after-${VERSION}"
   || mark_fail "branch name shape" "got $ACTUAL expected $EXPECTED_BRANCH"
 
 # ---------------------------------------------------------------------------
-# Helper: classify_conflict_file <dev_ref> <main_ref> <release_sha> <file>
-# Mirrors SKILL.md step 5a exactly: list the commits on main-not-on-dev that
-# touched <file>; if the ONLY one is <release_sha>, the conflict is a
-# squash-duplicate (safe to resolve toward dev); any other commit in that
-# list makes it a main-only-commit conflict (must stop and ask).
+# Helper: list_touching_commits <dev_ref> <main_ref> <file>
+# Mirrors SKILL.md step 5a's display step: list the commits on main-not-on-dev
+# that touched <file>. This is informational only — step 5a does not use the
+# result to decide anything. It shows the list to the user and stops.
 # ---------------------------------------------------------------------------
-classify_conflict_file() {
-  local dev_ref="$1" main_ref="$2" release_sha="$3" file="$4"
-  local touching
-  touching=$(git log "${dev_ref}..${main_ref}" --format=%H -- "$file" 2>/dev/null)
-  if [ -z "$touching" ]; then
-    echo "no-conflict"
-  elif [ "$touching" = "$release_sha" ]; then
-    echo "squash-duplicate"
-  else
-    echo "main-only-commit"
-  fi
+list_touching_commits() {
+  local dev_ref="$1" main_ref="$2" file="$3"
+  git log "${dev_ref}..${main_ref}" --format=%H -- "$file" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
-# Case 4: squash-duplicate conflict resolves toward dev (apexyard#1394)
+# Helper: file_is_conflicted <file>
+# True when <file> is an unmerged path in the current index — i.e. a plain
+# merge left it conflicted and it has not been resolved yet.
+# ---------------------------------------------------------------------------
+file_is_conflicted() {
+  local file="$1"
+  git diff --name-only --diff-filter=U 2>/dev/null | grep -qx "$file"
+}
+
+# ---------------------------------------------------------------------------
+# Helper: commit_blocked_while_unresolved
+# True when `git commit --no-edit` refuses to run because an unmerged path
+# still exists. This is git's own behaviour, not something the skill has to
+# implement — it is what makes "never auto-pick a side" mechanically true:
+# nothing can finish the merge until every conflicted file is `git add`ed.
+# ---------------------------------------------------------------------------
+commit_blocked_while_unresolved() {
+  ! git commit --no-edit -q >/dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# Case 4: sole-touching-commit conflict must STOP and ask, never auto-resolve
+# (apexyard#1394, #1406 maintainer direction — no squash-duplicate rule)
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 (
@@ -249,7 +268,7 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   git commit -q -m "feat: dev version"
 
   # main adds main-version of conflicting.md via the ONLY release squash
-  # commit on main — the classic squash-duplicate shape.
+  # commit on main — the shape a squash-duplicate rule would call "safe".
   git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
   printf "main-version\n" > conflicting.md
   git add conflicting.md
@@ -261,28 +280,44 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   git checkout -q -b sync-branch dev
   git merge --no-ff -q main -m "sync: merge main into dev" 2>/dev/null
 
-  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" conflicting.md)
-  if [ "$CLASS" != "squash-duplicate" ]; then
-    echo "expected classification 'squash-duplicate', got '$CLASS'" >&2
+  if ! file_is_conflicted conflicting.md; then
+    echo "pre-condition broken: expected conflicting.md to be unmerged after the plain merge" >&2
     exit 1
   fi
 
-  # Resolve toward dev, per the classification, and finish the merge.
+  # The touching-commit list has exactly one entry, the release squash
+  # commit — the exact shape the old squash-duplicate rule auto-resolved.
+  TOUCHING=$(list_touching_commits dev main conflicting.md)
+  if [ "$TOUCHING" != "$RELEASE_SHA" ]; then
+    echo "expected the sole touching commit to be the release squash, got '$TOUCHING'" >&2
+    exit 1
+  fi
+
+  # The conflict must block the merge commit until a human resolves it —
+  # this is what "never auto-pick a side" means mechanically.
+  if ! commit_blocked_while_unresolved; then
+    echo "expected the merge commit to be blocked while conflicting.md is unresolved" >&2
+    exit 1
+  fi
+
+  # A human resolves it (here, choosing dev's side, same as the old rule
+  # would have picked) — the skill did not pick it automatically.
   git checkout --ours -- conflicting.md
   git add conflicting.md
   git commit --no-edit -q
 
   CONTENT=$(cat conflicting.md)
   [ "$CONTENT" = "dev-version" ] && exit 0
-  echo "expected 'dev-version' after squash-duplicate resolution, got '$CONTENT'" >&2
+  echo "expected 'dev-version' after the human's resolution, got '$CONTENT'" >&2
   exit 1
 )
-[ "$?" -eq 0 ] && mark_pass "squash-duplicate conflict: classified correctly, resolves toward dev" \
-              || mark_fail "squash-duplicate resolution" "see output above"
+[ "$?" -eq 0 ] && mark_pass "sole-touching-commit conflict: stops and blocks the commit until a human resolves it" \
+              || mark_fail "sole-touching-commit conflict" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
-# Case 4b: main-only-commit conflict must NOT auto-resolve (apexyard#1394)
+# Case 4b: main-only-commit conflict must STOP and ask, never auto-resolve
+# (apexyard#1394)
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 (
@@ -307,7 +342,6 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   git add unrelated.md
   git commit -q -m "release(#10): squash, unrelated file only"
   git tag -a v9.9.8 -m "v9.9.8"  # annotated (B2): matches auto-tag-on-release-pr-merge.yml
-  RELEASE_SHA=$(git rev-parse "v9.9.8^{commit}")
 
   printf "main-only-hotfix\n" > conflicting.md
   git add conflicting.md
@@ -316,13 +350,28 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
   git checkout -q -b sync-branch dev
   git merge --no-ff -q main -m "sync: merge main into dev" 2>/dev/null
 
-  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" conflicting.md)
-  [ "$CLASS" = "main-only-commit" ] && exit 0
-  echo "expected classification 'main-only-commit', got '$CLASS'" >&2
+  if ! file_is_conflicted conflicting.md; then
+    echo "pre-condition broken: expected conflicting.md to be unmerged after the plain merge" >&2
+    exit 1
+  fi
+
+  if ! commit_blocked_while_unresolved; then
+    echo "expected the merge commit to be blocked while conflicting.md is unresolved" >&2
+    exit 1
+  fi
+
+  # A human resolves it, choosing to keep both sides.
+  printf "dev-version-plus-hotfix\n" > conflicting.md
+  git add conflicting.md
+  git commit --no-edit -q
+
+  CONTENT=$(cat conflicting.md)
+  [ "$CONTENT" = "dev-version-plus-hotfix" ] && exit 0
+  echo "expected the human's resolution to stick, got '$CONTENT'" >&2
   exit 1
 )
-[ "$?" -eq 0 ] && mark_pass "main-only-commit conflict: classified correctly, must stop and ask" \
-              || mark_fail "main-only-commit classification" "see output above"
+[ "$?" -eq 0 ] && mark_pass "main-only-commit conflict: stops and blocks the commit until a human resolves it" \
+              || mark_fail "main-only-commit conflict" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
@@ -335,7 +384,7 @@ build_repo "$SB"
   cd "$SB" || exit 99
   # First sync: branch from dev, merge main (plain merge — build_repo's
   # feature-b.md/feature-c.md are identical add-add on both sides, so this
-  # does not conflict and needs no attribution step).
+  # does not conflict and needs no manual resolution).
   git checkout -q -b sync/main-to-dev-after-v1.0.0 dev
   git merge --no-ff -q main -m "sync: first pass" 2>/dev/null
 
@@ -623,15 +672,14 @@ build_repo_with_main_only_hotfix() {
 
 # ---------------------------------------------------------------------------
 # Case 11 (general main-only-commit shape, apexyard#1394): blind `-X ours`
-# drops a main-only row added by a SEPARATE hotfix commit; commit-attributed
-# resolution keeps it. This models a main-only commit in general — NOT the
-# real apexyard#1348 shape. See case 13 below for that.
+# drops a main-only row added by a SEPARATE hotfix commit; a plain merge
+# plus a user-driven resolution keeps it. This models a main-only commit in
+# general — NOT the real apexyard#1348 shape. See case 13 below for that.
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 build_repo_with_main_only_hotfix "$SB"
 (
   cd "$SB" || exit 99
-  RELEASE_SHA=$(git rev-parse "v1.0.0^{commit}")
 
   # --- OLD behaviour: blind -X ours ---
   git checkout -q -b sync-old dev
@@ -641,17 +689,22 @@ build_repo_with_main_only_hotfix "$SB"
     exit 1
   fi
 
-  # --- NEW behaviour: plain merge, classify, stop on main-only-commit ---
+  # --- NEW behaviour: plain merge, stop, user resolves ---
   git checkout -q dev
   git checkout -q -b sync-new dev
-  git merge --no-ff -q main -m "sync: new attributed strategy" 2>/dev/null
-  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" README.md)
-  if [ "$CLASS" != "main-only-commit" ]; then
-    echo "expected README.md to classify as main-only-commit, got '$CLASS'" >&2
+  git merge --no-ff -q main -m "sync: new plain-merge strategy" 2>/dev/null
+
+  if ! file_is_conflicted README.md; then
+    echo "expected README.md to be unmerged after the plain merge" >&2
     exit 1
   fi
-  # Per the skill: a main-only-commit conflict is resolved by hand, not
-  # blindly. Simulate the user's resolution keeping BOTH sides' content.
+  if ! commit_blocked_while_unresolved; then
+    echo "expected the merge commit to be blocked while README.md is unresolved" >&2
+    exit 1
+  fi
+
+  # Per the skill: never resolved by hand — the USER resolves it. Simulate
+  # the user's resolution keeping BOTH sides' content.
   printf '%s\n' "# README" "- new-dev-feature" "" "- core-maintainer" "- squash-of-dev-content" "- new-contributor-row" > README.md
   git add README.md
   git commit --no-edit -q
@@ -662,7 +715,7 @@ build_repo_with_main_only_hotfix "$SB"
   fi
   exit 0
 )
-[ "$?" -eq 0 ] && mark_pass "main-only commit (separate hotfix): -X ours drops the row; attributed resolution keeps it" \
+[ "$?" -eq 0 ] && mark_pass "main-only commit (separate hotfix): -X ours drops the row; a plain merge plus a user resolution keeps it" \
               || mark_fail "main-only-commit repro" "see output above"
 rm -rf "$SB"
 
@@ -707,12 +760,12 @@ build_repo_with_main_only_hotfix "$SB"
   git commit --no-edit -q
 
   if ! main_only_commit_applies "$HOTFIX_SHA"; then
-    echo "post-merge check still fails after attributed resolution" >&2
+    echo "post-merge check still fails after the user's resolution" >&2
     exit 1
   fi
   exit 0
 )
-[ "$?" -eq 0 ] && mark_pass "post-merge check (step 5c): flags a main-only-commit loss, clean after attributed resolution" \
+[ "$?" -eq 0 ] && mark_pass "post-merge check (step 5c): flags a main-only-commit loss, clean after the user's resolution" \
               || mark_fail "post-merge content check" "see output above"
 rm -rf "$SB"
 
@@ -754,47 +807,17 @@ SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------
-# Helper: classify_squash_duplicate_safe <release_sha> <file>
-# Mirrors SKILL.md step 5a's Released-From confirmation exactly. Given a
-# file already classified "squash-duplicate" by classify_conflict_file
-# (release_sha is the ONLY main-not-on-dev commit that touched it), decide
-# whether it is actually safe to resolve toward dev:
-#   - "safe"   the release commit's Released-From trailer names a dev
-#              commit, and the file is unchanged between that commit and
-#              the release commit — confirmed equivalent to dev.
-#   - "unsafe" the trailer is missing, or the file differs — route to the
-#              same stop-and-ask path as a main-only-commit conflict.
-# ---------------------------------------------------------------------------
-classify_squash_duplicate_safe() {
-  local release_sha="$1" file="$2"
-  local released_from
-  released_from=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' "$release_sha" 2>/dev/null)
-  if [ -z "$released_from" ]; then
-    echo "unsafe"
-    return
-  fi
-  if git diff --quiet "$released_from" "$release_sha" -- "$file" 2>/dev/null; then
-    echo "safe"
-  else
-    echo "unsafe"
-  fi
-}
-
-# ---------------------------------------------------------------------------
 # Helper: build the REAL apexyard#1348 shape (Rex's B3 finding on #1406).
 # The release squash commit is the ONLY commit main has that dev does not —
-# so classify_conflict_file alone reports "squash-duplicate" — but its
-# content for the conflicting file does NOT match the dev commit named in
-# its own Released-From trailer. The contributor row was written directly
-# on the release branch, before the squash, and never merged to dev first.
-# This is what #1348 case 11 above does NOT model: there, the lost row came
-# from a SEPARATE later commit; here, the release squash commit itself
-# carries content dev never had, while still being the sole touching commit.
+# the exact shape a squash-duplicate rule would call "safe" — but its
+# content for the conflicting file does NOT match dev. The contributor row
+# was written directly on the release branch, before the squash, and never
+# merged to dev first.
 #
 # build_repo_with_release_branch_edit <root>
 #   - dev:  base -> feature commit (adds "new-dev-feature" to README.md)
-#   - main: base -> release squash, Released-From: <dev tip>, README.md =
-#           dev's content PLUS a row added directly on the release branch
+#   - main: base -> release squash, README.md = dev's content PLUS a row
+#           added directly on the release branch
 # ---------------------------------------------------------------------------
 build_repo_with_release_branch_edit() {
   local root="$1"
@@ -816,7 +839,7 @@ build_repo_with_release_branch_edit() {
     DEV_TIP=$(git rev-parse dev)
 
     git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
-    printf '%s\n' "# README" "" "- core-maintainer" "- new-dev-feature" "- new-contributor-row" > README.md
+    printf '%s\n' "# README" "" "- core-maintainer" "- new-contributor-row" > README.md
     git add README.md
     git commit -q -m "release(#10): v1.0.0 squash
 
@@ -829,8 +852,12 @@ Released-From: $DEV_TIP"
 }
 
 # ---------------------------------------------------------------------------
-# Case 13 (B3, the REAL apexyard#1348 shape): a squash-duplicate candidate
-# whose release-branch edit the naive classification alone would miss.
+# Case 13 (B3, the REAL apexyard#1348 shape): the release squash commit is
+# the sole touching commit — the shape a squash-duplicate rule would call
+# safe — and it still conflicts, because it carries a release-branch-only
+# edit. The fix is not a smarter classification: it is that this skill no
+# longer classifies at all, so the conflict always stops for a human
+# instead of resolving toward a side that might be wrong.
 # ---------------------------------------------------------------------------
 SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
 build_repo_with_release_branch_edit "$SB"
@@ -839,77 +866,48 @@ build_repo_with_release_branch_edit "$SB"
   RELEASE_SHA=$(git rev-parse "v1.0.0-real1348^{commit}")
 
   git checkout -q -b sync-branch dev
-  git merge --no-ff -q main -m "sync: attributed strategy" 2>/dev/null
+  git merge --no-ff -q main -m "sync: plain merge" 2>/dev/null
 
-  CLASS=$(classify_conflict_file dev main "$RELEASE_SHA" README.md)
-  if [ "$CLASS" != "squash-duplicate" ]; then
-    echo "expected README.md to classify as squash-duplicate (release_sha is the sole touching commit), got '$CLASS'" >&2
+  if ! file_is_conflicted README.md; then
+    echo "pre-condition broken: expected README.md to be unmerged (the real #1348 shape must still conflict)" >&2
     exit 1
   fi
 
-  # --- Pre-fix behaviour: classification alone says "safe", checkout
-  # --ours drops the release-branch row. This is the #1348 loss reproduced.
+  TOUCHING=$(list_touching_commits dev main README.md)
+  if [ "$TOUCHING" != "$RELEASE_SHA" ]; then
+    echo "expected the release squash commit to be the sole touching commit, got '$TOUCHING'" >&2
+    exit 1
+  fi
+
+  # A naive "sole touching commit is safe" rule would resolve toward dev
+  # here and silently drop the release-branch row — reproducing #1348.
   git checkout -q --ours -- README.md
   if grep -q "new-contributor-row" README.md; then
-    echo "pre-condition broken: naive squash-duplicate resolution did not reproduce the #1348 drop" >&2
+    echo "pre-condition broken: naive sole-touching-commit resolution did not reproduce the #1348 drop" >&2
+    exit 1
+  fi
+  # The naive probe above only changed the working tree, not the index —
+  # the file's conflict stages are untouched, so it is still unresolved.
+  # The resolution below overwrites the working tree again, so no explicit
+  # undo is needed.
+
+  if ! commit_blocked_while_unresolved; then
+    echo "expected the merge commit to be blocked while README.md is unresolved" >&2
     exit 1
   fi
 
-  # --- B3 fix: the Released-From confirmation must say "unsafe" for this
-  # file, routing it to stop-and-ask instead of a blind checkout --ours.
-  SAFE=$(classify_squash_duplicate_safe "$RELEASE_SHA" README.md)
-  if [ "$SAFE" != "unsafe" ]; then
-    echo "expected classify_squash_duplicate_safe to say 'unsafe' (release branch edited this file), got '$SAFE'" >&2
-    exit 1
-  fi
-  exit 0
-)
-[ "$?" -eq 0 ] && mark_pass "B3: real #1348 shape — squash-duplicate confirmation catches the release-branch edit" \
-              || mark_fail "B3 real #1348 shape" "see output above"
-rm -rf "$SB"
+  # A human resolves it, keeping both dev's feature line and the
+  # release-branch row that the naive rule would have dropped.
+  printf '%s\n' "# README" "" "- core-maintainer" "- new-dev-feature" "- new-contributor-row" > README.md
+  git add README.md
+  git commit --no-edit -q
 
-# ---------------------------------------------------------------------------
-# Case 14 (B3 control): a genuine squash-duplicate — the release commit
-# changed nothing relative to its Released-From dev commit — must still be
-# classified "safe", so the common case keeps resolving toward dev
-# unattended and does not regress into asking on every sync.
-# ---------------------------------------------------------------------------
-SB=$(mktemp -d) && SB=$(cd "$SB" && pwd -P)
-(
-  cd "$SB" || exit 1
-  git init -q
-  git config user.email "test@test.com"
-  git config user.name "test"
-
-  printf "shared\n" > shared.md
-  git add shared.md
-  git commit -q -m "base"
-
-  git checkout -q -b dev
-  printf "dev-version\n" > conflicting.md
-  git add conflicting.md
-  git commit -q -m "feat: dev version"
-  DEV_TIP=$(git rev-parse dev)
-
-  # A genuine squash-duplicate: the release commit's content for this file
-  # is IDENTICAL to dev's tip content (the release branch added nothing new
-  # here) — the case the fix must still resolve toward dev unattended.
-  git checkout -q main 2>/dev/null || git checkout -q -b main HEAD~1
-  printf "dev-version\n" > conflicting.md
-  git add conflicting.md
-  git commit -q -m "release(#10): squash, no release-branch edit to this file
-
-Released-From: $DEV_TIP"
-  git tag -a v9.9.7 -m "v9.9.7"
-  RELEASE_SHA=$(git rev-parse "v9.9.7^{commit}")
-
-  SAFE=$(classify_squash_duplicate_safe "$RELEASE_SHA" conflicting.md)
-  [ "$SAFE" = "safe" ] && exit 0
-  echo "expected a genuine squash-duplicate to classify 'safe', got '$SAFE'" >&2
+  grep -q "new-contributor-row" README.md && exit 0
+  echo "expected the human's resolution to keep the release-branch row" >&2
   exit 1
 )
-[ "$?" -eq 0 ] && mark_pass "B3 control: genuine squash-duplicate (no release-branch edit) stays safe" \
-              || mark_fail "B3 control: genuine squash-duplicate stays safe" "see output above"
+[ "$?" -eq 0 ] && mark_pass "B3: real #1348 shape — stops for a human instead of resolving toward a possibly-wrong side" \
+              || mark_fail "B3 real #1348 shape" "see output above"
 rm -rf "$SB"
 
 # ---------------------------------------------------------------------------

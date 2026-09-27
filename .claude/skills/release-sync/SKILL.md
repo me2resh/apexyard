@@ -83,108 +83,77 @@ Refs #403" upstream/main
 **annotated** tag (`git tag -a`). `git rev-parse "<version>"` on an annotated
 tag returns the tag *object*'s SHA, not the commit it points at — a
 different value from the release squash commit on `main`. The `^{commit}`
-suffix peels the tag to the commit it names, regardless of tag type. Without
-it, `$RELEASE_SHA` never matches any commit in step 5a's touching-commit
-list, so the squash-duplicate case below never classifies correctly.
+suffix peels the tag to the commit it names, regardless of tag type.
 
 `$RELEASE_SHA` is the exact commit the version tag names — the release squash
-commit on `main`. Step 5a uses it to tell a squash-duplicate conflict apart
-from a conflict that touches genuinely new content.
+commit on `main`. Step 5a uses it only to label that commit for the user when
+it shows the list of commits that touched a conflicting file. It plays no
+part in deciding how to resolve a conflict — see below.
 
-**Why a plain merge, not `-X ours`.** `-X ours` resolves every conflicting hunk
-in favour of `dev`, with no check on which commit introduced the conflicting
-content on `main`. Most of the time that content is the release squash
-commit's duplicate of what `dev` already carries, and dropping it is correct.
-But `main` can carry content `dev` never had, from two different sources: a
-commit that was never on `dev` at all (a PR merged straight to `main`, a
-hand-edited file, a hotfix), or edits made directly on the release branch
-before it was squashed — so the release squash commit itself is not
-guaranteed to match `dev`, even when it is the only commit in the touching
-list. `-X ours` drops either case's content too, silently and with no
-warning. This is exactly what happened in apexyard#1348: sync commit
-`04bd8c7` hit a `README.md` conflict, and the release squash commit that
-caused it had added two contributor rows directly on the release branch —
-content `dev` did not have at the cut point the release was made from. A
-plain merge surfaces every conflict instead of resolving it blindly, so
-step 5a below can tell these cases apart from a genuine squash duplicate.
+**Why a plain merge, not `-X ours`.** `-X ours` resolves every conflicting
+hunk in favour of `dev`, with no check on which commit introduced the
+conflicting content on `main`. Most conflicts come from the release squash
+commit duplicating content `dev` already carries, and dropping it looks
+correct. But `main` can carry content `dev` never had, from two different
+sources: a commit that was never on `dev` at all (a PR merged straight to
+`main`, a hand-edited file, a hotfix), or an edit made directly on the
+release branch before it was squashed — so the release squash commit itself
+is not guaranteed to match `dev`, even when it is the only commit that
+touched a given file. `-X ours` drops either case's content too, silently
+and with no warning.
+
+This is exactly what happened in apexyard#1348. Sync commit `04bd8c7` hit a
+`README.md` conflict. The release squash commit was the only commit in the
+touching list for that file, so a rule that trusts "sole touching commit"
+would call the conflict a safe duplicate. It was not: the release squash
+commit had added two contributor rows directly on the release branch, before
+the squash. `dev` never had those rows. `-X ours` dropped them with no
+warning. A rule that tries to tell a safe duplicate apart from unsafe content
+has to get that distinction right every time, and #1348 shows it does not.
+This skill does not attempt the distinction. A plain merge surfaces every
+conflict, and step 5a below stops on every one of them instead of guessing.
 
 If the merge completes with no conflicts, skip to step 5b.
 
-### 5a. On conflict: attribute each file to the commit that caused it
+### 5a. On conflict: stop, list, and ask — never resolve automatically
 
 ```bash
 CONFLICTS=$(git diff --name-only --diff-filter=U)
 ```
 
-For each file in `$CONFLICTS`, list the commits on `main` that are not on
-`dev` and touched that file:
+**Stop here.** Do not resolve any conflicting file yourself, including a file
+where the release squash commit (`$RELEASE_SHA`) is the only commit on
+`main` that is not on `dev` and touched it. A conflict looking like a
+"squash duplicate" is not proof that `dev` already has the content —
+apexyard#1348 is exactly that case, and it is why this skill no longer tries
+to tell a safe duplicate apart from unsafe content. Every conflict gets the
+same treatment.
+
+For each file in `$CONFLICTS`, show the user:
 
 ```bash
-git log upstream/dev..upstream/main --format=%H -- "<file>"
+git diff upstream/dev upstream/main -- "<file>"
+git log upstream/dev..upstream/main --oneline -- "<file>"
 ```
 
-Compare the result against `$RELEASE_SHA` from step 5:
+The second command lists every commit on `main` that is not on `dev` and
+touched the file — including `$RELEASE_SHA` when it is one of them. Ask the
+user how to resolve the file. Once the user names the resolution, `git add`
+the file and continue. Do not pick a side yourself, not even when the list
+has only one commit in it.
 
-- **Squash-duplicate candidate.** `$RELEASE_SHA` is the ONLY commit in that
-  list. This is NOT yet enough to resolve toward `dev` — the release squash
-  commit can itself carry edits `dev` never had, made directly on the
-  release branch before the squash merge (this is what actually happened in
-  apexyard#1348: two contributor rows were added on the release branch, so
-  `$RELEASE_SHA` being the sole touching commit did not mean `dev` already
-  had the content). Confirm it against the release commit's own
-  `Released-From` trailer — the exact `dev` SHA the release was cut from:
-
-  ```bash
-  RELEASED_FROM=$(git log -1 --pretty=format:'%(trailers:key=Released-From,valueonly)' "$RELEASE_SHA")
-  ```
-
-  - **`$RELEASED_FROM` is non-empty AND `git diff "$RELEASED_FROM" "$RELEASE_SHA" -- "<file>"` is empty.**
-    The release commit changed nothing in this file relative to the exact
-    `dev` commit it was cut from — `dev`'s current content is confirmed
-    equivalent. Resolve toward `dev`:
-
-    ```bash
-    git checkout --ours -- "<file>"
-    git add "<file>"
-    ```
-
-    `git checkout --ours` takes the WHOLE file from `dev`'s side of the
-    merge, not just the conflicting hunks — different from `-X ours`, which
-    resolved every hunk in the file that way regardless of conflict. Here
-    the whole-file swap is safe because the diff above already confirmed the
-    two sides are equivalent for this file.
-
-  - **Otherwise** — the trailer is missing, or the diff is non-empty. Either
-    means this file cannot be confirmed safe to resolve automatically: a
-    missing trailer means there is nothing to compare against, and a
-    non-empty diff means the release branch changed this file relative to
-    the `dev` cut point. Route it to the same stop-and-ask path as a
-    main-only commit, below — do not guess.
-
-- **Main-only commit.** Any OTHER commit appears in that list — a commit that
-  exists on `main` and nowhere on `dev`. Picking either side blindly would
-  lose content. **Stop and ask the user** how to resolve this file. Show:
-
-  ```bash
-  git diff upstream/dev upstream/main -- "<file>"
-  git log upstream/dev..upstream/main --oneline -- "<file>"
-  ```
-
-  Do not resolve a main-only-commit file automatically. Once the user names
-  the resolution, `git add` the file and continue.
-
-Once every conflicting file is resolved, finish the merge:
+Once every conflicting file is resolved by the user, finish the merge:
 
 ```bash
 git commit --no-edit
 ```
 
-If any file needed a stop-and-ask, wait for the user's answer before running
-this commit. Do not commit the merge with an unresolved or auto-guessed file.
+Wait for the user's answer on every file before running this commit. Do not
+commit the merge with a file still unresolved.
 
 ### 5b. Carry forward `CHANGELOG.md` from main (apexyard#448)
 
-`dev` should win on a squash-duplicate conflict, per step 5a — but
+A user resolving a step 5a conflict usually keeps `dev`'s side — but
 `CHANGELOG.md` is the one file where the opposite is true: every release
 writes new entries on `main`, and `dev` should track those entries forward.
 Without this step the release-notes history accumulates only on `main`, and
@@ -296,12 +265,10 @@ gh pr create \
 - **Syncs main→dev after the <version> release** — makes the <version> squash commit
   an ancestor of `dev` so the next `dev→main` release PR only sees genuinely-new
   commits instead of fighting the accumulated squash divergence
-- **Merge strategy: plain merge, conflicts attributed by commit** — a conflict caused
-  only by the release squash commit resolves toward `dev`, but only after confirming
-  the release commit changed nothing in that file relative to its `Released-From`
-  `dev` cut point. A conflict that also involves a main-only commit, or that fails
-  that confirmation, stops and asks instead of guessing. Replaces the blind `-X ours`
-  strategy that dropped main-only content with no warning (apexyard#1394).
+- **Merge strategy: plain merge, stop and ask on every conflict** — no conflict
+  resolves automatically, not even one where the release squash commit is the
+  only commit that touched the file. Replaces the blind `-X ours` strategy
+  that dropped main-only content with no warning (apexyard#1394).
 - **`CHANGELOG.md` is carried forward separately** — the plain merge keeps dev's
   CHANGELOG, so a second commit on top of the merge restores `main`'s
   `CHANGELOG.md` verbatim. Path-specific, audit-trail-visible, idempotent. See apexyard#448.
@@ -319,10 +286,9 @@ commits. A future dev→main release PR then conflicts on all the diffs that X a
 touched. v2.0.0 suffered 99 conflicts because of this accumulated gap.
 
 This PR merges main→dev with a plain merge so the squash commit becomes an ancestor
-of dev. Future release PRs then only show genuinely-new commits in the diff. A plain
-merge, not `-X ours`, because `main` can carry commits `dev` never had — a squash
-commit isn't the only thing that can land there — and `-X ours` drops those silently
-(apexyard#1348, apexyard#1394).
+of dev. Future release PRs then only show genuinely-new commits in the diff. The merge
+uses a plain strategy, not `-X ours`. `Main` can carry content `dev` never had, and
+`-X ours` drops that content silently (apexyard#1348, apexyard#1394).
 
 See [#403](https://github.com/me2resh/apexyard/issues/403) for full root-cause analysis.
 
@@ -343,8 +309,7 @@ Refs #403, #448, #1002, #1394
 | Term | Definition |
 |------|------------|
 | Squash divergence | When a release PR is squash-merged to main, the resulting commit has a different SHA than the equivalent dev history, so dev still carries the un-squashed commits as "unsynced" |
-| Squash-duplicate conflict | A merge conflict where the release squash commit is the ONLY main-only commit that touched the file, AND its content matches the `dev` commit named in its `Released-From` trailer for that file. Confirmed equivalent, so the conflict resolves toward `dev`. |
-| Main-only commit | A commit that exists on `main` and nowhere on `dev` — a PR merged straight to `main`, a hand-edited file, a hotfix. A conflict that involves one stops the sync and asks, rather than guessing. |
+| Main-only commit | A commit that exists on `main` and nowhere on `dev`. Examples: a PR merged straight to `main`, a hand-edited file, a hotfix, or a release-branch edit made before the squash. A conflict involving one stops the sync and asks, rather than guessing. |
 | `sync/main-to-dev-after-<version>` | Short-lived branch used to carry the merge commit from main into dev; deleted after the PR merges |
 | CHANGELOG carry-forward | Path-specific step 5b that restores `main`'s `CHANGELOG.md` on the sync branch after the merge in step 5 would otherwise keep dev's stale copy. Atomic separate commit, idempotent re-run. See apexyard#448. |
 | Post-merge content check | Step 5c: for every main-only commit, verify its patch still reverse-applies cleanly against the sync branch, confirming the content survived the merge. See apexyard#1394. |
@@ -399,7 +364,7 @@ After merge: git merge-base --is-ancestor <release-squash-sha> upstream/dev shou
 1. **Framework-only.** Refuse on managed projects.
 2. **No auto-merge.** The PR must go through Rex + CEO approval like every other PR.
 3. **Branch base is always `upstream/dev`.** Never branch from main for this operation.
-4. **Plain merge, conflicts attributed by commit (apexyard#1394).** Never use `-X ours`. A conflict caused only by the release squash commit resolves toward `dev` only after its `Released-From`-anchored diff confirms the file is unchanged. A conflict involving a main-only commit, or one that fails that confirmation, stops and asks. Do not offer to resolve either case automatically.
+4. **Plain merge, stop and ask on every conflict (apexyard#1394).** Never use `-X ours`. Never resolve a conflicting file automatically, not even one where the release squash commit is the only commit that touched it. Show the user the diff and the touching commits, and wait for their answer.
 5. **`--merge` (true merge) on PR merge.** Never `--squash` or `--rebase`. The merge commit IS the ancestry-closure artefact; destroying it defeats the skill's purpose. `/approve-merge` enforces this automatically on `sync/`-prefixed PRs; a guard in `block-unreviewed-merge.sh` refuses `--squash` on them as a mechanical backstop.
 6. **No-op on already-synced repos.** Idempotent: if main has nothing dev doesn't, exit 0.
 7. **Version argument is required.** The version labels the sync branch and PR body for auditability.
@@ -410,7 +375,7 @@ After merge: git merge-base --is-ancestor <release-squash-sha> upstream/dev shou
 - `AgDR-0007` — the release-cut branch model this skill stabilises
 - `AgDR-0052` — the original design decisions for this skill
 - `AgDR-0053` — the decision to use `--merge` (not `--squash`) for sync PRs, and the auto-detect + guard design
-- `AgDR-0170` — the decision to replace `-X ours` with a plain merge + commit-attributed conflict resolution (apexyard#1394)
+- `AgDR-0170` — the decision to replace `-X ours` with a plain merge that stops and asks on every conflict (apexyard#1394)
 - `docs/release-process.md` — the prose runbook
 
 ---
