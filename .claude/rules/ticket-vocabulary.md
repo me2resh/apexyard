@@ -137,7 +137,7 @@ gh issue view 92 --json state,title
 gh issue view 92 --repo me2resh/apexyard --json state,title
 ```
 
-The same discipline is what `/start-ticket` already bakes in: it records the ticket's fully-qualified `owner/repo` in the session marker (see `.claude/skills/start-ticket/SKILL.md` § "Cross-repo note"), so pass the qualified form (`me2resh/flat-mate#128`) whenever you're in one repo but the ticket lives in another.
+The same discipline is what `/start-ticket` already bakes in: it records the ticket's fully-qualified `owner/repo` in the session marker (see `.claude/skills/start-ticket/SKILL.md` § "Cross-repo note"), so pass the qualified form (`other-org/other-repo#128`) whenever you're in one repo but the ticket lives in another.
 
 ### The write side is already mechanically guarded
 

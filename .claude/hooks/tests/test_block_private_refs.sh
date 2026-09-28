@@ -40,13 +40,13 @@ YAML
 cat > "$TMPDIR/fork/apexyard.projects.yaml" <<'YAML'
 version: 1
 projects:
-  - name: curios-dog
-    repo: me2resh/curios-dog
-    workspace: workspace/curios-dog
+  - name: sample-app
+    repo: me2resh/sample-app
+    workspace: workspace/sample-app
     status: active
-  - name: sharppick
-    repo: me2resh/SharpPick
-    workspace: workspace/sharppick
+  - name: demo-svc
+    repo: me2resh/DemoSvc
+    workspace: workspace/demo-svc
     status: active
   - name: marlow-core
     repo: acme-private/marlow-svc
@@ -125,35 +125,35 @@ run_case() {
 
 # 1. Name leak — body mentions a registered project name, target is public.
 run_case "name leak on gh issue create to me2resh/apexyard" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title 'bug in rebuild' --body 'discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug in rebuild' --body 'discovered during sample-app rebuild'"
 
 # 2. Repo-slug leak — body contains `owner/repo#N`.
 run_case "repo-slug leak with ticket ref" \
-  2 "project repo: me2resh/curios-dog" \
-  "gh pr create --repo me2resh/apexyard --title 'fix: patch' --body 'same as me2resh/curios-dog#42'"
+  2 "project repo: me2resh/sample-app" \
+  "gh pr create --repo me2resh/apexyard --title 'fix: patch' --body 'same as me2resh/sample-app#42'"
 
 # 3. Bare repo-slug leak without #N.
 run_case "bare repo-slug leak" \
-  2 "project repo: me2resh/SharpPick" \
-  "gh issue comment 5 --repo me2resh/apexyard --body 'reproduces in me2resh/SharpPick too'"
+  2 "project repo: me2resh/DemoSvc" \
+  "gh issue comment 5 --repo me2resh/apexyard --body 'reproduces in me2resh/DemoSvc too'"
 
 # 4. Skip marker — body has the allow comment, hook exits 0 with a warning.
 run_case "skip marker bypasses leak check" \
   0 "private-refs: allow marker present" \
-  "gh issue create --repo me2resh/apexyard --title 'legit cross-ref' --body 'refs curios-dog intentionally <!-- private-refs: allow -->'"
+  "gh issue create --repo me2resh/apexyard --title 'legit cross-ref' --body 'refs sample-app intentionally <!-- private-refs: allow -->'"
 
 # 5. Missing registry — registry file not present, hook is a no-op.
 mv "$TMPDIR/fork/apexyard.projects.yaml" "$TMPDIR/fork/apexyard.projects.yaml.bak"
 run_case "missing registry → no-op" \
   0 "" \
-  "gh issue create --repo me2resh/apexyard --title 'x' --body 'mentions curios-dog'"
+  "gh issue create --repo me2resh/apexyard --title 'x' --body 'mentions sample-app'"
 mv "$TMPDIR/fork/apexyard.projects.yaml.bak" "$TMPDIR/fork/apexyard.projects.yaml"
 
 # 6. Non-public target — same body but a private repo target; hook ignores.
 run_case "non-public target → no-op" \
   0 "" \
-  "gh issue create --repo me2resh/curios-dog --title 'x' --body 'mentions curios-dog freely'"
+  "gh issue create --repo me2resh/sample-app --title 'x' --body 'mentions sample-app freely'"
 
 # 7. Empty body — nothing to scan, hook is a no-op.
 run_case "empty body → no-op" \
@@ -169,12 +169,12 @@ run_case "workspace path leak" \
 # 9. Non-gh command — hook does not fire.
 run_case "non-gh command → no-op" \
   0 "" \
-  "echo curios-dog"
+  "echo sample-app"
 
 # 10. gh api issues shape — mirrors gh issue create via REST.
 run_case "gh api issues leak" \
-  2 "project name: curios-dog" \
-  "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during sample-app rebuild'"
 
 # 11. Embedded double quotes in body — me2resh/apexyard#227.
 #     Pre-227 the sed-based extractor's `[^"]*` truncated the body at the
@@ -190,10 +190,10 @@ The "admin notice" string is shown to users.
 - Mention the "current state" label
 
 ## Acceptance Criteria
-- [ ] discovered during curios-dog rebuild'
+- [ ] discovered during sample-app rebuild'
 
 run_case "leak in back half of body with embedded quote in front → block" \
-  2 "project name: curios-dog" \
+  2 "project name: sample-app" \
   "gh issue create --repo me2resh/apexyard --title 'fix' --body \"$LEAK_AFTER_QUOTE_BODY\""
 
 # 12. Same but for repo-slug ref past the embedded quote.
@@ -201,10 +201,10 @@ LEAK_REPO_AFTER_QUOTE='Description of the issue.
 
 The "needs attention" flag is wrong.
 
-See me2resh/SharpPick#42 for similar.'
+See me2resh/DemoSvc#42 for similar.'
 
 run_case "repo-slug leak past embedded quote → block" \
-  2 "project repo: me2resh/SharpPick" \
+  2 "project repo: me2resh/DemoSvc" \
   "gh pr create --repo me2resh/apexyard --title 'fix' --body \"$LEAK_REPO_AFTER_QUOTE\""
 
 # 13. Clean body (no leak) with embedded quotes — should pass.
@@ -314,22 +314,22 @@ run_case "#1039: no body at all → still a no-op (editor case)" \
 
 for boundary in '|' ';' '&' '<' '>' '(' ')'; do
   run_case "#1039 r2: inline body, quote then '$boundary' then leak → block" \
-    2 "project name: curios-dog" \
-    "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" $boundary more text. Seen during the curios-dog rebuild.\""
+    2 "project name: sample-app" \
+    "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" $boundary more text. Seen during the sample-app rebuild.\""
 done
 
 # A single-dash flag as the boundary — same class, different trigger char.
 run_case "#1039 r2: inline body, quote then ' -t' then leak → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" -t more. Seen during the curios-dog rebuild.\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title t --body \"The \\\"admin notice\\\" -t more. Seen during the sample-app rebuild.\""
 
 # The realistic shape: a mandatory Glossary table, then a leak below it.
 run_case "#1039 r2: markdown table row then leak in the tail → block" \
-  2 "project name: curios-dog" \
+  2 "project name: sample-app" \
   "gh issue create --repo me2resh/apexyard --title t --body \"| Term | Definition |
 | \\\"thing\\\" | a thing |
 
-Discovered during the curios-dog rebuild.\""
+Discovered during the sample-app rebuild.\""
 
 # ---------------------------------------------------------------------------
 # me2resh/apexyard#1046 — the trim, not the match anchor.
@@ -355,28 +355,28 @@ Discovered during the curios-dog rebuild.\""
 
 # The two leaking commands recorded on the issue. Both exited 0 pre-fix.
 run_case "#1046: double-quoted body, embedded quote then --flag, leak in tail → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose then curios-dog here\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" --verbose then sample-app here\""
 
 run_case "#1046: same shape with a trailing --label after the body → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"x \\\"y\\\" --a b curios-dog\" --label bug"
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"x \\\"y\\\" --a b sample-app\" --label bug"
 
 # NOT on the issue: the single-quoted branch carried the identical
 # leftmost-longest defect and leaked on the equivalent command shape.
 run_case "#1046: single-quoted body, embedded quote then --flag, leak in tail → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title t --body 'quote '\"'\"'done'\"'\"' --verbose then curios-dog here'"
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title t --body 'quote '\"'\"'done'\"'\"' --verbose then sample-app here'"
 
 # Single-condition controls — these passed BEFORE the fix too. They are here to
 # document why the originally filed repro did not reproduce, not as proof.
 run_case "#1046 control: embedded quote alone (no --flag) → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" then curios-dog here\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"quote \\\"done\\\" then sample-app here\""
 
 run_case "#1046 control: --flag alone (no embedded quote) → block" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"no quotes --verbose curios-dog\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"no quotes --verbose sample-app\""
 
 # The false-positive guard: both trigger conditions present, nothing private.
 run_case "#1046: embedded quote + --flag but clean body → pass" \
@@ -402,47 +402,47 @@ run_case "#1046: skip marker in --body does not unblock an unreadable --body-fil
 # gate. Blocked on dev, briefly bypassed mid-PR, blocked again now that the
 # marker check reads a conservative (subset) extraction.
 run_case "#1046: skip marker in a later --label must NOT bypass the gate" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --label \"<!-- private-refs: allow -->\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app\" --label \"<!-- private-refs: allow -->\""
 
 # The legitimate bypasses must still work — the marker is a documented escape
 # hatch, and narrowing its scope must not remove it from title or body.
 run_case "#1046: skip marker in the body still bypasses (documented escape hatch)" \
   0 "" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog <!-- private-refs: allow -->\""
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app <!-- private-refs: allow -->\""
 
 run_case "#1046: skip marker in the title still bypasses (documented escape hatch)" \
   0 "" \
-  "gh issue create --repo me2resh/apexyard --title \"<!-- private-refs: allow -->\" --body \"curios-dog\""
+  "gh issue create --repo me2resh/apexyard --title \"<!-- private-refs: allow -->\" --body \"sample-app\""
 
 # Round-2 security review: the first scope-asymmetry fix keyed the conservative
 # cut on a DOUBLE dash, so it closed `--label` and left the short spellings
 # open. `-l` IS `--label` — same shape, two spellings. The anchor is now
 # `-{1,2}[a-zA-Z]` in the "first" branch only, which cannot reach detection.
 run_case "#1046: skip marker in -l must NOT bypass (short spelling of --label)" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app\" -l \"<!-- private-refs: allow -->\""
 
 run_case "#1046: skip marker in -a must NOT bypass (short spelling of --assignee)" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -a \"<!-- private-refs: allow -->\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app\" -a \"<!-- private-refs: allow -->\""
 
 run_case "#1046: skip marker in --assignee must NOT bypass" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" --assignee \"<!-- private-refs: allow -->\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app\" --assignee \"<!-- private-refs: allow -->\""
 
 # A marker present but not where it counts used to block with no explanation:
 # the operator reads the escape-hatch advice, adds the marker, is blocked
 # again, and goes hunting for a typo in a marker that is demonstrably there.
 run_case "#1046: a misplaced marker gets a diagnostic explaining why it did not apply" \
   2 "not in a position" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog\" -l \"<!-- private-refs: allow -->\""
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app\" -l \"<!-- private-refs: allow -->\""
 
 # ...and the diagnostic must NOT fire when no marker was supplied at all,
 # or it becomes noise on every ordinary block.
 run_case "#1046: plain leak with no marker still blocks (diagnostic not asserted here)" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"curios-dog here\""
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title \"t\" --body \"sample-app here\""
 
 # ---------------------------------------------------------------------------
 # me2resh/apexyard#1068 — a trailing --repo ANYWHERE on the line disables
@@ -771,8 +771,8 @@ run_case "#1070: gh api --field body=@<missing file> → blocked" \
 #     entirely, so a leak sent through them went unscanned. Now equivalent
 #     to -F/-f.
 run_case "#1070: gh api --raw-field/--field long forms are recognised" \
-  2 "project name: curios-dog" \
-  "gh api repos/me2resh/apexyard/issues --raw-field title=bug --field body='discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh api repos/me2resh/apexyard/issues --raw-field title=bug --field body='discovered during sample-app rebuild'"
 
 # 41. The second repro from the issue: `--input <file>` was not extracted
 #     at all, so a leak sent through it went unscanned (rc=0). Now refused
@@ -793,9 +793,9 @@ run_case "#1070: gh api --input - (stdin) → MUST fail closed" \
 #     readable body=@file must still be SCANNED (and blocked on a leak),
 #     not swept up by the new --input refusal.
 LEAK_FILE_1070="$TMPDIR/leak-body-1070.md"
-printf 'Discovered during the curios-dog rebuild.\n' > "$LEAK_FILE_1070"
+printf 'Discovered during the sample-app rebuild.\n' > "$LEAK_FILE_1070"
 run_case "#1070: --field body=@<readable leak file> is still read and scanned" \
-  2 "project name: curios-dog" \
+  2 "project name: sample-app" \
   "gh api repos/me2resh/apexyard/issues --field body=@$LEAK_FILE_1070"
 
 # 44. False-positive guard for the readable-file path above — a clean body
@@ -811,14 +811,14 @@ run_case "#1070: --field body=@<readable clean file> → pass (no false positive
 #     public-class repo (step 3, upstream of this block).
 run_case "#1070: --input on a non-public target → still a no-op" \
   0 "" \
-  "gh api repos/me2resh/curios-dog/issues --input /nonexistent-zzz-1070.json"
+  "gh api repos/me2resh/sample-app/issues --input /nonexistent-zzz-1070.json"
 
 # 46. Regression guard — the pre-existing SHORT forms (-f/-F) must still
 #     work exactly as before; #1070 only adds coverage, it does not change
 #     the short-form behaviour case 10 above already pins.
 run_case "#1070: existing -f/-F short forms are unaffected" \
-  2 "project name: curios-dog" \
-  "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh api repos/me2resh/apexyard/issues -f title=bug -f body='discovered during sample-app rebuild'"
 
 # ---------------------------------------------------------------------------
 # 47-59. me2resh/apexyard#1206 — gh pr review and gh pr merge were entirely
@@ -1051,8 +1051,8 @@ run_case "#1387: owner mention in the title must not block" \
 #     still block. The owner exemption must not widen into "any name is
 #     fine now".
 run_case "#1387: an unrelated private project name still blocks (owner exemption is narrow)" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'discovered during sample-app rebuild'"
 
 # 76. Regression guard — the target's own bare repo name exemption (pre-
 #     existing, #1387 must not disturb it) still works alongside the new
@@ -1066,8 +1066,8 @@ run_case "#1387: the target's own bare repo name still exempt (pre-existing beha
 #     the owner's own name entry; it must not short-circuit scanning the
 #     rest of the body for an unrelated private project.
 run_case "#1387: owner mention plus a real leak in the same body still blocks on the real leak" \
-  2 "project name: curios-dog" \
-  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'filed against me2resh/apexyard; also discovered during curios-dog rebuild'"
+  2 "project name: sample-app" \
+  "gh issue create --repo me2resh/apexyard --title 'fix' --body 'filed against me2resh/apexyard; also discovered during sample-app rebuild'"
 
 # 77b. Rex code-review finding (PR #1400) — the issue asked to KEEP the block
 #      when the owner-equal name appears alone (no `@`, no `/`). The exemption

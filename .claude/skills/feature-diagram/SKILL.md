@@ -54,7 +54,7 @@ The Path resolution section's example sources the helper *once* for documentatio
 
 ```
 /feature-diagram create-order                       # current project (cwd inside workspace/<name>/ or single-project fork)
-/feature-diagram create-order curios-dog            # registered project
+/feature-diagram create-order sample-app            # registered project
 /feature-diagram reset-password --force             # overwrite existing diagram
 ```
 

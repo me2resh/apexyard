@@ -45,7 +45,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 Expected forms:
 
 - `42` — plain number, resolves against the current repo. Read `git remote get-url origin` and extract `<owner>/<repo>`. If there's no origin, stop and ask for a fully-qualified reference.
-- `me2resh/flat-mate#128` — fully-qualified reference.
+- `other-org/other-repo#128` — fully-qualified reference.
 - `apexyard#42` — owner defaults to the current org (parsed from the origin URL).
 
 If `$ARGUMENTS` is empty, stop and ask the user which issue they're starting.
@@ -126,7 +126,7 @@ else
   # Greppy fallback: find the `name:` whose sibling `repo:` matches.
   # Strips surrounding quotes from both `name:` and `repo:` values so the
   # comparison works whether the registry uses bare scalars
-  # (`repo: me2resh/curios-dog`) or quoted scalars (`repo: "me2resh/…"`).
+  # (`repo: me2resh/sample-app`) or quoted scalars (`repo: "me2resh/…"`).
   project=$(awk -v r="$OWNER_REPO" '
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
     /^[[:space:]]*- name:/ { name = unquote($3) }
@@ -137,11 +137,11 @@ fi
 
 Notes on the fallback:
 
-- Handles both `repo: me2resh/curios-dog` and `repo: "me2resh/curios-dog"` (and single-quoted).
+- Handles both `repo: me2resh/sample-app` and `repo: "me2resh/sample-app"` (and single-quoted).
 - Assumes `- name:` is the FIRST key in each project entry — that matches the shape in `apexyard.projects.yaml.example` and every entry produced by `/handover`. If your registry reorders keys so `repo:` appears before `name:` in an entry, the lookup misses. Fix: move `name:` to the top, or install `yq` (the preferred path).
 - Leading whitespace is tolerated via `^[[:space:]]*` — nested entries under `projects:` parse fine at any indent level, so long as the indent is consistent within the entry.
 
-`$project` is now either a registered project name (e.g. `curios-dog`, `sharppick`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).
+`$project` is now either a registered project name (e.g. `sample-app`, `demo-svc`) or empty (ticket's tracker repo isn't registered — typically because the ticket is on the ops fork itself, or a repo that's not under management).
 
 #### 4c. Pick the marker path
 
@@ -231,7 +231,7 @@ Do NOT create the branch automatically. The user may already be on a branch, or 
 ## Notes
 
 - `.claude/session/` (including `.claude/session/tickets/`) is gitignored — markers are per-machine, per-clone of the ops fork.
-- Running `/start-ticket` again overwrites the marker at whichever path resolved in step 4c (per-project or fallback). That's how you switch tickets — including jumping between projects (each project's marker lives in its own file, so switching between `curios-dog` and `sharppick` doesn't lose either one's context).
+- Running `/start-ticket` again overwrites the marker at whichever path resolved in step 4c (per-project or fallback). That's how you switch tickets — including jumping between projects (each project's marker lives in its own file, so switching between `sample-app` and `demo-svc` doesn't lose either one's context).
 - To clear a specific project's marker: `rm <ops_root>/.claude/session/tickets/<project>`.
 - To clear the ops-level fallback: `rm <ops_root>/.claude/session/current-ticket`.
 - Exempt paths (`.claude/`, `docs/`, `projects/*/docs/`, any `*.md`) don't need a ticket — the skill is only required before touching source / config / infra.

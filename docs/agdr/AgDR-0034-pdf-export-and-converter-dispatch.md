@@ -88,7 +88,7 @@ The hint text explicitly references the framework rule: *"Pick (1) if a downstre
 
 ### Negative
 
-- **Two-step UX for routine shares**: operator runs `/c4 curios-dog`, then `/pdf projects/curios-dog/architecture/context.md`. We're betting that PDF emission is rare enough that the second step is acceptable; if adopters complain, the v1.5 per-skill `--pdf` flag is the answer.
+- **Two-step UX for routine shares**: operator runs `/c4 sample-app`, then `/pdf projects/sample-app/architecture/context.md`. We're betting that PDF emission is rare enough that the second step is acceptable; if adopters complain, the v1.5 per-skill `--pdf` flag is the answer.
 - **BPMN → PDF pipeline is two stages** (bpmn-to-image → SVG → pandoc → PDF). When one stage fails, the error surface is less direct than a single binary call. Mitigated by streaming each tool's stderr through.
 - **md-to-pdf via npx has cold-start latency** (~5s on first invocation as npx fetches the package). Adopters who use it often will want `npm install -g md-to-pdf` to skip the fetch.
 - **No template/branding/custom-styling layer in v1** — the system pandoc defaults look "fine but not branded". Custom LaTeX templates are deferred to a separate ticket if demand surfaces.

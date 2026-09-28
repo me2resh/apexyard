@@ -157,7 +157,7 @@ purge your own repository's objects. It cannot reach a fork.
 
 If a project's `name` collides with a generic word (a project literally named `auth`, or `core`), the hook will block any upstream ticket that uses that word. Mitigations:
 
-1. **Don't register a private project under a generic one-word name.** `curios-dog` is fine; `auth` is not. This is a good principle independent of leak protection — it also stops `/projects` and `/tasks` from colliding.
+1. **Don't register a private project under a generic one-word name.** `sample-app` is fine; `auth` is not. This is a good principle independent of leak protection — it also stops `/projects` and `/tasks` from colliding.
 2. **Use the skip marker** when you've confirmed the match is incidental. The warning that accompanies the bypass is visible and auditable.
 3. **Omit the `name` field temporarily** — the hook reads only registered fields, so redacting one project's name in the registry removes it from the scrub list. Least-preferred option; you lose discovery in `/projects` for that project.
 
