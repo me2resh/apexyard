@@ -1154,6 +1154,17 @@ done <<EOF
 $REGISTRY_PARSED
 EOF
 
+# apexyard#1457 review round 3 (Hakim MEDIUM, elevated to blocking) — a
+# registry that plainly looks like it registers projects (a `projects:`
+# key AND at least one `name:` key) but produced zero tokens means the
+# parse missed a shape, not that nothing is registered. Fail closed.
+if [ "${#NAMES[@]}" -eq 0 ] && [ "${#REPOS[@]}" -eq 0 ] && [ "${#WORKSPACES[@]}" -eq 0 ]; then
+  if registry_has_project_shape "$REGISTRY"; then
+    echo "BLOCKED: registry parse produced no tokens despite a projects: key and a name: key being present in $REGISTRY. Cannot safely scan for a private portfolio reference." >&2
+    exit 2
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 # 8. Build the match list.
 #

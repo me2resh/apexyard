@@ -152,6 +152,105 @@ run_case "case C: public: true nested under a sub-map does not unscrub the entry
   2 "project name: secret-app" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 review round 3 (Rex B4 / Hakim HIGH-3, HIGH-4) — valid YAML
+# shapes the parser dropped at 3a424f5. Each body names ONLY the private
+# REPO SLUG, never the project name, so a surviving NAME token cannot mask
+# a dropped REPO token. All names/slugs are SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+# N3 — a top-level list before projects:, at a different indent.
+write_registry 'maintainers:
+- ops-team
+- infra-team
+projects:
+  - name: aa-app
+    repo: acme-org/aa-repo-one
+    workspace: workspace/aa-app
+'
+run_case "N3: a top-level list before projects: does not drop the entry" \
+  2 "project repo: acme-org/aa-repo-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/aa-repo-one as well'"
+
+# N3b — a top-level block scalar with a "- " line, at a column that does
+# not match the real entries.
+write_registry 'description: |
+    Some prose about this registry.
+    - not a real project entry
+projects:
+  - name: bb-app
+    repo: acme-org/bb-repo-one
+    workspace: workspace/bb-app
+'
+run_case "N3b: a top-level block scalar with a - line does not drop the entry" \
+  2 "project repo: acme-org/bb-repo-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/bb-repo-one as well'"
+
+# N1b — a compact repos: sequence (item dashes at the SAME column as the
+# repos: key).
+write_registry 'projects:
+  - name: cc-app
+    repos:
+    - acme-org/cc-repo-one
+    - acme-org/cc-repo-two
+'
+run_case "N1b: a compact repos: list does not drop its items" \
+  2 "project repo: acme-org/cc-repo-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/cc-repo-one as well'"
+
+# N2b — an indentless projects: list combined with a compact repos: list.
+write_registry 'projects:
+- name: dd-app
+  repos:
+  - acme-org/dd-repo-one
+  - acme-org/dd-repo-two
+'
+run_case "N2b: an indentless projects: list with a compact repos: list does not drop its items" \
+  2 "project repo: acme-org/dd-repo-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/dd-repo-one as well'"
+
+# N4 — a bare "-" entry, keys on the following lines.
+write_registry 'projects:
+  - name: ee-app
+    repo: acme-org/ee-repo-one
+  -
+    name: ff-app
+    repo: acme-org/ff-repo-one
+    workspace: workspace/ff-app
+'
+run_case "N4: a bare - entry with keys on the next lines does not drop the entry" \
+  2 "project repo: acme-org/ff-repo-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/ff-repo-one as well'"
+
+# Sanity gate (Hakim MEDIUM) — projects:/name: present, zero tokens parsed.
+write_registry 'projects:
+notes: |
+  name: this is prose inside a block scalar, not a real project
+'
+run_case "sanity gate: projects:/name: present, zero tokens parsed, still blocks" \
+  2 "registry parse produced no tokens" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'nothing private mentioned here at all'"
+
+# A genuinely empty registry must stay a no-op.
+write_registry 'version: 1
+'
+run_case "sanity gate: a genuinely empty registry stays a no-op" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'nothing private mentioned here at all'"
+
+# apexyard#1457 round 2 Rex suggestion — the non-zero parser-exit branch
+# of B1: the library loads fine, but registry_parse_entries itself
+# returns non-zero because the registry exists but cannot be read.
+write_registry 'projects:
+  - name: aa-app
+    repo: acme-org/aa-repo-one
+'
+chmod 000 "$TMPDIR/fork/apexyard.projects.yaml"
+run_case "public-tracker hook blocks when the registry exists but is unreadable (non-zero parser exit)" \
+  2 "registry parse failed" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'irrelevant body'"
+chmod 644 "$TMPDIR/fork/apexyard.projects.yaml"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

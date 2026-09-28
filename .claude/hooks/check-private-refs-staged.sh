@@ -105,7 +105,17 @@ done <<EOF
 $registry_parsed
 EOF
 
-[ "${#names[@]}" -gt 0 ] || [ "${#repos[@]}" -gt 0 ] || [ "${#workspaces[@]}" -gt 0 ] || exit 0
+if [ "${#names[@]}" -eq 0 ] && [ "${#repos[@]}" -eq 0 ] && [ "${#workspaces[@]}" -eq 0 ]; then
+  # apexyard#1457 review round 3 (Hakim MEDIUM, elevated to blocking) — a
+  # registry that plainly looks like it registers projects (a `projects:`
+  # key AND at least one `name:` key) but produced zero tokens means the
+  # parse missed a shape, not that nothing is registered. Fail closed.
+  if registry_has_project_shape "$REGISTRY"; then
+    echo "BLOCKED: registry parse produced no tokens despite a projects: key and a name: key being present in $REGISTRY. Cannot safely scan staged content for a private portfolio reference." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 # #1431 round 2 (Hakim MEDIUM) — a registered project's `name` can
 # coincidentally equal `upstream`'s bare repo name without that entry

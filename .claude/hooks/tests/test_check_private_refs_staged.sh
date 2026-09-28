@@ -689,6 +689,171 @@ assert_hook "a registry with no workspace: field anywhere still blocks a real le
 rm -rf "$sandbox"
 
 echo
+echo "== Round 3: valid YAML shapes the parser must not drop (apexyard#1457)"
+#
+# Rex B4 / Hakim HIGH-3, HIGH-4 — five valid YAML shapes dropped their
+# entries at commit 3a424f5. Each test body below names ONLY the private
+# REPO SLUG, never the project name, so a surviving NAME token cannot mask
+# a dropped REPO token. Verified by hand against 3a424f5's copy of
+# _lib-registry-parser.sh before this fix: N3 produced zero tokens, N3b
+# dropped its entry, N1b and N2b dropped their repos: items, and N4 dropped
+# its bare-"-" entry entirely. All names/slugs are SYNTHETIC.
+
+# N3 — a top-level list before `projects:`, at a DIFFERENT indent than the
+# real entries, must not anchor the entry column.
+N3_YAML='maintainers:
+- ops-team
+- infra-team
+projects:
+  - name: aa-app
+    repo: acme-org/aa-repo-one
+    workspace: workspace/aa-app
+'
+sandbox=$(make_sandbox_with_remotes "$N3_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/aa-repo-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "N3: a top-level list before projects: does not drop the entry" "$sandbox" 2 "File: notes.md" "aa-repo-one"
+rm -rf "$sandbox"
+
+# N3b — a top-level block scalar before `projects:` with a line that
+# starts with "- ", at a column that does not match the real entries.
+N3B_YAML='description: |
+    Some prose about this registry.
+    - not a real project entry
+projects:
+  - name: bb-app
+    repo: acme-org/bb-repo-one
+    workspace: workspace/bb-app
+'
+sandbox=$(make_sandbox_with_remotes "$N3B_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/bb-repo-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "N3b: a top-level block scalar with a - line does not drop the entry" "$sandbox" 2 "File: notes.md" "bb-repo-one"
+rm -rf "$sandbox"
+
+# N1b — a compact repos: sequence, item dashes at the SAME column as the
+# repos: key itself (valid YAML; not only the strictly-deeper form).
+N1B_YAML='projects:
+  - name: cc-app
+    repos:
+    - acme-org/cc-repo-one
+    - acme-org/cc-repo-two
+'
+sandbox=$(make_sandbox_with_remotes "$N1B_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/cc-repo-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "N1b: a compact repos: list does not drop its items" "$sandbox" 2 "File: notes.md" "cc-repo-one"
+rm -rf "$sandbox"
+
+# N2b — an indentless projects: list ("- name:" at column 0, PyYAML's
+# default dump shape) combined with a compact repos: list.
+N2B_YAML='projects:
+- name: dd-app
+  repos:
+  - acme-org/dd-repo-one
+  - acme-org/dd-repo-two
+'
+sandbox=$(make_sandbox_with_remotes "$N2B_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/dd-repo-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "N2b: an indentless projects: list with a compact repos: list does not drop its items" "$sandbox" 2 "File: notes.md" "dd-repo-one"
+rm -rf "$sandbox"
+
+# N4 — a bare "-" entry, with its keys on the following lines.
+N4_YAML='projects:
+  - name: ee-app
+    repo: acme-org/ee-repo-one
+  -
+    name: ff-app
+    repo: acme-org/ff-repo-one
+    workspace: workspace/ff-app
+'
+sandbox=$(make_sandbox_with_remotes "$N4_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/ff-repo-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "N4: a bare - entry with keys on the next lines does not drop the entry" "$sandbox" 2 "File: notes.md" "ff-repo-one"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 3: runtime hook, same shapes (where it applies)"
+
+sandbox=$(make_sandbox_with_remotes "$N1B_YAML" "$NEUTRAL_ORIGIN_URL")
+resolved_repo="me2resh/apexyard"
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/cc-repo-one as well' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'cc-repo-one'; then
+  pass "runtime hook — N1b compact repos: list does not drop its items"
+else
+  fail "runtime hook — N1b compact repos: list does not drop its items" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$N4_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/ff-repo-one as well' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'ff-repo-one'; then
+  pass "runtime hook — N4 bare - entry does not drop the entry"
+else
+  fail "runtime hook — N4 bare - entry does not drop the entry" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+echo
+echo "== Round 3: sanity gate — projects:/name: present but the parse gives zero tokens (Hakim MEDIUM)"
+#
+# A registry that plainly has a projects: key and a name: key, but the
+# structural parse could not place any token in an entry, must block
+# rather than silently allow every private reference (a parser gap, not
+# an empty registry).
+ZERO_TOKEN_YAML='projects:
+notes: |
+  name: this is prose inside a block scalar, not a real project
+'
+sandbox=$(make_sandbox_with_remotes "$ZERO_TOKEN_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Nothing private mentioned here at all.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "sanity gate: projects:/name: present, zero tokens parsed, still blocks" "$sandbox" 2 "registry parse produced no tokens" ""
+rm -rf "$sandbox"
+
+# A genuinely EMPTY registry (no projects:/name: shape at all) must stay a
+# no-op, exactly as before — the sanity gate must not fire on a registry
+# that legitimately registers nothing.
+EMPTY_YAML='version: 1
+'
+sandbox=$(make_sandbox_with_remotes "$EMPTY_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Nothing private mentioned here at all.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "sanity gate: a genuinely empty registry stays a no-op" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
+echo "== Round 3: the non-zero parser-exit branch of B1 (an unreadable, not missing, registry)"
+#
+# apexyard#1457 round 2 Rex suggestion — only the "library missing" branch
+# had a test. This exercises the OTHER fail-closed branch: the library
+# loads fine, but registry_parse_entries itself returns non-zero because
+# the registry file exists but cannot be read.
+sandbox=$(make_sandbox_with_remotes "$N3_YAML" "$NEUTRAL_ORIGIN_URL")
+chmod 000 "$sandbox/apexyard.projects.yaml"
+unreadable_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-staged.sh 2>&1); unreadable_rc=$?
+chmod 644 "$sandbox/apexyard.projects.yaml"
+if [ "$unreadable_rc" = "2" ] && printf '%s' "$unreadable_output" | grep -qF 'registry parse failed'; then
+  pass "staged hook blocks when the registry exists but is unreadable (non-zero parser exit)"
+else
+  fail "staged hook blocks when the registry exists but is unreadable (non-zero parser exit)" "exit=$unreadable_rc output=$unreadable_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$N3_YAML" "$NEUTRAL_ORIGIN_URL")
+chmod 000 "$sandbox/apexyard.projects.yaml"
+unreadable_runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" "irrelevant" '' 2>&1); unreadable_runtime_rc=$?
+chmod 644 "$sandbox/apexyard.projects.yaml"
+if [ "$unreadable_runtime_rc" = "2" ] && printf '%s' "$unreadable_runtime_output" | grep -qF 'registry parse failed'; then
+  pass "runtime hook blocks when the registry exists but is unreadable (non-zero parser exit)"
+else
+  fail "runtime hook blocks when the registry exists but is unreadable (non-zero parser exit)" "exit=$unreadable_runtime_rc output=$unreadable_runtime_output"
+fi
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

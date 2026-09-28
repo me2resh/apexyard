@@ -70,6 +70,17 @@ if [ "$registry_parse_rc" -ne 0 ]; then
   exit 2
 fi
 
+# apexyard#1457 review round 3 (Hakim MEDIUM, elevated to blocking) — a
+# registry that plainly looks like it registers projects (a `projects:`
+# key AND at least one `name:` key) but produced zero tokens means the
+# parse missed a shape, not that nothing is registered. Fail closed.
+if ! printf '%s\n' "$registry_parsed" | grep -qE '^(NAME|REPO|WORKSPACE)='; then
+  if registry_has_project_shape "$registry"; then
+    echo "BLOCKED: registry parse produced no tokens despite a projects: key and a name: key being present in $registry. Cannot safely scan tracker-wrapper content for a private portfolio reference." >&2
+    exit 2
+  fi
+fi
+
 current_public=0
 while IFS= read -r entry; do
   case "$entry" in
