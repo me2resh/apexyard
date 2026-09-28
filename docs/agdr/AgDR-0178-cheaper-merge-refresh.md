@@ -81,7 +81,7 @@ marker returns `false`. A non-empty remerge-diff returns `false`. Only the
 exact clean-replay shape returns `true`. `block-unreviewed-merge.sh` calls
 this once for the Rex marker and once for the CEO marker — each checked
 independently, since either marker can be the stale one. No agent writes a
-marker for this; the gate decides on its own, from state a local file
+marker for this. The gate decides on its own, from state a local file
 write cannot fabricate.
 
 `merge_refresh_required` (`_lib-merge-behind.sh`) decides whether
