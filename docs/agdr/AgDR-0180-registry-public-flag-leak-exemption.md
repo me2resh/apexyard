@@ -192,6 +192,18 @@ hook specifically).
   second `public:` key, even a second `true`, now makes the entry
   private, closing a path where a malformed or duplicated key could have
   been read charitably.
+- **Round 6 correction (me2resh/apexyard#1457).** The greedy pass's own
+  `repo:`/`workspace:`/`name:` checks matched a one-key `- repo: x` or
+  `- workspace: x` list item before its generic repos-item fallback ran,
+  closing an open `repos:` list and dropping every plain item after it
+  — a valid-YAML shape that made the "can never disappear" claim above
+  false again. Fixed by keeping the list open across every dash item at
+  or deeper than the `repos:` key's own column, recording each item's
+  value (and, for a multi-key map item, the value of every one of its
+  keys), and closing it only on a line at or left of that column. Also
+  hardened: a second `name:`, `repo:`, `repos:` or `workspace:` key in
+  one entry — most often a missing leading dash typo — now makes the
+  entry private too, the same as a duplicate `public:` key.
 
 ## Artifacts
 

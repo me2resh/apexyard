@@ -1088,6 +1088,88 @@ fi
 rm -rf "$sandbox"
 
 echo
+echo "== Round 6: an open repos: list must survive every dash item (Rex B6)"
+#
+# The greedy (private) pass'\''s repo:/workspace:/name: checks matched a
+# one-key "- repo: x" or "- workspace: x" LIST ITEM before the generic
+# repos-item fallback ran, and that match closed the list — dropping
+# every plain item after it. This shape is valid YAML: base dev blocks
+# it, and 8196285/fa2b9a9 both allowed it. Each test body names ONLY
+# the private repo slug that came AFTER the map-shaped item, never the
+# entry name, so a surviving NAME token cannot mask a dropped REPO
+# token. All names/slugs are SYNTHETIC.
+
+B6_REPO_YAML='projects:
+  - name: pp-priv1
+    repos:
+      - repo: org/decoy-b6-repo
+      - org/target-b6-after-repo
+'
+sandbox=$(make_sandbox_with_remotes "$B6_REPO_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/target-b6-after-repo as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B6: a - repo: item does not close the repos: list early" "$sandbox" 2 "File: notes.md" "target-b6-after-repo"
+rm -rf "$sandbox"
+
+B6_WS_YAML='projects:
+  - name: qq-priv2
+    repos:
+      - workspace: w/decoy-b6-ws
+      - org/target-b6-after-ws
+'
+sandbox=$(make_sandbox_with_remotes "$B6_WS_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/target-b6-after-ws as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B6: a - workspace: item does not close the repos: list early" "$sandbox" 2 "File: notes.md" "target-b6-after-ws"
+rm -rf "$sandbox"
+
+B6_MULTIKEY_YAML='projects:
+  - name: rr-priv3
+    repos:
+      - primary: org/decoy-b6-primary
+        mirror: true
+      - org/target-b6-after-map
+'
+sandbox=$(make_sandbox_with_remotes "$B6_MULTIKEY_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/target-b6-after-map as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B6: a multi-key map item does not close the repos: list early" "$sandbox" 2 "File: notes.md" "target-b6-after-map"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 6: runtime hook, representative B6 shape"
+
+sandbox=$(make_sandbox_with_remotes "$B6_REPO_YAML" "$NEUTRAL_ORIGIN_URL")
+resolved_repo="me2resh/apexyard"
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in org/target-b6-after-repo as well' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'target-b6-after-repo'; then
+  pass "runtime hook — B6 (- repo: item) does not close the repos: list early"
+else
+  fail "runtime hook — B6 (- repo: item) does not close the repos: list early" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+echo
+echo "== Round 6: a duplicate name:/repo:/workspace:/repos: key makes the entry private (Hakim D1, advisory)"
+#
+# A missing "- " typo lets a whole second project's fields land inside
+# the entry above it as duplicate keys. The parser reads it as one
+# entry with a duplicate name:/repo: — treated the same as a duplicate
+# public: key.
+D1_YAML='projects:
+  - name: ss-pub1
+    public: true
+    repo: org/decoy-d1-primary
+    name: tt-typo1
+    repo: org/target-d1-shared
+'
+sandbox=$(make_sandbox_with_remotes "$D1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/target-d1-shared as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "D1: a duplicate name:/repo: key (missing - typo) makes the entry private" "$sandbox" 2 "File: notes.md" "target-d1-shared"
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

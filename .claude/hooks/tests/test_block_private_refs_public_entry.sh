@@ -372,6 +372,59 @@ run_case "X1c (control): a plain list with the same shared slug still blocks" \
   2 "project repo: org/shared-x1c" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/shared-x1c as well'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 6 (Rex B6) — a one-key "- repo: x" or "- workspace: x"
+# LIST ITEM must not close an open repos: list; every plain item after it
+# must stay in the private set. Valid YAML; base dev blocks it, 8196285/
+# fa2b9a9 both allowed it. Each body names only the private slug that
+# came after the map-shaped item. All names/slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+write_registry 'projects:
+  - name: pp-priv1
+    repos:
+      - repo: org/decoy-b6-repo
+      - org/target-b6-after-repo
+'
+run_case "B6: a - repo: item does not close the repos: list early" \
+  2 "project repo: org/target-b6-after-repo" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-b6-after-repo as well'"
+
+write_registry 'projects:
+  - name: qq-priv2
+    repos:
+      - workspace: w/decoy-b6-ws
+      - org/target-b6-after-ws
+'
+run_case "B6: a - workspace: item does not close the repos: list early" \
+  2 "project repo: org/target-b6-after-ws" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-b6-after-ws as well'"
+
+write_registry 'projects:
+  - name: rr-priv3
+    repos:
+      - primary: org/decoy-b6-primary
+        mirror: true
+      - org/target-b6-after-map
+'
+run_case "B6: a multi-key map item does not close the repos: list early" \
+  2 "project repo: org/target-b6-after-map" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-b6-after-map as well'"
+
+# apexyard#1457 round 6 (Hakim D1, advisory) — a duplicate name:/repo:/
+# workspace:/repos: key in one entry (a missing "- " typo) makes the
+# entry private, the same as a duplicate public: key.
+write_registry 'projects:
+  - name: ss-pub1
+    public: true
+    repo: org/decoy-d1-primary
+    name: tt-typo1
+    repo: org/target-d1-shared
+'
+run_case "D1: a duplicate name:/repo: key (missing - typo) makes the entry private" \
+  2 "project repo: org/target-d1-shared" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-d1-shared as well'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

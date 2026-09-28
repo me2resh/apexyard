@@ -124,9 +124,11 @@ registry_parse_entries() {
       p_ambiguous_reason = ""
       p_entry_indent = -1; p_field_col = -1; p_have_entry = 0
       p_public_count = 0; p_public_all_true = 1
+      p_name_key_count = 0; p_repo_key_count = 0; p_workspace_key_count = 0
+      p_repos_key_count = 0
       p_in_block = 0
       # Private (greedy) pass state.
-      g_current_list = ""
+      g_current_list = ""; g_repos_indent = -1
     }
 
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
@@ -149,7 +151,18 @@ registry_parse_entries() {
         # when it has EXACTLY ONE `public:` key and that key'\''s value is
         # exactly `true`. A second `public:` key (even a second `true`)
         # or any other value makes the entry private.
-        entry_is_public = (p_public_count == 1 && p_public_all_true)
+        #
+        # apexyard#1457 round 6 (Hakim D1, advisory) — the same rule
+        # extends to `name:`, `repo:`, `repos:` and `workspace:`: a
+        # second occurrence of any one of them in the same entry (most
+        # often a missing "- " typo that lets a whole SECOND project'\''s
+        # fields land inside the entry above it as duplicate keys) also
+        # makes the entry private. This does not affect the PAIR=
+        # association below, which always reflects whatever the
+        # structural walk actually saw.
+        entry_is_public = (p_public_count == 1 && p_public_all_true &&
+          p_name_key_count <= 1 && p_repo_key_count <= 1 &&
+          p_workspace_key_count <= 1 && p_repos_key_count <= 1)
         if (entry_is_public) {
           for (i = 1; i <= p_nname; i++) PNL[p_enames[i], p_ename_lines[i]] = 1
           for (i = 1; i <= p_nrepo; i++) PRL[p_erepos[i], p_erepo_lines[i]] = 1
@@ -166,6 +179,8 @@ registry_parse_entries() {
       }
       p_have_entry = 0; p_nname = 0; p_nrepo = 0; p_nws = 0
       p_public_count = 0; p_public_all_true = 1
+      p_name_key_count = 0; p_repo_key_count = 0; p_workspace_key_count = 0
+      p_repos_key_count = 0
       p_current_list = ""; p_field_col = -1
     }
 
@@ -178,18 +193,21 @@ registry_parse_entries() {
       if (text ~ /^name:/) {
         v = text; sub(/^name:[[:space:]]*/, "", v); sub(/[[:space:]]*(#.*)?$/, "", v)
         p_nname++; p_enames[p_nname] = unquote(v); p_ename_lines[p_nname] = ln
+        p_name_key_count++
         p_current_list = ""
         return
       }
       if (text ~ /^repo:/) {
         v = text; sub(/^repo:[[:space:]]*/, "", v); sub(/[[:space:]]*(#.*)?$/, "", v)
         p_nrepo++; p_erepos[p_nrepo] = unquote(v); p_erepo_lines[p_nrepo] = ln
+        p_repo_key_count++
         p_current_list = ""
         return
       }
       if (text ~ /^workspace:/) {
         v = text; sub(/^workspace:[[:space:]]*/, "", v); sub(/[[:space:]]*(#.*)?$/, "", v)
         p_nws++; p_ews[p_nws] = unquote(v); p_ews_lines[p_nws] = ln
+        p_workspace_key_count++
         p_current_list = ""
         return
       }
@@ -211,10 +229,12 @@ registry_parse_entries() {
           item = parts[k]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
           if (item != "") { p_nrepo++; p_erepos[p_nrepo] = unquote(item); p_erepo_lines[p_nrepo] = ln }
         }
+        p_repos_key_count++
         p_current_list = ""
         return
       }
       if (text ~ /^repos:[[:space:]]*(#.*)?$/) {
+        p_repos_key_count++
         p_current_list = "repos"
         return
       }
@@ -245,40 +265,95 @@ registry_parse_entries() {
       # Each match records the CURRENT line number alongside the value
       # (apexyard#1457 round 5, Hakim HIGH-7) so exemption can be decided
       # by line-level correlation with the public pass, not raw counts.
+      #
+      # apexyard#1457 round 6 (Rex B6) — an armed `repos:` list must stay
+      # open across EVERY dash item AT OR DEEPER THAN the column of the
+      # `repos:` key itself, whatever that item looks like. The round-4/5
+      # version let the `repo:`/`workspace:`/`name:` checks below match a
+      # `- repo: x` or `- workspace: x` LIST ITEM first, which then
+      # closed the list (by falling into a branch that resets
+      # `g_current_list`) and dropped every plain item after it — a
+      # fail-open regression, because the greedy set must never lose a
+      # token. This gate runs FIRST, before those specific-key checks,
+      # and treats a dash line at or deeper than the `repos:` key column
+      # as a repos-item continuation while the list is armed: a plain
+      # item is recorded as-is; a one-line map item (`- repo: x`) is
+      # recorded by its value, stripping the "key:" wrapper generically
+      # (not only for "repo"/"workspace"/"name" — ANY key); the list
+      # stays open either way. A later, deeper-than-the-repos:-key,
+      # non-dash line is read as another key of that SAME map item (Rex:
+      # "for a map item, record the value of each of its keys") —
+      # closing the gap that already exists on `dev` for a
+      # `- primary: x` item followed by a `mirror: true` continuation.
+      #
+      # The list closes on a non-dash line at or left of the `repos:`
+      # key column (the literal Rex rule) — and ALSO on a dash line
+      # SHALLOWER than that column, which this scan only reaches once
+      # the entry that owned the `repos:` list has already ended (the
+      # dash then belongs to an outer list, most commonly the NEXT
+      # top-level entry own opening dash). Without that second closing
+      # condition, a `repos:` list left open with nothing after it would
+      # swallow the following entry own fields as if they were more
+      # items of THIS list, dropping that entry real name/repo token
+      # from the greedy set entirely — the exact class of bug this whole
+      # gate exists to prevent.
       # ------------------------------------------------------------------
-      if (line ~ /^[[:space:]]*-?[[:space:]]*name:[[:space:]]*[^[:space:]]/) {
-        gv = line; sub(/^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-        GNL[unquote(gv), NR] = 1
-        g_current_list = ""
-      } else if (line ~ /^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*[^[:space:]]/) {
-        gv = line; sub(/^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-        GRL[unquote(gv), NR] = 1
-        g_current_list = ""
-      } else if (line ~ /^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*[^[:space:]]/) {
-        gv = line; sub(/^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-        GWL[unquote(gv), NR] = 1
-        g_current_list = ""
-      } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*\[/) {
-        gval = line
-        sub(/^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*/, "", gval)
-        sub(/^\[/, "", gval); sub(/\][[:space:]]*(#.*)?$/, "", gval)
-        gn = split(gval, gparts, ",")
-        for (gi = 1; gi <= gn; gi++) {
-          gitem = gparts[gi]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", gitem)
-          if (gitem != "") GRL[unquote(gitem), NR] = 1
-        }
-        g_current_list = ""
-      } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*(#.*)?$/) {
-        g_current_list = "repos"
-      } else if (line ~ /^[[:space:]]*-[[:space:]]+/) {
-        if (g_current_list == "repos") {
-          gitem = line
-          sub(/^[[:space:]]*-[[:space:]]+/, "", gitem)
+      g_handled = 0
+      match(line, /^[ \t]*/); g_indent = RLENGTH; g_content = substr(line, g_indent + 1)
+      if (g_current_list == "repos" && g_content != "" && g_content !~ /^#/) {
+        if (g_indent >= g_repos_indent && (g_content ~ /^-[[:space:]]+/ || g_content ~ /^-[[:space:]]*(#.*)?$/)) {
+          gitem = g_content
+          sub(/^-[[:space:]]*/, "", gitem)
           gsub(/[[:space:]]+$/, "", gitem)
+          if (gitem ~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*[^[:space:]]/) {
+            sub(/^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*/, "", gitem)
+            sub(/[[:space:]]*(#.*)?$/, "", gitem)
+          }
           if (gitem != "") GRL[unquote(gitem), NR] = 1
+          g_handled = 1
+        } else if (g_content !~ /^-/ && g_indent > g_repos_indent) {
+          gitem = g_content
+          if (gitem ~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*[^[:space:]]/) {
+            sub(/^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*/, "", gitem)
+            sub(/[[:space:]]*(#.*)?$/, "", gitem)
+            if (gitem != "") GRL[unquote(gitem), NR] = 1
+          }
+          g_handled = 1
+        } else {
+          g_current_list = ""
         }
-      } else if (line ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/) {
-        g_current_list = ""
+      }
+      if (!g_handled) {
+        if (line ~ /^[[:space:]]*-?[[:space:]]*name:[[:space:]]*[^[:space:]]/) {
+          gv = line; sub(/^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
+          GNL[unquote(gv), NR] = 1
+          g_current_list = ""
+        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*[^[:space:]]/) {
+          gv = line; sub(/^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
+          GRL[unquote(gv), NR] = 1
+          g_current_list = ""
+        } else if (line ~ /^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*[^[:space:]]/) {
+          gv = line; sub(/^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
+          GWL[unquote(gv), NR] = 1
+          g_current_list = ""
+        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*\[/) {
+          gval = line
+          sub(/^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*/, "", gval)
+          sub(/^\[/, "", gval); sub(/\][[:space:]]*(#.*)?$/, "", gval)
+          gn = split(gval, gparts, ",")
+          for (gi = 1; gi <= gn; gi++) {
+            gitem2 = gparts[gi]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", gitem2)
+            if (gitem2 != "") GRL[unquote(gitem2), NR] = 1
+          }
+          g_current_list = ""
+        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*(#.*)?$/) {
+          g_current_list = "repos"; g_repos_indent = g_indent
+        } else if (line ~ /^[[:space:]]*-[[:space:]]+/) {
+          # A dash line while no repos: list is armed — not a list item
+          # of anything this pass tracks; nothing to record.
+        } else if (line ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/) {
+          g_current_list = ""
+        }
       }
 
       # ------------------------------------------------------------------
