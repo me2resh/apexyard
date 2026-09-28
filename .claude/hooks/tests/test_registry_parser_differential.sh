@@ -32,6 +32,12 @@
 # value) pairs rather than a bare value, so a token can never silently
 # reappear under the wrong type without this test noticing.
 #
+# Round 9 (Rex B8) narrows `dev_word_split` to match `split_words()`'s own
+# round-9 fix: a trailing YAML comment is stripped before splitting, and a
+# resulting word that is only a YAML key shape is dropped, so this test's
+# floor does not still demand a "#" or "repo:"-shaped token that round 9
+# deliberately removed as a false-positive source.
+#
 # All fixture names/slugs are SYNTHETIC.
 
 set -u
@@ -140,24 +146,41 @@ dev_extract_runtime() {
 # its own. "What dev really scanned" for a given registry is therefore
 # not the raw TYPE=value lines dev's awk prints — it is those lines PLUS
 # one extra TYPE=word line per word of any value that has more than one.
+#
+# apexyard#1457 round 9 (Rex B8) — narrows that floor to match
+# split_words()'s own round-9 fix: a trailing YAML comment
+# (`[[:space:]]+#.*$`) is stripped before splitting (its words, and the
+# "#" itself, are never real content), and a resulting word that is only
+# a YAML key shape (`^[A-Za-z_][A-Za-z0-9_-]*:$`, e.g. "repo:", "primary:")
+# is dropped — round 8's split introduced both as accidental new tokens
+# that round 9 intentionally removes, so the floor this test enforces
+# must not still demand them.
 # Reads "TYPE=value" lines on stdin; for a value with embedded
-# whitespace, `for w in $value` deliberately reuses the same unquoted
-# expansion dev's shell loop relied on, so this models dev's hook
-# behaviour exactly rather than re-deriving it with new logic.
+# whitespace, `for w in $stripped` deliberately reuses the same
+# unquoted expansion dev's shell loop relied on, so this models dev's
+# hook behaviour (as narrowed by round 9) rather than re-deriving it
+# with new logic.
 dev_word_split() {
-  local line type value w
+  local line type value stripped w
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     type="${line%%=*}"
     value="${line#*=}"
     echo "$type=$value"
-    case "$value" in
-      *[[:space:]]*)
-        for w in $value; do
-          [ -n "$w" ] && echo "$type=$w"
-        done
-        ;;
-    esac
+    stripped=$(printf '%s' "$value" | sed -E 's/[[:space:]]+#.*$//')
+    # Unconditional, like split_words()'s own split() call — a stripped
+    # value with no remaining whitespace still needs this pass: stripping
+    # a trailing comment can turn a multi-word value into a single real
+    # word (e.g. "acme-org/x  # note" -> "acme-org/x"), and that word is
+    # new relative to $value (which still carries the comment) and must
+    # still be emitted.
+    for w in $stripped; do
+      [ -z "$w" ] && continue
+      if [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_-]*:$ ]]; then
+        continue
+      fi
+      echo "$type=$w"
+    done
   done
 }
 
@@ -387,6 +410,18 @@ run_fixture "M1b-dash-repo-item-in-repos-list" 'projects:
       - repo: acme-org/mm-target-m1b
 '
 
+# apexyard#1457 round 9 (Rex B8) — a bare repos: list item with a
+# trailing YAML comment. dev's whole-line capture keeps the comment
+# verbatim ("acme-org/b8-target  # primary service"); dev_word_split
+# above now strips the comment before splitting, matching split_words()'s
+# own round-9 fix, so this fixture must still find the real slug as its
+# own word without also demanding "#"/"primary"/"service".
+run_fixture "B8-trailing-comment-on-repos-item" 'projects:
+  - name: b8-priv
+    repos:
+      - acme-org/b8-target  # primary service
+'
+
 # apexyard#1457 round 8 (Hakim LOW-1) — a CRLF registry. Unlike the other
 # fixtures, dev's own extraction here still carries a trailing "\r" on
 # every value (dev never stripped it) while the new parser runs against
@@ -418,6 +453,28 @@ if printf '%s\n' "$g3_new_values" | grep -qxF -- "true"; then
   fail "G3: the new parser does not invent a bare true value dev never produced"
 else
   pass "G3: the new parser does not invent a bare true value dev never produced"
+fi
+
+echo
+echo "== Differential: the B8 comment does not yield a bare # or key-shaped VALUE"
+# apexyard#1457 round 9 (Rex B8) — the new parser's own overall output
+# must not contain a bare "#" token, nor a bare "repo:"/"primary:"-shaped
+# YAML-key token, for any fixture. This is the specific regression class
+# B8 caught: split_words() producing a token that blocks every Markdown
+# heading. Checked across the two fixtures most likely to regress it.
+b8_bad_found=""
+for b8_fixture in "B8-trailing-comment-on-repos-item" "M1b-dash-repo-item-in-repos-list" "X1-map-item-before-shared-slug"; do
+  b8_file="$WORKDIR/${b8_fixture}.yaml"
+  b8_values=$(registry_parse_entries "$b8_file" standard 2>/dev/null \
+    | grep -E '^(NAME|REPO|WORKSPACE)=' | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+  if printf '%s\n' "$b8_values" | grep -qxE -- '#|[A-Za-z_][A-Za-z0-9_-]*:'; then
+    b8_bad_found="$b8_bad_found $b8_fixture"
+  fi
+done
+if [ -n "$b8_bad_found" ]; then
+  fail "B8: the new parser does not invent a bare # or key-shaped value" "found in:$b8_bad_found"
+else
+  pass "B8: the new parser does not invent a bare # or key-shaped value"
 fi
 
 echo

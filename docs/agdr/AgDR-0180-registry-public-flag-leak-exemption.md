@@ -186,6 +186,12 @@ hook specifically).
   (closing a forged-line-number path — MEDIUM), and runs dev's private
   extraction against a carriage-return-stripped copy of the registry so a
   CRLF entry's tokens match plain text (LOW-1).
+- **Round 9 correction (me2resh/apexyard#1457, Rex).** Round 8's word-split
+  strips a trailing YAML comment and drops any resulting word that is only
+  a YAML key shape before splitting, so a commented `repos:` list item no
+  longer turns `#` and the comment's own words into private tokens (B8);
+  `registry_parse_entries` also now checks the CR-strip's own exit status
+  instead of assuming success.
 
 ## Artifacts
 

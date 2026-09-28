@@ -1341,6 +1341,41 @@ assert_hook "MEDIUM: a tab-forged line number does not exempt the real private t
 rm -rf "$sandbox"
 
 echo
+echo "== Round 9 (Rex B8): a trailing comment on a repos: item does not become private words"
+#
+# apexyard#1457 round 9 — round 8's word-split ran on dev's whole-line
+# capture of a repos: block-list item, which includes a trailing YAML
+# comment verbatim ("- acme-org/dd-one  # primary service" -> dev value
+# "acme-org/dd-one  # primary service"). Splitting that on whitespace
+# alone produced "#", "primary", and "service" as standalone private
+# tokens, and "#" then blocked every Markdown heading. Fixed by
+# stripping a trailing "[[:space:]]+#.*$" comment before the split. The
+# real slug must still block. All names/slugs SYNTHETIC.
+
+B8_YAML='projects:
+  - name: dd-priv-b8
+    repos:
+      - acme-org/dd-one  # primary service
+'
+sandbox=$(make_sandbox_with_remotes "$B8_YAML" "$NEUTRAL_ORIGIN_URL")
+printf '# Release notes\n\nSee the changelog.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B8: a Markdown heading (# ...) is not blocked by a commented repos: item" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$B8_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'This is the primary service for the team.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B8: the comment's own words (primary service) are not blocked" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$B8_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/dd-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "B8: the real slug (acme-org/dd-one) still blocks" "$sandbox" 2 "File: notes.md" "dd-one"
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

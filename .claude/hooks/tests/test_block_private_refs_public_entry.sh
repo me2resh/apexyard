@@ -556,6 +556,34 @@ run_case "M1b: a - repo: item inside repos: blocks via its split word (Hakim HIG
   2 "project repo: acme-org/mm-target-b" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/mm-target-b as well'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 9 (Rex B8, blocking) — round 8's word-split ran on
+# dev's whole-line capture of a repos: block-list item, which includes a
+# trailing YAML comment verbatim ("- acme-org/dd-one  # primary service"
+# -> dev value "acme-org/dd-one  # primary service"). Splitting that on
+# whitespace alone produced "#", "primary", and "service" as standalone
+# private tokens, and "#" then blocked every Markdown heading. Fixed by
+# stripping a trailing "[[:space:]]+#.*$" comment before the split. The
+# real slug must still block. All names/slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+write_registry 'projects:
+  - name: dd-priv-b8
+    repos:
+      - acme-org/dd-one  # primary service
+'
+run_case "B8: a Markdown heading (# ...) is not blocked by a commented repos: item" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body '# Release notes'"
+
+run_case "B8: the comment's own words (primary service) are not blocked" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'This is the primary service for the team'"
+
+run_case "B8: the real slug (acme-org/dd-one) still blocks" \
+  2 "project repo: acme-org/dd-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/dd-one as well'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

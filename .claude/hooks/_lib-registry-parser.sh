@@ -75,6 +75,22 @@
 #     — safe under the same "never fewer than dev" guarantee. The public
 #     (structural) pass is intentionally left reading the registry as-is.
 #
+# apexyard#1457 round 9 (Rex B8; item 2) — two more, on top of round 8:
+#   - `split_words()`'\''s own round-8 word-split was too literal on two
+#     dev-captured shapes that carry more than a plain slug on one line:
+#     a `repos:` block-list item with a trailing YAML comment (dev'\''s
+#     whole-line capture keeps the comment verbatim) and a one-key map
+#     item (`- repo: acme-org/x`). Splitting those on whitespace alone
+#     produced `#`, the comment'\''s own words, and a bare `repo:`/
+#     `primary:`-shaped word as standalone private tokens — `#` then
+#     blocked every Markdown heading the staged hook ever saw. Fixed by
+#     stripping a trailing comment before the split and dropping any
+#     resulting word that is only a YAML key shape; the untouched whole
+#     value and the real slug words are still always kept.
+#   - `registry_parse_entries` now checks `tr -d '\''\r'\''`'\''s own exit
+#     status instead of assuming success, so a failed CR-strip (not just
+#     a failed `mktemp`) fails the whole call closed too.
+#
 # Explicitly out of scope, unchanged from earlier rounds: flow-style YAML
 # and a value-level anchor.
 #
@@ -129,7 +145,15 @@ registry_parse_entries() {
   # reading the registry as-is — untouched since round 6, and Rex found
   # nothing to fix in round 7 either.
   crfile=$(mktemp 2>/dev/null) || { rm -f "$privfile" "$pubfile"; return 1; }
-  tr -d '\r' < "$registry" > "$crfile" 2>/dev/null
+  # apexyard#1457 round 9 (item 2) — check tr's own exit status. A failed
+  # tr (e.g. it cannot write crfile, or is killed) must fail the whole
+  # call closed, the same as a failed mktemp above; it must never fall
+  # through and scan whatever partial or empty content it happened to
+  # leave behind.
+  if ! tr -d '\r' < "$registry" > "$crfile" 2>/dev/null; then
+    rm -f "$privfile" "$pubfile" "$crfile"
+    return 1
+  fi
 
   if [ "$style" = "runtime" ]; then
     _registry_dev_extract_runtime "$crfile" > "$privfile" 2>/dev/null
@@ -469,18 +493,36 @@ _registry_correlate() {
     # is always v itself, and is safe to keep even when it can never
     # match anything on its own, because the individual words that CAN
     # match are always included alongside it.
-    function split_words(v, out,    n, m, parts, i, w, j, dup) {
+    #
+    # apexyard#1457 round 9 (Rex B8, blocking) — round 8'\''s word-split was
+    # too literal on two dev-captured shapes that carry more than a plain
+    # slug on one line: a `repos:` block-list item with a trailing YAML
+    # comment (`- acme-org/x  # primary service`, which dev'\''s whole-line
+    # capture keeps verbatim, comment included) and a one-key map item
+    # (`- repo: acme-org/x`). Splitting those on whitespace alone produced
+    # `#`, `primary`, `service`, and `repo:` as standalone private WORDS —
+    # `#` then blocked every Markdown heading the staged hook ever saw.
+    # Fixed here, once, before the word-split: strip a trailing
+    # `[[:space:]]+#.*$` comment from a COPY of the value first (the
+    # comment'\''s words never become tokens), then drop any resulting word
+    # that is ONLY a YAML key shape (`^[A-Za-z_][A-Za-z0-9_-]*:$` — no
+    # value fragment survived splitting alongside it, so it is pure
+    # syntax, not content). The untouched original value (out[1], comment
+    # and all) is still always kept, exactly as round 8 left it — this
+    # only narrows which of the SPLIT words additionally get emitted.
+    function split_words(v, out,    n, stripped, m, parts, i, w, j, dup) {
       n = 0
       out[++n] = v
-      if (v ~ /[ \t]/) {
-        m = split(v, parts, /[ \t]+/)
-        for (i = 1; i <= m; i++) {
-          w = parts[i]
-          if (w == "") continue
-          dup = 0
-          for (j = 1; j <= n; j++) { if (out[j] == w) { dup = 1; break } }
-          if (!dup) out[++n] = w
-        }
+      stripped = v
+      sub(/[[:space:]]+#.*$/, "", stripped)
+      m = split(stripped, parts, /[ \t]+/)
+      for (i = 1; i <= m; i++) {
+        w = parts[i]
+        if (w == "") continue
+        if (w ~ /^[A-Za-z_][A-Za-z0-9_-]*:$/) continue
+        dup = 0
+        for (j = 1; j <= n; j++) { if (out[j] == w) { dup = 1; break } }
+        if (!dup) out[++n] = w
       }
       return n
     }
