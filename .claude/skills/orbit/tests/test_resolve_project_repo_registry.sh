@@ -76,6 +76,39 @@ if [ "$rc4" -eq 0 ] || [ -n "$output4" ]; then
   fail=1
 fi
 
+# --- Case 5: a CRLF line ending and a trailing "# comment" are both
+# stripped (round 4, Rex advisory) --------------------------------------
+registry2="$sb/apexyard-crlf.projects.yaml"
+printf 'projects:\n  - name: gamma-widget\n    repo: acme/gamma-widget  # primary mirror\r\n    workspace: workspace/gamma-widget\n' > "$registry2"
+
+output5=$("$HELPER" "$registry2" "gamma-widget")
+rc5=$?
+line_count5=$(printf '%s' "$output5" | grep -c .)
+if [ "$rc5" -ne 0 ] || [ "$line_count5" -ne 1 ] || [ "$output5" != "acme/gamma-widget" ]; then
+  echo "FAIL: expected exactly one line 'acme/gamma-widget' with the CRLF and comment stripped, got rc=$rc5 output: $output5"
+  fail=1
+fi
+
+# --- Case 6: a nested repo: key under an entry must not override that
+# entry's own top-level repo: (round 4, Rex advisory) --------------------
+registry3="$sb/apexyard-nested.projects.yaml"
+cat > "$registry3" <<'YAML'
+projects:
+  - name: delta-widget
+    repo: acme/delta-widget
+    mirror:
+      repo: acme/delta-widget-mirror
+    workspace: workspace/delta-widget
+YAML
+
+output6=$("$HELPER" "$registry3" "delta-widget")
+rc6=$?
+line_count6=$(printf '%s' "$output6" | grep -c .)
+if [ "$rc6" -ne 0 ] || [ "$line_count6" -ne 1 ] || [ "$output6" != "acme/delta-widget" ]; then
+  echo "FAIL: expected exactly one line 'acme/delta-widget' (the entry's own top-level repo:, not the nested mirror.repo:), got rc=$rc6 output: $output6"
+  fail=1
+fi
+
 rm -rf "$sb"
 
 if [ "$fail" -eq 0 ]; then

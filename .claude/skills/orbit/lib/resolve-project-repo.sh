@@ -20,6 +20,10 @@
 #     overwrite that entry's own top-level `repo:` (last-write-wins).
 #     Fixed by keeping only the FIRST `repo:` line seen after each
 #     `- name:` line.
+#
+# Round-4 advisory (Rex, small): a value line now also has a trailing \r
+# (CRLF registry file) and a trailing "  # comment" stripped, so either one
+# does not become part of the resolved repo string.
 
 set -u
 
@@ -32,7 +36,13 @@ if [ -z "$registry" ] || [ -z "$target" ] || [ ! -f "$registry" ]; then
 fi
 
 repo=$(awk -v target="$target" '
-  function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^["'"'"']|["'"'"']$/, "", line); return line }
+  function value(line) {
+    sub(/^[^:]+:[[:space:]]*/, "", line)
+    sub(/\r$/, "", line)
+    if (line !~ /^["'"'"']/) { sub(/[[:space:]]+#.*$/, "", line) }
+    gsub(/^["'"'"']|["'"'"']$/, "", line)
+    return line
+  }
   /^[[:space:]]*- name:/ {
     if (name == target) { print repo; found=1; exit }
     name=value($0); repo=""; next

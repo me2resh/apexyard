@@ -94,9 +94,14 @@ plan_revision=$(jq -r '.basedOn.planRevision // empty' "$slice_file")
 reconciliation_id=$(jq -r '.basedOn.reconciliationId // empty' "$slice_file")
 
 [ -n "$slice_id" ] || { echo "Slice record $slice_file has no id." >&2; exit 13; }
-# LC_ALL=C so [A-Za-z0-9._-] means exactly those 64 bytes in every locale,
-# not whatever a locale's collation happens to fold into that range.
-if ! printf '%s' "$slice_id" | LC_ALL=C grep -qE '^[A-Za-z0-9._-]+$'; then
+# Byte-level check, not `grep -E '^...$'`: grep -q matches if ANY line of a
+# multi-line value matches, so a slice id containing a newline could carry
+# one clean line (passing the anchored regex) and one hostile line (e.g. a
+# quote or a search qualifier) on a second line, and still pass. `tr -d`
+# deletes every byte in [A-Za-z0-9._-] from the whole value in one pass,
+# including across embedded newlines; anything left over is disallowed.
+# LC_ALL=C so the class means exactly those 64 bytes in every locale.
+if [ -z "$slice_id" ] || [ -n "$(printf '%s' "$slice_id" | LC_ALL=C tr -d 'A-Za-z0-9._-')" ]; then
   echo "Slice id '$slice_id' contains characters outside [A-Za-z0-9._-]; refusing to build a search query from it." >&2
   exit 13
 fi
@@ -165,6 +170,11 @@ if [ "$dup_rc" -ne 0 ]; then
 fi
 if ! printf '%s' "$duplicates_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
   echo "Cannot verify whether an open issue in $repo already carries slice ID $slice_id: gh issue list did not return a JSON array." >&2
+  exit 13
+fi
+raw_count=$(printf '%s' "$duplicates_json" | jq 'length' 2>/dev/null)
+if [ "$raw_count" = "200" ]; then
+  echo "Cannot verify whether an open issue in $repo already carries slice ID $slice_id: the search returned 200 results, its configured limit, and may be cut off." >&2
   exit 13
 fi
 token='`'"$slice_id"'`'
