@@ -60,7 +60,16 @@
 
   "merge": {
     "_comment": "Config for /approve-merge's behind-base check (me2resh/apexyard#1386). require_up_to_date defaults to true: before merging, the skill computes whether the PR's head is behind its base from the compare API (is_pr_behind_base in _lib-merge-behind.sh), not from the forge's mergeStateStatus field, which only reports BEHIND under a strict ruleset policy. When behind, the skill stops before the merge instead of using a CI result computed against a stale base. Set to false to disable the check for adopters who accept that risk. This key changes /approve-merge's own behaviour only — it adds no new blocking condition to block-unreviewed-merge.sh.",
-    "require_up_to_date": true
+    "require_up_to_date": true,
+    "_comment_shared_file_patterns": "me2resh/apexyard#1437 — the shared-file set for merge_refresh_required (_lib-merge-behind.sh). When the base branch's commits since the merge base touch none of the PR's own files AND none of these patterns, /approve-merge step 3a skips the branch-update refresh instead of stopping. Patterns use bash `case` glob syntax (`*` matches any run of characters, including `/`). Extend or replace in .claude/project-config.json for hooks/config files this fork added outside the defaults below. A truncated compare (300 files or more), a failed API call, or any other unknown result always requires the refresh — this list only narrows the SKIP path, never widens a block.",
+    "shared_file_patterns": [
+      ".claude/hooks/_lib-*.sh",
+      ".claude/settings.json",
+      ".claude/project-config.defaults.json",
+      "bin/run-pre-push-checks.sh",
+      ".githooks/*",
+      ".github/workflows/*"
+    ]
   },
 
   "branch": {

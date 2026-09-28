@@ -178,23 +178,63 @@ evidence the PR is up to date.
 
 - **`false`** — proceed to step 4.
 
-- **`true`** — **stop here**. Do not verify the Rex marker, do not write the
-  CEO marker, and do not merge. Tell the user:
+- **`true`** — before stopping, check whether the refresh is actually
+  needed (me2resh/apexyard#1437). `is_pr_behind_base` only says the base
+  moved — it says nothing about whether the base's new commits touch
+  anything this PR could be affected by. When they don't, refreshing buys
+  no protection: no file the base changed can break a PR that shares none
+  of those files.
 
-  ```
-  PR #<pr> is behind its base branch (<baseRefName>). Before this can merge:
-    1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
-    2. Wait for green CI on the updated branch.
-    3. Get a short Rex re-review of the new merge commit — the SHA will
-       change, so the existing Rex marker will no longer match HEAD.
-    4. Run /approve-merge <pr> again.
+  ```bash
+  # BASE_MERGE_COMMIT_SHA: .merge_base_commit.sha from the SAME compare
+  # call is_pr_behind_base made — do not make a second, possibly
+  # inconsistent, compare call. Re-read it explicitly:
+  BASE_MERGE_COMMIT_SHA=$(gh api "repos/${REPO}/compare/<baseRefName>...<headRefOid>" -q '.merge_base_commit.sha' 2>/dev/null)
+  # config_get (not config_get_or) for the multi-line array filter — same
+  # convention as .branch.type_whitelist[] elsewhere in this codebase.
+  SHARED_PATTERNS=$(config_get '.merge.shared_file_patterns[]' 2>/dev/null)
+  REFRESH=$(merge_refresh_required "$REPO" "<baseRefName>" <pr> "$BASE_MERGE_COMMIT_SHA" "$SHARED_PATTERNS")
   ```
 
-  Ask the user to run step 1, or to approve you running it — do not update
-  the branch yourself. Updating the branch pushes a merge commit to the
-  PR's head branch. On a fork PR with maintainer edits that branch belongs
-  to the contributor. The update is a separate, visible action the user
-  should see happen, not one this skill takes on its own.
+  `merge_refresh_required` (`_lib-merge-behind.sh`) echoes `required` or
+  `skippable`. It fails closed to `required` on anything it cannot fully
+  verify: a failed `gh api` call, a truncated compare (300 files or more on
+  either side), an empty `BASE_MERGE_COMMIT_SHA`, or a base commit set that
+  touches a file the PR itself changed OR a file matching
+  `merge.shared_file_patterns` (default: `.claude/hooks/_lib-*.sh`,
+  `.claude/settings.json`, `.claude/project-config.defaults.json`,
+  `bin/run-pre-push-checks.sh`, `.githooks/*`, `.github/workflows/*`).
+
+  - **`skippable`** — the base moved, but touches nothing this PR shares.
+    Proceed to step 4 on the CURRENT `<headRefOid>` — no branch update, no
+    re-review, no new CI run. Tell the user the refresh was skipped and
+    name the reason (behind by N commits, none overlapping this PR's files
+    or the shared set).
+
+  - **`required`** — **stop here**, the same as before #1437. Do not verify
+    the Rex marker, do not write the CEO marker, and do not merge. Tell the
+    user:
+
+    ```
+    PR #<pr> is behind its base branch (<baseRefName>) and the base's new
+    commits touch a file this PR shares. Before this can merge:
+      1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
+      2. Wait for green CI on the updated branch.
+      3. Get a short Rex re-review of the new merge commit — OR, if the
+         merge is a clean replay of the base with no conflicts (`git show
+         --remerge-diff` on the new HEAD is empty), the merge gate carries
+         the existing Rex approval forward on its own. See
+         block-unreviewed-merge.sh's rex_approval_carries_over check
+         (me2resh/apexyard#1437) — no marker to write by hand either way.
+      4. Run /approve-merge <pr> again.
+    ```
+
+    Ask the user to run step 1, or to approve you running it — do not
+    update the branch yourself. Updating the branch pushes a merge commit
+    to the PR's head branch. On a fork PR with maintainer edits that
+    branch belongs to the contributor. The update is a separate, visible
+    action the user should see happen, not one this skill takes on its
+    own.
 
 - **`unknown`, empty, or unset** — the compare call failed, or an argument
   was empty. **Stop here, the same as `true`.** Do not verify the Rex marker,
@@ -233,10 +273,25 @@ The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone acti
 # $PR_HOST_REPO) — you cannot merge a fork's copy.
 PR_HOST_REPO=$(pr_base_repo <pr> "$REPO")
 REX=$(review_marker_path "$PR_HOST_REPO" <pr> rex "$MARKER_HOME")
-[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
 
-If Rex's marker is missing or its SHA doesn't match the PR HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
+If the Rex marker's SHA already equals `<headRefOid from step 3>`, proceed to step 5.
+
+**If the marker exists but its SHA does NOT match HEAD, do not immediately refuse** (me2resh/apexyard#1437 round-2 review, Rex 2). Check the SAME carry-over the merge gate checks, using the SAME function — a skill that refuses here while the gate would accept the merge anyway is a dead end, not a safety margin:
+
+```bash
+# _lib-merge-behind.sh was already sourced in step 3a above.
+REX_SHA=$(tr -d '[:space:]' < "$REX")
+CARRY_OVER="false"
+if [ -n "$REX_SHA" ] && command -v rex_approval_carries_over >/dev/null 2>&1; then
+  CARRY_OVER=$(rex_approval_carries_over "$PR_HOST_REPO" "$REX_SHA" "<headRefOid from step 3>" "<baseRefName from step 3>")
+fi
+```
+
+- **`true`** — the marker carries over. Proceed to step 5 exactly as if the SHA had matched (write the CEO marker against `<headRefOid from step 3>`, the CURRENT head — never the old, Rex-reviewed SHA).
+- Anything else (`false`, `unknown`) — refuse. Tell the user Rex's marker is stale and ask them to re-invoke the code-reviewer on the current HEAD. Do not write the CEO marker on a stale base.
+
+Never write a marker yourself to force this check to pass. `rex_approval_carries_over` is read-only — it decides, you read its answer.
 
 **On a MISSING marker, check for the gate-invisible near-miss before reporting it (me2resh/apexyard#1144).** A reviewer handed a literal marker path in its spawn prompt writes the bare-number form instead of the repo-qualified one. That file is read by no gate, but `ls .claude/session/reviews/` makes it look like a perfectly good approval — so "marker missing" is true of the path you looked at and false of what the operator can see on disk. Name the discrepancy:
 
@@ -473,7 +528,7 @@ The skill never writes the marker AND defers the merge in any other case. The de
 
 - The marker is gitignored (`.claude/session/` is in `.gitignore`). It's session state, not code.
 - Re-running `/approve-merge <pr>` on the same PR is idempotent — overwrites with current HEAD/timestamp. Useful for a small follow-up (rebase, comment-only fixup) where re-running Rex isn't needed.
-- New commits after the marker is written invalidate the approval — the hook refuses to merge because `sha=` no longer matches PR HEAD. Re-run Rex + `/approve-merge`.
+- New commits after the marker is written invalidate the approval — the hook refuses to merge because `sha=` no longer matches PR HEAD. Re-run Rex + `/approve-merge`. **One exception (me2resh/apexyard#1437):** when the new HEAD is a forge-verified, conflict-free base-branch merge of the approved SHA — see step 4 and `rex_approval_carries_over` — the gate carries the existing marker forward on its own. Nothing needs re-running for that specific case, and no marker gets rewritten to make it happen.
 - The marker format is **versioned**. A bare-SHA legacy marker (skill_version absent) is rejected by the merge gate as of `block-unreviewed-merge.sh` v2 — same release as this skill. Adopters with stale legacy markers from earlier sessions just re-run `/approve-merge` once.
 - The skill intentionally does **not** wait/poll for "the user's 'approved'." The skill exists to be invoked, not to poll.
 
