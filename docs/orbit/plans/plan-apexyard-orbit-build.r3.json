@@ -1,0 +1,165 @@
+{
+  "specVersion": "0.1",
+  "id": "plan-apexyard-orbit-build",
+  "revision": 3,
+  "project": {
+    "id": "apexyard"
+  },
+  "title": "Build with ORBIT in ApexYard",
+  "intent": "An operator can take a validated ORBIT execution slice straight into the ApexYard build flow (ticket, build, review, merge) and trace the resulting PR back to the slice. ORBIT stays the source of truth for intent and evidence. ApexYard stays the source of truth for governance (gates, reviews, merges). Non-ORBIT paths never need the ORBIT CLI, and ORBIT paths fail closed without it. The Plan hierarchy is visible on a GitHub Projects v2 board, where the Plan and its outcomes are draft items and only an execution slice becomes a real repo issue. ORBIT is the default planning path when an operator enables it in config; the shipped default leaves it off.",
+  "outcomes": [
+    {
+      "id": "o1-slice-to-ticket",
+      "title": "A validated execution slice becomes one ApexYard tracker ticket after a preview and an operator confirmation, and /start-ticket records the slice."
+    },
+    {
+      "id": "o2-build-traceability",
+      "title": "A PR built from a slice links back to the slice, and Rex reviews the diff against the slice scope in the ticket."
+    },
+    {
+      "id": "o3-board-hierarchy",
+      "title": "The Plan hierarchy is visible on a Projects v2 board as a group-by on a Level field, and only slices become real issues."
+    },
+    {
+      "id": "o4-default-planning",
+      "title": "ORBIT is the default planning path when enabled in config."
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac1-1",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "An /orbit handoff operation turns a validated slice into one tracker issue through the existing single-issue orbit sync github adapter."
+    },
+    {
+      "id": "ac1-2",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "The issue body carries the slice ID, the Plan ID and revision, the objective, and the included and excluded work."
+    },
+    {
+      "id": "ac1-3",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "The handoff stops when orbit validate fails, and states the reason."
+    },
+    {
+      "id": "ac1-4",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "When the ORBIT CLI is absent, the handoff stops with one install note."
+    },
+    {
+      "id": "ac1-5",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "No skill other than /orbit calls the ORBIT CLI."
+    },
+    {
+      "id": "ac1-6",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "The handoff runs a dry-run preview, then the leak scrub, then asks for operator confirmation before any tracker write."
+    },
+    {
+      "id": "ac1-7",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "A sidecar mapping file under docs/orbit, outside the canonical ORBIT records, stores each slice mapping keyed on the tracker repo and the issue number."
+    },
+    {
+      "id": "ac1-8",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "A repeated handoff for a mapped slice edits the mapped issue and creates no duplicate."
+    },
+    {
+      "id": "ac1-9",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "The handoff refuses to edit a mapped issue when the mapping repo differs from the current tracker repo."
+    },
+    {
+      "id": "ac1-10",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "The leak scrub runs on every ORBIT record before the record is committed to a public repo."
+    },
+    {
+      "id": "ac1-11",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "/start-ticket records the slice ID in the active-ticket marker when the ticket body carries one."
+    },
+    {
+      "id": "ac1-12",
+      "outcomeId": "o1-slice-to-ticket",
+      "statement": "An AgDR-0164 amendment permits the adapter to create one tracker issue per slice after operator confirmation."
+    },
+    {
+      "id": "ac2-1",
+      "outcomeId": "o2-build-traceability",
+      "statement": "A PR for a slice-derived ticket carries a Slice: reference in its body."
+    },
+    {
+      "id": "ac2-2",
+      "outcomeId": "o2-build-traceability",
+      "statement": "Rex checks the diff against the Excludes list in the ticket body."
+    },
+    {
+      "id": "ac2-3",
+      "outcomeId": "o2-build-traceability",
+      "statement": "Rex reads no ORBIT record during a review."
+    },
+    {
+      "id": "ac2-4",
+      "outcomeId": "o2-build-traceability",
+      "statement": "No merge gate reads ORBIT records."
+    },
+    {
+      "id": "ac3-1",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "A board sync places the Plan and each outcome on the configured Projects v2 board as draft items with Level, ORBIT ID and Plan fields, and creates no repo issue."
+    },
+    {
+      "id": "ac3-2",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "A slice handoff adds the slice issue to the board with Level set to Slice and its Plan and Outcome fields set."
+    },
+    {
+      "id": "ac3-3",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "A repeated board sync pages through every board item, finds existing items by the ORBIT ID field, updates them, and creates no duplicate."
+    },
+    {
+      "id": "ac3-4",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "A board sync runs a dry-run preview, then the leak scrub, then asks for operator confirmation before any board write."
+    },
+    {
+      "id": "ac3-5",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "With no board configured, the board sync skips with one note."
+    },
+    {
+      "id": "ac3-6",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "/orbit calls a pinned orbit-spec release that provides the board sync."
+    },
+    {
+      "id": "ac4-1",
+      "outcomeId": "o4-default-planning",
+      "statement": "When orbit.default_planning is true, /plan-initiative and /write-spec start the /orbit Plan flow instead of their own flow."
+    },
+    {
+      "id": "ac4-2",
+      "outcomeId": "o4-default-planning",
+      "statement": "When orbit.default_planning is true, /feature and /task offer to start from an existing slice before free-text entry."
+    },
+    {
+      "id": "ac4-3",
+      "outcomeId": "o4-default-planning",
+      "statement": "With orbit.default_planning false, no planning or ticket skill reads docs/orbit or calls the ORBIT CLI."
+    },
+    {
+      "id": "ac3-7",
+      "outcomeId": "o3-board-hierarchy",
+      "statement": "The board sync finds or creates the Level, ORBIT ID, Plan and Outcome fields on the board before it writes items."
+    },
+    {
+      "id": "ac4-4",
+      "outcomeId": "o4-default-planning",
+      "statement": "When orbit.default_planning is true and the ORBIT CLI is absent, /plan-initiative and /write-spec run their own flow and print one note."
+    }
+  ]
+}

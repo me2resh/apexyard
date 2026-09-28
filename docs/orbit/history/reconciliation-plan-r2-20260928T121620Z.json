@@ -1,0 +1,141 @@
+{
+  "specVersion": "0.1",
+  "id": "reconciliation-plan-apexyard-orbit-build",
+  "planId": "plan-apexyard-orbit-build",
+  "planRevision": 2,
+  "projectSnapshotId": "snapshot-apexyard",
+  "reconciledAt": "2026-09-28T12:16:31.612Z",
+  "observations": [
+    "Observed apexyard at 378623ede8c286daeab3c6a726924535f1f87e61."
+  ],
+  "criterionAssessments": [
+    {
+      "criterionId": "ac1-1",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n 'handoff' .claude/skills/orbit/SKILL.md returns no operation named handoff. The listed operations are plan, snapshot, reconcile, slice and validate."
+      ],
+      "explanation": "The handoff operation does not exist yet."
+    },
+    {
+      "criterionId": "ac1-2",
+      "status": "not-verified",
+      "evidence": [
+        "No handoff exists (see ac1-1), so no tracker issue body is written."
+      ],
+      "explanation": "The issue body format is not defined yet."
+    },
+    {
+      "criterionId": "ac1-3",
+      "status": "not-verified",
+      "evidence": [
+        "grep -n 'blocks the handoff' .claude/skills/orbit/SKILL.md finds the rule for the existing validate step only."
+      ],
+      "explanation": "No handoff exists to enforce the rule."
+    },
+    {
+      "criterionId": "ac1-4",
+      "status": "partially-verified",
+      "evidence": [
+        "grep -n 'ORBIT CLI not found' .claude/skills/orbit/SKILL.md finds the prerequisite check that stops every /orbit operation."
+      ],
+      "explanation": "The check exists for all operations. It is not yet wired to a handoff."
+    },
+    {
+      "criterionId": "ac1-5",
+      "status": "achieved",
+      "evidence": [
+        "grep -rln 'ORBIT_BIN' . finds only /orbit files: .claude/skills/orbit/SKILL.md, its mirror under .agents/skills/orbit/, docs/orbit-adapter.md and the /orbit smoke tests. grep -l orbit .claude/hooks/*.sh finds nothing."
+      ],
+      "explanation": "No skill other than /orbit calls the ORBIT CLI."
+    },
+    {
+      "criterionId": "ac1-6",
+      "status": "contradicted",
+      "evidence": [
+        "docs/agdr/AgDR-0164-orbit-adapter-boundary.md states that the adapter does not create external tracker records."
+      ],
+      "explanation": "Repo text states the opposite of the criterion until the amendment in ac1-12 lands."
+    },
+    {
+      "criterionId": "ac1-7",
+      "status": "not-verified",
+      "evidence": [
+        "find docs/orbit -name '*mapping*' finds no sidecar mapping file."
+      ],
+      "explanation": "The mapping file is not defined yet."
+    },
+    {
+      "criterionId": "ac1-8",
+      "status": "not-verified",
+      "evidence": [
+        "No mapping file and no handoff exist (see ac1-1 and ac1-7)."
+      ],
+      "explanation": "Idempotent re-handoff depends on ac1-7."
+    },
+    {
+      "criterionId": "ac1-9",
+      "status": "not-verified",
+      "evidence": [
+        "No mapping file exists (see ac1-7)."
+      ],
+      "explanation": "The repo-match check depends on ac1-7."
+    },
+    {
+      "criterionId": "ac1-10",
+      "status": "not-verified",
+      "evidence": [
+        "git config core.hooksPath is empty in this clone, so the staged leak hook (.claude/hooks/check-private-refs-staged.sh) does not run on commit here."
+      ],
+      "explanation": "No leak scrub runs on ORBIT records at this commit."
+    },
+    {
+      "criterionId": "ac1-11",
+      "status": "not-verified",
+      "evidence": [
+        "grep -ci 'slice' .claude/skills/start-ticket/SKILL.md returns 0."
+      ],
+      "explanation": "The marker does not record a slice ID yet."
+    },
+    {
+      "criterionId": "ac1-12",
+      "status": "contradicted",
+      "evidence": [
+        "docs/agdr/AgDR-0164-orbit-adapter-boundary.md states that the adapter does not create external tracker records, and no amendment exists."
+      ],
+      "explanation": "The amendment does not exist yet."
+    },
+    {
+      "criterionId": "ac2-1",
+      "status": "not-verified",
+      "evidence": [
+        "grep -rn 'Slice:' .claude/skills .github finds no PR template or skill that adds a Slice: reference."
+      ],
+      "explanation": "The PR body convention is not defined yet."
+    },
+    {
+      "criterionId": "ac2-2",
+      "status": "partially-verified",
+      "evidence": [
+        ".claude/agents/code-reviewer.md line 134 holds the rule that Rex verifies the linked ticket's acceptance criteria. grep -ci 'excludes' finds no rule for an Excludes list."
+      ],
+      "explanation": "Rex checks acceptance criteria, but not the Excludes list."
+    },
+    {
+      "criterionId": "ac2-3",
+      "status": "achieved",
+      "evidence": [
+        "grep -ci 'orbit' .claude/agents/code-reviewer.md returns 0."
+      ],
+      "explanation": "Rex reads no ORBIT record. Evidence by absence: re-verify after O2 lands."
+    },
+    {
+      "criterionId": "ac2-4",
+      "status": "achieved",
+      "evidence": [
+        "grep -l 'orbit' .claude/hooks/*.sh finds nothing."
+      ],
+      "explanation": "No merge gate reads ORBIT records. Evidence by absence: re-verify after O2 lands."
+    }
+  ]
+}
