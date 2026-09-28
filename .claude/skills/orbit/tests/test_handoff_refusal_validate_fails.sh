@@ -17,7 +17,7 @@ fail=0
 sb=$(make_sandbox)
 orbit_root=$(fixtures_write_orbit_root "$sb")
 fixtures_install_mock_orbit "$sb" 1 0
-fixtures_install_mock_gh "$sb" 0
+fixtures_install_mock_gh "$sb"
 
 PATH="$sb/bin:$PATH"
 export PATH

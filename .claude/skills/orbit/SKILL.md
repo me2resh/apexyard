@@ -141,7 +141,19 @@ Return the CLI exit status. A non-zero result blocks the handoff until the recor
 
 Turn one validated execution slice into one tracker issue, through the existing single-issue `orbit sync github` adapter. This is the only `/orbit` operation that writes to an external tracker. No other ApexYard skill calls the ORBIT CLI (ac1-5) — keep that boundary when you extend this operation.
 
-Resolve `project_root` and `orbit_root` as in "Project resolution" above. The slice file's `basedOn` names the Plan revision and the Reconciliation it was cut from; resolve the matching records from `orbit_root` before doing anything else:
+Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry — the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand:
+
+```bash
+project_repo=$(awk -v target="$project" '
+  function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^['"'"']|['"'"']$/, "", line); return line }
+  /^[[:space:]]*- name:/ { if (name == target) { print repo; exit }; name=value($0); repo=""; next }
+  /^[[:space:]]*repo:/ { repo=value($0) }
+  END { if (name == target) print repo }
+' "$registry")
+[ -n "$project_repo" ] || { echo "No repo: field for project $project in the registry. /orbit handoff needs a target repo." >&2; exit 1; }
+```
+
+The slice file's `basedOn` names the Plan revision and the Reconciliation it was cut from; resolve the matching records from `orbit_root` before doing anything else:
 
 - Plan: the record in `docs/orbit/plans/` whose `id` equals the slice's `planId` and whose `revision` equals `basedOn.planRevision`.
 - Reconciliation: the record in `docs/orbit/reconciliations/` whose `id` equals `basedOn.reconciliationId`.
@@ -149,12 +161,12 @@ Resolve `project_root` and `orbit_root` as in "Project resolution" above. The sl
 
 Stop and report if any of the three is missing or ambiguous. Do not guess a record when more than one file matches.
 
-Run the mechanical preflight helper. It performs steps 1–4 below and prints the dry-run preview on stdout, or stops with a reason on stderr and a non-zero exit:
+Run the mechanical preflight helper. It performs steps 1–5 below and prints the leak-scrubbed dry-run preview on stdout, or stops with a reason on stderr and a non-zero exit:
 
 ```bash
 "$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/handoff-preflight.sh" \
   --slice "$slice_file" \
-  --repo "<owner/repo>" \
+  --repo "$project_repo" \
   --orbit-root "$orbit_root"
 ```
 
@@ -162,33 +174,25 @@ The helper's flow, in order:
 
 1. **CLI check.** If `$ORBIT_BIN` (default `orbit`) is not on `PATH`, stop with one install note (ac1-4): "ORBIT CLI not found. Install orbit-spec ... or set ORBIT_BIN to the CLI path." Take no further action.
 2. **Validate.** Run `orbit validate --all --root "$orbit_root"`. On a non-zero exit, stop and state the reason from the CLI's own error text (ac1-3).
-3. **Duplicate check.** Run `gh issue list --repo "<owner/repo>" --state open --search "<slice-id>" --json number`. If the search returns any open issue, refuse the handoff — that slice already has a ticket. Report the issue number(s) found.
-4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo <owner/repo>`. The adapter already renders the issue body with the slice ID, the Plan ID and revision, the objective, and the included and excluded work (ac1-2) — do not fork the adapter to add fields it already carries.
+3. **Duplicate check.** Search open issues in `$project_repo` for the slice ID, but only *count* a hit when an issue's body contains the exact backtick-quoted token the adapter renders under "Orbit identifiers" (`` `<slice-id>` ``) — a shared word or a prefix is not a match. When the search itself fails (auth, network, rate limit), stop with a "cannot verify" error; never treat a failed search as "no duplicate found".
+4. **Dry-run preview.** Run `orbit sync github --dry-run --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"`. The adapter already renders the issue body with the slice ID, the Plan ID and revision, the objective, and the included and excluded work (ac1-2) — do not fork the adapter to add fields it already carries.
+5. **Leak scrub.** Extract the plain-text title and body from the preview with `jq -r '.title'` / `jq -r '.body'` — not the raw JSON, where a name at the start of a body line is preceded by the two characters `\n` rather than a real newline, and the scrub's word-boundary rule misses it. Run `check-private-refs-runtime.sh` against `$project_repo`, the plain-text title, and the plain-text body written to a file. A non-zero exit blocks the handoff (ac1-6).
 
-After the helper exits 0 with a preview on stdout, continue in the skill itself (these steps write nothing and ask for confirmation, so they stay outside the mechanical helper):
+After the helper exits 0 with the scrubbed preview on stdout, continue in the skill itself (these two steps ask for and act on operator input, so they stay outside the mechanical helper):
 
-5. **Leak scrub.** Run the leak scrub against the preview body:
-
-   ```bash
-   ops_root=$(git rev-parse --show-toplevel)
-   "$ops_root/.claude/hooks/check-private-refs-runtime.sh" "<owner/repo>" "" "$preview_body_file"
-   ```
-
-   A non-zero exit blocks the handoff. Report the block; do not retry with the same body.
-
-6. **Operator confirmation.** Show the preview title and body, and ask: `Create this tracker issue for slice <slice-id>? (y/n)`. A "no", an unclear answer, or no answer stops the handoff. Only a clear "yes" continues.
+6. **Operator confirmation.** Show the target repo, the preview title, and the preview body, and ask: `Create this issue in <owner/repo> for slice <slice-id>? (y/n)`. A "no", an unclear answer, or no answer stops the handoff. Only a clear "yes" continues.
 
 7. **Real sync.** Only after a "yes", run the same command without `--dry-run`:
 
    ```bash
-   "$ORBIT_BIN" sync github --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo <owner/repo>
+   "${ORBIT_BIN:-orbit}" sync github --plan <plan_file> --snapshot <snapshot_file> --reconciliation <reconciliation_file> --slice <slice_file> --repo "$project_repo"
    ```
 
    Report the created issue URL.
 
-The helper's non-zero exit codes: `10` CLI absent, `11` validate failed, `12` duplicate slice ID already ticketed, `13` a usage or record-resolution error (e.g. the Plan/Snapshot/Reconciliation could not be resolved from `basedOn`, or `jq`/`gh` is missing). Surface the stderr message in each case; do not paraphrase it into a different reason.
+The helper's non-zero exit codes: `10` CLI absent, `11` validate failed, `12` an open issue already carries the exact slice-ID token, `13` a usage error, a record-resolution failure, or a duplicate check that could not be verified (the search failed or returned something other than a JSON array), `14` the leak scrub blocked the preview. Surface the stderr message in each case; do not paraphrase it into a different reason.
 
-Out of scope for this operation (later ORBIT slices): the sidecar mapping file and idempotent re-handoff, the leak scrub on committed ORBIT records, `/start-ticket` recording the slice ID, the `Slice:` reference check in PR bodies, and the Projects v2 board.
+Out of scope for this operation (later ORBIT slices): the sidecar mapping file and idempotent re-handoff, the leak scrub on committed ORBIT records, `/start-ticket` recording the slice ID, the `Slice:` reference check in PR bodies, and the Projects v2 board. Also out of scope: a wrapper that re-renders and hashes the preview immediately before the real sync, to guarantee the scrubbed text and the written text are identical (proposed as a follow-up ticket, not filed by this slice).
 
 ## End-to-end planning workflow
 

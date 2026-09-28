@@ -2,9 +2,9 @@
 # _lib-fixtures.sh — shared sandbox + ORBIT record fixtures for the
 # /orbit handoff smoke tests (apexyard#1446).
 #
-# Builds a throwaway orbit_root with a matching Plan, Snapshot,
-# Reconciliation and Execution Slice, all named with synthetic
-# (non-portfolio) identifiers, and a mock `orbit`/`gh` on PATH.
+# Builds a throwaway orbit_root with a matching, schema-valid Plan,
+# Snapshot, Reconciliation and Execution Slice, all named with synthetic
+# (non-portfolio) identifiers, plus mock `orbit`/`gh` binaries on PATH.
 #
 # Usage:
 #   source "$(dirname "$0")/_lib-fixtures.sh"
@@ -17,7 +17,9 @@ make_sandbox() {
 }
 
 # Writes a valid, self-consistent Plan/Snapshot/Reconciliation/Slice record
-# set under <sandbox>/orbit. Prints the orbit_root path.
+# set under <sandbox>/orbit. Every record matches the real orbit-spec v0.1
+# schemas (verified against the real CLI — see the PR body for the command).
+# Prints the orbit_root path.
 fixtures_write_orbit_root() {
   sb="$1"
   orbit_root="$sb/orbit"
@@ -40,9 +42,11 @@ JSON
 {
   "specVersion": "0.1",
   "id": "snapshot-demo-widget-1",
-  "projectId": "demo-widget",
-  "capturedAt": "2026-09-28T00:00:00Z",
-  "repositories": { "demo-widget": "0000000000000000000000000000000000000a" }
+  "project": { "id": "demo-widget" },
+  "observedAt": "2026-09-28T00:00:00Z",
+  "repositories": [
+    { "repositoryId": "demo-widget", "branch": "main", "commit": "0000000000000000000000000000000000000a" }
+  ]
 }
 JSON
 
@@ -53,7 +57,11 @@ JSON
   "planId": "plan-demo-widget",
   "planRevision": 1,
   "projectSnapshotId": "snapshot-demo-widget-1",
-  "criteria": [{ "criterionId": "ac1-1", "status": "not-verified", "evidence": "none", "explanation": "fixture" }]
+  "reconciledAt": "2026-09-28T00:00:00Z",
+  "observations": [],
+  "criterionAssessments": [
+    { "criterionId": "ac1-1", "status": "not-verified", "evidence": [], "explanation": "fixture" }
+  ]
 }
 JSON
 
@@ -80,7 +88,8 @@ JSON
 
 # Installs a mock `orbit` on PATH inside <sandbox>/bin. `validate_exit`
 # controls the `validate --all` exit code (default 0). `sync_exit` controls
-# `sync github --dry-run`'s exit code (default 0, printing a fixed preview).
+# `sync github --dry-run`'s exit code (default 0, printing a clean preview
+# whose body carries no private text — safe under any repo).
 fixtures_install_mock_orbit() {
   sb="$1"
   validate_exit="${2:-0}"
@@ -101,7 +110,7 @@ if [ "\$1" = "sync" ] && [ "\$2" = "github" ]; then
     echo "mock orbit: fixture sync failure" >&2
     exit "$sync_exit"
   fi
-  echo '{"dryRun":true,"repo":"demo-org/demo-widget","title":"[Slice] Fixture objective for the handoff smoke test.","body":"slice-demo-widget-o1"}'
+  echo '{"dryRun":true,"repo":"demo-org/demo-widget","title":"[Slice] Fixture objective for the handoff smoke test.","body":"## Orbit Execution Slice\n\nFixture objective for the handoff smoke test.\n\n### Why now\nFixture reason.\n\n### Scope\n**Includes**\n- fixture item\n\n**Excludes**\n- fixture excluded item\n\n### Orbit identifiers\n- Slice: \`slice-demo-widget-o1\`\n"}'
   exit 0
 fi
 echo "mock orbit: unhandled args: \$*" >&2
@@ -110,25 +119,85 @@ EOF
   chmod +x "$sb/bin/orbit"
 }
 
-# Installs a mock `gh` on PATH inside <sandbox>/bin. `issue_count` controls
-# how many rows `gh issue list --search ...` reports (default 0, meaning no
-# duplicate found).
+# Installs a mock `orbit` whose dry-run preview body carries `private_word`
+# as the FIRST WORD of the "### Why now" line — i.e. in the raw JSON, the
+# character immediately before it is the "n" of the "\n" escape, not a real
+# newline. A scrub run against the raw JSON misses this; a scrub run against
+# the jq -r plain-text body catches it. Used by the leak-scrub refusal test.
+fixtures_install_mock_orbit_with_leak() {
+  sb="$1"
+  private_word="$2"
+  mkdir -p "$sb/bin"
+  cat > "$sb/bin/orbit" <<EOF
+#!/bin/bash
+if [ "\$1" = "validate" ]; then
+  echo "Validated 4 ORBIT records."
+  exit 0
+fi
+if [ "\$1" = "sync" ] && [ "\$2" = "github" ]; then
+  echo '{"dryRun":true,"repo":"me2resh/apexyard","title":"[Slice] Fixture objective for the handoff smoke test.","body":"## Orbit Execution Slice\n\nFixture objective for the handoff smoke test.\n\n### Why now\n$private_word needs this before the deadline.\n\n### Scope\n**Includes**\n- fixture item\n\n**Excludes**\n- fixture excluded item\n\n### Orbit identifiers\n- Slice: \`slice-demo-widget-o1\`\n"}'
+  exit 0
+fi
+echo "mock orbit: unhandled args: \$*" >&2
+exit 99
+EOF
+  chmod +x "$sb/bin/orbit"
+}
+
+# Installs a mock `gh` on PATH inside <sandbox>/bin. `gh issue list` reads
+# two env vars at call time (not baked in at install time), so one mock
+# serves every duplicate-check scenario:
+#   MOCK_GH_FAIL=1                       -> the search itself fails (exit 1)
+#   MOCK_GH_ISSUE_LIST_JSON_FILE=<path>  -> `cat`s that file as the result
+#   (neither set)                        -> prints an empty array
 fixtures_install_mock_gh() {
   sb="$1"
-  issue_count="${2:-0}"
   mkdir -p "$sb/bin"
-  cat > "$sb/bin/gh" <<EOF
+  cat > "$sb/bin/gh" <<'EOF'
 #!/bin/bash
-if [ "\$1" = "issue" ] && [ "\$2" = "list" ]; then
-  if [ "$issue_count" = "0" ]; then
-    echo '[]'
+if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
+  if [ "${MOCK_GH_FAIL:-0}" = "1" ]; then
+    echo "gh: mock search failure (HTTP 502)" >&2
+    exit 1
+  fi
+  if [ -n "${MOCK_GH_ISSUE_LIST_JSON_FILE:-}" ] && [ -f "${MOCK_GH_ISSUE_LIST_JSON_FILE:-}" ]; then
+    cat "$MOCK_GH_ISSUE_LIST_JSON_FILE"
   else
-    echo '[{"number":4242}]'
+    echo '[]'
   fi
   exit 0
 fi
-echo "mock gh: unhandled args: \$*" >&2
+echo "mock gh: unhandled args: $*" >&2
 exit 99
 EOF
   chmod +x "$sb/bin/gh"
+}
+
+# Builds a fully sandboxed copy of the leak-scrub hook plus the
+# handoff-preflight helper, at the SAME relative depth they have in the real
+# repo (.claude/hooks/check-private-refs-runtime.sh and
+# .claude/skills/orbit/lib/handoff-preflight.sh), so the helper's own
+# self-location path resolution finds the sandboxed scrub — never the real
+# fork's. Also writes a synthetic registry at <sandbox>/apexyard.projects.yaml
+# with one private project, so the scrub has a real (but made-up) name to
+# catch. Prints the path to the sandboxed helper.
+fixtures_install_leak_scrub_sandbox() {
+  sb="$1"
+  private_name="${2:-zephyrvault}"
+  private_repo="${3:-acme-private/zephyrvault}"
+
+  real_root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+  mkdir -p "$sb/.claude/hooks" "$sb/.claude/skills/orbit/lib"
+  cp "$real_root/.claude/hooks/check-private-refs-runtime.sh" "$sb/.claude/hooks/check-private-refs-runtime.sh"
+  cp "$real_root/.claude/skills/orbit/lib/handoff-preflight.sh" "$sb/.claude/skills/orbit/lib/handoff-preflight.sh"
+  chmod +x "$sb/.claude/hooks/check-private-refs-runtime.sh" "$sb/.claude/skills/orbit/lib/handoff-preflight.sh"
+
+  cat > "$sb/apexyard.projects.yaml" <<YAML
+projects:
+  - name: $private_name
+    repo: $private_repo
+    workspace: workspace/$private_name
+YAML
+
+  echo "$sb/.claude/skills/orbit/lib/handoff-preflight.sh"
 }
