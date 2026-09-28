@@ -166,6 +166,260 @@ rm -rf "$sb"
 [ "$got" = "unknown" ] && mark_pass "gh api prints '0' but exits non-zero -> unknown" \
                         || mark_fail "gh api prints '0' but exits non-zero" "got '$got'"
 
+# ===========================================================================
+# rex_approval_carries_over (me2resh/apexyard#1437)
+#
+# Builds real git history in a throwaway repo so the merge-commit shape
+# (parent count, parent[0] identity, remerge-diff cleanliness) is genuine,
+# not simulated. Fail-before: these cases exercise behaviour that does not
+# exist on dev — before this PR, this function is undefined.
+# ===========================================================================
+
+make_git_repo() {
+  local d
+  d=$(mktemp -d)
+  git -C "$d" init -q -b main
+  git -C "$d" config user.email test@example.com
+  git -C "$d" config user.name "Test"
+  echo "$d"
+}
+
+if command -v git >/dev/null 2>&1; then
+
+  # -------------------------------------------------------------------------
+  # Case 8: clean base merge, parent[0] == old_sha, empty remerge-diff -> true
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; git -C "$repo" add base.txt; git -C "$repo" commit -q -m base
+  git -C "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; git -C "$repo" add pr.txt; git -C "$repo" commit -q -m "pr work"
+  OLD_SHA=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q main
+  echo more-base > "$repo/base2.txt"; git -C "$repo" add base2.txt; git -C "$repo" commit -q -m "base moves on"
+  git -C "$repo" checkout -q pr-branch
+  git -C "$repo" merge -q --no-ff main -m "merge main into pr-branch"
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo $OLD_SHA $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "true" ] && mark_pass "clean base merge, parent[0]==old_sha, empty remerge -> true" \
+                       || mark_fail "clean base merge carry-over" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 9: non-merge commit (1 parent) -> false, never true
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; git -C "$repo" add base.txt; git -C "$repo" commit -q -m base
+  OLD_SHA=$(git -C "$repo" rev-parse HEAD)
+  echo more > "$repo/more.txt"; git -C "$repo" add more.txt; git -C "$repo" commit -q -m "ordinary commit"
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo $OLD_SHA $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "false" ] && mark_pass "non-merge commit (1 parent) -> false" \
+                        || mark_fail "non-merge commit" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 10: octopus merge (3 parents) -> false, never true
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; git -C "$repo" add base.txt; git -C "$repo" commit -q -m base
+  OLD_SHA=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q -b b1; echo b1 > "$repo/b1.txt"; git -C "$repo" add b1.txt; git -C "$repo" commit -q -m b1
+  git -C "$repo" checkout -q main
+  git -C "$repo" checkout -q -b b2; echo b2 > "$repo/b2.txt"; git -C "$repo" add b2.txt; git -C "$repo" commit -q -m b2
+  git -C "$repo" checkout -q main
+  git -C "$repo" merge -q --no-ff -m "octopus" b1 b2
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo $OLD_SHA $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "false" ] && mark_pass "octopus merge (3 parents) -> false" \
+                        || mark_fail "octopus merge" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 11: two-parent merge, but first parent is NOT old_sha -> false
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; git -C "$repo" add base.txt; git -C "$repo" commit -q -m base
+  UNRELATED_SHA=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; git -C "$repo" add pr.txt; git -C "$repo" commit -q -m "pr work"
+  git -C "$repo" checkout -q main
+  echo more-base > "$repo/base2.txt"; git -C "$repo" add base2.txt; git -C "$repo" commit -q -m "base moves on"
+  git -C "$repo" checkout -q pr-branch
+  git -C "$repo" merge -q --no-ff main -m "merge main into pr-branch"
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  # OLD_SHA below is deliberately NOT this merge's first parent.
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo $UNRELATED_SHA $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "false" ] && mark_pass "two-parent merge but parent[0] != old_sha -> false" \
+                        || mark_fail "wrong parent[0]" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 12: clean two-parent merge shape, but a hand edit makes the
+  # remerge-diff non-empty -> false (conflict resolution / hand edit)
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/shared.txt"; git -C "$repo" add shared.txt; git -C "$repo" commit -q -m base
+  git -C "$repo" checkout -q -b pr-branch
+  echo "pr change" > "$repo/shared.txt"; git -C "$repo" add shared.txt; git -C "$repo" commit -q -m "pr edits shared.txt"
+  OLD_SHA=$(git -C "$repo" rev-parse HEAD)
+  git -C "$repo" checkout -q main
+  echo "base change" > "$repo/shared.txt"; git -C "$repo" add shared.txt; git -C "$repo" commit -q -m "base also edits shared.txt"
+  git -C "$repo" checkout -q pr-branch
+  git -C "$repo" merge -q --no-ff main -m "merge main into pr-branch" 2>/dev/null || true
+  # Resolve the conflict by hand instead of letting git's own recursive
+  # merge stand — this is exactly the "hand edit" case remerge-diff exists
+  # to catch.
+  echo "hand-resolved" > "$repo/shared.txt"
+  git -C "$repo" add shared.txt
+  git -C "$repo" commit -q -m "merge main into pr-branch" 2>/dev/null || git -C "$repo" -c core.editor=true commit -q --no-edit
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo $OLD_SHA $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "false" ] && mark_pass "hand-resolved conflict -> non-empty remerge-diff -> false" \
+                        || mark_fail "hand-resolved conflict" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 13: missing object (SHA that does not exist) -> unknown, never true
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; git -C "$repo" add base.txt; git -C "$repo" commit -q -m base
+  NEW_SHA=$(git -C "$repo" rev-parse HEAD)
+  got=$(cd "$repo" && bash -c ". '$LIB'; rex_approval_carries_over irrelevant/repo 0000000000000000000000000000000000000000 $NEW_SHA")
+  rm -rf "$repo"
+  [ "$got" = "unknown" ] && mark_pass "missing old_sha object -> unknown" \
+                          || mark_fail "missing object" "got '$got'"
+
+  # -------------------------------------------------------------------------
+  # Case 14: missing/empty arguments -> unknown
+  # -------------------------------------------------------------------------
+  got=$(bash -c ". '$LIB'; rex_approval_carries_over '' abc def")
+  [ "$got" = "unknown" ] && mark_pass "missing repo arg -> unknown" \
+                          || mark_fail "missing repo arg" "got '$got'"
+
+else
+  echo "  SKIP: git not on PATH — rex_approval_carries_over cases skipped" >&2
+fi
+
+# ===========================================================================
+# merge_refresh_required (me2resh/apexyard#1437)
+#
+# Fail-before: this function is undefined on dev.
+# ===========================================================================
+
+make_sandbox_with_gh_script() {
+  # $1: a shell snippet defining the gh mock body (case "$*" in ... esac).
+  local body="$1"
+  local sb
+  sb=$(mktemp -d)
+  mkdir -p "$sb/bin"
+  {
+    echo '#!/bin/bash'
+    echo "$body"
+    echo 'exit 0'
+  } > "$sb/bin/gh"
+  chmod +x "$sb/bin/gh"
+  echo "$sb"
+}
+
+# Case 15: no overlap at all -> skippable
+sb=$(make_sandbox_with_gh_script '
+case "$*" in
+  *"pulls/1/files"*) echo "src/pr_only.txt" ;;
+  *"compare/base123...main"*) echo "{\"files\":[{\"filename\":\"docs/unrelated.md\"}]}" ;;
+esac
+')
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 '.claude/hooks/_lib-*.sh'")
+rm -rf "$sb"
+[ "$got" = "skippable" ] && mark_pass "no file/pattern overlap -> skippable" \
+                          || mark_fail "no overlap" "got '$got'"
+
+# Case 16: base touches a file the PR also touches -> required
+sb=$(make_sandbox_with_gh_script '
+case "$*" in
+  *"pulls/1/files"*) echo "src/shared.txt" ;;
+  *"compare/base123...main"*) echo "{\"files\":[{\"filename\":\"src/shared.txt\"}]}" ;;
+esac
+')
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 ''")
+rm -rf "$sb"
+[ "$got" = "required" ] && mark_pass "base overlaps a PR file -> required" \
+                         || mark_fail "PR-file overlap" "got '$got'"
+
+# Case 17: base touches a shared-pattern file (not a PR file) -> required
+sb=$(make_sandbox_with_gh_script '
+case "$*" in
+  *"pulls/1/files"*) echo "src/pr_only.txt" ;;
+  *"compare/base123...main"*) echo "{\"files\":[{\"filename\":\".claude/hooks/_lib-merge-behind.sh\"}]}" ;;
+esac
+')
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 '.claude/hooks/_lib-*.sh'")
+rm -rf "$sb"
+[ "$got" = "required" ] && mark_pass "base overlaps a shared-file pattern -> required" \
+                         || mark_fail "shared-pattern overlap" "got '$got'"
+
+# Case 18: compare API call fails -> required (fail closed)
+sb=$(mktemp -d)
+mkdir -p "$sb/bin"
+cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+case "$*" in
+  *"pulls/1/files"*) echo "src/pr_only.txt"; exit 0 ;;
+  *"compare/"*) exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "$sb/bin/gh"
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 ''")
+rm -rf "$sb"
+[ "$got" = "required" ] && mark_pass "compare API failure -> required" \
+                         || mark_fail "compare API failure" "got '$got'"
+
+# Case 19: PR-files API call fails -> required (fail closed)
+sb=$(mktemp -d)
+mkdir -p "$sb/bin"
+cat > "$sb/bin/gh" <<'EOF'
+#!/bin/bash
+case "$*" in
+  *"pulls/1/files"*) exit 1 ;;
+  *"compare/"*) echo '{"files":[]}'; exit 0 ;;
+esac
+exit 0
+EOF
+chmod +x "$sb/bin/gh"
+got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 ''")
+rm -rf "$sb"
+[ "$got" = "required" ] && mark_pass "PR-files API failure -> required" \
+                         || mark_fail "PR-files API failure" "got '$got'"
+
+# Case 20: truncated compare (>= 300 base files) -> required (fail closed)
+sb=$(mktemp -d)
+mkdir -p "$sb/bin"
+cat > "$sb/bin/gen_files.py" <<'PYEOF'
+print("{\"files\": [" + ",".join('{"filename":"f%d.txt"}' % i for i in range(300)) + "]}")
+PYEOF
+cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pulls/1/files"*) echo "src/pr_only.txt" ;;
+  *"compare/"*) python3 "$sb/bin/gen_files.py" 2>/dev/null || echo '{"files":[]}' ;;
+esac
+exit 0
+EOF
+chmod +x "$sb/bin/gh"
+if command -v python3 >/dev/null 2>&1; then
+  got=$(PATH="$sb/bin:$PATH" bash -c ". '$LIB'; merge_refresh_required me2resh/apexyard main 1 base123 ''")
+  [ "$got" = "required" ] && mark_pass "300+ base files (truncated compare) -> required" \
+                           || mark_fail "truncated compare" "got '$got'"
+else
+  echo "  SKIP: python3 not on PATH — truncated-compare case skipped" >&2
+fi
+rm -rf "$sb"
+
+# Case 21: missing argument -> required
+got=$(bash -c ". '$LIB'; merge_refresh_required '' main 1 base123 ''")
+[ "$got" = "required" ] && mark_pass "missing repo arg -> required" \
+                         || mark_fail "missing repo arg" "got '$got'"
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------

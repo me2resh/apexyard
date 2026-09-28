@@ -178,23 +178,63 @@ evidence the PR is up to date.
 
 - **`false`** — proceed to step 4.
 
-- **`true`** — **stop here**. Do not verify the Rex marker, do not write the
-  CEO marker, and do not merge. Tell the user:
+- **`true`** — before stopping, check whether the refresh is actually
+  needed (me2resh/apexyard#1437). `is_pr_behind_base` only says the base
+  moved — it says nothing about whether the base's new commits touch
+  anything this PR could be affected by. When they don't, refreshing buys
+  no protection: no file the base changed can break a PR that shares none
+  of those files.
 
-  ```
-  PR #<pr> is behind its base branch (<baseRefName>). Before this can merge:
-    1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
-    2. Wait for green CI on the updated branch.
-    3. Get a short Rex re-review of the new merge commit — the SHA will
-       change, so the existing Rex marker will no longer match HEAD.
-    4. Run /approve-merge <pr> again.
+  ```bash
+  # BASE_MERGE_COMMIT_SHA: .merge_base_commit.sha from the SAME compare
+  # call is_pr_behind_base made — do not make a second, possibly
+  # inconsistent, compare call. Re-read it explicitly:
+  BASE_MERGE_COMMIT_SHA=$(gh api "repos/${REPO}/compare/<baseRefName>...<headRefOid>" -q '.merge_base_commit.sha' 2>/dev/null)
+  # config_get (not config_get_or) for the multi-line array filter — same
+  # convention as .branch.type_whitelist[] elsewhere in this codebase.
+  SHARED_PATTERNS=$(config_get '.merge.shared_file_patterns[]' 2>/dev/null)
+  REFRESH=$(merge_refresh_required "$REPO" "<baseRefName>" <pr> "$BASE_MERGE_COMMIT_SHA" "$SHARED_PATTERNS")
   ```
 
-  Ask the user to run step 1, or to approve you running it — do not update
-  the branch yourself. Updating the branch pushes a merge commit to the
-  PR's head branch. On a fork PR with maintainer edits that branch belongs
-  to the contributor. The update is a separate, visible action the user
-  should see happen, not one this skill takes on its own.
+  `merge_refresh_required` (`_lib-merge-behind.sh`) echoes `required` or
+  `skippable`. It fails closed to `required` on anything it cannot fully
+  verify: a failed `gh api` call, a truncated compare (300 files or more on
+  either side), an empty `BASE_MERGE_COMMIT_SHA`, or a base commit set that
+  touches a file the PR itself changed OR a file matching
+  `merge.shared_file_patterns` (default: `.claude/hooks/_lib-*.sh`,
+  `.claude/settings.json`, `.claude/project-config.defaults.json`,
+  `bin/run-pre-push-checks.sh`, `.githooks/*`, `.github/workflows/*`).
+
+  - **`skippable`** — the base moved, but touches nothing this PR shares.
+    Proceed to step 4 on the CURRENT `<headRefOid>` — no branch update, no
+    re-review, no new CI run. Tell the user the refresh was skipped and
+    name the reason (behind by N commits, none overlapping this PR's files
+    or the shared set).
+
+  - **`required`** — **stop here**, the same as before #1437. Do not verify
+    the Rex marker, do not write the CEO marker, and do not merge. Tell the
+    user:
+
+    ```
+    PR #<pr> is behind its base branch (<baseRefName>) and the base's new
+    commits touch a file this PR shares. Before this can merge:
+      1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
+      2. Wait for green CI on the updated branch.
+      3. Get a short Rex re-review of the new merge commit — OR, if the
+         merge is a clean replay of the base with no conflicts (`git show
+         --remerge-diff` on the new HEAD is empty), the merge gate carries
+         the existing Rex approval forward on its own. See
+         block-unreviewed-merge.sh's rex_approval_carries_over check
+         (me2resh/apexyard#1437) — no marker to write by hand either way.
+      4. Run /approve-merge <pr> again.
+    ```
+
+    Ask the user to run step 1, or to approve you running it — do not
+    update the branch yourself. Updating the branch pushes a merge commit
+    to the PR's head branch. On a fork PR with maintainer edits that
+    branch belongs to the contributor. The update is a separate, visible
+    action the user should see happen, not one this skill takes on its
+    own.
 
 - **`unknown`, empty, or unset** — the compare call failed, or an argument
   was empty. **Stop here, the same as `true`.** Do not verify the Rex marker,

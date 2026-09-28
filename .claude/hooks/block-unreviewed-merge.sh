@@ -407,7 +407,23 @@ MSG
 fi
 
 REX_SHA=$(tr -d '[:space:]' < "$REX_APPROVAL")
-if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ]; then
+# --- Carry the Rex approval across a verified base-branch merge (#1437) ---
+# When HEAD moved because the PR was refreshed against its base — not
+# because new work landed — and that refresh is a conflict-free two-parent
+# merge of the Rex-approved commit, the marker's original SHA no longer matches HEAD
+# even though nothing Rex reviewed actually changed. rex_approval_carries_over
+# (_lib-merge-behind.sh) verifies that shape mechanically (parent[0] ==
+# REX_SHA, remerge-diff empty) and fails closed on any uncertainty — a
+# missing object, a failed fetch, a non-merge commit, an octopus merge, or a
+# non-empty remerge-diff all fall through to the ordinary stale-marker block
+# below. No agent writes a marker for this; the gate itself decides.
+_CARRY_OVER="false"
+if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
+   && command -v rex_approval_carries_over >/dev/null 2>&1; then
+  _CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$REX_SHA" "$CURRENT_SHA")
+fi
+if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
+   && [ "$_CARRY_OVER" != "true" ]; then
   cat >&2 <<MSG
 BLOCKED: Code-reviewer approved commit ${REX_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
 
@@ -667,7 +683,18 @@ MSG
   exit 2
 fi
 
-if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ]; then
+# Same verified-base-merge carry-over applies to the CEO marker (#1437): a
+# refresh that only replays the base branch, with no hand edits, changes
+# HEAD without changing anything the CEO approved. Re-checks the SAME
+# condition independently (never assumes the Rex-side check above already
+# proved it) — this comparison uses CEO_SHA, not REX_SHA, as parent[0].
+_CEO_CARRY_OVER="false"
+if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
+   && command -v rex_approval_carries_over >/dev/null 2>&1; then
+  _CEO_CARRY_OVER=$(rex_approval_carries_over "${CMD_REPO:-}" "$CEO_SHA" "$CURRENT_SHA")
+fi
+if [ -n "$CEO_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$CEO_SHA" != "$CURRENT_SHA" ] \
+   && [ "$_CEO_CARRY_OVER" != "true" ]; then
   cat >&2 <<MSG
 BLOCKED: ${APPROVER_TITLE} approved commit ${CEO_SHA:0:7} but HEAD is now ${CURRENT_SHA:0:7}.
 

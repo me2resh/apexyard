@@ -1160,6 +1160,156 @@ else
   FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}A1-stale-sha-note "
 fi
 
+# ===========================================================================
+# Carry the Rex approval across a clean base merge (me2resh/apexyard#1437)
+#
+# Each sandbox IS a real git repo (make_sandbox runs `git init`), so these
+# cases build genuine merge-commit history and point the mocked `gh pr
+# view ... headRefOid` at the real resulting SHA — the carry-over decision
+# is exercised against real git objects, not a stubbed shape.
+#
+# Fail-before: on dev, rex_approval_carries_over is undefined, so
+# block-unreviewed-merge.sh's stale-marker block fires unconditionally on
+# every one of these cases (CO1 and CO4 would FAIL on dev; CO2/CO3/CO5 pin
+# down that the surrounding behaviour is unchanged).
+# ===========================================================================
+
+write_gh_mock_head() {
+  # Overwrite the sandbox's gh mock so headRefOid (and friends) reflect a
+  # specific, real SHA built in the sandbox's own git history.
+  local sb="$1" head_sha="$2"
+  cat > "$sb/bin/gh" <<EOF
+#!/bin/bash
+case "\$*" in
+  *"pr view"*"headRefOid"*)        echo "$head_sha" ;;
+  *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
+  *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
+  *"pr view"*"baseRefName"*)       echo "\${MOCK_BASE_BRANCH:-dev}" ;;
+  *"api "*"compare/"*)             echo "\${MOCK_BEHIND_BY:-0}" ;;
+  *) ;;
+esac
+exit 0
+EOF
+  chmod +x "$sb/bin/gh"
+}
+
+# CO1: clean base merge — Rex + CEO markers name the merge's first parent,
+# HEAD is the merge commit, remerge-diff is empty -> merge ALLOWED (exit 0).
+sb=$(make_sandbox)
+BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q "$BASE_BRANCH"
+  echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
+)
+NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA"
+write_rex_marker "$sb" 300 "$OLD_SHA"
+write_ceo_marker_structured "$sb" 300 "$OLD_SHA"
+run_case "CO1: clean base merge carries Rex+CEO approval forward -> allows" 0 "" "$sb" 300
+
+# CO2: HEAD moved for an ordinary reason (new commit, not a base merge) —
+# carry-over must NOT apply. Same as the pre-#1437 stale-marker block.
+sb=$(make_sandbox)
+(
+  cd "$sb" || exit 1
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  echo more-pr > pr2.txt; git add pr2.txt; git commit -q -m "more pr work, not a merge"
+)
+NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA"
+write_rex_marker "$sb" 301 "$OLD_SHA"
+write_ceo_marker_structured "$sb" 301 "$OLD_SHA"
+run_case "CO2: ordinary new commit (not a merge) -> no carry-over, still blocks" 2 "New commits were pushed" "$sb" 301
+
+# CO3: HEAD is a two-parent merge, but the FIRST parent is not the
+# Rex-approved commit (e.g. base was merged the other way around) ->
+# no carry-over, still blocks.
+sb=$(make_sandbox)
+BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+UNRELATED_SHA=$(cd "$sb" && git rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+  git checkout -q "$BASE_BRANCH"
+  echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
+)
+NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA"
+write_rex_marker "$sb" 302 "$UNRELATED_SHA"
+write_ceo_marker_structured "$sb" 302 "$UNRELATED_SHA"
+run_case "CO3: two-parent merge but parent[0] != Rex SHA -> no carry-over, still blocks" 2 "New commits were pushed" "$sb" 302
+
+# CO4: a hand-resolved conflict merge (remerge-diff non-empty) -> no
+# carry-over, still blocks — this is exactly the case #1437 says must
+# fail closed.
+sb=$(make_sandbox)
+BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+(
+  cd "$sb" || exit 1
+  echo base > shared.txt; git add shared.txt; git commit -q -m "shared base"
+  git checkout -q -b pr-branch
+  echo "pr change" > shared.txt; git add shared.txt; git commit -q -m "pr edits shared.txt"
+)
+OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q "$BASE_BRANCH"
+  echo "base change" > shared.txt; git add shared.txt; git commit -q -m "base also edits shared.txt"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch" 2>/dev/null || true
+  echo "hand-resolved" > shared.txt
+  git add shared.txt
+  git commit -q -m "merge base into pr-branch (hand-resolved)"
+)
+NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA"
+write_rex_marker "$sb" 303 "$OLD_SHA"
+write_ceo_marker_structured "$sb" 303 "$OLD_SHA"
+run_case "CO4: hand-resolved conflict (non-empty remerge-diff) -> no carry-over, still blocks" 2 "New commits were pushed" "$sb" 303
+
+# CO5: the CEO marker independently carries over too (not only Rex) — both
+# markers name the merge's first parent, both should be accepted.
+sb=$(make_sandbox)
+BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  git checkout -q "$BASE_BRANCH"
+  echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
+)
+NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA"
+# Rex marker already matches HEAD (as if Rex re-reviewed) — only the CEO
+# marker is stale and must carry over on its own.
+write_rex_marker "$sb" 304 "$NEW_SHA"
+write_ceo_marker_structured "$sb" 304 "$OLD_SHA"
+run_case "CO5: CEO marker alone carries over across the same clean base merge -> allows" 0 "" "$sb" 304
+
 # --- Summary ----------------------------------------------------------
 
 echo ""
