@@ -1092,77 +1092,59 @@ fi
 NAMES=""
 REPOS=""
 WORKSPACES=""
+# apexyard#1455 — parallel space-separated sets of the tokens above that
+# belong to a registry entry marked `public: true`. Membership in these sets
+# (not the entry's index) decides the skip, since NAMES/REPOS/WORKSPACES are
+# flattened, order-loses-entry-boundary strings by the time the loops below
+# run.
+PUBLIC_NAMES=""
+PUBLIC_REPOS=""
+PUBLIC_WORKSPACES=""
 
-# awk parser: walk each `- name:` block and pull out `name`, every `repo`/
-# `repos[]` entry, and `workspace`. Strips surrounding quotes. Assumes
-# `- name:` is the first key in each project entry (same assumption as
-# /start-ticket).
-PARSED=$(awk '
-  function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
-  /^[[:space:]]*- name:/ {
-    print "NAME=" unquote($3)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repo:/ {
-    print "REPO=" unquote($2)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*workspace:/ {
-    print "WORKSPACE=" unquote($2)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repos:[[:space:]]*\[/ {
-    line = $0
-    sub(/^[^\[]*\[/, "", line); sub(/\].*$/, "", line)
-    n = split(line, parts, ",")
-    for (i = 1; i <= n; i++) {
-      item = parts[i]
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-      if (item != "") print "REPO=" unquote(item)
-    }
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
-    current_list = "repos"
-    next
-  }
-  /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/ {
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*-[[:space:]]+/ {
-    if (current_list == "repos") {
-      item = $0
-      sub(/^[[:space:]]*-[[:space:]]+/, "", item)
-      gsub(/[[:space:]]+$/, "", item)
-      print "REPO=" unquote(item)
-    }
-    next
-  }
-' "$REGISTRY")
+HOOK_DIR_FOR_PARSER=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [ -f "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh"
+fi
 
+CURRENT_PUBLIC=0
 while IFS= read -r line; do
   case "$line" in
+    PUBLIC=*)
+      CURRENT_PUBLIC=${line#PUBLIC=}
+      ;;
     NAME=*)
       v=${line#NAME=}
-      [ -n "$v" ] && NAMES="$NAMES $v"
+      if [ -n "$v" ]; then
+        NAMES="$NAMES $v"
+        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_NAMES="$PUBLIC_NAMES $v"
+      fi
       ;;
     REPO=*)
       v=${line#REPO=}
-      [ -n "$v" ] && REPOS="$REPOS $v"
+      if [ -n "$v" ]; then
+        REPOS="$REPOS $v"
+        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_REPOS="$PUBLIC_REPOS $v"
+      fi
       ;;
     WORKSPACE=*)
       v=${line#WORKSPACE=}
-      [ -n "$v" ] && WORKSPACES="$WORKSPACES $v"
+      if [ -n "$v" ]; then
+        WORKSPACES="$WORKSPACES $v"
+        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_WORKSPACES="$PUBLIC_WORKSPACES $v"
+      fi
       ;;
   esac
-done <<EOF
-$PARSED
-EOF
+done < <(registry_parse_entries "$REGISTRY")
+
+# Whole-word membership test against a space-separated set built above.
+token_is_public() {
+  local token="$1" set="$2" item
+  for item in $set; do
+    [ "$item" = "$token" ] && return 0
+  done
+  return 1
+}
 
 # ---------------------------------------------------------------------------
 # 8. Build the match list.
@@ -1204,6 +1186,8 @@ record_if_match() {
 }
 
 for n in $NAMES; do
+  # apexyard#1455 — a registry entry marked `public: true` is not a leak.
+  token_is_public "$n" "$PUBLIC_NAMES" && continue
   # Exempt the target repo's own bare name entirely (pre-existing).
   if [ "$n" = "$TARGET_NAME" ]; then continue; fi
 
@@ -1261,6 +1245,7 @@ for n in $NAMES; do
 done
 
 for rp in $REPOS; do
+  token_is_public "$rp" "$PUBLIC_REPOS" && continue
   if [ "$rp" = "$TARGET_REPO" ]; then continue; fi
   esc=$(printf '%s' "$rp" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Either bare slug (with word-ish boundary) or slug#<N>.
@@ -1271,6 +1256,7 @@ for rp in $REPOS; do
 done
 
 for ws in $WORKSPACES; do
+  token_is_public "$ws" "$PUBLIC_WORKSPACES" && continue
   esc=$(printf '%s' "$ws" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Workspace-path boundaries: path-chars `/` and `-` ARE allowed *after* the
   # match (e.g. `workspace/ws-marlow/app.ts` is a real reference — the

@@ -68,6 +68,14 @@ version: 1
 #               Override the global ticket prefix per project. Useful when
 #               one project uses GH Issues (`GH`) and another uses Linear
 #               (`ENG`).
+#   public      true | (omitted). Marks a registered project's repo as
+#               PUBLIC — for example, a public marketing site. The leak hooks
+#               (check-private-refs-staged.sh, check-private-refs-runtime.sh,
+#               block-private-refs-in-public-repos.sh) skip this entry's
+#               name, repo/repos, and workspace path when scanning for a
+#               private-portfolio reference (me2resh/apexyard#1455). Omit it,
+#               or set anything other than `true`, and the entry stays
+#               private — the hooks fail closed by default.
 #   tracker     Per-project override of the GLOBAL tracker config in
 #               .claude/project-config.json (#670 / AgDR-0072). Same keys as
 #               the global block — any you omit fall back to the global default,
@@ -123,9 +131,13 @@ projects:
 
   # ---------------------------------------------------------------------------
   # Example 3: a marketing site managed but with a lighter touch
+  # `public: true` — this repo is public (a marketing site normally is), so
+  # the leak hooks let its name, repo slug, and workspace path through
+  # instead of treating it as a private portfolio identifier (#1455).
   # ---------------------------------------------------------------------------
   - name: marketing-site
     repo: your-org/marketing-site
+    public: true
     # workspace omitted — skills will use GitHub-only data and mark git fields
     # as "(not cloned)" until you clone it locally.
     docs: projects/marketing-site

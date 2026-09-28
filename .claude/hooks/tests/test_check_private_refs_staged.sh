@@ -6,6 +6,7 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 HOOK_SRC="$ROOT/.claude/hooks/check-private-refs-staged.sh"
 RUNTIME_SRC="$ROOT/.claude/hooks/check-private-refs-runtime.sh"
+PARSER_LIB_SRC="$ROOT/.claude/hooks/_lib-registry-parser.sh"
 PRE_COMMIT_SRC="$ROOT/.githooks/pre-commit"
 
 PASS=0
@@ -21,6 +22,7 @@ make_sandbox() {
   cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   cp "$PRE_COMMIT_SRC" "$sandbox/.githooks/pre-commit"
+  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
   chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" "$sandbox/.claude/hooks/check-private-refs-runtime.sh" "$sandbox/.githooks/pre-commit"
   cat > "$sandbox/apexyard.projects.yaml" <<'YAML'
 projects:
@@ -160,6 +162,7 @@ make_sandbox_with_remotes() {
   cp "$HOOK_SRC" "$sandbox/.claude/hooks/check-private-refs-staged.sh"
   cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
   cp "$PRE_COMMIT_SRC" "$sandbox/.githooks/pre-commit"
+  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
   chmod +x "$sandbox/.claude/hooks/check-private-refs-staged.sh" "$sandbox/.claude/hooks/check-private-refs-runtime.sh" "$sandbox/.githooks/pre-commit"
   printf '%s' "$registry_yaml" > "$sandbox/apexyard.projects.yaml"
   (
@@ -433,6 +436,63 @@ else
   echo "  skip fail-before HIGH-1 proof: could not read $ROUND1_SHA's copy of the hook (not fetched in this clone)"
 fi
 rm -f "$round1_hook"
+rm -rf "$sandbox"
+
+echo
+echo "== public: true registry entries (apexyard#1455)"
+#
+# A registered project marked `public: true` is not a private identifier —
+# the staged and runtime hooks must let a commit mention its name, repo
+# slug, or workspace path through, while an entry with no `public` field
+# (the default) still blocks exactly as before. All fixture names below are
+# SYNTHETIC.
+
+PUBLIC_REGISTRY_YAML='projects:
+  - name: open-marketing-site
+    repo: acme-org/open-marketing-site
+    public: true
+    workspace: workspace/open-marketing-site
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+NEUTRAL_ORIGIN_URL="https://github.com/neutral-fork/ops-fork.git"
+
+sandbox=$(make_sandbox_with_remotes "$PUBLIC_REGISTRY_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Announcing open-marketing-site in the acme-org/open-marketing-site repo.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "public:true entry — name and repo slug do not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$PUBLIC_REGISTRY_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Docs live at workspace/open-marketing-site/README.md\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "public:true entry — workspace path does not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$PUBLIC_REGISTRY_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "entry without public field still blocks (default private)" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$PUBLIC_REGISTRY_YAML" "$NEUTRAL_ORIGIN_URL")
+resolved_repo="me2resh/apexyard"
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Announcing acme-org/open-marketing-site' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "0" ]; then
+  pass "runtime hook — public:true entry's repo slug does not block"
+else
+  fail "runtime hook — public:true entry's repo slug does not block" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$PUBLIC_REGISTRY_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reviewed secret-app' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'secret-app'; then
+  pass "runtime hook — entry without public field still blocks"
+else
+  fail "runtime hook — entry without public field still blocks" "$runtime_output"
+fi
 rm -rf "$sandbox"
 
 echo

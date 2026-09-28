@@ -20,6 +20,28 @@ Private project identifiers (names, repo slugs, workspace paths) belong in your 
 - `.projects[].repo` — exact `owner/repo` match, optionally followed by `#<N>` to catch ticket references. Skipped when equal to the target repo.
 - `.projects[].workspace` — whole-word match on the workspace path.
 
+## Public registry entries — `public: true`
+
+A registered project whose repo is public — a public marketing site, say —
+is not a private identifier. Add `public: true` to that entry in
+`apexyard.projects.yaml`:
+
+```yaml
+- name: marketing-site
+  repo: your-org/marketing-site
+  public: true
+```
+
+Every leak hook (`check-private-refs-staged.sh`, `check-private-refs-runtime.sh`,
+`block-private-refs-in-public-repos.sh`) reads the field through the shared
+parser at `.claude/hooks/_lib-registry-parser.sh` and skips that entry's
+`name`, `repo`/`repos`, and `workspace` when scanning for a leak
+(me2resh/apexyard#1455). Omitting the field, or setting it to anything other
+than `true`, keeps the entry private — the hooks fail closed by default.
+
+`public: true` is per-entry, not global: an unrelated private project two
+entries down in the same registry still blocks normally.
+
 ## What does NOT get scrubbed
 
 - The fork owner's git identity (name / email) — that's signed on every commit anyway.
@@ -157,7 +179,7 @@ purge your own repository's objects. It cannot reach a fork.
 
 If a project's `name` collides with a generic word (a project literally named `auth`, or `core`), the hook will block any upstream ticket that uses that word. Mitigations:
 
-1. **Don't register a private project under a generic one-word name.** `curios-dog` is fine; `auth` is not. This is a good principle independent of leak protection — it also stops `/projects` and `/tasks` from colliding.
+1. **Don't register a private project under a generic one-word name.** `sample-app` is fine; `auth` is not. This is a good principle independent of leak protection — it also stops `/projects` and `/tasks` from colliding.
 2. **Use the skip marker** when you've confirmed the match is incidental. The warning that accompanies the bypass is visible and auditable.
 3. **Omit the `name` field temporarily** — the hook reads only registered fields, so redacting one project's name in the registry removes it from the scrub list. Least-preferred option; you lose discovery in `/projects` for that project.
 

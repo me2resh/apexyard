@@ -51,50 +51,41 @@ if [ -n "$upstream_repo" ]; then
   upstream_owner=${upstream_repo%%/*}
 fi
 
+if [ -f "$HOOK_DIR/_lib-registry-parser.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-registry-parser.sh"
+fi
+
 names=()
+names_public=()
 repos=()
+repos_public=()
 workspaces=()
+workspaces_public=()
 name_repo_pairs=()
+current_public=0
+pending_name=""
 while IFS= read -r entry; do
   case "$entry" in
-    NAME=*) names+=("${entry#NAME=}") ;;
-    REPO=*) repos+=("${entry#REPO=}") ;;
-    WORKSPACE=*) workspaces+=("${entry#WORKSPACE=}") ;;
-    NAMEREPO=*) name_repo_pairs+=("${entry#NAMEREPO=}") ;;
+    PUBLIC=*) current_public=${entry#PUBLIC=}; pending_name="" ;;
+    NAME=*)
+      names+=("${entry#NAME=}")
+      names_public+=("$current_public")
+      pending_name="${entry#NAME=}"
+      ;;
+    REPO=*)
+      repos+=("${entry#REPO=}")
+      repos_public+=("$current_public")
+      if [ -n "$pending_name" ]; then
+        name_repo_pairs+=("${pending_name}"$'\t'"${entry#REPO=}")
+      fi
+      ;;
+    WORKSPACE=*)
+      workspaces+=("${entry#WORKSPACE=}")
+      workspaces_public+=("$current_public")
+      ;;
   esac
-done < <(awk '
-  function unquote(value) { gsub(/^['\''\"]|['\''\"]$/, "", value); return value }
-  /^[[:space:]]*- name:/ {
-    pending_name = unquote($3)
-    print "NAME=" pending_name; current_list = ""; next
-  }
-  /^[[:space:]]*repo:/ {
-    repo_val = unquote($2)
-    print "REPO=" repo_val
-    if (pending_name != "") { print "NAMEREPO=" pending_name "\t" repo_val }
-    pending_name = ""; current_list = ""; next
-  }
-  /^[[:space:]]*workspace:/ {
-    print "WORKSPACE=" unquote($2); current_list = ""; next
-  }
-  /^[[:space:]]*repos:[[:space:]]*\[/ {
-    value = $0; sub(/^[^\[]*\[/, "", value); sub(/\].*$/, "", value)
-    count = split(value, items, ",")
-    for (i = 1; i <= count; i++) {
-      item = items[i]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-      if (item != "") print "REPO=" unquote(item)
-    }
-    pending_name = ""; current_list = ""; next
-  }
-  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
-  /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
-  /^[[:space:]]*-[[:space:]]+/ {
-    if (current_list == "repos") {
-      value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
-      gsub(/[[:space:]]+$/, "", value); print "REPO=" unquote(value)
-    }
-  }
-' "$REGISTRY")
+done < <(registry_parse_entries "$REGISTRY")
 
 [ "${#names[@]}" -gt 0 ] || [ "${#repos[@]}" -gt 0 ] || [ "${#workspaces[@]}" -gt 0 ] || exit 0
 
@@ -197,8 +188,10 @@ while IFS= read -r -d '' path; do
   [ "$path" = "$registry_rel" ] && continue
   git show ":$path" >/dev/null 2>&1 || continue
 
-  for name in "${names[@]}"; do
+  for idx in "${!names[@]}"; do
+    name="${names[$idx]}"
     [ -n "$name" ] || continue
+    [ "${names_public[$idx]}" = "1" ] && continue
     [ "$name" = "$current_name" ] && continue
     if [ -n "$upstream_name" ] && [ "$name" = "$upstream_name" ] \
       && registry_name_repo_matches "$name" "$upstream_repo"; then
@@ -213,16 +206,20 @@ while IFS= read -r -d '' path; do
     staged_blob_matches "$path" "(^|[^[:alnum:]_])${escaped}([^[:alnum:]_]|$)" && block "$path"
   done
 
-  for repo in "${repos[@]}"; do
+  for idx in "${!repos[@]}"; do
+    repo="${repos[$idx]}"
     [ -n "$repo" ] || continue
+    [ "${repos_public[$idx]}" = "1" ] && continue
     [ "$repo" = "$current_repo" ] && continue
     [ -n "$upstream_repo" ] && [ "$repo" = "$upstream_repo" ] && continue
     escaped=$(escape_regex "$repo")
     staged_blob_matches "$path" "(^|[^A-Za-z0-9_/-])${escaped}(#[0-9]+)?([^A-Za-z0-9_/-]|$)" && block "$path"
   done
 
-  for workspace in "${workspaces[@]}"; do
+  for idx in "${!workspaces[@]}"; do
+    workspace="${workspaces[$idx]}"
     [ -n "$workspace" ] || continue
+    [ "${workspaces_public[$idx]}" = "1" ] && continue
     escaped=$(escape_regex "$workspace")
     staged_blob_matches "$path" "(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)" && block "$path"
   done
