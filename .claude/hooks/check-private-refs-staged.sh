@@ -80,25 +80,28 @@ workspaces=()
 workspaces_public=()
 name_repo_pairs=()
 current_public=0
-pending_name=""
 while IFS= read -r entry; do
   case "$entry" in
-    PUBLIC=*) current_public=${entry#PUBLIC=}; pending_name="" ;;
+    PUBLIC=*) current_public=${entry#PUBLIC=} ;;
     NAME=*)
       names+=("${entry#NAME=}")
       names_public+=("$current_public")
-      pending_name="${entry#NAME=}"
       ;;
     REPO=*)
       repos+=("${entry#REPO=}")
       repos_public+=("$current_public")
-      if [ -n "$pending_name" ]; then
-        name_repo_pairs+=("${pending_name}"$'\t'"${entry#REPO=}")
-      fi
       ;;
     WORKSPACE=*)
       workspaces+=("${entry#WORKSPACE=}")
       workspaces_public+=("$current_public")
+      ;;
+    PAIR=*)
+      # apexyard#1457 round 4 — the shared parser's private/public sets
+      # are now flat, structure-independent value sets (NAME=/REPO=/
+      # WORKSPACE= adjacency no longer implies "same registry entry"), so
+      # it emits this pairing directly instead. Used only by the #1431
+      # upstream bare-name exemption below.
+      name_repo_pairs+=("${entry#PAIR=}")
       ;;
   esac
 done <<EOF

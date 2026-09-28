@@ -222,10 +222,13 @@ run_case "N4: a bare - entry with keys on the next lines does not drop the entry
   2 "project repo: acme-org/ff-repo-one" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/ff-repo-one as well'"
 
-# Sanity gate (Hakim MEDIUM) — projects:/name: present, zero tokens parsed.
+# Sanity gate (Hakim MEDIUM) — projects:/name: present, zero tokens
+# parsed. apexyard#1457 round 4 — "name:" must sit at the START of a
+# line to be caught by the greedy (private) pass, so a zero-token
+# fixture has to put it mid-line, where the more lenient sanity-gate
+# heuristic still matches it.
 write_registry 'projects:
-notes: |
-  name: this is prose inside a block scalar, not a real project
+notes: the name: field is optional here
 '
 run_case "sanity gate: projects:/name: present, zero tokens parsed, still blocks" \
   2 "registry parse produced no tokens" \
@@ -250,6 +253,71 @@ run_case "public-tracker hook blocks when the registry exists but is unreadable 
   2 "registry parse failed" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'irrelevant body'"
 chmod 644 "$TMPDIR/fork/apexyard.projects.yaml"
+
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 4 (Rex A/Hakim S5, Hakim S1, Hakim S4, Rex B/Hakim S9,
+# Hakim S8) — the round-3 anchor still dropped a whole entry (name AND
+# repo) when the real top-level projects: key was preceded by an
+# ambiguous or unrecognized shape. Each "target" entry's repo slug shares
+# NO substring with its own name. Verified by hand against 44c0fb6 before
+# adding these: all five reproduced the drop. All names/slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+# S1 — two top-level projects: keys; the first holds a public entry.
+write_registry 'projects:
+  - name: aa-decoy
+    repo: acme-org/site-one
+    public: true
+projects:
+  - name: bb-target
+    repo: acme-org/vault-one
+'
+run_case "S1: two top-level projects: keys do not drop the second entry" \
+  2 "project repo: acme-org/vault-one" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-one as well'"
+
+# S4 — a top-level block scalar whose TEXT holds "projects:" and a
+# "- name:" line, before the real key.
+write_registry 'notes: |
+  projects:
+  - name: cc-fake
+projects:
+  - name: dd-target
+    repo: acme-org/vault-two
+'
+run_case "S4: a block scalar whose text holds projects: and - name: does not drop the real entry" \
+  2 "project repo: acme-org/vault-two" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-two as well'"
+
+# S5 / Rex A — a nested projects: list under another top-level map.
+write_registry 'meta:
+  projects:
+    - name: ee-fake
+projects:
+  - name: ff-target
+    repo: acme-org/vault-three
+'
+run_case "S5/Rex A: a nested projects: key under another map does not drop the real entry" \
+  2 "project repo: acme-org/vault-three" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-three as well'"
+
+# S8 — an anchored key, projects: &all.
+write_registry 'projects: &all
+  - name: gg-target
+    repo: acme-org/vault-four
+'
+run_case "S8: projects: &all (an anchor) does not drop every entry" \
+  2 "project repo: acme-org/vault-four" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-four as well'"
+
+# S9 / Rex B — a quoted key, "projects":.
+write_registry '"projects":
+  - name: hh-target
+    repo: acme-org/vault-five
+'
+run_case "S9/Rex B: a quoted projects: key does not drop every entry" \
+  2 "project repo: acme-org/vault-five" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-five as well'"
 
 echo
 echo "Passed: $PASS  Failed: $FAIL"

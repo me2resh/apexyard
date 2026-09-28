@@ -797,15 +797,23 @@ fi
 rm -rf "$sandbox"
 
 echo
-echo "== Round 3: sanity gate — projects:/name: present but the parse gives zero tokens (Hakim MEDIUM)"
+echo "== Round 3/4: sanity gate — projects:/name: present but the parse gives zero tokens (Hakim MEDIUM)"
 #
 # A registry that plainly has a projects: key and a name: key, but the
-# structural parse could not place any token in an entry, must block
-# rather than silently allow every private reference (a parser gap, not
-# an empty registry).
+# parse could not extract any token, must block rather than silently
+# allow every private reference (a parser gap, not an empty registry).
+#
+# apexyard#1457 round 4 — the private set is now a greedy, structure-
+# independent scan (registry_has_project_shape allows "name:" ANYWHERE on
+# a line; the greedy awk pass requires the line'\''s own content to START
+# with "name:"), so this fixture has to exploit that specific gap between
+# the two: "name:" appears mid-line, after other text, which the lenient
+# sanity-gate heuristic still matches but the anchored greedy pass does
+# not. A fixture that puts "name:" at the START of any line (even inside
+# prose) is no longer a zero-token case at all — the greedy pass would
+# find it, which is by design.
 ZERO_TOKEN_YAML='projects:
-notes: |
-  name: this is prose inside a block scalar, not a real project
+notes: the name: field is optional here
 '
 sandbox=$(make_sandbox_with_remotes "$ZERO_TOKEN_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'Nothing private mentioned here at all.\n' > "$sandbox/notes.md"
@@ -850,6 +858,111 @@ if [ "$unreadable_runtime_rc" = "2" ] && printf '%s' "$unreadable_runtime_output
   pass "runtime hook blocks when the registry exists but is unreadable (non-zero parser exit)"
 else
   fail "runtime hook blocks when the registry exists but is unreadable (non-zero parser exit)" "exit=$unreadable_runtime_rc output=$unreadable_runtime_output"
+fi
+rm -rf "$sandbox"
+
+echo
+echo "== Round 4: the projects: anchor itself must not be droppable (apexyard#1457)"
+#
+# Rex A / Hakim S5, Hakim S1, Hakim S4, Rex B / Hakim S9, Hakim S8 — the
+# round-3 structural anchor still dropped a whole entry (name AND repo)
+# when the real top-level projects: key was preceded by an ambiguous or
+# unrecognized shape. Each fixture pairs a "target" entry with a repo
+# slug that shares NO substring with its own name, so a surviving NAME
+# token can never mask a dropped REPO token (or vice versa). Verified by
+# hand against 44c0fb6's copy of _lib-registry-parser.sh before adding
+# these: every one of the five reproduced the drop (S1 kept only the
+# first, ambiguous entry; S4/S5 kept only the fake prose/nested name; S8
+# and S9 produced no tokens at all). All names/slugs are SYNTHETIC.
+
+# S1 — two top-level projects: keys; the first holds a public entry. The
+# whole parse must become ambiguous, so nothing is exempt — but the
+# SECOND (real, private) entry must still be captured at all.
+S1_YAML='projects:
+  - name: aa-decoy
+    repo: acme-org/site-one
+    public: true
+projects:
+  - name: bb-target
+    repo: acme-org/vault-one
+'
+sandbox=$(make_sandbox_with_remotes "$S1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "S1: two top-level projects: keys do not drop the second entry" "$sandbox" 2 "File: notes.md" "vault-one"
+rm -rf "$sandbox"
+
+# S4 — a top-level block scalar whose TEXT holds "projects:" and a
+# "- name:" line, before the real key.
+S4_YAML='notes: |
+  projects:
+  - name: cc-fake
+projects:
+  - name: dd-target
+    repo: acme-org/vault-two
+'
+sandbox=$(make_sandbox_with_remotes "$S4_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-two as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "S4: a block scalar whose text holds projects: and - name: does not drop the real entry" "$sandbox" 2 "File: notes.md" "vault-two"
+rm -rf "$sandbox"
+
+# S5 / Rex A — a nested projects: list under another top-level map,
+# before the real key.
+S5_YAML='meta:
+  projects:
+    - name: ee-fake
+projects:
+  - name: ff-target
+    repo: acme-org/vault-three
+'
+sandbox=$(make_sandbox_with_remotes "$S5_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-three as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "S5/Rex A: a nested projects: key under another map does not drop the real entry" "$sandbox" 2 "File: notes.md" "vault-three"
+rm -rf "$sandbox"
+
+# S8 — an anchored key, projects: &all.
+S8_YAML='projects: &all
+  - name: gg-target
+    repo: acme-org/vault-four
+'
+sandbox=$(make_sandbox_with_remotes "$S8_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-four as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "S8: projects: &all (an anchor) does not drop every entry" "$sandbox" 2 "File: notes.md" "vault-four"
+rm -rf "$sandbox"
+
+# S9 / Rex B — a quoted key, "projects":.
+S9_YAML='"projects":
+  - name: hh-target
+    repo: acme-org/vault-five
+'
+sandbox=$(make_sandbox_with_remotes "$S9_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-five as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "S9/Rex B: a quoted projects: key does not drop every entry" "$sandbox" 2 "File: notes.md" "vault-five"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 4: runtime hook, representative anchor shapes"
+
+sandbox=$(make_sandbox_with_remotes "$S1_YAML" "$NEUTRAL_ORIGIN_URL")
+resolved_repo="me2resh/apexyard"
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/vault-one as well' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'vault-one'; then
+  pass "runtime hook — S1 (two top-level projects: keys) does not drop the second entry"
+else
+  fail "runtime hook — S1 (two top-level projects: keys) does not drop the second entry" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$S8_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/vault-four as well' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'vault-four'; then
+  pass "runtime hook — S8 (projects: &all anchor) does not drop every entry"
+else
+  fail "runtime hook — S8 (projects: &all anchor) does not drop every entry" "$runtime_output"
 fi
 rm -rf "$sandbox"
 

@@ -152,6 +152,22 @@ hook specifically).
   already documents removal as a mitigation path. The flag is quieter and
   looks more legitimate than an outright deletion, which is a real but
   accepted cost of the feature; it is not mitigated further here.
+- **Round 4 correction (me2resh/apexyard#1457).** Three review rounds of
+  entry-boundary special cases (scoping `public:` to its own entry;
+  anchoring on the `projects:` key; accepting compact lists and bare-dash
+  entries) kept finding a fresh valid YAML shape that made the structural
+  parser lose track of the real `projects:` key and silently drop private
+  tokens. The parser is inverted instead of patched again: the **private
+  set is greedy** — every `name:`, `repo:`, `repos:` item and `workspace:`
+  value anywhere in the file is private by default, independent of
+  whether the structural parse can find or trust a `projects:` key at
+  all — and the **public set must be proven**, meaning a value is exempt
+  only when every one of its occurrences in that greedy scan is also
+  accounted for by a structurally-confirmed `public: true` entry under
+  the file's real top-level `projects` key. A structural-parser bug can
+  now only fail to grant an exemption a project deserves (safe) or be
+  refused by the correlation step anyway; it can no longer make a real
+  private token disappear from the scrub list.
 
 ## Artifacts
 
