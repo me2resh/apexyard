@@ -109,7 +109,7 @@ There is no `dev → main` promotion step and no `/release` skill — `/release`
 
 ## App Store apps: `CFBundleShortVersionString` / `CFBundleVersion`
 
-macOS / iOS apps distributed through the App Store (e.g. **DemoSvc**) carry two Apple-mandated version fields in their `Info.plist`, and these are a **separate distribution surface** from the git/`VERSION`/tag convention above:
+macOS / iOS apps distributed through the App Store (e.g. **DemoApp**) carry two Apple-mandated version fields in their `Info.plist`, and these are a **separate distribution surface** from the git/`VERSION`/tag convention above:
 
 | Field | Meaning | Relationship to `VERSION` |
 |-------|---------|---------------------------|

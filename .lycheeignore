@@ -1,8 +1,8 @@
 # Portfolio repo links — these repos may be private. Lychee runs
 # unauthenticated so private repos always 404.
 https://github.com/me2resh/apexyard.*
-https://github.com/me2resh/curios-dog.*
-https://github.com/me2resh/SharpPick.*
+https://github.com/me2resh/sample-app.*
+https://github.com/me2resh/demo-svc.*
 
 # Medium author URLs return 403 to bot user-agents (transient anti-scraping
 # protection). The link works in browsers; lychee-action's user-agent gets

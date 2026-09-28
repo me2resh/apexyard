@@ -116,7 +116,7 @@ Severity tags for objections:
 ```
 /challenge #345
 /challenge play devil's advocate on adding a second database
-/challenge projects/apexbrain/prd.md
+/challenge projects/sample-app/prd.md
 ```
 
 ---
