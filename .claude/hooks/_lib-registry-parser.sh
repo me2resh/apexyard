@@ -7,67 +7,67 @@
 # apexyard#1455 — before this file, each of those three hooks carried its own
 # copy of an awk state machine, and none of them read the optional
 # `public: true` field, so a registered project marked public was still
-# treated as private and blocked. This file centralizes the parse so the
-# field is handled once, for every consumer.
+# treated as private and blocked. This file centralizes the `public:` field
+# handling so it is done once, for every consumer.
 #
-# apexyard#1457 review round 4 (Rex A/B, Hakim S1/S4/S5/S8/S9) — three
-# rounds of entry-boundary special-casing (round 2: scope `public:` to its
-# own entry; round 3: anchor on `projects:`, accept compact lists and bare
-# dashes) kept finding new valid YAML shapes that made the STRUCTURAL
-# parser anchor on the wrong key, or leave the `projects:` value and never
-# come back — each one a fresh way to silently drop real private tokens.
-# Round 4 inverted the design instead of adding another special case:
+# apexyard#1457 review round 7 (Hakim HIGH-8, following B6/HIGH-7/HIGH-5/
+# HIGH-6 in rounds 4-6) — every one of those findings traced back to the
+# same decision: rounds 4-6 REWROTE the private-token scan as a new,
+# hand-written, structure-independent "greedy" awk pass, meant to be a
+# strict superset of the three hooks' original (pre-#1455) extraction. Each
+# round found — and the next round re-broke — a fresh edge case in that
+# rewrite: `public: true` bleeding across entries, an anchor guessing the
+# wrong `projects:` key, a `repos:` list closing early on a one-key map
+# item, an entry that opens with `- repos:` swallowing every entry after
+# it. Patching the rewrite kept adding cases; it never closed the class.
 #
-#   - The PRIVATE set is greedy and structure-independent. It matches
-#     every `name:`, `repo:`, `repos:` item and `workspace:` value ANYWHERE
-#     in the file — the same nesting/indent-blind matching the leak hooks
-#     used before apexyard#1455 — with no dependence on finding a
-#     `projects:` key at all. The structural parser can never remove a
-#     token from this set; it can only add an EXEMPTION on top of it.
-#   - The PUBLIC set is proven only. A separate, still-structural pass
-#     finds tokens that belong to an entry with `public: true`, strictly
-#     under the file's real top-level `projects` key (accepting the
-#     unquoted, single-quoted and double-quoted spellings, with an
-#     optional trailing `&anchor` or `!tag`). If the parse of that key is
-#     ambiguous — for example two top-level `projects` keys, two YAML
-#     documents, or a tab anywhere in the file's indentation — the public
-#     set is empty for the whole file, not just for the ambiguous part.
+# This version stops rewriting the private side and makes it correct BY
+# CONSTRUCTION instead:
 #
-# apexyard#1457 review round 5 (Hakim HIGH-7) — the round-4 exemption rule
-# compared PER-VALUE OCCURRENCE COUNTS between the two passes ("exempt iff
-# greedy count == public count"), on the assumption that both passes end a
-# `repos:` block list on the same line. They do not: the greedy pass ends
-# the list at ANY key-shaped line (including a list item that is itself a
-# map, `- primary: ...`), while the public pass only ends it at the
-# entry's own field column. A public entry whose `repos:` list has a map
-# item before a shared slug could then have the SAME count (1) as a
-# private entry holding that same slug elsewhere — exempting a token that
-# is genuinely private in a second location. Fixed by comparing LINE
-# NUMBERS instead of counts: both passes now record the line each value
-# occurred on, and a token is exempt only when EVERY line where the greedy
-# pass found it is ALSO a line the public pass attributes to a proven
-# public entry. A public-pass line can then never "balance out" a private
-# line the greedy pass counted elsewhere, because they are different line
-# numbers by construction.
+#   - The PRIVATE set is exactly what each hook's ORIGINAL (dev, commit
+#     9ac9d9e) awk extraction produces — kept byte-for-byte, just wrapped
+#     so each emitted token also carries the line it came from. `dev`'\''s
+#     extraction is not one thing: `check-private-refs-staged.sh` and
+#     `block-private-refs-in-public-repos.sh` share one awk program
+#     (`_registry_dev_extract_standard`); `check-private-refs-runtime.sh`
+#     has always had its own, slightly different one
+#     (`_registry_dev_extract_runtime`), including that hook'\''s own
+#     long-standing gap around block-list `repos:` items. Both are
+#     reproduced here unchanged; this file does not "fix" either one, and
+#     a caller can never end up with FEWER private tokens than dev found
+#     for that same registry, because it is not deriving that set with new
+#     logic at all — it is running dev'\''s own.
+#   - The PUBLIC set is still proven, not assumed — unchanged from round 6:
+#     a separate structural pass finds tokens belonging to an entry with
+#     `public: true`, strictly under the file'\''s real top-level `projects`
+#     key (unquoted, single- or double-quoted, with an optional `&anchor`
+#     or `!tag`), with a second top-level `projects:` key, two YAML
+#     documents, or ANY tab in the file'\''s indentation making the whole
+#     file ambiguous (the public set then empties for the WHOLE file, and
+#     one line goes to stderr naming the cause). An entry is public only
+#     with EXACTLY ONE `public:` key whose value is exactly `true`; a
+#     second occurrence of `name:`/`repo:`/`repos:`/`workspace:` in the
+#     same entry also makes it private (closes a missing "- " typo path).
+#   - A token is exempt only when EVERY line dev'\''s extraction found it on
+#     is ALSO a line the structural pass attributes to a proven public
+#     entry — the line-based correlation rounds 5-6 already established,
+#     now comparing dev'\''s own line numbers against the structural pass'\''s.
 #
-# Explicitly out of scope (pre-existing gaps that already fail open on
-# `dev` today, named in the PR body rather than fixed here): flow-style
-# YAML (`projects: [{name: ..., repo: ...}]`, `- {name: ..., repo: ...}`)
-# and a value-level anchor (`repo: &r org/repo`, referenced later via
-# `*r`). Both are rare in a hand-written registry and are a follow-up.
-# Also out of scope (usability, not a leak — the greedy pass is
-# deliberately indent/nesting-blind): a nested `name:` key with a common
-# word as its value (e.g. `deploy: name: prod` in a private entry) makes
-# that word a private token throughout the codebase. Named in the PR body
-# as a follow-up.
+# Explicitly out of scope, unchanged from earlier rounds: flow-style YAML,
+# a value-level anchor, and — new in this round, an explicit acceptance
+# rather than a gap to close — every extraction quirk `check-private-refs-
+# runtime.sh`'\''s own dev-era awk already had (for example, it does not
+# strip a trailing `\r`, so a CRLF registry'\''s tokens do not match plain
+# text; that was true on `dev` before apexyard#1455 and stays true here).
 #
 # Usage:
 #   source ".../_lib-registry-parser.sh"
-#   parsed=$(registry_parse_entries "$registry"); rc=$?
+#   parsed=$(registry_parse_entries "$registry" "$style"); rc=$?
+#   # $style is "runtime" for check-private-refs-runtime.sh, and anything
+#   # else (conventionally "standard", or omitted) for the other two hooks.
 #   # rc non-zero means the parse failed (e.g. the file became unreadable
 #   # mid-call) — the caller must fail closed (BLOCK), never treat that as
-#   # "no registered projects". A stderr warning (see below) may also
-#   # explain a suppressed public set even though rc is 0.
+#   # "no registered projects".
 #   while IFS= read -r entry; do
 #     case "$entry" in
 #       PUBLIC=*)    current_public=${entry#PUBLIC=} ;;
@@ -81,45 +81,147 @@
 #   EOF
 #
 # Output contract: one `PUBLIC=0` or `PUBLIC=1` line immediately precedes
-# each `NAME=`/`REPO=`/`WORKSPACE=` line it governs. The flag is computed
-# per unique VALUE, not per registry entry — apexyard#1457 round 4 made
-# the private (name/repo/workspace) set a flat, structure-independent
-# scan, so there is no longer a stable "this entry's tokens" grouping in
-# that part of the stream at all. Every distinct value in the private
-# (greedy) set is emitted exactly once. A separate `PAIR=name<TAB>repo`
-# line — one per (name, repo) combination of an entry that actually has
-# both — carries the per-entry association that a consumer needing it
-# (the #1431 upstream bare-name exemption) cannot reconstruct from
-# NAME=/REPO= adjacency any more. `PAIR=` lines are NOT preceded by a
-# `PUBLIC=` line and do not affect `current_public` tracking; skip them
-# in a `case` that only wants tokens, as shown above.
-#
-# When the public set is suppressed for the whole file (ambiguity — see
-# above), one line is written to STDERR naming the cause (apexyard#1457
-# round 5, Rex/Hakim advisory). That line is diagnostic only: it never
-# appears on stdout, so it cannot be mistaken for a PUBLIC=/NAME=/PAIR=
-# line by a caller reading this function's output.
+# each `NAME=`/`REPO=`/`WORKSPACE=` line it governs; every distinct value
+# dev'\''s extraction produced is emitted exactly once. `PAIR=name<TAB>repo`
+# lines carry the #1431 upstream bare-name exemption'\''s per-entry
+# association, built by the structural pass (unaffected by public/private
+# status); they are not preceded by a `PUBLIC=` line.
 #
 # A missing `public:` field, a `public:` value other than exactly `true`,
-# a SECOND `public:` key in the same entry, or ANY ambiguity in the
-# public-set parse, all default to PUBLIC=0 (private). Every caller MUST
-# fail closed — block, never silently allow — whenever this function is
-# undefined (the library failed to load) or returns non-zero (apexyard#1457
-# Rex B1 / Hakim HIGH-2). See each hook's own "registry parser sanity check"
-# comment for the exact fail-closed gate.
-#
-# This whole file's guarantee — a private token can never disappear from
-# the scrub list — holds for valid YAML input. A file this parser cannot
-# make sense of at all (mismatched quotes, a broken block scalar, etc.) is
-# outside what any of the three passes above claim to handle correctly;
-# the ambiguity gate catches the shapes named above, not every possible
-# malformed file.
+# a SECOND `public:`/`name:`/`repo:`/`repos:`/`workspace:` key, or ANY
+# ambiguity in the public-set parse, all default to PUBLIC=0 (private).
+# Every caller MUST fail closed — block, never silently allow — whenever
+# this function is undefined (the library failed to load) or returns
+# non-zero (apexyard#1457 Rex B1 / Hakim HIGH-2).
 registry_parse_entries() {
+  local registry="$1" style="${2:-standard}"
+  [ -r "$registry" ] || return 1
+  local privfile pubfile rc
+  privfile=$(mktemp 2>/dev/null) || return 1
+  pubfile=$(mktemp 2>/dev/null) || { rm -f "$privfile"; return 1; }
+
+  if [ "$style" = "runtime" ]; then
+    _registry_dev_extract_runtime "$registry" > "$privfile" 2>/dev/null
+  else
+    _registry_dev_extract_standard "$registry" > "$privfile" 2>/dev/null
+  fi
+  rc=$?
+  if [ "$rc" -ne 0 ]; then rm -f "$privfile" "$pubfile"; return 1; fi
+
+  _registry_public_pass "$registry" > "$pubfile"
+  rc=$?
+  if [ "$rc" -ne 0 ]; then rm -f "$privfile" "$pubfile"; return 1; fi
+
+  _registry_correlate "$privfile" "$pubfile"
+  rc=$?
+  rm -f "$privfile" "$pubfile"
+  return $rc
+}
+
+# ---------------------------------------------------------------------------
+# Dev (9ac9d9e) private-token extraction — `check-private-refs-staged.sh`
+# and `block-private-refs-in-public-repos.sh` share this program verbatim
+# (module the `pending_name`/`NAMEREPO` bookkeeping, which fed the #1431
+# exemption before this file existed and is superseded here by the
+# structural pass'\''s `PAIR=` lines). Each token print gains a
+# "\t<line-number>" suffix — the ONLY change from dev'\''s own program — so
+# the exemption correlation below can compare by line, not by count
+# (apexyard#1457 Hakim HIGH-7). WHICH tokens this finds is untouched.
+# ---------------------------------------------------------------------------
+_registry_dev_extract_standard() {
+  local registry="$1"
+  [ -r "$registry" ] || return 1
+  awk '
+    function unquote(value) { gsub(/^["\x27]|["\x27]$/, "", value); return value }
+    /^[[:space:]]*- name:/ {
+      pending_name = unquote($3)
+      print "NAME=" pending_name "\t" NR; current_list = ""; next
+    }
+    /^[[:space:]]*repo:/ {
+      repo_val = unquote($2)
+      print "REPO=" repo_val "\t" NR
+      pending_name = ""; current_list = ""; next
+    }
+    /^[[:space:]]*workspace:/ {
+      print "WORKSPACE=" unquote($2) "\t" NR; current_list = ""; next
+    }
+    /^[[:space:]]*repos:[[:space:]]*\[/ {
+      value = $0; sub(/^[^\[]*\[/, "", value); sub(/\].*$/, "", value)
+      count = split(value, items, ",")
+      for (i = 1; i <= count; i++) {
+        item = items[i]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item != "") print "REPO=" unquote(item) "\t" NR
+      }
+      pending_name = ""; current_list = ""; next
+    }
+    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
+    /^[[:space:]]*-[[:space:]]+/ {
+      if (current_list == "repos") {
+        value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
+        gsub(/[[:space:]]+$/, "", value); print "REPO=" unquote(value) "\t" NR
+      }
+    }
+  ' "$registry"
+}
+
+# Dev (9ac9d9e) private-token extraction for `check-private-refs-
+# runtime.sh` — its own separate program, unchanged from dev apart from
+# the same "\t<line-number>" suffix. Includes that hook'\''s own long-
+# standing behaviour around block-list `repos:` items (see the file
+# header); not "fixed" here on purpose.
+_registry_dev_extract_runtime() {
+  local registry="$1"
+  [ -r "$registry" ] || return 1
+  awk '
+    function unquote(value) { gsub(/^["\x27]|["\x27]$/, "", value); return value }
+    function emit_repos(value,    n, parts, i, item) {
+      gsub(/^[[:space:]]*\[[[:space:]]*/, "", value)
+      gsub(/[[:space:]]*\][[:space:]]*$/, "", value)
+      n = split(value, parts, ",")
+      for (i = 1; i <= n; i++) {
+        item = unquote(parts[i])
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item != "") print "REPO=" item "\t" NR
+      }
+    }
+    in_repos = 0
+    /^[[:space:]]*- name:/ { print "NAME=" unquote($3) "\t" NR; next }
+    /^[[:space:]]*repo:/ { print "REPO=" unquote($2) "\t" NR; next }
+    /^[[:space:]]*repos:[[:space:]]*\[/ {
+      value = $0
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      emit_repos(value)
+      in_repos = 0
+      next
+    }
+    /^[[:space:]]*repos:[[:space:]]*$/ { in_repos = 1; next }
+    in_repos && /^[[:space:]]*-[[:space:]]+/ {
+      value = $0
+      sub(/^[[:space:]]*-[[:space:]]*/, "", value)
+      if (value !~ /^[[:alnum:]_.-]+:/) print "REPO=" unquote(value) "\t" NR
+      next
+    }
+    /^[^[:space:]-]/ { in_repos = 0 }
+    /^[[:space:]]*workspace:/ { print "WORKSPACE=" unquote($2) "\t" NR; next }
+  ' "$registry"
+}
+
+# ---------------------------------------------------------------------------
+# The PUBLIC (structural) pass — unchanged since round 6 (Rex reviewed it
+# again in round 7 and found nothing to fix). Finds tokens belonging to an
+# entry with `public: true`, strictly under the file'\''s real top-level
+# `projects` key, and the #1431 name<->repo `PAIR=` associations for every
+# entry it walks. Emits its own `PUBNAME=`/`PUBREPO=`/`PUBWS=value\tline`
+# lines (the "proven public, on this line" set) plus `PAIR=` lines; both
+# are correlated against dev'\''s private extraction by `_registry_correlate`
+# below, not by this function.
+# ---------------------------------------------------------------------------
+_registry_public_pass() {
   local registry="$1"
   [ -r "$registry" ] || return 1
   awk '
     BEGIN {
-      # Public (structural) pass state.
       p_state = "before"; p_top_col = -1; p_projects_seen = 0; p_ambiguous = 0
       p_ambiguous_reason = ""
       p_entry_indent = -1; p_field_col = -1; p_have_entry = 0
@@ -127,8 +229,7 @@ registry_parse_entries() {
       p_name_key_count = 0; p_repo_key_count = 0; p_workspace_key_count = 0
       p_repos_key_count = 0
       p_in_block = 0
-      # Private (greedy) pass state.
-      g_current_list = ""; g_repos_indent = -1
+      n_pub = 0; n_pair = 0
     }
 
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
@@ -137,45 +238,23 @@ registry_parse_entries() {
       if (!p_ambiguous) { p_ambiguous = 1; p_ambiguous_reason = reason }
     }
 
-    # ------------------------------------------------------------------
-    # PUBLIC (structural) pass — helper functions.
-    # ------------------------------------------------------------------
-
     function is_projects_key(text) {
       return (text ~ /^(\x27projects\x27|"projects"|projects):[[:space:]]*((&[A-Za-z0-9_.-]+|![^[:space:]]*)[[:space:]]*)?(#.*)?$/)
     }
 
     function p_flush() {
       if (p_have_entry) {
-        # apexyard#1457 round 5 (Hakim item 3) — an entry is public only
-        # when it has EXACTLY ONE `public:` key and that key'\''s value is
-        # exactly `true`. A second `public:` key (even a second `true`)
-        # or any other value makes the entry private.
-        #
-        # apexyard#1457 round 6 (Hakim D1, advisory) — the same rule
-        # extends to `name:`, `repo:`, `repos:` and `workspace:`: a
-        # second occurrence of any one of them in the same entry (most
-        # often a missing "- " typo that lets a whole SECOND project'\''s
-        # fields land inside the entry above it as duplicate keys) also
-        # makes the entry private. This does not affect the PAIR=
-        # association below, which always reflects whatever the
-        # structural walk actually saw.
         entry_is_public = (p_public_count == 1 && p_public_all_true &&
           p_name_key_count <= 1 && p_repo_key_count <= 1 &&
           p_workspace_key_count <= 1 && p_repos_key_count <= 1)
         if (entry_is_public) {
-          for (i = 1; i <= p_nname; i++) PNL[p_enames[i], p_ename_lines[i]] = 1
-          for (i = 1; i <= p_nrepo; i++) PRL[p_erepos[i], p_erepo_lines[i]] = 1
-          for (i = 1; i <= p_nws; i++)  PWL[p_ews[i], p_ews_lines[i]] = 1
+          for (i = 1; i <= p_nname; i++) { n_pub++; PubOut[n_pub] = "PUBNAME=" p_enames[i] "\t" p_ename_lines[i] }
+          for (i = 1; i <= p_nrepo; i++) { n_pub++; PubOut[n_pub] = "PUBREPO=" p_erepos[i] "\t" p_erepo_lines[i] }
+          for (i = 1; i <= p_nws; i++)  { n_pub++; PubOut[n_pub] = "PUBWS=" p_ews[i] "\t" p_ews_lines[i] }
         }
-        # apexyard#1457 round 4 — the #1431 upstream bare-name exemption in
-        # check-private-refs-staged.sh needs to know which repo(s) belong
-        # to the SAME registry entry as a given name, regardless of that
-        # entry'\''s public/private status. Pairs a name with EVERY repo of
-        # the entry, including each `repos:` item.
         for (i = 1; i <= p_nname; i++)
           for (j = 1; j <= p_nrepo; j++)
-            { n_pairs++; PairList[n_pairs] = p_enames[i] "\t" p_erepos[j] }
+            { n_pair++; PairOut[n_pair] = "PAIR=" p_enames[i] "\t" p_erepos[j] }
       }
       p_have_entry = 0; p_nname = 0; p_nrepo = 0; p_nws = 0
       p_public_count = 0; p_public_all_true = 1
@@ -184,11 +263,6 @@ registry_parse_entries() {
       p_current_list = ""; p_field_col = -1
     }
 
-    # One field key ("name:", "repo:", ...) of the entry currently open in
-    # the PUBLIC pass, at its own field column. `ln` is the line number
-    # this key line is on, recorded alongside each value so the line-based
-    # exemption correlation (apexyard#1457 round 5) can compare it against
-    # the greedy pass'\''s own recorded line for the same value.
     function p_dispatch(text, ln) {
       if (text ~ /^name:/) {
         v = text; sub(/^name:[[:space:]]*/, "", v); sub(/[[:space:]]*(#.*)?$/, "", v)
@@ -212,9 +286,6 @@ registry_parse_entries() {
         return
       }
       if (text ~ /^public:/) {
-        # apexyard#1457 round 5 (Hakim item 3) — count EVERY `public:` key,
-        # and require the value to be exactly `true`. Deferred to p_flush,
-        # which knows the entry'\''s TOTAL count once it closes.
         p_public_count++
         if (text !~ /^public:[[:space:]]+true[[:space:]]*(#.*)?$/) p_public_all_true = 0
         p_current_list = ""
@@ -242,127 +313,12 @@ registry_parse_entries() {
     }
 
     {
-      # apexyard#1457 Hakim LOW-3 — strip a trailing CR so a CRLF registry
-      # parses identically to LF.
       line = $0
       sub(/\r$/, "", line)
 
-      # apexyard#1457 round 5 (Hakim item 2) — a tab ANYWHERE in a line'\''s
-      # own indentation makes the whole file ambiguous for the public
-      # pass. YAML forbids tabs as indentation; a registry that has one
-      # cannot be trusted to have been parsed the same way this awk
-      # program and a real YAML loader would agree on. Checked
-      # unconditionally, before anything else, on every physical line.
       match(line, /^[ \t]*/)
       if (substr(line, 1, RLENGTH) ~ /\t/) mark_ambiguous("a tab character in the registry'\''s indentation (line " NR ")")
 
-      # ------------------------------------------------------------------
-      # PRIVATE (greedy) pass — runs on EVERY line, unconditionally, with
-      # no state machine and no dependence on the PUBLIC pass below. This
-      # mirrors the indent/nesting-blind matching the leak hooks used
-      # before apexyard#1455: a `name:`/`repo:`/`workspace:` value, or a
-      # `repos:` list item (block or flow), is private wherever it sits.
-      # Each match records the CURRENT line number alongside the value
-      # (apexyard#1457 round 5, Hakim HIGH-7) so exemption can be decided
-      # by line-level correlation with the public pass, not raw counts.
-      #
-      # apexyard#1457 round 6 (Rex B6) — an armed `repos:` list must stay
-      # open across EVERY dash item AT OR DEEPER THAN the column of the
-      # `repos:` key itself, whatever that item looks like. The round-4/5
-      # version let the `repo:`/`workspace:`/`name:` checks below match a
-      # `- repo: x` or `- workspace: x` LIST ITEM first, which then
-      # closed the list (by falling into a branch that resets
-      # `g_current_list`) and dropped every plain item after it — a
-      # fail-open regression, because the greedy set must never lose a
-      # token. This gate runs FIRST, before those specific-key checks,
-      # and treats a dash line at or deeper than the `repos:` key column
-      # as a repos-item continuation while the list is armed: a plain
-      # item is recorded as-is; a one-line map item (`- repo: x`) is
-      # recorded by its value, stripping the "key:" wrapper generically
-      # (not only for "repo"/"workspace"/"name" — ANY key); the list
-      # stays open either way. A later, deeper-than-the-repos:-key,
-      # non-dash line is read as another key of that SAME map item (Rex:
-      # "for a map item, record the value of each of its keys") —
-      # closing the gap that already exists on `dev` for a
-      # `- primary: x` item followed by a `mirror: true` continuation.
-      #
-      # The list closes on a non-dash line at or left of the `repos:`
-      # key column (the literal Rex rule) — and ALSO on a dash line
-      # SHALLOWER than that column, which this scan only reaches once
-      # the entry that owned the `repos:` list has already ended (the
-      # dash then belongs to an outer list, most commonly the NEXT
-      # top-level entry own opening dash). Without that second closing
-      # condition, a `repos:` list left open with nothing after it would
-      # swallow the following entry own fields as if they were more
-      # items of THIS list, dropping that entry real name/repo token
-      # from the greedy set entirely — the exact class of bug this whole
-      # gate exists to prevent.
-      # ------------------------------------------------------------------
-      g_handled = 0
-      match(line, /^[ \t]*/); g_indent = RLENGTH; g_content = substr(line, g_indent + 1)
-      if (g_current_list == "repos" && g_content != "" && g_content !~ /^#/) {
-        if (g_indent >= g_repos_indent && (g_content ~ /^-[[:space:]]+/ || g_content ~ /^-[[:space:]]*(#.*)?$/)) {
-          gitem = g_content
-          sub(/^-[[:space:]]*/, "", gitem)
-          gsub(/[[:space:]]+$/, "", gitem)
-          if (gitem ~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*[^[:space:]]/) {
-            sub(/^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*/, "", gitem)
-            sub(/[[:space:]]*(#.*)?$/, "", gitem)
-          }
-          if (gitem != "") GRL[unquote(gitem), NR] = 1
-          g_handled = 1
-        } else if (g_content !~ /^-/ && g_indent > g_repos_indent) {
-          gitem = g_content
-          if (gitem ~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*[^[:space:]]/) {
-            sub(/^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*/, "", gitem)
-            sub(/[[:space:]]*(#.*)?$/, "", gitem)
-            if (gitem != "") GRL[unquote(gitem), NR] = 1
-          }
-          g_handled = 1
-        } else {
-          g_current_list = ""
-        }
-      }
-      if (!g_handled) {
-        if (line ~ /^[[:space:]]*-?[[:space:]]*name:[[:space:]]*[^[:space:]]/) {
-          gv = line; sub(/^[[:space:]]*-?[[:space:]]*name:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-          GNL[unquote(gv), NR] = 1
-          g_current_list = ""
-        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*[^[:space:]]/) {
-          gv = line; sub(/^[[:space:]]*-?[[:space:]]*repo:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-          GRL[unquote(gv), NR] = 1
-          g_current_list = ""
-        } else if (line ~ /^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*[^[:space:]]/) {
-          gv = line; sub(/^[[:space:]]*-?[[:space:]]*workspace:[[:space:]]*/, "", gv); sub(/[[:space:]]*(#.*)?$/, "", gv)
-          GWL[unquote(gv), NR] = 1
-          g_current_list = ""
-        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*\[/) {
-          gval = line
-          sub(/^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*/, "", gval)
-          sub(/^\[/, "", gval); sub(/\][[:space:]]*(#.*)?$/, "", gval)
-          gn = split(gval, gparts, ",")
-          for (gi = 1; gi <= gn; gi++) {
-            gitem2 = gparts[gi]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", gitem2)
-            if (gitem2 != "") GRL[unquote(gitem2), NR] = 1
-          }
-          g_current_list = ""
-        } else if (line ~ /^[[:space:]]*-?[[:space:]]*repos:[[:space:]]*(#.*)?$/) {
-          g_current_list = "repos"; g_repos_indent = g_indent
-        } else if (line ~ /^[[:space:]]*-[[:space:]]+/) {
-          # A dash line while no repos: list is armed — not a list item
-          # of anything this pass tracks; nothing to record.
-        } else if (line ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/) {
-          g_current_list = ""
-        }
-      }
-
-      # ------------------------------------------------------------------
-      # PUBLIC (structural) pass — finds tokens belonging to an entry
-      # with `public: true`, strictly under the file'\''s real top-level
-      # `projects` key. Every branch below fails closed by construction:
-      # it can only ADD to PNL/PRL/PWL, never remove anything from
-      # GNL/GRL/GWL above.
-      # ------------------------------------------------------------------
       p_skip = 0
       if (p_in_block) {
         match(line, /^[ \t]*/); p_ind = RLENGTH
@@ -377,20 +333,12 @@ registry_parse_entries() {
         if (p_content != "" && p_content !~ /^#/) {
           if (p_top_col == -1) p_top_col = p_indent
 
-          # A block scalar opened on THIS line ("key: |", "key: >-3", an
-          # optional trailing comment) swallows every later line indented
-          # deeper than THIS line'\''s own column, until a dedent — whatever
-          # state we are in, and whatever key it is (Hakim S4: a top-level
-          # block scalar whose prose happens to contain "projects:" and a
-          # "- name:" line must never be read as either).
           if (p_content ~ /^[A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*[|>][+-]?[0-9]*[[:space:]]*(#.*)?$/) {
             p_in_block = 1; p_block_indent = p_indent
           }
 
           if (p_state == "in") {
             if (p_content ~ /^-[[:space:]]*(#.*)?$/) {
-              # A bare "-" line opens an entry with no key on this line at
-              # all; its field column is deferred to the next real line.
               if (p_entry_indent == -1) p_entry_indent = p_indent
               if (p_indent == p_entry_indent) {
                 p_flush(); p_have_entry = 1
@@ -416,11 +364,6 @@ registry_parse_entries() {
                 if (p_item != "") { p_nrepo++; p_erepos[p_nrepo] = unquote(p_item); p_erepo_lines[p_nrepo] = NR }
               }
             } else if (p_indent <= p_top_col) {
-              # A non-dash line at or left of the top-level column ends the
-              # projects: value — a top-level key such as `defaults:`
-              # included. Do NOT `next` past it: re-check the SAME line as
-              # a possible new `projects:` key below (Hakim HIGH-5 fix
-              # item 2 — S1'\''s duplicate top-level key).
               p_flush()
               p_state = "after"
             } else if (p_have_entry) {
@@ -430,17 +373,10 @@ registry_parse_entries() {
               } else if (p_indent == p_field_col) {
                 p_dispatch(p_content, NR)
               }
-              # else: deeper than field_col — a nested map or unrelated
-              # sub-structure. Not this entry'\''s own key; ignored (the
-              # PRIVATE pass above already covers it independently).
             }
           }
 
           if (p_state != "in") {
-            # Only a line at the file'\''s own top-level column can open (or
-            # re-open) the projects: block — never a nested key (Hakim S5)
-            # or one read out of a block scalar'\''s prose (Hakim S4, closed
-            # above by the universal block-scalar skip).
             if (p_indent == p_top_col && is_projects_key(p_content)) {
               if (p_projects_seen) mark_ambiguous("a second top-level projects: key (line " NR ")")
               p_projects_seen = 1
@@ -454,81 +390,90 @@ registry_parse_entries() {
     }
     END {
       p_flush()
-
-      # apexyard#1457 round 5 (Hakim HIGH-7) — correlate by LINE, not by
-      # count. A greedy line for value v is only safe to exempt when that
-      # EXACT line is also one the public pass attributed to a proven
-      # public entry. One pass over each greedy line-index array builds a
-      # per-value (total lines, matched lines) tally; a value is exempt
-      # only when every one of its lines matched.
-      for (key in GNL) {
-        split(key, kp, SUBSEP); v = kp[1]
-        n_total[v]++
-        if (key in PNL) n_matched[v]++
-      }
-      for (v in n_total) {
-        pub = (!p_ambiguous && n_matched[v] == n_total[v])
-        print "PUBLIC=" (pub ? 1 : 0)
-        print "NAME=" v
-      }
-      delete n_total; delete n_matched
-
-      for (key in GRL) {
-        split(key, kp, SUBSEP); v = kp[1]
-        n_total[v]++
-        if (key in PRL) n_matched[v]++
-      }
-      for (v in n_total) {
-        pub = (!p_ambiguous && n_matched[v] == n_total[v])
-        print "PUBLIC=" (pub ? 1 : 0)
-        print "REPO=" v
-      }
-      delete n_total; delete n_matched
-
-      # apexyard#1457 round 4 — name<->repo pairs, gated by the SAME
-      # ambiguity flag as the public set: if the structural walk could not
-      # tell which `projects:` key was real, its notion of entry
-      # boundaries is equally untrustworthy, so no pairing is asserted at
-      # all rather than asserting a possibly-wrong one.
-      if (!p_ambiguous) {
-        for (i = 1; i <= n_pairs; i++) print "PAIR=" PairList[i]
-      }
-
-      for (key in GWL) {
-        split(key, kp, SUBSEP); v = kp[1]
-        n_total[v]++
-        if (key in PWL) n_matched[v]++
-      }
-      for (v in n_total) {
-        pub = (!p_ambiguous && n_matched[v] == n_total[v])
-        print "PUBLIC=" (pub ? 1 : 0)
-        print "WORKSPACE=" v
-      }
-
-      # apexyard#1457 round 5 (Rex/Hakim advisory, item 4) — one line to
-      # STDERR naming why the public set is suppressed, if it is. Never
-      # written to stdout, so it cannot be mistaken for a PUBLIC=/NAME=/
-      # PAIR= line by a caller reading this function'\''s output.
       if (p_ambiguous) {
         print "WARN: registry_parse_entries: the public-entry exemption is suppressed for the whole file — " p_ambiguous_reason > "/dev/stderr"
+      } else {
+        for (i = 1; i <= n_pub; i++) print PubOut[i]
+        for (i = 1; i <= n_pair; i++) print PairOut[i]
       }
     }
   ' "$registry"
 }
 
+# ---------------------------------------------------------------------------
+# Correlates dev'\''s private extraction (privfile: NAME=/REPO=/WORKSPACE=
+# value\tline) against the structural public pass (pubfile: PUBNAME=/
+# PUBREPO=/PUBWS=value\tline, plus PAIR=name\trepo lines). A value is
+# exempt only when EVERY line dev'\''s extraction found it on is also a line
+# the public pass proved belongs to a public entry (apexyard#1457 Hakim
+# HIGH-7) — never a raw count comparison.
+# ---------------------------------------------------------------------------
+_registry_correlate() {
+  local privfile="$1" pubfile="$2"
+  awk -v pubfile="$pubfile" '
+    function load_public() {
+      while ((getline pline < pubfile) > 0) {
+        if (pline ~ /^PAIR=/) { n_pair++; PairOut[n_pair] = substr(pline, 6); continue }
+        tabpos = index(pline, "\t")
+        if (tabpos == 0) continue
+        pkv = substr(pline, 1, tabpos - 1)
+        pln = substr(pline, tabpos + 1) + 0
+        if (pkv ~ /^PUBNAME=/) PubN[substr(pkv, 9), pln] = 1
+        else if (pkv ~ /^PUBREPO=/) PubR[substr(pkv, 9), pln] = 1
+        else if (pkv ~ /^PUBWS=/) PubW[substr(pkv, 7), pln] = 1
+      }
+      close(pubfile)
+    }
+    BEGIN { load_public() }
+    {
+      tabpos = index($0, "\t")
+      if (tabpos == 0) next
+      kv = substr($0, 1, tabpos - 1)
+      ln = substr($0, tabpos + 1) + 0
+      if (kv ~ /^NAME=/) {
+        v = substr(kv, 6)
+        key = v SUBSEP ln
+        if (!(key in SeenN)) { SeenN[key] = 1; totalN[v]++; if (key in PubN) matchedN[v]++ }
+      } else if (kv ~ /^REPO=/) {
+        v = substr(kv, 6)
+        key = v SUBSEP ln
+        if (!(key in SeenR)) { SeenR[key] = 1; totalR[v]++; if (key in PubR) matchedR[v]++ }
+      } else if (kv ~ /^WORKSPACE=/) {
+        v = substr(kv, 11)
+        key = v SUBSEP ln
+        if (!(key in SeenW)) { SeenW[key] = 1; totalW[v]++; if (key in PubW) matchedW[v]++ }
+      }
+    }
+    END {
+      for (v in totalN) {
+        pub = (matchedN[v] == totalN[v])
+        print "PUBLIC=" (pub ? 1 : 0)
+        print "NAME=" v
+      }
+      for (v in totalR) {
+        pub = (matchedR[v] == totalR[v])
+        print "PUBLIC=" (pub ? 1 : 0)
+        print "REPO=" v
+      }
+      for (v in totalW) {
+        pub = (matchedW[v] == totalW[v])
+        print "PUBLIC=" (pub ? 1 : 0)
+        print "WORKSPACE=" v
+      }
+      for (i = 1; i <= n_pair; i++) print "PAIR=" PairOut[i]
+    }
+  ' "$privfile"
+}
+
 # apexyard#1457 round 3, Hakim MEDIUM (elevated to blocking); round 4,
 # Rex fix item 3 ("use the same key rule" as the public-set anchor) — a
 # heuristic, text-only check for "does this registry plainly look like it
-# registers at least one project?", independent of the awk parse above.
-# Every leak hook calls this when its own parse produced zero NAME/REPO/
+# registers at least one project?", independent of the parse above. Every
+# leak hook calls this when its own parse produced zero NAME/REPO/
 # WORKSPACE tokens; if this returns true anyway, that is not "no
 # registered projects" — it is the parse failing to find shapes that ARE
 # there, and the caller must block rather than silently allow every
-# private reference. Deliberately lenient about indentation (unlike the
-# structural pass'\''s top-level-column anchor) — this is a heuristic
-# sanity check, not the security-critical exemption boundary, so matching
-# a `projects:`-shaped line at ANY indent is the right (more suspicious,
-# not less) direction for a advisory gate.
+# private reference.
 registry_has_project_shape() {
   local registry="$1"
   [ -r "$registry" ] || return 1

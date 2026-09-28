@@ -152,58 +152,32 @@ hook specifically).
   already documents removal as a mitigation path. The flag is quieter and
   looks more legitimate than an outright deletion, which is a real but
   accepted cost of the feature; it is not mitigated further here.
-- **Round 4 correction (me2resh/apexyard#1457).** Three review rounds of
-  entry-boundary special cases (scoping `public:` to its own entry;
-  anchoring on the `projects:` key; accepting compact lists and bare-dash
-  entries) kept finding a fresh valid YAML shape that made the structural
-  parser lose track of the real `projects:` key and silently drop private
-  tokens. The parser is inverted instead of patched again: the **private
-  set is greedy** — every `name:`, `repo:`, `repos:` item and `workspace:`
-  value anywhere in the file is private by default, independent of
-  whether the structural parse can find or trust a `projects:` key at
-  all — and the **public set must be proven**, meaning a value is exempt
-  only when every one of its occurrences in that greedy scan is also
-  accounted for by a structurally-confirmed `public: true` entry under
-  the file's real top-level `projects` key. For valid YAML input, a
-  structural-parser bug can now only fail to grant an exemption a
-  project deserves (safe) or be refused by the correlation step anyway;
-  it can no longer make a real private token disappear from the scrub
-  list. A file the parser cannot make sense of at all is a different
-  case: an ambiguous shape (a duplicate top-level `projects:` key, two
-  YAML documents, or a tab in the indentation) does not silently drop
-  anything either — it empties the public set for the whole file
-  instead, so every entry, including the one that should have been
-  exempt, is treated as private, and the parser writes one line to
-  stderr naming the cause.
-- **Round 5 correction (me2resh/apexyard#1457).** The round-4 exemption
-  rule compared per-value OCCURRENCE COUNTS between the greedy (private)
-  pass and the structural (public) pass, on the assumption that both end
-  a `repos:` block list on the same line. They did not: the greedy pass
-  ends the list at any key-shaped line (including a list item that is
-  itself a map, `- primary: ...`), while the structural pass only ends
-  it at the entry's own field column. A public entry whose `repos:` list
-  had such an item before a slug it shared with a private entry could
-  then have equal counts (1 each), exempting a token that was genuinely
-  private elsewhere. Fixed by comparing LINE NUMBERS instead of counts:
-  a token is exempt only when every line the greedy pass found it on is
-  also a line the structural pass attributes to a proven public entry.
-  Also tightened in the same round: an entry is public only when it has
-  EXACTLY ONE `public:` key and that key's value is exactly `true` — a
-  second `public:` key, even a second `true`, now makes the entry
-  private, closing a path where a malformed or duplicated key could have
-  been read charitably.
-- **Round 6 correction (me2resh/apexyard#1457).** The greedy pass's own
-  `repo:`/`workspace:`/`name:` checks matched a one-key `- repo: x` or
-  `- workspace: x` list item before its generic repos-item fallback ran,
-  closing an open `repos:` list and dropping every plain item after it
-  — a valid-YAML shape that made the "can never disappear" claim above
-  false again. Fixed by keeping the list open across every dash item at
-  or deeper than the `repos:` key's own column, recording each item's
-  value (and, for a multi-key map item, the value of every one of its
-  keys), and closing it only on a line at or left of that column. Also
-  hardened: a second `name:`, `repo:`, `repos:` or `workspace:` key in
-  one entry — most often a missing leading dash typo — now makes the
-  entry private too, the same as a duplicate `public:` key.
+- **Rounds 4-7 correction (me2resh/apexyard#1457).** Rounds 4-6 tried
+  fixing the false positive by rewriting the private-token scan as a new,
+  hand-written "greedy" pass meant to be a strict superset of the hooks'
+  original extraction, then patching that rewrite as each round's review
+  found a fresh valid YAML shape where it silently dropped a private
+  token: a `projects:` anchor guess in round 4, an exemption compared
+  by occurrence count instead of line number in round 5, and a one-key
+  `- repo:`/`- workspace:` list item closing an open `repos:` list
+  early in round 6. Round 7 (Hakim HIGH-8: an entry whose first key is `- repos:`
+  swallowed every entry after it) stopped patching the rewrite and
+  removed it instead: the **private set is now exactly what each hook's
+  original, dev (commit `9ac9d9e`) extraction produces**, run unchanged
+  and wrapped only to carry each token's line number, so it can never
+  again produce a token count smaller than dev's own code did on the
+  same registry. The **public set must still be proven**, unchanged
+  since round 6 — a value is exempt only when every line dev's
+  extraction finds it on is also a line the structural pass attributes
+  to a confirmed `public: true` entry under the file's real top-level
+  `projects` key. An ambiguous file (a duplicate top-level `projects:`
+  key, two YAML documents, or a tab in the indentation) empties the
+  public set for the whole file instead, with one line to stderr naming
+  the cause. `.claude/hooks/tests/test_registry_parser_differential.sh`
+  (new) makes this mechanical: it re-derives dev's original two
+  extraction programs and asserts, for every registry fixture in the
+  suite, that no value they find is ever absent from the new parser's
+  output — only ever reclassified from private to proven-public.
 
 ## Artifacts
 
@@ -218,3 +192,4 @@ hook specifically).
 - `.claude/hooks/tests/test_check_private_refs_staged.sh`
 - `.claude/hooks/tests/test_block_private_refs_public_entry.sh` (new)
 - `.claude/hooks/tests/test_leak_hooks_parser_missing.sh` (new)
+- `.claude/hooks/tests/test_registry_parser_differential.sh` (new)

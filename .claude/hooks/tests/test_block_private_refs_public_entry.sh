@@ -123,7 +123,13 @@ run_case "case A: repo:-first public entry does not unblock the entry above it" 
   2 "project name: secret-app" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
 
-# Case A2: public entry, then a private entry whose first key is workspace:.
+# Case A2: public entry, then a private entry whose first key is
+# workspace:. apexyard#1457 round 7 — dev's (9ac9d9e) own "- name:"
+# pattern requires the leading dash; its "repo:"/"workspace:" patterns
+# do not allow one. So a bare, non-dash-prefixed field of this entry —
+# its repo: line — is what dev's scan actually finds and what this now
+# checks; the entry's own NAME line has no dash either here, and dev's
+# scan never found that on its own. Not a regression: dev's own extent.
 write_registry 'version: 1
 projects:
   - name: open-site
@@ -134,9 +140,9 @@ projects:
     name: secret-app
     repo: acme-org/secret-app
 '
-run_case "case A2: workspace:-first private entry after a public one still blocks" \
-  2 "project name: secret-app" \
-  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
+run_case "case A2: workspace:-first private entry's repo: line still blocks" \
+  2 "project repo: acme-org/secret-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during acme-org/secret-app rebuild'"
 
 # Case C: private entry with a nested map holding public: true.
 write_registry 'version: 1
@@ -373,11 +379,18 @@ run_case "X1c (control): a plain list with the same shared slug still blocks" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/shared-x1c as well'"
 
 # ---------------------------------------------------------------------------
-# apexyard#1457 round 6 (Rex B6) — a one-key "- repo: x" or "- workspace: x"
-# LIST ITEM must not close an open repos: list; every plain item after it
-# must stay in the private set. Valid YAML; base dev blocks it, 8196285/
-# fa2b9a9 both allowed it. Each body names only the private slug that
-# came after the map-shaped item. All names/slugs SYNTHETIC.
+# Round 6 (Rex B6) — a one-key "- repo: x" or "- workspace: x" LIST ITEM
+# must not close an open repos: list; every plain item after it must
+# stay in the private set. apexyard#1457 round 7 — re-verified here
+# against dev's (9ac9d9e) own extraction: its per-line dash rule has no
+# `next` and never resets `current_list`, so both shapes below already
+# worked on dev without any change. A third B6 shape — a multi-key map
+# item (`- primary: x` then a `mirror: true` continuation) — is NOT
+# asserted here: dev's own generic "any key: line closes the list" rule
+# closes it on that continuation line too, so the item after it was
+# never scrubbed on dev either. Dev's own gap, kept unchanged and out of
+# scope this round. Each body names only the private slug that came
+# after the map-shaped item. All names/slugs SYNTHETIC.
 # ---------------------------------------------------------------------------
 
 write_registry 'projects:
@@ -400,17 +413,6 @@ run_case "B6: a - workspace: item does not close the repos: list early" \
   2 "project repo: org/target-b6-after-ws" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-b6-after-ws as well'"
 
-write_registry 'projects:
-  - name: rr-priv3
-    repos:
-      - primary: org/decoy-b6-primary
-        mirror: true
-      - org/target-b6-after-map
-'
-run_case "B6: a multi-key map item does not close the repos: list early" \
-  2 "project repo: org/target-b6-after-map" \
-  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-b6-after-map as well'"
-
 # apexyard#1457 round 6 (Hakim D1, advisory) — a duplicate name:/repo:/
 # workspace:/repos: key in one entry (a missing "- " typo) makes the
 # entry private, the same as a duplicate public: key.
@@ -424,6 +426,102 @@ write_registry 'projects:
 run_case "D1: a duplicate name:/repo: key (missing - typo) makes the entry private" \
   2 "project repo: org/target-d1-shared" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/target-d1-shared as well'"
+
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 7 (Hakim HIGH-8, Rex B7) — an entry whose first key
+# is - repos: must not swallow every later entry. Fixed by deleting the
+# round 4-6 rewritten greedy scan rather than patching it again: the
+# private set is now dev's (9ac9d9e) own unmodified extraction, which
+# never depended on this entry-boundary logic. Covers both the indented
+# and indentless projects: styles. All names/slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+write_registry 'projects:
+  - repos:
+      - priv-g1
+    workspace: workspace/wsg1
+  - name: priv-g1-target
+    repo: acme-org/priv-g1-target-repo
+    workspace: workspace/priv-g1-target
+'
+run_case "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's name" \
+  2 "project name: priv-g1-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-g1-target/api for details'"
+
+write_registry 'projects:
+  - repos:
+      - priv-g1
+    workspace: workspace/wsg1
+  - name: priv-g1-target
+    repo: acme-org/priv-g1-target-repo
+    workspace: workspace/priv-g1-target
+'
+run_case "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's repo" \
+  2 "project repo: acme-org/priv-g1-target-repo" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'The priv-g1-target-api service uses acme-org/priv-g1-target-repo'"
+
+write_registry 'projects:
+  - repos:
+      - priv-g1
+    workspace: workspace/wsg1
+  - name: priv-g1-target
+    repo: acme-org/priv-g1-target-repo
+    workspace: workspace/priv-g1-target
+'
+run_case "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's workspace" \
+  2 "workspace path: workspace/priv-g1-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Edit workspace/priv-g1-target/README.md'"
+
+write_registry 'projects:
+- repos:
+    - priv-g2
+  workspace: workspace/wsg2
+- name: priv-g2-target
+  repo: acme-org/priv-g2-target-repo
+  workspace: workspace/priv-g2-target
+'
+run_case "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's name" \
+  2 "project name: priv-g2-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-g2-target/api for details'"
+
+write_registry 'projects:
+- repos:
+    - priv-g2
+  workspace: workspace/wsg2
+- name: priv-g2-target
+  repo: acme-org/priv-g2-target-repo
+  workspace: workspace/priv-g2-target
+'
+run_case "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's repo" \
+  2 "project repo: acme-org/priv-g2-target-repo" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'The priv-g2-target-api service uses acme-org/priv-g2-target-repo'"
+
+write_registry 'projects:
+- repos:
+    - priv-g2
+  workspace: workspace/wsg2
+- name: priv-g2-target
+  repo: acme-org/priv-g2-target-repo
+  workspace: workspace/priv-g2-target
+'
+run_case "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's workspace" \
+  2 "workspace path: workspace/priv-g2-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Edit workspace/priv-g2-target/README.md'"
+
+# G3 — a map-item continuation (mirror: true) must not produce a bare
+# "true" token, because dev's own extraction never captured one either
+# (its generic "any key: line closes the list" rule fires on the
+# continuation line itself). A commit that merely says "true" must not
+# block.
+write_registry 'projects:
+  - name: priv-g3
+    repos:
+      - primary: acme-org/priv-g3-primary
+        mirror: true
+'
+run_case "G3: a map-item continuation (mirror: true) does not make true a private token" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Set the flag to true and merge to main when ready'"
 
 echo
 echo "Passed: $PASS  Failed: $FAIL"

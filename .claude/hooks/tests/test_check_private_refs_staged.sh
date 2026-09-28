@@ -528,6 +528,16 @@ rm -rf "$sandbox"
 
 # Case A2 — public entry first, then a private entry whose first key is
 # `workspace:` (not `name:`). The private entry must not inherit public.
+#
+# apexyard#1457 round 7 — the private set is now exactly dev's (9ac9d9e)
+# own extraction, which only ever matched a bare "workspace:"/"repo:"
+# line, never a dash-prefixed one (`- workspace:`/`- repo:`); only its
+# "- name:" pattern allows a leading dash. So a NON-dash-prefixed field of
+# this entry — its `repo:` line — still gets found by dev's scan, and is
+# the one this test now checks for correlation correctness. Dev's own
+# scan never finds this entry's bare NAME at all when `workspace:` opens
+# it (the name line here has no dash either) — that is dev's own
+# pre-existing limit, not a regression, and out of scope per this round.
 CASE_A2_YAML='projects:
   - name: open-site
     repo: acme-org/open-site
@@ -538,9 +548,9 @@ CASE_A2_YAML='projects:
     repo: acme-org/secret-app
 '
 sandbox=$(make_sandbox_with_remotes "$CASE_A2_YAML" "$NEUTRAL_ORIGIN_URL")
-printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+printf 'Discovered while touching acme-org/secret-app during the rebuild.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_hook "case A2: workspace:-first private entry after a public one still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
+assert_hook "case A2: workspace:-first private entry's repo: line still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
 rm -rf "$sandbox"
 
 # Case C — a private entry with a NESTED map holding `public: true`. Only
@@ -621,15 +631,16 @@ git -C "$sandbox" add notes.md
 assert_hook "public:true with no space after the colon is not read as the flag" "$sandbox" 2 "File: notes.md" "secret-app"
 rm -rf "$sandbox"
 
-# CRLF registry — Hakim LOW-3. A CRLF-terminated private entry (no public
-# flag) must still block; a CRLF-terminated PUBLIC entry must still pass.
-sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
-printf 'projects:\r\n  - name: secret-app\r\n    repo: acme-org/secret-app\r\n    workspace: workspace/secret-app\r\n' > "$sandbox/apexyard.projects.yaml"
-printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
-git -C "$sandbox" add notes.md
-assert_hook "CRLF registry — a private entry still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
-rm -rf "$sandbox"
-
+# CRLF registry — apexyard#1457 round 7: the private set is now exactly
+# dev's (9ac9d9e) own extraction, which never stripped a trailing `\r`.
+# Dev's own token for a CRLF line therefore carries that `\r`, and never
+# matches a plain-text mention — for a PRIVATE entry exactly as much as a
+# PUBLIC one. This was already true on `dev` before apexyard#1455 (Hakim
+# LOW-3, round 4) and is an accepted, in-scope-again gap under "the
+# private set equals dev's extraction, unchanged" — not fixed here. Only
+# the "still passes" direction is asserted below, because that is the
+# one direction a caller could regress on (accidentally start blocking a
+# CRLF public entry it should not).
 sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'projects:\r\n  - name: open-site\r\n    repo: acme-org/open-site\r\n    public: true\r\n    workspace: workspace/open-site\r\n' > "$sandbox/apexyard.projects.yaml"
 printf 'See acme-org/open-site for the open-site launch.\n' > "$sandbox/notes.md"
@@ -776,16 +787,16 @@ rm -rf "$sandbox"
 
 echo
 echo "== Round 3: runtime hook, same shapes (where it applies)"
-
-sandbox=$(make_sandbox_with_remotes "$N1B_YAML" "$NEUTRAL_ORIGIN_URL")
+#
+# apexyard#1457 round 7 — no compact/block-list repos: case is asserted
+# for the runtime hook here any more. Its own dev (9ac9d9e) extraction
+# has a pre-existing bug that keeps a `repos:` block list from EVER being
+# read (a bare `in_repos = 0` statement, with no braces, is itself an
+# always-false PATTERN in awk, so it re-fires and resets the flag on
+# every single line, not just once at start) — no `repos:` block-list
+# item, compact or indented, was ever scrubbed by this hook on dev. That
+# is dev's own gap, kept unchanged and out of scope this round.
 resolved_repo="me2resh/apexyard"
-runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/cc-repo-one as well' '' 2>&1); runtime_rc=$?
-if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'cc-repo-one'; then
-  pass "runtime hook — N1b compact repos: list does not drop its items"
-else
-  fail "runtime hook — N1b compact repos: list does not drop its items" "$runtime_output"
-fi
-rm -rf "$sandbox"
 
 sandbox=$(make_sandbox_with_remotes "$N4_YAML" "$NEUTRAL_ORIGIN_URL")
 runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in acme-org/ff-repo-one as well' '' 2>&1); runtime_rc=$?
@@ -1088,16 +1099,23 @@ fi
 rm -rf "$sandbox"
 
 echo
-echo "== Round 6: an open repos: list must survive every dash item (Rex B6)"
+echo "== Round 6: a repos: list surviving a - repo:/- workspace: item (Rex B6)"
 #
-# The greedy (private) pass'\''s repo:/workspace:/name: checks matched a
-# one-key "- repo: x" or "- workspace: x" LIST ITEM before the generic
-# repos-item fallback ran, and that match closed the list — dropping
-# every plain item after it. This shape is valid YAML: base dev blocks
-# it, and 8196285/fa2b9a9 both allowed it. Each test body names ONLY
-# the private repo slug that came AFTER the map-shaped item, never the
-# entry name, so a surviving NAME token cannot mask a dropped REPO
-# token. All names/slugs are SYNTHETIC.
+# apexyard#1457 round 7 — these two cases are re-verified here against
+# dev's (9ac9d9e) own extraction, which the private set is built from
+# again as of this round. Dev's standard (staged/public-tracker) awk
+# already handled a one-key "- repo: x" or "- workspace: x" list item
+# correctly on its own: its per-line dash rule has no `next` and never
+# resets `current_list`, so the list stays armed for the plain item
+# after it. A THIRD B6 shape — a multi-key map item, `- primary: x` then
+# a `mirror: true` continuation line — is NOT asserted here any more:
+# dev's own generic "any key: line closes the list" rule closes it on
+# the `mirror: true` continuation just as much as it would on a real
+# sibling key, so the plain item after it was never scrubbed on dev
+# either. That is dev's own gap, kept unchanged and out of scope this
+# round. Each test body names ONLY the private repo slug that came
+# AFTER the map-shaped item, never the entry name. All names/slugs are
+# SYNTHETIC.
 
 B6_REPO_YAML='projects:
   - name: pp-priv1
@@ -1123,31 +1141,15 @@ git -C "$sandbox" add notes.md
 assert_hook "B6: a - workspace: item does not close the repos: list early" "$sandbox" 2 "File: notes.md" "target-b6-after-ws"
 rm -rf "$sandbox"
 
-B6_MULTIKEY_YAML='projects:
-  - name: rr-priv3
-    repos:
-      - primary: org/decoy-b6-primary
-        mirror: true
-      - org/target-b6-after-map
-'
-sandbox=$(make_sandbox_with_remotes "$B6_MULTIKEY_YAML" "$NEUTRAL_ORIGIN_URL")
-printf 'Reproduces in org/target-b6-after-map as well.\n' > "$sandbox/notes.md"
-git -C "$sandbox" add notes.md
-assert_hook "B6: a multi-key map item does not close the repos: list early" "$sandbox" 2 "File: notes.md" "target-b6-after-map"
-rm -rf "$sandbox"
-
 echo
-echo "== Round 6: runtime hook, representative B6 shape"
-
-sandbox=$(make_sandbox_with_remotes "$B6_REPO_YAML" "$NEUTRAL_ORIGIN_URL")
+echo "== Round 6: runtime hook — see note above; not asserted (dev's own gap)"
+#
+# apexyard#1457 round 7 — the runtime hook's own dev extraction cannot
+# scrub ANY repos: block-list item at all (see the "in_repos" note in
+# the round-3 runtime section above), so neither the - repo: nor the
+# multi-key-map B6 shape is asserted for it here. Not a regression:
+# dev never scrubbed a block-list repos: item for this hook.
 resolved_repo="me2resh/apexyard"
-runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'Reproduces in org/target-b6-after-repo as well' '' 2>&1); runtime_rc=$?
-if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'target-b6-after-repo'; then
-  pass "runtime hook — B6 (- repo: item) does not close the repos: list early"
-else
-  fail "runtime hook — B6 (- repo: item) does not close the repos: list early" "$runtime_output"
-fi
-rm -rf "$sandbox"
 
 echo
 echo "== Round 6: a duplicate name:/repo:/workspace:/repos: key makes the entry private (Hakim D1, advisory)"
@@ -1167,6 +1169,107 @@ sandbox=$(make_sandbox_with_remotes "$D1_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'Reproduces in org/target-d1-shared as well.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 assert_hook "D1: a duplicate name:/repo: key (missing - typo) makes the entry private" "$sandbox" 2 "File: notes.md" "target-d1-shared"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 7 (Hakim HIGH-8, Rex B7): an entry starting with - repos: must not swallow later entries"
+#
+# The round-6 greedy scan's g_repos_indent got the whole LINE's own
+# indentation, not the column of the repos: key text — on a "- repos:"
+# line those are the same column as the entry's own dash, so the list
+# never closed and every later entry's fields (name, repo, workspace)
+# were read as more items of that same list. Deleted with the rest of
+# the round 4-6 rewrite (apexyard#1457 round 7): the private set no
+# longer depends on any custom entry-boundary logic at all, so this
+# shape was never at risk under dev's (9ac9d9e) own flat extraction —
+# verified here, in both the indented and indentless projects: styles.
+# Each body checks the path form (name/file), the hyphenated form
+# (name-suffix), and a workspace path followed by /. All names/slugs
+# SYNTHETIC.
+
+G1_YAML='projects:
+  - repos:
+      - priv-g1
+    workspace: workspace/wsg1
+  - name: priv-g1-target
+    repo: acme-org/priv-g1-target-repo
+    workspace: workspace/priv-g1-target
+'
+sandbox=$(make_sandbox_with_remotes "$G1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See priv-g1-target/api for details.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's name (path form)" "$sandbox" 2 "File: notes.md" "priv-g1-target"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$G1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'The priv-g1-target-api service is down.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's name (hyphenated form)" "$sandbox" 2 "File: notes.md" "priv-g1-target"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$G1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Edit workspace/priv-g1-target/README.md.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G1/B7 (indented): an entry starting with - repos: does not swallow the next entry's workspace path" "$sandbox" 2 "File: notes.md" "priv-g1-target"
+rm -rf "$sandbox"
+
+G2_YAML='projects:
+- repos:
+    - priv-g2
+  workspace: workspace/wsg2
+- name: priv-g2-target
+  repo: acme-org/priv-g2-target-repo
+  workspace: workspace/priv-g2-target
+'
+sandbox=$(make_sandbox_with_remotes "$G2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See priv-g2-target/api for details.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's name (path form)" "$sandbox" 2 "File: notes.md" "priv-g2-target"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$G2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'The priv-g2-target-api service is down.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's name (hyphenated form)" "$sandbox" 2 "File: notes.md" "priv-g2-target"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$G2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Edit workspace/priv-g2-target/README.md.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G2/B7 (indentless): an entry starting with - repos: does not swallow the next entry's workspace path" "$sandbox" 2 "File: notes.md" "priv-g2-target"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 7: runtime hook, representative G1 shape"
+
+sandbox=$(make_sandbox_with_remotes "$G1_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "$resolved_repo" 'See priv-g1-target/api for details' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'priv-g1-target'; then
+  pass "runtime hook — G1/B7 (indented) does not swallow the next entry's name"
+else
+  fail "runtime hook — G1/B7 (indented) does not swallow the next entry's name" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+echo
+echo "== Round 7: a map-item continuation (mirror: true) must not produce a 'true' token"
+#
+# apexyard#1457 round 7 — dev's (9ac9d9e) own extraction never captured
+# a map-item's continuation line as a value at all (its generic "any
+# key: line closes the list" rule fires on "mirror: true" before any
+# repos-item rule could), so the private set built from dev's
+# extraction must not contain a bare "true" token either. A commit that
+# merely says "true" must not block.
+G3_YAML='projects:
+  - name: priv-g3
+    repos:
+      - primary: acme-org/priv-g3-primary
+        mirror: true
+'
+sandbox=$(make_sandbox_with_remotes "$G3_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Set the flag to true and merge to main when ready.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "G3: a map-item continuation (mirror: true) does not make 'true' a private token" "$sandbox" 0 "" ""
 rm -rf "$sandbox"
 
 echo

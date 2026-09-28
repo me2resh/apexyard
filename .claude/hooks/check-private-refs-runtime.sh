@@ -63,7 +63,7 @@ if ! declare -F registry_parse_entries >/dev/null 2>&1; then
   echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan tracker-wrapper content for a private portfolio reference." >&2
   exit 2
 fi
-registry_parsed=$(registry_parse_entries "$registry")
+registry_parsed=$(registry_parse_entries "$registry" runtime)
 registry_parse_rc=$?
 if [ "$registry_parse_rc" -ne 0 ]; then
   echo "BLOCKED: registry parse failed (exit $registry_parse_rc) while scanning tracker-wrapper content for a private portfolio reference." >&2
