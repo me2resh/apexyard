@@ -358,6 +358,54 @@ run_custom_trunk_case "#888: real malformed feature branch still blocks with tru
 run_custom_trunk_case "#888: bogus branch still blocks with trunk override present" \
   "git push origin bogus-branch" 2
 
+# ---- #1362: dependency-bot branch prefixes ------------------------------
+#
+# Bots name their own branches and have no ticket to reference, so a
+# maintainer could never push the changelog fragment the merge gates demand.
+# CI already exempts these prefixes (pr-title-check.yml, #588). The negatives
+# below pin the exemption to an ANCHORED prefix: a name that merely contains
+# the word, or nests it under another path, must still block.
+
+run_case "#1362: dependabot/ branch is exempt" \
+  "git push origin dependabot/npm_and_yarn/undici-8.9.0" 0
+
+run_case "#1362: renovate/ branch is exempt" \
+  "git push origin renovate/major-node-types" 0
+
+run_case "#1362: nested feature/dependabot/ still blocks" \
+  "git push origin feature/dependabot/bump-undici" 2
+
+run_case "#1362: dependabot-manual/ lookalike still blocks" \
+  "git push origin dependabot-manual/bump-undici" 2
+
+run_case "#1362: branch merely containing 'dependabot' still blocks" \
+  "git push origin chore/update-dependabot-config" 2
+
+run_case "#1362: renovate-bot/ lookalike still blocks" \
+  "git push origin renovate-bot/bump-node" 2
+
+# Near-miss shapes. Each differs from an exempt prefix by one character or by
+# position, so each is the mistake a future edit to the anchor would make.
+run_case "#1362: dependabotx/ lookalike still blocks" \
+  "git push origin dependabotx/foo" 2
+
+run_case "#1362: renovate-fix (no slash) still blocks" \
+  "git push origin renovate-fix" 2
+
+run_case "#1362: dependabot as a mid-path segment still blocks" \
+  "git push origin feature/dependabot-x" 2
+
+run_case "#1362: capitalised Dependabot/ still blocks" \
+  "git push origin Dependabot/npm/x" 2
+
+# An empty first segment is not exempt. Git rejects a ref ending in "/", so the
+# practical risk is low, but the anchor should not accept a name no bot emits.
+run_case "#1362: bare dependabot/ is not exempt" \
+  "git push origin dependabot/" 2
+
+run_case "#1362: bare renovate/ is not exempt" \
+  "git push origin renovate/" 2
+
 # ---- Summary ------------------------------------------------------------
 
 echo ""

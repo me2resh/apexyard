@@ -34,11 +34,19 @@ jobs:
             const title = context.payload.pull_request.title;
             const headRef = context.payload.pull_request.head.ref || '';
 
-            // Bot / automation branches carry no ticket by design — dependabot
+            // Bot / automation branches carry no ticket by design — dependency
             // bump PRs ("chore: bump X from A to B") and release-sync merges.
             // Exempt them, mirroring the local hooks' sync/ exemption (#545).
             // See #588.
-            if (/^(dependabot\/|sync\/|release\/)/.test(headRef)) {
+            //
+            // This list and validate-branch-name.sh's bot-prefix list must
+            // stay in step (#1362). A prefix the hook exempts but this check
+            // does not lets a bot PR pass the local push gate and then fail
+            // here on a title it was never going to carry — which is the
+            // "anything that passes the hooks also passes this CI check"
+            // promise below, broken. Each side requires a non-empty segment
+            // after the slash, so a bare `renovate/` is not exempt.
+            if (/^(dependabot\/|renovate\/|sync\/|release\/)/.test(headRef)) {
               console.log(`✅ Exempt automation branch (${headRef}) — ticket ID not required.`);
               return;
             }

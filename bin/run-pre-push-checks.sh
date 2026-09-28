@@ -76,6 +76,7 @@ if [ "${1:-}" = "--list" ]; then
   echo "markdownlint"
   echo "shellcheck"
   echo "subpacks"
+  echo "writing-profile"
   exit 0
 fi
 
@@ -178,6 +179,21 @@ run_check "shellcheck" "$SHELLCHECK_CMD" || true
 
 # 3. subpack extraction smoke test
 run_check "subpacks" "bash .claude/hooks/tests/test_subpack_extraction.sh 2>&1" || true
+
+# 4. writing-profile check (advisory only, me2resh/apexyard#1418 item 6)
+# Reports semicolons and over-length sentences in changed Markdown lines.
+# Runs OUTSIDE run_check on purpose: run_check swallows a passing check's
+# stdout, and these findings must reach the contributor, not be discarded.
+# The script itself always exits 0, and the `|| true` here is a second,
+# redundant guarantee: this step can never turn into a BLOCKED result, even
+# if the script crashes.
+echo "  running: writing-profile (advisory)" >&2
+WRITING_PROFILE_SCRIPT="$REPO_ROOT/bin/check-writing-profile.sh"
+if [ -f "$WRITING_PROFILE_SCRIPT" ]; then
+  bash "$WRITING_PROFILE_SCRIPT" 2>&1 | sed 's/^/  writing-profile: /' >&2 || true
+else
+  echo "INFO: $WRITING_PROFILE_SCRIPT not found — writing-profile check skipped." >&2
+fi
 
 # ---------------------------------------------------------------------------
 # Result

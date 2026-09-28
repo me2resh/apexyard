@@ -150,13 +150,7 @@ Don't ask questions whose answer is already in the discovery report.
 
 ### 5. Generate the output(s)
 
-Resolve the template:
-
-```bash
-template=$(portfolio_resolve_template architecture/dfd.md)
-```
-
-Single-fork adopters with no override fall through to `templates/architecture/dfd.md`. Adopters who want a customised shape drop their version at `<private_repo>/custom-templates/architecture/dfd.md` (same convention as `/c4`).
+`generate-mermaid.sh` writes the whole `dfd.md` itself. It does not read `templates/architecture/dfd.md`. An override at `<private_repo>/custom-templates/architecture/dfd.md` has no effect on generated output. The template is the starting point for a DFD written by hand. A DFD from either source must follow the heading-contract rule under Rules below.
 
 #### 5a. Mermaid markdown (always)
 
@@ -185,7 +179,7 @@ bash .claude/skills/dfd/generate-mermaid.sh "$PROJECT" "$discovery_yaml" "$class
 cat "$discovery_yaml" "$classifications_yaml" > "${projects_dir}/${PROJECT}/architecture/dfd-source.yaml"
 ```
 
-The generator replaces placeholders in the template skeleton with real actors / processes / stores / flows from the in-memory model. Every cross-boundary arrow MUST carry a payload label.
+The generator writes a fixed skeleton with placeholder nodes and rows. It appends both YAML reports under `## Discovery provenance`. Every cross-boundary arrow MUST carry a payload label.
 
 #### 5b. Threat Dragon v2 JSON (on `--format=dragon` or `--format=all`)
 

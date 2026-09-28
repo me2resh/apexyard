@@ -196,6 +196,20 @@ git commit --amend -m "$(git log -1 --format=%B)
 
 Link-check (lychee) is intentionally excluded — it is slow and network-dependent, making it unsuitable for pre-push latency.
 
+### Writing-profile check (advisory)
+
+`bin/run-pre-push-checks.sh` also runs `bin/check-writing-profile.sh` after the
+checks above (me2resh/apexyard#1418 item 6). It reports semicolons and
+sentences over 25 words in the Markdown lines a push adds, using the
+controlled technical writing profile in `.claude/rules/writing-standard.md`.
+
+This check is advisory only. It always exits 0. It never blocks a push, even
+when it finds faults or crashes. Run it by hand before opening a PR:
+
+```bash
+bash bin/check-writing-profile.sh
+```
+
 ---
 
 ## Managing model cost — why the main agent dominates spend
