@@ -967,6 +967,127 @@ fi
 rm -rf "$sandbox"
 
 echo
+echo "== Round 5: line-based exemption, not count-based (Hakim HIGH-7)"
+#
+# The round-4 exemption rule compared PER-VALUE OCCURRENCE COUNTS between
+# the greedy (private) pass and the structural (public) pass, on the
+# assumption both end a repos: list at the same line. They do not: the
+# greedy pass ends the list at ANY key-shaped line, including a repos:
+# item that is itself a map (`- primary: ...`) or a `- repo:` item; the
+# structural pass keeps the list open until the entry's own field
+# column. A public entry whose repos: list has such an item before a
+# slug it shares with a PRIVATE entry could then have equal counts (1
+# each) — exempting a token that is genuinely private elsewhere. Fixed
+# by comparing LINE NUMBERS: a token is exempt only when every line
+# where the greedy pass found it is ALSO a line the structural pass
+# attributes to a proven public entry. Verified by hand against
+# 8196285's copy of _lib-registry-parser.sh before adding these: X1 and
+# X1b both marked the shared slug PUBLIC=1 there; X1c (control) already
+# blocked correctly. All names/slugs are SYNTHETIC.
+
+# X1 — a MAP item ("- primary: ... / mirror: true") before the shared
+# slug in a public entry's repos: list; the same slug also appears in a
+# private entry via a plain repo: key.
+X1_YAML='projects:
+  - name: aa-open
+    public: true
+    repos:
+      - primary: org/open-x1
+        mirror: true
+      - org/shared-x1
+  - name: bb-private
+    repo: org/shared-x1
+'
+sandbox=$(make_sandbox_with_remotes "$X1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/shared-x1 as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "X1: a map item before the shared slug does not exempt it" "$sandbox" 2 "File: notes.md" "shared-x1"
+rm -rf "$sandbox"
+
+# X1b — a "- repo: ..." item before the shared slug in the public
+# entry's repos: list.
+X1B_YAML='projects:
+  - name: cc-open
+    public: true
+    repos:
+      - repo: org/open-x1b
+      - org/shared-x1b
+  - name: dd-private
+    repo: org/shared-x1b
+'
+sandbox=$(make_sandbox_with_remotes "$X1B_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/shared-x1b as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "X1b: a - repo: item before the shared slug does not exempt it" "$sandbox" 2 "File: notes.md" "shared-x1b"
+rm -rf "$sandbox"
+
+# X1c (control) — a plain list, same shared slug, nothing before it.
+# Must already block correctly; proves the fix did not overcorrect.
+X1C_YAML='projects:
+  - name: ee-open
+    public: true
+    repos:
+      - org/open-x1c
+      - org/shared-x1c
+  - name: ff-private
+    repo: org/shared-x1c
+'
+sandbox=$(make_sandbox_with_remotes "$X1C_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/shared-x1c as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "X1c (control): a plain list with the same shared slug still blocks" "$sandbox" 2 "File: notes.md" "shared-x1c"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 5: strict public: true validation (Hakim item 3)"
+#
+# An entry is public only if it has EXACTLY ONE public: key and that
+# key's value is exactly true. A second public: key, or any other
+# value, makes the entry private.
+DUP_PUBLIC_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app-duppublic
+    public: true
+    public: true
+    workspace: workspace/secret-app-duppublic
+'
+sandbox=$(make_sandbox_with_remotes "$DUP_PUBLIC_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/secret-app-duppublic as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "a second public: true key makes the entry private" "$sandbox" 2 "File: notes.md" "secret-app-duppublic"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 5: an ambiguity warning names its cause (Rex/Hakim advisory)"
+#
+# When the public set is suppressed (a duplicate top-level projects: key,
+# or a tab in the registry's indentation), the parser writes one line to
+# stderr naming the cause. The commit still blocks on its own merits
+# (the mentioned repo slug); this only checks the diagnostic is present.
+sandbox=$(make_sandbox_with_remotes "$S1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/vault-one as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+warn_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-staged.sh 2>&1)
+if printf '%s' "$warn_output" | grep -qF 'a second top-level projects: key'; then
+  pass "ambiguity warning names a duplicate top-level projects: key"
+else
+  fail "ambiguity warning names a duplicate top-level projects: key" "$warn_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$S1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'projects:\n\t- name: secret-app\n\t  repo: acme-org/secret-app-tab\n' > "$sandbox/apexyard.projects.yaml"
+printf 'Reproduces in acme-org/secret-app-tab as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+warn_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-staged.sh 2>&1)
+if printf '%s' "$warn_output" | grep -qF "a tab character in the registry"; then
+  pass "ambiguity warning names a tab in the registry's indentation"
+else
+  fail "ambiguity warning names a tab in the registry's indentation" "$warn_output"
+fi
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

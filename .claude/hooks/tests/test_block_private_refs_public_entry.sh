@@ -319,6 +319,59 @@ run_case "S9/Rex B: a quoted projects: key does not drop every entry" \
   2 "project repo: acme-org/vault-five" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in acme-org/vault-five as well'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 5 (Hakim HIGH-7) — the round-4 exemption rule
+# compared per-value occurrence COUNTS, which the two passes'\'' differing
+# repos: list boundaries could make equal even for a shared private slug.
+# Fixed by comparing LINE NUMBERS instead. Verified by hand against
+# 8196285 before adding these: X1 and X1b both marked the shared slug
+# public there; X1c (control) already blocked. All slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+# X1 — a MAP item before the shared slug in a public entry's repos: list;
+# the same slug also appears in a private entry via a plain repo: key.
+write_registry 'projects:
+  - name: aa-open
+    public: true
+    repos:
+      - primary: org/open-x1
+        mirror: true
+      - org/shared-x1
+  - name: bb-private
+    repo: org/shared-x1
+'
+run_case "X1: a map item before the shared slug does not exempt it" \
+  2 "project repo: org/shared-x1" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/shared-x1 as well'"
+
+# X1b — a "- repo: ..." item before the shared slug.
+write_registry 'projects:
+  - name: cc-open
+    public: true
+    repos:
+      - repo: org/open-x1b
+      - org/shared-x1b
+  - name: dd-private
+    repo: org/shared-x1b
+'
+run_case "X1b: a - repo: item before the shared slug does not exempt it" \
+  2 "project repo: org/shared-x1b" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/shared-x1b as well'"
+
+# X1c (control) — a plain list, same shared slug, nothing before it.
+write_registry 'projects:
+  - name: ee-open
+    public: true
+    repos:
+      - org/open-x1c
+      - org/shared-x1c
+  - name: ff-private
+    repo: org/shared-x1c
+'
+run_case "X1c (control): a plain list with the same shared slug still blocks" \
+  2 "project repo: org/shared-x1c" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'reproduces in org/shared-x1c as well'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

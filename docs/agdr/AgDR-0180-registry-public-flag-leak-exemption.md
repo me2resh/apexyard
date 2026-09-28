@@ -164,10 +164,34 @@ hook specifically).
   all — and the **public set must be proven**, meaning a value is exempt
   only when every one of its occurrences in that greedy scan is also
   accounted for by a structurally-confirmed `public: true` entry under
-  the file's real top-level `projects` key. A structural-parser bug can
-  now only fail to grant an exemption a project deserves (safe) or be
-  refused by the correlation step anyway; it can no longer make a real
-  private token disappear from the scrub list.
+  the file's real top-level `projects` key. For valid YAML input, a
+  structural-parser bug can now only fail to grant an exemption a
+  project deserves (safe) or be refused by the correlation step anyway;
+  it can no longer make a real private token disappear from the scrub
+  list. A file the parser cannot make sense of at all is a different
+  case: an ambiguous shape (a duplicate top-level `projects:` key, two
+  YAML documents, or a tab in the indentation) does not silently drop
+  anything either — it empties the public set for the whole file
+  instead, so every entry, including the one that should have been
+  exempt, is treated as private, and the parser writes one line to
+  stderr naming the cause.
+- **Round 5 correction (me2resh/apexyard#1457).** The round-4 exemption
+  rule compared per-value OCCURRENCE COUNTS between the greedy (private)
+  pass and the structural (public) pass, on the assumption that both end
+  a `repos:` block list on the same line. They did not: the greedy pass
+  ends the list at any key-shaped line (including a list item that is
+  itself a map, `- primary: ...`), while the structural pass only ends
+  it at the entry's own field column. A public entry whose `repos:` list
+  had such an item before a slug it shared with a private entry could
+  then have equal counts (1 each), exempting a token that was genuinely
+  private elsewhere. Fixed by comparing LINE NUMBERS instead of counts:
+  a token is exempt only when every line the greedy pass found it on is
+  also a line the structural pass attributes to a proven public entry.
+  Also tightened in the same round: an entry is public only when it has
+  EXACTLY ONE `public:` key and that key's value is exactly `true` — a
+  second `public:` key, even a second `true`, now makes the entry
+  private, closing a path where a malformed or duplicated key could have
+  been read charitably.
 
 ## Artifacts
 
