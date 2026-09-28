@@ -141,16 +141,13 @@ Return the CLI exit status. A non-zero result blocks the handoff until the recor
 
 Turn one validated execution slice into one tracker issue, through the existing single-issue `orbit sync github` adapter. This is the only `/orbit` operation that writes to an external tracker. No other ApexYard skill calls the ORBIT CLI (ac1-5) — keep that boundary when you extend this operation.
 
-Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry — the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand:
+Resolve `project_root` and `orbit_root` as in "Project resolution" above. Also resolve the project's tracker repo from the same registry entry — the handoff files the issue against this repo, and every other step below (the duplicate check, the leak scrub, the sync, the confirmation prompt) uses this same value, never a placeholder typed by hand. Use the helper, not a hand-rolled `awk` line — a project that is not the last registry entry needs the `found`-flag fix the helper carries (apexyard#1446, Hakim N1):
 
 ```bash
-project_repo=$(awk -v target="$project" '
-  function value(line) { sub(/^[^:]+:[[:space:]]*/, "", line); gsub(/^['"'"']|['"'"']$/, "", line); return line }
-  /^[[:space:]]*- name:/ { if (name == target) { print repo; exit }; name=value($0); repo=""; next }
-  /^[[:space:]]*repo:/ { repo=value($0) }
-  END { if (name == target) print repo }
-' "$registry")
-[ -n "$project_repo" ] || { echo "No repo: field for project $project in the registry. /orbit handoff needs a target repo." >&2; exit 1; }
+project_repo=$("$(git rev-parse --show-toplevel)/.claude/skills/orbit/lib/resolve-project-repo.sh" "$registry" "$project") || {
+  echo "No repo: field for project $project in the registry. /orbit handoff needs a target repo." >&2
+  exit 1
+}
 ```
 
 The slice file's `basedOn` names the Plan revision and the Reconciliation it was cut from; resolve the matching records from `orbit_root` before doing anything else:

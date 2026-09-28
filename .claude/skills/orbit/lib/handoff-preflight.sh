@@ -94,12 +94,12 @@ plan_revision=$(jq -r '.basedOn.planRevision // empty' "$slice_file")
 reconciliation_id=$(jq -r '.basedOn.reconciliationId // empty' "$slice_file")
 
 [ -n "$slice_id" ] || { echo "Slice record $slice_file has no id." >&2; exit 13; }
-case "$slice_id" in
-  *[!A-Za-z0-9._-]*)
-    echo "Slice id '$slice_id' contains characters outside [A-Za-z0-9._-]; refusing to build a search query from it." >&2
-    exit 13
-    ;;
-esac
+# LC_ALL=C so [A-Za-z0-9._-] means exactly those 64 bytes in every locale,
+# not whatever a locale's collation happens to fold into that range.
+if ! printf '%s' "$slice_id" | LC_ALL=C grep -qE '^[A-Za-z0-9._-]+$'; then
+  echo "Slice id '$slice_id' contains characters outside [A-Za-z0-9._-]; refusing to build a search query from it." >&2
+  exit 13
+fi
 [ -n "$plan_id" ] && [ -n "$plan_revision" ] || { echo "Slice record $slice_file has no basedOn.planRevision for $plan_id." >&2; exit 13; }
 [ -n "$reconciliation_id" ] || { echo "Slice record $slice_file has no basedOn.reconciliationId." >&2; exit 13; }
 
@@ -155,7 +155,7 @@ dup_stderr=$(mktemp "${TMPDIR:-/tmp}/orbit-handoff-dup.XXXXXX") || {
   echo "Cannot create a temp file for the duplicate-issue check." >&2
   exit 13
 }
-duplicates_json=$(gh issue list --repo "$repo" --state open --search "\"$slice_id\"" --json number,body 2>"$dup_stderr")
+duplicates_json=$(gh issue list --repo "$repo" --state open --search "\"$slice_id\" in:body" --limit 200 --json number,body 2>"$dup_stderr")
 dup_rc=$?
 dup_err=$(cat "$dup_stderr" 2>/dev/null)
 rm -f "$dup_stderr"
