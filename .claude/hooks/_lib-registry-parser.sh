@@ -53,12 +53,30 @@
 #     entry — the line-based correlation rounds 5-6 already established,
 #     now comparing dev'\''s own line numbers against the structural pass'\''s.
 #
-# Explicitly out of scope, unchanged from earlier rounds: flow-style YAML,
-# a value-level anchor, and — new in this round, an explicit acceptance
-# rather than a gap to close — every extraction quirk `check-private-refs-
-# runtime.sh`'\''s own dev-era awk already had (for example, it does not
-# strip a trailing `\r`, so a CRLF registry'\''s tokens do not match plain
-# text; that was true on `dev` before apexyard#1455 and stays true here).
+# apexyard#1457 round 8 (Hakim HIGH-9/MEDIUM/LOW-1) — three targeted
+# hardenings on top of round 7'\''s design, none of which touch the three
+# hooks'\'' own bodies (every fix lands in this one shared file, so every
+# consumer gets it the same way):
+#   - `_registry_correlate` now also checks each individual WORD of a
+#     multi-word `dev` value as its own token (`split_words()`), restoring
+#     a behaviour dev'\''s shell loop had (word-splitting an unquoted
+#     variable) that round 2'\''s move to indexed arrays lost. Applied to
+#     both the private and the public side, so a legitimately public
+#     multi-word token'\''s words are still exemptable.
+#   - `_registry_correlate` splits each "value\tline" pair at the LAST
+#     tab, not the first, and refuses to trust a proven-public value that
+#     itself still contains a tab after that split — closing a forged
+#     line-number path (Hakim MEDIUM).
+#   - `registry_parse_entries` now runs dev'\''s private extraction against
+#     a carriage-return-stripped COPY of the registry (Hakim LOW-1). This
+#     is strictly MORE scanning than dev did (dev never stripped `\r`, so
+#     a CRLF registry'\''s tokens never matched plain text) and can only
+#     ever ADD private tokens `dev` itself never found, never remove any
+#     — safe under the same "never fewer than dev" guarantee. The public
+#     (structural) pass is intentionally left reading the registry as-is.
+#
+# Explicitly out of scope, unchanged from earlier rounds: flow-style YAML
+# and a value-level anchor.
 #
 # Usage:
 #   source ".../_lib-registry-parser.sh"
@@ -96,16 +114,30 @@
 registry_parse_entries() {
   local registry="$1" style="${2:-standard}"
   [ -r "$registry" ] || return 1
-  local privfile pubfile rc
+  local privfile pubfile crfile rc
   privfile=$(mktemp 2>/dev/null) || return 1
   pubfile=$(mktemp 2>/dev/null) || { rm -f "$privfile"; return 1; }
 
+  # apexyard#1457 round 8 (Hakim LOW-1) — run dev's private extraction
+  # against a carriage-return-stripped COPY of the registry, not the
+  # registry itself. dev's own awk never stripped "\r", so a CRLF
+  # registry's private tokens carried a trailing "\r" that never matched
+  # plain text (a pre-existing dev gap, accepted through round 7). This
+  # is strictly MORE scanning than dev did, never less, so it cannot
+  # regress the "never fewer tokens than dev" guarantee the differential
+  # test enforces. The public (structural) pass is intentionally left
+  # reading the registry as-is — untouched since round 6, and Rex found
+  # nothing to fix in round 7 either.
+  crfile=$(mktemp 2>/dev/null) || { rm -f "$privfile" "$pubfile"; return 1; }
+  tr -d '\r' < "$registry" > "$crfile" 2>/dev/null
+
   if [ "$style" = "runtime" ]; then
-    _registry_dev_extract_runtime "$registry" > "$privfile" 2>/dev/null
+    _registry_dev_extract_runtime "$crfile" > "$privfile" 2>/dev/null
   else
-    _registry_dev_extract_standard "$registry" > "$privfile" 2>/dev/null
+    _registry_dev_extract_standard "$crfile" > "$privfile" 2>/dev/null
   fi
   rc=$?
+  rm -f "$crfile"
   if [ "$rc" -ne 0 ]; then rm -f "$privfile" "$pubfile"; return 1; fi
 
   _registry_public_pass "$registry" > "$pubfile"
@@ -411,37 +443,101 @@ _registry_public_pass() {
 _registry_correlate() {
   local privfile="$1" pubfile="$2"
   awk -v pubfile="$pubfile" '
-    function load_public() {
+    # apexyard#1457 round 8 (Hakim MEDIUM) — split each "value\tline" pair
+    # at the LAST tab, not the first. A value that itself contains an
+    # embedded tab (crafted or otherwise) used to let the FIRST-tab split
+    # misread that embedded tab as the value/line separator, so an
+    # attacker-chosen digit string right after it was read as the line
+    # number, forging a PubN/PubR/PubW entry at an arbitrary line. The
+    # trailing "\t[^\t]*$" match always lands on the real, final tab
+    # regardless of how many earlier tabs the value itself holds.
+    function last_tab_pos(s) {
+      if (match(s, /\t[^\t]*$/)) return RSTART
+      return 0
+    }
+    # apexyard#1457 round 8 (Hakim HIGH-9) — dev'\''s own hooks looped over
+    # a space-joined string, so the shell split every multi-word token
+    # (e.g. a `repos:` map item like "primary: acme-org/x", or a one-key
+    # `- repo: acme-org/x` list item, both of which dev'\''s extraction
+    # emits as one value with an embedded space) into separate words and
+    # checked each word on its own. Round 2'\''s array change checks each
+    # emitted value as ONE whole string instead, which a normal commit or
+    # issue body never contains verbatim, silently dropping the real
+    # per-word match dev had. This restores dev'\''s per-word behaviour once,
+    # here, so every consumer (staged, runtime, public-tracker) gets it
+    # without re-implementing it three times. Populates out[1..n]; out[1]
+    # is always v itself, and is safe to keep even when it can never
+    # match anything on its own, because the individual words that CAN
+    # match are always included alongside it.
+    function split_words(v, out,    n, m, parts, i, w, j, dup) {
+      n = 0
+      out[++n] = v
+      if (v ~ /[ \t]/) {
+        m = split(v, parts, /[ \t]+/)
+        for (i = 1; i <= m; i++) {
+          w = parts[i]
+          if (w == "") continue
+          dup = 0
+          for (j = 1; j <= n; j++) { if (out[j] == w) { dup = 1; break } }
+          if (!dup) out[++n] = w
+        }
+      }
+      return n
+    }
+    function load_public(    tabpos, pkv, pln, v, warr, nw, wi) {
       while ((getline pline < pubfile) > 0) {
         if (pline ~ /^PAIR=/) { n_pair++; PairOut[n_pair] = substr(pline, 6); continue }
-        tabpos = index(pline, "\t")
+        tabpos = last_tab_pos(pline)
         if (tabpos == 0) continue
         pkv = substr(pline, 1, tabpos - 1)
         pln = substr(pline, tabpos + 1) + 0
-        if (pkv ~ /^PUBNAME=/) PubN[substr(pkv, 9), pln] = 1
-        else if (pkv ~ /^PUBREPO=/) PubR[substr(pkv, 9), pln] = 1
-        else if (pkv ~ /^PUBWS=/) PubW[substr(pkv, 7), pln] = 1
+        if (pkv ~ /^PUBNAME=/) v = substr(pkv, 9)
+        else if (pkv ~ /^PUBREPO=/) v = substr(pkv, 9)
+        else if (pkv ~ /^PUBWS=/) v = substr(pkv, 7)
+        else continue
+        # apexyard#1457 round 8 (Hakim MEDIUM, second half) — a proven-
+        # public VALUE that itself still contains a tab, even after the
+        # last-tab split above correctly located the real line-number
+        # separator, is never trusted as proof of anything. It contributes
+        # no PubN/PubR/PubW entry at all, so any private token sharing
+        # that exact (value, line) stays private by default.
+        if (v ~ /\t/) continue
+        nw = split_words(v, warr)
+        for (wi = 1; wi <= nw; wi++) {
+          if (pkv ~ /^PUBNAME=/) PubN[warr[wi], pln] = 1
+          else if (pkv ~ /^PUBREPO=/) PubR[warr[wi], pln] = 1
+          else if (pkv ~ /^PUBWS=/) PubW[warr[wi], pln] = 1
+        }
       }
       close(pubfile)
     }
     BEGIN { load_public() }
     {
-      tabpos = index($0, "\t")
+      tabpos = last_tab_pos($0)
       if (tabpos == 0) next
       kv = substr($0, 1, tabpos - 1)
       ln = substr($0, tabpos + 1) + 0
       if (kv ~ /^NAME=/) {
         v = substr(kv, 6)
-        key = v SUBSEP ln
-        if (!(key in SeenN)) { SeenN[key] = 1; totalN[v]++; if (key in PubN) matchedN[v]++ }
+        nw = split_words(v, warr)
+        for (wi = 1; wi <= nw; wi++) {
+          wv = warr[wi]; key = wv SUBSEP ln
+          if (!(key in SeenN)) { SeenN[key] = 1; totalN[wv]++; if (key in PubN) matchedN[wv]++ }
+        }
       } else if (kv ~ /^REPO=/) {
         v = substr(kv, 6)
-        key = v SUBSEP ln
-        if (!(key in SeenR)) { SeenR[key] = 1; totalR[v]++; if (key in PubR) matchedR[v]++ }
+        nw = split_words(v, warr)
+        for (wi = 1; wi <= nw; wi++) {
+          wv = warr[wi]; key = wv SUBSEP ln
+          if (!(key in SeenR)) { SeenR[key] = 1; totalR[wv]++; if (key in PubR) matchedR[wv]++ }
+        }
       } else if (kv ~ /^WORKSPACE=/) {
         v = substr(kv, 11)
-        key = v SUBSEP ln
-        if (!(key in SeenW)) { SeenW[key] = 1; totalW[v]++; if (key in PubW) matchedW[v]++ }
+        nw = split_words(v, warr)
+        for (wi = 1; wi <= nw; wi++) {
+          wv = warr[wi]; key = wv SUBSEP ln
+          if (!(key in SeenW)) { SeenW[key] = 1; totalW[wv]++; if (key in PubW) matchedW[wv]++ }
+        }
       }
     }
     END {

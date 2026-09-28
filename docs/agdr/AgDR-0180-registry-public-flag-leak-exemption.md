@@ -178,6 +178,14 @@ hook specifically).
   extraction programs and asserts, for every registry fixture in the
   suite, that no value they find is ever absent from the new parser's
   output — only ever reclassified from private to proven-public.
+- **Round 8 correction (me2resh/apexyard#1457, Hakim).** `_registry_correlate`
+  now also checks each individual word of a multi-word dev value (restoring
+  a per-word check dev's own hook body had, which round 2's move to indexed
+  arrays lost — HIGH-9), splits a "value\tline" pair at the last tab and
+  distrusts a proven-public value that still contains one after that split
+  (closing a forged-line-number path — MEDIUM), and runs dev's private
+  extraction against a carriage-return-stripped copy of the registry so a
+  CRLF entry's tokens match plain text (LOW-1).
 
 ## Artifacts
 

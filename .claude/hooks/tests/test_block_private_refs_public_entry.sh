@@ -523,6 +523,39 @@ run_case "G3: a map-item continuation (mirror: true) does not make true a privat
   0 "" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Set the flag to true and merge to main when ready'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 round 8 (Hakim HIGH-9) — dev's own hook looped over a
+# space-joined string, so the shell split a multi-word token (a `repos:`
+# map item like "primary: acme-org/x", or a one-key "- repo: acme-org/x"
+# list item — both of which dev's extraction emits as ONE value with an
+# embedded space) into separate words and checked each word on its own.
+# Round 2's move to indexed arrays checks each value as one whole string
+# instead, which normal issue-body text never contains verbatim, so it
+# never matched. _lib-registry-parser.sh now restores dev's per-word
+# behaviour once, in the shared path, so this hook gets it the same way
+# the staged hook does. M1a is the map-item shape; M1b is the one-key
+# `- repo:` shape. All names/slugs SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+write_registry 'projects:
+  - name: mm-priv-a
+    repos:
+      - primary: acme-org/mm-target-a
+        mirror: true
+'
+run_case "M1a: a map-item repos: value blocks via its split word (Hakim HIGH-9)" \
+  2 "project repo: acme-org/mm-target-a" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/mm-target-a as well'"
+
+write_registry 'projects:
+  - name: mm-priv-b
+    repos:
+      - repo: acme-org/mm-target-b
+'
+run_case "M1b: a - repo: item inside repos: blocks via its split word (Hakim HIGH-9)" \
+  2 "project repo: acme-org/mm-target-b" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/mm-target-b as well'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

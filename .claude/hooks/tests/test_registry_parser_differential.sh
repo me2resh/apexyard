@@ -25,6 +25,13 @@
 # finding looked like, and what this file exists to catch mechanically
 # instead of by review.
 #
+# Round 8 (Hakim HIGH-9, Rex) extends the comparison two ways: it applies
+# each hook's EFFECTIVE word-splitting (dev's own hook body looped over a
+# space-joined string, splitting a multi-word value into separate words —
+# see `dev_word_split` below) before comparing, and it compares (TYPE,
+# value) pairs rather than a bare value, so a token can never silently
+# reappear under the wrong type without this test noticing.
+#
 # All fixture names/slugs are SYNTHETIC.
 
 set -u
@@ -125,24 +132,56 @@ dev_extract_runtime() {
   ' "$1"
 }
 
+# apexyard#1457 round 8 (Hakim HIGH-9) — dev's own hooks did not check
+# an extracted value as one whole string; they looped over a
+# space-joined string, so the shell's own unquoted-variable expansion
+# split a multi-word value (e.g. a `repos:` map item like
+# "primary: acme-org/x") into separate words and checked each word on
+# its own. "What dev really scanned" for a given registry is therefore
+# not the raw TYPE=value lines dev's awk prints — it is those lines PLUS
+# one extra TYPE=word line per word of any value that has more than one.
+# Reads "TYPE=value" lines on stdin; for a value with embedded
+# whitespace, `for w in $value` deliberately reuses the same unquoted
+# expansion dev's shell loop relied on, so this models dev's hook
+# behaviour exactly rather than re-deriving it with new logic.
+dev_word_split() {
+  local line type value w
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    type="${line%%=*}"
+    value="${line#*=}"
+    echo "$type=$value"
+    case "$value" in
+      *[[:space:]]*)
+        for w in $value; do
+          [ -n "$w" ] && echo "$type=$w"
+        done
+        ;;
+    esac
+  done
+}
+
 # assert_superset LABEL REGISTRY_FILE STYLE
-# Runs both dev's original extraction and the new registry_parse_entries
-# against REGISTRY_FILE, and asserts every distinct token value dev finds
-# is present somewhere in the new parser's output (either PUBLIC=0 or
-# PUBLIC=1 — reclassification is fine, disappearance is not).
+# Runs both dev's original extraction (word-split as dev's own hook body
+# would have) and the new registry_parse_entries against REGISTRY_FILE,
+# and asserts every distinct (TYPE, value) pair dev finds is present
+# somewhere in the new parser's output (either PUBLIC=0 or PUBLIC=1 —
+# reclassification is fine, disappearance is not). Compared by TYPE and
+# value together, per Rex's round-8 review — a bare value match alone
+# would let a token silently reappear under the WRONG type (a REPO
+# becoming a NAME, say) without this test noticing.
 assert_superset() {
   local label="$1" registry="$2" style="$3"
   local dev_values new_values missing
 
   if [ "$style" = "runtime" ]; then
-    dev_values=$(dev_extract_runtime "$registry" | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+    dev_values=$(dev_extract_runtime "$registry" | dev_word_split | sort -u)
   else
-    dev_values=$(dev_extract_standard "$registry" | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+    dev_values=$(dev_extract_standard "$registry" | dev_word_split | sort -u)
   fi
 
   new_values=$(registry_parse_entries "$registry" "$style" 2>/dev/null \
-    | grep -E '^(NAME|REPO|WORKSPACE)=' \
-    | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+    | grep -E '^(NAME|REPO|WORKSPACE)=' | sort -u)
 
   missing=""
   while IFS= read -r v; do
@@ -155,7 +194,7 @@ $dev_values
 EOF
 
   if [ -n "$missing" ]; then
-    fail "$label" "dev found a value the new parser dropped: ${missing#|}"
+    fail "$label" "dev found a (type, value) pair the new parser dropped: ${missing#|}"
   else
     pass "$label"
   fi
@@ -336,6 +375,35 @@ run_fixture "PT2-second-public-key" 'projects:
     public: true
     repo: acme-org/vv-pub2-repo
 '
+
+# apexyard#1457 round 8 (Hakim HIGH-9) — a one-key "- repo:" item inside
+# a block repos: list is the shape dev's extraction emits as ONE value
+# with an embedded space ("repo: acme-org/mm-target-b"). dev_word_split
+# above models dev's shell loop splitting it into "repo:" and the real
+# slug; this fixture exercises that through the full differential check.
+run_fixture "M1b-dash-repo-item-in-repos-list" 'projects:
+  - name: mm-priv-m1b
+    repos:
+      - repo: acme-org/mm-target-m1b
+'
+
+# apexyard#1457 round 8 (Hakim LOW-1) — a CRLF registry. Unlike the other
+# fixtures, dev's own extraction here still carries a trailing "\r" on
+# every value (dev never stripped it) while the new parser runs against
+# a CR-stripped copy, so dev's raw "\r"-suffixed value is, by design, NOT
+# expected to reappear verbatim in the new parser's output — only its
+# stripped form is. assert_superset is not used here for that reason;
+# this only checks the new parser finds the CR-stripped slug, which is
+# the whole point of the round-8 hardening.
+crlf_file="$WORKDIR/CRLF-private-entry.yaml"
+printf 'projects:\r\n  - name: ww-crlf\r\n    repo: acme-org/ww-crlf-repo\r\n' > "$crlf_file"
+crlf_new_values=$(registry_parse_entries "$crlf_file" standard 2>/dev/null \
+  | grep -E '^(NAME|REPO|WORKSPACE)=' | sort -u)
+if printf '%s\n' "$crlf_new_values" | grep -qxF -- "REPO=acme-org/ww-crlf-repo"; then
+  pass "CRLF-private-entry: the new parser finds the CR-stripped slug"
+else
+  fail "CRLF-private-entry: the new parser finds the CR-stripped slug" "$crlf_new_values"
+fi
 
 echo
 echo "== Differential: the G3 map-item continuation never yields a bare true VALUE"

@@ -631,21 +631,28 @@ git -C "$sandbox" add notes.md
 assert_hook "public:true with no space after the colon is not read as the flag" "$sandbox" 2 "File: notes.md" "secret-app"
 rm -rf "$sandbox"
 
-# CRLF registry — apexyard#1457 round 7: the private set is now exactly
-# dev's (9ac9d9e) own extraction, which never stripped a trailing `\r`.
-# Dev's own token for a CRLF line therefore carries that `\r`, and never
-# matches a plain-text mention — for a PRIVATE entry exactly as much as a
-# PUBLIC one. This was already true on `dev` before apexyard#1455 (Hakim
-# LOW-3, round 4) and is an accepted, in-scope-again gap under "the
-# private set equals dev's extraction, unchanged" — not fixed here. Only
-# the "still passes" direction is asserted below, because that is the
-# one direction a caller could regress on (accidentally start blocking a
-# CRLF public entry it should not).
+# CRLF registry — apexyard#1457 round 7 left this an accepted dev gap
+# (dev's own extraction never stripped a trailing `\r`, so a CRLF line's
+# token carried it and never matched plain text, for a private entry
+# exactly as much as a public one). Round 8 (Hakim LOW-1) closes the
+# private-entry half: registry_parse_entries now runs dev's extraction
+# against a CR-stripped COPY of the registry, so a CRLF private token
+# matches plain text like any other. This is strictly MORE scanning than
+# dev did (never less), so it cannot regress the differential test's
+# "never fewer than dev" guarantee. The public (structural) pass still
+# reads the registry as-is, unchanged.
 sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'projects:\r\n  - name: open-site\r\n    repo: acme-org/open-site\r\n    public: true\r\n    workspace: workspace/open-site\r\n' > "$sandbox/apexyard.projects.yaml"
 printf 'See acme-org/open-site for the open-site launch.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 assert_hook "CRLF registry — a public entry still passes" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'projects:\r\n  - name: pp-crlf-priv\r\n    repo: acme-org/pp-crlf-repo\r\n' > "$sandbox/apexyard.projects.yaml"
+printf 'See acme-org/pp-crlf-repo mentioned here.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "CRLF registry (round 8, Hakim LOW-1) — a private entry now blocks" "$sandbox" 2 "File: notes.md" "pp-crlf-repo"
 rm -rf "$sandbox"
 
 echo
@@ -1270,6 +1277,63 @@ sandbox=$(make_sandbox_with_remotes "$G3_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'Set the flag to true and merge to main when ready.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 assert_hook "G3: a map-item continuation (mirror: true) does not make 'true' a private token" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
+echo "== Round 8 (Hakim HIGH-9): a multi-word dev token still blocks on its real word"
+#
+# apexyard#1457 round 8 — dev's own hook looped over a space-joined
+# string, so the shell split a multi-word token (a map item like
+# "primary: acme-org/x", or a one-key "- repo: acme-org/x" list item —
+# both of which dev's extraction emits as ONE value with an embedded
+# space) into separate words and checked each word on its own. Round 2's
+# move to indexed arrays checks each value as one whole string instead,
+# which normal text never contains verbatim. _lib-registry-parser.sh now
+# restores dev's per-word behaviour once, in the shared path, so every
+# consumer gets it. M2b is the staged-hook mirror of public-tracker's
+# M1b (M1a's shape is already covered on staged by G3 above, which only
+# asserted the "true" non-match half; this adds the real-slug match half
+# for the staged hook via M2b specifically, per round-8 scope). All
+# names/slugs SYNTHETIC.
+
+M2B_YAML='projects:
+  - name: mm-priv-b2
+    repos:
+      - repo: acme-org/mm-target-b2
+'
+sandbox=$(make_sandbox_with_remotes "$M2B_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/mm-target-b2 as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "M2b: a - repo: item inside repos: blocks via its split word on the staged hook" "$sandbox" 2 "File: notes.md" "mm-target-b2"
+rm -rf "$sandbox"
+
+echo
+echo "== Round 8 (Hakim MEDIUM): a tab inside a proven-public value cannot forge a line number"
+#
+# apexyard#1457 round 8 — _registry_correlate split a "value\tline" pair
+# at the FIRST tab. A proven-public value containing an embedded tab
+# followed by a digit string chosen to match some OTHER private token's
+# real line let that first-tab split misread the embedded tab as the
+# value/line separator, forging a PubR entry at an attacker-chosen line
+# — exempting a private token that has nothing to do with the actual
+# public entry. Below, "nn-public"'\''s repo value is
+# "org/mm-shared-tabforge<TAB>3", chosen so the OLD first-tab split would
+# read line 3 — the real line of "mm-private"'\''s own repo: value, which
+# is genuinely private. Fixed by splitting at the LAST tab, and by never
+# trusting a proven-public value that still contains a tab after that
+# split. The private mention must still block.
+TAB=$(printf '\t')
+MEDIUM_YAML="projects:
+  - name: mm-private
+    repo: org/mm-shared-tabforge
+  - name: nn-public
+    public: true
+    repo: org/mm-shared-tabforge${TAB}3
+"
+sandbox=$(make_sandbox_with_remotes "$MEDIUM_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in org/mm-shared-tabforge as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "MEDIUM: a tab-forged line number does not exempt the real private token" "$sandbox" 2 "File: notes.md" "mm-shared-tabforge"
 rm -rf "$sandbox"
 
 echo
