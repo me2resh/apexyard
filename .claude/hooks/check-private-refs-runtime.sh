@@ -56,6 +56,20 @@ if [ -f "$hook_dir/_lib-registry-parser.sh" ]; then
   . "$hook_dir/_lib-registry-parser.sh"
 fi
 
+# apexyard#1457 review round 2 (Rex B1 / Hakim HIGH-2) — fail closed if the
+# shared parser is missing or its parse fails; never treat that as "no
+# registered projects".
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan tracker-wrapper content for a private portfolio reference." >&2
+  exit 2
+fi
+registry_parsed=$(registry_parse_entries "$registry")
+registry_parse_rc=$?
+if [ "$registry_parse_rc" -ne 0 ]; then
+  echo "BLOCKED: registry parse failed (exit $registry_parse_rc) while scanning tracker-wrapper content for a private portfolio reference." >&2
+  exit 2
+fi
+
 current_public=0
 while IFS= read -r entry; do
   case "$entry" in
@@ -83,6 +97,8 @@ while IFS= read -r entry; do
       printf '%s' "$haystack" | grep -qE "(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)" && block
       ;;
   esac
-done < <(registry_parse_entries "$registry")
+done <<EOF
+$registry_parsed
+EOF
 
 exit 0

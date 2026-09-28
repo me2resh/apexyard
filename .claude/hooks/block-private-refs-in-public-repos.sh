@@ -1089,22 +1089,37 @@ fi
 #    _lib-multi-repo-trace.sh.
 # ---------------------------------------------------------------------------
 
-NAMES=""
-REPOS=""
-WORKSPACES=""
-# apexyard#1455 — parallel space-separated sets of the tokens above that
-# belong to a registry entry marked `public: true`. Membership in these sets
-# (not the entry's index) decides the skip, since NAMES/REPOS/WORKSPACES are
-# flattened, order-loses-entry-boundary strings by the time the loops below
-# run.
-PUBLIC_NAMES=""
-PUBLIC_REPOS=""
-PUBLIC_WORKSPACES=""
+# apexyard#1457 review round 2 (Hakim LOW-2) — indexed arrays, not
+# space-joined strings: NAMES_PUBLIC[i] / REPOS_PUBLIC[i] / WORKSPACES_PUBLIC[i]
+# pair with NAMES[i] / REPOS[i] / WORKSPACES[i] by POSITION, the same
+# per-entry pairing the staged and runtime hooks use. A membership-only
+# check (the pre-round-2 approach) could not tell two entries with the same
+# token apart; this can.
+NAMES=()
+NAMES_PUBLIC=()
+REPOS=()
+REPOS_PUBLIC=()
+WORKSPACES=()
+WORKSPACES_PUBLIC=()
 
 HOOK_DIR_FOR_PARSER=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ -f "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh"
+fi
+
+# apexyard#1457 review round 2 (Rex B1 / Hakim HIGH-2) — the registry
+# exists (checked earlier), so fail closed rather than silently scanning
+# nothing when the shared parser is missing or its parse fails.
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan for a private portfolio reference." >&2
+  exit 2
+fi
+REGISTRY_PARSED=$(registry_parse_entries "$REGISTRY")
+REGISTRY_PARSE_RC=$?
+if [ "$REGISTRY_PARSE_RC" -ne 0 ]; then
+  echo "BLOCKED: registry parse failed (exit $REGISTRY_PARSE_RC) while scanning for a private portfolio reference." >&2
+  exit 2
 fi
 
 CURRENT_PUBLIC=0
@@ -1116,35 +1131,28 @@ while IFS= read -r line; do
     NAME=*)
       v=${line#NAME=}
       if [ -n "$v" ]; then
-        NAMES="$NAMES $v"
-        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_NAMES="$PUBLIC_NAMES $v"
+        NAMES+=("$v")
+        NAMES_PUBLIC+=("$CURRENT_PUBLIC")
       fi
       ;;
     REPO=*)
       v=${line#REPO=}
       if [ -n "$v" ]; then
-        REPOS="$REPOS $v"
-        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_REPOS="$PUBLIC_REPOS $v"
+        REPOS+=("$v")
+        REPOS_PUBLIC+=("$CURRENT_PUBLIC")
       fi
       ;;
     WORKSPACE=*)
       v=${line#WORKSPACE=}
       if [ -n "$v" ]; then
-        WORKSPACES="$WORKSPACES $v"
-        [ "$CURRENT_PUBLIC" = "1" ] && PUBLIC_WORKSPACES="$PUBLIC_WORKSPACES $v"
+        WORKSPACES+=("$v")
+        WORKSPACES_PUBLIC+=("$CURRENT_PUBLIC")
       fi
       ;;
   esac
-done < <(registry_parse_entries "$REGISTRY")
-
-# Whole-word membership test against a space-separated set built above.
-token_is_public() {
-  local token="$1" set="$2" item
-  for item in $set; do
-    [ "$item" = "$token" ] && return 0
-  done
-  return 1
-}
+done <<EOF
+$REGISTRY_PARSED
+EOF
 
 # ---------------------------------------------------------------------------
 # 8. Build the match list.
@@ -1185,9 +1193,12 @@ record_if_match() {
   fi
 }
 
-for n in $NAMES; do
+for name_idx in "${!NAMES[@]}"; do
+  n="${NAMES[$name_idx]}"
   # apexyard#1455 — a registry entry marked `public: true` is not a leak.
-  token_is_public "$n" "$PUBLIC_NAMES" && continue
+  # apexyard#1457 review round 2 (Hakim LOW-2) — paired by INDEX with the
+  # entry that produced $n, not by token-string membership.
+  [ "${NAMES_PUBLIC[$name_idx]}" = "1" ] && continue
   # Exempt the target repo's own bare name entirely (pre-existing).
   if [ "$n" = "$TARGET_NAME" ]; then continue; fi
 
@@ -1244,8 +1255,9 @@ for n in $NAMES; do
   fi
 done
 
-for rp in $REPOS; do
-  token_is_public "$rp" "$PUBLIC_REPOS" && continue
+for repo_idx in "${!REPOS[@]}"; do
+  rp="${REPOS[$repo_idx]}"
+  [ "${REPOS_PUBLIC[$repo_idx]}" = "1" ] && continue
   if [ "$rp" = "$TARGET_REPO" ]; then continue; fi
   esc=$(printf '%s' "$rp" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Either bare slug (with word-ish boundary) or slug#<N>.
@@ -1255,8 +1267,9 @@ for rp in $REPOS; do
   fi
 done
 
-for ws in $WORKSPACES; do
-  token_is_public "$ws" "$PUBLIC_WORKSPACES" && continue
+for ws_idx in "${!WORKSPACES[@]}"; do
+  ws="${WORKSPACES[$ws_idx]}"
+  [ "${WORKSPACES_PUBLIC[$ws_idx]}" = "1" ] && continue
   esc=$(printf '%s' "$ws" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Workspace-path boundaries: path-chars `/` and `-` ARE allowed *after* the
   # match (e.g. `workspace/ws-marlow/app.ts` is a real reference — the

@@ -56,6 +56,22 @@ if [ -f "$HOOK_DIR/_lib-registry-parser.sh" ]; then
   . "$HOOK_DIR/_lib-registry-parser.sh"
 fi
 
+# apexyard#1457 review round 2 (Rex B1 / Hakim HIGH-2) — the registry exists
+# (checked above), so there IS a scrub list to enforce. If the shared
+# parser failed to load, or the awk parse itself fails, silently treating
+# that as "no registered projects" would fail OPEN on every private
+# reference. Fail closed instead: block until the parser is fixed.
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan staged content for a private portfolio reference." >&2
+  exit 2
+fi
+registry_parsed=$(registry_parse_entries "$REGISTRY")
+registry_parse_rc=$?
+if [ "$registry_parse_rc" -ne 0 ]; then
+  echo "BLOCKED: registry parse failed (exit $registry_parse_rc) while scanning staged content for a private portfolio reference." >&2
+  exit 2
+fi
+
 names=()
 names_public=()
 repos=()
@@ -85,7 +101,9 @@ while IFS= read -r entry; do
       workspaces_public+=("$current_public")
       ;;
   esac
-done < <(registry_parse_entries "$REGISTRY")
+done <<EOF
+$registry_parsed
+EOF
 
 [ "${#names[@]}" -gt 0 ] || [ "${#repos[@]}" -gt 0 ] || [ "${#workspaces[@]}" -gt 0 ] || exit 0
 

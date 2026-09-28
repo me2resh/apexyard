@@ -496,6 +496,199 @@ fi
 rm -rf "$sandbox"
 
 echo
+echo "== public: true entry-boundary scoping (apexyard#1457 review round 2)"
+#
+# Rex B2 / Hakim HIGH-1: the parser must scope `public: true` to its OWN
+# entry only. Each case below proves a private entry stays blocked despite
+# a nearby or nested `public: true` that must NOT bleed onto it. All names
+# are SYNTHETIC.
+
+# Case A — private entry, then a public entry whose first key is `repo:`
+# (not `name:`). The public flag must not bleed backward onto the first.
+CASE_A_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+  - repo: acme-org/open-site
+    name: open-site
+    public: true
+    workspace: workspace/open-site
+'
+sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "case A: repo:-first public entry does not unblock the entry above it" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See acme-org/open-site for the open-site launch.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "case A: the repo:-first public entry itself still passes" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+# Case A2 — public entry first, then a private entry whose first key is
+# `workspace:` (not `name:`). The private entry must not inherit public.
+CASE_A2_YAML='projects:
+  - name: open-site
+    repo: acme-org/open-site
+    public: true
+    workspace: workspace/open-site
+  - workspace: workspace/secret-app
+    name: secret-app
+    repo: acme-org/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$CASE_A2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "case A2: workspace:-first private entry after a public one still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# Case C — a private entry with a NESTED map holding `public: true`. Only
+# an exact top-level `public: true` on the entry counts.
+CASE_C_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    deploy:
+      public: true
+      region: us
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$CASE_C_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "case C: public: true nested under a sub-map does not unscrub the entry" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# Case E — a top-level `defaults:` map (after the last entry) with
+# `public: true` nested inside it must not unscrub the entry above it.
+CASE_E_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+defaults:
+  public: true
+  status: active
+'
+sandbox=$(make_sandbox_with_remotes "$CASE_E_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "case E: public: true under a top-level defaults: block does not unscrub the entry" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# Block scalar — a `notes: |` body that happens to CONTAIN the literal text
+# "public: true" as prose must not be read as the flag.
+BLOCK_SCALAR_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    notes: |
+      this project is not public: true actually
+      public: true
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$BLOCK_SCALAR_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "block scalar prose containing the string public: true is not read as the flag" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# Nested "- name:" list item — a sub-list inside the entry that itself
+# starts with "- name:" must not be mistaken for a NEW top-level entry.
+NESTED_LIST_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    team:
+      - name: someone
+        public: true
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$NESTED_LIST_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "nested - name: list item inside an entry does not open a new entry" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# "public:true" with no space — YAML reads a colon with no following
+# space as a plain scalar, not a key; must not be read as the flag.
+NO_SPACE_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    public:true
+    workspace: workspace/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$NO_SPACE_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "public:true with no space after the colon is not read as the flag" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+# CRLF registry — Hakim LOW-3. A CRLF-terminated private entry (no public
+# flag) must still block; a CRLF-terminated PUBLIC entry must still pass.
+sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'projects:\r\n  - name: secret-app\r\n    repo: acme-org/secret-app\r\n    workspace: workspace/secret-app\r\n' > "$sandbox/apexyard.projects.yaml"
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "CRLF registry — a private entry still blocks" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$CASE_A_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'projects:\r\n  - name: open-site\r\n    repo: acme-org/open-site\r\n    public: true\r\n    workspace: workspace/open-site\r\n' > "$sandbox/apexyard.projects.yaml"
+printf 'See acme-org/open-site for the open-site launch.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "CRLF registry — a public entry still passes" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
+echo "== #1431 name-repo pairing when the upstream repo is in a repos: list (Hakim LOW-1)"
+#
+# The staged hook's name_repo_pairs now pairs a name with EVERY repo in its
+# entry, including each item of a plural `repos:` list (a side effect of
+# the entry-scoped rewrite). This proves the upstream bare-name exemption
+# still fires when the upstream repo is one of several in a `repos:` list,
+# and is a deliberate behaviour change from the base #1431 pairing (which
+# only ever paired the first singular `repo:`).
+REPOS_LIST_UPSTREAM_YAML='projects:
+  - name: framework
+    repos:
+      - acme-org/other-repo
+      - acme-framework/framework
+    workspace: workspace/framework-mirror
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+'
+# The BARE upstream repo name only — no "@owner" or "owner/repo" form — so
+# this exercises registry_name_repo_matches (the name<->repos: pairing),
+# not the separate owner-login exemption (#1387).
+sandbox=$(make_sandbox_with_remotes "$REPOS_LIST_UPSTREAM_YAML" "$FORK_ORIGIN_URL" "$FRAMEWORK_UPSTREAM_URL")
+printf 'The framework has a bug in this area.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "LOW-1: upstream bare-name exemption fires when upstream repo is inside a repos: list" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
+echo "== Regression: no workspace field at all (bash 3.2 unbound-variable crash)"
+#
+# Rex suggestion — at a prior base, a registry where NO entry has a
+# workspace: field crashed the staged hook under bash 3.2's `set -u` with
+# `workspaces[@]: unbound variable` (exit 1), blocking every commit
+# regardless of content. The `"${!array[@]}"` index loops fix this.
+NO_WORKSPACE_YAML='projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+'
+sandbox=$(make_sandbox_with_remotes "$NO_WORKSPACE_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Nothing private mentioned here.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "a registry with no workspace: field anywhere does not crash (clean file passes)" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$NO_WORKSPACE_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Discovered while touching secret-app during the rebuild.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "a registry with no workspace: field anywhere still blocks a real leak" "$sandbox" 2 "File: notes.md" "secret-app"
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

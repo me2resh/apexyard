@@ -98,6 +98,60 @@ run_case "public entry mention alongside a real leak still blocks on the leak" \
   2 "project name: secret-app" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'open-marketing-site is fine; secret-app is not'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1457 review round 2 (Rex B2 / Hakim HIGH-1) — entry-boundary
+# scoping. Swaps the fixture registry per case; each writes its own
+# registry, so order after this point does not depend on the block above.
+# ---------------------------------------------------------------------------
+
+write_registry() {
+  printf '%s' "$1" > "$TMPDIR/fork/apexyard.projects.yaml"
+}
+
+# Case A: private entry, then a public entry whose first key is repo:.
+write_registry 'version: 1
+projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    workspace: workspace/secret-app
+  - repo: acme-org/open-site
+    name: open-site
+    public: true
+    workspace: workspace/open-site
+'
+run_case "case A: repo:-first public entry does not unblock the entry above it" \
+  2 "project name: secret-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
+
+# Case A2: public entry, then a private entry whose first key is workspace:.
+write_registry 'version: 1
+projects:
+  - name: open-site
+    repo: acme-org/open-site
+    public: true
+    workspace: workspace/open-site
+  - workspace: workspace/secret-app
+    name: secret-app
+    repo: acme-org/secret-app
+'
+run_case "case A2: workspace:-first private entry after a public one still blocks" \
+  2 "project name: secret-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
+
+# Case C: private entry with a nested map holding public: true.
+write_registry 'version: 1
+projects:
+  - name: secret-app
+    repo: acme-org/secret-app
+    deploy:
+      public: true
+      region: us
+    workspace: workspace/secret-app
+'
+run_case "case C: public: true nested under a sub-map does not unscrub the entry" \
+  2 "project name: secret-app" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during secret-app rebuild'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]
