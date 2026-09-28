@@ -1,5 +1,7 @@
 # ORBIT adapter boundary in ApexYard
 
+> Partly superseded by [AgDR-0179](AgDR-0179-orbit-handoff-one-issue-per-slice.md): the `/orbit handoff` operation may create one tracker issue per validated execution slice, after a dry-run preview, a leak scrub, and operator confirmation. Every other `/orbit` operation stays record-only, as decided below.
+>
 > In the context of adding an opt-in ORBIT skill to ApexYard, facing a portable planning standard with its own CLI and lifecycle, I decided to keep the adapter thin and project-local to achieve governed adoption without coupling ORBIT to ApexYard, accepting that operators must install the ORBIT CLI separately.
 
 ## Context

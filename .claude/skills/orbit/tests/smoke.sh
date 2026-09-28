@@ -14,8 +14,11 @@ grep -q 'validate --all --root "\$orbit_root"' "$skill"
 grep -q 'not-verified' "$skill"
 grep -q 'Naqid' "$skill"
 grep -q 'no-challenge' "$skill"
-grep -q 'does not create issues' "$skill"
-! grep -q 'gh issue create' "$skill"
-! grep -q 'gh pr merge' "$skill"
+# apexyard#1446 (AgDR-0179): handoff is the one operation allowed to write a
+# tracker issue. Assert the boundary line names that exception explicitly,
+# and that every non-handoff operation stays record-only.
+grep -q 'one exception to "no tracker records"' "$skill"
+grep -q 'does not create branches, commits, code changes, or deployments' "$skill"
+! grep -qE 'gh (issue create|pr merge)' "$skill"
 
 echo "orbit skill smoke test passed"
