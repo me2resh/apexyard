@@ -144,7 +144,7 @@ the branch, wait for green CI, get Rex to look again.
 `/approve-merge` step 4 (the skill, not only the gate) calls the same
 `rex_approval_carries_over` function before refusing on a stale Rex
 marker — the two now agree by construction. Before this round, only the
-gate checked carry-over; the skill would refuse a merge the gate would
+gate checked carry-over. The skill would refuse a merge the gate would
 have accepted, which made the carry-over unreachable through the sanctioned
 merge path.
 
@@ -157,7 +157,7 @@ states the CEO marker and the merge are "one authorization moment" —
 writing the marker and running the merge are a single deterministic
 consequence of one explicit, per-PR approval. A forge-verified,
 conflict-free base-branch replay does not introduce any content I did not
-already approve; it only changes the SHA the marker points at. Refusing to
+already approve. It only changes the SHA the marker points at. Refusing to
 carry the CEO marker forward while carrying the Rex marker forward would
 make every one of these mechanically-clean refreshes stop anyway, asking me
 to re-approve a merge whose content is identical to what I already approved
@@ -203,7 +203,7 @@ case that function cannot fully verify still requires a fresh
 ## Artifacts
 
 - `.claude/hooks/_lib-merge-behind.sh` — `rex_approval_carries_over`, `merge_refresh_required`, `_merge_behind_path_matches_any`, `_rex_carry_git`, `_rex_carry_is_sha40`
-- `.claude/hooks/block-unreviewed-merge.sh` — carry-over check ahead of both the Rex-marker and CEO-marker stale-SHA blocks; `BASE_REF_NAME` resolved once and shared with `print_behind_base_note`
+- `.claude/hooks/block-unreviewed-merge.sh` — carry-over check ahead of both the Rex-marker and CEO-marker stale-SHA blocks. `BASE_REF_NAME` is resolved once and shared with `print_behind_base_note`
 - `.claude/skills/approve-merge/SKILL.md` — step 3a (the `skippable`/`required` branch) and step 4 (carry-over parity with the gate)
 - `.claude/project-config.defaults.json` — `merge.shared_file_patterns`
 - `.claude/rules/pr-workflow.md` — the "one authorization moment" exception for a forge-verified base-branch replay
