@@ -111,6 +111,71 @@ else
 fi
 
 # ------------------------------------------------------------------------------
+# _ratc_quoted_origin_hint TOOL_NAME
+#
+# Echoes an explanatory note when every write sign the detector found in the
+# Bash command sits INSIDE a quoted argument. Echoes nothing otherwise. It
+# reads the command from $COMMAND.
+#
+# DIAGNOSIS ONLY (me2resh/apexyard#1356). This function never changes a
+# verdict. It runs after the gate has already decided to block, and it only
+# adds text to the message. AgDR-0113 forbids feeding quote-filtered text to a
+# gate's presence question, because a parser bug there fails OPEN across every
+# consumer at once. The gate's own presence check below still reads the raw
+# command. This function asks the same question of the MASKED command, but
+# only to choose a message. A bug here yields a worse message, never a
+# skipped gate. See `_lib-mask-quoted.sh` and AgDR-0171.
+# ------------------------------------------------------------------------------
+_ratc_quoted_origin_hint() {
+  local tool="${1-}"
+
+  [ "$tool" = "Bash" ] || return 0
+  [ -n "${COMMAND:-}" ] || return 0
+  [ -f "$_RATC_HOOK_DIR/_lib-mask-quoted.sh" ] || return 0
+  command -v bash_command_appears_to_write >/dev/null 2>&1 || return 0
+
+  # shellcheck source=/dev/null
+  . "$_RATC_HOOK_DIR/_lib-mask-quoted.sh"
+
+  local masked
+  masked=$(mask_quoted_metachars "$COMMAND" 2>/dev/null)
+
+  # An empty mask is never a legitimate result for a non-empty command. It
+  # means awk is missing, awk failed, or the command exceeded the kernel's
+  # single-environment-string limit (MAX_ARG_STRLEN, 128 KiB on Linux) so
+  # execve returned E2BIG. Without this guard, "" reads as "differs from
+  # COMMAND" and the note fires on a genuine write that holds no quote at
+  # all. Verified at 140 KB.
+  [ -n "$masked" ] || return 0
+
+  # No quoted metacharacter, or an uncertainty guard tripped. Say nothing.
+  [ "$masked" != "$COMMAND" ] || return 0
+
+  # Some write sign still sits outside quotes, so at least one target may be
+  # real. Say nothing. This is a presence check, not a target extraction. It
+  # costs far less. AgDR-0171 records the measured cost.
+  #
+  # DIAGNOSIS ONLY. Never copy this call into a verdict. A gate must ask this
+  # question of the RAW command (AgDR-0113 governance rule 2). Here the answer
+  # only chooses whether to print the note.
+  bash_command_appears_to_write "$masked" && return 0
+
+  # The note speaks about the quoted match only, not the whole command. The
+  # quoted text may still run as code through eval, sh -c, or awk. The
+  # command may also write in a way the detector does not see, such as touch
+  # or ln. The note offers one remedy only. Advice to reword a command would
+  # steer an agent toward a detector gap when the write is real.
+  #
+  # No surrounding blank lines here. The caller adds them, because command
+  # substitution strips trailing newlines from whatever this prints.
+  printf '%s' "NOTE: the detector found this match only inside quoted text. It matches raw
+command text and does not parse shell quoting (me2resh/apexyard#1356). If
+the quoted text is only data, this match is a false positive. If eval,
+sh -c, awk, or another program runs the quoted text, it may write a file.
+The detector does not see every kind of write. Declare a ticket to continue."
+}
+
+# ------------------------------------------------------------------------------
 # _ratc_evaluate_target FILE_PATH TOOL_NAME
 #
 # Runs the full ticket-gate pipeline for ONE candidate write target:
@@ -494,6 +559,14 @@ _ratc_evaluate_target() {
   fi
 
   # Nothing found — emit a guide that names both possibilities.
+  #
+  # The quoted-origin note, when present, sits between the Target line and
+  # "Exempt paths" with a blank line on each side. A plain variable keeps the
+  # trailing newline that a command substitution inside the heredoc would
+  # strip. With no note, the variable is empty and the one blank line stays.
+  local QUOTED_HINT
+  QUOTED_HINT=$(_ratc_quoted_origin_hint "$TOOL_NAME")
+  [ -n "$QUOTED_HINT" ] && QUOTED_HINT=$'\n'"$QUOTED_HINT"$'\n'
   cat >&2 <<MSG
 BLOCKED: No active ticket set for this session.
 
@@ -516,7 +589,7 @@ $([ -n "$PER_PROJECT_MARKER" ] && echo "  per-project:  $PER_PROJECT_MARKER")
   ops fallback: $FALLBACK_MARKER
 
 Target: ${FILE_PATH:-<unextractable Bash write target>}
-
+${QUOTED_HINT}
 Exempt paths (no ticket required): .claude/, docs/, projects/*/docs/, *.md
 MSG
   return 2
