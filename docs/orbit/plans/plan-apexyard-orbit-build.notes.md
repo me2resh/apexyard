@@ -32,7 +32,7 @@ Preconditions before a revision takes this on:
 ## Follow-ups
 
 - Structured epics and sub-issues for the ticket skills (#1269) stays a native tracker feature. ORBIT can use it later.
-- File hierarchy and idempotent sync support for the provider adapter in the orbit-spec repo.
+- Open an orbit-spec issue for hierarchy and idempotent sync support in the provider adapter.
 
 ## Revision history
 
@@ -45,5 +45,11 @@ Revision 2 records move to `docs/orbit/history/` because `orbit validate --all` 
 
 - The Plan schema has no fields for constraints or assumptions. This notes file holds them instead.
 - `orbit validate --all` cannot hold more than one revision of a Plan in the same record set.
-- `orbit slice` does not copy repository commits from the Snapshot into `basedOn.repositories`, and it leaves `contributesTo` empty unless `--contributes` is passed.
+- `orbit slice` does not copy repository commits from the Snapshot into `basedOn.repositories`, and it leaves `contributesTo` empty unless the operator passes `--contributes`.
 - `orbit sync github` creates one issue and can add it to a board. It has no board hierarchy, no field setting, and no lookup-based idempotency (see O3).
+
+## Validating the history records
+
+`orbit validate --all` does not read `docs/orbit/history/`. To check a history record, validate it on its own, for example `orbit validate docs/orbit/history/plan-apexyard-orbit-build.r2.json`.
+
+The snapshot records the local planning branch name. The commit `378623e` is the `dev` tip at snapshot time.

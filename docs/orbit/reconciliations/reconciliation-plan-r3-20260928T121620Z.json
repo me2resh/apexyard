@@ -45,7 +45,7 @@
       "criterionId": "ac1-5",
       "status": "achieved",
       "evidence": [
-        "grep -rln 'ORBIT_BIN' . finds only /orbit files: .claude/skills/orbit/SKILL.md, its mirror under .agents/skills/orbit/, docs/orbit-adapter.md and the /orbit smoke tests. grep -l orbit .claude/hooks/*.sh finds nothing."
+        "git grep -ln ORBIT_BIN (tracked files at the snapshot commit) finds only /orbit files: .claude/skills/orbit/SKILL.md, .claude/skills/orbit/tests/smoke.sh and docs/orbit-adapter.md. git grep -l orbit -- .claude/hooks finds nothing."
       ],
       "explanation": "No skill other than /orbit calls the ORBIT CLI."
     },
@@ -117,7 +117,7 @@
       "criterionId": "ac2-2",
       "status": "partially-verified",
       "evidence": [
-        ".claude/agents/code-reviewer.md line 134 holds the rule that Rex verifies the linked ticket's acceptance criteria. grep -ci 'excludes' finds no rule for an Excludes list."
+        ".claude/agents/code-reviewer.md lines 215-217 hold the rule that Rex verifies the linked ticket acceptance criteria. grep -ci excludes finds no rule for an Excludes list."
       ],
       "explanation": "Rex checks acceptance criteria, but not the Excludes list."
     },
