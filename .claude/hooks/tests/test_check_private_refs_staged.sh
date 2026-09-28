@@ -1316,19 +1316,23 @@ echo "== Round 8 (Hakim MEDIUM): a tab inside a proven-public value cannot forge
 # real line let that first-tab split misread the embedded tab as the
 # value/line separator, forging a PubR entry at an attacker-chosen line
 # — exempting a private token that has nothing to do with the actual
-# public entry. Below, "nn-public"'\''s repo value is
-# "org/mm-shared-tabforge<TAB>3", chosen so the OLD first-tab split would
-# read line 3 — the real line of "mm-private"'\''s own repo: value, which
-# is genuinely private. Fixed by splitting at the LAST tab, and by never
-# trusting a proven-public value that still contains a tab after that
-# split. The private mention must still block.
+# public entry. Below, "nn-public"'\''s repos: list carries ONE item,
+# "org/mm-shared-tabforge<TAB>3" (captured whole-line by dev'\''s repos-
+# item pattern, tab included), chosen so the OLD first-tab split would
+# read line 3 — the real line of "mm-private"'\''s own, unrelated repo:
+# value. Verified against `0104011`'\''s copy of the library before fixing:
+# it marks "org/mm-shared-tabforge" PUBLIC=1 (wrongly exempted). Fixed by
+# splitting at the LAST tab, and by never trusting a proven-public value
+# that still contains a tab after that split. The private mention must
+# still block.
 TAB=$(printf '\t')
 MEDIUM_YAML="projects:
   - name: mm-private
     repo: org/mm-shared-tabforge
   - name: nn-public
     public: true
-    repo: org/mm-shared-tabforge${TAB}3
+    repos:
+      - org/mm-shared-tabforge${TAB}3
 "
 sandbox=$(make_sandbox_with_remotes "$MEDIUM_YAML" "$NEUTRAL_ORIGIN_URL")
 printf 'Reproduces in org/mm-shared-tabforge as well.\n' > "$sandbox/notes.md"
