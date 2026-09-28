@@ -3,7 +3,7 @@
 **Status**: In Review
 **Date**: 2026-09-27
 **Requirements**: issue #1359, including its design-direction comment.
-**Decision record**: [AgDR-0175](../agdr/AgDR-0175-dependency-audit-ecosystem-dispatch.md).
+**Decision record**: [AgDR-0176](../agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md).
 
 ## Overview
 
@@ -95,7 +95,7 @@ Pass arguments as a subprocess array. Run from the trusted temporary directory.
 Never select checkout-local executables or inherit `PYTHONPATH` and scanner service overrides.
 Pin audit dependencies and their transitive distributions with hashes outside project-controlled configuration.
 Record actual versions and reject mismatched tool installations.
-AgDR-0175 compares this option with OSV-Scanner and direct OSV scanning.
+AgDR-0176 compares this option with OSV-Scanner and direct OSV scanning.
 If the preferred trusted scanner is absent, query OSV directly for the same exact package set.
 An explicit `--runner=pip-audit` selection instead reports the missing tool and exits 3.
 A scanner failure must remain visible. Do not silently convert it into a clean fallback result.

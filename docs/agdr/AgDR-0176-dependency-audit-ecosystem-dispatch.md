@@ -1,5 +1,5 @@
 ---
-id: AgDR-0175
+id: AgDR-0176
 timestamp: 2026-09-27T20:56:20Z
 agent: codex
 model: gpt-6
@@ -12,7 +12,7 @@ projects: [apexyard]
 
 <!-- Uses the controlled technical writing profile in .claude/rules/writing-standard.md. -->
 
-# AgDR-0175 - Dependency audit ecosystem dispatch
+# AgDR-0176 - Dependency audit ecosystem dispatch
 
 > In the context of #1359, facing incomplete dependency audits, I chose finite ecosystem dispatch and data-only Python inventory collection.
 > This provides npm and Python coverage, accepting parser maintenance and public advisory queries.
