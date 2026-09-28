@@ -108,6 +108,8 @@ A common failure mode: you present a multi-step plan that includes a merge as on
 
 The load-bearing rule is "explicit per-PR approval", not "two user messages." After the per-PR-naming approval is given, `/approve-merge <pr>` writes the structured CEO marker AND runs `gh pr merge` in the same turn — they're a single deterministic consequence of one authorization moment, not two separate moments. Earlier versions of this rule split the consequence across two messages (write marker → wait → merge); that ceremony added latency without safety. The mechanical safety net is the structured marker (#48) + per-PR-naming gate, not the two-message split.
 
+**One narrow, CEO-decided exception to "one authorization moment" (me2resh/apexyard#1437, AgDR-0178, dated 2026-09-28):** when HEAD moves ONLY because the PR branch was refreshed against its base — a forge-verified, conflict-free two-parent merge that `rex_approval_carries_over` (`_lib-merge-behind.sh`) can prove reproduces exactly what git's own merge would produce — the CEO's earlier marker still authorizes the merge at the new HEAD, without a fresh `/approve-merge` invocation. The CEO decided this deliberately: the marker's SHA changed, but the CONTENT the CEO approved did not — a mechanically-verified base replay adds nothing the CEO reviewed or could have reviewed differently. This is not a relaxation of "explicit per-PR approval" — the original approval was still explicit and named this PR — it is a recognition that a base-only refresh is not a second authorization-worthy event. It does not extend to any case the carry-over check cannot fully verify: those still require a fresh `/approve-merge`, exactly as before.
+
 #### Wrong
 
 ```

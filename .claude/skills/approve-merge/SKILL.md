@@ -273,10 +273,25 @@ The CEO approval is a stamp on top of a Rex-approved HEAD, not a standalone acti
 # $PR_HOST_REPO) — you cannot merge a fork's copy.
 PR_HOST_REPO=$(pr_base_repo <pr> "$REPO")
 REX=$(review_marker_path "$PR_HOST_REPO" <pr> rex "$MARKER_HOME")
-[ -f "$REX" ] && [ "$(tr -d '[:space:]' < "$REX")" = "<headRefOid from step 3>" ]
 ```
 
-If Rex's marker is missing or its SHA doesn't match the PR HEAD, refuse and tell the user to re-invoke the code-reviewer first. Do not write the CEO marker on a stale base.
+If the Rex marker's SHA already equals `<headRefOid from step 3>`, proceed to step 5.
+
+**If the marker exists but its SHA does NOT match HEAD, do not immediately refuse** (me2resh/apexyard#1437 round-2 review, Rex 2). Check the SAME carry-over the merge gate checks, using the SAME function — a skill that refuses here while the gate would accept the merge anyway is a dead end, not a safety margin:
+
+```bash
+# _lib-merge-behind.sh was already sourced in step 3a above.
+REX_SHA=$(tr -d '[:space:]' < "$REX")
+CARRY_OVER="false"
+if [ -n "$REX_SHA" ] && command -v rex_approval_carries_over >/dev/null 2>&1; then
+  CARRY_OVER=$(rex_approval_carries_over "$PR_HOST_REPO" "$REX_SHA" "<headRefOid from step 3>" "<baseRefName from step 3>")
+fi
+```
+
+- **`true`** — the marker carries over. Proceed to step 5 exactly as if the SHA had matched (write the CEO marker against `<headRefOid from step 3>`, the CURRENT head — never the old, Rex-reviewed SHA).
+- Anything else (`false`, `unknown`) — refuse. Tell the user Rex's marker is stale and ask them to re-invoke the code-reviewer on the current HEAD. Do not write the CEO marker on a stale base.
+
+Never write a marker yourself to force this check to pass. `rex_approval_carries_over` is read-only — it decides, you read its answer.
 
 **On a MISSING marker, check for the gate-invisible near-miss before reporting it (me2resh/apexyard#1144).** A reviewer handed a literal marker path in its spawn prompt writes the bare-number form instead of the repo-qualified one. That file is read by no gate, but `ls .claude/session/reviews/` makes it look like a perfectly good approval — so "marker missing" is true of the path you looked at and false of what the operator can see on disk. Name the discrepancy:
 
@@ -513,7 +528,7 @@ The skill never writes the marker AND defers the merge in any other case. The de
 
 - The marker is gitignored (`.claude/session/` is in `.gitignore`). It's session state, not code.
 - Re-running `/approve-merge <pr>` on the same PR is idempotent — overwrites with current HEAD/timestamp. Useful for a small follow-up (rebase, comment-only fixup) where re-running Rex isn't needed.
-- New commits after the marker is written invalidate the approval — the hook refuses to merge because `sha=` no longer matches PR HEAD. Re-run Rex + `/approve-merge`.
+- New commits after the marker is written invalidate the approval — the hook refuses to merge because `sha=` no longer matches PR HEAD. Re-run Rex + `/approve-merge`. **One exception (me2resh/apexyard#1437):** when the new HEAD is a forge-verified, conflict-free base-branch merge of the approved SHA — see step 4 and `rex_approval_carries_over` — the gate carries the existing marker forward on its own. Nothing needs re-running for that specific case, and no marker gets rewritten to make it happen.
 - The marker format is **versioned**. A bare-SHA legacy marker (skill_version absent) is rejected by the merge gate as of `block-unreviewed-merge.sh` v2 — same release as this skill. Adopters with stale legacy markers from earlier sessions just re-run `/approve-merge` once.
 - The skill intentionally does **not** wait/poll for "the user's 'approved'." The skill exists to be invoked, not to poll.
 
