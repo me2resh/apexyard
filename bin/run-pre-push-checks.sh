@@ -76,6 +76,7 @@ if [ "${1:-}" = "--list" ]; then
   echo "markdownlint"
   echo "shellcheck"
   echo "subpacks"
+  echo "writing-profile"
   exit 0
 fi
 
