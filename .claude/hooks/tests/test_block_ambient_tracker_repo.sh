@@ -83,6 +83,30 @@ make_repo "$multiple" "git@github.com:owner/framework.git"
 printf '%s\n' 'repo=owner/project-a' > "$multiple/.claude/session/tickets/a"
 printf '%s\n' 'repo=owner/project-b' > "$multiple/.claude/session/tickets/b"
 run_case 'multiple active repos require an explicit target' 2 'gh pr list' "$multiple"
+run_case 'repository flag on a continued line is explicit' 0 \
+  "$(printf 'gh issue view 42 \\\n  --repo owner/project-a')" "$multiple"
+run_case 'short repository flag on a continued line is explicit' 0 \
+  "$(printf 'gh pr list \\\n  -R owner/project-b')" "$multiple"
+run_case 'continued CLI word without a repository remains blocked' 2 \
+  "$(printf 'gh \\\n  issue view 42')" "$multiple"
+run_case 'continued subcommand without a repository remains blocked' 2 \
+  "$(printf 'gh pr \\\n  list')" "$multiple"
+# An escaped backslash before a newline is a literal backslash. The newline
+# ends the command, so a flag on the next line belongs to a new command.
+run_case 'escaped backslash then newline does not carry a repository flag' 2 \
+  "$(printf 'gh pr list \\\\\n --repo owner/project-a')" "$multiple"
+run_case 'escaped backslash then newline, flag at line start, stays blocked' 2 \
+  "$(printf 'gh pr list \\\\\n--repo owner/project-a')" "$multiple"
+# Bash keeps a backslash-newline inside single quotes, and the gate does not
+# join inside any quotes, so quoted text cannot supply the flag.
+run_case 'continuation inside single quotes does not join a repository flag' 2 \
+  "$(printf "true && gh pr list --title 'a \\\\\n --repo owner/project-a'")" "$multiple"
+run_case 'continuation inside double quotes does not join a repository flag' 2 \
+  "$(printf 'true && gh pr list --title "a \\\n --repo owner/project-a"')" "$multiple"
+run_case 'ANSI-C quoted command is not joined' 2 \
+  "$(printf "true && gh pr list --title \$'a' \\\\\n --repo owner/project-a")" "$multiple"
+run_case 'continued lines then a separate unqualified command still block' 2 \
+  "$(printf 'gh issue view 42 \\\n  --repo owner/project-a; gh pr list')" "$multiple"
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

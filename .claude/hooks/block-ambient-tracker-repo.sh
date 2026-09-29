@@ -16,6 +16,44 @@ if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
   . "$HOOK_DIR/_lib-command-scrub.sh"
   SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
 fi
+# Bash removes a backslash-newline continuation before it parses words and
+# flags, so `gh pr list \<newline> --repo x` names its repository (#1492).
+# Join a continuation only where Bash does: outside quotes, and only when the
+# backslash is not itself escaped. `\\<newline>` is a literal backslash and a
+# real newline, so the next line is a new command and must stay separate.
+# ANSI-C `$'...'` quoting changes backslash rules, so a command that contains
+# it is left unjoined. Unjoined lines split into separate segments below,
+# which can only block more.
+_batr_join_continuations() {
+  local s="$1" out="" c quote="" bs=0 i n
+  n=${#s}
+  for ((i = 0; i < n; i++)); do
+    c="${s:i:1}"
+    if [ -n "$quote" ]; then
+      [ "$c" = "$quote" ] && [ $((bs % 2)) -eq 0 ] && quote=""
+      if [ "$quote" = '"' ] && [ "$c" = '\' ]; then bs=$((bs + 1)); else bs=0; fi
+      out="$out$c"
+      continue
+    fi
+    if [ "$c" = $'\n' ] && [ $((bs % 2)) -eq 1 ]; then
+      out="${out%\\}"
+      bs=0
+      continue
+    fi
+    if [ "$c" = '\' ]; then
+      bs=$((bs + 1))
+    else
+      { [ "$c" = "'" ] || [ "$c" = '"' ]; } && [ $((bs % 2)) -eq 0 ] && quote="$c"
+      bs=0
+    fi
+    out="$out$c"
+  done
+  printf '%s' "$out"
+}
+case "$SCAN_COMMAND" in
+  *"\$'"*) ;;
+  *$'\\\n'*) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
+esac
 
 # This guard covers GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross
