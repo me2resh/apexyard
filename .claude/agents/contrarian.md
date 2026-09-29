@@ -45,6 +45,7 @@ Read the target fully before challenging it. If it's a ticket or doc, read it; i
 
 The `apexyard-search` MCP server is an optional add-on.
 Use `grep` and `Read` when its tools are not in your tool list.
+If `apexyard-search` is not installed, use `grep` and `Read`. Do not skip the step.
 Also use `grep` and `Read` when a call fails or returns nothing relevant.
 Do the same grounding reads with those tools.
 Do not skip the grounding step.
