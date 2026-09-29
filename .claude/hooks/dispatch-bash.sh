@@ -27,12 +27,11 @@ fi
 # through unblocked, not just merges — a silent fail-open, not a fail-closed
 # exit 1 as the exit code alone might suggest.
 #
-# A file that is MISSING entirely is a tolerated partial-install case:
-# is_merge_command stays undefined, and the fail-closed check further down
-# this script still runs the merge gates on any merge-shaped command. A file
-# that EXISTS and cannot be READ is a different, more suspicious case — a
-# broken permission or a tampered file, not a partial install — so it gets
-# an explicit block instead of silently falling through to that same path.
+# If the file is missing, is_merge_command stays undefined. The fail-closed
+# path below then runs the merge gates on every Bash command. In a real
+# install, each gate blocks because its required library is missing. The
+# dispatcher adds no separate absence block. If the file exists but cannot
+# be read, block here and name the file instead of attempting to source it.
 if [ -e "$HOOK_DIR/_lib-extract-pr.sh" ] && [ ! -r "$HOOK_DIR/_lib-extract-pr.sh" ]; then
   echo "BLOCKED: dispatcher found _lib-extract-pr.sh but cannot read it." >&2
   echo "Unreadable: $HOOK_DIR/_lib-extract-pr.sh" >&2

@@ -150,6 +150,7 @@ Build agents MUST NOT:
 - Write any file under `.claude/session/reviews/`, including `*-rex.approved`, `*-ceo.approved`, `*-security.approved`, or `*-architecture.approved`. **Nothing mechanically stops you** — `warn-review-marker-write.sh` warns and exits 0 (see "Mechanical backstop" below). That is why this is a MUST NOT rather than a can't: writing one records a review that never happened, and the human approving the merge relies on it
 - Frame their final report as a code review, Rex review, or include a "Verdict: APPROVED / CHANGES REQUESTED" section
 - Claim to be performing an independent review
+- Switch tools to work around a hook block. Moving the same write from Bash to Write (or the reverse) after a PreToolUse block is still a workaround. Stop and report the block. A false positive is a gate bug to fix, not a prompt to retry with a different tool (me2resh/apexyard#1426 item 5)
 
 Build agents MUST:
 
@@ -335,7 +336,7 @@ A blocking finding under `.claude/agents/code-reviewer.md` § "Blocking-Severity
 Bar" still blocks in round two, and in any round after it. Its fix always
 gets a delta re-review, whatever the round count — the merge gate needs a
 fresh Rex marker at the new HEAD, and only a review can write one. The cap
-limits how many rounds chase non-blocking findings; it never blocks the one
+limits how many rounds chase non-blocking findings. It never blocks the one
 path a blocking finding needs to clear.
 
 ## Resuming PR Sessions

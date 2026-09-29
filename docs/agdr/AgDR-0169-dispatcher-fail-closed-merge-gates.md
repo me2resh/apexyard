@@ -217,11 +217,12 @@ that decides whether a gate runs at all.
 **Fix:** the check is now `[ -r ]`. An explicit branch checks for
 exists-but-unreadable before any attempt to source the file. That
 branch prints a BLOCKED message naming the file and exits 2. A file
-that is entirely missing stays the tolerated partial-install case it
-already was. `is_merge_command` stays undefined in that case. The
-dispatcher's existing fail-closed check further down the script still
-runs the merge gates on a merge-shaped command. See the Consequences
-section above for the availability cost this fix accepts.
+that is entirely missing leaves `is_merge_command` undefined. The
+dispatcher's fail-closed check further down the script then runs the
+merge gates on every Bash command, not only a merge-shaped one. With
+real `_require_lib` gates that blocks every Bash command until the
+file is restored. See the Consequences section above for the
+availability cost this fix accepts.
 
 **`_lib-read-config.sh` stays optional, by design, in
 `block-unreviewed-merge.sh`.** This library backs two independent
@@ -280,9 +281,12 @@ stubbed to source a missing library, blocked under
 
 It also covers the dispatcher's own `_lib-extract-pr.sh` guard
 (Addendum 2, Follow-up 3). An unreadable copy blocks with a message
-naming the file. A missing copy stays a tolerated no-op for a
-non-merge command. That second case is the control. It would catch an
-overly-broad fix that also blocked on absence.
+naming the file. A missing copy is not a no-op in a real install. The
+dispatcher runs the merge gates fail-closed, and each gate's
+`_require_lib` then blocks every Bash command until the file returns.
+The stubbed-gate control in `test_dispatch_bash.sh` only shows that
+the dispatcher itself does not add a second absence block on top of
+that path.
 
 Each of the four hooks' own test files additionally removes each
 required library the hook sources, one at a time. Each removal expects

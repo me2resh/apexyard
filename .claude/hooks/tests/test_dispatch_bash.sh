@@ -295,9 +295,12 @@ if ! grep -q '_lib-extract-pr.sh' "$TMP/stderr"; then
   exit 1
 fi
 
-# Control: a MISSING (not unreadable) library must stay a tolerated
-# partial-install case, not a new block — this test would also catch an
-# overly broad fix that blocks on absence too.
+# Control: a MISSING (not unreadable) library must not make the dispatcher
+# itself invent a new absence block on top of the merge-gate path. This
+# sandbox uses stub merge gates that always exit 0, so the dispatcher's
+# fail-closed "run the merge gates" path still returns 0 here. In a real
+# install the same missing file makes each gate's `_require_lib` block
+# every Bash command (AgDR-0169 Consequences). That is not a no-op.
 cp -r "$TMP/hooks" "$missing_lib_dir/hooks"
 rm -f "$missing_lib_dir/hooks/_lib-extract-pr.sh"
 
@@ -307,7 +310,7 @@ printf '{"tool_name":"Bash","tool_input":{"command":"echo hello"}}' \
 rc=$?
 set -e
 if [ "$rc" -eq 2 ]; then
-  echo "FAIL: a MISSING (not unreadable) _lib-extract-pr.sh should not itself block a non-merge command" >&2
+  echo "FAIL: with stub merge gates, a MISSING _lib-extract-pr.sh must not make the dispatcher invent its own absence block" >&2
   cat "$TMP/stderr" >&2
   exit 1
 fi
