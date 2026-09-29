@@ -98,29 +98,27 @@ fork.
 checks the session's own working-directory repo. It names that repo in
 every message, and states plainly that the check covers only that repo.
 
-It prints install advice only when that repo is itself the resolved ops
-root. That is the real ApexYard fork, not merely a repo that ships
-fork-shaped files (Hakim finding A5, Rex finding S1, PR #1428 round 3).
+It prints install advice only for sessions with a valid pin to the
+checked repo's main worktree. A linked worktree shares that main
+worktree. The pin identifies the ApexYard fork. Files in the checked
+repo alone cannot establish that identity (Hakim finding A5, Rex
+finding S1, PR #1428 round 3).
 
-Fork status comes from `resolve_ops_root` (`_lib-ops-root.sh`). It is
-the same pin-first resolver the rest of the framework trusts for this
-question. It is called with the working-directory repo as the walk-up
-start. A round-2 draft
+The hook validates the pin with `_lib-ops-root.sh` and compares it with
+the checked repo's Git common directory. It gives no advice if the pin
+is absent, disabled, or invalid. A round-2 draft
 of this hook instead trusted a `.apexyard-fork` marker, or a
 `.githooks/pre-push` plus `bin/install-git-hooks.sh` pair, present in
 the working-directory repo itself. Round 3's review showed a managed
 repo can ship either shape and talk the hook into recommending
-`core.hooksPath` for itself. `resolve_ops_root` closes that gap, because
-a session's pinned ops root always outranks a candidate repo's own
-files. When `resolve_ops_root` cannot resolve anything, this hook treats
-the repo as not the ops root. It never guesses in favor of giving
-advice.
+`core.hooksPath` for itself. The ops-root check closes that spoof gap
+only for sessions with a valid pin. Without one, `resolve_ops_root`
+falls back to a walk-up that can accept the checked repo's own marker.
 
-In any other repo, including a managed-project clone, it prints a short
-note instead. That note says ApexYard runs no local pre-push checks
-there. It never gives the `core.hooksPath` install advice. AgDR-0115
-forbids suggesting that advice for this case (PR #1428 review, Rex
-finding B2). It never blocks, in either case.
+With a valid pin to another repo, it prints a short note instead. That
+note says ApexYard runs no local pre-push checks there. It never gives
+the `core.hooksPath` install advice. AgDR-0115 forbids suggesting that
+advice for this case (PR #1428 review, Rex finding B2). It never blocks.
 
 Config resolution inside `bin/run-configured-pre-push-checks.sh` pins
 `_CONFIG_ROOT_CACHE` to `$REPO_ROOT` before calling `config_get`. This
@@ -141,9 +139,10 @@ describes.
   terminal push and a Claude Code-driven push alike. Config comes from
   that same repository.
 - **An ApexYard fork without `core.hooksPath` installed** gets no local
-  blocking check for `.pre_push.commands`. `pre-push-gate.sh` reminds the
-  session once per matching push, and names that fork by path. CI is the
-  only backstop until the fork installs the git-native hook.
+  blocking check for `.pre_push.commands`. `pre-push-gate.sh` reminds a
+  pinned session once per matching push, and names that fork by path.
+  An unpinned session gets no install advice. CI is the only backstop
+  until the fork installs the git-native hook.
   `bin/run-pre-push-checks.sh` already documents this same accepted
   trade-off for its own hardcoded checks on a fresh clone.
 - **A managed-project clone** gets no local pre-push check from ApexYard
@@ -179,6 +178,8 @@ describes.
 
 ## Artifacts
 
+- Issue #1491 (valid pin and linked worktree refinement)
+- AgDR-0198 (decision to require a valid pin for install advice)
 - me2resh/apexyard#1366 (the bug this record closes)
 - me2resh/apexyard#1405 (the closed PR whose review found H1, H3, L2 and
   motivated this design)
