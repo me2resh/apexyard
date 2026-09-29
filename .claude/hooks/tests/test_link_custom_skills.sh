@@ -7,7 +7,7 @@
 #   1. No private custom-skills dir → no-op (silent, exit 0, no symlinks)
 #   2. Private dir with two custom skills → both symlinked, summary printed
 #   3. Custom skill name collides with framework skill → custom wins;
-#      framework dir moved to <name>.framework.bak; warning printed
+#      framework dir moved to .claude/skill-framework-bak/<name>; warning printed
 #   4. Windows OS detection → graceful decline with manual-install pointer
 #   5. Idempotency — re-running with the same private dir is a no-op
 #      (same target, same name, no spurious warnings)
@@ -208,8 +208,9 @@ out=$(run_hook "$SB")
 rc=$?
 ok=1
 [ "$rc" -eq 0 ] || ok=0
-# Framework dir moved to <name>.framework.bak.
-[ -d "$SB/.claude/skills/feature.framework.bak" ] || ok=0
+# Framework dir moved outside the skill root (AgDR-0187 / #1377).
+[ -d "$SB/.claude/skill-framework-bak/feature" ] || ok=0
+[ ! -e "$SB/.claude/skills/feature.framework.bak" ] || ok=0
 # Custom symlink in place.
 [ -L "$SB/.claude/skills/feature" ] || ok=0
 # Symlink resolves to the custom SKILL.md (the body says "Custom").
@@ -218,7 +219,7 @@ grep -q 'Custom /feature' "$SB/.claude/skills/feature/SKILL.md" || ok=0
 echo "$out" | grep -q "override framework skill" || ok=0
 echo "$out" | grep -q "feature" || ok=0
 [ "$ok" -eq 1 ] && rc2=0 || rc2=1
-assert "case 3: name collision → custom wins; framework moved to .bak; warning printed" "$rc2"
+assert "case 3: name collision → custom wins; framework moved to skill-framework-bak; warning printed" "$rc2"
 if [ "$ok" -ne 1 ]; then echo "  out: $out"; fi
 rm -rf "$SB" "$SIB"
 

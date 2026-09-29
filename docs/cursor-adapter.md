@@ -56,6 +56,7 @@ The command emits:
 
 - `.cursor/hooks.json` with one `sessionStart` command
 - `.cursor/rules/apexyard.mdc`
+- a managed block in `.cursorignore` so sibling `custom-skills/` and framework skill backups are not a second skill root ([AgDR-0187](agdr/AgDR-0187-cursor-skill-one-root-override-wins.md))
 
 Project command: `.claude/hooks/cursor-session-pin.sh`.
 User-level command: walk to ops-root, then exec the same script.
@@ -63,10 +64,16 @@ User-level command: walk to ops-root, then exec the same script.
 The generator does not read `.claude/settings.json`. Gate lists stay in
 that file. Cursor loads them natively.
 
+Open the **ops fork** directory in Cursor. Do not open a parent folder that
+also holds the portfolio repo. A parent workspace can list the same custom
+skill twice. Cursor's skill root for apexyard is `.claude/skills/`. One
+name maps to one entry. A custom override wins.
+
 ```bash
 bin/sync-cursor-adapter.sh --check
 bin/sync-cursor-adapter.sh --clean
 bin/sync-cursor-adapter.sh --user --check
+bin/list-cursor-skills.sh --duplicates   # exit 1 if any name appears twice
 ```
 
 ## Session pin overlay
@@ -96,6 +103,24 @@ paths. Clones then get project sessionStart without a generate step.
 
 `--check` still detects overlay drift.
 
+## Skills
+
+Cursor loads skills from `.claude/skills/` when third-party configs are on.
+That directory is the single skill root for the fork ([AgDR-0187](agdr/AgDR-0187-cursor-skill-one-root-override-wins.md)).
+
+Open the ops fork in Cursor. Do not open a parent directory that also
+contains the portfolio repo. A parent workspace can list one custom skill
+from the fork symlink and again from `custom-skills/`.
+
+After a custom override, the framework copy moves to
+`.claude/skill-framework-bak/<name>/` so it is outside the skill root.
+`bin/sync-cursor-adapter.sh` also writes a managed `.cursorignore` block
+that ignores `custom-skills/` and bak paths.
+
+```bash
+bin/list-cursor-skills.sh --root . --duplicates
+```
+
 ## Known limitations
 
 - **Third-party configs must be on.** Without that toggle, `.claude/settings.json` does not load.
@@ -104,6 +129,7 @@ paths. Clones then get project sessionStart without a generate step.
 - **Session env injection is not independently proven.** The overlay prints Cursor sessionStart `env` JSON. If Cursor does not apply it, later hooks walk from cwd as they already do.
 - **Conformance CI has no headless Cursor path.** Cursor stays documented-manual on that badge.
 - **Project vs user load can both fire the overlay.** That is one session-pin script, not 86 gates. Double pin writes are idempotent.
+- **Parent-directory workspaces can still duplicate skills.** The install output and docs warn operators to open the fork only.
 
 ## Design notes
 

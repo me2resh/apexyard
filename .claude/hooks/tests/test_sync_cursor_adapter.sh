@@ -44,11 +44,22 @@ unset CLAUDE_CODE_SESSION_ID
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-test.XXXXXX")
 trap 'rm -rf "$TMPROOT"' EXIT
 
+# Cursor agent sandbox blocks creating `.cursor/` and `.cursorignore` paths.
+# Live generator write coverage needs an unsandboxed runner (CI or local).
+if ! mkdir -p "$TMPROOT/.cursor/rules" 2>/dev/null; then
+  echo "DEFERRED: sandbox blocks mkdir .cursor (cannot exercise sync write path here)"
+  echo "Results: 0 passed, 0 failed, 0 failed (write path deferred)"
+  exit 0
+fi
+rmdir "$TMPROOT/.cursor/rules" 2>/dev/null || true
+rmdir "$TMPROOT/.cursor" 2>/dev/null || true
+
 mkdir -p "$TMPROOT/.claude/hooks"
 touch "$TMPROOT/.apexyard-fork"
 cp "$ROOT/.claude/hooks/cursor-session-pin.sh" "$TMPROOT/.claude/hooks/cursor-session-pin.sh"
 chmod +x "$TMPROOT/.claude/hooks/cursor-session-pin.sh"
 cp "$ROOT/.claude/hooks/_lib-ops-root.sh" "$TMPROOT/.claude/hooks/_lib-ops-root.sh"
+cp "$ROOT/.claude/hooks/_lib-cursor-skills.sh" "$TMPROOT/.claude/hooks/_lib-cursor-skills.sh"
 cat > "$TMPROOT/.claude/hooks/pin-ops-root.sh" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -127,6 +138,14 @@ assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/writing-sta
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" ".claude/rules/reporting-style.md" "rules bridge carries reporting style"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "sync-cursor-adapter.sh" "rules bridge documents regeneration"
 assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "thin overlay" "rules bridge names the thin overlay"
+assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "Open this ops fork directory in Cursor" "rules bridge warns about parent workspaces"
+assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "AgDR-0187" "rules bridge cites skill-root AgDR"
+
+assert_file "$TMPROOT/.cursorignore" ".cursorignore exists"
+assert_contains "$TMPROOT/.cursorignore" "BEGIN apexyard-cursor-skills" ".cursorignore has managed begin marker"
+assert_contains "$TMPROOT/.cursorignore" "custom-skills/" ".cursorignore ignores custom-skills"
+assert_contains "$TMPROOT/.cursorignore" ".claude/skill-framework-bak/" ".cursorignore ignores skill-framework-bak"
+assert_contains "$TMPROOT/.cursorignore" ".claude/skills/*.framework.bak/" ".cursorignore ignores legacy framework.bak"
 
 if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_cursor_adapter_check.out 2>&1; then
   mark_pass "--check passes when generated output is current"

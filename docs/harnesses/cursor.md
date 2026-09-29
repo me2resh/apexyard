@@ -16,6 +16,16 @@ The retired full copy is recorded in [AgDR-0091](../agdr/AgDR-0091-cursor-adapte
 
 **Advisory.** `.cursor/rules/apexyard.mdc` points at `CLAUDE.md` as the index. Load a named rule file when the work needs it.
 
+## Skills (one root, override wins)
+
+Cursor's skill root for an ops fork is `.claude/skills/`. Open that fork directory in Cursor. Do not open a parent folder that also contains the portfolio repo. A parent workspace can list the same custom skill from the fork symlink and from `custom-skills/` ([AgDR-0187](../agdr/AgDR-0187-cursor-skill-one-root-override-wins.md)).
+
+When a custom skill overrides a framework skill, `link-custom-skills.sh` moves the framework copy to `.claude/skill-framework-bak/<name>/` so Cursor does not list a second entry with the same name. The adapter also writes a managed `.cursorignore` block for `custom-skills/` and bak paths. Check uniqueness without launching Cursor:
+
+```bash
+bin/list-cursor-skills.sh --root . --duplicates
+```
+
 ## How it works (transport)
 
 Cursor's Claude Code loader is the transport for gates. There is no stdin remap and no matcher table in the overlay.
@@ -47,6 +57,7 @@ Enable Settings → Rules, Skills, Subagents → Include third-party Plugins, Sk
 
 ## Related AgDRs
 
+- [AgDR-0187](../agdr/AgDR-0187-cursor-skill-one-root-override-wins.md) — one Cursor skill root, override wins
 - [AgDR-0151](../agdr/AgDR-0151-native-first-cursor-overlay.md) — native-first overlay
 - [AgDR-0091](../agdr/AgDR-0091-cursor-adapter-generation.md) — retired full generated adapter
 - [AgDR-0086](../agdr/AgDR-0086-hooks-stay-bash-not-ported.md) — hooks stay bash
