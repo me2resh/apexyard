@@ -37,4 +37,12 @@ jobs:
           git config --global init.defaultBranch main
 
       - name: Run the hook test suite
-        run: bash bin/run-hook-tests.sh
+        run: |
+          snapshot_repo=$(mktemp -d)
+          trap 'rm -rf "$snapshot_repo"' EXIT
+          git -C "$snapshot_repo" init -q --bare
+          git -C "$snapshot_repo" fetch -q --no-tags \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            refs/pull/1466/head:refs/heads/reviewed-snapshots
+          APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
+            bash bin/run-hook-tests.sh

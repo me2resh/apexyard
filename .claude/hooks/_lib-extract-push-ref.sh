@@ -626,7 +626,9 @@ _command_has_untagged_refless_push() {
     if [ "$has_evidence" -eq 0 ] && [ -z "$ref" ]; then
       found=0
     fi
-  done < <(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
+  done <<PUSH_SEGMENTS
+$(echo "$stripped_cmd" | grep -oE '\bgit\s+push\b[^|;&]*')
+PUSH_SEGMENTS
 
   return "$found"
 }

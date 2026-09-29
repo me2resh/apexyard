@@ -369,7 +369,9 @@ _bdw_match_redirection_any_segment() {
   while IFS= read -r seg; do
     [ -z "$seg" ] && continue
     _bdw_match_redirection "$seg" && return 0
-  done < <(_bdw_split_top_level "$cmd")
+  done <<BDW_SEGMENTS
+$(_bdw_split_top_level "$cmd")
+BDW_SEGMENTS
   return 1
 }
 
@@ -1220,7 +1222,9 @@ _bdw_targets_from_segment() {
     [ -z "$line" ] && continue
     target=$(printf '%s\n' "$line" | sed -E "$_BDW_REDIRECT_STRIP")
     [ -n "$target" ] && _bdw_strip_quotes "$target"
-  done < <(printf '%s\n' "$seg" | grep -oE "$_BDW_REDIRECT_RE")
+  done <<BDW_REDIRECTS
+$(printf '%s\n' "$seg" | grep -oE "$_BDW_REDIRECT_RE")
+BDW_REDIRECTS
 
   _bdw_cp_mv_target_before_redirect "$seg" "$syntax"
 
@@ -1299,7 +1303,9 @@ bash_extract_write_targets() {
   local seg
   while IFS= read -r seg; do
     syntax_segments+=("$seg")
-  done < <(_bdw_split_top_level "$syntax")
+  done <<BDW_SYNTAX_SEGMENTS
+$(_bdw_split_top_level "$syntax")
+BDW_SYNTAX_SEGMENTS
 
   local seg_targets
   seg_targets=$(
@@ -1309,7 +1315,9 @@ bash_extract_write_targets() {
       index=$((index + 1))
       [ -z "$seg" ] && continue
       _bdw_targets_from_segment "$seg" "$syntax_seg"
-    done < <(_bdw_split_top_level "$cmd")
+    done <<BDW_COMMAND_SEGMENTS
+$(_bdw_split_top_level "$cmd")
+BDW_COMMAND_SEGMENTS
   )
   {
     [ -n "$seg_targets" ] && printf '%s\n' "$seg_targets"
@@ -1370,10 +1378,14 @@ bash_command_has_unextractable_write() {
   fi
   while IFS= read -r segment; do
     syntax_segments+=("$segment")
-  done < <(_bdw_split_top_level "$syntax")
+  done <<BDW_SYNTAX_SEGMENTS
+$(_bdw_split_top_level "$syntax")
+BDW_SYNTAX_SEGMENTS
   while IFS= read -r segment; do
     operator_segments+=("$segment")
-  done < <(_bdw_split_top_level "$operators")
+  done <<BDW_OPERATOR_SEGMENTS
+$(_bdw_split_top_level "$operators")
+BDW_OPERATOR_SEGMENTS
   [ "${#syntax_segments[@]}" -eq "${#operator_segments[@]}" ] || return 0
   for ((index=0; index<${#syntax_segments[@]}; index++)); do
     if printf '%s' "${syntax_segments[index]}" | grep -qE '(^|[;&|()[:space:]])(cp|mv)[[:space:]]' \
