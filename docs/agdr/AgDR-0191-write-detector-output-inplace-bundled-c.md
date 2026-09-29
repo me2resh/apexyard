@@ -22,7 +22,7 @@ Add detection for each form. Keep the AgDR-0181 allowlist unchanged.
 
 Extract the path for `git log|diff --output`, `sort -o` / `--output`, and `yq -i` / `--inplace` when the flag or trailing operand names it. Leave `python3 -Bc` unextractable, like other inline interpreter writes. An empty target list still fails closed under the existing #1416 rule.
 
-Widen `_BDW_PYTHON_DASH_C_RE` so a lone `-c`, bundled shorts that include `c` (`-Bc`, `-cB`), and preceding short flags without `c` (`-B -c`) all match. Long options such as `--check` stay out because a second leading dash fails the short-option class.
+Widen `_BDW_PYTHON_DASH_C_RE` so a lone `-c`, bundled shorts that include `c` (`-Bc`), and preceding short flags without `c` (`-B -c`) all match. Long options such as `--check` stay out because a second leading dash fails the short-option class.
 
 Wire the new matchers into `bash_command_appears_to_write`, `_bdw_detects_other_write`, and `bash_command_is_deletion_only` so sed `w` decoy hold-back stays in step.
 
@@ -31,6 +31,22 @@ Wire the new matchers into `bash_command_appears_to_write`, `_bdw_detects_other_
 - The five #1480 forms block without an active ticket and allow with one.
 - Ordinary allowlisted reads such as `git log --format='%h > %s'`, bare `sort`, and `yq` without `-i` stay ungated.
 - AgDR-0181 Residue no longer lists these forms.
+
+## Architecture evolution
+
+### Review fix: never looser than `dev` for python `-c` (PR #1485)
+
+The bundled-only presence regex required every skipped token to start with `-`. That opened a bypass `dev` still blocked: `python3 -W ignore -c "…"`, `python3 -X utf8 -c "…"`, and `python -W error -c "…"`. The legacy `dev` form `(-[^c]*[[:space:]]+)?-c\b` can consume an option argument such as `ignore` because `[^c]*` may span spaces.
+
+**Change:** `_BDW_PYTHON_DASH_C_RE` matches when *either* the legacy `dev` form *or* the bundled form matches. Both presence call sites (`_bdw_match_python_dash_c` and `_bdw_quoted_source_write`) use that combined regex. The new detector must never be looser than `dev` for any input.
+
+### Wording: `python3 -cB` is not bundled `-c` + `B`
+
+Python reads `-cB` as `-c` with program text `B`, not as `-c` plus a bundled `B` flag. AgDR and test labels said otherwise. Detection stays conservative and continues to gate `-cB`; only the description is corrected.
+
+### Bundled `sort` / `yq` write spellings both trees missed
+
+`dev` and this branch both missed `sort -uo <file>`, `sort -o<file>` (attached argument), and `yq -Pi <file>` (i bundled with other shorts). Matchers now cover those forms. Reads stay ungated: `sort -u file`, `yq -P '.a' file`, `yq '.a' my-i.yaml`.
 
 ## Artifacts
 

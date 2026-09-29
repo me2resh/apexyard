@@ -1255,7 +1255,8 @@ run_case "#1396 reported repro: sed -i on a variable path honors active ticket" 
 for c in 'git log --output=src/app.ts' 'git log --output src/app.ts' \
          'git diff --output=src/app.ts' 'git diff --output src/app.ts' \
          'sort -o src/app.ts input.txt' 'yq -i ".a=1" src/app.ts' \
-         "python3 -Bc \"open('src/app.ts','w').write('x')\""; do
+         "python3 -Bc \"open('src/app.ts','w').write('x')\"" \
+         "python3 -W ignore -c \"open('src/app.ts','w').write('x')\""; do
   sb=$(make_sandbox)
   in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
   run_case "#1480 blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"

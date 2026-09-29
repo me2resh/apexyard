@@ -110,11 +110,13 @@ _bdw_operators() {
 #
 #   Tool output / in-place writers (#1480)
 #     - git log|diff --output / --output=
-#     - sort -o / --output
-#     - yq -i / --inplace
+#     - sort -o / -uo / -oFILE / --output
+#     - yq -i / -Pi / --inplace
 #
 #   Embedded interpreters with inline source (-c / -e / -r)
-#     - python -c / -Bc / -cB '…' with write/open/touch/copy/rename keywords
+#     - python -c / -Bc '…' with write/open/touch/copy/rename keywords
+#       (also conservatively gates -cB, which Python reads as -c with
+#       program text B — not as -c plus a bundled B flag)
 #     - python <<EOF / python - <<EOF (heredoc-fed)
 #     - node -e '…' with writeFile/appendFile/write keywords
 #     - node <<EOF (heredoc-fed, #153)
@@ -563,21 +565,27 @@ _bdw_match_git_log_diff_output() {
 }
 
 # 8c. sort -o FILE / sort --output=FILE (#1480).
-#     GNU and BSD sort write the result to -o/--output. Do not match a bare
-#     `-o` glued into an unrelated long option: require a following path
-#     token or an equals form.
+#     GNU and BSD sort write the result to -o/--output. Also catch `sort -uo`
+#     (o bundled with other shorts) and `sort -oFILE` (attached argument).
+#     Do not match a bare `-o` glued into an unrelated long option: require a
+#     following path token, an attached path, or an equals form. `sort -u file`
+#     stays a read. `sort` must be a command word, so the `--sort` option of
+#     another tool (`ps --sort -rss -o pid`) stays a read.
 _bdw_match_sort_output() {
   local cmd="$1"
   echo "$cmd" | grep -qE '\bsort\b' || return 1
-  echo "$cmd" | grep -qE '\bsort[[:space:]][^|;&]*(-o[[:space:]]+|--output(=|[[:space:]]+))'
+  echo "$cmd" | grep -qE '(^|[^-[:alnum:]_.])sort[[:space:]][^|;&]*(-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+|-o[^[:space:]=][^[:space:]]*|--output(=|[[:space:]]+))'
 }
 
 # 8d. yq -i / yq --inplace (#1480).
 #     In-place edit of a YAML/JSON file. Same role as sed -i / awk -i inplace.
+#     Also catch `yq -Pi` / `yq -iP` (i bundled with other shorts). The short
+#     flag must be its own token so `yq '.a' my-i.yaml` and `yq -P '.a' file`
+#     stay reads.
 _bdw_match_yq_inplace() {
   local cmd="$1"
   echo "$cmd" | grep -qE '\byq\b' || return 1
-  echo "$cmd" | grep -qE '\byq[[:space:]][^|;&]*(-i\b|--inplace\b)'
+  echo "$cmd" | grep -qE '\byq[[:space:]]+([^|;&]*[[:space:]])?(-[A-Za-z0-9]*i[A-Za-z0-9]*\b|--inplace\b)'
 }
 
 # Python write-keyword set, shared by the -c and heredoc matchers below.
@@ -629,11 +637,27 @@ _bdw_match_yq_inplace() {
 # read, because the leading `[wax+]` still has to match.
 _BDW_PY_MODE="\\\\?['\"][rbtU]*[wax+][rwxabt+U]*([:|][a-z0-9*]*)?\\\\?['\"]"
 
-# python -c presence (#1480). Accepts a lone `-c`, bundled shorts that include
-# `c` (`-Bc`, `-cB`), and preceding short flags that do not contain `c`
-# (`-B -c`, `-OO -c`). Long options such as `--check` do not match: a second
-# leading dash fails the short-option class.
-_BDW_PYTHON_DASH_C_RE='\bpython3?[[:space:]]+(-[^c[:space:]]*[[:space:]]+)*-[A-Za-z0-9]*c[A-Za-z0-9]*\b'
+# python -c presence (#1480 + review fix).
+#
+# Legacy (dev) form: `(-[^c]*[[:space:]]+)?-c\b` after python. `[^c]*` may span
+# spaces, so an option argument such as `ignore` in `python3 -W ignore -c`
+# still reaches `-c`. Keep this form so the new detector is never looser than
+# dev for any input.
+_BDW_PYTHON_DASH_C_LEGACY_RE='\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b'
+
+# Bundled shorts (#1480): a lone `-c`, bundled shorts that include `c` (`-Bc`),
+# and preceding short flags that do not contain `c` (`-B -c`, `-OO -c`). Each
+# skipped token must start with `-`, so this form alone misses
+# `python3 -W ignore -c`. Long options such as `--check` do not match: a
+# second leading dash fails the short-option class.
+#
+# `-cB` is also matched here. Python reads that as `-c` with program text `B`
+# (not as `-c` plus a bundled `B` flag). Detection stays conservative and
+# continues to gate it.
+_BDW_PYTHON_DASH_C_BUNDLED_RE='\bpython3?[[:space:]]+(-[^c[:space:]]*[[:space:]]+)*-[A-Za-z0-9]*c[A-Za-z0-9]*\b'
+
+# Match when EITHER form matches. Apply at every presence check.
+_BDW_PYTHON_DASH_C_RE="(${_BDW_PYTHON_DASH_C_LEGACY_RE}|${_BDW_PYTHON_DASH_C_BUNDLED_RE})"
 
 # A call whose arguments after the first comma contain NO quote at all has no
 # literal mode to read, so the mode is unknown and the call counts as a write.
@@ -1054,11 +1078,15 @@ bash_extract_write_target() {
     fi
   fi
 
-  # sort -o / --output (#1480).
+  # sort -o / -uo / -oFILE / --output (#1480).
   if _bdw_match_sort_output "$cmd"; then
-    target=$(echo "$cmd" | grep -oE -e '-o[[:space:]]+[^[:space:]&|;]+' -e '--output=[^[:space:]&|;]+' -e '--output[[:space:]]+[^[:space:]&|;]+' \
+    target=$(echo "$cmd" | grep -oE \
+                  -e '-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+[^[:space:]&|;]+' \
+                  -e '-o[^[:space:]=][^[:space:]&|;]*' \
+                  -e '--output=[^[:space:]&|;]+' \
+                  -e '--output[[:space:]]+[^[:space:]&|;]+' \
                   | head -n 1 \
-                  | sed -E 's/^(-o[[:space:]]+|--output(=|[[:space:]]+))//')
+                  | sed -E 's/^(-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+|-o|--output(=|[[:space:]]+))//')
     if [ -n "$target" ]; then
       target=$(_bdw_strip_quotes "$target")
       echo "$target"
