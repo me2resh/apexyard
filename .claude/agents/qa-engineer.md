@@ -40,6 +40,7 @@ The main loop follows the same rule (apexyard#475).
 
 The `apexyard-search` MCP server is an optional add-on.
 Use `grep` and `Read` when its tools are not in your tool list.
+If `apexyard-search` is not installed, use `grep` and `Read`. Do not skip the step.
 Also use `grep` and `Read` when a call fails or returns nothing relevant.
 Do the same complete read with those tools.
 Do not skip or shorten the step.
