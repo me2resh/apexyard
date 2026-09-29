@@ -47,14 +47,14 @@ does not touch reviewer agent prose.
 
 | Option | Pros | Cons |
 |--------|------|------|
-| Add a blocking-severity bar (four kinds: regression, code-execution or approval-bypass vector, correctness bug, failed acceptance criterion) with every other finding advisory (chosen) | Removes the two most common false-blocking causes — self-bypass edge cases and writing nits — without touching the merge gate | A reviewer must classify each finding correctly; a wrong classification could let a real correctness bug through as advisory |
-| Keep every finding blocking, and instead cap review rounds only | Simpler; one change | Leaves the root cause (over-broad blocking) in place. A round cap alone still forces a follow-up ticket for findings that never needed to block at all |
+| Add a blocking-severity bar (four kinds: regression, code-execution or approval-bypass vector, correctness bug, failed acceptance criterion) with every other finding advisory (chosen) | Removes the two most common false-blocking causes — self-bypass edge cases and writing nits — without touching the merge gate | A reviewer must classify each finding correctly. A wrong classification could let a real correctness bug through as advisory |
+| Keep every finding blocking, and instead cap review rounds only | Simpler. One change | Leaves the root cause (over-broad blocking) in place. A round cap alone still forces a follow-up ticket for findings that never needed to block at all |
 | Give reviewers a full re-clone and full re-run on every re-review (status quo) | Simple, no new procedure to follow | This is the exact cost item 2 and item 3 name — a 14-minute, 165k-token re-review that only checked fix commits |
-| Add delta re-review scope (`git diff <last-reviewed-SHA>..HEAD`, `git range-diff` for a base merge) with a fresh marker at each new HEAD (chosen) | Matches the review to what changed; the merge gate's SHA check is unchanged | A re-review that misjudges "what the delta calls for" could miss a regression introduced by an earlier commit's interaction with a later one; mitigated by keeping the acceptance-criteria and AgDR checks blocking and full-scope on every pass |
-| Let reviewers keep re-running the full suite on every pass | No new procedure | CI already runs the full suite and is the merge gate's trusted result; re-running it three times is the cost item 3 names |
-| CI ownership of the full suite: reviewers read CI's check-run result for the head SHA, and run only changed-file tests plus fail-before proofs for new tests (chosen) | Cuts one of the three redundant full-suite runs without weakening the merge gate, which already requires green CI | A reviewer who skips reading CI's result could approve on a red suite; mitigated by making a red CI check itself a blocking finding |
+| Add delta re-review scope (`git diff <last-reviewed-SHA>..HEAD`, `git range-diff` for a base merge) with a fresh marker at each new HEAD (chosen) | Matches the review to what changed. The merge gate's SHA check is unchanged | A re-review that misjudges "what the delta calls for" could miss a regression introduced by an earlier commit's interaction with a later one. Mitigated by keeping the acceptance-criteria and AgDR checks blocking and full-scope on every pass |
+| Let reviewers keep re-running the full suite on every pass | No new procedure | CI already runs the full suite and is the merge gate's trusted result. Re-running it three times is the cost item 3 names |
+| CI ownership of the full suite: reviewers read CI's check-run result for the head SHA, and run only changed-file tests plus fail-before proofs for new tests (chosen) | Cuts one of the three redundant full-suite runs without weakening the merge gate, which already requires green CI | A reviewer who skips reading CI's result could approve on a red suite. Mitigated by making a red CI check itself a blocking finding |
 | No cap on review rounds | Simple | This is cause 4 verbatim — a later round can always surface one more advisory point, with nothing to stop it |
-| Cap review rounds at two, and file remaining non-blocking findings as a follow-up ticket after round two (chosen) | Bounds the review-fix loop's cost; a blocking finding in round two still blocks, so safety is unchanged | A genuinely material non-blocking finding could still wait for a follow-up PR instead of landing in the same PR |
+| Cap review rounds at two, and file remaining non-blocking findings as a follow-up ticket after round two (chosen) | Bounds the review-fix loop's cost. A blocking finding in round two still blocks, so safety is unchanged | A genuinely material non-blocking finding could still wait for a follow-up PR instead of landing in the same PR |
 | Batch several tickets into one trust-chain PR, as allowed for any PR | Fewer PRs to open | A batched trust-chain PR cannot isolate one blocking finding to one criterion, and a delta re-review cannot cleanly attribute a later commit to one ticket |
 | One ticket per trust-chain PR (chosen), with the existing Lean docs/config batching exemption unchanged | Keeps each review round scoped to one change on the highest-blast-radius path class | None material — this narrows batching only on the path class that already gets the full Heavy review chain |
 
@@ -77,14 +77,14 @@ at the PR's real HEAD on every merge, including after a delta re-review.
   `git range-diff` for a base-branch merge, instead of the whole PR.
 - Rex and Hakim read `gh pr checks` for the head SHA and run only changed-file
   tests plus fail-before proofs, instead of the full suite.
-- `.claude/rules/pr-workflow.md` caps review rounds at two; the orchestrator
+- `.claude/rules/pr-workflow.md` caps review rounds at two. The orchestrator
   files a follow-up ticket for any non-blocking finding still open after
   round two.
 - The builder pastes shellcheck, test, and fail-before evidence into the PR
-  body (`.claude/rules/pr-quality.md` § "Builder Evidence"); the reviewer
+  body (`.claude/rules/pr-quality.md` § "Builder Evidence"). The reviewer
   spot-checks it instead of reproducing every command.
 - Rex and Hakim state a scope split — Rex owns code quality, tests, and
-  writing; Hakim owns security and gate integrity — so neither repeats the
+  writing. Hakim owns security and gate integrity. Neither repeats the
   other's checks, and the orchestrator may skip Hakim on a docs-only delta.
 - A PR that changes `.claude/hooks/**`, `.claude/settings.json`,
   `.githooks/**`, or a delegated gate runner carries one ticket
