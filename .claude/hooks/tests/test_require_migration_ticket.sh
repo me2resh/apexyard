@@ -1601,6 +1601,45 @@ for tilde in '~root' '~+' '~-'; do
 done
 
 # =============================================================================
+# Cases #1483: relative migrations/ spellings must all block without a ticket.
+# Default patterns are `*/`-anchored, so bare `migrations/001.sql` used to
+# miss every arm while `./migrations/001.sql` matched. Cover Bash redirects
+# and Write/Edit file_path for the three relative spellings named in the
+# ticket. No active migration ticket → exit 2 for each.
+# =============================================================================
+for _1483_spelling in \
+  'migrations/001.sql' \
+  './migrations/001.sql' \
+  'sub/../migrations/001.sql'
+do
+  SB=$(make_fork)
+  mkdir -p "$SB/migrations" "$SB/sub"
+  install_mock "$SB" gh 'exit 99'
+  if run_hook_bash "$SB" "echo x > $_1483_spelling" 2; then
+    record_pass "#1483 bash: relative '$_1483_spelling' with no ticket → block"
+  else
+    record_fail "#1483 bash: relative '$_1483_spelling' with no ticket → block"
+  fi
+  rm -rf "$SB"
+done
+
+for _1483_spelling in \
+  'migrations/001.sql' \
+  './migrations/001.sql' \
+  'sub/../migrations/001.sql'
+do
+  SB=$(make_fork)
+  mkdir -p "$SB/migrations" "$SB/sub"
+  install_mock "$SB" gh 'exit 99'
+  if run_hook "$SB" "$_1483_spelling" 2; then
+    record_pass "#1483 Write: relative '$_1483_spelling' with no ticket → block"
+  else
+    record_fail "#1483 Write: relative '$_1483_spelling' with no ticket → block"
+  fi
+  rm -rf "$SB"
+done
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo
