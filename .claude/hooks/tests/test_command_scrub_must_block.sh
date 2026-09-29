@@ -130,14 +130,17 @@ else
   D5_HOOKS=""
 fi
 
+# The PR-branch snapshots (39c5b95, d5e7ce4, 1fea730) do not exist after the
+# squash merge to dev. Skip their fail-before proofs when the commit is absent.
 HEAD_HOOKS="$TMP/1fea730-hooks"
 mkdir -p "$HEAD_HOOKS"
-if ! git -C "$SOURCE_REPO" archive 1fea730 .claude/hooks >"$TMP/1fea730-hooks.tar"; then
-  echo "FAIL: cannot archive 1fea730 hooks for fail-before proofs" >&2
-  exit 1
+if git -C "$SOURCE_REPO" archive 1fea730 .claude/hooks >"$TMP/1fea730-hooks.tar" 2>/dev/null; then
+  tar -xf "$TMP/1fea730-hooks.tar" -C "$HEAD_HOOKS"
+  HEAD_HOOKS="$HEAD_HOOKS/.claude/hooks"
+else
+  echo "WARN: cannot archive 1fea730 hooks — skip 1fea730 fail-before proofs" >&2
+  HEAD_HOOKS=""
 fi
-tar -xf "$TMP/1fea730-hooks.tar" -C "$HEAD_HOOKS"
-HEAD_HOOKS="$HEAD_HOOKS/.claude/hooks"
 
 # Build cases as a label+command list via a directory of files.
 CASES_DIR="$TMP/cases"
@@ -303,18 +306,20 @@ if [ -n "$D5_HOOKS" ]; then
   fail_before_ticket "$D5_HOOKS" "d5e7ce4" "$ALLOW_DIR"
 fi
 
-# These six bypasses must all allow at 1fea730 and block after the fix.
-fail_before_ticket "$HEAD_HOOKS" "1fea730" "$HEREDOC_DIR"
+if [ -n "$HEAD_HOOKS" ]; then
+  # These six bypasses must all allow at 1fea730 and block after the fix.
+  fail_before_ticket "$HEAD_HOOKS" "1fea730" "$HEREDOC_DIR"
 
-# The ordinary quoted cases already pass at 1fea730. Its single-delimiter
-# gate incorrectly blocks the second body in the two-heredoc case.
-setup_ticket_sandbox "$TMP/head_fp_ticket" "$HEAD_HOOKS"
-check 'baseline fp quoted heredoc markdown scratch write' 0 \
-  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_MARKDOWN_CMD")"
-check 'baseline fp heredoc pipe grep with redirect text' 0 \
-  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_GREP_CMD")"
-check 'baseline fp two heredoc bodies in order' 2 \
-  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_TWO_HEREDOC_CMD")"
+  # The ordinary quoted cases already pass at 1fea730. Its single-delimiter
+  # gate incorrectly blocks the second body in the two-heredoc case.
+  setup_ticket_sandbox "$TMP/head_fp_ticket" "$HEAD_HOOKS"
+  check 'baseline fp quoted heredoc markdown scratch write' 0 \
+    "$(ticket_rc "$TMP/head_fp_ticket" "$FP_MARKDOWN_CMD")"
+  check 'baseline fp heredoc pipe grep with redirect text' 0 \
+    "$(ticket_rc "$TMP/head_fp_ticket" "$FP_GREP_CMD")"
+  check 'baseline fp two heredoc bodies in order' 2 \
+    "$(ticket_rc "$TMP/head_fp_ticket" "$FP_TWO_HEREDOC_CMD")"
+fi
 
 # Pass-after against current hooks (expect block / exit 2).
 setup_ticket_sandbox "$TMP/cur_ticket" "$HOOKS"
