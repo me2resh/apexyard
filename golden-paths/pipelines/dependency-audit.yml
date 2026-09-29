@@ -1,9 +1,17 @@
 # Dependency Audit Pipeline — Guardian Agent
 # Copy this to .github/workflows/dependency-audit.yml in your project.
+# Also copy golden-paths/pipelines/scripts/dependency-audit.py and
+# dependency-audit-tools.requirements.txt to .github/scripts/ (same revision).
+# Refresh when the framework helper_revision advances. See pipelines/README.md.
 #
 # Agent: Guardian (Dependency Auditor)
-# Trigger: weekly (Monday 9 AM UTC) and on package.json changes
-# Purpose: monitor dependencies for vulnerabilities, outdated packages, and license compliance
+# Trigger: weekly (Monday 9 AM UTC), manual, and on npm / Python manifest changes
+# Purpose: monitor dependencies for vulnerabilities, outdated packages, and licenses
+# Design: AgDR-0176 / AgDR-0184 / issue #1359
+#
+# Upgrade note: unpinned Python requirements fail coverage by default
+# (fail-on-incomplete=true). Set repository variable DEPENDENCY_AUDIT_FAIL_ON_INCOMPLETE
+# to "false" to keep an incomplete verdict with a visible warning instead of failing.
 
 name: Dependency Audit
 
@@ -14,30 +22,102 @@ on:
     branches: [main]
     paths:
       - 'package.json'
+      - '**/package.json'
       - 'package-lock.json'
+      - '**/package-lock.json'
       - 'yarn.lock'
+      - '**/yarn.lock'
       - 'pnpm-lock.yaml'
+      - '**/pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - '**/requirements*.txt'
+      - 'pyproject.toml'
+      - '**/pyproject.toml'
+      - 'Pipfile'
+      - '**/Pipfile'
+      - 'Pipfile.lock'
+      - '**/Pipfile.lock'
+      - 'poetry.lock'
+      - '**/poetry.lock'
+      - 'uv.lock'
+      - '**/uv.lock'
+      - '.github/scripts/dependency-audit.py'
   pull_request:
     paths:
       - 'package.json'
+      - '**/package.json'
       - 'package-lock.json'
+      - '**/package-lock.json'
       - 'yarn.lock'
+      - '**/yarn.lock'
       - 'pnpm-lock.yaml'
-  workflow_dispatch:  # manual trigger
+      - '**/pnpm-lock.yaml'
+      - 'requirements*.txt'
+      - '**/requirements*.txt'
+      - 'pyproject.toml'
+      - '**/pyproject.toml'
+      - 'Pipfile'
+      - '**/Pipfile'
+      - 'Pipfile.lock'
+      - '**/Pipfile.lock'
+      - 'poetry.lock'
+      - '**/poetry.lock'
+      - 'uv.lock'
+      - '**/uv.lock'
+      - '.github/scripts/dependency-audit.py'
+  workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
+
+env:
+  FAIL_ON_INCOMPLETE: ${{ vars.DEPENDENCY_AUDIT_FAIL_ON_INCOMPLETE || 'true' }}
 
 jobs:
-  guardian-audit:
-    name: Guardian Dependency Audit
+  detect:
+    name: Detect ecosystems
     runs-on: ubuntu-latest
-
+    outputs:
+      has_npm: ${{ steps.detect.outputs.has_npm }}
+      has_python: ${{ steps.detect.outputs.has_python }}
     steps:
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Detect manifests
+        id: detect
+        run: |
+          set -e
+          has_npm=false
+          has_python=false
+          if find . \( -name node_modules -o -name .git -o -name dist -o -name build -o -name .venv \) -prune -o -name package.json -print | grep -q .
+          then
+            has_npm=true
+          fi
+          if find . \( -name node_modules -o -name .git -o -name dist -o -name build -o -name .venv \) -prune -o \( -name 'requirements*.txt' -o -name pyproject.toml -o -name Pipfile -o -name Pipfile.lock -o -name poetry.lock -o -name uv.lock \) -print | grep -q .
+          then
+            has_python=true
+          fi
+          echo "has_npm=$has_npm" >> "$GITHUB_OUTPUT"
+          echo "has_python=$has_python" >> "$GITHUB_OUTPUT"
+
+  npm-audit:
+    name: npm dependency audit
+    needs: detect
+    if: needs.detect.outputs.has_npm == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exit_code: ${{ steps.audit.outputs.exit_code }}
+      has_report: ${{ steps.audit.outputs.has_report }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
@@ -45,74 +125,45 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
-      # Vulnerability scan
-      - name: Run npm audit
-        id: npm-audit
+      - name: Install dependencies (no lifecycle scripts)
         run: |
-          npm audit --json > audit-report.json || true
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "No npm lockfile. Licence metadata may be incomplete."
+            npm install --ignore-scripts --package-lock-only || true
+          fi
 
-          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' audit-report.json)
-          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-report.json)
-          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' audit-report.json)
-          LOW=$(jq '.metadata.vulnerabilities.low // 0' audit-report.json)
-          TOTAL=$((CRITICAL + HIGH + MODERATE + LOW))
-
-          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
-          echo "high=$HIGH" >> $GITHUB_OUTPUT
-          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
-          echo "low=$LOW" >> $GITHUB_OUTPUT
-          echo "total=$TOTAL" >> $GITHUB_OUTPUT
-
-      # Check for outdated packages
       - name: Check outdated packages
         id: outdated
         run: |
-          npm outdated --json > outdated-report.json || true
+          mkdir -p audit-evidence
+          npm outdated --json > audit-evidence/npm-outdated.json || true
 
-          MAJOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) != (.value.current | split(".")[0]))] | length' outdated-report.json)
-          MINOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) != (.value.current | split(".")[1]))] | length' outdated-report.json)
-          PATCH=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) == (.value.current | split(".")[1]))] | length' outdated-report.json)
+          MAJOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) != (.value.current | split(".")[0]))] | length' audit-evidence/npm-outdated.json)
+          MINOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) != (.value.current | split(".")[1]))] | length' audit-evidence/npm-outdated.json)
+          PATCH=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) == (.value.current | split(".")[1]))] | length' audit-evidence/npm-outdated.json)
 
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
-          echo "minor=$MINOR" >> $GITHUB_OUTPUT
-          echo "patch=$PATCH" >> $GITHUB_OUTPUT
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
+          echo "patch=$PATCH" >> "$GITHUB_OUTPUT"
 
-      # License compliance check
       - name: Check licenses
         id: licenses
         run: |
+          mkdir -p audit-evidence
           npm install -g license-checker
+          license-checker --json > audit-evidence/licenses.json
 
-          license-checker --json > licenses.json
+          COPYLEFT=$(jq '[to_entries[] | select(.value.licenses | test("GPL|LGPL|AGPL|MPL|CDDL"; "i"))] | length' audit-evidence/licenses.json)
+          UNKNOWN=$(jq '[to_entries[] | select(.value.licenses == null or .value.licenses == "UNKNOWN")] | length' audit-evidence/licenses.json)
 
-          # Find copyleft licenses
-          COPYLEFT=$(jq '[to_entries[] | select(.value.licenses | test("GPL|LGPL|AGPL|MPL|CDDL"; "i"))] | length' licenses.json)
-          UNKNOWN=$(jq '[to_entries[] | select(.value.licenses == null or .value.licenses == "UNKNOWN")] | length' licenses.json)
+          echo "copyleft=$COPYLEFT" >> "$GITHUB_OUTPUT"
+          echo "unknown=$UNKNOWN" >> "$GITHUB_OUTPUT"
 
-          echo "copyleft=$COPYLEFT" >> $GITHUB_OUTPUT
-          echo "unknown=$UNKNOWN" >> $GITHUB_OUTPUT
-
-      # Generate summary report
-      - name: Generate audit report
+      - name: Summarize npm inventory
         run: |
-          cat << EOF >> $GITHUB_STEP_SUMMARY
-          # 🛡️ Guardian Dependency Audit Report
-
-          **Repository**: ${{ github.repository }}
-          **Date**: $(date -u +"%Y-%m-%d %H:%M UTC")
-
-          ## Vulnerability Summary
-
-          | Severity | Count | Action |
-          |----------|-------|--------|
-          | Critical | ${{ steps.npm-audit.outputs.critical }} | Immediate fix required |
-          | High | ${{ steps.npm-audit.outputs.high }} | Fix this week |
-          | Moderate | ${{ steps.npm-audit.outputs.moderate }} | Fix this sprint |
-          | Low | ${{ steps.npm-audit.outputs.low }} | Track in backlog |
-
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
           ## Outdated Packages
 
           | Type | Count |
@@ -127,64 +178,346 @@ jobs:
           |-------|-------|
           | Copyleft licenses (needs review) | ${{ steps.licenses.outputs.copyleft }} |
           | Unknown licenses | ${{ steps.licenses.outputs.unknown }} |
-
-          ---
-          *Audited by Guardian (Dependency Auditor Agent)*
           EOF
 
-      # Create issue for critical/high vulnerabilities
-      - name: Create issue for vulnerabilities
-        if: steps.npm-audit.outputs.critical > 0 || steps.npm-audit.outputs.high > 0
+      - name: Run shared helper (npm)
+        id: audit
+        run: |
+          mkdir -p audit-evidence
+          set +e
+          python3 -I .github/scripts/dependency-audit.py . \
+            --ecosystem=npm \
+            --json-out audit-evidence/npm-report.json \
+            --md-out audit-evidence/npm-report.md
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ -f audit-evidence/npm-report.json ]; then
+            echo "has_report=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_report=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Upload npm evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dependency-audit-npm
+          path: audit-evidence/
+
+  python-audit:
+    name: Python dependency audit
+    needs: detect
+    if: needs.detect.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exit_code: ${{ steps.audit.outputs.exit_code }}
+      has_report: ${{ steps.audit.outputs.has_report }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install trusted audit tools (isolated)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dep-audit-tools"
+          # shellcheck disable=SC1091
+          . "$RUNNER_TEMP/dep-audit-tools/bin/activate"
+          # Install from the pin file (versions only). Hashes are a follow-up — AgDR-0184.
+          pip install -r .github/scripts/dependency-audit-tools.requirements.txt
+          echo "DEPENDENCY_AUDIT_TRUSTED_PYTHON=$RUNNER_TEMP/dep-audit-tools/bin/python" >> "$GITHUB_ENV"
+
+      - name: Run shared helper (python)
+        id: audit
+        run: |
+          mkdir -p audit-evidence
+          set +e
+          "$DEPENDENCY_AUDIT_TRUSTED_PYTHON" -I .github/scripts/dependency-audit.py . \
+            --ecosystem=python \
+            --trusted-python "$DEPENDENCY_AUDIT_TRUSTED_PYTHON" \
+            --json-out audit-evidence/python-report.json \
+            --md-out audit-evidence/python-report.md
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          if [ -f audit-evidence/python-report.json ]; then
+            echo "has_report=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_report=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Upload Python evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dependency-audit-python
+          path: audit-evidence/
+
+  summarize:
+    name: Combine report and thresholds
+    needs: [detect, npm-audit, python-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      critical: ${{ steps.combine.outputs.critical }}
+      high: ${{ steps.combine.outputs.high }}
+      unknown: ${{ steps.combine.outputs.unknown }}
+      incomplete: ${{ steps.combine.outputs.incomplete }}
+      report_path: ${{ steps.combine.outputs.report_path }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Download evidence
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4
+        with:
+          path: audit-evidence
+        continue-on-error: true
+
+      - name: Combine reports
+        id: combine
+        env:
+          HAS_NPM: ${{ needs.detect.outputs.has_npm }}
+          HAS_PYTHON: ${{ needs.detect.outputs.has_python }}
+          NPM_RESULT: ${{ needs.npm-audit.result }}
+          PYTHON_RESULT: ${{ needs.python-audit.result }}
+          NPM_EXIT: ${{ needs.npm-audit.outputs.exit_code }}
+          PYTHON_EXIT: ${{ needs.python-audit.outputs.exit_code }}
+          NPM_HAS_REPORT: ${{ needs.npm-audit.outputs.has_report }}
+          PYTHON_HAS_REPORT: ${{ needs.python-audit.outputs.has_report }}
+        run: |
+          python3 <<'PY'
+          import json, os, pathlib, sys
+          root = pathlib.Path("audit-evidence")
+          reports = list(root.rglob("*-report.json"))
+          totals = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Unknown": 0}
+          incomplete = False
+          ecosystems = set()
+          findings = []
+          notes = []
+
+          has_npm = os.environ.get("HAS_NPM") == "true"
+          has_python = os.environ.get("HAS_PYTHON") == "true"
+          npm_result = os.environ.get("NPM_RESULT") or "skipped"
+          python_result = os.environ.get("PYTHON_RESULT") or "skipped"
+          npm_has_report = os.environ.get("NPM_HAS_REPORT") == "true"
+          python_has_report = os.environ.get("PYTHON_HAS_REPORT") == "true"
+
+          def job_ok(result: str) -> bool:
+              return result in ("success", "skipped")
+
+          if has_npm and not job_ok(npm_result):
+              incomplete = True
+              notes.append(f"npm-audit job result={npm_result}")
+          if has_python and not job_ok(python_result):
+              incomplete = True
+              notes.append(f"python-audit job result={python_result}")
+          if has_npm and npm_result != "skipped" and not npm_has_report:
+              incomplete = True
+              notes.append("npm report missing")
+          if has_python and python_result != "skipped" and not python_has_report:
+              incomplete = True
+              notes.append("python report missing")
+          for label, raw in (("npm", os.environ.get("NPM_EXIT")), ("python", os.environ.get("PYTHON_EXIT"))):
+              if raw not in (None, "", "skipped"):
+                  try:
+                      if int(raw) not in (0, 4):
+                          # 1=critical vulns handled by threshold; 3=incomplete/failed tool
+                          if int(raw) == 3:
+                              incomplete = True
+                              notes.append(f"{label} helper exit_code={raw}")
+                  except ValueError:
+                      incomplete = True
+                      notes.append(f"{label} helper exit_code unparseable: {raw!r}")
+
+          for path in reports:
+              try:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+              except Exception as exc:
+                  print(f"failed to read {path}: {exc}", file=sys.stderr)
+                  incomplete = True
+                  continue
+              for k, v in (data.get("severity_totals") or {}).items():
+                  totals[k] = totals.get(k, 0) + int(v)
+              for ds in data.get("dependency_sets") or []:
+                  ecosystems.add(ds.get("ecosystem"))
+                  if ds.get("coverage") in ("incomplete", "failed") or ds.get("check_status") in (
+                      "failed", "incomplete", "skipped", "pending"
+                  ):
+                      incomplete = True
+              if int(data.get("exit_code") or 0) == 3:
+                  incomplete = True
+              findings.extend(data.get("findings") or [])
+          if has_npm and not any(e == "npm" for e in ecosystems) and npm_result == "success":
+              # Report present but no npm set recorded — treat as incomplete.
+              if not any("npm-report.json" in str(p) for p in reports):
+                  incomplete = True
+                  notes.append("npm ecosystem detected but no npm report ingested")
+          if has_python and not any("python-report.json" in str(p) for p in reports) and python_result == "success":
+              incomplete = True
+              notes.append("python ecosystem detected but no python report ingested")
+
+          combined = {
+              "ecosystems": sorted(x for x in ecosystems if x),
+              "severity_totals": totals,
+              "incomplete": incomplete,
+              "findings": findings,
+              "notes": notes,
+              "helper_note": "combined from per-ecosystem helper runs",
+          }
+          out = pathlib.Path("combined-report.json")
+          out.write_text(json.dumps(combined, indent=2) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"critical={totals.get('Critical', 0)}\n")
+              fh.write(f"high={totals.get('High', 0)}\n")
+              fh.write(f"unknown={totals.get('Unknown', 0)}\n")
+              fh.write(f"incomplete={'true' if incomplete else 'false'}\n")
+              fh.write("report_path=combined-report.json\n")
+          summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          lines = [
+              "# Guardian Dependency Audit Report",
+              "",
+              f"**Repository**: {os.environ.get('GITHUB_REPOSITORY', '')}",
+              "",
+              "## Vulnerability Summary",
+              "",
+              "| Severity | Count |",
+              "|----------|-------|",
+              f"| Critical | {totals.get('Critical', 0)} |",
+              f"| High | {totals.get('High', 0)} |",
+              f"| Medium | {totals.get('Medium', 0)} |",
+              f"| Low | {totals.get('Low', 0)} |",
+              f"| Unknown | {totals.get('Unknown', 0)} |",
+              "",
+              f"Ecosystems: {', '.join(sorted(x for x in ecosystems if x)) or '(none detected)'}",
+              f"Incomplete coverage: {incomplete}",
+              "",
+              "---",
+              "*Audited by Guardian (Dependency Auditor Agent)*",
+              "",
+          ]
+          summary.write_text("\n".join(lines), encoding="utf-8")
+          PY
+
+      - name: Upload combined report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dependency-audit-combined
+          path: combined-report.json
+
+      - name: Threshold gate
+        if: always()
+        run: |
+          set -e
+          if [ "${{ steps.combine.outputs.critical }}" -gt 0 ]; then
+            echo "::error::Critical vulnerabilities found. Failing build."
+            exit 1
+          fi
+          if [ "${{ steps.combine.outputs.unknown }}" -gt 0 ]; then
+            echo "::warning::Unknown-severity findings require manual triage."
+          fi
+          if [ "${{ steps.combine.outputs.incomplete }}" = "true" ]; then
+            if [ "$FAIL_ON_INCOMPLETE" = "true" ]; then
+              echo "::error::Incomplete selected coverage. Failing by default (AgDR-0176)."
+              exit 1
+            fi
+            echo "::warning::Incomplete coverage retained. Scan is not clean."
+          fi
+
+  open-issues:
+    name: Open triage issues on default branch
+    needs: summarize
+    if: >
+      always()
+      && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      && (needs.summarize.outputs.critical > 0
+          || needs.summarize.outputs.high > 0
+          || needs.summarize.outputs.unknown > 0)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Download combined report
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4
+        with:
+          name: dependency-audit-combined
+          path: .
+
+      - name: Create or update tracking issue
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         with:
           script: |
-            const critical = ${{ steps.npm-audit.outputs.critical }};
-            const high = ${{ steps.npm-audit.outputs.high }};
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('combined-report.json', 'utf8'));
+            const totals = report.severity_totals || {};
+            const critical = totals.Critical || 0;
+            const high = totals.High || 0;
+            const unknown = totals.Unknown || 0;
+            const ecosystems = (report.ecosystems || []).join(', ');
+            const title = `[Security] Dependency audit: ${critical} critical, ${high} high, ${unknown} unknown`;
+            const findingLines = (report.findings || []).slice(0, 20).map(f => {
+              const eco = f.ecosystem || 'unknown';
+              const pkg = f.package || 'unknown';
+              const ver = f.version || '';
+              const sev = f.severity || 'Unknown';
+              const adv = f.advisory_id || '';
+              const manifests = (f.manifests || []).join(', ');
+              return `- [${eco}] ${pkg}@${ver} — ${sev} (${adv}) manifests: ${manifests}`;
+            }).join('\n');
+            const body = [
+              '## Dependency vulnerabilities detected',
+              '',
+              `Ecosystems: ${ecosystems || '(none)'}`,
+              '',
+              '| Severity | Count |',
+              '|----------|-------|',
+              `| Critical | ${critical} |`,
+              `| High | ${high} |`,
+              `| Unknown | ${unknown} |`,
+              '',
+              '### Findings (sample)',
+              findingLines || '_No finding details in combined report._',
+              '',
+              '### Action',
+              '1. Download the workflow artifacts.',
+              '2. Run the shared helper locally for details.',
+              '3. Remediate with the ecosystem package manager (never `npm update` for PyPI).',
+              '',
+              '---',
+              '*Created by Guardian (Dependency Auditor Agent)*',
+            ].join('\n');
 
-            const title = `[Security] ${critical} critical, ${high} high severity vulnerabilities found`;
-
-            const body = `## 🚨 Dependency Vulnerabilities Detected
-
-            Guardian has detected vulnerabilities that require immediate attention.
-
-            | Severity | Count |
-            |----------|-------|
-            | Critical | ${critical} |
-            | High | ${high} |
-
-            ### Action Required
-
-            1. Run \`npm audit\` locally to see details
-            2. Run \`npm audit fix\` to auto-fix where possible
-            3. For breaking changes, run \`npm audit fix --force\` carefully
-            4. Update packages manually if automatic fix fails
-
-            ### Commands
-
-            \`\`\`bash
-            npm audit
-            npm audit fix
-            npm audit fix --force
-            \`\`\`
-
-            ---
-            *Created by Guardian (Dependency Auditor Agent)*`;
-
+            const labels = ['security', 'dependencies', 'priority-high'];
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'security,dependencies'
+              labels: 'security,dependencies',
             });
-
-            const existingIssue = issues.find(i => i.title.includes('vulnerabilities found'));
-
-            if (existingIssue) {
+            const existing = issues.find(i => i.title.startsWith('[Security] Dependency audit:'));
+            if (existing) {
               await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existingIssue.number,
-                body
+                issue_number: existing.number,
+                title,
+                body,
               });
             } else {
               await github.rest.issues.create({
@@ -192,13 +525,6 @@ jobs:
                 repo: context.repo.repo,
                 title,
                 body,
-                labels: ['security', 'dependencies', 'priority-high']
+                labels,
               });
             }
-
-      # Fail the workflow if critical vulnerabilities found
-      - name: Check thresholds
-        if: steps.npm-audit.outputs.critical > 0
-        run: |
-          echo "::error::Critical vulnerabilities found! Failing build."
-          exit 1
