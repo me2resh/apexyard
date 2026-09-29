@@ -660,6 +660,10 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   # the first happened to be exempt.
   ALL_TARGETS=$(bash_extract_write_targets "$COMMAND")
 
+  if bash_command_has_unextractable_write "$COMMAND"; then
+    _ratc_evaluate_target "" "Bash" || exit 2
+  fi
+
   if [ -z "$ALL_TARGETS" ]; then
     # No target extractable at all — categorical fail-closed gate, same
     # as the pre-#886 empty-FILE_PATH behaviour (single call, FILE_PATH="").

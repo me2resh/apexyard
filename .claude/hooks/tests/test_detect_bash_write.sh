@@ -645,7 +645,11 @@ assert_read  "#1414 sed then | grep 'w x' is a read" "sed -n 1p in.txt | grep 'w
 assert_write   "#1414 sed -i with s///w /dev/stdout" 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'
 assert_targets "#1414 sed -i + exempt w target yields no target" \
   'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'                                  ""
-assert_targets "#1414 sed -i with ;w /tmp/x yields no target" \
+# sed is outside the data-only allowlist, so the scrubber returns raw. A
+# top-level ";" inside the quoted script still splits segments, so neither
+# target is extracted reliably. Empty targets match upstream/dev / bb447a9.
+# The ticket gate still blocks via appears_to_write + unextractable write.
+assert_targets "#1414 sed -i with ;w yields no target" \
   "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          ""
 assert_targets "#1414 sed w then sed -i yields no target" \
   'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts'                       ""
@@ -704,6 +708,13 @@ assert_targets "#1414 w decoy beside tee with an empty word" \
 
 # The heredoc families need the decoy first, because a heredoc ends on a
 # line that holds only its terminator.
+#
+# Expect empty targets — same as upstream/dev. python3/node/ruby sit outside
+# the data-only allowlist (AgDR-0181), so the write detector sees the heredoc
+# body. That fires _bdw_detects_other_write and holds the sed `w` decoy back.
+# Scrubbing at 39c5b95 blanked the body and yielded /tmp/x. Returning raw for
+# non-allowlisted tools restores the pre-scrub hold-back, not that scrub-era
+# result.
 assert_targets "#1414 w decoy before a python heredoc" \
   "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" ""
 assert_targets "#1414 w decoy before a node heredoc" \

@@ -16,6 +16,7 @@ reviewer_entries=$(jq '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hook
 mkdir -p "$TMP/hooks"
 cp "$ROOT/dispatch-bash.sh" "$TMP/hooks/dispatch-bash.sh"
 cp "$ROOT/_lib-extract-pr.sh" "$TMP/hooks/_lib-extract-pr.sh"
+cp "$ROOT/_lib-command-scrub.sh" "$TMP/hooks/_lib-command-scrub.sh"
 chmod +x "$TMP/hooks/dispatch-bash.sh"
 
 scripts='block-ambient-tracker-repo.sh block-privileged-escalation.sh require-skill-for-issue-create.sh require-migration-ticket.sh require-active-ticket.sh suggest-mcp-search.sh warn-review-marker-write.sh warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh block-git-add-all.sh block-main-push.sh validate-branch-name.sh pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh block-onboarding-in-git.sh verify-commit-refs.sh validate-commit-format.sh require-agdr-for-arch-changes.sh warn-bootstrap-scope.sh suggest-ticket-template.sh validate-issue-structure.sh block-private-refs-in-public-repos.sh validate-pr-create.sh require-agdr-for-arch-pr.sh nudge-control-adversarial-test.sh block-unreviewed-merge.sh require-design-review-for-ui.sh block-merge-on-red-ci.sh require-architecture-review.sh detect-role-trigger.sh'
@@ -48,6 +49,18 @@ grep -qx 'block-reviewer-repo-mutation.sh' "$TMP/log"
 if grep -q 'block-unreviewed-merge.sh' "$TMP/log"; then
   exit 1
 fi
+
+# PR-create text in data must not route any PR-create hook.
+for command in "printf '%s' 'gh pr create --title x'" \
+  "$(printf "cat <<'TEXT'\ngh pr create --title x\nTEXT")"; do
+  : > "$TMP/log"
+  jq -nc --arg c "$command" '{tool_name:"Bash",tool_input:{command:$c}}' \
+    | DISPATCH_LOG="$TMP/log" "$TMP/hooks/dispatch-bash.sh"
+  if grep -q '^validate-pr-create.sh$' "$TMP/log"; then
+    echo "FAIL: dispatcher routed quoted PR-create data" >&2
+    exit 1
+  fi
+done
 
 : > "$TMP/log"
 run 'gh pr merge 42'

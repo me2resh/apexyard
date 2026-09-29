@@ -69,7 +69,14 @@ if [ "$TOOL_NAME" != "Bash" ] || [ -z "$COMMAND" ]; then
 fi
 
 # Only fire on gh pr create
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
+HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCAN_COMMAND="$COMMAND"
+if [ -r "$HOOKS_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOKS_DIR/_lib-command-scrub.sh"
+  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
+fi
+if ! echo "$SCAN_COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
   exit 0
 fi
 
@@ -84,7 +91,6 @@ else
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "${REPO_ROOT:-.}/.claude/session/pending-reviews"
 if [ -n "$PR_NUMBER" ]; then
   echo "${PR_URL}" > "${REPO_ROOT:-.}/.claude/session/pending-reviews/${PR_NUMBER}"
