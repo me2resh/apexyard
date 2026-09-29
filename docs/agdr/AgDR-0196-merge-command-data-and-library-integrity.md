@@ -22,7 +22,7 @@ Review found that the general scrubber allowed `gh api`, `git`, `rg`, and `sort`
 
 Chosen: **scrub only the narrow merge-specific command list and retain a raw fallback**.
 
-- Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `printf`, `head`, `tail`, or `wc` command word.
+- Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `head`, `tail`, or `wc` command word. `printf` is excluded: `printf -v` into an array element evaluates the subscript, which can run a command substitution.
 - The parser checks each segment across separators and newlines. It never searches whole lines for an apparent first word.
 - Any other command word preserves the entire raw command, including `gh`, `glab`, `git`, `tracker_pr_merge`, `rg`, `sort`, `xargs`, `find`, and shells.
 - Quoted arguments and confirmed heredoc bodies are data only after every command word passes this check.

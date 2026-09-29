@@ -31,10 +31,12 @@ check 'rg retains raw merge scan' yes "rg 'glab mr merge 7' notes.txt"
 check 'echo argument is data' no "echo 'gh api repos/demo/service/pulls/7/merge'"
 check 'quoted scratch heredoc is data' no "$(printf "cat > /tmp/merge-notes <<'TEXT'\ngh pr merge 7\nglab mr merge 7\nTEXT")"
 check 'read-only heredoc is data' no "$(printf "cat <<'TEXT'\ntracker_pr_merge demo/service 7 squash\nTEXT")"
-for word in grep egrep fgrep cat echo printf head tail wc; do
+for word in grep egrep fgrep cat echo head tail wc; do
   check "$word quoted data" no "$word 'gh pr merge 7'"
 done
-check 'allowlisted words across segments' no $'echo "gh pr merge 7; git commit" | grep merge && printf ok; head notes.txt\ntail notes.txt | wc'
+# printf can run code through an array subscript, so it keeps the raw scan.
+check 'printf keeps raw merge scan' yes "printf 'gh pr merge 7'"
+check 'allowlisted words across segments' no $'echo "gh pr merge 7; git commit" | grep merge && echo ok; head notes.txt\ntail notes.txt | wc'
 check 'descriptor redirect remains data' no "echo 'gh pr merge 7' 2>&1 | cat"
 check 'multiple heredoc bodies are data' no $'cat <<\'A\' <<\'B\' | grep merge\ngh pr merge 7\nA\nglab mr merge 7\nB'
 check 'tab-stripped heredoc is data' no $'cat <<-\'TEXT\'\n\tgh pr merge 7\n\tTEXT'
@@ -70,6 +72,12 @@ must_detect 'F2.1 rg preprocessor payload' "echo 'gh pr merge 7 --squash' > m.sh
 must_detect 'F2.2 git hook payload' "echo x; echo 'gh pr merge 7 --squash' > .git/hooks/pre-commit; git commit --allow-empty -m x"
 must_detect 'F2.3 git external diff payload' "echo '[diff]' >> .git/config; echo 'external = sh -c \"gh pr merge 7\" #' >> .git/config; git diff"
 must_detect 'sort compressor payload' "echo 'gh pr merge 7' > m.sh; sort --compress-program=./m.sh input.txt"
+# B3 (#1489 review round 2): printf -v into an array element evaluates the
+# subscript, which runs the substitution inside the quoted name.
+must_detect 'B3.1 printf -v array subscript' "printf -v 'a[\$(gh pr merge 7 --admin)]' x"
+must_detect 'B3.2 printf %d array subscript' "printf -v 'a[1]' x; printf '%d' 'a[\$(gh pr merge 7)]'"
+must_detect 'B3.3 zsh printf %d with no -v' "printf '%d\n' 'path[\$(gh pr merge 1497)]'"
+must_detect 'B3.4 printf subscript with gh api' "echo start; printf -v 'y[\$(gh api -X PUT repos/o/r/pulls/7/merge)]' %s 1 | wc -c"
 
 # Only the narrow command list can suppress merge text, regardless of the
 # general scrubber policy. Unknown words and shell syntax retain the raw view.

@@ -73,6 +73,9 @@ setup_dispatch_sandbox() {
   cp "$hooks_src/dispatch-bash.sh" "$dest/hooks/dispatch-bash.sh"
   [ -f "$hooks_src/_lib-extract-pr.sh" ] && cp "$hooks_src/_lib-extract-pr.sh" "$dest/hooks/_lib-extract-pr.sh"
   [ -f "$hooks_src/_lib-command-scrub.sh" ] && cp "$hooks_src/_lib-command-scrub.sh" "$dest/hooks/_lib-command-scrub.sh"
+  # _lib-extract-pr.sh sources the tracker library. Copy it so the sandbox
+  # does not depend on finding it through the surrounding git checkout.
+  [ -f "$hooks_src/_lib-tracker.sh" ] && cp "$hooks_src/_lib-tracker.sh" "$dest/hooks/_lib-tracker.sh"
   chmod +x "$dest/hooks/dispatch-bash.sh"
   local script
   for script in block-ambient-tracker-repo.sh block-privileged-escalation.sh \

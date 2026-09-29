@@ -284,9 +284,11 @@ _scrub_merge_command() {
   fi
   result=$(MERGE_SCRUB_INPUT="$cmd" awk '
     function blank(text) { gsub(/[^\n]/, " ", text); return text }
+    # printf is NOT on this list: `printf -v "a[$(cmd)]"` makes the shell
+    # evaluate the array subscript, which runs the substitution (#1489 review).
     function allowed(word) {
       return word == "grep" || word == "egrep" || word == "fgrep" || \
-             word == "cat" || word == "echo" || word == "printf" || \
+             word == "cat" || word == "echo" || \
              word == "head" || word == "tail" || word == "wc"
     }
     BEGIN {
