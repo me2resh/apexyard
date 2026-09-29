@@ -107,6 +107,18 @@ run_case 'ANSI-C quoted command is not joined' 2 \
   "$(printf "true && gh pr list --title \$'a' \\\\\n --repo owner/project-a")" "$multiple"
 run_case 'continued lines then a separate unqualified command still block' 2 \
   "$(printf 'gh issue view 42 \\\n  --repo owner/project-a; gh pr list')" "$multiple"
+# A backslash in a comment is not a continuation. The next line is a real
+# command, so it must not be pulled into the comment and dropped.
+run_case 'comment line ending in a backslash does not hide the next command' 2 \
+  "$(printf '# list PRs \\\ngh pr list')" "$multiple"
+run_case 'inline comment ending in a backslash does not hide the next command' 2 \
+  "$(printf 'echo hi # note \\\ngh pr list')" "$multiple"
+run_case 'heredoc delimiter ending in a backslash does not hide the next command' 2 \
+  "$(printf "cat <<'E\\\\'\nbody\nE\\\\\ngh pr list")" "$multiple"
+run_case 'command substitution is not joined' 2 \
+  "$(printf 'x="$(printf a)" gh pr list \\\n --title "b --repo owner/project-a"')" "$multiple"
+run_case 'a command over the size cap is not joined' 2 \
+  "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
