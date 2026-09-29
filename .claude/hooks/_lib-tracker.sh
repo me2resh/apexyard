@@ -74,7 +74,7 @@
 # Results use per-process shell caches, like the config and portfolio helpers.
 
 # ------------------------------------------------------------------------------
-# Internal: ensure _lib-read-config.sh is loaded so config_get_or works.
+# Internal: load _lib-read-config.sh for one tracker config read.
 #
 # Self-location note (#1025): ${BASH_SOURCE[0]} is bash-only. Under zsh it is
 # UNSET, not merely empty — a bare reference errors ("parameter not set")
@@ -93,9 +93,6 @@
 # _tracker_load_portfolio_lib below for the case this asymmetry actually broke).
 # ------------------------------------------------------------------------------
 _tracker_load_config_lib() {
-  if command -v config_get_or >/dev/null 2>&1; then
-    return 0
-  fi
   local root hook_dir
   hook_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
   # me2resh/apexyard#1062: under a non-bash shell BASH_SOURCE is empty, so the resolution above
@@ -122,12 +119,18 @@ _tracker_load_config_lib() {
       hook_dir="$root/.claude/hooks"
     fi
   fi
-  if [ -n "$hook_dir" ] && [ -f "$hook_dir/_lib-read-config.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$hook_dir/_lib-read-config.sh"
-  fi
+  [ -n "$hook_dir" ] && [ -f "$hook_dir/_lib-read-config.sh" ] || return 1
+  # shellcheck source=/dev/null
+  . "$hook_dir/_lib-read-config.sh" || return 1
   command -v config_get_or >/dev/null 2>&1
 }
+
+# Keep the reader and its per-process caches inside this subshell. Always load
+# the sibling library here: an inherited config_get_or can hold another root.
+_tracker_config_get_or() (
+  _tracker_load_config_lib || return 1
+  config_get_or "$@"
+)
 
 # ------------------------------------------------------------------------------
 # Internal: ensure _lib-portfolio-paths.sh is loaded so portfolio_registry works.
@@ -286,10 +289,9 @@ _tracker_axis_kind() {
     echo "$k"
     return 0
   fi
-  _tracker_load_config_lib
-  k=$(config_get_or ".tracker.$key" '' 2>/dev/null)
+  k=$(_tracker_config_get_or ".tracker.$key" '' 2>/dev/null)
   if [ -z "$k" ] || [ "$k" = "null" ]; then
-    k=$(config_get_or '.tracker.kind' 'gh' 2>/dev/null)
+    k=$(_tracker_config_get_or '.tracker.kind' 'gh' 2>/dev/null)
   fi
   if [ -z "$k" ] || [ "$k" = "null" ]; then
     k="gh"
@@ -344,9 +346,8 @@ tracker_id_pattern() {
     echo "$_TRACKER_ID_PATTERN_CACHE"
     return 0
   fi
-  _tracker_load_config_lib
   local p
-  p=$(config_get_or '.tracker.id_pattern' '^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$' 2>/dev/null)
+  p=$(_tracker_config_get_or '.tracker.id_pattern' '^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$' 2>/dev/null)
   if [ -z "$p" ] || [ "$p" = "null" ]; then
     p='^(#[0-9]+|GH-[0-9]+|[A-Z]{2,10}-[0-9]+)$'
   fi
@@ -374,7 +375,6 @@ _tracker_view_template() {
     echo "$_TRACKER_VIEW_TPL_CACHE"
     return 0
   fi
-  _tracker_load_config_lib
   local tpl
   # An explicit .tracker.view_command (registry per-project or config) always
   # wins. With none set, fall back to a per-KIND built-in default: glab gets a
@@ -385,7 +385,7 @@ _tracker_view_template() {
   # in project-config.defaults.json, so this kind-aware fallback can fire (a
   # pinned default would deep-merge over a glab adopter's `kind: glab` and force
   # the gh command — the exact #755 bug at the config layer).
-  tpl=$(config_get_or '.tracker.view_command' '' 2>/dev/null)
+  tpl=$(_tracker_config_get_or '.tracker.view_command' '' 2>/dev/null)
   if [ -z "$tpl" ] || [ "$tpl" = "null" ]; then
     case "$kind" in
       glab) tpl='glab issue view {id} -R {owner_repo} --output json' ;;
@@ -580,9 +580,8 @@ _tracker_normalise_custom() {
   if [ -z "$raw" ]; then return 1; fi
   if ! printf '%s' "$raw" | jq -e . >/dev/null 2>&1; then return 1; fi
 
-  _tracker_load_config_lib
   local jq_expr
-  jq_expr=$(config_get_or '.tracker.normalise_jq' '.' 2>/dev/null)
+  jq_expr=$(_tracker_config_get_or '.tracker.normalise_jq' '.' 2>/dev/null)
   if [ -z "$jq_expr" ] || [ "$jq_expr" = "null" ]; then
     jq_expr='.'
   fi
@@ -800,9 +799,8 @@ _tracker_create_template() {
       return 0
     fi
   fi
-  _tracker_load_config_lib
   local tpl
-  tpl=$(config_get_or '.tracker.create_command' '' 2>/dev/null)
+  tpl=$(_tracker_config_get_or '.tracker.create_command' '' 2>/dev/null)
   if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
     echo "$tpl"
   fi
@@ -938,9 +936,8 @@ _tracker_list_template() {
       return 0
     fi
   fi
-  _tracker_load_config_lib
   local tpl
-  tpl=$(config_get_or '.tracker.list_command' '' 2>/dev/null)
+  tpl=$(_tracker_config_get_or '.tracker.list_command' '' 2>/dev/null)
   if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
     echo "$tpl"
   fi
@@ -1077,9 +1074,8 @@ _tracker_normalise_list_custom() {
   local raw="$1"
   [ -n "$raw" ] || return 1
   printf '%s' "$raw" | jq -e . >/dev/null 2>&1 || return 1
-  _tracker_load_config_lib
   local jq_expr
-  jq_expr=$(config_get_or '.tracker.list_normalise_jq' '.' 2>/dev/null)
+  jq_expr=$(_tracker_config_get_or '.tracker.list_normalise_jq' '.' 2>/dev/null)
   if [ -z "$jq_expr" ] || [ "$jq_expr" = "null" ]; then
     jq_expr='.'
   fi
@@ -1311,9 +1307,8 @@ _tracker_review_template() {
       return 0
     fi
   fi
-  _tracker_load_config_lib
   local tpl
-  tpl=$(config_get_or '.tracker.review_command' '' 2>/dev/null)
+  tpl=$(_tracker_config_get_or '.tracker.review_command' '' 2>/dev/null)
   if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
     echo "$tpl"
   fi
@@ -1592,9 +1587,8 @@ _tracker_merge_template() {
       return 0
     fi
   fi
-  _tracker_load_config_lib
   local tpl
-  tpl=$(config_get_or '.tracker.merge_command' '' 2>/dev/null)
+  tpl=$(_tracker_config_get_or '.tracker.merge_command' '' 2>/dev/null)
   if [ -n "$tpl" ] && [ "$tpl" != "null" ]; then
     echo "$tpl"
   fi
