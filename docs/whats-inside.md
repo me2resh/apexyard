@@ -186,7 +186,7 @@ The full, one-line-per-skill list lives in [`CLAUDE.md`](../CLAUDE.md) under "Av
 - **Review & decisions** — `/decide`, `/agdr`, `/code-review`, `/security-review`, `/design-review`, `/challenge`, `/approve-merge`, `/approve-design`, `/approve-architecture`
 - **Audits** — `/launch-check`, `/threat-model`, `/accessibility-audit`, `/compliance-check`, `/analytics-audit`, `/seo-audit`, `/geo-audit`, `/performance-audit`, `/monitoring-audit`, `/docs-audit`, `/mutation-test`, `/audit-deps`
 - **Architecture & diagrams** — `/c4`, `/dfd`, `/tech-vision`, `/journey`, `/feature-diagram`, `/extract-features`, `/process`
-- **Portfolio** — `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`
+- **Portfolio** — `/projects`, `/inbox`, `/status`, `/tasks`, `/roadmap`, `/stakeholder-update`, `/fan-out`, `/duty`
 
 ## CI/CD pipelines
 

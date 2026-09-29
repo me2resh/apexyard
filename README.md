@@ -58,7 +58,7 @@ root. No runtime or service is required.
 
 - **20 roles** across 6 departments (engineering, product, design, security, data, architecture) that activate on triggers
 - **60 shell hooks** that mechanically enforce the SDLC — ticket-first edits, a two-marker merge gate, migration gates, secrets scanning, and more
-- **66 slash-command skills** — from `/setup` and `/handover` to `/decide`, `/code-review`, `/migration`, and `/launch-check`
+- **67 slash-command skills** — from `/setup` and `/handover` to `/decide`, `/code-review`, `/migration`, and `/launch-check`
 - **23 sub-agents** — Rex (code review), Hakim (security), Tariq (design review), plus the department personas
 - **22 rule files**, workflow docs, and document templates (PRD, tech design, ADR, AgDR, C4 diagrams)
 
