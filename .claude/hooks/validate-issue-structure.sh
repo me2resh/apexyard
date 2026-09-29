@@ -41,14 +41,7 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # Only fire on `gh issue create`. Any other invocation is a silent no-op.
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCAN_COMMAND="$COMMAND"
-if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$HOOK_DIR/_lib-command-scrub.sh"
-  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
-fi
-if ! echo "$SCAN_COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then
+if ! echo "$COMMAND" | grep -qE '\bgh\s+issue\s+create\b'; then
   exit 0
 fi
 

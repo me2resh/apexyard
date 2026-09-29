@@ -55,14 +55,7 @@ COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/nul
 [ -z "$COMMAND" ] && exit 0
 
 # Match only `gh pr create …`.
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-SCAN_COMMAND="$COMMAND"
-if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$HOOK_DIR/_lib-command-scrub.sh"
-  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
-fi
-if ! printf '%s' "$SCAN_COMMAND" | grep -qE '\bgh[[:space:]]+pr[[:space:]]+create\b'; then
+if ! printf '%s' "$COMMAND" | grep -qE '\bgh[[:space:]]+pr[[:space:]]+create\b'; then
   exit 0
 fi
 

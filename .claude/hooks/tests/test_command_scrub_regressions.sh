@@ -23,12 +23,15 @@ write_result() {
   if bash_command_appears_to_write "$1"; then printf write; else printf read; fi
 }
 check 'quoted redirect' read "$(write_result "git log --format='%h > %s'")"
-check 'quoted comparison' read "$(write_result "awk '\$1 > 0' data.txt")"
+# awk is on the raw-deny interpreter list, so the scrubber returns raw and the
+# write detector keeps today's conservative raw-text verdict (false write).
+check 'quoted comparison' write "$(write_result "awk '\$1 > 0' data.txt")"
 check 'quoted grep pattern' read "$(write_result "grep -E '^>' data.txt")"
 check 'double-quoted redirect text' read "$(write_result 'echo "> src/app.ts"')"
 check 'quoted command name' read "$(write_result "echo 'sed -i s/a/b/ src/app.ts'")"
 check 'quoted tee command is data' read "$(write_result "echo 'tee src/app.ts'")"
 check 'real redirect' write "$(write_result 'echo x > src/app.ts')"
+# $( forces the raw-deny gate; the redirect inside the substitution still writes.
 check 'redirect inside command substitution executes' write \
   "$(write_result 'x="$(echo hi > src/app.ts)"')"
 check 'eval of quoted shell code is conservative' write \
@@ -41,8 +44,9 @@ check 'unterminated quote falls back' write "$(write_result "echo 'x > src/app.t
 
 heredoc_cmd=$(printf "cat <<'TEXT'\n> src/app.ts\ngh pr create --title x\nTEXT")
 check 'heredoc body is data' read "$(write_result "$heredoc_cmd")"
+# $( is raw-deny, so the redirect inside the substitution body stays visible.
 substitution_heredoc=$(printf 'gh issue create --body "$(cat <<\047TEXT\047\n> src/app.ts\ngh pr create --title x\nTEXT\n)"')
-check 'heredoc inside command substitution is data' read \
+check 'heredoc inside command substitution falls back to raw' write \
   "$(write_result "$substitution_heredoc")"
 for opener in '<<"TEXT"' '<<TEXT' '<<-TEXT'; do
   check "heredoc $opener body is data" read \
@@ -56,22 +60,30 @@ check 'unsupported delimiter falls back' write \
 check 'adjacent redirects yield both targets' '/tmp/x,src/app.ts' \
   "$(bash_extract_write_targets 'echo x >/tmp/x>src/app.ts' | paste -sd, -)"
 
-# A quoted tracker mention and a heredoc body must not be treated as gh calls.
+# A quoted tracker mention and a heredoc body fire the ambient-repo gate
+# again because that matcher reads the raw command (AgDR-0181).
 mkdir -p "$TMP/.claude/session"
 : > "$TMP/onboarding.yaml"
 : > "$TMP/apexyard.projects.yaml"
 printf 'repo=acme-org/example\n' > "$TMP/.claude/session/current-ticket"
-(cd "$TMP" && git init -q)
+GIT_FIXTURE="$ROOT/.claude/hooks/tests/fixtures/empty-gitdir.tar.gz"
+if [ -f "$GIT_FIXTURE" ]; then
+  tar xzf "$GIT_FIXTURE" -C "$TMP"
+else
+  (cd "$TMP" && git init -q)
+fi
+export APEXYARD_OPS_DISABLE_PIN=1
+unset CLAUDE_CODE_SESSION_ID || true
 tracker_result() {
   local payload rc
   payload=$(jq -nc --arg c "$1" '{tool_input:{command:$c}}')
-  (cd "$TMP" && printf '%s' "$payload" | bash "$HOOKS/block-ambient-tracker-repo.sh" >/dev/null 2>&1)
+  (cd "$TMP" && printf '%s' "$payload" | APEXYARD_OPS_DISABLE_PIN=1 bash "$HOOKS/block-ambient-tracker-repo.sh" >/dev/null 2>&1)
   rc=$?
   printf '%s' "$rc"
 }
-check 'quoted tracker text' 0 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
-check 'double-quoted tracker text' 0 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
-check 'heredoc tracker text' 0 "$(tracker_result "$heredoc_cmd")"
+check 'quoted tracker text' 2 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
+check 'double-quoted tracker text' 2 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
+check 'heredoc tracker text' 2 "$(tracker_result "$heredoc_cmd")"
 check 'real tracker command' 2 "$(tracker_result 'gh pr create --title x')"
 check 'malformed quote falls back for tracker' 2 \
   "$(tracker_result "printf 'gh pr create --title x")"
@@ -87,7 +99,9 @@ review_result() {
 }
 check 'quoted PR text does not trigger review' 0 "$(review_result "printf '%s' 'gh pr create --title x'")"
 check 'heredoc PR text does not trigger review' 0 "$(review_result "$heredoc_cmd")"
-check 'substitution heredoc PR text does not trigger review' 0 \
+# $( is raw-deny for the scrubber auto-code-review uses, so the embedded
+# gh pr create stays visible and the review trigger fires.
+check 'substitution heredoc PR text falls back and triggers review' 2 \
   "$(review_result "$substitution_heredoc")"
 check 'real PR command triggers review' 2 "$(review_result 'gh pr create --title x')"
 
@@ -97,14 +111,22 @@ rm -f "$TMP/.claude/session/current-ticket"
 mkdir -p "$TMP/.claude/hooks"
 for file in require-active-ticket.sh _lib-detect-bash-write.sh \
   _lib-command-scrub.sh _lib-mask-quoted.sh _lib-read-config.sh \
-  _lib-path-resolve.sh _lib-active-ticket.sh; do
+  _lib-path-resolve.sh _lib-active-ticket.sh _lib-ops-root.sh; do
   [ -f "$HOOKS/$file" ] && cp "$HOOKS/$file" "$TMP/.claude/hooks/$file"
 done
 cp "$ROOT/.claude/project-config.defaults.json" "$TMP/.claude/project-config.defaults.json"
+if [ ! -d "$TMP/.git" ]; then
+  GIT_FIXTURE="$ROOT/.claude/hooks/tests/fixtures/empty-gitdir.tar.gz"
+  if [ -f "$GIT_FIXTURE" ]; then
+    tar xzf "$GIT_FIXTURE" -C "$TMP"
+  else
+    (cd "$TMP" && git init -q)
+  fi
+fi
 ticket_result() {
   local payload rc
   payload=$(jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c}}')
-  (cd "$TMP" && printf '%s' "$payload" | bash .claude/hooks/require-active-ticket.sh >/dev/null 2>&1)
+  (cd "$TMP" && printf '%s' "$payload" | APEXYARD_OPS_DISABLE_PIN=1 bash .claude/hooks/require-active-ticket.sh >/dev/null 2>&1)
   rc=$?
   printf '%s' "$rc"
 }

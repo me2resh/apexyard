@@ -592,12 +592,18 @@ assert_targets "#1414 w decoy beside tee with an empty word" \
 
 # The heredoc families need the decoy first, because a heredoc ends on a
 # line that holds only its terminator.
+#
+# Expect empty targets — same as upstream/dev. python3/node/ruby trip the
+# scrubber's raw-deny gate (AgDR-0181), so the write detector sees the
+# heredoc body. That fires _bdw_detects_other_write and holds the sed `w`
+# decoy back. Scrubbing at 39c5b95 blanked the body and yielded /tmp/x;
+# deny-to-raw restores the pre-scrub hold-back, not that scrub-era result.
 assert_targets "#1414 w decoy before a python heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" "/tmp/x"
+  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" ""
 assert_targets "#1414 w decoy before a node heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" "/tmp/x"
+  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" ""
 assert_targets "#1414 w decoy before a ruby heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" "/tmp/x"
+  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" ""
 
 # An escaped quote after an fd copy stays a read.
 assert_read  "#1414 escaped quote after 2>&1 is a read" 'bash -c "sh -c \"make 2>&1\""'

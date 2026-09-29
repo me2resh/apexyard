@@ -1,8 +1,51 @@
 #!/bin/bash
 # _lib-command-scrub.sh — separate shell operators from literal command data.
-# A parse we cannot account for returns the original command (fail closed).
-# The two views share one scanner: syntax hides quoted words; operators keeps
-# quoted target names but masks metacharacters inside them.
+#
+# Scope (AgDR-0181): only two consumers may use the scrubbed view —
+#   (a) the write detector (_lib-detect-bash-write.sh) for redirect presence
+#       and target questions asked by the ticket and migration gates
+#   (b) auto-code-review.sh PostToolUse trigger matching
+# Routing, merge detection, and every other command matcher read the raw
+# command. A raw-command deny gate below returns the raw text unchanged when
+# the input may execute nested code or use syntax the scanner does not model.
+
+# Return 0 when the RAW command must not be scrubbed (deny by default).
+# Matching runs on a copy with quotes and backslashes removed so that
+# 'bash', "eval", \eval, and /bin/sh all count as the same command word.
+_command_scrub_raw_deny() {
+  local cmd="${1-}" flat word_re path_re find_re pipe_re
+  [ -n "$cmd" ] || return 1
+  # Strip quotes and backslashes for word matching only.
+  flat=$(printf '%s' "$cmd" | tr -d "'\"\\")
+  # Syntax the scanner treats as data, or cannot model safely.
+  if printf '%s' "$flat" | grep -qE '<<<|\$\(|`|<\(|>\(|\(\('; then
+    return 0
+  fi
+  # Shell / interpreter / wrapper used as a command word. Optional leading
+  # path so /bin/sh and ./bash count. Dot-source is a lone "." word.
+  word_re='bash|sh|zsh|dash|ksh|fish|eval|exec|source|command|builtin|env|xargs|trap|awk|gawk|mawk|python|python3|node|ruby|perl|php|osascript'
+  path_re='(/[^[:space:];&|()<>]*)?'
+  if printf '%s' "$flat" | grep -qE "(^|[;&|()[:space:]])${path_re}(${word_re})([[:space:]]|[;&|()]|$)"; then
+    return 0
+  fi
+  if printf '%s' "$flat" | grep -qE '(^|[;&|()[:space:]])\.([[:space:]]|[;&|()]|$)'; then
+    return 0
+  fi
+  # find -exec / -execdir runs arbitrary commands.
+  find_re="(^|[;&|()[:space:]])${path_re}find[[:space:]].*-exec(dir)?([[:space:]]|$)"
+  if printf '%s' "$flat" | grep -qE "$find_re"; then
+    return 0
+  fi
+  # Pipe into any of the same command words.
+  pipe_re="\|[[:space:]]*${path_re}(${word_re})([[:space:]]|[;&|()]|$)"
+  if printf '%s' "$flat" | grep -qE "$pipe_re"; then
+    return 0
+  fi
+  if printf '%s' "$flat" | grep -qE '\|[[:space:]]*\.([[:space:]]|[;&|()]|$)'; then
+    return 0
+  fi
+  return 1
+}
 
 _command_scrub() {
   local mode="$1" cmd="${2-}" result
@@ -10,6 +53,11 @@ _command_scrub() {
   # Keep below the smallest common per-string exec limit and avoid a long
   # awk concatenation on oversized tool payloads.
   if [ "${#cmd}" -gt 120000 ]; then
+    printf '%s' "$cmd"
+    return 0
+  fi
+  # Deny gate: nested shells, interpreters, and unmodelled syntax stay raw.
+  if _command_scrub_raw_deny "$cmd"; then
     printf '%s' "$cmd"
     return 0
   fi
@@ -127,11 +175,6 @@ _command_scrub() {
     }
   ' 2>/dev/null) || result="$cmd"
   [ -n "$result" ] || result="$cmd"
-  # These commands execute a quoted argument as shell code. The scanner
-  # cannot treat that argument as passive data without hiding real writes.
-  if printf '%s' "$result" | grep -qE '(^|[;&|()[:space:]])eval([[:space:]]|$)|(^|[;&|()[:space:]])(bash|sh|zsh)[[:space:]]+-c([[:space:]]|$)'; then
-    result="$cmd"
-  fi
   printf '%s' "$result"
 }
 
