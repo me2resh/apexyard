@@ -1,0 +1,8 @@
+[[package]]
+name = "demo-lib"
+version = "1.0.0"
+
+[metadata]
+lock-version = "99.0"
+python-versions = "*"
+content-hash = "synthetic"

@@ -95,20 +95,36 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 
 **Agent**: Guardian (Dependency Auditor)
 
+**Ecosystems** (AgDR-0176 / issue #1359): npm and Python via a finite runner map. Other ecosystems stay out of scope for this first pass.
+
 **Checks performed**:
 
-- npm audit (vulnerabilities by severity)
-- npm outdated (major / minor / patch versions behind)
-- license-checker (GPL, LGPL, unknown licenses)
+- Shared helper: `scripts/dependency-audit.py` (copy to `.github/scripts/dependency-audit.py`)
+- npm: `npm audit`, outdated checks, licence metadata from an `--ignore-scripts` install
+- Python: data-only inventory from locks / exact pins. Prefer `pip-audit==2.10.0` (`-s osv --no-deps --disable-pip`). Fall back to OSV when the trusted scanner is absent. Licence and outdated checks use version-specific PyPI metadata.
+- Severity totals include Critical, High, Medium, Low, and Unknown
+- Unknown licence metadata is pending review (not banned). It still blocks clearance.
+
+**Copy / refresh procedure**:
+
+```bash
+mkdir -p .github/workflows .github/scripts
+cp golden-paths/pipelines/dependency-audit.yml .github/workflows/
+cp golden-paths/pipelines/scripts/dependency-audit.py .github/scripts/
+# Compare helper_revision in the JSON report when refreshing after a framework upgrade.
+```
 
 **Automated actions**:
 
-- Creates a GitHub issue for critical / high vulnerabilities
+- Uploads per-ecosystem evidence and a combined report
+- On the default branch, opens or updates a triage issue for Critical / High / Unknown findings
 - Weekly scheduled audit (Monday 9 AM UTC)
 
 **Fail conditions**:
 
 - Critical vulnerabilities found
+- Incomplete selected coverage (default). Set repository variable `DEPENDENCY_AUDIT_FAIL_ON_INCOMPLETE=false` to warn instead. Never treat incomplete coverage as clean.
+- Unknown severity emits a warning and a triage issue. It does not use the Critical threshold alone.
 
 ---
 

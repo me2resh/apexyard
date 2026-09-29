@@ -1,6 +1,6 @@
 # Technical Design: Dependency Audit Ecosystem Dispatch
 
-**Status**: In Review
+**Status**: Approved for implementation (PR #1430 design gate). Implemented on #1359.
 **Date**: 2026-09-27
 **Requirements**: issue #1359, including its design-direction comment.
 **Decision record**: [AgDR-0176](../agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md).

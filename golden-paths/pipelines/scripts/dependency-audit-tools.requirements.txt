@@ -1,0 +1,9 @@
+# Trusted audit tools for golden-paths/pipelines/scripts/dependency-audit.py
+# Install in an isolated environment outside the audited checkout.
+# Hash lines are omitted in-tree so the framework clone needs no network to
+# validate. Adopters and CI should regenerate with:
+#   pip-compile --generate-hashes
+# or pin hashes from the PyPI JSON API before production use (AgDR-0176).
+pip-audit==2.10.0
+packaging==25.0
+# cvss==3.6  # LGPLv3+ — enable only after restricted-licence approval
