@@ -6,6 +6,9 @@
 # gates. It emits:
 #   - .cursor/hooks.json with a sessionStart pin overlay only
 #   - .cursor/rules/apexyard.mdc advisory pointer
+#   - .cursorignore managed block so framework skill backups under
+#     .claude/skill-framework-bak/ (and legacy *.framework.bak) are not
+#     a second skill root (AgDR-0187 / #1377)
 #
 # --user merges the overlay into ~/.cursor/hooks.json and replaces any
 # leftover full generated adapter (entries that exec .claude/hooks/*.sh).
@@ -27,6 +30,7 @@ Usage: bin/sync-cursor-adapter.sh [--check] [--clean] [--root <path>]
 Generate the thin Cursor overlay (native-first):
   (static) -> .cursor/hooks.json  (sessionStart pin only)
   (static) -> .cursor/rules/apexyard.mdc
+  (managed block) -> .cursorignore  (skill-root dedupe for #1377)
 
 Options:
   --check       Do not write files; fail if generated output would differ.
@@ -77,6 +81,7 @@ fi
 
 ROOT="$(cd "$ROOT" && pwd)"
 CLAUDE_DIR="$ROOT/.claude"
+LIB_CURSOR_SKILLS="$CLAUDE_DIR/hooks/_lib-cursor-skills.sh"
 
 [ -d "$CLAUDE_DIR" ] || { echo "ERROR: .claude not found under $ROOT" >&2; exit 1; }
 [ -f "$CLAUDE_DIR/hooks/cursor-session-pin.sh" ] || {
@@ -93,6 +98,7 @@ TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter.XXXXXX")
 trap 'rm -rf "$TMPDIR"' EXIT
 
 OUT_OVERLAY="$TMPDIR/overlay"
+OUT_CURSORIGNORE="$TMPDIR/cursorignore.managed"
 mkdir -p "$OUT_OVERLAY/rules"
 
 # Project hooks run from the repo root. User hooks run from ~/.cursor, so
@@ -148,10 +154,92 @@ Load-bearing rules before you start:
 - Report status like a colleague (`.claude/rules/reporting-style.md`)
 - Use the controlled technical writing profile for durable artifacts (`.claude/rules/writing-standard.md`)
 
+Open this ops fork directory in Cursor. Do not open a parent folder that
+also contains the portfolio repo. A parent workspace can list the same
+skill twice. Cursor's skill root here is `.claude/skills/` (AgDR-0187).
+
 Regenerate this overlay after any change to
 `.claude/hooks/cursor-session-pin.sh`: `bin/sync-cursor-adapter.sh`.
 Drift check: `bin/sync-cursor-adapter.sh --check`.
 MDC
+}
+
+CURSORIGNORE_BEGIN='# BEGIN apexyard-cursor-skills'
+CURSORIGNORE_END='# END apexyard-cursor-skills'
+
+cursorignore_managed_block() {
+  cat <<'IGNORE'
+# BEGIN apexyard-cursor-skills
+# Keep Cursor skill discovery on one root: .claude/skills (AgDR-0187).
+# Ignore framework backups that still hold SKILL.md with the same name.
+# Do not ignore in-fork custom skill source dirs (single-fork adopters).
+.claude/skill-framework-bak/
+.claude/skills/*.framework.bak/
+# END apexyard-cursor-skills
+IGNORE
+}
+
+write_cursorignore() {
+  local target="$1"
+  local tmp
+  tmp=$(mktemp "${TMPDIR:-/tmp}/cursorignore.XXXXXX")
+  if [ -f "$target" ]; then
+    # Drop a previous managed block, keep adopter lines.
+    awk -v begin="$CURSORIGNORE_BEGIN" -v end="$CURSORIGNORE_END" '
+      $0 == begin { skip=1; next }
+      $0 == end { skip=0; next }
+      skip { next }
+      { print }
+    ' "$target" > "$tmp"
+    if [ -s "$tmp" ] && [ -n "$(tail -n 1 "$tmp")" ]; then
+      printf '\n' >> "$tmp"
+    fi
+  else
+    : > "$tmp"
+  fi
+  cursorignore_managed_block >> "$tmp"
+  mv "$tmp" "$target"
+}
+
+extract_cursorignore_managed_block() {
+  local target="$1"
+  [ -f "$target" ] || return 1
+  awk -v begin="$CURSORIGNORE_BEGIN" -v end="$CURSORIGNORE_END" '
+    $0 == begin { show=1 }
+    show { print }
+    $0 == end { exit }
+  ' "$target"
+}
+
+warn_parent_workspace() {
+  local root="$1"
+  local parent
+  [ -f "$LIB_CURSOR_SKILLS" ] || return 0
+  # shellcheck source=/dev/null
+  . "$LIB_CURSOR_SKILLS"
+  parent=$(dirname "$root")
+  if cursor_skills_parent_workspace_risk "$parent" 2>/dev/null; then
+    echo "WARNING: parent of $root also looks like a split-portfolio workspace." >&2
+    echo "WARNING: open the ops fork in Cursor, not the parent directory." >&2
+    echo "WARNING: a parent workspace can list the same custom skill twice." >&2
+  fi
+}
+
+check_skill_name_uniqueness() {
+  local root="$1"
+  local dups
+  [ -f "$LIB_CURSOR_SKILLS" ] || return 0
+  # shellcheck source=/dev/null
+  . "$LIB_CURSOR_SKILLS"
+  if dups=$(cursor_skills_duplicate_names "$root" 2>/dev/null); then
+    return 0
+  fi
+  if [ -n "$dups" ]; then
+    echo "WARNING: duplicate Cursor skill names under $root:" >&2
+    printf '%s\n' "$dups" | sed 's/^/WARNING:   /' >&2
+    echo "WARNING: run SessionStart link-custom-skills or see AgDR-0187." >&2
+  fi
+  return 0
 }
 
 if [ "$USER_MODE" = "1" ]; then
@@ -160,8 +248,9 @@ else
   write_hooks_json "$PROJECT_PIN_CMD" > "$OUT_OVERLAY/hooks.json"
 fi
 write_rules_mdc > "$OUT_OVERLAY/rules/apexyard.mdc"
+cursorignore_managed_block > "$OUT_CURSORIGNORE"
 
-if grep -R "$(printf '%s' "$ROOT" | sed 's/[.[\*^$()+?{}|]/\\&/g')" "$OUT_OVERLAY" >/dev/null 2>&1; then
+if grep -R "$(printf '%s' "$ROOT" | sed 's/[.[\*^$()+?{}|]/\\&/g')" "$OUT_OVERLAY" "$OUT_CURSORIGNORE" >/dev/null 2>&1; then
   echo "ERROR: generated adapter contains an absolute path to $ROOT" >&2
   exit 1
 fi
@@ -201,6 +290,22 @@ check_drift() {
     diff -qr "$expected" "$actual" >&2 || true
     return 1
   fi
+}
+
+check_cursorignore_drift() {
+  local actual="$ROOT/.cursorignore"
+  local expected="$OUT_CURSORIGNORE"
+  local actual_block
+  if [ ! -f "$actual" ]; then
+    echo "DRIFT: .cursorignore is missing; run bin/sync-cursor-adapter.sh" >&2
+    return 1
+  fi
+  actual_block=$(extract_cursorignore_managed_block "$actual") || actual_block=""
+  if [ "$actual_block" != "$(cat "$expected")" ]; then
+    echo "DRIFT: apexyard-managed block in .cursorignore differs; run bin/sync-cursor-adapter.sh" >&2
+    return 1
+  fi
+  return 0
 }
 
 check_user_drift() {
@@ -262,6 +367,7 @@ if [ "$CHECK" = "1" ]; then
   else
     check_drift "$ROOT/.cursor" "$OUT_OVERLAY" ".cursor" || rc=1
   fi
+  check_cursorignore_drift || rc=1
   exit "$rc"
 fi
 
@@ -272,18 +378,27 @@ fi
 mkdir -p "$ROOT/.cursor/rules"
 rm -f "$ROOT/.cursor/rules/apexyard.mdc"
 cp "$OUT_OVERLAY/rules/apexyard.mdc" "$ROOT/.cursor/rules/apexyard.mdc"
+write_cursorignore "$ROOT/.cursorignore"
+warn_parent_workspace "$ROOT"
+check_skill_name_uniqueness "$ROOT"
 
 if [ "$USER_MODE" = "1" ]; then
   install_user_hooks
   echo "Merged the thin apexyard Cursor overlay into the USER config:"
   echo "  $USER_DIR/hooks.json"
   echo "  $ROOT/.cursor/rules/apexyard.mdc"
+  echo "  $ROOT/.cursorignore"
   echo "Enable Settings → Rules, Skills, Subagents → Include third-party"
   echo "Plugins, Skills, and other configs so .claude/settings.json gates load."
+  echo "Open the ops fork in Cursor, not a parent that also holds the portfolio."
+  echo "Cursor skill root: .claude/skills/ (one entry per name; override wins)."
 else
   rm -f "$ROOT/.cursor/hooks.json"
   cp "$OUT_OVERLAY/hooks.json" "$ROOT/.cursor/hooks.json"
   echo "Generated thin Cursor overlay from .claude:"
   echo "  .cursor/hooks.json"
   echo "  .cursor/rules/apexyard.mdc"
+  echo "  .cursorignore"
+  echo "Open the ops fork in Cursor, not a parent that also holds the portfolio."
+  echo "Cursor skill root: .claude/skills/ (one entry per name; override wins)."
 fi

@@ -208,7 +208,7 @@ mcp__apexyard-search__reindex(scope="project", project="<name>")
 REINDEX_STATUS="indexed"   # or "unavailable" | "skipped" (when $CLONE_STATUS != cloned)
 ```
 
-When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` over `grep` + `Read` for the assessment reads in steps 2–6 (per the MCP-search-first rule). When `unavailable` or `skipped`, fall back to `grep` + `Read` without further apology. Do every read in steps 2–6 with `grep` + `Read`. Do not skip or shorten a step. Do not report a semantic search or an index that did not run.
+When `$REINDEX_STATUS="indexed"`, prefer `search_code` and `search_docs` for assessment reads in steps 2–6. When `unavailable` or `skipped`, use `grep` and `Read` for every assessment read in steps 2–6. Do not skip or shorten a step. Do not report a semantic search or an index that did not run.
 
 A `PostToolUse` hook (`suggest-mcp-reindex-after-clone.sh`) fires after the clone command and emits a one-line reminder of this step. Same advisory shape as `detect-role-trigger.sh` — exit 0, non-blocking, removes the "I forgot the rule applied here" failure mode.
 

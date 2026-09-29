@@ -146,6 +146,7 @@ The framework default handbooks apply unless the adopter overrides them in the s
 When MCP `search_docs` is available, you MAY supplement path-convention discovery with semantically-matched handbooks (additive, fail-soft — skip silently if MCP is down). Same rules as Rex § "Semantic supplement".
 The `apexyard-search` MCP server is an optional add-on.
 When its tools are not in your tool list, skip only this supplement.
+If `apexyard-search` is not installed, use `grep` and `Read`. Do not skip the step.
 Run path-convention discovery in full.
 Do not report a semantic search that did not run.
 

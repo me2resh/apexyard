@@ -18,7 +18,7 @@ C4Container
         Container(rules, ".claude/rules/", "Markdown", "Modular rule files — git conventions, ticket vocabulary, PR workflow, AgDR, PR quality, role triggers, workflow gates, code standards.")
         Container(hooks, ".claude/hooks/", "Shell scripts", "Mechanical enforcement — merge gates, ticket-first, secrets check, commit format, drift banner. Runs on PreToolUse / PostToolUse / SessionStart. Cursor session-pin overlay lives here too.")
         Container(overlay, ".cursor/", "hooks.json + rules", "Thin Cursor overlay. sessionStart maps session_id onto CLAUDE_CODE_SESSION_ID. Does not copy the Claude Code gates.")
-        Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. (66 skills)")
+        Container(skills, ".claude/skills/", "Markdown SKILL.md files", "Slash commands — /setup, /handover, /update, /status, /inbox, /approve-merge, /approve-design, /decide, /code-review, etc. Cursor's single skill root when third-party configs are on. Custom overrides win. Framework bak copies move to .claude/skill-framework-bak/ so Cursor does not list duplicates (AgDR-0187).")
         Container(agents, ".claude/agents/", "Markdown agent defs", "Sub-agent definitions — code-reviewer (Rex), security-reviewer (Hakim), dependency-auditor (Munir), solution-architect (Tariq), contrarian (Naqid), plus the department-aligned role agents.")
         Container(roles, "roles/", "Markdown role files", "20 role definitions across engineering / product / design / security / data / architecture. Activated by role-triggers.md matcher rules.")
         Container(workflows, "workflows/", "Markdown process docs", "SDLC, code review, deployment — the prose contract for how work moves.")
@@ -65,6 +65,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 - **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
+- **cursor → skills** — Cursor loads `.claude/skills/` only as the fork skill root. Open the fork, not a parent that also holds `custom-skills/`. Override bak dirs keep a recoverable copy (manual restore; `/update` does not restore) but do not expose a second `SKILL.md` name (AgDR-0187 / #1377).
 
 ## What this diagram does NOT show
 
@@ -90,6 +91,10 @@ Updates when:
 Skill-count / hook-count / role-count drift goes in the relevant summary docs (CLAUDE.md, hooks/README.md), not here. This diagram stays at the "shape of the fork" level.
 
 ## Evolution
+
+**2026-09-29 — Cursor skill one-root / override wins (AgDR-0187, me2resh/apexyard#1377).** Cursor keyed skills by frontmatter `name`. A custom override left the framework copy under `.claude/skills/<name>.framework.bak/` with the same name. Cursor listed two entries. Fix: keep `.claude/skills/` as the only Cursor skill root. Move bak copies to `.claude/skill-framework-bak/`. Adapter sync writes a managed `.cursorignore` block for bak paths inside the fork (not in-fork custom skill sources). Install and docs warn operators not to open a parent portfolio workspace. Bak restore is manual; `/update` does not restore it. `bin/list-cursor-skills.sh` checks uniqueness without launching Cursor.
+
+The skills container stays the same path. The bak copy is no longer inside that container.
 
 **2026-09-16 — native-first Cursor overlay (AgDR-0151, me2resh/apexyard#1311).** Cursor.app 3.10.20 executed unmodified `.claude/hooks/*.sh` through the Claude Code loader. The generated 86-entry `hooks.json` copy became a lock-the-session hazard (`failClosed` plus leftover user config). Architecture change: Cursor is now a runtime of `.claude/`, not a second gate list. `.cursor/` is a one-hook overlay that maps `session_id` onto `CLAUDE_CODE_SESSION_ID`. Skill count on this diagram moved from 31 to 66 to match CLAUDE.md.
 

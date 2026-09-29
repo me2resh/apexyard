@@ -133,6 +133,20 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
+# The fork configuration is a generation hint. A running agent still checks
+# its own tool list because configuration alone cannot prove tool availability.
+SEARCH_MCP_CONFIGURED=0
+if [ -f "$TARGET_ROOT/.mcp.json" ] \
+  && jq -e '.mcpServers["apexyard-search"] | type == "object"' "$TARGET_ROOT/.mcp.json" >/dev/null 2>&1; then
+  SEARCH_MCP_CONFIGURED=1
+fi
+
+strip_unavailable_search_names() {
+  # Bare capability names remain readable in conditional instructions. Exact
+  # Claude tool identifiers must not appear in an unconfigured Codex adapter.
+  perl -pe 's/mcp__apexyard-search__([A-Za-z0-9_]+)/$1/g' "$@"
+}
+
 TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-adapter.XXXXXX")
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -225,6 +239,14 @@ assert_hook_counts_match
 
 while IFS= read -r -d '' generated_file; do
   rewrite_skill_paths "$generated_file"
+  case "$generated_file" in
+    *.md)
+      if [ "$SEARCH_MCP_CONFIGURED" = "0" ]; then
+        strip_unavailable_search_names "$generated_file" > "$generated_file.tmp"
+        mv "$generated_file.tmp" "$generated_file"
+      fi
+      ;;
+  esac
 done < <(find "$OUT_AGENTS" -type f -print0)
 
 generate_agent_toml() {
@@ -240,6 +262,9 @@ generate_agent_toml() {
   body=$(printf '%s\n' "$body" | perl -0pe '
     s/\.claude\/skills/.agents\/skills/g;
   ')
+  if [ "$SEARCH_MCP_CONFIGURED" = "0" ]; then
+    body=$(printf '%s\n' "$body" | strip_unavailable_search_names)
+  fi
 
   {
     printf 'name = %s\n' "$(printf '%s' "$name" | jq -Rs .)"

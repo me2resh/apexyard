@@ -43,6 +43,12 @@ Agent model labels are translated to Codex-native equivalents:
 | `sonnet` | `gpt-5.4` |
 | `haiku` | `gpt-5.4-mini` |
 
+The generator checks the target fork's `.mcp.json` for an `apexyard-search`
+entry. Without that entry, generated agents and skills omit exact Claude MCP
+tool identifiers. Their `grep` and `Read` fallback remains. A configured
+entry keeps the identifiers, but agents still check their runtime tool list.
+Regenerate the adapter after changing `.mcp.json`.
+
 ## Drift Check
 
 ```bash
