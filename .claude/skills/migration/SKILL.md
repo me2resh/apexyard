@@ -94,7 +94,7 @@ If the project isn't registered, stop — file one via `/handover` first, or pas
 ### 2. Gather the migration facts (conversational)
 
 Ask each of the following. Each answer feeds both the issue body and the AgDR — the skill writes them into both so the user never retypes.
-Use `AskUserQuestion` for the fields with listed choices. Recommend the best supported value first for each field.
+Use `AskUserQuestion` for the fields with listed choices. For a choice field such as migration type, recommend the best supported value first. For a factual field such as "Rollback tested against" or "Estimated downtime", do not recommend a value the operator has not confirmed. Put the most conservative value first (for example `not tested`), and recommend another value only when the conversation already holds evidence for it.
 Use the listed values as a numbered prose fallback only when the harness lacks the tool.
 
 1. **One-line summary** — goes in the ticket title: `[Migration] <type>: <summary>`

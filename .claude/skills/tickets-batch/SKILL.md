@@ -281,7 +281,7 @@ Show progress per call, using the `${ref}` parsed from each `tracker_create`:
 
 ### 7. Failure handling
 
-On the first `tracker_create` failure (`rc` non-zero **or** empty `result`), **stop the batch immediately**. Do not silently skip. (A `tracker.kind=none` project returns `rc=3` with the rendered body on stdout — treat that as "shape-only, nothing filed" and stop the batch the same way, telling the operator to file the set in their external system.) Use `AskUserQuestion` for retry, skip, edit, or abort. Recommend edit first. Show the menu below only when the harness lacks the tool:
+On the first `tracker_create` failure (`rc` non-zero **or** empty `result`), **stop the batch immediately**. Do not silently skip. (A `tracker.kind=none` project returns `rc=3` with the rendered body on stdout — treat that as "shape-only, nothing filed" and stop the batch the same way, telling the operator to file the set in their external system.) Use `AskUserQuestion` for retry, skip, edit, or abort. Recommend retry first for a transient error (network, rate limit, auth timeout). Recommend edit first for a validator error (for example a missing section). Show the menu below only when the harness lacks the tool:
 
 ```
 [5/12] Filing "Migrate user table to new auth schema"… ✗
