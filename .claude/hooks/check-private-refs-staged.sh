@@ -51,52 +51,74 @@ if [ -n "$upstream_repo" ]; then
   upstream_owner=${upstream_repo%%/*}
 fi
 
+if [ -f "$HOOK_DIR/_lib-registry-parser.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-registry-parser.sh"
+fi
+
+# apexyard#1457 review round 2 (Rex B1 / Hakim HIGH-2) — the registry exists
+# (checked above), so there IS a scrub list to enforce. If the shared
+# parser failed to load, or the awk parse itself fails, silently treating
+# that as "no registered projects" would fail OPEN on every private
+# reference. Fail closed instead: block until the parser is fixed.
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan staged content for a private portfolio reference." >&2
+  exit 2
+fi
+registry_parsed=$(registry_parse_entries "$REGISTRY")
+registry_parse_rc=$?
+if [ "$registry_parse_rc" -ne 0 ]; then
+  echo "BLOCKED: registry parse failed (exit $registry_parse_rc) while scanning staged content for a private portfolio reference." >&2
+  exit 2
+fi
+
 names=()
+names_public=()
 repos=()
+repos_public=()
 workspaces=()
+workspaces_public=()
 name_repo_pairs=()
+current_public=0
 while IFS= read -r entry; do
   case "$entry" in
-    NAME=*) names+=("${entry#NAME=}") ;;
-    REPO=*) repos+=("${entry#REPO=}") ;;
-    WORKSPACE=*) workspaces+=("${entry#WORKSPACE=}") ;;
-    NAMEREPO=*) name_repo_pairs+=("${entry#NAMEREPO=}") ;;
+    PUBLIC=*) current_public=${entry#PUBLIC=} ;;
+    NAME=*)
+      names+=("${entry#NAME=}")
+      names_public+=("$current_public")
+      ;;
+    REPO=*)
+      repos+=("${entry#REPO=}")
+      repos_public+=("$current_public")
+      ;;
+    WORKSPACE=*)
+      workspaces+=("${entry#WORKSPACE=}")
+      workspaces_public+=("$current_public")
+      ;;
+    PAIR=*)
+      # apexyard#1457 round 4 — the shared parser's private/public sets
+      # are now flat, structure-independent value sets (NAME=/REPO=/
+      # WORKSPACE= adjacency no longer implies "same registry entry"), so
+      # it emits this pairing directly instead. Used only by the #1431
+      # upstream bare-name exemption below.
+      name_repo_pairs+=("${entry#PAIR=}")
+      ;;
   esac
-done < <(awk '
-  function unquote(value) { gsub(/^['\''\"]|['\''\"]$/, "", value); return value }
-  /^[[:space:]]*- name:/ {
-    pending_name = unquote($3)
-    print "NAME=" pending_name; current_list = ""; next
-  }
-  /^[[:space:]]*repo:/ {
-    repo_val = unquote($2)
-    print "REPO=" repo_val
-    if (pending_name != "") { print "NAMEREPO=" pending_name "\t" repo_val }
-    pending_name = ""; current_list = ""; next
-  }
-  /^[[:space:]]*workspace:/ {
-    print "WORKSPACE=" unquote($2); current_list = ""; next
-  }
-  /^[[:space:]]*repos:[[:space:]]*\[/ {
-    value = $0; sub(/^[^\[]*\[/, "", value); sub(/\].*$/, "", value)
-    count = split(value, items, ",")
-    for (i = 1; i <= count; i++) {
-      item = items[i]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-      if (item != "") print "REPO=" unquote(item)
-    }
-    pending_name = ""; current_list = ""; next
-  }
-  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
-  /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
-  /^[[:space:]]*-[[:space:]]+/ {
-    if (current_list == "repos") {
-      value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
-      gsub(/[[:space:]]+$/, "", value); print "REPO=" unquote(value)
-    }
-  }
-' "$REGISTRY")
+done <<EOF
+$registry_parsed
+EOF
 
-[ "${#names[@]}" -gt 0 ] || [ "${#repos[@]}" -gt 0 ] || [ "${#workspaces[@]}" -gt 0 ] || exit 0
+if [ "${#names[@]}" -eq 0 ] && [ "${#repos[@]}" -eq 0 ] && [ "${#workspaces[@]}" -eq 0 ]; then
+  # apexyard#1457 review round 3 (Hakim MEDIUM, elevated to blocking) — a
+  # registry that plainly looks like it registers projects (a `projects:`
+  # key AND at least one `name:` key) but produced zero tokens means the
+  # parse missed a shape, not that nothing is registered. Fail closed.
+  if registry_has_project_shape "$REGISTRY"; then
+    echo "BLOCKED: registry parse produced no tokens despite a projects: key and a name: key being present in $REGISTRY. Cannot safely scan staged content for a private portfolio reference." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 # #1431 round 2 (Hakim MEDIUM) — a registered project's `name` can
 # coincidentally equal `upstream`'s bare repo name without that entry
@@ -197,8 +219,10 @@ while IFS= read -r -d '' path; do
   [ "$path" = "$registry_rel" ] && continue
   git show ":$path" >/dev/null 2>&1 || continue
 
-  for name in "${names[@]}"; do
+  for idx in "${!names[@]}"; do
+    name="${names[$idx]}"
     [ -n "$name" ] || continue
+    [ "${names_public[$idx]}" = "1" ] && continue
     [ "$name" = "$current_name" ] && continue
     if [ -n "$upstream_name" ] && [ "$name" = "$upstream_name" ] \
       && registry_name_repo_matches "$name" "$upstream_repo"; then
@@ -213,16 +237,20 @@ while IFS= read -r -d '' path; do
     staged_blob_matches "$path" "(^|[^[:alnum:]_])${escaped}([^[:alnum:]_]|$)" && block "$path"
   done
 
-  for repo in "${repos[@]}"; do
+  for idx in "${!repos[@]}"; do
+    repo="${repos[$idx]}"
     [ -n "$repo" ] || continue
+    [ "${repos_public[$idx]}" = "1" ] && continue
     [ "$repo" = "$current_repo" ] && continue
     [ -n "$upstream_repo" ] && [ "$repo" = "$upstream_repo" ] && continue
     escaped=$(escape_regex "$repo")
     staged_blob_matches "$path" "(^|[^A-Za-z0-9_/-])${escaped}(#[0-9]+)?([^A-Za-z0-9_/-]|$)" && block "$path"
   done
 
-  for workspace in "${workspaces[@]}"; do
+  for idx in "${!workspaces[@]}"; do
+    workspace="${workspaces[$idx]}"
     [ -n "$workspace" ] || continue
+    [ "${workspaces_public[$idx]}" = "1" ] && continue
     escaped=$(escape_regex "$workspace")
     staged_blob_matches "$path" "(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)" && block "$path"
   done

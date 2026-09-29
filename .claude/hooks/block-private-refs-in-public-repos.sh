@@ -1089,80 +1089,81 @@ fi
 #    _lib-multi-repo-trace.sh.
 # ---------------------------------------------------------------------------
 
-NAMES=""
-REPOS=""
-WORKSPACES=""
+# apexyard#1457 review round 2 (Hakim LOW-2) — indexed arrays, not
+# space-joined strings: NAMES_PUBLIC[i] / REPOS_PUBLIC[i] / WORKSPACES_PUBLIC[i]
+# pair with NAMES[i] / REPOS[i] / WORKSPACES[i] by POSITION, the same
+# per-entry pairing the staged and runtime hooks use. A membership-only
+# check (the pre-round-2 approach) could not tell two entries with the same
+# token apart; this can.
+NAMES=()
+NAMES_PUBLIC=()
+REPOS=()
+REPOS_PUBLIC=()
+WORKSPACES=()
+WORKSPACES_PUBLIC=()
 
-# awk parser: walk each `- name:` block and pull out `name`, every `repo`/
-# `repos[]` entry, and `workspace`. Strips surrounding quotes. Assumes
-# `- name:` is the first key in each project entry (same assumption as
-# /start-ticket).
-PARSED=$(awk '
-  function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
-  /^[[:space:]]*- name:/ {
-    print "NAME=" unquote($3)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repo:/ {
-    print "REPO=" unquote($2)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*workspace:/ {
-    print "WORKSPACE=" unquote($2)
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repos:[[:space:]]*\[/ {
-    line = $0
-    sub(/^[^\[]*\[/, "", line); sub(/\].*$/, "", line)
-    n = split(line, parts, ",")
-    for (i = 1; i <= n; i++) {
-      item = parts[i]
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-      if (item != "") print "REPO=" unquote(item)
-    }
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
-    current_list = "repos"
-    next
-  }
-  /^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_-]*:/ {
-    current_list = ""
-    next
-  }
-  /^[[:space:]]*-[[:space:]]+/ {
-    if (current_list == "repos") {
-      item = $0
-      sub(/^[[:space:]]*-[[:space:]]+/, "", item)
-      gsub(/[[:space:]]+$/, "", item)
-      print "REPO=" unquote(item)
-    }
-    next
-  }
-' "$REGISTRY")
+HOOK_DIR_FOR_PARSER=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [ -f "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR_FOR_PARSER/_lib-registry-parser.sh"
+fi
 
+# apexyard#1457 review round 2 (Rex B1 / Hakim HIGH-2) — the registry
+# exists (checked earlier), so fail closed rather than silently scanning
+# nothing when the shared parser is missing or its parse fails.
+if ! declare -F registry_parse_entries >/dev/null 2>&1; then
+  echo "BLOCKED: shared registry parser (_lib-registry-parser.sh) is missing or failed to load. Cannot safely scan for a private portfolio reference." >&2
+  exit 2
+fi
+REGISTRY_PARSED=$(registry_parse_entries "$REGISTRY")
+REGISTRY_PARSE_RC=$?
+if [ "$REGISTRY_PARSE_RC" -ne 0 ]; then
+  echo "BLOCKED: registry parse failed (exit $REGISTRY_PARSE_RC) while scanning for a private portfolio reference." >&2
+  exit 2
+fi
+
+CURRENT_PUBLIC=0
 while IFS= read -r line; do
   case "$line" in
+    PUBLIC=*)
+      CURRENT_PUBLIC=${line#PUBLIC=}
+      ;;
     NAME=*)
       v=${line#NAME=}
-      [ -n "$v" ] && NAMES="$NAMES $v"
+      if [ -n "$v" ]; then
+        NAMES+=("$v")
+        NAMES_PUBLIC+=("$CURRENT_PUBLIC")
+      fi
       ;;
     REPO=*)
       v=${line#REPO=}
-      [ -n "$v" ] && REPOS="$REPOS $v"
+      if [ -n "$v" ]; then
+        REPOS+=("$v")
+        REPOS_PUBLIC+=("$CURRENT_PUBLIC")
+      fi
       ;;
     WORKSPACE=*)
       v=${line#WORKSPACE=}
-      [ -n "$v" ] && WORKSPACES="$WORKSPACES $v"
+      if [ -n "$v" ]; then
+        WORKSPACES+=("$v")
+        WORKSPACES_PUBLIC+=("$CURRENT_PUBLIC")
+      fi
       ;;
   esac
 done <<EOF
-$PARSED
+$REGISTRY_PARSED
 EOF
+
+# apexyard#1457 review round 3 (Hakim MEDIUM, elevated to blocking) — a
+# registry that plainly looks like it registers projects (a `projects:`
+# key AND at least one `name:` key) but produced zero tokens means the
+# parse missed a shape, not that nothing is registered. Fail closed.
+if [ "${#NAMES[@]}" -eq 0 ] && [ "${#REPOS[@]}" -eq 0 ] && [ "${#WORKSPACES[@]}" -eq 0 ]; then
+  if registry_has_project_shape "$REGISTRY"; then
+    echo "BLOCKED: registry parse produced no tokens despite a projects: key and a name: key being present in $REGISTRY. Cannot safely scan for a private portfolio reference." >&2
+    exit 2
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # 8. Build the match list.
@@ -1203,7 +1204,12 @@ record_if_match() {
   fi
 }
 
-for n in $NAMES; do
+for name_idx in "${!NAMES[@]}"; do
+  n="${NAMES[$name_idx]}"
+  # apexyard#1455 — a registry entry marked `public: true` is not a leak.
+  # apexyard#1457 review round 2 (Hakim LOW-2) — paired by INDEX with the
+  # entry that produced $n, not by token-string membership.
+  [ "${NAMES_PUBLIC[$name_idx]}" = "1" ] && continue
   # Exempt the target repo's own bare name entirely (pre-existing).
   if [ "$n" = "$TARGET_NAME" ]; then continue; fi
 
@@ -1260,7 +1266,9 @@ for n in $NAMES; do
   fi
 done
 
-for rp in $REPOS; do
+for repo_idx in "${!REPOS[@]}"; do
+  rp="${REPOS[$repo_idx]}"
+  [ "${REPOS_PUBLIC[$repo_idx]}" = "1" ] && continue
   if [ "$rp" = "$TARGET_REPO" ]; then continue; fi
   esc=$(printf '%s' "$rp" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Either bare slug (with word-ish boundary) or slug#<N>.
@@ -1270,7 +1278,9 @@ for rp in $REPOS; do
   fi
 done
 
-for ws in $WORKSPACES; do
+for ws_idx in "${!WORKSPACES[@]}"; do
+  ws="${WORKSPACES[$ws_idx]}"
+  [ "${WORKSPACES_PUBLIC[$ws_idx]}" = "1" ] && continue
   esc=$(printf '%s' "$ws" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
   # Workspace-path boundaries: path-chars `/` and `-` ARE allowed *after* the
   # match (e.g. `workspace/ws-marlow/app.ts` is a real reference — the

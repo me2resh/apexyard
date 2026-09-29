@@ -29,18 +29,18 @@ The skill **asks**, doesn't guess. The 4-option prompt below covers every common
 ## Usage
 
 ```
-/pdf projects/curios-dog/architecture/vision.md
-/pdf workspace/curios-dog/docs/architecture/context.md
-/pdf projects/curios-dog/audits/security/2026-05-19.md
-/pdf projects/curios-dog/journeys/checkout-v2.html
-/pdf projects/curios-dog/processes/onboarding.bpmn
+/pdf projects/sample-app/architecture/vision.md
+/pdf workspace/sample-app/docs/architecture/context.md
+/pdf projects/sample-app/audits/security/2026-05-19.md
+/pdf projects/sample-app/journeys/checkout-v2.html
+/pdf projects/sample-app/processes/onboarding.bpmn
 /pdf <input> --no-prompt                  # use default_destination from config
 /pdf <input> --converter=pandoc           # force a specific converter
 /pdf <input> --destination=workspace      # skip the prompt, write to workspace/<name>/docs/
 /pdf <input> --destination=projects       # skip the prompt, write to projects/<name>/pdfs/
 /pdf <input> --destination=keep           # skip the prompt, keep next to source
 /pdf <input> --destination=/absolute/path/out.pdf  # explicit path
-/pdf <input> --project=curios-dog         # override auto-detected project name
+/pdf <input> --project=sample-app         # override auto-detected project name
 ```
 
 ## Path resolution

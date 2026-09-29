@@ -6,7 +6,7 @@
 
 The portfolio rule "prefer `mcp__apexyard-search__search_code` / `search_docs` over `grep` + `Read`" is enforced on the **main loop** two ways: the `suggest-mcp-search.sh` PreToolUse advisory hook (fires on the main agent's Bash/grep calls and injects a `hookSpecificOutput.additionalContext` nudge), and operator feedback memory. Neither reaches a spawned sub-agent: the hook observes the *main* agent's tool calls, and a sub-agent runs its own loop with its own (separately-declared) tools.
 
-Observed 2026-06-01 (this is the originating incident): the `tech-lead` sub-agent authored a curios-dog Cognito migration design by reading the Terraform + DynamoDB code via `grep`/`Read`. The MCP `activity.jsonl` showed **zero** `search_code` entries for that run. The design came out correct, but via the more expensive path the rule exists to avoid. Filed as me2resh/apexyard#475.
+Observed 2026-06-01 (this is the originating incident): the `tech-lead` sub-agent authored a managed-project Cognito migration design by reading the Terraform + DynamoDB code via `grep`/`Read`. The MCP `activity.jsonl` showed **zero** `search_code` entries for that run. The design came out correct, but via the more expensive path the rule exists to avoid. Filed as me2resh/apexyard#475.
 
 Two contributing facts:
 

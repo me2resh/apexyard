@@ -51,8 +51,8 @@ assert_banner_contains "cwd-based — reindex is project-scoped" \
   'project="example"'
 
 assert_banner_contains "cwd nested under tool_input" \
-  '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git pull","cwd":"/Users/me/portfolio/workspace/curios-dog"},"tool_response":{"exit_code":0}}' \
-  "workspace/curios-dog/ was updated via git"
+  '{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"git pull","cwd":"/Users/me/portfolio/workspace/sample-app"},"tool_response":{"exit_code":0}}' \
+  "workspace/sample-app/ was updated via git"
 
 # --- Should fire: path-argument fallbacks ------------------------------------
 
