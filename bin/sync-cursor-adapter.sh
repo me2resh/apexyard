@@ -6,8 +6,9 @@
 # gates. It emits:
 #   - .cursor/hooks.json with a sessionStart pin overlay only
 #   - .cursor/rules/apexyard.mdc advisory pointer
-#   - .cursorignore managed block so sibling custom-skills/ and framework
-#     skill backups are not a second skill root (AgDR-0187 / #1377)
+#   - .cursorignore managed block so framework skill backups under
+#     .claude/skill-framework-bak/ (and legacy *.framework.bak) are not
+#     a second skill root (AgDR-0187 / #1377)
 #
 # --user merges the overlay into ~/.cursor/hooks.json and replaces any
 # leftover full generated adapter (entries that exec .claude/hooks/*.sh).
@@ -170,9 +171,8 @@ cursorignore_managed_block() {
   cat <<'IGNORE'
 # BEGIN apexyard-cursor-skills
 # Keep Cursor skill discovery on one root: .claude/skills (AgDR-0187).
-# Ignore override sources and framework backups that share skill names.
-custom-skills/
-**/custom-skills/
+# Ignore framework backups that still hold SKILL.md with the same name.
+# Do not ignore in-fork custom skill source dirs (single-fork adopters).
 .claude/skill-framework-bak/
 .claude/skills/*.framework.bak/
 # END apexyard-cursor-skills

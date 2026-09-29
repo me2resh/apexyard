@@ -116,15 +116,23 @@ mkdir -p "$skills_target_dir" "$skills_bak_dir"
 # Move a framework bak out of the skill discovery root. Cursor keys skills
 # by frontmatter `name`. A bak that still holds SKILL.md under
 # .claude/skills/ lists as a duplicate of the override (#1377 / AgDR-0187).
+# When both legacy and new bak exist and differ, keep both (rename legacy
+# with a suffix) — never delete without comparing. Restore is manual
+# (AgDR-0187); /update does not restore a bak.
 migrate_or_stash_framework_bak() {
   local name="$1"
   local legacy="$skills_target_dir/${name}.framework.bak"
   local backup="$skills_bak_dir/$name"
+  local keep
   if [ -e "$legacy" ]; then
     if [ ! -e "$backup" ]; then
       mv "$legacy" "$backup"
-    else
+    elif diff -qr "$legacy" "$backup" >/dev/null 2>&1; then
       rm -rf "$legacy"
+    else
+      keep="${backup}.legacy-$(date +%Y%m%d%H%M%S)"
+      mv "$legacy" "$keep"
+      echo "WARNING: legacy bak and .claude/skill-framework-bak/$name both exist and differ; kept legacy at $keep" >&2
     fi
   fi
 }

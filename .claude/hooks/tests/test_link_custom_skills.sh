@@ -355,6 +355,56 @@ if [ "$ok" -ne 1 ]; then echo "  out: $out"; fi
 rm -rf "$SB" "$SIB"
 
 # ==========================================================================
+# Case 8 — legacy bak and new bak both exist and differ → keep both
+# ==========================================================================
+SB=$(make_fork)
+SIB=$(mktemp -d)
+SIB=$(cd "$SIB" && pwd -P)
+mkdir -p "$SB/.claude/skills/feature.framework.bak"
+cat > "$SB/.claude/skills/feature.framework.bak/SKILL.md" <<'MD'
+---
+name: feature
+---
+# Legacy bak body
+MD
+mkdir -p "$SB/.claude/skill-framework-bak/feature"
+cat > "$SB/.claude/skill-framework-bak/feature/SKILL.md" <<'MD'
+---
+name: feature
+---
+# New bak body
+MD
+mkdir -p "$SIB/custom-skills/feature"
+cat > "$SIB/custom-skills/feature/SKILL.md" <<'MD'
+---
+name: feature
+description: Custom override
+---
+# Custom /feature
+MD
+cat > "$SB/.claude/project-config.json" <<JSON
+{ "portfolio": { "custom_skills_dir": "$SIB/custom-skills" } }
+JSON
+
+out=$(run_hook "$SB")
+ok=1
+# Legacy dir must not be deleted silently when contents differ.
+[ ! -e "$SB/.claude/skills/feature.framework.bak" ] || ok=0
+[ -d "$SB/.claude/skill-framework-bak/feature" ] || ok=0
+# Differing legacy was renamed beside the new bak.
+legacy_kept=$(find "$SB/.claude/skill-framework-bak" -maxdepth 1 -type d -name 'feature.legacy-*' 2>/dev/null | head -n 1)
+[ -n "$legacy_kept" ] || ok=0
+[ -f "$legacy_kept/SKILL.md" ] || ok=0
+grep -q 'Legacy bak body' "$legacy_kept/SKILL.md" || ok=0
+grep -q 'New bak body' "$SB/.claude/skill-framework-bak/feature/SKILL.md" || ok=0
+echo "$out" | grep -q "both exist and differ" || ok=0
+[ -L "$SB/.claude/skills/feature" ] || ok=0
+[ "$ok" -eq 1 ] && rc2=0 || rc2=1
+assert "case 8: differing legacy + new bak → keep both; warn; do not delete" "$rc2"
+if [ "$ok" -ne 1 ]; then echo "  out: $out"; ls -la "$SB/.claude/skills" "$SB/.claude/skill-framework-bak" 2>&1; fi
+rm -rf "$SB" "$SIB"
+
+# ==========================================================================
 # Summary
 # ==========================================================================
 echo

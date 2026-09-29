@@ -110,7 +110,7 @@ _cursor_skills_kind_rank() {
 # Print unique winners: path<TAB>name (override wins).
 cursor_skills_unique() {
   local workspace="$1"
-  local tmp sorted
+  local tmp sorted path name kind rank
   tmp=$(mktemp "${TMPDIR:-/tmp}/cursor-skills.XXXXXX")
   cursor_skills_discover "$workspace" > "$tmp" || {
     rm -f "$tmp"

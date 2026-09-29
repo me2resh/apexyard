@@ -56,7 +56,7 @@ The command emits:
 
 - `.cursor/hooks.json` with one `sessionStart` command
 - `.cursor/rules/apexyard.mdc`
-- a managed block in `.cursorignore` so sibling `custom-skills/` and framework skill backups are not a second skill root ([AgDR-0187](agdr/AgDR-0187-cursor-skill-one-root-override-wins.md))
+- a managed block in `.cursorignore` so framework skill backups under `.claude/skill-framework-bak/` (and legacy `*.framework.bak`) are not a second skill root ([AgDR-0187](agdr/AgDR-0187-cursor-skill-one-root-override-wins.md))
 
 Project command: `.claude/hooks/cursor-session-pin.sh`.
 User-level command: walk to ops-root, then exec the same script.
@@ -110,12 +110,15 @@ That directory is the single skill root for the fork ([AgDR-0187](agdr/AgDR-0187
 
 Open the ops fork in Cursor. Do not open a parent directory that also
 contains the portfolio repo. A parent workspace can list one custom skill
-from the fork symlink and again from `custom-skills/`.
+from the fork symlink and again from a sibling portfolio `custom-skills/`
+tree. A fork-root `.cursorignore` cannot reach that sibling; open the fork
+only.
 
 After a custom override, the framework copy moves to
 `.claude/skill-framework-bak/<name>/` so it is outside the skill root.
 `bin/sync-cursor-adapter.sh` also writes a managed `.cursorignore` block
-that ignores `custom-skills/` and bak paths.
+that ignores those bak paths inside the fork. Restoring a framework skill
+from bak is manual (AgDR-0187); `/update` does not restore it.
 
 ```bash
 bin/list-cursor-skills.sh --root . --duplicates

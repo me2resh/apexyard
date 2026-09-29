@@ -30,6 +30,7 @@ export APEXYARD_OPS_DISABLE_PIN=1
 
 PASS=0
 FAIL=0
+SKIP=0
 FAILED=""
 
 mark_pass() { echo "PASS: $1"; PASS=$((PASS + 1)); }
@@ -38,6 +39,8 @@ mark_fail() {
   FAIL=$((FAIL + 1))
   FAILED="$FAILED $1"
 }
+mark_skip() { echo "SKIP: $1"; SKIP=$((SKIP + 1)); }
+
 
 for req in "$LIST" "$LINK" "$LIB_CURSOR" "$INSTALL" "$SYNC" \
            "$LIB_PORTFOLIO" "$LIB_CONFIG" "$LIB_OPS" "$DEFAULTS"; do
@@ -191,22 +194,29 @@ SH
 chmod +x "$SB3/.claude/hooks/pin-ops-root.sh"
 
 SYNC_OUT="$TMP/sync-ac3.out"
-if bash "$SYNC" --root "$SB3" >"$SYNC_OUT" 2>&1; then
-  if [ -f "$SB3/.cursorignore" ] \
-    && grep -Fq "BEGIN apexyard-cursor-skills" "$SB3/.cursorignore" \
-    && grep -Fq ".claude/skill-framework-bak/" "$SB3/.cursorignore"; then
-    mark_pass "AC3 sync writes managed .cursorignore excluding skill-framework-bak"
+if ! mkdir -p "$SB3/.cursor/rules" 2>/dev/null; then
+  mark_skip "AC3 sync write path blocked in this environment (mkdir .cursor)"
+else
+  rmdir "$SB3/.cursor/rules" 2>/dev/null || true
+  rmdir "$SB3/.cursor" 2>/dev/null || true
+  if bash "$SYNC" --root "$SB3" >"$SYNC_OUT" 2>&1; then
+    if [ -f "$SB3/.cursorignore" ] \
+      && grep -Fq "BEGIN apexyard-cursor-skills" "$SB3/.cursorignore" \
+      && grep -Fq ".claude/skill-framework-bak/" "$SB3/.cursorignore" \
+      && ! grep -Eq '^custom-skills/|^\*\*/custom-skills/' "$SB3/.cursorignore"; then
+      mark_pass "AC3 sync writes managed .cursorignore excluding skill-framework-bak"
+    else
+      mark_fail "AC3 sync writes managed .cursorignore excluding skill-framework-bak" \
+        "cursorignore=$(cat "$SB3/.cursorignore" 2>&1) sync=$(cat "$SYNC_OUT" 2>&1)"
+    fi
   else
     mark_fail "AC3 sync writes managed .cursorignore excluding skill-framework-bak" \
-      "cursorignore=$(cat "$SB3/.cursorignore" 2>&1) sync=$(cat "$SYNC_OUT" 2>&1)"
+      "sync exit non-zero: $(cat "$SYNC_OUT" 2>&1)"
   fi
-else
-  mark_fail "AC3 sync writes managed .cursorignore excluding skill-framework-bak" \
-    "sync exit non-zero: $(cat "$SYNC_OUT" 2>&1)"
 fi
 
 echo ""
-echo "Results: $PASS passed, $FAIL failed"
+echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -ne 0 ]; then
   echo "Failed cases:$FAILED" >&2
   exit 1

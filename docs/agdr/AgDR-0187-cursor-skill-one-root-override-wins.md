@@ -11,7 +11,7 @@ category: integrations
 
 # Cursor skill root stays `.claude/skills/`. Override wins. Bak leaves that root.
 
-> In the context of Cursor listing a custom skill override and the framework bak as two entries with the same name, facing duplicate skill names when third-party configs are on, I decided to keep `.claude/skills/` as Cursor's single skill root, move framework bak copies to `.claude/skill-framework-bak/`, write a managed `.cursorignore` block for override sources, and warn operators not to open a parent portfolio workspace, accepting a path change from AgDR-0022's in-skills bak location.
+> In the context of Cursor listing a custom skill override and the framework bak as two entries with the same name, facing duplicate skill names when third-party configs are on, I decided to keep `.claude/skills/` as Cursor's single skill root, move framework bak copies to `.claude/skill-framework-bak/`, write a managed `.cursorignore` block for bak paths inside the fork, and warn operators not to open a parent portfolio workspace, accepting a path change from AgDR-0022's in-skills bak location.
 
 ## Context
 
@@ -28,7 +28,7 @@ AgDR-0151 already made Cursor native-first. Generating a second skill tree under
 | Option | Pros | Cons |
 |--------|------|------|
 | Generate `.cursor/skills/` with deduped symlinks and keep native `.claude/skills/` | Matches "generation" wording | Cursor would load both roots and list every skill twice |
-| Move bak to `.claude/skill-framework-bak/<name>/`, manage `.cursorignore`, warn on parent workspaces | One skill root. Override stays live. Bak stays recoverable with intact `SKILL.md`. Parent sources can be ignored when Cursor honors `.cursorignore` | Changes the AgDR-0022 bak path. Relies on install docs when Cursor ignores are incomplete |
+| Move bak to `.claude/skill-framework-bak/<name>/`, manage `.cursorignore`, warn on parent workspaces | One skill root. Override stays live. Bak stays recoverable with intact `SKILL.md` via a manual move. Parent-directory duplicates are a workspace-root choice | Changes the AgDR-0022 bak path. Relies on install docs when Cursor ignores are incomplete; fork-root `.cursorignore` cannot hide a sibling `custom-skills/` |
 | Rename bak `SKILL.md` only | Smallest path change | Leaves bak dirs inside the skill root. Easy to miss on a future sweep |
 | Rely only on docs telling people to open the fork | Smallest code change | Leaves the bak duplicate inside a correct fork workspace |
 
@@ -38,15 +38,15 @@ Chosen: **move bak outside the skill root, manage `.cursorignore`, warn on paren
 
 `.claude/skills/` remains the only Cursor skill root for the fork. The override symlink is the live entry. After a collision, `link-custom-skills.sh` moves the framework copy to `.claude/skill-framework-bak/<name>/`. A SessionStart sweep migrates legacy `.claude/skills/<name>.framework.bak/` dirs to that location.
 
-`bin/sync-cursor-adapter.sh` writes a managed block into `.cursorignore` that ignores `custom-skills/`, nested `**/custom-skills/`, and bak paths. That keeps one skill root when Cursor honors the ignore file. Install and sync also tell operators to open the ops fork, not a parent folder that also holds the portfolio.
+`bin/sync-cursor-adapter.sh` writes a managed block into `.cursorignore` that ignores `.claude/skill-framework-bak/` and legacy `.claude/skills/*.framework.bak/`. It does not ignore `custom-skills/`: that directory lives inside the fork for single-fork adopters and is the override source. A fork-root `.cursorignore` also cannot reach a sibling portfolio `custom-skills/` tree. Install and sync tell operators to open the ops fork, not a parent folder that also holds the portfolio.
 
 `bin/list-cursor-skills.sh` lists the names Cursor would load from disk. `--duplicates` fails when one name appears more than once. `--unique` prints the override-wins winner. Tests use that harness. They do not launch Cursor.
 
 ## Consequences
 
 - A fork with an override shows one Cursor entry per skill name. The override is the live path.
-- Restoring a framework skill means moving `.claude/skill-framework-bak/<name>/` back to `.claude/skills/<name>/` after removing the override symlink.
-- Opening a parent workspace that contains both the fork and `custom-skills/` can still list duplicates if Cursor does not honor `.cursorignore`. The install and docs warn about that layout.
+- Restoring a framework skill means moving `.claude/skill-framework-bak/<name>/` back to `.claude/skills/<name>/` after removing the override symlink. That restore is manual. `/update` does not restore a framework skill backup.
+- Opening a parent workspace that contains both the fork and a sibling `custom-skills/` can still list duplicates. The install and docs warn about that layout.
 - No second generated skill tree is added under `.cursor/` or `.agents/`. Native-first stays intact.
 
 ## Artifacts
@@ -64,4 +64,4 @@ Chosen: **move bak outside the skill root, manage `.cursorignore`, warn on paren
 
 ## Evolution
 
-Cursor skill loading stayed on the native `.claude/skills/` root. Framework bak copies left that root. Adapter generation now maintains a `.cursorignore` block for override sources. Parent-directory portfolio layouts stay documented as unsafe when ignores do not apply.
+Cursor skill loading stayed on the native `.claude/skills/` root. Framework bak copies left that root. Adapter generation now maintains a `.cursorignore` block for bak paths inside the fork. Parent-directory portfolio layouts stay documented as unsafe. Bak restore stays manual; `/update` does not restore it.

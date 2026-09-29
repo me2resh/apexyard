@@ -65,7 +65,7 @@ The diagram captures which "container" does what *when interpreted by the right 
 - **hooks → github** — hooks call `gh` directly (e.g. `block-merge-on-red-ci.sh` runs `gh pr checks`). This is how ApexYard's mechanical enforcement reaches the remote tracker state.
 - **skills → github** — skills are the user-facing portfolio-aware commands. Most call `gh` at some point; some also read the registry to iterate.
 - **skills → registry / projectdocs** — the portfolio-level read/write flow. `/inbox` / `/status` / `/projects` / `/stakeholder-update` all live here.
-- **cursor → skills** — Cursor loads `.claude/skills/` only as the fork skill root. Open the fork, not a parent that also holds `custom-skills/`. Override bak dirs keep a recoverable copy but do not expose a second `SKILL.md` name (AgDR-0187 / #1377).
+- **cursor → skills** — Cursor loads `.claude/skills/` only as the fork skill root. Open the fork, not a parent that also holds `custom-skills/`. Override bak dirs keep a recoverable copy (manual restore; `/update` does not restore) but do not expose a second `SKILL.md` name (AgDR-0187 / #1377).
 
 ## What this diagram does NOT show
 
@@ -92,7 +92,7 @@ Skill-count / hook-count / role-count drift goes in the relevant summary docs (C
 
 ## Evolution
 
-**2026-09-29 — Cursor skill one-root / override wins (AgDR-0187, me2resh/apexyard#1377).** Cursor keyed skills by frontmatter `name`. A custom override left the framework copy under `.claude/skills/<name>.framework.bak/` with the same name. Cursor listed two entries. Fix: keep `.claude/skills/` as the only Cursor skill root. Move bak copies to `.claude/skill-framework-bak/`. Adapter sync writes a managed `.cursorignore` block for override sources. Install and docs warn operators not to open a parent portfolio workspace. `bin/list-cursor-skills.sh` checks uniqueness without launching Cursor.
+**2026-09-29 — Cursor skill one-root / override wins (AgDR-0187, me2resh/apexyard#1377).** Cursor keyed skills by frontmatter `name`. A custom override left the framework copy under `.claude/skills/<name>.framework.bak/` with the same name. Cursor listed two entries. Fix: keep `.claude/skills/` as the only Cursor skill root. Move bak copies to `.claude/skill-framework-bak/`. Adapter sync writes a managed `.cursorignore` block for bak paths inside the fork (not in-fork custom skill sources). Install and docs warn operators not to open a parent portfolio workspace. Bak restore is manual; `/update` does not restore it. `bin/list-cursor-skills.sh` checks uniqueness without launching Cursor.
 
 The skills container stays the same path. The bak copy is no longer inside that container.
 

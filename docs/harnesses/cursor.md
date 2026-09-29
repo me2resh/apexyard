@@ -20,7 +20,7 @@ The retired full copy is recorded in [AgDR-0091](../agdr/AgDR-0091-cursor-adapte
 
 Cursor's skill root for an ops fork is `.claude/skills/`. Open that fork directory in Cursor. Do not open a parent folder that also contains the portfolio repo. A parent workspace can list the same custom skill from the fork symlink and from `custom-skills/` ([AgDR-0187](../agdr/AgDR-0187-cursor-skill-one-root-override-wins.md)).
 
-When a custom skill overrides a framework skill, `link-custom-skills.sh` moves the framework copy to `.claude/skill-framework-bak/<name>/` so Cursor does not list a second entry with the same name. The adapter also writes a managed `.cursorignore` block for `custom-skills/` and bak paths. Check uniqueness without launching Cursor:
+When a custom skill overrides a framework skill, `link-custom-skills.sh` moves the framework copy to `.claude/skill-framework-bak/<name>/` so Cursor does not list a second entry with the same name. The adapter also writes a managed `.cursorignore` block for those bak paths inside the fork. Restoring from bak is manual; `/update` does not restore it. Check uniqueness without launching Cursor:
 
 ```bash
 bin/list-cursor-skills.sh --root . --duplicates

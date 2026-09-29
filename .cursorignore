@@ -1,0 +1,7 @@
+# BEGIN apexyard-cursor-skills
+# Keep Cursor skill discovery on one root: .claude/skills (AgDR-0187).
+# Ignore framework backups that still hold SKILL.md with the same name.
+# Do not ignore in-fork custom skill source dirs (single-fork adopters).
+.claude/skill-framework-bak/
+.claude/skills/*.framework.bak/
+# END apexyard-cursor-skills

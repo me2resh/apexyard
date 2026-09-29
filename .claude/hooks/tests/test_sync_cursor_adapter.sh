@@ -9,8 +9,12 @@ SCRIPT="$ROOT/bin/sync-cursor-adapter.sh"
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 
+# Cursor agent environments may block creating `.cursor/` paths under
+# $TMPDIR. Count that as a visible SKIP (exit 0). Exit non-zero only on
+# real assertion failures. Do not assert sandbox behaviour.
 PASS=0
 FAIL=0
+SKIP=0
 FAILED=""
 
 mark_pass() { green "  ok   $1"; PASS=$((PASS+1)); }
@@ -19,6 +23,7 @@ mark_fail() {
   FAIL=$((FAIL+1))
   FAILED="$FAILED $1"
 }
+mark_skip() { echo "SKIP: $1"; SKIP=$((SKIP+1)); }
 
 assert_file() {
   local path="$1" label="$2"
@@ -41,14 +46,37 @@ assert_not_contains() {
 
 unset CLAUDE_CODE_SESSION_ID
 
+echo "== committed overlay --check (no write)"
+
+if [ ! -f "$ROOT/.cursorignore" ]; then
+  # Prefer materializing a staged managed file when the worktree write was blocked.
+  git -C "$ROOT" checkout-index -f -- .cursorignore 2>/dev/null || true
+fi
+if [ -f "$ROOT/.cursorignore" ]; then
+  if bash "$SCRIPT" --check >/tmp/_cursor_adapter_committed_check.out 2>&1; then
+    mark_pass "committed files pass bin/sync-cursor-adapter.sh --check"
+  else
+    mark_fail "committed files pass bin/sync-cursor-adapter.sh --check" \
+      "$(cat /tmp/_cursor_adapter_committed_check.out)"
+  fi
+else
+  mark_skip ".cursorignore missing on disk (write blocked here); expect orchestrator to materialize staged index entry"
+fi
+
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-test.XXXXXX")
 trap 'rm -rf "$TMPROOT"' EXIT
 
-# Cursor agent sandbox blocks creating `.cursor/` and `.cursorignore` paths.
-# Live generator write coverage needs an unsandboxed runner (CI or local).
 if ! mkdir -p "$TMPROOT/.cursor/rules" 2>/dev/null; then
-  echo "DEFERRED: sandbox blocks mkdir .cursor (cannot exercise sync write path here)"
-  echo "Results: 0 passed, 0 failed, 0 failed (write path deferred)"
+  mark_skip "mkdir .cursor blocked in this environment (write path not exercised)"
+  echo
+  echo "===== test_sync_cursor_adapter.sh ====="
+  echo "Passed: $PASS"
+  echo "Failed: $FAIL"
+  echo "Skipped: $SKIP"
+  if [ "$FAIL" -gt 0 ]; then
+    echo "Failed cases:$FAILED"
+    exit 1
+  fi
   exit 0
 fi
 rmdir "$TMPROOT/.cursor/rules" 2>/dev/null || true
@@ -143,9 +171,9 @@ assert_contains "$TMPROOT/.cursor/rules/apexyard.mdc" "AgDR-0187" "rules bridge 
 
 assert_file "$TMPROOT/.cursorignore" ".cursorignore exists"
 assert_contains "$TMPROOT/.cursorignore" "BEGIN apexyard-cursor-skills" ".cursorignore has managed begin marker"
-assert_contains "$TMPROOT/.cursorignore" "custom-skills/" ".cursorignore ignores custom-skills"
 assert_contains "$TMPROOT/.cursorignore" ".claude/skill-framework-bak/" ".cursorignore ignores skill-framework-bak"
 assert_contains "$TMPROOT/.cursorignore" ".claude/skills/*.framework.bak/" ".cursorignore ignores legacy framework.bak"
+assert_not_contains "$TMPROOT/.cursorignore" "custom-skills/" ".cursorignore does not ignore custom-skills"
 
 if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_cursor_adapter_check.out 2>&1; then
   mark_pass "--check passes when generated output is current"
@@ -351,6 +379,7 @@ echo
 echo "===== test_sync_cursor_adapter.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
+echo "Skipped: $SKIP"
 if [ "$FAIL" -gt 0 ]; then
   echo "Failed cases:$FAILED"
   exit 1
