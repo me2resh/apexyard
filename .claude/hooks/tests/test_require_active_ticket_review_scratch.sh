@@ -8,7 +8,8 @@ set -u
 
 SRC_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOK_SOURCE=${RATC_HOOK_SOURCE:-$SRC_ROOT/.claude/hooks/require-active-ticket.sh}
-TMP=$(mktemp -d)
+TMP_RAW=$(mktemp -d)
+TMP=$(cd "$TMP_RAW" && pwd -P)
 trap 'rm -rf "$TMP"' EXIT
 
 ops="$TMP/ops"
@@ -61,9 +62,14 @@ bash_input() {
 edit_input() {
   jq -nc --arg file_path "$1" '{tool_name:"Edit",tool_input:{file_path:$file_path}}'
 }
+write_input() {
+  jq -nc --arg file_path "$1" '{tool_name:"Write",tool_input:{file_path:$file_path,content:"fixture"}}'
+}
 
 run_case 'rex may write a fixture in a scratch clone' 0 "$ops" \
   "$(bash_input "echo fixture > $scratch/fixture.txt")"
+run_case 'rex may write through a system temp prefix into a scratch clone' 0 "$ops" \
+  "$(bash_input "echo fixture > $TMP_RAW/scratch/raw-fixture.txt")"
 printf '%s\n' 'sample/project#42:security' > "$ops/.claude/session/active-reviewer.session-a"
 run_case 'security reviewer may edit a scratch clone' 0 "$ops" \
   "$(edit_input "$scratch/fixture.txt")"
@@ -82,6 +88,30 @@ run_case 'second target in ops fork still blocks' 2 "$ops" \
 ln -s "$ops" "$scratch/ops-link"
 run_case 'scratch symlink into ops fork blocks' 2 "$ops" \
   "$(edit_input "$scratch/ops-link/source.txt")"
+: > "$ops/source.txt"
+: > "$ops/workspace/demo/source.txt"
+ln -s "$ops/source.txt" "$scratch/ops-file-link"
+ln -s "$ops/missing.txt" "$scratch/ops-dangling-link"
+ln -s "$ops/workspace/demo/missing.txt" "$scratch/workspace-dangling-link"
+ln -s "$scratch/fixture.txt" "$scratch/local-file-link"
+mkdir "$scratch/fixtures"
+ln -s "$scratch/fixtures" "$scratch/fixture-dir-link"
+run_case 'MUST-BLOCK scratch existing ops file link via Bash redirect' 2 "$ops" \
+  "$(bash_input "echo fixture > $scratch/ops-file-link")"
+run_case 'MUST-BLOCK scratch existing ops file link via Edit' 2 "$ops" \
+  "$(edit_input "$scratch/ops-file-link")"
+run_case 'MUST-BLOCK scratch existing ops file link via Write' 2 "$ops" \
+  "$(write_input "$scratch/ops-file-link")"
+run_case 'MUST-BLOCK scratch dangling ops file link' 2 "$ops" \
+  "$(edit_input "$scratch/ops-dangling-link")"
+run_case 'MUST-BLOCK scratch dangling workspace file link' 2 "$ops" \
+  "$(write_input "$scratch/workspace-dangling-link")"
+run_case 'MUST-BLOCK scratch dangling ops link through temp prefix' 2 "$ops" \
+  "$(write_input "$TMP_RAW/scratch/ops-dangling-link")"
+run_case 'MUST-BLOCK scratch local file link' 2 "$ops" \
+  "$(edit_input "$scratch/local-file-link")"
+run_case 'MUST-BLOCK scratch local directory link' 2 "$ops" \
+  "$(edit_input "$scratch/fixture-dir-link/source.txt")"
 run_case 'linked worktree is not a scratch clone' 2 "$ops" \
   "$(edit_input "$TMP/linked/source.txt")"
 run_case 'temporary git init repository is not a scratch clone' 2 "$ops" \
@@ -94,6 +124,13 @@ run_case 'unrecognized review role cannot use scratch exemption' 2 "$ops" \
   "$(edit_input "$scratch/fixture.txt")"
 rm "$ops/.claude/session/active-reviewer.session-a"
 run_case 'review marker is required' 2 "$ops" \
+  "$(edit_input "$scratch/fixture.txt")"
+
+printf '%s\n' 'sample/project#42:rex' 'unexpected' > "$ops/.claude/session/active-reviewer.session-a"
+run_case 'MUST-BLOCK marker with appended line' 2 "$ops" \
+  "$(edit_input "$scratch/fixture.txt")"
+printf '%s\n' 'unexpected' 'sample/project#42:rex' > "$ops/.claude/session/active-reviewer.session-a"
+run_case 'MUST-BLOCK marker with valid second line' 2 "$ops" \
   "$(edit_input "$scratch/fixture.txt")"
 
 printf '%s\n' 'sample/project#42:rex' > "$ops/.claude/session/active-reviewer.session-a"
@@ -111,6 +148,28 @@ printf '%s\n' "$ops" > "$TMP/pins/ops-root-session-a"
 mkdir "$TMP/export"
 run_case 'non-git review export keeps existing exemption' 0 "$ops" \
   "$(edit_input "$TMP/export/fixture.txt")"
+run_case 'non-git export through a system temp prefix is exempt' 0 "$ops" \
+  "$(edit_input "$TMP_RAW/export/raw-fixture.txt")"
+
+ln -s "$ops/source.txt" "$TMP/export/ops-file-link"
+ln -s "$ops/missing.txt" "$TMP/export/ops-dangling-link"
+ln -s "$ops/workspace/demo/missing.txt" "$TMP/export/workspace-dangling-link"
+mkdir "$TMP/export/fixtures"
+ln -s "$TMP/export/fixtures" "$TMP/export/fixture-dir-link"
+run_case 'MUST-BLOCK export existing ops file link via Bash redirect' 2 "$ops" \
+  "$(bash_input "echo fixture > $TMP/export/ops-file-link")"
+run_case 'MUST-BLOCK export existing ops file link via Edit' 2 "$ops" \
+  "$(edit_input "$TMP/export/ops-file-link")"
+run_case 'MUST-BLOCK export existing ops file link via Write' 2 "$ops" \
+  "$(write_input "$TMP/export/ops-file-link")"
+run_case 'MUST-BLOCK export dangling ops file link' 2 "$ops" \
+  "$(edit_input "$TMP/export/ops-dangling-link")"
+run_case 'MUST-BLOCK export dangling workspace file link' 2 "$ops" \
+  "$(write_input "$TMP/export/workspace-dangling-link")"
+run_case 'MUST-BLOCK export dangling workspace link through temp prefix' 2 "$ops" \
+  "$(write_input "$TMP_RAW/export/workspace-dangling-link")"
+run_case 'MUST-BLOCK export local directory link' 2 "$ops" \
+  "$(edit_input "$TMP/export/fixture-dir-link/source.txt")"
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

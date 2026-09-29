@@ -21,7 +21,7 @@ Chosen: **allow temporary standalone clones during a sanctioned review**. The ho
 
 The hook checks that the target belongs to a standalone git repository with an origin remote under a temporary directory. It rejects linked worktrees and path traversal.
 
-The hook checks raw and resolved targets against the ops fork and managed workspace. It checks every Bash write target separately.
+The hook checks raw and resolved targets against the ops fork and managed workspace. It checks every Bash write target separately. Any symlink in a target path, including a dangling final-component link, prevents the exemption.
 
 The hook compares the active marker's ops root with the hook's own ops root. Missing or mismatched context keeps the ticket gate active.
 
@@ -31,6 +31,8 @@ When the session pin is disabled, the hook uses Claude Code's ops-fork working d
 
 - A sanctioned reviewer can create test fixtures in a temporary scratch clone without a ticket.
 - Writes into the ops fork and managed workspace still require a ticket.
+- Symlinked targets never receive the scratch-clone or non-git export exemption.
+- A `git worktree add` checkout is a linked worktree. Writes there still require a ticket.
 - Clones outside temporary directories still require a ticket.
 - Temporary repositories without an origin remote still require a ticket.
 - The marker identifies the reviewing session. It does not identify an individual process within that session.

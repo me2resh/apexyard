@@ -1,6 +1,6 @@
 #!/bin/bash
-# _lib-path-resolve.sh — single shared implementation of the portable
-# "realpath -m without GNU coreutils" helper used across the trust chain.
+# _lib-path-resolve.sh — shared nearest-existing-ancestor path helper used
+# across the trust chain. It does not fully resolve final-component links.
 #
 # Sourced by:
 #   - require-active-ticket.sh (the ticket gate's symlink-safe path check)
@@ -25,13 +25,12 @@
 # function fails EMPTY (echoes nothing). Do not fold the two together;
 # `_portfolio_canonicalize`'s callers rely on its fail-soft behaviour.
 
-# Resolve PATH to its canonical, symlink-free absolute form. Walks up to
-# the nearest EXISTING ancestor, physically resolves it (`pwd -P`, which
-# follows symlinks), then re-appends any not-yet-created tail literally —
-# a tail that doesn't exist yet cannot itself be a symlink. This mirrors
-# `realpath -m` without depending on GNU coreutils (not guaranteed present
-# on macOS/BSD). Echoes the resolved path, or nothing if even "/" can't be
-# stat'd (should not happen for a well-formed absolute path).
+# Resolve directory links in PATH without depending on GNU coreutils.
+# Walk up to the nearest existing ancestor, physically resolve its directory
+# (`pwd -P` follows links), then append the remaining tail literally.
+# A final file symlink or dangling link can remain unresolved. Callers that
+# grant a path-based exemption must check the target for symlinks separately.
+# Echo the resulting path, or nothing if even "/" cannot be stat'd.
 #
 # Why this matters (#883): without resolving symlinks first, a symlink
 # living under $HOME that POINTS INTO a governed tree (e.g.
