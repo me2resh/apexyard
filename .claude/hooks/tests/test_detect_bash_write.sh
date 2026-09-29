@@ -533,8 +533,8 @@ assert_read  "#1414 sed then | grep 'w x' is a read" "sed -n 1p in.txt | grep 'w
 assert_write   "#1414 sed -i with s///w /dev/stdout" 'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'
 assert_targets "#1414 sed -i + exempt w target yields no target" \
   'sed -i "s/foo/bar/w /dev/stdout" src/app.ts'                                  ""
-assert_targets "#1414 sed -i with ;w /tmp/x yields no target" \
-  "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          ""
+assert_targets "#1414 sed -i with ;w extracts both targets" \
+  "sed -i 's/a/b/;w /tmp/x' src/app.ts"                                          "/tmp/x,src/app.ts"
 assert_targets "#1414 sed w then sed -i yields no target" \
   'sed -n "w /tmp/x" in.txt && sed -i "s/a/b/" src/app.ts'                       ""
 assert_targets "#1414 sed -i file and its w file both extracted" \
@@ -593,11 +593,11 @@ assert_targets "#1414 w decoy beside tee with an empty word" \
 # The heredoc families need the decoy first, because a heredoc ends on a
 # line that holds only its terminator.
 assert_targets "#1414 w decoy before a python heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" ""
+  "$(printf "sed -n 'w /tmp/x' in.txt; python3 - <<'PY'\nopen('src/app.ts','w').write('x')\nPY")" "/tmp/x"
 assert_targets "#1414 w decoy before a node heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" ""
+  "$(printf "sed -n 'w /tmp/x' in.txt; node <<'JS'\nrequire('fs').writeFileSync('src/app.ts','x')\nJS")" "/tmp/x"
 assert_targets "#1414 w decoy before a ruby heredoc" \
-  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" ""
+  "$(printf "sed -n 'w /tmp/x' in.txt; ruby <<'RB'\nFile.write('src/app.ts','x')\nRB")" "/tmp/x"
 
 # An escaped quote after an fd copy stays a read.
 assert_read  "#1414 escaped quote after 2>&1 is a read" 'bash -c "sh -c \"make 2>&1\""'

@@ -145,6 +145,16 @@ fi
 # pathological input looping unboundedly; beyond the ceiling the gate fails
 # OPEN (skips validation) rather than hanging or false-blocking, which is
 # the safe direction for a completeness backstop like this one.
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCAN_COMMAND="$COMMAND"
+if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-command-scrub.sh"
+  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
+fi
+if ! printf '%s' "$SCAN_COMMAND" | grep -qE '\bgh[[:space:]]+pr[[:space:]]+create\b'; then
+  exit 0
+fi
 _cmd_for_gate=$(printf '%s' "$COMMAND" \
   | sed -E 's/[[:space:]]--body-file[[:space:]].*//' \
   | sed -E 's/[[:space:]]--body[[:space:]].*//' \

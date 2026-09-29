@@ -6,6 +6,12 @@
 INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$COMMAND" ] || exit 0
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || exit 0
+if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-command-scrub.sh"
+  COMMAND=$(scrub_bash_command "$COMMAND")
+fi
 
 # This guard covers raw GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross

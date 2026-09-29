@@ -1,5 +1,7 @@
 #!/bin/bash
 # _lib-mask-quoted.sh — mask shell metacharacters that sit INSIDE quotes.
+# AgDR-0181 supersedes the raw-only gate decision described below. This
+# helper remains diagnosis-only; gates use _lib-command-scrub.sh instead.
 #
 # Not a hook itself (prefixed `_lib-`). Sourced by callers that need to tell a
 # real shell operator from the same character used as literal data.

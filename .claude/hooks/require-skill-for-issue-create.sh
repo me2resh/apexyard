@@ -34,9 +34,14 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 if [ -z "$COMMAND" ]; then
   exit 0
 fi
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-command-scrub.sh"
+  COMMAND=$(scrub_bash_command "$COMMAND")
+fi
 
 # Discover ops root (mirror of clear-bootstrap-marker.sh / require-active-ticket.sh).
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 OPS_ROOT=""
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then

@@ -14,6 +14,12 @@ fi
 if [ "$COMMAND" = "null" ]; then
   COMMAND=""
 fi
+SCAN_COMMAND="$COMMAND"
+if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-command-scrub.sh"
+  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
+fi
 
 # Merge-shape detection for wrapped commands (AgDR-0162, me2resh/apexyard#1338).
 # Prefix case arms still handle the one-line forms. is_merge_command scans the
@@ -174,7 +180,7 @@ run_merge_gates() {
   run_merge_gate_hook require-architecture-review.sh
 }
 
-case "$COMMAND" in
+case "$SCAN_COMMAND" in
   "git add "*) run_hook block-git-add-all.sh ;;
   "git push "*)
     run_hook block-main-push.sh
@@ -233,7 +239,7 @@ if [ "${_merge_gates_ran}" -eq 0 ]; then
   if ! command -v is_merge_command >/dev/null 2>&1; then
     printf 'WARN: merge parser missing; running merge gates fail-closed.\n' >&2
     run_merge_gates
-  elif is_merge_command "$COMMAND"; then
+  elif is_merge_command "$SCAN_COMMAND"; then
     run_merge_gates
   fi
 fi

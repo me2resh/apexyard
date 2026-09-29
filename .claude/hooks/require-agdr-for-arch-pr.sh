@@ -38,7 +38,14 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # Match only on `gh pr create …`.
-if ! echo "$COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
+HOOK_DIR_AGDR="$(cd "$(dirname "$0")" && pwd)"
+SCAN_COMMAND="$COMMAND"
+if [ -r "$HOOK_DIR_AGDR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR_AGDR/_lib-command-scrub.sh"
+  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
+fi
+if ! echo "$SCAN_COMMAND" | grep -qE '\bgh\s+pr\s+create\b'; then
   exit 0
 fi
 
