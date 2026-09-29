@@ -50,19 +50,26 @@ not_contains() {
 }
 
 run_test() {
-  local tmpdir
-  tmpdir=$(mktemp -d)
+  local tmpdir root
+  root="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  mkdir -p "$root/.claude/hooks/tests/.tmp"
+  # Workspace-local temp + named GIT_DIR: Cursor's sandbox blocks creating a
+  # literal `.git` directory. Keep GIT_CEILING_DIRECTORIES and stop on init failure.
+  tmpdir=$(mktemp -d "$root/.claude/hooks/tests/.tmp/repo.XXXXXX")
   (
     # Stop git from walking above the temp repo if init fails. Without this
     # ceiling, a failed `git init` lets later commands mutate the parent repo.
     export GIT_CEILING_DIRECTORIES="$tmpdir"
     cd "$tmpdir" || exit 1
+    export GIT_DIR="$tmpdir/gitdir"
+    export GIT_WORK_TREE="$tmpdir"
+    mkdir -p "$GIT_DIR"
     if ! git init -q; then
       echo "FAIL: git init failed in $tmpdir — refusing to continue (would risk the parent repo)" >&2
       exit 1
     fi
-    if [ ! -d .git ] && [ ! -f .git ]; then
-      echo "FAIL: git init produced no .git in $tmpdir" >&2
+    if [ ! -d "$GIT_DIR" ]; then
+      echo "FAIL: git init produced no gitdir in $tmpdir" >&2
       exit 1
     fi
     git config user.email "test@test.local"
@@ -127,6 +134,51 @@ out=$(run_test '
 ')
 contains "exits 0 when nothing is removed" "EXIT_CODE=0" "$out"
 not_contains "no deleted content lines" "-same on both tips" "$out"
+
+# ── removed `---` content must still list (not filtered as a diff header) ───
+# A blanket `^---` filter hid YAML front-matter / markdown-rule deletions.
+# Only the `--- a/...` file header after `diff --git` must be skipped.
+
+echo "--- #1490 lists a removed --- content line ---"
+out=$(run_test '
+  printf "%s\n" "---" "title: demo" "---" "body" > doc.md
+  git add doc.md
+  git commit -q -m "chore: front matter on main"
+  git branch -M main
+  MAIN_SHA=$(git rev-parse HEAD)
+
+  git checkout -q -b release/v9.9.2
+  printf "%s\n" "body" > doc.md
+  git add doc.md
+  git commit -q -m "chore: drop front matter"
+
+  MAIN_REF="$MAIN_SHA" HEAD_REF="HEAD" bash "'"$LIST_SCRIPT"'"
+')
+contains "lists removed YAML --- fence" "----" "$out"
+# Diff shows one "-" plus the content "---" → "----". Also list title: demo.
+contains "lists removed front-matter title line" "-title: demo" "$out"
+
+# ── removed `-- title` content must still list ──────────────────────────────
+# Diff form is "-" + "-- title" → "--- title". Must not be mistaken for the
+# `--- a/path` file header.
+
+echo "--- #1490 lists a removed -- title content line ---"
+out=$(run_test '
+  printf "%s\n" "keep" "-- title" "end" > notes.md
+  git add notes.md
+  git commit -q -m "chore: dash-dash title on main"
+  git branch -M main
+  MAIN_SHA=$(git rev-parse HEAD)
+
+  git checkout -q -b release/v9.9.3
+  printf "%s\n" "keep" "end" > notes.md
+  git add notes.md
+  git commit -q -m "chore: drop dash-dash title"
+
+  MAIN_REF="$MAIN_SHA" HEAD_REF="HEAD" bash "'"$LIST_SCRIPT"'"
+')
+contains "lists removed -- title line" "--- title" "$out"
+not_contains "does not list kept line as removed" "-keep" "$out"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 

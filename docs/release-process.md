@@ -48,7 +48,7 @@ The skill:
 
 1. Pre-flights the repo (clean tree, dev branch, non-empty delta)
 2. Auto-detects the semver bump from conventional commits (or accepts explicit version)
-3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper). A `Closes #N` line appears only when the commit body itself closes `#N` (AgDR-0197 / #1490)
+3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper). A `Closes #N` line appears only when the real PR body (fetched via `gh pr view`) closes `#N`; on a fetch failure the script falls back to a scoped-title close and warns (AgDR-0197 / #1490)
 4. Lists every line the release tip removes from `main` via `bin/release-list-removed-lines.sh`, and asks before continuing when the list is non-empty (#1490)
 5. Shows the draft for review / editing
 6. Writes `CHANGELOG.md` (prepends the new section)
@@ -207,6 +207,7 @@ PREV_TAG=v3.2.0 HEAD_REF=upstream/dev VERSION=v3.3.0 DATE=$(date +%F) \
 ```
 
 Input: `PREV_TAG`, `HEAD_REF`, `VERSION`, `DATE` env vars.
+Optional: `RELEASE_GH` (default `gh`), `REPO_REMOTE`, `PR_LOOKUP_REPO` for the PR-body close check (AgDR-0197).
 Output: markdown CHANGELOG section to stdout.
 Never writes files; callers decide where to write the output.
 Tests: `.claude/hooks/tests/test_release_changelog.sh`.
@@ -247,7 +248,7 @@ Branch protection on `dev` matches the prior `main` setup — required reviews +
 - `AgDR-0007` — the original release-cut branch model decision record
 - `AgDR-0076` — the release-automation design record
 - `AgDR-0170` — the decision to replace `-X ours` with a plain merge that stops and asks on every conflict in `/release-sync`, and to add a behind-base check to `/approve-merge`
-- `AgDR-0197` — close changelog issues only from the PR body, and list lines a release removes from main (#1490)
+- `AgDR-0197` — close changelog issues only from the PR body via `gh pr view` (scoped-title fallback + warning on fetch failure), and list lines a release removes from main (#1490)
 - `.claude/skills/release/SKILL.md` — the automated flow (this doc is the manual fallback)
 - `bin/release-changelog.sh` — the changelog generation helper
 - `bin/release-list-removed-lines.sh` — lists lines the release tip deletes from main

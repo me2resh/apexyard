@@ -17,8 +17,11 @@
 #   Empty stdout means the release removes nothing from MAIN_REF.
 #
 # Uses `git diff MAIN_REF..HEAD_REF` (two-dot): the set of changes to turn
-# MAIN_REF into HEAD_REF. Lines that start with "-" (and are not a `---`
-# file header) are content removed from MAIN_REF.
+# MAIN_REF into HEAD_REF. Lines that start with "-" are content removed from
+# MAIN_REF, except the per-file `--- a/...` (or `--- /dev/null`) old-file
+# header that follows each `diff --git` block. Content lines that happen to
+# start with `--` or `---` (YAML front matter, markdown rules, titles) MUST
+# still appear — a blanket `^---` filter wrongly hid those (#1490 review).
 #
 # Exit codes:
 #   0 — success (including the empty-removal case)
@@ -36,11 +39,17 @@ for var in MAIN_REF HEAD_REF; do
   fi
 done
 
-# --unified=0 keeps the listing tight (no context lines). Filter to deleted
-# content only: a leading "-", but not the "--- a/path" file headers.
-# `|| true` keeps set -e from aborting when grep finds zero removals —
+# --unified=0 keeps the listing tight (no context lines). Emit deleted
+# content lines only. Skip the old-file header that belongs to each
+# `diff --git` block (the first `--- ` line after that marker), not every
+# line that merely starts with `---`.
+# `|| true` keeps set -e from aborting when awk/grep find zero removals —
 # empty output is a valid, successful answer.
 git diff --unified=0 "${MAIN_REF}..${HEAD_REF}" \
-  | grep -E '^-' \
-  | grep -vE '^---' \
+  | awk '
+      /^diff --git / { want_old_header = 1; next }
+      want_old_header && /^--- / { want_old_header = 0; next }
+      want_old_header { want_old_header = 0 }
+      /^-/ { print }
+    ' \
   || true

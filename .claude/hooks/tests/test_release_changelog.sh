@@ -64,20 +64,28 @@ not_contains() {  # not_contains <label> <needle> <haystack>
 
 run_test() {
   # $@ is a list of git commands + the final assertion call
-  local tmpdir
-  tmpdir=$(mktemp -d)
+  local tmpdir root
+  root="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  mkdir -p "$root/.claude/hooks/tests/.tmp"
+  # Workspace-local temp: Cursor's sandbox blocks creating a `.git` directory
+  # under /var/folders and under the workspace. Use an explicit GIT_DIR name
+  # instead so git init can succeed without a literal `.git` path.
+  tmpdir=$(mktemp -d "$root/.claude/hooks/tests/.tmp/repo.XXXXXX")
   (
     # Stop git from walking above the temp repo if init fails. Without this
     # ceiling, a failed `git init` (e.g. sandbox blocks creating `.git`) lets
     # later git commands discover the framework worktree and mutate it.
     export GIT_CEILING_DIRECTORIES="$tmpdir"
     cd "$tmpdir" || exit 1
+    export GIT_DIR="$tmpdir/gitdir"
+    export GIT_WORK_TREE="$tmpdir"
+    mkdir -p "$GIT_DIR"
     if ! git init -q; then
       echo "FAIL: git init failed in $tmpdir — refusing to continue (would risk the parent repo)" >&2
       exit 1
     fi
-    if [ ! -d .git ] && [ ! -f .git ]; then
-      echo "FAIL: git init produced no .git in $tmpdir" >&2
+    if [ ! -d "$GIT_DIR" ]; then
+      echo "FAIL: git init produced no gitdir in $tmpdir" >&2
       exit 1
     fi
     git config user.email "test@test.local"
@@ -108,6 +116,39 @@ run_test() {
   return $rc
 }
 
+# ── Stub `gh` for PR-body lookup tests (#1056 / #1490) ──────────────────────
+# Writes a fake `gh` to <dir>/gh. Point RELEASE_GH at it (do not rely on
+# PATH). Controlled by env vars the caller sets before invoking the script:
+#   STUB_GH_BODY     — the PR body text `gh pr view --json body --jq .body`
+#                       should return
+#   STUB_GH_EXIT      — non-zero to simulate a `gh` failure
+#   STUB_GH_SLEEP     — seconds to sleep before responding
+#   STUB_GH_CALL_LOG  — append every invocation's args here
+# Every `$` in the heredoc body is backslash-escaped so it survives heredoc
+# creation literally and only expands when the stub itself runs later,
+# inside the test's own subshell.
+make_stub_gh() {  # make_stub_gh <dir>
+  mkdir -p "$1"
+  cat > "$1/gh" <<STUBEOF
+#!/usr/bin/env bash
+if [ -n "\${STUB_GH_CALL_LOG:-}" ]; then
+  echo "GH_CALLED_WITH: \$*" >> "\$STUB_GH_CALL_LOG"
+fi
+if [ -n "\${STUB_GH_SLEEP:-}" ]; then
+  sleep "\${STUB_GH_SLEEP}"
+fi
+if [ "\${STUB_GH_EXIT:-0}" != "0" ]; then
+  exit "\${STUB_GH_EXIT}"
+fi
+if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
+  printf "%s" "\${STUB_GH_BODY:-}"
+  exit 0
+fi
+exit 1
+STUBEOF
+  chmod +x "$1/gh"
+}
+
 # ── Test: missing required env var fails with exit 1 ────────────────────────
 
 echo "--- missing env var ---"
@@ -135,9 +176,15 @@ echo "--- feat commits ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v1.0.0
-  mc_body "feat(#101): add auto-tag workflow" "Closes #101"
-  mc_body "feat(#102): add dry-run mode to release skill" "Closes #102"
-  PREV_TAG="v1.0.0" HEAD_REF="HEAD" VERSION="v1.1.0" DATE="2026-06-21" \
+  mc "feat(#101): add auto-tag workflow (#101)"
+  mc "feat(#102): add dry-run mode to release skill (#102)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  STUB_GH_BODY=$(printf "%s\n" "Closes #101" "Closes #102")
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="$STUB_GH_BODY" \
+    PREV_TAG="v1.0.0" HEAD_REF="HEAD" VERSION="v1.1.0" DATE="2026-06-21" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
 contains "header line" "## [v1.1.0] — 2026-06-21" "$out"
@@ -414,59 +461,27 @@ contains "range line present on stderr" "RELEASE_CHANGELOG_RANGE=" "$stderr_out"
 expect_sha=$(echo "$out" | grep -oE 'EXPECT_SHA=.*' | cut -d= -f2)
 contains "stderr range is anchored on the trailer sha" "RELEASE_CHANGELOG_RANGE=${expect_sha}..HEAD" "$stderr_out"
 
-# ── #1056 helper — a stub `gh` binary for ref-resolution tests ──────────────
-# Writes a fake `gh` to <dir>/gh, controlled by env vars the caller sets
-# before invoking the changelog script:
-#   STUB_GH_BODY     — the PR body text `gh pr view --json body -q .body`
-#                       should "return"
-#   STUB_GH_EXIT      — non-zero to simulate a `gh` failure — auth, rate
-#                       limit, or an unreachable forge, the exact failure
-#                       mode hit live during the v5.3.0 cut
-#   STUB_GH_SLEEP     — seconds to sleep before responding, to simulate a
-#                       hung/unresponsive forge
-#   STUB_GH_CALL_LOG  — a file path; every invocation appends its full
-#                       argument list here, so tests can assert on exactly
-#                       what the script queried (or, since #1076, that it
-#                       never queried at all — the log staying EMPTY is now
-#                       the expected outcome for every unscoped/cross-repo
-#                       commit, not the presence of a particular --repo)
-# Every `$` in the heredoc body is backslash-escaped so it survives heredoc
-# creation literally and only expands when the stub itself runs later,
-# inside the test's own subshell.
-make_stub_gh() {  # make_stub_gh <dir>
-  mkdir -p "$1"
-  cat > "$1/gh" <<STUBEOF
-#!/usr/bin/env bash
-if [ -n "\${STUB_GH_CALL_LOG:-}" ]; then
-  echo "GH_CALLED_WITH: \$*" >> "\$STUB_GH_CALL_LOG"
-fi
-if [ -n "\${STUB_GH_SLEEP:-}" ]; then
-  sleep "\${STUB_GH_SLEEP}"
-fi
-if [ "\${STUB_GH_EXIT:-0}" != "0" ]; then
-  exit "\${STUB_GH_EXIT}"
-fi
-if [ "\$1" = "pr" ] && [ "\$2" = "view" ]; then
-  printf "%s" "\${STUB_GH_BODY:-}"
-  exit 0
-fi
-exit 1
-STUBEOF
-  chmod +x "$1/gh"
-}
-
 # ── Test: #1056 defect 1 — Closes repeats the keyword per reference ─────────
 # A comma-joined "Closes #A, #B, #C" line only auto-closes #A — GitHub only
 # honours the reference immediately following the closing keyword. Every
 # reference must get its own "- Closes #N" bullet so all of them fire.
+# Bodies come from gh (#1490); stub returns a closing keyword per PR.
 echo "--- #1056 Closes repeats keyword per reference (>=3 refs) ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v15.0.0
-  mc_body "feat(#1501): first unreleased feature" "Closes #1501"
-  mc_body "fix(#1502): second unreleased fix" "Closes #1502"
-  mc_body "chore(#1503): third unreleased chore" "Closes #1503"
-  PREV_TAG="v15.0.0" HEAD_REF="HEAD" VERSION="v15.1.0" DATE="2026-07-29" \
+  mc "feat(#1501): first unreleased feature (#1501)"
+  mc "fix(#1502): second unreleased fix (#1502)"
+  mc "chore(#1503): third unreleased chore (#1503)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  # One stub body that closes every scoped number the subjects carry —
+  # the generator checks each issue against the fetched PR body.
+  STUB_GH_BODY=$(printf "%s\n" "Closes #1501" "Closes #1502" "Closes #1503")
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="$STUB_GH_BODY" \
+    PREV_TAG="v15.0.0" HEAD_REF="HEAD" VERSION="v15.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
 contains   "Closes #1501 own bullet" "Closes #1501" "$out"
@@ -475,16 +490,21 @@ contains   "Closes #1503 own bullet" "Closes #1503" "$out"
 not_contains "no comma-joined Closes line (#1501, #1502 inert-past-first bug)" "Closes #1501, #1502" "$out"
 not_contains "no comma-joined Closes line (any pairing)" "#1502, #1503" "$out"
 
-# ── Test: #1056 defect 2 — scoped subject + body Closes, no PR lookup ───────
-# `fix(#1042): ...` with `Closes #1042` in the body — the scope names the
-# candidate and the body confirms. No `gh` call (#1490 reads the commit
-# body from git, not the forge).
-echo "--- #1056 scoped subject resolves directly, no PR lookup ---"
+# ── Test: #1056 defect 2 — scoped subject + PR body Closes via gh ───────────
+# `fix(#1600): ... (#1601)` with PR #1601 body `Closes #1600` — the scope
+# names the candidate and the fetched PR body confirms. Trailing (#1601) is
+# the squash-appended PR number used for the gh lookup.
+echo "--- #1056 scoped subject resolves via gh PR body ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v16.0.0
-  mc_body "fix(#1600): put the human gate on approval flow (#1601)" "Closes #1600"
-  PREV_TAG="v16.0.0" HEAD_REF="HEAD" VERSION="v16.1.0" DATE="2026-07-29" \
+  mc "fix(#1600): put the human gate on approval flow (#1601)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="Closes #1600" \
+    PREV_TAG="v16.0.0" HEAD_REF="HEAD" VERSION="v16.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
 contains     "closes the ISSUE number from the scope" "Closes #1600" "$out"
@@ -680,42 +700,101 @@ not_contains "never picks up the prose-mentioned issue" "Closes #999" "$out"
 not_contains "no Closes section at all (unscoped commit)" "### Closes" "$out"
 eq          "gh is never invoked for an unscoped commit" "" "$call_log_contents"
 
-# ── #1490 — title scope alone must not close when the body only Refs ────────
-# Live failure mode from v5.7.0: a PR titled `feat(#N)` / `fix(#N)` produced
-# a changelog `Closes #N` even when the PR body said `Refs #N`. That nearly
-# closed partially-fixed issues. The body must itself carry a closing
-# keyword for #N before a close line is emitted.
-echo "--- #1490 scoped title + Refs body emits no Closes ---"
-out=$(run_test '
-  mc "chore: initial"
-  git tag v29.0.0
-  mc_body "feat(#2901): partially address the writing profile" "Refs #2901"
-  PREV_TAG="v29.0.0" HEAD_REF="HEAD" VERSION="v29.1.0" DATE="2026-09-29" \
-    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
-')
-contains     "feat still appears in Added" "partially address the writing profile" "$out"
-not_contains "does not close an issue the body only Refs" "Closes #2901" "$out"
-not_contains "no Closes section when every scoped ref is Refs-only" "### Closes" "$out"
+# ── #1490 — close check reads the real PR body via gh ───────────────────────
+# This repo squash-merges with COMMIT_MESSAGES, so the squash commit body is
+# the branch's commit messages — NOT the PR description. The generator must
+# fetch the PR body with `$RELEASE_GH pr view` for every subject ending in
+# `(#<PR>)`. Prefer missing over wrong when the body is readable; on gh
+# failure, keep the pre-#1490 / `dev` behaviour (scoped title closes) and
+# warn — never silently drop a close because of a fetch failure.
 
-# Positive counterpart: same title shape, but the body truly closes.
-echo "--- #1490 scoped title + Closes body emits Closes ---"
+# Case 1: PR body closes #N → close line emitted
+echo "--- #1490 PR body Closes #N emits Closes ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v30.0.0
-  mc_body "feat(#3001): finish the writing profile work" "Closes #3001"
-  PREV_TAG="v30.0.0" HEAD_REF="HEAD" VERSION="v30.1.0" DATE="2026-09-29" \
+  mc_body "feat(#3001): finish the writing profile work (#3001)" "squash body is commit msgs, not the PR"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="Closes #3001" \
+    PREV_TAG="v30.0.0" HEAD_REF="HEAD" VERSION="v30.1.0" DATE="2026-09-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
-contains "closes when the body closes" "Closes #3001" "$out"
+contains "closes when the PR body closes" "Closes #3001" "$out"
 
-# Fixes / Resolves keywords also count (GitHub's full closing set).
-echo "--- #1490 Fixes and Resolves body keywords also close ---"
+# Case 2: PR body only has Refs #N → no close line
+echo "--- #1490 PR body Refs #N emits no Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v29.0.0
+  mc_body "feat(#2901): partially address the writing profile (#2901)" "Refs #2901"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="Refs #2901" \
+    PREV_TAG="v29.0.0" HEAD_REF="HEAD" VERSION="v29.1.0" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains     "feat still appears in Added" "partially address the writing profile" "$out"
+not_contains "does not close an issue the PR body only Refs" "Closes #2901" "$out"
+not_contains "no Closes section when every scoped ref is Refs-only" "### Closes" "$out"
+
+# Case 3: gh fails → `dev` behaviour (scoped title closes) + warning naming the PR
+echo "--- #1490 gh failure falls back to scoped-title close with warning ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v33.0.0
+  mc_body "feat(#3301): work whose PR body is unreachable (#3301)" "Refs #3301"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_EXIT=1 \
+    PREV_TAG="v33.0.0" HEAD_REF="HEAD" VERSION="v33.1.0" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "scoped title still closes when gh fails" "Closes #3301" "$out"
+contains "warning names the unreachable PR" "PR #3301" "$out"
+contains "warning mentions falling back" "falling back" "$out"
+
+# Case 4: squash body differs from PR body — trust the PR body, not %b.
+# (Case 1 already covers squash-without-Closes + PR-with-Closes. This is the
+# inverse: squash body has Closes but the real PR body only Refs — must NOT
+# close, proving %b is ignored.)
+echo "--- #1490 squash body Closes ignored when PR body only Refs ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v32.0.0
+  mc_body "feat(#3202): false close in squash body (#3202)" "Closes #3202"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="Refs #3202" \
+    PREV_TAG="v32.0.0" HEAD_REF="HEAD" VERSION="v32.1.0" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains     "feat still listed from the squash subject" "false close in squash body" "$out"
+not_contains "squash-body Closes alone does not close" "Closes #3202" "$out"
+not_contains "no Closes section when PR body only Refs" "### Closes" "$out"
+
+# Fixes / Resolves keywords also count (GitHub's full closing set), via gh.
+echo "--- #1490 Fixes and Resolves PR-body keywords also close ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v31.0.0
-  mc_body "fix(#3101): repair the listing helper" "Fixes #3101"
-  mc_body "chore(#3102): tidy the release docs" "Resolves #3102"
-  PREV_TAG="v31.0.0" HEAD_REF="HEAD" VERSION="v31.0.1" DATE="2026-09-29" \
+  mc "fix(#3101): repair the listing helper (#3101)"
+  mc "chore(#3102): tidy the release docs (#3102)"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  STUB_GH_BODY=$(printf "%s\n" "Fixes #3101" "Resolves #3102")
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="$STUB_GH_BODY" \
+    PREV_TAG="v31.0.0" HEAD_REF="HEAD" VERSION="v31.0.1" DATE="2026-09-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
 contains "Fixes keyword closes" "Closes #3101" "$out"
