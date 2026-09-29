@@ -253,8 +253,8 @@ _command_scrub_allowlist_ok() {
           while (pos <= n && substr(s, pos, 1) != "\n") pos++
           line = substr(s, line_start, pos - line_start)
           check = line
-          if (hd_tabs) sub(/^\t+/, "", check)
-          if (!hd_quoted) {
+          if (hd_tabs[hd_index]) sub(/^\t+/, "", check)
+          if (!hd_quoted[hd_index]) {
             if (index(line, "$(") || index(line, "`")) { ok = 0; break }
             if (index(line, "<(") || index(line, ">(") || index(line, "<<<")) {
               ok = 0
@@ -262,10 +262,13 @@ _command_scrub_allowlist_ok() {
             }
           }
           if (pos <= n && substr(s, pos, 1) == "\n") pos++
-          if (check == hd_delim) {
-            state = "plain"
-            cmd_start = 1
-            pending = 0
+          if (check == hd_delim[hd_index]) {
+            hd_index++
+            if (hd_index > pending) {
+              state = "plain"
+              cmd_start = 1
+              pending = 0
+            }
           }
           continue
         }
@@ -327,18 +330,23 @@ _command_scrub_allowlist_ok() {
             quoted = 0
           }
           if (delim == "") { ok = 0; break }
-          # Skip to end of this line, then enter heredoc body.
-          while (j <= n && substr(s, j, 1) != "\n") j++
-          if (j <= n) j++
+          # The body starts at the next newline. Check the rest of this
+          # command line first, including any more heredoc openers.
+          after = substr(s, j, 1)
+          if (after != "" && after !~ /[[:space:];|&()<>]/) { ok = 0; break }
+          pending++
+          hd_delim[pending] = delim
+          hd_quoted[pending] = quoted
+          hd_tabs[pending] = tabs
           pos = j
-          hd_delim = delim
-          hd_quoted = quoted
-          hd_tabs = tabs
-          state = "heredoc"
-          cmd_start = 0
           continue
         }
-        if (c == "\n") { cmd_start = 1; pos++; continue }
+        if (c == "\n") {
+          cmd_start = 1
+          pos++
+          if (pending) { hd_index = 1; state = "heredoc" }
+          continue
+        }
         if (c == "#" && (pos == 1 || substr(s, pos - 1, 1) ~ /[[:space:];&|()<>]/)) {
           while (pos <= n && substr(s, pos, 1) != "\n") pos++
           continue
@@ -384,7 +392,7 @@ _command_scrub_allowlist_ok() {
         if (!read_word()) { pos++; continue }
         if (word_executes(WORD)) { ok = 0; break }
       }
-      if (state != "plain") ok = 0
+      if (state != "plain" || pending) ok = 0
       if (ok) print "yes"; else print "no"
     }
   ' 2>/dev/null) || verdict="no"

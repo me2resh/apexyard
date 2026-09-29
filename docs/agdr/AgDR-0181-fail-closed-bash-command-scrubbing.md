@@ -49,7 +49,7 @@ Only these two consumers may read the scrubbed view:
 
 Scrub only when every command word in the raw command is on the data-only allowlist. Otherwise return the raw command unchanged. When unsure, return raw.
 
-A command word is the first word of each simple command. That includes the start of the string and the word after `;`, `&&`, `||`, `|`, `&`, `(`, `{`, a newline, `then`, `do`, `else`, `elif`, `!`, or `time`. A leading variable assignment returns raw, because it can name a program that `git` or `gh` runs, such as `GIT_PAGER` or `EDITOR`. Quotes, backslashes, and a leading path are removed before the compare, so `'cat'`, `\cat`, and `/bin/cat` all compare as `cat`.
+A command word is the first word of each simple command. That includes the start of the string and the word after `;`, `&&`, `||`, `|`, `&`, `(`, `{`, a newline, `then`, `do`, `else`, `elif`, `!`, or `time`. Command words after a heredoc opener on the same line are checked like any others. A leading variable assignment returns raw, because it can name a program that `git` or `gh` runs, such as `GIT_PAGER` or `EDITOR`. Quotes, backslashes, and a leading path are removed before the compare, so `'cat'`, `\cat`, and `/bin/cat` all compare as `cat`.
 
 Heredoc bodies are not command words. A quoted heredoc body is data. An unquoted heredoc body that holds `$(` or a backtick forces raw.
 
@@ -73,6 +73,10 @@ These shapes still false-block:
 - interpreter programs such as `python3 -c` when the scrubber returns raw for the same reason
 - tracker or PR-create words inside quotes or heredoc bodies, for every matcher except `auto-code-review.sh`
 - unquoted heredoc bodies that hold `$(` or a backtick, because the scrubber returns raw and the body text stays visible
+
+The detector does not see these writes on `dev` either:
+
+- `git log --output`, `sort -o`, `yq -i`, and `git diff --output`
 
 Any program outside the allowlist gets the raw view.
 

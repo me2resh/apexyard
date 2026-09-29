@@ -114,17 +114,30 @@ dispatch_has_merge() {
   fi
 }
 
+# Copy commit snapshots from a temporary local repository. Test Git commands
+# run there or in the fixture repositories, never in the source worktree.
+SOURCE_REPO="$TMP/source"
+(cd "$TMP" && git clone -q --no-checkout --no-hardlinks "$ROOT" "$SOURCE_REPO")
+
 # Extract d5e7ce4 hooks into an isolated tree for fail-before proofs.
 D5_HOOKS="$TMP/d5e7ce4-hooks"
 mkdir -p "$TMP/d5root"
-if git -C "$ROOT" archive d5e7ce4 .claude/hooks >/tmp/ay-1459-d5-hooks.tar 2>/dev/null; then
-  tar -xf /tmp/ay-1459-d5-hooks.tar -C "$TMP/d5root"
-  rm -f /tmp/ay-1459-d5-hooks.tar
+if git -C "$SOURCE_REPO" archive d5e7ce4 .claude/hooks >"$TMP/d5-hooks.tar" 2>/dev/null; then
+  tar -xf "$TMP/d5-hooks.tar" -C "$TMP/d5root"
   D5_HOOKS="$TMP/d5root/.claude/hooks"
 else
   echo "WARN: cannot archive d5e7ce4 hooks — skip d5 fail-before proofs" >&2
   D5_HOOKS=""
 fi
+
+HEAD_HOOKS="$TMP/1fea730-hooks"
+mkdir -p "$HEAD_HOOKS"
+if ! git -C "$SOURCE_REPO" archive 1fea730 .claude/hooks >"$TMP/1fea730-hooks.tar"; then
+  echo "FAIL: cannot archive 1fea730 hooks for fail-before proofs" >&2
+  exit 1
+fi
+tar -xf "$TMP/1fea730-hooks.tar" -C "$HEAD_HOOKS"
+HEAD_HOOKS="$HEAD_HOOKS/.claude/hooks"
 
 # Build cases as a label+command list via a directory of files.
 CASES_DIR="$TMP/cases"
@@ -235,6 +248,28 @@ add_extra 'brace group sh -c' "{ sh -c 'echo x > src/app.ts'; }"
 add_extra 'if then sh -c' "if true; then sh -c 'echo x > src/app.ts'; fi"
 add_extra 'double-quoted command substitution write' 'x="$(echo hi > src/app.ts)"'
 
+# Heredoc bodies start on the next line. Commands after the opener must still
+# be checked against the allowlist on the opener line.
+HEREDOC_DIR="$TMP/heredoc_cases"
+mkdir -p "$HEREDOC_DIR"
+hi=0
+add_heredoc() {
+  local label="$1" cmd="$2"
+  hi=$((hi + 1))
+  printf '%s' "$label" > "$HEREDOC_DIR/$hi.label"
+  printf '%s' "$cmd" > "$HEREDOC_DIR/$hi.cmd"
+}
+add_heredoc 'quoted opener pipe bash' "$(printf "cat <<'EOF' | bash\necho hi > src/app.ts\nEOF")"
+add_heredoc 'quoted opener pipe sh -s' "$(printf "cat <<'EOF' | sh -s\necho hi > src/app.ts\nEOF")"
+add_heredoc 'unquoted opener pipe bash' "$(printf "cat <<EOF | bash\necho hi > src/app.ts\nEOF")"
+add_heredoc 'quoted opener semicolon bash -c' "$(printf "cat <<'EOF'; bash -c 'echo hi > src/app.ts'\necho hi > src/app.ts\nEOF")"
+add_heredoc 'quoted opener semicolon eval' "$(printf "cat <<'EOF'; eval 'echo hi > src/app.ts'\necho hi > src/app.ts\nEOF")"
+add_heredoc 'quoted opener pipe xargs sh -c' "$(printf "cat <<'EOF' | xargs -I{} sh -c 'echo hi > src/app.ts'\necho hi > src/app.ts\nEOF")"
+
+FP_MARKDOWN_CMD=$(printf "cat > /tmp/x <<'EOF'\n# Markdown\n> quoted text\nEOF")
+FP_GREP_CMD=$(printf "cat <<'EOF' | grep x\nx > src/app.ts\nEOF")
+FP_TWO_HEREDOC_CMD=$(printf "cat <<'A' <<'B' | grep x\nfirst > src/app.ts\nA\nsecond > src/app.ts\nB")
+
 fail_before_ticket() {
   local snap="$1" tag="$2" cases_dir="$3"
   local n label cmd got
@@ -268,6 +303,19 @@ if [ -n "$D5_HOOKS" ]; then
   fail_before_ticket "$D5_HOOKS" "d5e7ce4" "$ALLOW_DIR"
 fi
 
+# These six bypasses must all allow at 1fea730 and block after the fix.
+fail_before_ticket "$HEAD_HOOKS" "1fea730" "$HEREDOC_DIR"
+
+# The ordinary quoted cases already pass at 1fea730. Its single-delimiter
+# gate incorrectly blocks the second body in the two-heredoc case.
+setup_ticket_sandbox "$TMP/head_fp_ticket" "$HEAD_HOOKS"
+check 'baseline fp quoted heredoc markdown scratch write' 0 \
+  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_MARKDOWN_CMD")"
+check 'baseline fp heredoc pipe grep with redirect text' 0 \
+  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_GREP_CMD")"
+check 'baseline fp two heredoc bodies in order' 2 \
+  "$(ticket_rc "$TMP/head_fp_ticket" "$FP_TWO_HEREDOC_CMD")"
+
 # Pass-after against current hooks (expect block / exit 2).
 setup_ticket_sandbox "$TMP/cur_ticket" "$HOOKS"
 n=1
@@ -294,6 +342,15 @@ while [ -f "$EXTRA_DIR/$n.label" ]; do
   cmd=$(cat "$EXTRA_DIR/$n.cmd")
   got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
   check "ticket-extra/$label" 2 "$got"
+  n=$((n + 1))
+done
+
+n=1
+while [ -f "$HEREDOC_DIR/$n.label" ]; do
+  label=$(cat "$HEREDOC_DIR/$n.label")
+  cmd=$(cat "$HEREDOC_DIR/$n.cmd")
+  got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
+  check "ticket-heredoc/$label" 2 "$got"
   n=$((n + 1))
 done
 
@@ -364,6 +421,9 @@ check 'fp quoted heredoc with nested markers' 0 \
   "$(ticket_rc "$TMP/fp_ticket" "$(printf "cat > /tmp/x <<'EOF'\n\`date\`\n\$(echo hi)\nbash\n> src/app.ts\ngh pr merge 1\nEOF")")"
 check 'fp gh pr comment body-file heredoc' 0 \
   "$(ticket_rc "$TMP/fp_ticket" "$(printf "gh pr comment 1 --body-file - <<'EOF'\nsee \`code\` and > quote\nEOF")")"
+check 'fp quoted heredoc markdown scratch write' 0 "$(ticket_rc "$TMP/fp_ticket" "$FP_MARKDOWN_CMD")"
+check 'fp heredoc pipe grep with redirect text' 0 "$(ticket_rc "$TMP/fp_ticket" "$FP_GREP_CMD")"
+check 'fp two heredoc bodies in order' 0 "$(ticket_rc "$TMP/fp_ticket" "$FP_TWO_HEREDOC_CMD")"
 
 # Scrubber must stay silent on stderr (GNU tr portability).
 # shellcheck source=/dev/null
