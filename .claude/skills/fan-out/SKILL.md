@@ -29,6 +29,11 @@ Do NOT use when:
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 1. Gather tasks
 
 Accept tasks from any of these forms:
@@ -44,7 +49,8 @@ Trim whitespace, drop empties. If the result is fewer than 2 tasks, stop: fan-ou
 
 For each task, infer the answer from the description first, then ask only when ambiguous.
 
-**Agent type** — default `general-purpose`. Options:
+**Agent type** — default `general-purpose`. Use `AskUserQuestion` when inference cannot resolve the type.
+Recommend `general-purpose` first. Split the list across wizard questions. Use the options below only without the tool:
 
 | Agent | Use for |
 |-------|---------|

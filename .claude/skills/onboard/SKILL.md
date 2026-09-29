@@ -4,7 +4,7 @@ description: "Guided first-run onboarding — capability tour, handover-vs-new-p
 disable-model-invocation: false
 argument-hint: ""
 effort: medium
-allowed-tools: Bash, Read, Write, Skill
+allowed-tools: Bash, Read, Write, Skill, AskUserQuestion
 ---
 
 ## Writing rule
@@ -63,6 +63,11 @@ registry=$(portfolio_registry)
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 0. Mark this session as bootstrap (REQUIRED)
 
 `/onboard` runs before any portfolio is configured, so no project tickets
@@ -104,8 +109,9 @@ Branch on `$state`:
 
 - **`configured`** — the fork is already set up. Don't force the full
   first-run flow (that would re-run config bootstrap and the guided first
-  win on someone who's past that stage). Offer a lightweight re-run
-  instead:
+  win on someone who's past that stage). Use `AskUserQuestion` to offer a
+  lightweight re-run. Recommend `Nothing — exit` first. Use the menu below
+  only when the harness lacks the tool:
 
   ```
   This fork is already configured. Want to:
@@ -348,6 +354,9 @@ becomes the folder name under projects/ and workspace/)
 ```
 
 **ii) Repo status**
+
+Use `AskUserQuestion` for repo status. Recommend the existing-repo option first when a repo exists.
+Otherwise recommend the greenfield option first. Use the menu below only without the tool.
 
 ```
 Does this project already have a GitHub repo?

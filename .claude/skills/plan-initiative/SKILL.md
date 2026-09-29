@@ -77,6 +77,11 @@ Both directories are created on first write if missing.
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 1. Resolve the slug + check for an existing initiative doc
 
 Kebab-ify the argument (lowercase, hyphen-separated, alphanumeric only, max 60 chars). Confirm if the operator passed a non-kebab form.
@@ -148,6 +153,9 @@ Avoid output measures ("ship 10 features"). Prefer outcome measures
 ```
 
 **d) Scope**
+
+Use `AskUserQuestion` for the scope choice. Recommend the specific project when one is named.
+Otherwise recommend framework-wide scope. Use the prompt below only without the tool.
 
 ```
 Is this initiative scoped to:
@@ -265,7 +273,7 @@ if len(sorted_order) < len(milestones):
     # FAIL — print cycle, ask operator to resolve
 ```
 
-On cycle:
+On cycle, use `AskUserQuestion` for the three resolution types. Use the prompt below only without the tool:
 
 ```
 ⚠ Dependency cycle detected:

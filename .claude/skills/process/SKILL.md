@@ -2,7 +2,7 @@
 name: process
 description: Extract a business process from registered repos via 7-axis code scan + gap-targeted interview, then emit lint-clean BPMN 2.0.
 argument-hint: "<process-slug> [--from-endpoint METHOD /path] [--from-machine ClassName] [--from-job JobName] [--scope dir/] [--project name] [--pools] [--swimlanes] [--skip-lint] [--force]"
-allowed-tools: Bash, Read, Grep, Glob, Write
+allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
 ## Writing rule
@@ -196,6 +196,11 @@ README sections and `docs/` files with headings like "Onboarding Flow" / "Order 
 Use as confirmation / disambiguation source for step labels; don't trust as primary structure (often stale).
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill.
+Follow `.claude/rules/reporting-style.md § Operator choices`.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### 1. Resolve the anchor + scope
 

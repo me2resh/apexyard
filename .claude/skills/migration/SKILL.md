@@ -2,7 +2,7 @@
 name: migration
 description: Create a labelled migration ticket + matching migration AgDR — required by the migration gate.
 argument-hint: "[<project>]"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 # /migration — Create a Migration Ticket + AgDR
@@ -47,6 +47,11 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
 
 Before any `gh issue create` (or other tracker CLI), write this skill's name to the active-issue-skill marker so `require-skill-for-issue-create.sh` lets the command through. At skill entry:
@@ -89,6 +94,8 @@ If the project isn't registered, stop — file one via `/handover` first, or pas
 ### 2. Gather the migration facts (conversational)
 
 Ask each of the following. Each answer feeds both the issue body and the AgDR — the skill writes them into both so the user never retypes.
+Use `AskUserQuestion` for the fields with listed choices. Recommend the best supported value first for each field.
+Use the listed values as a numbered prose fallback only when the harness lacks the tool.
 
 1. **One-line summary** — goes in the ticket title: `[Migration] <type>: <summary>`
 2. **Migration type** — `schema | data | sql | orm` (pick one; if it straddles, use the most invasive)

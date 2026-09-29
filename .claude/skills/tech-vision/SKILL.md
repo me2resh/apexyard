@@ -2,7 +2,7 @@
 name: tech-vision
 description: Interactive author for the architecture vision template — target, gap, migration, anti-scope, cadence.
 argument-hint: "[project-slug | . | --framework]"
-allowed-tools: Bash, Read, Grep, Glob, Write
+allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
 ## Writing rule
@@ -78,6 +78,11 @@ The split mirrors the existing convention from `docs/multi-project.md` § "Archi
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 1. Resolve the target + load the template
 
 ```bash
@@ -98,19 +103,21 @@ fi
 # - Else (no arg + cwd is ops fork root): ask the user
 ```
 
-If the resolved output file already exists:
+If the resolved output file already exists, use `AskUserQuestion` for keep, overwrite, or refresh.
+Recommend keep first. Use the prompt below only when the harness lacks the tool:
 
 ```
 projects/<name>/architecture/vision.md already exists (last written {date}).
 
-  (k) keep existing — exit without changes
-  (o) overwrite — start a fresh interview
-  (r) refresh — start the interview with existing content as defaults (recommended for quarterly review)
+  (1) keep existing (Recommended) — exit without changes
+  (2) refresh — start the interview with existing content as defaults
+  (3) overwrite — start a fresh interview
 
 > 
 ```
 
-On `k`: exit. On `o`: ignore existing content, proceed to step 2 with empty defaults. On `r`: parse existing file's sections, use each section's content as the default during the interview.
+On refresh: parse existing file sections and use each section as an interview default.
+On keep: exit. On overwrite: ignore existing content and start step 2 with empty defaults.
 
 ### 2. Read the template structure
 
