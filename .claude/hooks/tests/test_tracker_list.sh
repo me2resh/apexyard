@@ -50,6 +50,7 @@ make_sandbox() {
   local sb registry_body="${1:-}"
   sb=$(mktemp -d); sb=$(cd "$sb" && pwd -P)
   mkdir -p "$sb/.claude/hooks" "$sb/bin"
+  git -C "$sb" init -q || return 1
   touch "$sb/onboarding.yaml"
   cp "$TRACKER_LIB"   "$sb/.claude/hooks/_lib-tracker.sh"
   cp "$CONFIG_LIB"    "$sb/.claude/hooks/_lib-read-config.sh"
