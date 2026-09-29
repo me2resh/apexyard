@@ -35,7 +35,7 @@ Run an audit when:
 
 - A weekly scheduled scan fires (typically Mondays)
 - `package.json`, `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml` is modified
-- `requirements*.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, or `uv.lock` is modified
+- `requirements*.txt`, `dev-requirements.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, or `uv.lock` is modified
 - A new project is added
 - A manual trigger is requested
 

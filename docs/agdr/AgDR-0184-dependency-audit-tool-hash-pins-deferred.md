@@ -5,7 +5,7 @@ agent: platform-engineer
 model: composer
 session: cursor-1359-rex-fixes
 trigger: user-prompt
-status: executed
+status: superseded by AgDR-0194
 category: security
 projects: [apexyard]
 ---
@@ -31,6 +31,7 @@ projects: [apexyard]
 - Generating and maintaining `--require-hashes` lines needs a network
   capable refresh path. That work is separate from the B1–B5 fail-closed
   corrections.
+- Issue #1478 tracks the hash-pin follow-up.
 
 ## Options Considered
 
@@ -68,3 +69,12 @@ Reasons:
 - `golden-paths/pipelines/dependency-audit.yml` (install from pin file)
 - `docs/agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md` (parent decision)
 - Issue #1359 / PR #1469
+- Issue #1478 (hash-pin follow-up)
+
+## Follow-up
+
+Issue #1478 and AgDR-0194 completed this deviation: CI installs with
+`pip install --require-hashes -r …`, and
+`dependency-audit-tools.requirements.txt` now holds generated sha256 hashes
+(compiled for Python 3.12 on Linux x86_64). Regenerate with the `uv pip compile`
+command recorded in that file's header.

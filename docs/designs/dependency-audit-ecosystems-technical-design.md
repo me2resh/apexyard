@@ -216,6 +216,17 @@ Installed packages support license-checker metadata extraction without lifecycle
 Packages whose metadata requires generated artifacts remain incomplete rather than triggering scripts.
 Python inventory collection never installs target packages or invokes exporters.
 Install pinned trusted audit tools separately from inventory collection.
+Install with `pip install --require-hashes -r dependency-audit-tools.requirements.txt`.
+That file is a generated hashed lock for Python 3.12 on Linux x86_64 (AgDR-0194 / #1478).
+Regenerate after changing a pin with:
+
+```bash
+uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes --no-header \
+  -o golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt \
+  golden-paths/pipelines/scripts/dependency-audit-tools.in
+```
+
 Upload per-manifest JSON evidence and combine it into the report.
 Run the summary step even after a scan fails.
 A scan failure or incomplete selected input fails the workflow after the summary by default.
@@ -295,13 +306,12 @@ Verify behavior with fixtures, rather than only matching documentation strings.
 | Date | Change | Reasoning |
 |------|--------|-----------|
 | 2026-09-29 | Fail-closed scanners (B1–B5). TOML lock parsers via `tomllib`. Manifest size cap. PEP 508/440 pin sanitisation. Symlink containment. Restore npm outdated + licence-checker. Install tools from the pin file. Hash pins deferred in AgDR-0184. | Rex review of PR #1469 found five fail-open paths that reported unscanned sets as clean, regex lock parsers that missed real Poetry/uv source tables, and a pipeline that dropped npm checks from `dev`. |
+| 2026-09-29 | Hashed audit-tool lock shipped. CI installs with `--require-hashes`. Pre-hash gate step removed. Regeneration documented via `uv pip compile --generate-hashes` (AgDR-0194 / #1478). | AgDR-0176 required hashes; AgDR-0184 deferred them. #1478 fail-closed during transition, then filled the lock so verified tools install from the compiled pin file. |
 
 ## Approvals
 
-Architecture and human approval remain pending.
-The issue supplies requirements, but its tracker hierarchy lacks the parent/story records required by the pre-build rule.
-Reconcile those prerequisites before implementation.
-This design does not declare the build gate satisfied.
+PR #1430 recorded the design gate approval before implementation on #1359.
+The later implementation and follow-up work use that approved design.
 
 ## Sources
 
@@ -314,4 +324,6 @@ This design does not declare the build gate satisfied.
 - [PyPI JSON API](https://docs.pypi.org/api/json/).
 - [Python core metadata](https://packaging.python.org/en/latest/specifications/core-metadata/).
 - [SPDX License List](https://spdx.org/licenses/).
-- [AgDR-0184](../agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.md) — hash-pin follow-up.
+- [AgDR-0184](../agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.md) — hash-pin deferral (superseded by AgDR-0194).
+- [AgDR-0194](../agdr/AgDR-0194-dependency-audit-fail-closed-hash-transition.md) — `--require-hashes` and generated hashed lock (#1478).
+

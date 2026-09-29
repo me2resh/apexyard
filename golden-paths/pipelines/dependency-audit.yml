@@ -31,6 +31,8 @@ on:
       - '**/pnpm-lock.yaml'
       - 'requirements*.txt'
       - '**/requirements*.txt'
+      - 'dev-requirements.txt'
+      - '**/dev-requirements.txt'
       - 'pyproject.toml'
       - '**/pyproject.toml'
       - 'Pipfile'
@@ -54,6 +56,8 @@ on:
       - '**/pnpm-lock.yaml'
       - 'requirements*.txt'
       - '**/requirements*.txt'
+      - 'dev-requirements.txt'
+      - '**/dev-requirements.txt'
       - 'pyproject.toml'
       - '**/pyproject.toml'
       - 'Pipfile'
@@ -96,7 +100,7 @@ jobs:
           then
             has_npm=true
           fi
-          if find . \( -name node_modules -o -name .git -o -name dist -o -name build -o -name .venv \) -prune -o \( -name 'requirements*.txt' -o -name pyproject.toml -o -name Pipfile -o -name Pipfile.lock -o -name poetry.lock -o -name uv.lock \) -print | grep -q .
+          if find . \( -name node_modules -o -name .git -o -name dist -o -name build -o -name .venv \) -prune -o \( -name 'requirements*.txt' -o -name 'dev-requirements.txt' -o -name pyproject.toml -o -name Pipfile -o -name Pipfile.lock -o -name poetry.lock -o -name uv.lock \) -print | grep -q .
           then
             has_python=true
           fi
@@ -184,6 +188,7 @@ jobs:
         id: audit
         run: |
           mkdir -p audit-evidence
+          rm -f audit-evidence/*-report.json
           set +e
           python3 -I .github/scripts/dependency-audit.py . \
             --ecosystem=npm \
@@ -232,14 +237,14 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/dep-audit-tools"
           # shellcheck disable=SC1091
           . "$RUNNER_TEMP/dep-audit-tools/bin/activate"
-          # Install from the pin file (versions only). Hashes are a follow-up — AgDR-0184.
-          pip install -r .github/scripts/dependency-audit-tools.requirements.txt
+          pip install --require-hashes -r .github/scripts/dependency-audit-tools.requirements.txt
           echo "DEPENDENCY_AUDIT_TRUSTED_PYTHON=$RUNNER_TEMP/dep-audit-tools/bin/python" >> "$GITHUB_ENV"
 
       - name: Run shared helper (python)
         id: audit
         run: |
           mkdir -p audit-evidence
+          rm -f audit-evidence/*-report.json
           set +e
           "$DEPENDENCY_AUDIT_TRUSTED_PYTHON" -I .github/scripts/dependency-audit.py . \
             --ecosystem=python \
@@ -282,6 +287,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Clear checkout audit reports
+        run: |
+          rm -f audit-evidence/*-report.json
+
       - name: Download evidence
         uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e  # v4
         with:
@@ -309,6 +318,8 @@ jobs:
           ecosystems = set()
           findings = []
           notes = []
+          critical_findings = set()
+          critical_exits = set()
 
           has_npm = os.environ.get("HAS_NPM") == "true"
           has_python = os.environ.get("HAS_PYTHON") == "true"
@@ -335,11 +346,12 @@ jobs:
           for label, raw in (("npm", os.environ.get("NPM_EXIT")), ("python", os.environ.get("PYTHON_EXIT"))):
               if raw not in (None, "", "skipped"):
                   try:
-                      if int(raw) not in (0, 4):
-                          # 1=critical vulns handled by threshold; 3=incomplete/failed tool
-                          if int(raw) == 3:
-                              incomplete = True
-                              notes.append(f"{label} helper exit_code={raw}")
+                      code = int(raw)
+                      if code == 1:
+                          critical_exits.add(label)
+                      elif code not in (0, 4):
+                          incomplete = True
+                          notes.append(f"{label} helper exit_code={raw}")
                   except ValueError:
                       incomplete = True
                       notes.append(f"{label} helper exit_code unparseable: {raw!r}")
@@ -359,9 +371,26 @@ jobs:
                       "failed", "incomplete", "skipped", "pending"
                   ):
                       incomplete = True
-              if int(data.get("exit_code") or 0) == 3:
+              report_findings = data.get("findings") or []
+              for finding in report_findings:
+                  if finding.get("severity") == "Critical":
+                      critical_findings.add(finding.get("ecosystem"))
+              findings.extend(report_findings)
+              try:
+                  report_code = int(data.get("exit_code") or 0)
+              except (TypeError, ValueError):
+                  report_code = None
+              if report_code not in (0, 1, 4):
                   incomplete = True
-              findings.extend(data.get("findings") or [])
+                  notes.append(f"{path} report exit_code={data.get('exit_code')!r}")
+              elif report_code == 1 and not any(
+                  f.get("severity") == "Critical" for f in report_findings
+              ):
+                  incomplete = True
+                  notes.append(f"{path} reported exit 1 without a Critical finding")
+          for label in critical_exits - critical_findings:
+              incomplete = True
+              notes.append(f"{label} helper exited 1 without a Critical finding")
           if has_npm and not any(e == "npm" for e in ecosystems) and npm_result == "success":
               # Report present but no npm set recorded — treat as incomplete.
               if not any("npm-report.json" in str(p) for p in reports):

@@ -115,7 +115,17 @@ cp golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt .githu
 # Optional metadata companion (not required by the workflow install step):
 # cp golden-paths/pipelines/scripts/dependency-audit-tools.lock.json .github/scripts/
 # Compare helper_revision in the JSON report when refreshing after a framework upgrade.
-# Tool hashes are deferred — AgDR-0184.
+# dependency-audit-tools.requirements.txt is a hashed lock (#1478, AgDR-0194).
+# Regenerate it after changing a pin with the command below.
+```
+
+From the framework repository root, with network access and `uv` installed:
+
+```bash
+uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes --no-header \
+  -o golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt \
+  golden-paths/pipelines/scripts/dependency-audit-tools.in
 ```
 
 **Automated actions**:
