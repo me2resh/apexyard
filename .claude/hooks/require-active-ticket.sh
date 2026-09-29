@@ -40,8 +40,8 @@
 # workspace/<project> clone) AND not inside ANY git repository at all is
 # outside this gate's jurisdiction — home dotfiles (~/.zshrc), /etc-style
 # machine config, /tmp scratch files. See the "Out-of-governance
-# exemption" block below for the fail-closed resolution rules (symlinks
-# resolved before judging; unresolvable/ambiguous targets stay gated).
+# exemption" block below for the fail-closed resolution rules (symlinked
+# targets and unresolvable/ambiguous targets stay gated).
 #
 # ALL write targets are judged, not just the first (apexyard#886): a Bash
 # command can name more than one write target (`echo a > /tmp/x; echo b >
@@ -52,7 +52,7 @@
 # let a command that also names an out-of-governance target FIRST slip an
 # in-repo target past a gate that stopped looking after target #1.
 
-# _resolve_real_path — portable, symlink-safe path canonicalisation.
+# _resolve_real_path — portable directory path canonicalisation.
 #
 # Why this matters (#883): without resolving symlinks first, a symlink
 # living under $HOME that POINTS INTO a governed tree (e.g.
@@ -65,6 +65,8 @@
 # implementations of the same algorithm in .claude/hooks/ across two
 # files, one of which had already silently diverged. See
 # _lib-path-resolve.sh's own header comment for the full rationale.
+# The helper leaves a symlink at the final component unchanged. Both
+# exemptions below also check target components for symlinks.
 _RATC_HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$_RATC_HOOK_DIR/_lib-path-resolve.sh" ]; then
   # shellcheck source=/dev/null
@@ -173,6 +175,59 @@ command text and does not parse shell quoting (me2resh/apexyard#1356). If
 the quoted text is only data, this match is a false positive. If eval,
 sh -c, awk, or another program runs the quoted text, it may write a file.
 The detector does not see every kind of write. Declare a ticket to continue."
+}
+
+# A review scratch clone must live under a temporary directory. Check the
+# physical path so a symlinked temp directory cannot expand this boundary.
+_ratc_in_temp_dir() {
+  local target="$1" candidate root
+  for candidate in /tmp /var/tmp "${TMPDIR:-}"; do
+    [ -n "$candidate" ] && [ -d "$candidate" ] || continue
+    root=$(cd "$candidate" 2>/dev/null && pwd -P) || continue
+    case "$target" in
+      "$root"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# An exemption must not trust a path that traverses a symlink. The shared
+# resolver follows directory links but can leave a final-component link
+# (including a dangling one) unchanged. Start below a physical temp root so
+# system aliases such as /tmp -> /private/tmp are not mistaken for target
+# links. Still inspect every component beneath that root, including the final
+# entry. Outside a temp root, inspect the whole path.
+_ratc_path_has_symlink_component() {
+  local path="$1" probe="$1" root="/" candidate physical
+  for candidate in /tmp /var/tmp "${TMPDIR:-}"; do
+    [ -n "$candidate" ] && [ -d "$candidate" ] || continue
+    candidate="${candidate%/}"
+    [ -n "$candidate" ] || continue
+    physical=$(cd "$candidate" 2>/dev/null && pwd -P) || continue
+    case "$path" in
+      "$candidate"/*)
+        probe="$physical/${path#"$candidate"/}"
+        root="$physical"
+        break ;;
+      "$physical"/*)
+        root="$physical"
+        break ;;
+    esac
+  done
+  # A parent traversal could leave the selected root; keep it gated rather
+  # than skipping components on the other side of that traversal.
+  if [ "$root" != "/" ]; then
+    case "$probe" in */../*|*/..) return 0 ;; esac
+  fi
+  while [ -n "$probe" ] && [ "$probe" != "$root" ] && [ "$probe" != "/" ]; do
+    # A trailing slash hides a directory symlink from `test -L`.
+    case "$probe" in
+      */) probe="${probe%/}"; continue ;;
+    esac
+    [ -L "$probe" ] && return 0
+    probe="$(dirname "$probe")"
+  done
+  return 1
 }
 
 # ------------------------------------------------------------------------------
@@ -336,7 +391,7 @@ _ratc_evaluate_target() {
   # history: REPO_ROOT is empty (no git in the sibling dir) but the
   # session-pin resolver in _lib-ops-root.sh can still locate the ops fork
   # from the pin written at session-start, regardless of start dir.
-  local HOOK_DIR OPS_ROOT="" r parent
+  local HOOK_DIR OPS_ROOT="" r parent _ratc_hook_root="" _ratc_cwd_root="" _ratc_session_root=""
   HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
   if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
     # shellcheck source=/dev/null
@@ -344,6 +399,23 @@ _ratc_evaluate_target() {
     # Pass REPO_ROOT as the walk-up start dir when available; the pin
     # resolver ignores the start dir and uses the session pin directly.
     OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-}")
+    # A cloned ops fork carries the same anchor files, so without a pin the
+    # target walk can identify the scratch clone as OPS_ROOT. For a review
+    # target in a temp repo, prefer the session's working directory only
+    # when it resolves to the fork that owns this hook. A missing or
+    # mismatched root cannot activate the reviewer exception below.
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -n "$FILE_PATH" ] \
+       && [ -n "$REPO_ROOT" ] && _ratc_in_temp_dir "$REPO_ROOT"; then
+      _ratc_hook_root=$(resolve_ops_root_walk "$HOOK_DIR")
+      _ratc_cwd_root=$(resolve_ops_root_walk "$PWD")
+      if [ -n "$_ratc_hook_root" ] && [ "$_ratc_cwd_root" = "$_ratc_hook_root" ]; then
+        # Keep a valid session pin authoritative if it names another fork.
+        _ratc_session_root=$(resolve_ops_root "$PWD")
+        if [ "$_ratc_session_root" = "$_ratc_hook_root" ]; then
+          OPS_ROOT="$_ratc_hook_root"
+        fi
+      fi
+    fi
   elif [ -n "$REPO_ROOT" ]; then
     # Inline walk-up fallback when the lib is absent (e.g. minimal test
     # sandboxes that only copy the core libs).
@@ -395,9 +467,9 @@ _ratc_evaluate_target() {
   #     ticket gate below, unchanged from before this change.
   #   - Relative paths (a Bash write-target like `src/app.ts`) resolve
   #     against the hook's CWD before judging.
-  #   - Symlinks are resolved to their real path before judging (via
-  #     _resolve_real_path above), so a symlink living under $HOME that
-  #     POINTS INTO a governed tree does not slip through as "outside" it.
+  #   - A symlink below a physical temp root (or anywhere in a non-temp
+  #     target path) keeps both exemptions closed, including dangling links.
+  #     The resolver alone does not follow a link at the final component.
   #   - Being inside SOME git repository that is neither the ops fork nor a
   #     registered workspace project does NOT exempt the write on its own —
   #     the ops-root/workspace boundaries are checked EXPLICITLY (not
@@ -435,12 +507,17 @@ _ratc_evaluate_target() {
     esac
     _og_real_target="$(_resolve_real_path "$_og_abs_target")"
     if [ -n "$_og_real_target" ]; then
+      local _og_has_symlink=0
+      if _ratc_path_has_symlink_component "$_og_abs_target" \
+         || _ratc_path_has_symlink_component "$_og_real_target"; then
+        _og_has_symlink=1
+      fi
       local _og_in_ops_raw=0
       local _og_in_ws_raw=0
       local _og_in_ops_res=0
       local _og_in_ws_res=0
       local _og_in_git=0
-      local _og_real_ops="" _og_real_ws="" _og_probe
+      local _og_real_ops="" _og_real_ws="" _og_probe _og_git_root=""
 
       # Canonicalize the boundary anchors ONCE — used as the comparison
       # basis for both the raw-target check and the resolved-target check.
@@ -499,15 +576,59 @@ _ratc_evaluate_target() {
       while [ -n "$_og_probe" ] && [ "$_og_probe" != "/" ] && [ ! -d "$_og_probe" ]; do
         _og_probe="$(dirname "$_og_probe")"
       done
-      if [ -n "$_og_probe" ] && [ -d "$_og_probe" ] \
-         && git -C "$_og_probe" rev-parse --show-toplevel >/dev/null 2>&1; then
+      if [ -n "$_og_probe" ] && [ -d "$_og_probe" ]; then
+        _og_git_root=$(git -C "$_og_probe" rev-parse --show-toplevel 2>/dev/null) || _og_git_root=""
+      fi
+      if [ -n "$_og_git_root" ]; then
         _og_in_git=1
       fi
 
-      if [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
+      if [ "$_og_has_symlink" = 0 ] \
+         && [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
          && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
          && [ "$_og_in_git" = 0 ]; then
         return 0
+      fi
+
+      # Issue #1402: a session-scoped review may write inside a temporary
+      # standalone clone. The marker must belong to the ops fork that owns
+      # this hook. A linked worktree has a .git file, so it is not a clone.
+      # Every target must also be free of symlinks and pass both governance
+      # boundary checks.
+      if [ "$_og_has_symlink" = 0 ] \
+         && [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
+         && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
+         && [ "$_og_in_git" = 1 ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] \
+         && [ -n "$OPS_ROOT" ] && [ -d "$_og_git_root/.git" ] \
+         && git -C "$_og_git_root" remote get-url origin >/dev/null 2>&1 \
+         && [ -f "$HOOK_DIR/_lib-review-markers.sh" ] \
+         && command -v resolve_ops_root_walk >/dev/null 2>&1; then
+        local _review_hook_root _review_marker _review_git_root
+        _review_hook_root=$(resolve_ops_root_walk "$HOOK_DIR")
+        _review_git_root=$(_resolve_real_path "$_og_git_root")
+        if [ -n "$_review_hook_root" ] && [ "$_review_hook_root" = "$_og_real_ops" ] \
+           && [ "$_ratc_cwd_root" = "$_review_hook_root" ] \
+           && [ -n "$_review_git_root" ] \
+           && _ratc_in_temp_dir "$_review_git_root" \
+           && [ "$_og_real_target" != "$_review_git_root" ]; then
+          case "$FILE_PATH" in
+            */../*|*/..) ;;
+            *)
+              case "$_og_real_target" in
+                "$_review_git_root"/*)
+                  # shellcheck source=/dev/null
+                  . "$HOOK_DIR/_lib-review-markers.sh"
+                  _review_marker=$(active_reviewer_marker_path "$OPS_ROOT")
+                  if [ -f "$_review_marker" ] && \
+                     grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)+#[1-9][0-9]*:(rex|security|architecture)$' "$_review_marker" && \
+                     awk 'END { exit (NR != 1) }' "$_review_marker"; then
+                    return 0
+                  fi
+                  ;;
+              esac
+              ;;
+          esac
+        fi
       fi
     fi
   fi
