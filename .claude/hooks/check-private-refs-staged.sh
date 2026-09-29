@@ -147,7 +147,8 @@ escape_regex() {
 
 staged_blob_matches() {
   local path="$1" regex="$2"
-  git show ":$path" 2>/dev/null | grep -qiE "$regex"
+  # Match staged bytes even when a line is not valid UTF-8 (#1436).
+  git show ":$path" 2>/dev/null | LC_ALL=C grep -qiE "$regex"
 }
 
 # #1400's owner-login exemption, ported from
