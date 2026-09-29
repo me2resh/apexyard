@@ -32,7 +32,15 @@
 # exactly as before this file existed."
 # ------------------------------------------------------------------------------
 if ! command -v _resolution_cache_current_fingerprint >/dev/null 2>&1; then
-  _READ_CONFIG_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+  # Dash rejects ${BASH_SOURCE[0]:-} as a bad substitution (array subscript).
+  # Expand the array only under bash. Under dash (Linux /bin/sh) or any
+  # non-bash shell, leave the path empty and skip the sibling cache source.
+  # Sourcing still defines config_get. See me2resh/apexyard#1403 and AgDR-0183.
+  if [ -n "${BASH_VERSION:-}" ]; then
+    _READ_CONFIG_RAW_BASH_SOURCE_0="${BASH_SOURCE[0]:-}"
+  else
+    _READ_CONFIG_RAW_BASH_SOURCE_0=""
+  fi
   if [ -n "$_READ_CONFIG_RAW_BASH_SOURCE_0" ]; then
     _read_config_lib_dir="$(cd "$(dirname "$_READ_CONFIG_RAW_BASH_SOURCE_0")" 2>/dev/null && pwd)"
     if [ -n "$_read_config_lib_dir" ] && [ -f "$_read_config_lib_dir/_lib-resolution-cache.sh" ]; then
