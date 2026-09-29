@@ -34,25 +34,30 @@
 #   - Closes #M
 #   ...
 #
-# Closes resolution (#1056, #1076):
+# Closes resolution (#1056, #1076, #1490):
 #   GitHub's `Closes` keyword only auto-closes the reference IMMEDIATELY
 #   FOLLOWING it — a single "Closes #A, #B, #C" line only ever closes #A, so
 #   the section above emits one "- Closes #N" bullet per reference instead.
 #
-#   Governing rule (#1076): PREFER A MISSING CLOSE OVER A WRONG CLOSE. A
-#   `- Closes #N` bullet is emitted ONLY when the commit subject carries a
-#   recognised, SAME-REPO conventional-commit SCOPE holding the issue number
-#   — `fix(#1042): ...` — by apexyard convention the scope IS the issue
-#   number, used directly, no lookup needed.
+#   Governing rule (#1076 + #1490): PREFER A MISSING CLOSE OVER A WRONG
+#   CLOSE. A `- Closes #N` bullet is emitted ONLY when BOTH are true:
+#     1. the commit subject carries a recognised, SAME-REPO conventional-
+#        commit SCOPE holding the issue number — `fix(#1042): ...`
+#     2. the commit BODY (the squash-carried PR body) itself contains a
+#        GitHub closing keyword for that same number — `Closes #1042`,
+#        `Fixes #1042`, or `Resolves #1042` (and their tense variants)
+#
+#   A title / scope alone is NOT enough (#1490). A PR titled `feat(#N)`
+#   whose body says only `Refs #N` must NOT produce a close line. That
+#   nearly closed partially-fixed issues in v5.7.0.
 #
 #   Everything else emits NO Closes line at all:
+#     - a SCOPED subject whose body only Refs / mentions #N (#1490)
 #     - an UNSCOPED subject (`docs: ... (#1045)`) — the only "(#N)" present
 #       is GitHub's squash-appended trailing PR number, which is not an
-#       issue and is never resolved into one (#1076; previously resolved via
-#       a best-effort `gh pr view` lookup of the PR's own body — removed
-#       because that lookup could itself resolve to a WRONG close: a PR body
-#       that merely *mentions* a closing keyword in prose, e.g. discussing
-#       but not fixing #N, would still match)
+#       issue (#1076). Body text alone never opens a close either — scope
+#       is still required, so prose like "We used to say Fixes #999" cannot
+#       invent a close
 #     - a CROSS-REPO scope (`docs(owner/repo#148): ...`) — the scope names an
 #       issue in a DIFFERENT repo; a bare "Closes #148" would auto-close the
 #       WRONG repo's issue #148 if this repo happens to have one too (the
@@ -144,10 +149,11 @@ fi
 echo "RELEASE_CHANGELOG_RANGE=${LOG_RANGE}" >&2
 
 # ── Extract commits ──────────────────────────────────────────────────────────
-# Format: <short-sha> <subject>
-# We use %h (abbreviated sha) and %s (subject) so merge commits are included.
+# Format: <full-sha> <short-sha> <subject>
+# Full sha lets the Closes decision re-read the commit body (#1490) without
+# packing multiline bodies into this list. %h / %s stay for display.
 
-COMMITS=$(git log "$LOG_RANGE" --pretty=format:'%h %s' 2>/dev/null || true)
+COMMITS=$(git log "$LOG_RANGE" --pretty=format:'%H %h %s' 2>/dev/null || true)
 
 # ── Classify commits ─────────────────────────────────────────────────────────
 
@@ -157,8 +163,9 @@ changed_lines=()
 breaking_lines=()
 closes_nums=()
 
-# Extract the conventional-commit SCOPE's issue ref, if any — the ONLY
-# source a Closes bullet is ever derived from (#1076):
+# Extract the conventional-commit SCOPE's issue ref, if any — a Closes
+# CANDIDATE under #1076 / #1490 (never sufficient alone; the body must also
+# carry a closing keyword for the same number):
 #   "fix(#1042): ..."                    -> "#1042"
 #   "docs(me2resh/apexyard#148): ..."    -> "me2resh/apexyard#148"
 #   anything without a `type(...):` scope at the very start -> "" (empty)
@@ -180,6 +187,22 @@ extract_scope_ref() {
     | grep -oE '\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+\)' \
     | sed -E 's/^\(//; s/\)$//' \
     || true
+}
+
+# True when $1 (a commit / PR body) contains a GitHub auto-closing keyword
+# targeting issue #$2. Mirrors validate-pr-create.sh's keyword set:
+# close[sd]?, fix(e[sd])?, resolve[sd]?. `Refs #N` is intentionally NOT a
+# match — that is the #1490 failure mode. Cross-repo qualifiers
+# (`owner/repo#N`) are ignored here: callers only ask about a same-repo
+# scope number, and a foreign-qualified close must not count as local.
+#
+# Portable word-boundary: (^|[^A-Za-z0-9_]) instead of \b, so macOS
+# /bin/bash 3.2 + BSD grep and GNU grep on Linux CI agree.
+body_closes_issue() {
+  local body="$1"
+  local num="$2"
+  printf '%s\n' "$body" \
+    | grep -qiE "(^|[^A-Za-z0-9_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${num}([^0-9]|$)"
 }
 
 # Extract the DISPLAY ref shown in "($N) <subject>" — anchored, never "the
@@ -224,8 +247,10 @@ strip_cc_prefix() {
 while IFS= read -r line; do
   [ -z "$line" ] && continue
 
-  short_sha="${line%% *}"
-  subject="${line#* }"
+  full_sha="${line%% *}"
+  rest="${line#* }"
+  short_sha="${rest%% *}"
+  subject="${rest#* }"
 
   # Skip merge commits for "Merge branch" (sync commits) — only keep "Merge pull request"
   if echo "$subject" | grep -qE '^Merge branch '; then
@@ -266,10 +291,13 @@ while IFS= read -r line; do
     entry="- $display_subject — $short_sha"
   fi
 
-  # #1076 — Closes decision. Governing rule: prefer a MISSING close over a
-  # WRONG close. A Closes bullet is emitted ONLY when the subject carries a
-  # recognised, SAME-REPO conventional-commit scope. Every other case —
-  # unscoped, cross-repo scoped, or a revert — emits nothing.
+  # #1076 + #1490 — Closes decision. Governing rule: prefer a MISSING close
+  # over a WRONG close. A Closes bullet requires BOTH a same-repo
+  # conventional-commit scope AND a closing keyword for that number in the
+  # commit body (the squash-carried PR body). Title / scope alone is not
+  # enough — that is how `feat(#N)` + `Refs #N` nearly closed partially
+  # fixed issues in v5.7.0. Unscoped, cross-repo, and revert commits emit
+  # nothing.
   if [ "$is_revert" -eq 0 ]; then
     scope_ref=$(extract_scope_ref "$subject")
     if [ -n "$scope_ref" ]; then
@@ -279,13 +307,20 @@ while IFS= read -r line; do
           # from a foreign-repo reference (#207 lesson, reintroduced).
           ;;
         *)
-          closes_nums+=("${scope_ref#\#}")
+          issue_num="${scope_ref#\#}"
+          # %b = body only (PR body on a squash). Never read the subject
+          # again here — the scope already came from the subject, and
+          # re-scanning it would reintroduce the title-only close.
+          commit_body=$(git log -1 --pretty=format:'%b' "$full_sha" 2>/dev/null || true)
+          if body_closes_issue "$commit_body" "$issue_num"; then
+            closes_nums+=("$issue_num")
+          fi
           ;;
       esac
     fi
     # No scope at all -> no Closes line, regardless of any trailing "(#N)"
-    # squash-merge PR number — that number is a PR, not an issue, and is
-    # never resolved into one anymore (#1076).
+    # squash-merge PR number and regardless of closing keywords in the body
+    # (#1076 + #1490: both gates required).
   fi
 
   # Classify by conventional-commit type

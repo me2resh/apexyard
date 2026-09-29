@@ -93,7 +93,7 @@ if [ -z "$LOG_RANGE" ]; then
 fi
 ```
 
-**#1076 — a `Closes` bullet is now emitted ONLY from a recognised, same-repo conventional-commit scope.** `bin/release-changelog.sh` previously (#1056, #1077) resolved an UNSCOPED commit's trailing squash PR number back to the issue it closes via a best-effort `gh pr view --repo <repo>` lookup of the PR's own body. That lookup mechanism (and the `REPO_REMOTE` / `PR_LOOKUP_REPO` env vars that configured it) has been removed entirely: it was itself a source of live wrong closes — a design-doc commit whose subject merely *discussed* several issues could close the wrong one, a cross-repo mention (`other-repo#12`) could be misread as a local issue, and a PR body that merely *mentioned* a closing keyword in prose could resolve to the mentioned number. The governing rule is now "prefer a MISSING close over a WRONG close" (see the script's own header): `fix(#1042): ...` closes `#1042` directly from the scope, with no lookup and no network call; an unscoped commit, a cross-repo scope (`docs(owner/repo#N): ...`), and a revert commit all emit no `Closes` line at all.
+**#1076 + #1490 — a `Closes` bullet requires a same-repo scope AND a closing keyword in the PR body.** `bin/release-changelog.sh` emits `- Closes #N` only when the commit subject carries a recognised same-repo conventional-commit scope (`fix(#1042): ...`) **and** the commit body (the squash-carried PR body) itself contains a GitHub closing keyword for that same number (`Closes #1042`, `Fixes #1042`, or `Resolves #1042`). A title reference alone is not enough: a PR titled `feat(#N)` whose body says only `Refs #N` must produce no close line (#1490 — that nearly closed partially-fixed issues in v5.7.0). Unscoped commits, cross-repo scopes (`docs(owner/repo#N): ...`), and revert commits still emit no `Closes` line at all (#1076). The generator does not call `gh`; it reads the commit body from git. Governing rule: prefer a MISSING close over a WRONG close.
 
 The helper emits markdown to stdout in the format:
 
@@ -121,7 +121,7 @@ Minor release — N features, M fixes.
 ...
 ```
 
-**#1056 — one bullet per reference, not a comma list.** GitHub's `Closes` keyword only auto-closes the reference *immediately following* it — a single `Closes #N, #M, #P` line only ever closed `#N`; everything after the first was silently inert. The generator now emits one `- Closes #N` bullet per reference so every one of them actually fires. **#1076 narrowed which numbers are eligible in the first place:** a same-repo scoped commit (`fix(#1042): ...`) uses the scope directly (that's the issue, by convention, no lookup needed); everything else — an unscoped commit (`docs: ... (#1045)`), a cross-repo scope (`docs(owner/repo#N): ...`), and a revert commit — emits no `Closes` line at all. A release with fewer `Closes` bullets than before #1076 is expected, not a regression: those refs are now correctly left for a human to close by hand rather than guessed at.
+**#1056 — one bullet per reference, not a comma list.** GitHub's `Closes` keyword only auto-closes the reference *immediately following* it — a single `Closes #N, #M, #P` line only ever closed `#N`; everything after the first was silently inert. The generator now emits one `- Closes #N` bullet per reference so every one of them actually fires. **#1076 + #1490 narrowed which numbers are eligible:** a same-repo scoped commit whose body closes that number (`fix(#1042): ...` + `Closes #1042` in the body) is eligible; a scoped title with only `Refs #N` in the body is not; an unscoped commit, a cross-repo scope, and a revert commit are not. A release with fewer `Closes` bullets than before is expected when titles scoped issues that the bodies only referenced.
 
 #### Count-mismatch guard (AgDR-0094, option D)
 
@@ -183,6 +183,27 @@ else
 fi
 ```
 
+#### Lines this release removes from main (#1490)
+
+After the changelog draft (and on `--dry-run` against `upstream/dev`; after step 4 against the release branch), list every line the release tip deletes from `main`. A release cut from `dev` can drop content that is still on `main` — the v5.6.3 sync removed two contributor rows from `README.md` on `dev`, and the v5.7.0 release then removed them from `main` (#1393). Call the helper, show the listing, and **ask before continuing** when it is non-empty:
+
+```bash
+# On --dry-run use upstream/dev. After step 4 use the release branch tip.
+COMPARE_REF="${RELEASE_BRANCH:-upstream/dev}"
+REMOVED_LINES=$(MAIN_REF="upstream/main" HEAD_REF="$COMPARE_REF" \
+  bash bin/release-list-removed-lines.sh)
+if [ -n "$REMOVED_LINES" ]; then
+  echo "⚠️  WARNING: this release REMOVES the following lines from main:"
+  printf '%s\n' "$REMOVED_LINES"
+  echo ""
+  echo "These deletions ship to main when the release PR merges."
+  echo "Continue with the release? [y/N]"
+  # Stop unless the operator explicitly confirms. Do not open the PR on "N".
+else
+  echo "✓ Release removes no lines from main."
+fi
+```
+
 **Show the draft** (and both warnings, if any) and let the user edit interactively before proceeding. On `--dry-run`, print the draft and stop here with:
 
 ```
@@ -223,6 +244,8 @@ git push upstream "release/vA.B.C"
 ```
 
 **#1004 — the trailer belongs in this commit message, not only the PR body.** The release branch has exactly one commit, so this is the message a squash carries forward by construction — independent of how the merge is invoked. See step 6 for why the PR body copy alone used to silently lose the trailer.
+
+**#1490 — re-run the removed-lines check against the release branch** before opening the PR (step 5). Step 3's dry-run compared `upstream/main..upstream/dev`. The release branch now also carries the CHANGELOG commit, so re-check with `HEAD_REF=release/vA.B.C`. If new removals appear, show them and ask again before `gh pr create`.
 
 ### 5. Open the release PR
 
@@ -410,13 +433,16 @@ This files a `sync/main-to-dev-after-vA.B.C → dev` PR that merges `upstream/ma
 11. **Merge the release PR with an explicit `--subject`/`--body-file`, never a bare `gh pr merge --squash`** (#1004) — this repo's `squash_merge_commit_message=COMMIT_MESSAGES` setting silently drops a trailer that lives only in the PR body. See step 6. **`/approve-merge` — the actual merge path for #1042 — applies this automatically for a release-class PR** (#1136, `AgDR-0132`); the raw command in step 6 is the fallback for a manual merge outside `/approve-merge`.
 12. **Verify the `Released-From` trailer landed on the squash commit immediately after merge, and stop before `/release-sync` if it didn't** (#1004) — a missing trailer is invisible until the *next* release cut silently mis-anchors its changelog range. See step 6's verification block and the post-tag checklist in step 7.
 13. **Surface, but don't block on, a missing migration script** (#1105) — step 3's migration-script check and the PR body's "Migration script" checkbox are both **advisory**. This is deliberate, not an oversight: whether a release needs an adopter-facing migration is a judgement call (does this release actually change anything an adopter's fork needs to react to?), and a hard-blocking gate would force every doc-only or internal-tooling release to manufacture a no-op script just to pass CI. Making it a blocking gate (a pre-push hook, or a required PR-create check) is a larger design decision — deliberately left as a follow-up, not bundled into #1105's fix. Until then, the discipline is: read the warning, decide honestly, and don't skip past it out of habit — that's exactly the discipline gap that let 21 consecutive releases ship with no migration script at all.
+14. **List every line the release removes from main, and ask before continuing** (#1490) — run `bin/release-list-removed-lines.sh` against `upstream/main..$COMPARE_REF` (dev on dry-run, the release branch after step 4). A non-empty listing is a stop-and-ask, not a silent proceed: that is how the v5.7.0 cut dropped contributor rows that still lived on main.
 
 ## Related
 
 - `AgDR-0007` — the release-cut branch model this skill enacts
 - `AgDR-0076` — the automation design record (this enhancement)
 - `AgDR-0094` — release provenance via the `Released-From` trailer + count-mismatch guard (#872)
+- `AgDR-0197` — close only from PR-body keywords + list lines a release removes from main (#1490)
 - `bin/release-changelog.sh` — the changelog generation helper script, independently tested
+- `bin/release-list-removed-lines.sh` — lists lines the release tip deletes from main (#1490)
 - `docs/release-process.md` — the prose runbook (this skill is the automation; the doc is the manual fallback)
 - `.github/workflows/auto-tag-on-release-pr-merge.yml` — the CI workflow that tags the squash commit after merge
 - `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` — the reusable template for managed projects

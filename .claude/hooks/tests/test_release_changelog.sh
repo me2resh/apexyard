@@ -67,8 +67,19 @@ run_test() {
   local tmpdir
   tmpdir=$(mktemp -d)
   (
+    # Stop git from walking above the temp repo if init fails. Without this
+    # ceiling, a failed `git init` (e.g. sandbox blocks creating `.git`) lets
+    # later git commands discover the framework worktree and mutate it.
+    export GIT_CEILING_DIRECTORIES="$tmpdir"
     cd "$tmpdir" || exit 1
-    git init -q
+    if ! git init -q; then
+      echo "FAIL: git init failed in $tmpdir — refusing to continue (would risk the parent repo)" >&2
+      exit 1
+    fi
+    if [ ! -d .git ] && [ ! -f .git ]; then
+      echo "FAIL: git init produced no .git in $tmpdir" >&2
+      exit 1
+    fi
     git config user.email "test@test.local"
     git config user.name "Test"
     git config init.defaultBranch main 2>/dev/null || true
@@ -78,6 +89,15 @@ run_test() {
       echo "$RANDOM" > "$f"
       git add "$f"
       git commit -q -m "$1"
+    }
+
+    # make_commit with a separate body paragraph (squash-carried PR body).
+    # Used by #1490 closes-from-body tests: subject alone must not close.
+    mc_body() {  # mc_body <subject> <body>
+      local f="f$RANDOM.txt"
+      echo "$RANDOM" > "$f"
+      git add "$f"
+      git commit -q -m "$1" -m "$2"
     }
 
     # Run the caller-supplied body
@@ -115,8 +135,8 @@ echo "--- feat commits ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v1.0.0
-  mc "feat(#101): add auto-tag workflow"
-  mc "feat(#102): add dry-run mode to release skill"
+  mc_body "feat(#101): add auto-tag workflow" "Closes #101"
+  mc_body "feat(#102): add dry-run mode to release skill" "Closes #102"
   PREV_TAG="v1.0.0" HEAD_REF="HEAD" VERSION="v1.1.0" DATE="2026-06-21" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
@@ -443,9 +463,9 @@ echo "--- #1056 Closes repeats keyword per reference (>=3 refs) ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v15.0.0
-  mc "feat(#1501): first unreleased feature"
-  mc "fix(#1502): second unreleased fix"
-  mc "chore(#1503): third unreleased chore"
+  mc_body "feat(#1501): first unreleased feature" "Closes #1501"
+  mc_body "fix(#1502): second unreleased fix" "Closes #1502"
+  mc_body "chore(#1503): third unreleased chore" "Closes #1503"
   PREV_TAG="v15.0.0" HEAD_REF="HEAD" VERSION="v15.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
@@ -455,16 +475,15 @@ contains   "Closes #1503 own bullet" "Closes #1503" "$out"
 not_contains "no comma-joined Closes line (#1501, #1502 inert-past-first bug)" "Closes #1501, #1502" "$out"
 not_contains "no comma-joined Closes line (any pairing)" "#1502, #1503" "$out"
 
-# ── Test: #1056 defect 2 — scoped subject is unaffected (no PR lookup) ──────
-# `fix(#1042): ...` — the scope IS the issue number by convention. This must
-# resolve straight from the subject with no `gh` call at all (no stub `gh` is
-# put on PATH for this test — if the script tried to shell out, it would hit
-# whatever real `gh` is on the runner's PATH and could flake or hang).
+# ── Test: #1056 defect 2 — scoped subject + body Closes, no PR lookup ───────
+# `fix(#1042): ...` with `Closes #1042` in the body — the scope names the
+# candidate and the body confirms. No `gh` call (#1490 reads the commit
+# body from git, not the forge).
 echo "--- #1056 scoped subject resolves directly, no PR lookup ---"
 out=$(run_test '
   mc "chore: initial"
   git tag v16.0.0
-  mc "fix(#1600): put the human gate on approval flow (#1601)"
+  mc_body "fix(#1600): put the human gate on approval flow (#1601)" "Closes #1600"
   PREV_TAG="v16.0.0" HEAD_REF="HEAD" VERSION="v16.1.0" DATE="2026-07-29" \
     bash "'"$CHANGELOG_SCRIPT"'" 2>&1
 ')
@@ -660,6 +679,47 @@ rm -f "$call_log"
 not_contains "never picks up the prose-mentioned issue" "Closes #999" "$out"
 not_contains "no Closes section at all (unscoped commit)" "### Closes" "$out"
 eq          "gh is never invoked for an unscoped commit" "" "$call_log_contents"
+
+# ── #1490 — title scope alone must not close when the body only Refs ────────
+# Live failure mode from v5.7.0: a PR titled `feat(#N)` / `fix(#N)` produced
+# a changelog `Closes #N` even when the PR body said `Refs #N`. That nearly
+# closed partially-fixed issues. The body must itself carry a closing
+# keyword for #N before a close line is emitted.
+echo "--- #1490 scoped title + Refs body emits no Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v29.0.0
+  mc_body "feat(#2901): partially address the writing profile" "Refs #2901"
+  PREV_TAG="v29.0.0" HEAD_REF="HEAD" VERSION="v29.1.0" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains     "feat still appears in Added" "partially address the writing profile" "$out"
+not_contains "does not close an issue the body only Refs" "Closes #2901" "$out"
+not_contains "no Closes section when every scoped ref is Refs-only" "### Closes" "$out"
+
+# Positive counterpart: same title shape, but the body truly closes.
+echo "--- #1490 scoped title + Closes body emits Closes ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v30.0.0
+  mc_body "feat(#3001): finish the writing profile work" "Closes #3001"
+  PREV_TAG="v30.0.0" HEAD_REF="HEAD" VERSION="v30.1.0" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "closes when the body closes" "Closes #3001" "$out"
+
+# Fixes / Resolves keywords also count (GitHub's full closing set).
+echo "--- #1490 Fixes and Resolves body keywords also close ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v31.0.0
+  mc_body "fix(#3101): repair the listing helper" "Fixes #3101"
+  mc_body "chore(#3102): tidy the release docs" "Resolves #3102"
+  PREV_TAG="v31.0.0" HEAD_REF="HEAD" VERSION="v31.0.1" DATE="2026-09-29" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+contains "Fixes keyword closes" "Closes #3101" "$out"
+contains "Resolves keyword closes" "Closes #3102" "$out"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
