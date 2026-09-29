@@ -16,6 +16,51 @@ if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
   . "$HOOK_DIR/_lib-command-scrub.sh"
   SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
 fi
+# Bash removes a backslash-newline continuation before it parses words and
+# flags, so `gh pr list \<newline> --repo x` names its repository (#1492).
+# Join a continuation only where Bash does: outside quotes, and only when the
+# backslash is not itself escaped. `\\<newline>` is a literal backslash and a
+# real newline, so the next line is a new command and must stay separate.
+# The join models only plain words, quotes and backslashes. It leaves a
+# command unjoined when it holds syntax that changes where a line ends:
+# a comment (`#`), a heredoc (`<<`), command substitution (`$(` or a
+# backtick), or ANSI-C quoting (`$'`). A backslash in a comment, for
+# example, is not a continuation, so a join there would pull the next
+# command into the comment. It also skips a command over 2048 bytes, so
+# the per-character loop stays fast. Unjoined lines split into separate
+# segments below, which can only block more.
+_batr_join_continuations() {
+  local s="$1" out="" c quote="" bs=0 i n
+  n=${#s}
+  for ((i = 0; i < n; i++)); do
+    c="${s:i:1}"
+    if [ -n "$quote" ]; then
+      [ "$c" = "$quote" ] && [ $((bs % 2)) -eq 0 ] && quote=""
+      if [ "$quote" = '"' ] && [ "$c" = '\' ]; then bs=$((bs + 1)); else bs=0; fi
+      out="$out$c"
+      continue
+    fi
+    if [ "$c" = $'\n' ] && [ $((bs % 2)) -eq 1 ]; then
+      out="${out%\\}"
+      bs=0
+      continue
+    fi
+    if [ "$c" = '\' ]; then
+      bs=$((bs + 1))
+    else
+      { [ "$c" = "'" ] || [ "$c" = '"' ]; } && [ $((bs % 2)) -eq 0 ] && quote="$c"
+      bs=0
+    fi
+    out="$out$c"
+  done
+  printf '%s' "$out"
+}
+if [ "${#SCAN_COMMAND}" -le 2048 ]; then
+  case "$SCAN_COMMAND" in
+    *'#'* | *'<<'* | *'$('* | *'`'* | *"\$'"*) ;;
+    *$'\\\n'*) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
+  esac
+fi
 
 # This guard covers GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross

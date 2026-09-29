@@ -19,11 +19,12 @@
 #   - asserts exit code + stderr contents + (H1 cases) absence of a
 #     side-effect marker file
 #
-# Exit 0 if all cases pass; exit 1 on first failure with a clear message.
+# Exit 0 if all cases pass. Report every failed case before exiting 1.
 
 set -u
 
-HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/pre-push-gate.sh"
+HOOK_SRC="${PRE_PUSH_GATE_HOOK_SRC:-$(cd "$(dirname "$0")/.." && pwd)/pre-push-gate.sh}"
+AGDR_SRC="${PRE_PUSH_GATE_AGDR_SRC:-$(cd "$(dirname "$0")/../../.." && pwd)/docs/agdr/AgDR-0173-git-native-pre-push-command-execution.md}"
 if [ ! -x "$HOOK_SRC" ]; then
   echo "FAIL: hook not found or not executable at $HOOK_SRC" >&2
   exit 1
@@ -36,28 +37,15 @@ FAILED_CASES=""
 # -- sandbox builder -----------------------------------------------------
 # make_sandbox <install_git_native> <fork_shape>
 #
-# Fork status is decided by `resolve_ops_root` (`_lib-ops-root.sh`), the
-# same pin-first resolver the rest of the framework trusts for this
-# question — never by a file the sandbox itself ships (Hakim A5, Rex S1,
-# PR #1428 round 3). Every invocation of the hook against a sandbox runs
-# with CLAUDE_CODE_SESSION_ID and the pin env vars explicitly unset
-# (`env -u`), so `resolve_ops_root` falls straight through to its
-# walk-up and answers purely from the sandbox's own directory tree —
-# deterministic regardless of whatever real session this TEST is running
-# under. The one exception is the spoof case below, which sets up its
-# own session id and pin on purpose.
+# Install advice requires a valid session pin to the sandbox fork. Cases
+# set their own pin or explicitly clear all session pin variables. This
+# keeps them independent of the session that runs the suite.
 #
 # install_git_native=1: core.hooksPath set to .githooks with a real,
 # executable stub pre-push file — the hook should stay silent regardless
 # of fork_shape.
-# fork_shape=fork: plant a `.apexyard-fork` marker AT THE SANDBOX ROOT —
-# the walk-up resolves the sandbox itself as the ops root, so a missing
-# git-native hook gets the full install advice (maintainer decision, PR
-# #1428 round 2 — never suggest that advice outside the real fork, since
-# AgDR-0115 forbids the wiring it recommends).
-# fork_shape=managed (default): no anchor anywhere in the sandbox's own
-# tree. A plain managed-project clone — gets only a short scope note,
-# never install advice.
+# fork_shape=fork: plant a `.apexyard-fork` marker at the sandbox root.
+# fork_shape=managed (default): no anchor in the sandbox's own tree.
 make_sandbox() {
   local install_git_native="${1:-0}"
   local fork_shape="${2:-managed}"
@@ -72,7 +60,7 @@ make_sandbox() {
     git add onboarding.yaml
     git commit -q -m "init"
   )
-  mkdir -p "$sb/.claude/hooks" "$sb/.claude/session"
+  mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/pre-push-gate.sh"
   chmod +x "$sb/.claude/hooks/pre-push-gate.sh"
 
@@ -107,13 +95,32 @@ EOF
     (cd "$sb" && git config core.hooksPath .githooks)
   fi
 
-  echo "$sb"
+  (cd "$sb" && pwd -P)
 }
 
 push_json() {
   cat <<EOF
 {"tool_input":{"command":"git push origin HEAD"}}
 EOF
+}
+
+make_pin() {
+  local root="$1" sid="$2" pin_dir
+  pin_dir=$(mktemp -d)
+  printf '%s\n' "$root" > "$pin_dir/ops-root-${sid}"
+  printf '%s' "$pin_dir"
+}
+
+run_pinned_hook() {
+  local sb="$1" pin_dir="$2" sid="$3" hook_path="${4:-.claude/hooks/pre-push-gate.sh}"
+  (
+    cd "$sb" || exit 1
+    # Capture stderr while discarding stdout.
+    # shellcheck disable=SC2069
+    push_json | env -u APEXYARD_OPS_DISABLE_PIN \
+      CLAUDE_CODE_SESSION_ID="$sid" APEXYARD_OPS_PIN_DIR="$pin_dir" \
+      bash "$hook_path" 2>&1 1>/dev/null
+  )
 }
 
 json_cmd() {
@@ -183,22 +190,23 @@ case1() {
   rm -rf "$sb"
 }
 
-# ---- CASE 2: fork, no git-native hook installed -> full install advice ----
+# ---- CASE 2: pinned fork, no git-native hook -> full install advice ----
 case2() {
   local sb; sb=$(make_sandbox 0 fork)
-  run_hook "$sb" "$(push_json)" 0 "NOTE:" "fork-no-git-native-hook-gets-install-advice"
-  assert_no_marker "$sb" "fork-no-git-native-hook-gets-install-advice: still runs no commands"
-  local out
-  out=$(cd "$sb" && echo "$(push_json)" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
-  if echo "$out" | grep -qF "core.hooksPath" && echo "$out" | grep -qF "$sb"; then
-    echo "PASS [fork-no-git-native-hook-gets-install-advice: names repo and hooksPath]"
+  local sid="test-session-fork" pin_dir out rc
+  pin_dir=$(make_pin "$sb" "$sid")
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "core.hooksPath" && echo "$out" | grep -qF "$sb"; then
+    echo "PASS [pinned-fork-gets-install-advice-and-names-repo]"
     PASS=$((PASS+1))
   else
-    echo "FAIL [fork-no-git-native-hook-gets-install-advice: names repo and hooksPath]: $out" >&2
+    echo "FAIL [pinned-fork-gets-install-advice-and-names-repo]: rc=$rc stderr=$out" >&2
     FAIL=$((FAIL+1))
-    FAILED_CASES="${FAILED_CASES}fork-no-git-native-hook-gets-install-advice-naming "
+    FAILED_CASES="${FAILED_CASES}pinned-fork-gets-install-advice-and-names-repo "
   fi
-  rm -rf "$sb"
+  assert_no_marker "$sb" "pinned-fork-advice-runs-no-commands"
+  rm -rf "$sb" "$pin_dir"
 }
 
 # ---- CASE 3: git push, git-native hook installed -> silent, no reminder ----
@@ -226,8 +234,105 @@ case3() {
 case4() {
   local sb; sb=$(make_sandbox 0 fork)
   (cd "$sb" && git config core.hooksPath .githooks)
-  run_hook "$sb" "$(push_json)" 0 "NOTE:" "fork-hookspath-set-but-file-missing-still-advises"
-  rm -rf "$sb"
+  local sid="test-session-missing-hook" pin_dir out rc
+  pin_dir=$(make_pin "$sb" "$sid")
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "core.hooksPath"; then
+    echo "PASS [pinned-fork-hookspath-set-but-file-missing-still-advises]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [pinned-fork-hookspath-set-but-file-missing-still-advises]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}pinned-fork-hookspath-set-but-file-missing-still-advises "
+  fi
+  rm -rf "$sb" "$pin_dir"
+}
+
+# ---- #1491: an unpinned or stale-pinned fork gets no install advice ----
+case_no_valid_pin_gets_no_advice() {
+  local sb; sb=$(make_sandbox 0 fork)
+  local out rc sid="test-session-stale" pin_dir
+
+  out=$(cd "$sb" && push_json | env -u CLAUDE_CODE_SESSION_ID \
+    -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN \
+    bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  rc=$?
+  if [ "$rc" = "0" ] && ! echo "$out" | grep -qF "core.hooksPath"; then
+    echo "PASS [no-pin-gives-no-install-advice]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [no-pin-gives-no-install-advice]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}no-pin-gives-no-install-advice "
+  fi
+
+  pin_dir=$(make_pin "$sb/missing-root" "$sid")
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
+  if [ "$rc" = "0" ] && ! echo "$out" | grep -qF "core.hooksPath"; then
+    echo "PASS [stale-pin-gives-no-install-advice]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [stale-pin-gives-no-install-advice]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}stale-pin-gives-no-install-advice "
+  fi
+
+  rm -rf "$pin_dir"
+  pin_dir=$(make_pin "$sb" "$sid")
+  out=$(cd "$sb" && push_json | env CLAUDE_CODE_SESSION_ID="$sid" \
+    APEXYARD_OPS_PIN_DIR="$pin_dir" APEXYARD_OPS_DISABLE_PIN=1 \
+    bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  rc=$?
+  if [ "$rc" = "0" ] && ! echo "$out" | grep -qF "core.hooksPath"; then
+    echo "PASS [disabled-pin-gives-no-install-advice]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [disabled-pin-gives-no-install-advice]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}disabled-pin-gives-no-install-advice "
+  fi
+  rm -rf "$sb" "$pin_dir"
+}
+
+# ---- #1491: a pinned linked worktree resolves to its main checkout ----
+case_pinned_linked_worktree_gets_advice() {
+  local sb; sb=$(make_sandbox 0 fork)
+  local linked; linked=$(mktemp -d)
+  if ! git -C "$sb" worktree add -q -b linked "$linked"; then
+    echo "FAIL [pinned-linked-worktree-setup]" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}pinned-linked-worktree-setup "
+    rm -rf "$sb" "$linked"
+    return
+  fi
+
+  local sid="test-session-linked" pin_dir out rc
+  pin_dir=$(make_pin "$sb" "$sid")
+  out=$(run_pinned_hook "$linked" "$pin_dir" "$sid" "$sb/.claude/hooks/pre-push-gate.sh")
+  rc=$?
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "core.hooksPath" &&
+    ! echo "$out" | grep -qF "not an ApexYard fork"; then
+    echo "PASS [pinned-linked-worktree-gets-advice-without-false-note]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [pinned-linked-worktree-gets-advice-without-false-note]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}pinned-linked-worktree-gets-advice-without-false-note "
+  fi
+  rm -rf "$sb" "$linked" "$pin_dir"
+}
+
+case_agdr_states_pinned_limit() {
+  if grep -qF 'only for sessions with a valid pin' "$AGDR_SRC"; then
+    echo "PASS [AgDR-0173-states-pinned-session-limit]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [AgDR-0173-states-pinned-session-limit]" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}AgDR-0173-states-pinned-session-limit "
+  fi
 }
 
 # =====================================================================
@@ -243,13 +348,24 @@ case4() {
 # which a managed clone could spoof).
 # =====================================================================
 
-# ---- B2-1: managed clone (no fork markers at all) -> short note only ----
+# ---- B2-1: pinned session in a managed clone -> short note only ----
 case_b2_managed_clone_short_note() {
   local sb; sb=$(make_sandbox 0 managed)
-  run_hook "$sb" "$(push_json)" 0 "NOTE:.*not an ApexYard fork" "B2-managed-clone-gets-short-note"
+  local real_root sid="test-session-managed" pin_dir
+  real_root=$(make_sandbox 0 fork)
+  pin_dir=$(make_pin "$real_root" "$sid")
+  local out rc
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
   assert_no_marker "$sb" "B2-managed-clone-gets-short-note: still runs no commands"
-  local out
-  out=$(cd "$sb" && echo "$(push_json)" | env -u CLAUDE_CODE_SESSION_ID -u APEXYARD_OPS_PIN_DIR -u APEXYARD_OPS_DISABLE_PIN bash .claude/hooks/pre-push-gate.sh 2>&1 1>/dev/null)
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "not an ApexYard fork"; then
+    echo "PASS [B2-managed-clone-gets-short-note]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [B2-managed-clone-gets-short-note]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}B2-managed-clone-gets-short-note "
+  fi
   if echo "$out" | grep -qF "core.hooksPath"; then
     echo "FAIL [B2-managed-clone-never-suggests-hookspath]: $out" >&2
     FAIL=$((FAIL+1))
@@ -275,7 +391,7 @@ case_b2_managed_clone_short_note() {
     FAIL=$((FAIL+1))
     FAILED_CASES="${FAILED_CASES}B2-managed-clone-note-names-its-own-repo "
   fi
-  rm -rf "$sb"
+  rm -rf "$sb" "$real_root" "$pin_dir"
 }
 
 # ---- B2-3 (Hakim A5 / Rex S1): a repo that SHIPS `.apexyard-fork` but is
@@ -370,6 +486,9 @@ case1
 case2
 case3
 case4
+case_no_valid_pin_gets_no_advice
+case_pinned_linked_worktree_gets_advice
+case_agdr_states_pinned_limit
 case_h1_heredoc
 case_h1_quoted_string
 case_h1_commit_message
