@@ -175,6 +175,20 @@ sh -c, awk, or another program runs the quoted text, it may write a file.
 The detector does not see every kind of write. Declare a ticket to continue."
 }
 
+# A review scratch clone must live under a temporary directory. Check the
+# physical path so a symlinked temp directory cannot expand this boundary.
+_ratc_in_temp_dir() {
+  local target="$1" candidate root
+  for candidate in /tmp /var/tmp "${TMPDIR:-}"; do
+    [ -n "$candidate" ] && [ -d "$candidate" ] || continue
+    root=$(cd "$candidate" 2>/dev/null && pwd -P) || continue
+    case "$target" in
+      "$root"/*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 # ------------------------------------------------------------------------------
 # _ratc_evaluate_target FILE_PATH TOOL_NAME
 #
@@ -336,7 +350,7 @@ _ratc_evaluate_target() {
   # history: REPO_ROOT is empty (no git in the sibling dir) but the
   # session-pin resolver in _lib-ops-root.sh can still locate the ops fork
   # from the pin written at session-start, regardless of start dir.
-  local HOOK_DIR OPS_ROOT="" r parent
+  local HOOK_DIR OPS_ROOT="" r parent _ratc_hook_root="" _ratc_cwd_root="" _ratc_session_root=""
   HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
   if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
     # shellcheck source=/dev/null
@@ -344,6 +358,23 @@ _ratc_evaluate_target() {
     # Pass REPO_ROOT as the walk-up start dir when available; the pin
     # resolver ignores the start dir and uses the session pin directly.
     OPS_ROOT=$(resolve_ops_root "${REPO_ROOT:-}")
+    # A cloned ops fork carries the same anchor files, so without a pin the
+    # target walk can identify the scratch clone as OPS_ROOT. For a review
+    # target in a temp repo, prefer the session's working directory only
+    # when it resolves to the fork that owns this hook. A missing or
+    # mismatched root cannot activate the reviewer exception below.
+    if [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ -n "$FILE_PATH" ] \
+       && [ -n "$REPO_ROOT" ] && _ratc_in_temp_dir "$REPO_ROOT"; then
+      _ratc_hook_root=$(resolve_ops_root_walk "$HOOK_DIR")
+      _ratc_cwd_root=$(resolve_ops_root_walk "$PWD")
+      if [ -n "$_ratc_hook_root" ] && [ "$_ratc_cwd_root" = "$_ratc_hook_root" ]; then
+        # Keep a valid session pin authoritative if it names another fork.
+        _ratc_session_root=$(resolve_ops_root "$PWD")
+        if [ "$_ratc_session_root" = "$_ratc_hook_root" ]; then
+          OPS_ROOT="$_ratc_hook_root"
+        fi
+      fi
+    fi
   elif [ -n "$REPO_ROOT" ]; then
     # Inline walk-up fallback when the lib is absent (e.g. minimal test
     # sandboxes that only copy the core libs).
@@ -440,7 +471,7 @@ _ratc_evaluate_target() {
       local _og_in_ops_res=0
       local _og_in_ws_res=0
       local _og_in_git=0
-      local _og_real_ops="" _og_real_ws="" _og_probe
+      local _og_real_ops="" _og_real_ws="" _og_probe _og_git_root=""
 
       # Canonicalize the boundary anchors ONCE — used as the comparison
       # basis for both the raw-target check and the resolved-target check.
@@ -499,8 +530,10 @@ _ratc_evaluate_target() {
       while [ -n "$_og_probe" ] && [ "$_og_probe" != "/" ] && [ ! -d "$_og_probe" ]; do
         _og_probe="$(dirname "$_og_probe")"
       done
-      if [ -n "$_og_probe" ] && [ -d "$_og_probe" ] \
-         && git -C "$_og_probe" rev-parse --show-toplevel >/dev/null 2>&1; then
+      if [ -n "$_og_probe" ] && [ -d "$_og_probe" ]; then
+        _og_git_root=$(git -C "$_og_probe" rev-parse --show-toplevel 2>/dev/null) || _og_git_root=""
+      fi
+      if [ -n "$_og_git_root" ]; then
         _og_in_git=1
       fi
 
@@ -508,6 +541,44 @@ _ratc_evaluate_target() {
          && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
          && [ "$_og_in_git" = 0 ]; then
         return 0
+      fi
+
+      # Issue #1402: a session-scoped review may write inside a temporary
+      # standalone clone. The marker must belong to the ops fork that owns
+      # this hook. A linked worktree has a .git file, so it is not a clone.
+      # Every target still passes the raw and resolved governance checks.
+      if [ "$_og_in_ops_raw" = 0 ] && [ "$_og_in_ws_raw" = 0 ] \
+         && [ "$_og_in_ops_res" = 0 ] && [ "$_og_in_ws_res" = 0 ] \
+         && [ "$_og_in_git" = 1 ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] \
+         && [ -n "$OPS_ROOT" ] && [ -d "$_og_git_root/.git" ] \
+         && git -C "$_og_git_root" remote get-url origin >/dev/null 2>&1 \
+         && [ -f "$HOOK_DIR/_lib-review-markers.sh" ] \
+         && command -v resolve_ops_root_walk >/dev/null 2>&1; then
+        local _review_hook_root _review_marker _review_git_root
+        _review_hook_root=$(resolve_ops_root_walk "$HOOK_DIR")
+        _review_git_root=$(_resolve_real_path "$_og_git_root")
+        if [ -n "$_review_hook_root" ] && [ "$_review_hook_root" = "$_og_real_ops" ] \
+           && [ "$_ratc_cwd_root" = "$_review_hook_root" ] \
+           && [ -n "$_review_git_root" ] \
+           && _ratc_in_temp_dir "$_review_git_root" \
+           && [ "$_og_real_target" != "$_review_git_root" ]; then
+          case "$FILE_PATH" in
+            */../*|*/..) ;;
+            *)
+              case "$_og_real_target" in
+                "$_review_git_root"/*)
+                  # shellcheck source=/dev/null
+                  . "$HOOK_DIR/_lib-review-markers.sh"
+                  _review_marker=$(active_reviewer_marker_path "$OPS_ROOT")
+                  if [ -f "$_review_marker" ] && \
+                     grep -Eq '^[[:alnum:]_.-]+(/[[:alnum:]_.-]+)+#[1-9][0-9]*:(rex|security|architecture)$' "$_review_marker"; then
+                    return 0
+                  fi
+                  ;;
+              esac
+              ;;
+          esac
+        fi
       fi
     fi
   fi

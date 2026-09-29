@@ -64,6 +64,8 @@ The pre-build gate exists to protect **governed content** — the ops fork itsel
 
 This is deliberately narrower than "not inside a *registered* repo" — being inside some unrelated, unregistered git repository does **not** exempt a write; only a target with no git repository anywhere in its ancestry qualifies. Symlinks are resolved before judging, so a symlink under `$HOME` that points into a governed tree cannot be used to slip a write past the gate. An unresolvable or ambiguous target (an unextractable Bash write-target, in particular) is never exempted here — it falls straight through to the ticket gate, unchanged. See `require-active-ticket.sh`'s "Out-of-governance exemption" comment block for the full fail-closed reasoning, and `.claude/hooks/tests/test_require_active_ticket_bash.sh` cases 31–38 for the test coverage.
 
+**Reviewer scratch clone exception (#1402):** A sanctioned reviewer can write inside a standalone git clone under a temporary directory. The clone must have an origin remote. The hook requires this session's active-reviewer marker for Rex, Security, or Architecture review. It checks every write target against the ops fork and managed workspace before allowing the write. Linked worktrees, unresolved targets, and writes through symlinks into governed paths remain gated. See [AgDR-0188](../../docs/agdr/AgDR-0188-reviewer-scratch-clone-ticket-gate.md).
+
 See AgDR-0011 + me2resh/apexyard#150 for the full design rationale.
 
 ## Migration Gate (3a) — dedicated ticket + AgDR
