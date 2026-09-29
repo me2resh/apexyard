@@ -324,29 +324,29 @@ fi
 
 # --- 5. GOVERNANCE PIN (AgDR-0113) ---------------------------------------
 #
-# The presence question must keep reading RAW command text. This helper is
-# additive-only. A parser bug in a gate's presence question fails OPEN across
-# all three consuming hooks at once. Two pins below guard that boundary.
+# The older quote masker stays diagnosis-only. The command scrubber now feeds
+# the presence question, with raw fallback on any parse uncertainty. These
+# pins guard both paths while retaining the older masker's limited scope.
 #
-# Pin 1: these cases fail if someone makes bash_command_appears_to_write
-# itself quote-aware. That failure is the signal to re-read AgDR-0113 first.
+# Pin 1: the presence question ignores quoted redirect data.
 
 for c in "git log --format='%h > %s'" \
          "echo '  >> ZERO MATCHES'" \
          "jq '.[] | select(.n > 1)' data.json"; do
   if bash_command_appears_to_write "$c"; then
-    ok "presence question still reads raw text: ${c:0:34}"
+    bad "presence question ignores quoted data: ${c:0:34}" \
+        "quoted data was mistaken for a redirect"
   else
-    bad "presence question still reads raw text: ${c:0:34}" \
-        "detector went quote-aware — see AgDR-0113 before changing this"
+    ok "presence question ignores quoted data: ${c:0:34}"
   fi
 done
 
-# Pin 2: masking added at a gate's call site would pass pin 1. So only two
+# Pin 2: the older masker still has only two diagnostic callers. So only two
 # files may name the masker or its library: the library itself, and
 # require-active-ticket.sh, where the note function _ratc_quoted_origin_hint
 # asks the presence question of masked text only to choose a message. Hook
-# case A in test_require_active_ticket_bash.sh pins its exit code at 2.
+# case A in test_require_active_ticket_bash.sh pins the parser-missing
+# fallback exit code at 2.
 #
 # The check searches the hooks tree, .githooks, bin, and .claude/settings.json,
 # and skips tests. It compares full paths from the repository root, so a

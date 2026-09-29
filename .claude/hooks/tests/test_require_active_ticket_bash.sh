@@ -24,6 +24,10 @@ LIB_ACTIVE_TICKET="$SRC_ROOT/.claude/hooks/_lib-active-ticket.sh"
 LIB_MASK="$SRC_ROOT/.claude/hooks/_lib-mask-quoted.sh"
 DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 
+# This legacy fixture omits _lib-command-scrub.sh on purpose. It pins the
+# raw-command fallback when a partial install lacks the shared parser. The
+# installed-parser verdicts live in test_command_scrub_regressions.sh.
+
 for f in "$HOOK_SRC" "$LIB_BASH" "$LIB_CFG" "$LIB_PATH_RESOLVE" "$LIB_ACTIVE_TICKET" "$LIB_MASK" "$DEFAULTS"; do
   if [ ! -f "$f" ]; then
     echo "FAIL: required source missing: $f" >&2
@@ -992,10 +996,9 @@ run_case "#886 sanity: '||' then '>&2' fd-dup is not gated" 0 "" "$in" "$sb"
 # --- Quoted-origin diagnostic (#1356) ----------------------------------
 #
 # The gate verdict does NOT change. A read-only command whose only `>` sits
-# inside a quoted argument still blocks, because AgDR-0113 forbids feeding
-# quote-filtered text to the presence question. What changes is the message.
-# When every write sign the detector found sits inside quotes, a note says
-# so, and states both readings. See _lib-mask-quoted.sh and AgDR-0171.
+# inside a quoted argument still blocks in this parser-missing fixture. The
+# diagnostic note explains the conservative fallback. The installed parser
+# allows these read-only commands; test_command_scrub_regressions.sh pins it.
 #
 # This section sits before the #1089 section on purpose. Other open PRs append
 # their cases at the end of the file, and a separate spot keeps merges clean.
@@ -1029,9 +1032,8 @@ quoted_note_case() {
 
 bash_input() { jq -nc --arg c "$1" '{tool_name:"Bash", tool_input:{command:$c}}'; }
 
-# A. The maintainer's must-pass cases on #1356. This PR does NOT make them
-# pass. Each one still blocks. The note now explains all four, including the
-# one whose target the detector cannot extract.
+# A. Parser-missing fallback: each quoted redirect still blocks and carries
+# the diagnostic note, including the case with no extractable target.
 quoted_note_case "#1356 current behaviour: grep -E '^>' blocks, with the note" \
   note "$(bash_input "grep -E '^>' f")"
 quoted_note_case "#1356 current behaviour: grep -E 'a>b' blocks, with the note" \

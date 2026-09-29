@@ -1,5 +1,7 @@
 # Quote masking is a diagnostic aid, never a gate pre-filter
 
+> Partly superseded by [AgDR-0181](AgDR-0181-fail-closed-bash-command-scrubbing.md): the write detector may read a scrubbed view for redirect presence and target questions, under a raw-command deny gate. Routing and other command matchers stay on raw text. The older quote masker here remains diagnosis-only.
+>
 > In the context of me2resh/apexyard#1356, the write detector reads a redirect character inside a quoted argument as a real file write. Facing a choice between making the presence check quote-aware and leaving it alone, I decided to add quote masking as an additive, diagnosis-only helper. The gate verdict does not change. AgDR-0113 forbids feeding quote-filtered text to a presence question, because a parser bug there fails open across every consumer at once. The presence check keeps reading raw command text, and a regression test pins that choice.
 
 ## Status
