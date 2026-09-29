@@ -17,10 +17,10 @@
 #   7. _lib-read-config.sh sources cleanly under bash running in POSIX mode
 #      (`bash --posix` and `bash` with `POSIXLY_CORRECT=1`), and
 #      `config_get` is defined afterward (Hakim's LOW-A regression, #1403).
-#      Case 7a uses `bash --posix`, not `/bin/sh`: on Linux, `/bin/sh` is
-#      dash, a stricter POSIX shell this library was never written to
-#      support, and it fails on pre-existing bash-only syntax unrelated to
-#      LOW-A (see the case 7a comment below for the tracking reference).
+#      Case 7a uses `bash --posix`, not `/bin/sh`. Case 7c covers dash
+#      (Linux `/bin/sh`) via the BASH_VERSION guard added for #1403.
+#      A static `< <(` check for POSIX-sourced libs lives in
+#      test_posix_sourced_libs.sh (AgDR-0183).
 
 set -u
 
@@ -191,11 +191,10 @@ rm -rf "$sb"
 #
 #    Case 7a runs the probe under `bash --posix`, not `/bin/sh`. On macOS
 #    `/bin/sh` is bash in POSIX mode, so the two are equivalent there. On
-#    Linux CI runners `/bin/sh` is dash, an unrelated, stricter POSIX shell
-#    this library was never written to support: dash fails at line 35's
-#    pre-existing `${BASH_SOURCE[0]:-}` (a bash-only array expansion), which
-#    is not the LOW-A regression this case guards. That gap is tracked
-#    under #1403 and is not fixed by this case.
+#    Linux CI runners `/bin/sh` is dash. Case 7c covers dash directly.
+#    The top-level `${BASH_SOURCE[0]:-}` expansion is behind a
+#    BASH_VERSION guard (AgDR-0183 / #1403) so dash skips it and still
+#    defines config_get.
 # ---------------------------------------------------------------------------
 posix_probe_script() {
   local lib_path="$1"
@@ -223,6 +222,33 @@ if [ "$(printf '%s\n' "$out_posix" | tail -1)" = "config_get_defined" ]; then
   record_pass "7b: sources cleanly under bash POSIXLY_CORRECT=1, config_get defined"
 else
   record_fail "7b: sources cleanly under bash POSIXLY_CORRECT=1, config_get defined" "output: $out_posix"
+fi
+
+# 7c. Dash (Linux /bin/sh) must source the library and define config_get.
+#     Before AgDR-0183 an unguarded ${BASH_SOURCE[0]:-} aborted the source
+#     with "Bad substitution". Prefer an explicit dash binary. Fall back
+#     to /bin/sh only when that shell is not bash.
+DASH_BIN=""
+if command -v dash >/dev/null 2>&1; then
+  DASH_BIN=$(command -v dash)
+elif [ -x /bin/dash ]; then
+  DASH_BIN=/bin/dash
+elif [ -x /bin/sh ] && ! /bin/sh -c 'echo "${BASH_VERSION:-}"' | grep -q .; then
+  DASH_BIN=/bin/sh
+fi
+
+if [ -z "$DASH_BIN" ]; then
+  record_fail "7c: sources cleanly under dash, config_get defined" \
+    "no dash binary and /bin/sh is bash — install dash or run on Linux CI"
+else
+  out_dash=$("$DASH_BIN" -c "$probe" 2>&1)
+  rc_dash=$?
+  if [ "$rc_dash" -eq 0 ] && [ "$(printf '%s\n' "$out_dash" | tail -1)" = "config_get_defined" ]; then
+    record_pass "7c: sources cleanly under dash ($DASH_BIN), config_get defined"
+  else
+    record_fail "7c: sources cleanly under dash ($DASH_BIN), config_get defined" \
+      "rc=$rc_dash output: $out_dash"
+  fi
 fi
 
 echo
