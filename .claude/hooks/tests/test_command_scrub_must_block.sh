@@ -251,6 +251,26 @@ add_extra 'brace group sh -c' "{ sh -c 'echo x > src/app.ts'; }"
 add_extra 'if then sh -c' "if true; then sh -c 'echo x > src/app.ts'; fi"
 add_extra 'double-quoted command substitution write' 'x="$(echo hi > src/app.ts)"'
 
+# #1480 write-detector gaps. These forms missed on dev / AgDR-0181 residue.
+# Pass-after must block (exit 2). Fail-before is proven outside this file
+# against an unfixed detector copy — never asserted here.
+GAP_DIR="$TMP/gap_cases"
+mkdir -p "$GAP_DIR"
+gi=0
+add_gap() {
+  local label="$1" cmd="$2"
+  gi=$((gi + 1))
+  printf '%s' "$label" > "$GAP_DIR/$gi.label"
+  printf '%s' "$cmd" > "$GAP_DIR/$gi.cmd"
+}
+add_gap 'git log --output=file' 'git log --output=src/app.ts'
+add_gap 'git log --output file' 'git log --output src/app.ts'
+add_gap 'git diff --output=file' 'git diff --output=src/app.ts'
+add_gap 'git diff --output file' 'git diff --output src/app.ts'
+add_gap 'sort -o file' 'sort -o src/app.ts input.txt'
+add_gap 'yq -i file' 'yq -i ".a=1" src/app.ts'
+add_gap 'python3 -Bc open w' "python3 -Bc \"open('src/app.ts','w').write('x')\""
+
 # Heredoc bodies start on the next line. Commands after the opener must still
 # be checked against the allowlist on the opener line.
 HEREDOC_DIR="$TMP/heredoc_cases"
@@ -347,6 +367,15 @@ while [ -f "$EXTRA_DIR/$n.label" ]; do
   cmd=$(cat "$EXTRA_DIR/$n.cmd")
   got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
   check "ticket-extra/$label" 2 "$got"
+  n=$((n + 1))
+done
+
+n=1
+while [ -f "$GAP_DIR/$n.label" ]; do
+  label=$(cat "$GAP_DIR/$n.label")
+  cmd=$(cat "$GAP_DIR/$n.cmd")
+  got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
+  check "ticket-gap1480/$label" 2 "$got"
   n=$((n + 1))
 done
 

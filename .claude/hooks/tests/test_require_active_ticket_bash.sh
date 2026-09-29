@@ -1260,6 +1260,37 @@ in=$(jq -nc --arg c 'sed -i "s/x/y/" "$VAR"' \
   '{tool_name:"Bash", tool_input:{command:$c}}')
 run_case "#1396 reported repro: sed -i on a variable path honors active ticket" 0 "" "$in" "$sb"
 
+# --- #1480: git log/diff --output, sort -o, yq -i, python3 -Bc -------------
+#
+# Each form exited 0 with no ticket on dev. The detector must block without
+# a ticket and allow with one. Ordinary neighbours stay ungated.
+
+for c in 'git log --output=src/app.ts' 'git log --output src/app.ts' \
+         'git diff --output=src/app.ts' 'git diff --output src/app.ts' \
+         'sort -o src/app.ts input.txt' 'yq -i ".a=1" src/app.ts' \
+         "python3 -Bc \"open('src/app.ts','w').write('x')\"" \
+         "python3 -W ignore -c \"open('src/app.ts','w').write('x')\""; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1480 blocked w/o ticket: $c" 2 "BLOCKED" "$in" "$sb"
+
+  sb=$(make_sandbox)
+  cat > "$sb/.claude/session/current-ticket" <<EOF
+repo=me2resh/apexyard
+number=1480
+title=write detector gaps
+EOF
+  run_case "#1480 allowed WITH ticket: $c" 0 "" "$in" "$sb"
+done
+
+# This fixture omits _lib-command-scrub.sh, so a quoted '>' still reads as a
+# redirect here. test_command_scrub_regressions.sh covers the quoted case.
+for c in "git log --oneline -1" "sort src/app.ts" 'yq ".a" src/app.ts'; do
+  sb=$(make_sandbox)
+  in=$(jq -nc --arg c "$c" '{tool_name:"Bash", tool_input:{command:$c}}')
+  run_case "#1480 sanity: read stays ungated: $c" 0 "" "$in" "$sb"
+done
+
 # --- Summary -----------------------------------------------------------
 
 echo ""

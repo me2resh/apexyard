@@ -152,5 +152,22 @@ check 'heredoc prose with scratch write' 0 \
 check 'quoted tee beside scratch write is data' 0 \
   "$(ticket_result "echo 'tee src/app.ts' > /tmp/run.log")"
 
+# #1480: allowlisted writers that still write (scrubbed view must detect).
+check 'git log --output= tracked file' 2 \
+  "$(ticket_result 'git log --output=src/app.ts')"
+check 'git log --output space tracked file' 2 \
+  "$(ticket_result 'git log --output src/app.ts')"
+check 'git diff --output= tracked file' 2 \
+  "$(ticket_result 'git diff --output=src/app.ts')"
+check 'sort -o tracked file' 2 \
+  "$(ticket_result 'sort -o src/app.ts input.txt')"
+check 'yq -i tracked file' 2 \
+  "$(ticket_result 'yq -i ".a=1" src/app.ts')"
+check 'python3 -Bc open w tracked file' 2 \
+  "$(ticket_result "python3 -Bc \"open('src/app.ts','w').write('x')\"")"
+# Scrubbed allowlist false-positive neighbour still passes.
+check 'git log format stays allowed' 0 \
+  "$(ticket_result "git log --format='%h > %s'")"
+
 printf 'RESULT: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
