@@ -707,6 +707,26 @@ Enable it now? (needs admin on the repo)
 
 On **y**, run `gh repo edit <FORK_REPO> --enable-issues` and confirm. On **n**, print the one-liner and move on. Never enable silently — it's an externally-visible repo-settings change requiring admin scope, and the adopter may intend to track elsewhere. (In split-portfolio mode, the issue-hosting repo is the **public fork**, not the private portfolio — probe the fork, which is what `gh repo view` returns here.)
 
+### Step 7c: Record origin public proof for leak-hook exemption (#1477)
+
+The staged and runtime leak hooks stay offline. They exempt origin identity only when local proof names origin itself (AgDR-0190). One proof path is `leak_protection.origin_verified_public` in `.claude/project-config.json`.
+
+Run the helper once while network access is available:
+
+```bash
+bash bin/record-origin-verified-public.sh
+```
+
+The helper:
+
+1. Parses the `origin` remote into an `owner/repo` slug.
+2. Runs `gh repo view <slug> --json visibility,isFork`.
+3. Writes `leak_protection.origin_verified_public` only when visibility is `PUBLIC`.
+4. Removes an earlier key when GitHub reports the repo is not `PUBLIC`, for example after the repo was made private. Prints why the origin exemption is off.
+5. Keeps an earlier matching key when the check itself fails (no `gh`, no network, no auth), and says so. Writes no new key in that case.
+
+Show the helper's stdout to the operator. Do not invent a key by hand. Do not stage `.claude/project-config.json` (gitignored; see #1031). A private ops origin is expected and fine; the exemption simply stays off.
+
 ### Step 8: Clear the bootstrap marker (REQUIRED)
 
 ```bash
@@ -722,7 +742,7 @@ Always remove the marker on a clean exit so subsequent edits in the same session
 3. **Stage, don't commit.** The user should see the diff before it's committed. `/setup` stages; the user commits.
 4. **Preserve structure.** `onboarding.yaml` has comments that explain each section. Don't blow them away — edit in place.
 5. **Idempotent.** Running `/setup` again shows current config and asks what to update. Running with `--reset` clears and re-asks. Running with `--enable-lsp` retrofits the LSP step on an already-configured fork; if LSP is already enabled it's a no-op.
-6. **No project-config.json.** `/setup` configures the FRAMEWORK (onboarding.yaml). Per-project config is handled by `/handover` and `/idea` when projects enter the portfolio.
+6. **Project-config is narrow.** `/setup` configures the FRAMEWORK (`onboarding.yaml`). Do not invent broad `.claude/project-config.json` policy by hand. Allowed writes: the split-portfolio `portfolio:` block (Step 2b) and `leak_protection.origin_verified_public` via `bin/record-origin-verified-public.sh` (Step 7c). Per-project config otherwise stays with `/handover` and `/idea`.
 7. **Never auto-install language runtimes.** Step 2c installs LSP servers (e.g. `typescript-language-server`, `pyright`, `gopls`, `rust-analyzer`) but never the underlying runtime (`node`, `python`, `go`, `rustup`). If a runtime is missing, refuse the LSP install gracefully and tell the operator what to install.
 8. **Print plugin-install commands; never invoke them.** The Claude Code plugin marketplace command shape (`/plugin marketplace add`, `/plugin install`, `/reload-plugins`) is empirically stable — Step 2c.5(d) prints a copy-paste block for the operator. But `/plugin` is a Claude Code UI built-in, not a shell command, so the skill never runs the commands itself — it prints them. Always emit the `marketplace add` line; it's idempotent and recovers the case where the docs' auto-load claim doesn't fire on a fresh install.
 9. **`docs/harnesses/README.md` is the single source of truth for harness support.** Step 2d summarises and links it — it never copies the capability matrix inline as a maintained duplicate. When printing a harness's install command / precondition / tier, read the doc fresh rather than trusting a stale table baked into this skill; the matrix changes as adapters move through live-verification. Never round a harness's tier up. Do not restore the retired failClosed-only claim for Cursor.

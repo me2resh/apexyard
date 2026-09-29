@@ -964,6 +964,25 @@ write always happens through this explicit `/update` step (or a manual
 `bin/sync-codex-adapter.sh --reconcile-installed` run); `/update` remains the
 sole owner of strict, mutating reconciliation.
 
+### 8e. Record origin public proof for leak-hook exemption (#1477)
+
+After the sync has applied, refresh offline origin proof while network access
+is still available. The staged and runtime leak hooks never call GitHub.
+They read `leak_protection.origin_verified_public` from
+`.claude/project-config.json` (AgDR-0190).
+
+```bash
+bash bin/record-origin-verified-public.sh
+```
+
+The helper reads the origin slug, runs
+`gh repo view <slug> --json visibility,isFork`, and writes the key only when
+visibility is `PUBLIC`. If GitHub reports the repo is not `PUBLIC`, it removes
+an earlier key, because that proof is now wrong. If the check itself fails, it
+keeps an earlier matching key and writes no new one. It prints why in each case. Show that output
+to the operator. Do not stage the config file (#1031). Skip this step on
+`--dry-run`.
+
 ### 9. Final state + next steps
 
 On clean completion, print (substituting `$UPSTREAM_REF` for the literal `upstream/main` so the operator sees the actual ref synced under `--from-dev`):
@@ -1027,7 +1046,8 @@ Skill done. No remote state changed.
 | Merge conflict the user aborts | Restore original branch state, delete sync branch, exit 1 |
 | Tracking issue for the sync doesn't exist | Offer to create one via `gh issue create`, get number, continue |
 | `jq` not installed (deprecated-config detection) | Skip step 8 silently; print one-line warning. The sync itself still completes. |
-| `.claude/project-config.json` missing (no override) | Skip step 8 silently — by definition no deprecated keys to surface. |
+| `.claude/project-config.json` missing (no override) | Skip step 8 silently — by definition no deprecated keys to surface. Step 8e may still create the file when origin is PUBLIC. |
+| Origin is private during step 8e | Helper removes any earlier key, prints that origin exemption is off. Sync still succeeds. |
 | Operator answered `s` (show) | Print key + value, then re-prompt y/n (no `s` recursion). |
 | `--from-dev` passed but `upstream/dev` doesn't exist on the configured remote | Print: `upstream/dev not found — the configured upstream may not have a dev branch. Verify with: git ls-remote upstream dev`. Exit 1; no banner-suppression, no fallback to main. |
 | `--from-dev` combined with `--dry-run` | Banner prints first, then preview against `upstream/dev`, then exit 0. Same no-state-change semantics as plain `--dry-run`. |

@@ -292,10 +292,10 @@ fi
 rm -f "$pre_fix_hook"
 rm -rf "$sandbox"
 
-# 9. Origin-owner-only case — the owner-login exemption must work on its
-#    own for `origin`, with no `upstream` remote configured at all. This
-#    isolates the ORIGIN half of the owner branch from the upstream half
-#    case 2/5/6 already cover.
+# 9. #1477 — a private, non-fork origin must NOT exempt its owner login.
+#    Without upstream (and without origin in public_framework_repos), the
+#    owner/repo form of origin's owner is a private reference and blocks.
+#    A bare mention of that owner still blocks either way.
 ORIGIN_OWNER_REGISTRY_YAML='projects:
   - name: atlas-fork
     repo: acme-org/atlas-fork-tool
@@ -307,13 +307,38 @@ ORIGIN_OWNER_REGISTRY_YAML='projects:
 sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
 printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_hook "origin-owner-only: owner/repo form of ORIGIN's own owner does not block (no upstream)" "$sandbox" 0 "" ""
+assert_hook "origin-owner-only: private origin owner/repo form blocks (no public proof)" "$sandbox" 2 "File: notes.md" "atlas-fork"
 rm -rf "$sandbox"
 
 sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
 printf 'The atlas-fork account needs review.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 assert_hook "origin-owner-only: a bare mention of ORIGIN's owner still blocks (no upstream)" "$sandbox" 2 "File: notes.md" "atlas-fork"
+rm -rf "$sandbox"
+
+# 9b. #1477 — a public upstream alone does NOT prove origin public.
+#     Private ops repos commonly set upstream to the public framework.
+#     Without origin_verified_public (or origin in public_framework_repos /
+#     registry public:true), the origin-owner exemption must not fire.
+PUBLIC_UPSTREAM_URL="https://github.com/me2resh/apexyard.git"
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner with public upstream only: owner/repo form still blocks" "$sandbox" 2 "File: notes.md" "atlas-fork"
+rm -rf "$sandbox"
+
+# 9c. #1477 — recorded origin_verified_public matching origin restores the
+#     narrow owner/repo exemption (skills write this after an online check).
+#     Defaults must exist: _config_load skips overrides when they are absent.
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+cp "$ROOT/.claude/hooks/_lib-read-config.sh" "$sandbox/.claude/hooks/_lib-read-config.sh"
+printf '%s\n' '{"leak_protection":{}}' \
+  > "$sandbox/.claude/project-config.defaults.json"
+printf '%s\n' '{"leak_protection":{"origin_verified_public":"atlas-fork/ops-fork"}}' \
+  > "$sandbox/.claude/project-config.json"
+printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner with matching origin_verified_public: owner/repo form does not block" "$sandbox" 0 "" ""
 rm -rf "$sandbox"
 
 # 10. Upstream-slug-only case — the repo-slug exemption must work on its
