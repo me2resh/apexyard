@@ -12,27 +12,69 @@ hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ops_root=$(cd "$hook_dir/../.." && pwd)
 cd "$ops_root" || exit 2
 
+# Newline-separated for safe iteration (A4 / #1477). Target-public list
+# may still gain a space-joined upstream append below for citation checks.
 public_repos="me2resh/apexyard"
+origin_verified_public=""
 if [ -f "$hook_dir/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$hook_dir/_lib-read-config.sh"
-  configured=$(config_get '.leak_protection.public_framework_repos[]' 2>/dev/null | tr '\n' ' ')
+  configured=$(config_get '.leak_protection.public_framework_repos[]' 2>/dev/null)
   [ -n "$configured" ] && public_repos="$configured"
+  # Recorded by /setup or /update via bin/record-origin-verified-public.sh
+  # after an online gh visibility check (AgDR-0190). Exact slug match only.
+  origin_verified_public=$(config_get_or '.leak_protection.origin_verified_public' '')
+  origin_verified_public=$(printf '%s' "$origin_verified_public" | tr -d '[:space:]')
 fi
+# #1477 — snapshot the configured public list BEFORE appending upstream.
+# Origin identity exemptions may use only this proven list, a recorded
+# origin_verified_public match, or a registry public:true match.
+# Auto-appending upstream would circularly "prove" any upstream public.
+known_public_repos="$public_repos"
 origin=$(git remote get-url origin 2>/dev/null || true)
 origin=$(printf '%s' "$origin" | sed -nE 's|.*github\.com[:/]([^/]+/[^/]+)(\.git)?$|\1|p' | sed 's/\.git$//')
 origin_name=${origin##*/}
 origin_owner=${origin%%/*}
 upstream=$(git remote get-url upstream 2>/dev/null || true)
 upstream=$(printf '%s' "$upstream" | sed -nE 's|.*github\.com[:/]([^/]+/[^/]+)(\.git)?$|\1|p' | sed 's/\.git$//')
-[ -n "$upstream" ] && public_repos="$public_repos $upstream"
+# Target-tracker public list still includes upstream for citation exemptions.
+if [ -n "$upstream" ]; then
+  public_repos=$(printf '%s\n%s\n' "$public_repos" "$upstream")
+fi
 upstream_name=${upstream##*/}
 upstream_owner=${upstream%%/*}
 
+# #1477 — origin identity (slug, bare name, owner login) is exempt only when
+# offline proof says origin is public. Upstream is not that proof. Keep in
+# parity with check-private-refs-staged.sh. Fail closed otherwise.
+origin_identity_exempt=0
+if [ -n "$origin" ]; then
+  while IFS= read -r known; do
+    [ -n "$known" ] || continue
+    if [ "$origin" = "$known" ]; then
+      origin_identity_exempt=1
+      break
+    fi
+  done <<EOF
+$known_public_repos
+EOF
+  if [ "$origin_identity_exempt" -eq 0 ] \
+    && [ -n "$origin_verified_public" ] \
+    && [ "$origin" = "$origin_verified_public" ]; then
+    origin_identity_exempt=1
+  fi
+fi
+
 is_public=0
-for public_repo in $public_repos; do
-  [ "$repo" = "$public_repo" ] && is_public=1 && break
-done
+while IFS= read -r public_repo; do
+  [ -n "$public_repo" ] || continue
+  if [ "$repo" = "$public_repo" ]; then
+    is_public=1
+    break
+  fi
+done <<EOF
+$public_repos
+EOF
 [ "$is_public" -eq 1 ] || exit 0
 
 registry="$ops_root/apexyard.projects.yaml"
@@ -142,6 +184,26 @@ owner_bare_mention_remains() {
 }
 
 current_public=0
+# First pass: a registry public:true entry whose repo equals origin also
+# proves origin is public (#1477). Must run before the scrub loop so a
+# later private token that shares the origin owner login is still scrubbed.
+while IFS= read -r entry; do
+  case "$entry" in
+    PUBLIC=*)
+      current_public=${entry#PUBLIC=}
+      ;;
+    REPO=*)
+      if [ "$current_public" = "1" ] && [ "$origin_identity_exempt" -eq 0 ] \
+        && [ -n "$origin" ] && [ "${entry#REPO=}" = "$origin" ]; then
+        origin_identity_exempt=1
+      fi
+      ;;
+  esac
+done <<EOF
+$registry_parsed
+EOF
+
+current_public=0
 while IFS= read -r entry; do
   case "$entry" in
     PUBLIC=*)
@@ -150,7 +212,9 @@ while IFS= read -r entry; do
     NAME=*)
       [ "$current_public" = "1" ] && continue
       token=${entry#NAME=}; [ -n "$token" ] || continue
-      [ "$token" = "$origin_name" ] && continue
+      if [ "$origin_identity_exempt" -eq 1 ] && [ "$token" = "$origin_name" ]; then
+        continue
+      fi
       if [ "$token" = "$upstream_name" ] && [ -n "$upstream" ] \
         && registry_name_repo_matches "$token" "$upstream"; then
         continue
@@ -160,7 +224,8 @@ while IFS= read -r entry; do
       if [ "$token" = "${repo##*/}" ] && [ "$repo" != "$upstream" ]; then
         continue
       fi
-      if [ "$token" = "$origin_owner" ] || [ "$token" = "$upstream_owner" ] \
+      if { [ "$origin_identity_exempt" -eq 1 ] && [ "$token" = "$origin_owner" ]; } \
+        || [ "$token" = "$upstream_owner" ] \
         || [ "$token" = "${repo%%/*}" ]; then
         owner_bare_mention_remains "$token" || continue
       fi
@@ -171,7 +236,9 @@ while IFS= read -r entry; do
       [ "$current_public" = "1" ] && continue
       token=${entry#REPO=}; [ -n "$token" ] || continue
       [ "$token" = "$repo" ] && continue
-      [ "$token" = "$origin" ] && continue
+      if [ "$origin_identity_exempt" -eq 1 ] && [ "$token" = "$origin" ]; then
+        continue
+      fi
       [ -n "$upstream" ] && [ "$token" = "$upstream" ] && continue
       escaped=$(escape_regex "$token") || block
       haystack_matches "(^|[^A-Za-z0-9_-])${escaped}(#[0-9]+)?([^A-Za-z0-9_-]|$)" 0 && block
