@@ -83,4 +83,16 @@ if [ -f "$MARKER" ]; then
   echo "ApexYard: cleared stale active-reviewer marker (was: $stale_value) from a previous session." >&2
 fi
 
+# me2resh/apexyard#1408: sessions with an id never read the pre-#1376 shared
+# path. A leftover file there is orphaned stale state — sweep it on SessionStart
+# so it cannot spam the legacy-marker advisory forever. Never remove it when
+# this session has no id (that path IS this session's marker — case 2 above).
+LEGACY_MARKER="$ROOT/.claude/session/active-reviewer"
+SID="${CLAUDE_CODE_SESSION_ID:-}"
+if [ -n "$SID" ] && [ "$MARKER" != "$LEGACY_MARKER" ] && [ -f "$LEGACY_MARKER" ]; then
+  legacy_value=$(tr -d '[:space:]' < "$LEGACY_MARKER" 2>/dev/null || echo "(unreadable)")
+  rm -f "$LEGACY_MARKER"
+  echo "ApexYard: cleared stale legacy shared active-reviewer marker (was: $legacy_value)." >&2
+fi
+
 exit 0
