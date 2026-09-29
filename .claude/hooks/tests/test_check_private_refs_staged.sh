@@ -1376,6 +1376,209 @@ assert_hook "B8: the real slug (acme-org/dd-one) still blocks" "$sandbox" 2 "Fil
 rm -rf "$sandbox"
 
 echo
+echo "== apexyard#1458 items 1-3: follow-up to #1457"
+#
+# Each is verified to fail against the PRE-fix library before the
+# corresponding fix landed (see the differential-test probes and the PR
+# description). All names/slugs SYNTHETIC.
+
+# Item 1 — a comment-only repos: block-list item ("- # note") is one dev
+# token whose value IS the comment, with no whitespace before the "#" for
+# the old split_words() strip to anchor on. It split into "#" and "note"
+# as their own standalone tokens; "#" then blocked every Markdown
+# heading.
+IT1_YAML='projects:
+  - name: ee-priv-it1
+    repos:
+      - acme-org/it1-target
+      - # note
+'
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf '# Release notes\n\nSee the changelog.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: a Markdown heading (# ...) is not blocked by a comment-only repos: item" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Please note the deadline.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: the comment word (note) is not blocked" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/it1-target as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: the real slug (acme-org/it1-target) still blocks" "$sandbox" 2 "File: notes.md" "it1-target"
+rm -rf "$sandbox"
+
+# Item 2 — DROPPED (round 11, Hakim HIGH-1). The GARBAGE classification
+# round 10 added here (exempting a nested "- name:" line whenever it sat
+# deeper than the entry's own dash column) could not tell a genuinely
+# nested sub-item from a real project entry that legitimately sits
+# deeper than the FIRST entry's column. GA1/GA2/GA5 below are the three
+# valid YAML shapes Hakim found where that column test wrongly exempted
+# a REAL private project name. dev over-blocks a nested "- name:" (item
+# 2's original report); that stays an accepted usability gap, not a
+# leak — see AgDR-0180. These three cases must still BLOCK.
+
+# GA1 — grouped projects: a "- group:" entry (not "- name:") holding a
+# nested "projects:" list with a real project entry inside it.
+GA1_YAML='projects:
+  - group: team-a
+    projects:
+      - name: priv-ga1
+        repo: acme-org/priv-ga1-repo
+        workspace: workspace/priv-ga1
+'
+sandbox=$(make_sandbox_with_remotes "$GA1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See priv-ga1 today.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "GA1: a real project name nested under a - group: entry still blocks" "$sandbox" 2 "File: notes.md" "priv-ga1"
+rm -rf "$sandbox"
+
+# GA2 — projects: as a map of lists, with "archived:" indented MORE
+# deeply than "active:". The uneven indentation makes the deeper entry
+# look nested inside the shallower one to a column-only reader.
+GA2_YAML='projects:
+  active:
+    - name: priv-ga2a
+      repo: acme-org/priv-ga2a-repo
+  archived:
+      - name: priv-ga2b
+        repo: acme-org/priv-ga2b-repo
+'
+sandbox=$(make_sandbox_with_remotes "$GA2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See priv-ga2b today.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "GA2: a real project name in an unevenly-indented archived: list still blocks" "$sandbox" 2 "File: notes.md" "priv-ga2b"
+rm -rf "$sandbox"
+
+# GA5 — an entry that is itself a sequence: a bare "-" opens a nested
+# list, and the real project entry is the nested "- name:" inside it.
+GA5_YAML='projects:
+  -
+    - name: priv-ga5
+      repo: acme-org/priv-ga5-repo
+'
+sandbox=$(make_sandbox_with_remotes "$GA5_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See priv-ga5 today.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "GA5: a real project name nested under a bare - sequence entry still blocks" "$sandbox" 2 "File: notes.md" "priv-ga5"
+rm -rf "$sandbox"
+
+# Item 3 — re-verified against the current (post-#1457 round 9) library:
+# a public entry's own slug, written as a one-key "- repo:" map item
+# inside its own repos: list, is correctly exempted already (the greedy
+# private scan this was originally reported against, PR #1457 rounds
+# 4-6, was deleted outright in round 7). Regression coverage only, no
+# code change for this item.
+IT3_YAML='projects:
+  - name: gg-pub-it3
+    public: true
+    repos:
+      - repo: acme-org/it3-pub-repo
+'
+sandbox=$(make_sandbox_with_remotes "$IT3_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See acme-org/it3-pub-repo for source.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT3: a public entry own slug via a - repo: map item does not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
+echo "== apexyard#1458 round 11 (Rex B1): the runtime hook must not treat a"
+echo "   roles:/tags: list after repos: as private repo tokens"
+#
+# Round 10's item-4 fix (moving in_repos = 0 into BEGIN {}) closed the
+# leak gap but opened an over-block: in_repos closed only on a line
+# starting at column 0, which never happens inside an indented
+# projects: block, so a roles: or tags: list after a repos: block had
+# every dash item wrongly captured as REPO=. Fixed by tracking the
+# repos: key's own column and closing on any sibling key at or left of
+# it, mirroring item 6's standard-extraction fix.
+B1_YAML='projects:
+  - name: aa-app-b1
+    repos:
+      - acme-org/aa-one-b1
+    roles:
+      - tech-lead
+      - sre
+    tags:
+      - internal
+  - name: bb-app-b1
+    tags:
+      - customer-facing
+'
+sandbox=$(make_sandbox_with_remotes "$B1_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" 'This is internal tooling for the sre team.' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "0" ]; then
+  pass "B1: a role/tag word (sre, internal) after repos: does not block"
+else
+  fail "B1: a role/tag word (sre, internal) after repos: does not block" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$B1_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" 'Ping the tech-lead about the revenue report.' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "0" ]; then
+  pass "B1: a role word (tech-lead) from a later entry does not block"
+else
+  fail "B1: a role word (tech-lead) from a later entry does not block" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$B1_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" 'Reproduces in acme-org/aa-one-b1 as well.' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'aa-one-b1'; then
+  pass "B1: the real repo item (acme-org/aa-one-b1) still blocks"
+else
+  fail "B1: the real repo item (acme-org/aa-one-b1) still blocks" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$B1_YAML" "$NEUTRAL_ORIGIN_URL")
+runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" 'Private reference: aa-app-b1' '' 2>&1); runtime_rc=$?
+if [ "$runtime_rc" = "2" ] && ! printf '%s' "$runtime_output" | grep -qF 'aa-app-b1'; then
+  pass "B1: the real project name (aa-app-b1) still blocks"
+else
+  fail "B1: the real project name (aa-app-b1) still blocks" "$runtime_output"
+fi
+rm -rf "$sandbox"
+
+# The differential superset check cannot catch this class of bug: extra
+# tokens (a false positive) still pass a "never fewer than dev" test. A
+# direct hook-level assertion against the SHIPPED example registry is
+# the only thing that catches it — this is the exact file Rex found
+# still over-blocking at 6ac5626 (tech-lead, backend-engineer,
+# platform-engineer, customer-facing all leaked as REPO= tokens).
+EXAMPLE_REGISTRY="$ROOT/apexyard.projects.yaml.example"
+if [ -f "$EXAMPLE_REGISTRY" ]; then
+  sandbox=$(mktemp -d)
+  mkdir -p "$sandbox/.claude/hooks"
+  cp "$RUNTIME_SRC" "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
+  cp "$PARSER_LIB_SRC" "$sandbox/.claude/hooks/_lib-registry-parser.sh"
+  chmod +x "$sandbox/.claude/hooks/check-private-refs-runtime.sh"
+  cp "$EXAMPLE_REGISTRY" "$sandbox/apexyard.projects.yaml"
+  (
+    cd "$sandbox" || exit 1
+    git init -q
+    git config user.email test@example.com
+    git config user.name Test
+    git add apexyard.projects.yaml
+    git commit -q -m baseline
+    git remote add origin "$NEUTRAL_ORIGIN_URL"
+  )
+  runtime_output=$(cd "$sandbox" && .claude/hooks/check-private-refs-runtime.sh "me2resh/apexyard" 'Ping the tech-lead about the revenue report.' '' 2>&1); runtime_rc=$?
+  if [ "$runtime_rc" = "0" ]; then
+    pass "B1: the shipped apexyard.projects.yaml.example does not block a role-name word"
+  else
+    fail "B1: the shipped apexyard.projects.yaml.example does not block a role-name word" "$runtime_output"
+  fi
+  rm -rf "$sandbox"
+else
+  fail "B1: apexyard.projects.yaml.example must exist for this test" "not found at $EXAMPLE_REGISTRY"
+fi
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

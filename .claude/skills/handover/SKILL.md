@@ -2,7 +2,7 @@
 name: handover
 description: Onboard an external repo via a structured handover assessment + harnessability scoring across 5 codebase dimensions.
 argument-hint: "<project name> [path or url] [--topology <name>] [--all | --interactive]"
-allowed-tools: Bash, Read, Grep, Glob, Write
+allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
 # /handover — External Repo Handover Assessment
@@ -100,6 +100,11 @@ If `projects/<name>/` doesn't exist, create it. Also seed a `projects/<name>/REA
 The architecture stub is **written once** and never overwritten — it's a starting point, not a generated artefact. After the first handover, any edits the team makes to refine the diagram survive re-runs of the skill.
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### 0. Mark this session as bootstrap (REQUIRED)
 
@@ -211,7 +216,8 @@ A `PostToolUse` hook (`suggest-mcp-reindex-after-clone.sh`) fires after the clon
 
 ApexYard ships **harness-template topologies** — bundles of curated handbooks + CI pipelines + AgDR templates per service shape. Picking one here pre-bakes the right governance surface for the stack; declining keeps the existing flow byte-for-byte. See [`topologies/README.md`](../../../topologies/README.md) and AgDR-0048.
 
-If the operator passed `--topology <name>` on the CLI, skip the interactive prompt and use that pick. Otherwise prompt:
+If the operator passed `--topology <name>` on the CLI, skip the interactive prompt and use that pick. Otherwise use `AskUserQuestion`.
+Recommend `Skip / custom` first. Give each topology a one-line effect. Use the prompt below only without the tool:
 
 ```
 Which topology fits this project?
@@ -243,7 +249,8 @@ If `$PICKED_TOPOLOGY=""`, print nothing — the rest of the flow is unchanged.
 
 Background. As of 2026-07-09 the framework's mechanical gates reach beyond Claude Code through thin per-harness adapters — see `docs/harnesses/README.md`, the single source of truth for the support matrix. A team adopting an existing repo may already be running (or want to run) a non-Claude-Code harness against it; this step surfaces the adapter path at handover time instead of leaving the adopter to discover `docs/harnesses/` on their own. Light and skippable — Claude Code adopters (the default) answer one question and move on.
 
-Ask:
+Use `AskUserQuestion` to select harnesses. Preserve multiple selections and split the six options across wizard questions.
+Recommend Claude Code first. Use the prompt below only without the tool:
 
 ```
 Which harness(es) will drive work on {name}?
@@ -768,7 +775,9 @@ By this point the **computed core** is done: the handover assessment (step 5) an
 
 **Skip condition (`--all`)**: if the operator passed `--all` on the invocation, skip the checklist entirely. Generate the full default set (every row marked "default ✓" in the catalogue below) using each doc's conventional template. Note `document selection: --all (full set)` in the step 10 summary and continue to step 6. This is the byte-for-byte pre-checklist behaviour — existing scripted invocations keep working by adding `--all`.
 
-Otherwise (default, or explicit `--interactive`): present the checklist.
+Otherwise (default, or explicit `--interactive`): use `AskUserQuestion` for the document checklist.
+Split the nine documents into three wizard questions. Preserve the pre-ticked default and multiple selections.
+Use the checklist below only without the tool.
 
 #### Two kinds of output
 
@@ -852,7 +861,8 @@ registry=$(portfolio_registry)
 custom_dir="$(dirname "$registry")/custom-templates"
 ```
 
-Present the candidates, defaulting to the conventional one:
+Use `AskUserQuestion` for each template pick. Recommend the conventional template first.
+Present the candidates below only when the harness lacks the tool:
 
 ```
 Template for the L2 container diagram:
@@ -1537,7 +1547,8 @@ Every repo apexyard governs is a potential backlink + a visible signal that the 
 
 #### Pick the variant (governed_by vs built_with)
 
-On a yes, offer the second badge variant for repos that were built with apexyard from the start rather than adopted into its governance after the fact:
+On a yes, use `AskUserQuestion` to select the badge variant. Recommend `Governed by ApexYard` first.
+Use the prompt below only when the harness lacks the tool:
 
 ```
 Which wording fits <name>?

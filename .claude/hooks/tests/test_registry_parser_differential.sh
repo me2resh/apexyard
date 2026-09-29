@@ -61,12 +61,28 @@ WORKDIR=$(mktemp -d -t registry-differential.XXXXXX)
 trap 'rm -rf "$WORKDIR"' EXIT
 
 # ---------------------------------------------------------------------------
-# Dev's (9ac9d9e) original extraction programs, reproduced verbatim apart
-# from dropping the "\t"NR line-number suffix _lib-registry-parser.sh adds
-# — the differential check compares VALUES, not line numbers. Verified
-# against `git show 9ac9d9e:.claude/hooks/check-private-refs-staged.sh`
-# and `git show 9ac9d9e:.claude/hooks/check-private-refs-runtime.sh` when
-# this file was written.
+# The reference extraction programs. Originally dev's (9ac9d9e) exact
+# extraction, reproduced verbatim apart from dropping the "\t"NR
+# line-number suffix _lib-registry-parser.sh adds — the differential check
+# compares VALUES, not line numbers.
+#
+# apexyard#1458 items 4-6 moved this reference forward to match
+# `_lib-registry-parser.sh`'s own extraction fixes (per that ticket's
+# instruction: "when you change dev's extraction, move the differential
+# reference in the same commit"). The "never fewer tokens than the
+# reference" assertion (`assert_superset` below) is unchanged; it now
+# measures against the FIXED floor instead of the original dev floor:
+#   - item 5: a NEW rule recognises `- repos:` (the entry's own first
+#     field written with the list-opening dash), which the original two
+#     `repos:`-anchored rules could never match — the "- " sits between
+#     the leading whitespace and the literal "repos:" text they anchor
+#     on. Without it, an entry shaped this way lost every item of its own
+#     `repos:` list.
+#   - item 6: the generic "any key:-shaped line closes the list" rule now
+#     tracks the `repos:` key's own indentation and only closes the list
+#     on a line AT OR SHALLOWER than it — a deeper line is a CONTINUATION
+#     of a multi-key map item (`- primary: x` / `mirror: true`), not a
+#     new sibling field of the entry, and must not end the list early.
 # ---------------------------------------------------------------------------
 dev_extract_standard() {
   awk '
@@ -92,8 +108,23 @@ dev_extract_standard() {
       }
       pending_name = ""; current_list = ""; next
     }
-    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
-    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
+    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      if (current_list == "repos") {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH > repos_indent) { next }
+      }
+      current_list = ""; next
+    }
     /^[[:space:]]*-[[:space:]]+/ {
       if (current_list == "repos") {
         value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
@@ -103,6 +134,25 @@ dev_extract_standard() {
   ' "$1"
 }
 
+# apexyard#1458 item 4 moved this reference forward too: dev's own
+# `in_repos = 0` sat as a bare top-level pattern (re-running, and
+# resetting the flag, on every line) instead of inside `BEGIN {}`, so a
+# block-style `repos:` list item was never scrubbed at all — only the
+# flow `repos: [...]` form worked. `_lib-registry-parser.sh` now
+# initialises it once; this reference matches. Item 5's `- repos:`
+# companion rule is included too, for the same reason as the standard
+# extraction above.
+#
+# apexyard#1458 round 11 (Rex B1) moves this reference forward again:
+# the item-4 fix alone over-blocked, because `in_repos` closed only on a
+# column-0 line, and every line inside an indented `projects:` block is
+# indented. A `roles:`/`tags:` list after a `repos:` block had every
+# dash item wrongly read as a private repo. `_lib-registry-parser.sh`
+# now records the `repos:` key TEXT column and closes on any
+# `key:`-shaped line at or left of it (plus unconditionally in the
+# `- name:`, `repo:`, and `workspace:` rules); this reference matches,
+# so a fixture exercising that shape does not falsely demand the
+# over-blocked tokens back.
 dev_extract_runtime() {
   awk '
     function unquote(value) { gsub(/^["\x27]|["\x27]$/, "", value); return value }
@@ -116,9 +166,10 @@ dev_extract_runtime() {
         if (item != "") print "REPO=" item
       }
     }
-    in_repos = 0
-    /^[[:space:]]*- name:/ { print "NAME=" unquote($3); next }
-    /^[[:space:]]*repo:/ { print "REPO=" unquote($2); next }
+    BEGIN { in_repos = 0; repos_col = -1 }
+    /^[[:space:]]*- name:/ { in_repos = 0; print "NAME=" unquote($3); next }
+    /^[[:space:]]*repo:/ { in_repos = 0; print "REPO=" unquote($2); next }
+    /^[[:space:]]*workspace:/ { in_repos = 0; print "WORKSPACE=" unquote($2); next }
     /^[[:space:]]*repos:[[:space:]]*\[/ {
       value = $0
       sub(/^[^:]*:[[:space:]]*/, "", value)
@@ -126,7 +177,23 @@ dev_extract_runtime() {
       in_repos = 0
       next
     }
-    /^[[:space:]]*repos:[[:space:]]*$/ { in_repos = 1; next }
+    /^[[:space:]]*repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*/); repos_col = RLENGTH
+      next
+    }
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*-[[:space:]]+/); repos_col = RLENGTH
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      if (in_repos) {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH <= repos_col) in_repos = 0
+      }
+      next
+    }
     in_repos && /^[[:space:]]*-[[:space:]]+/ {
       value = $0
       sub(/^[[:space:]]*-[[:space:]]*/, "", value)
@@ -134,7 +201,6 @@ dev_extract_runtime() {
       next
     }
     /^[^[:space:]-]/ { in_repos = 0 }
-    /^[[:space:]]*workspace:/ { print "WORKSPACE=" unquote($2); next }
   ' "$1"
 }
 
@@ -155,11 +221,19 @@ dev_extract_runtime() {
 # is dropped — round 8's split introduced both as accidental new tokens
 # that round 9 intentionally removes, so the floor this test enforces
 # must not still demand them.
+#
+# apexyard#1458 item 1 narrows this further to match split_words()'s own
+# item-1 fix: a comment-ONLY value (`- # note`, dev value "# note") has
+# no whitespace before its "#" for the round-9 pattern to anchor on, so
+# it split into "#" and "note" as their own standalone words. Anchoring
+# on line-start too (`(^|[[:space:]]+)#.*$`) strips it the same way a
+# trailing comment on real content is stripped, so this floor does not
+# still demand a bare "#" or "note" that item 1 deliberately removes.
 # Reads "TYPE=value" lines on stdin; for a value with embedded
 # whitespace, `for w in $stripped` deliberately reuses the same
 # unquoted expansion dev's shell loop relied on, so this models dev's
-# hook behaviour (as narrowed by round 9) rather than re-deriving it
-# with new logic.
+# hook behaviour (as narrowed by round 9 and item 1) rather than
+# re-deriving it with new logic.
 dev_word_split() {
   local line type value stripped w
   while IFS= read -r line; do
@@ -167,7 +241,7 @@ dev_word_split() {
     type="${line%%=*}"
     value="${line#*=}"
     echo "$type=$value"
-    stripped=$(printf '%s' "$value" | sed -E 's/[[:space:]]+#.*$//')
+    stripped=$(printf '%s' "$value" | sed -E 's/(^|[[:space:]]+)#.*$//')
     # Unconditional, like split_words()'s own split() call — a stripped
     # value with no remaining whitespace still needs this pass: stripping
     # a trailing comment can turn a multi-word value into a single real
@@ -387,6 +461,55 @@ run_fixture "G3-map-item-continuation-mirror-true" 'projects:
         mirror: true
 '
 
+# apexyard#1458 item 6 — G3 above proves the multi-key map item itself is
+# still captured, but has nothing AFTER it in the same repos: list, so it
+# never exercised the actual gap: dev'\''s generic "any key:-shaped line
+# closes the list" rule fired on the map item'\''s own continuation line
+# (`mirror: true`) exactly as it would on a genuine sibling field of the
+# entry, ending the list one line too early and dropping every item
+# after it. This fixture adds a real trailing item to prove it survives.
+run_fixture "IT6-multi-key-map-item-does-not-close-list" 'projects:
+  - name: ww-priv-it6
+    repos:
+      - primary: acme-org/it6-decoy
+        mirror: true
+      - acme-org/it6-target
+'
+
+# apexyard#1458 item 5 — an entry whose OWN first field is `repos:`
+# (`- repos:` rather than a later sibling `repos:` line) never matched
+# either `repos:` detector: the "- " sits between the leading whitespace
+# and the literal "repos:" text they anchor on, so its own list items
+# were silently dropped in BOTH extractions. G1/G2 above already carry a
+# `repos:`-first entry (for the separate HIGH-8 swallowing bug), so this
+# fixture is a minimal, standalone repro naming the gap directly.
+run_fixture "IT5-repos-first-entry-own-items-not-lost" 'projects:
+  - repos:
+      - acme-org/it5-own-item
+    workspace: workspace/it5
+'
+
+# apexyard#1458 round 11 (Rex B1) — the runtime-style companion to item
+# 4: a roles:/tags: block-list AFTER a repos: block, in the runtime
+# style, must not have its own dash items read as private repos. The
+# assert_superset call below only proves the real repo/name are still
+# found (dev'\''s own floor); the negative check further down proves the
+# role/tag words are NOT invented as extra tokens, which a superset
+# check alone cannot catch.
+run_fixture "B1-roles-after-repos" 'projects:
+  - name: aa-app-b1
+    repos:
+      - acme-org/aa-one-b1
+    roles:
+      - tech-lead
+      - sre
+    tags:
+      - internal
+  - name: bb-app-b1
+    tags:
+      - customer-facing
+'
+
 run_fixture "T1-tab-in-indentation" 'projects:
 	- name: uu-tab
 	  repo: acme-org/uu-tab-repo
@@ -475,6 +598,23 @@ if [ -n "$b8_bad_found" ]; then
   fail "B8: the new parser does not invent a bare # or key-shaped value" "found in:$b8_bad_found"
 else
   pass "B8: the new parser does not invent a bare # or key-shaped value"
+fi
+
+echo
+echo "== Differential: the B1 runtime style never invents a role/tag word REPO token"
+# apexyard#1458 round 11 (Rex B1) — assert_superset only checks that
+# dev's own tokens are still found; it cannot catch EXTRA tokens the
+# parser wrongly invents, which is exactly what B1 was: a roles:/tags:
+# list after a repos: block, in the runtime style, had every dash item
+# wrongly read as REPO=. This checks the runtime-style output directly
+# for the specific role/tag words the fixture carries.
+b1_file="$WORKDIR/B1-roles-after-repos.yaml"
+b1_values=$(registry_parse_entries "$b1_file" runtime 2>/dev/null \
+  | grep -E '^(NAME|REPO|WORKSPACE)=' | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+if printf '%s\n' "$b1_values" | grep -qxE -- 'tech-lead|sre|internal|customer-facing'; then
+  fail "B1: the runtime style does not invent a role/tag word as a token" "$b1_values"
+else
+  pass "B1: the runtime style does not invent a role/tag word as a token"
 fi
 
 echo

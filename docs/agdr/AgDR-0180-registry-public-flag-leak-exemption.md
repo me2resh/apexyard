@@ -192,11 +192,123 @@ hook specifically).
   longer turns `#` and the comment's own words into private tokens (B8);
   `registry_parse_entries` also now checks the CR-strip's own exit status
   instead of assuming success.
+- **Round 10 correction (me2resh/apexyard#1458).** A follow-up ticket
+  closed the over-blocking and inherited gaps round 9 accepted or left
+  unexamined. Six targeted fixes, none a rewrite of either dev
+  extraction:
+  - **Item 1 (over-blocking).** A comment-only `repos:` block-list item
+    (`- # note`) has no whitespace before its `#` for `split_words()`'s
+    comment strip to anchor on, so it split into `#` and `note` as their
+    own private words. `#` then blocked every Markdown heading. Fixed by
+    anchoring the strip on line-start too.
+  - **Item 2 (over-blocking).** Dev's `- name:` rule has no nesting
+    awareness — it fires on `- name: X` anywhere in a private entry,
+    including nested inside an unrelated sub-list, turning a common word
+    into a private token. `_registry_public_pass` now flags every such
+    nested line as garbage, unconditionally, and `_registry_correlate`
+    exempts dev's capture on that exact line only — a value that is also
+    a genuine entry's name elsewhere still blocks.
+  - **Item 3.** Re-verified, not reproducible against the current
+    library. It described the hand-written "greedy" private scan from PR
+    #1457 rounds 4-6, which round 7 deleted outright. Hakim's original
+    LOW finding predates that deletion. Regression tests only, no code
+    change.
+  - **Item 4 (gap).** `_registry_dev_extract_runtime`'s `in_repos = 0`
+    sat as a bare top-level AWK pattern, re-running (and resetting the
+    flag) on every line instead of once. The runtime hook never scrubbed
+    a block-style `repos:` list item. Moved into `BEGIN {}`.
+  - **Item 5 (gap).** An entry whose own first field is `repos:`
+    (`- repos:`) never matched either `repos:` detector, in either
+    extraction — the list-opening dash sits between the leading
+    whitespace and the literal text they anchor on. Every item of that
+    entry's own list was lost. Fixed by adding one more rule per
+    extraction, anchored on the dash.
+  - **Item 6 (gap, standard extraction only).** A `repos:` block-list
+    item written as a multi-key map (`- primary: x` / `mirror: true`)
+    ended the list one line early: the generic "any `key:`-shaped line
+    closes the list" rule fired on the map item's own continuation line.
+    Fixed by recording the `repos:` key's indentation and only closing
+    the list on a line at or shallower than it.
+  - **Item 7, out of scope.** Flow-style YAML (`projects: [{...}]`,
+    `- {name: ...}`) and a value-level anchor stay unfixed, as named in
+    the originating ticket. Fixing either needs a YAML-aware parser, not
+    a targeted awk change, and no fixture in this file's history has
+    exercised either shape as a real registry format.
+  - All six fixes are additive to what dev finds — more tokens captured,
+    or exemption granted only on the exact line a structural proof
+    covers — never fewer. `.claude/hooks/tests/test_registry_parser_differential.sh`
+    moved its frozen dev-extraction reference forward to match items 4-6
+    (the ticket's own instruction), still asserting the new parser never
+    finds fewer tokens than that reference. Two new fixtures
+    (`IT5-repos-first-entry-own-items-not-lost`,
+    `IT6-multi-key-map-item-does-not-close-list`) each fail against the
+    pre-fix library and pass against the fixed one, confirmed directly
+    before landing the fix, not assumed.
+- **Round 11 correction (me2resh/apexyard#1458 PR #1462, Rex B1 +
+  Hakim HIGH-1).** Two independent reviews of round 10's PR each found
+  one of its six fixes fail-open. Both are corrected here. The other
+  four (items 1, 5, 6) and the item-3/item-7 dispositions stand
+  unchanged.
+  - **Item 2, DROPPED (Hakim HIGH-1, blocking).** Round 10's GARBAGE
+    classification exempted a nested `- name:` line whenever it sat
+    deeper than the FIRST project entry's own dash column, on the
+    reasoning that a genuinely nested sub-item always sits deeper than
+    its enclosing entry. That reasoning fails for valid YAML the column
+    test cannot tell apart from a real entry: Hakim found three shapes —
+    **GA1** (a `- group:` entry holding a nested `projects:` list with a
+    real project entry inside it), **GA2** (`projects:` written as a map
+    of lists, with `archived:` indented MORE deeply than `active:`, so
+    the uneven indentation makes a real, later entry look nested inside
+    an earlier one), and **GA5** (an entry that is itself a sequence — a
+    bare `-` opening a nested list, with the real project entry as the
+    nested `- name:` inside it) — where a REAL, registered private
+    project name went from blocked (dev) to silently passed (round 10).
+    Closing this properly needs a real YAML parser that can tell a
+    project-entry map from an arbitrary nested list or map-of-lists
+    layout. A column comparison over raw text cannot make that
+    distinction. Given the ticket's own instruction to keep every
+    change small and targeted, and that item 2 was only ever a
+    usability fix (a nested `- name:` over-blocks and does not leak),
+    the GARBAGE mechanism is removed outright rather than patched a
+    third time. dev's own `- name:`
+    capture is unconditionally private again, matching its behavior
+    before this whole ticket. **This is now recorded, alongside item 7,
+    as an accepted out-of-scope over-block**: a nested `- name:` common
+    word (e.g. a deploy environment named `prod`) still blocks every
+    commit and tracker write that mentions it. GA1/GA2/GA5 are now
+    regression tests (staged + public-tracker) asserting these three
+    shapes still block, confirmed to fail against the round-10 library
+    and pass against the one with GARBAGE removed.
+  - **Item 4, CORRECTED (Rex B1, blocking).** Round 10's `BEGIN {}` fix
+    closed the leak gap (the runtime hook now actually reads a
+    block-style `repos:` list) but opened a new over-block: the only
+    remaining close condition for `in_repos` was a line starting at
+    column 0, and every line inside an indented `projects:` block has
+    leading whitespace, so the list never closed at a sibling key. A
+    `roles:` or `tags:` list after a `repos:` block — in that entry or
+    any later one — had every dash item wrongly read as a private repo.
+    The shipped `apexyard.projects.yaml.example` reproduces this
+    directly: a public-tracker write mentioning `tech-lead` or
+    `backend-engineer` started blocking. Fixed the same way item 6
+    fixes the standard extraction: record the COLUMN of the `repos` key
+    TEXT (not the dash) when the list opens, and close `in_repos` on any
+    `key:`-shaped line at or left of that column — plus unconditionally
+    in the `- name:`, `repo:`, and `workspace:` rules, since any of
+    those can be the very next line after a `repos:` block ends. The
+    differential test's frozen runtime reference moved forward again to
+    match. A new fixture, `B1-roles-after-repos`, and a direct
+    hook-level test against the shipped example file are both confirmed
+    to fail against the round-10 library and pass against the fix — the
+    differential test's ordinary superset check cannot catch an
+    over-block (extra tokens still pass "dev's tokens are all present"),
+    so a dedicated negative assertion (no role/tag word in the runtime
+    output) was added alongside it.
 
 ## Artifacts
 
 - me2resh/apexyard#1455 (originating issue)
 - me2resh/apexyard#1457 (PR)
+- me2resh/apexyard#1458 (round 10 follow-up issue)
 - `.claude/hooks/_lib-registry-parser.sh` (new)
 - `.claude/hooks/check-private-refs-staged.sh`
 - `.claude/hooks/check-private-refs-runtime.sh`

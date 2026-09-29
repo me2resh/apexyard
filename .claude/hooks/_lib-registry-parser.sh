@@ -91,7 +91,101 @@
 #     status instead of assuming success, so a failed CR-strip (not just
 #     a failed `mktemp`) fails the whole call closed too.
 #
-# Explicitly out of scope, unchanged from earlier rounds: flow-style YAML
+# apexyard#1458 — targeted fixes on top of round 9, none of which
+# rewrite either dev extraction wholesale (per that ticket's explicit
+# instruction, after PR #1457's 9-round history of exactly that mistake).
+# Round 10 (this ticket's first pass) shipped six fixes; round 11 (Rex
+# B1, Hakim HIGH-1, PR #1462) dropped one of them (item 2) and corrected
+# another (item 4) after review found each fail-open:
+#
+#   1. (over-blocking) A comment-only `repos:` block-list item (`- # note`)
+#      split into the standalone words "#" and "note" in `split_words()`,
+#      because its trailing-comment strip required WHITESPACE before the
+#      "#" (`[[:space:]]+#.*$`), which a comment starting at position 0 of
+#      the value never has. "#" then blocked every Markdown heading. Fixed
+#      by anchoring the strip on line-start too (`(^|[[:space:]]+)#.*$`).
+#      The untouched whole value (out[1]) is still always kept, so this
+#      cannot drop a token dev's extraction found — only the SPURIOUS
+#      extra split words it never should have produced.
+#   2. (over-blocking, DROPPED in round 11 — Hakim HIGH-1) dev's
+#      `- name:` rule has no nesting awareness at all: it fires on ANY
+#      line shaped `- name: X`, anywhere in a project entry, not only at
+#      the entry's own top-level dash. Round 10 tried fixing this by
+#      having `_registry_public_pass` flag every nested `- name:` line as
+#      GARBAGE (exempt, regardless of the entry's own public/private
+#      status) whenever it sat deeper than the entry's OWN dash column.
+#      That column test cannot tell a genuinely nested sub-item from a
+#      real project entry that legitimately sits deeper than the FIRST
+#      entry's column — Hakim found three such valid YAML layouts (a
+#      `- group:` entry holding a nested `projects:` list; `projects:` as
+#      a map of `active:`/`archived:` lists at different indents; an
+#      entry that is itself a sequence, `-` then a nested `- name:`) where
+#      a REAL private project name went from blocked (dev) to silently
+#      passed (round 10). A column-only heuristic cannot close this
+#      without a real YAML parser — see AgDR-0180. Removed outright: the
+#      GARBAGE bookkeeping in `_registry_public_pass` and its consumer in
+#      `_registry_correlate`. dev's `- name:` capture is unconditionally
+#      private again, exactly as it always was — an accepted over-block,
+#      not a leak. GA1/GA2/GA5 regression tests (staged + public-tracker)
+#      assert these three shapes still block.
+#   4. (gap, CORRECTED in round 11 — Rex B1) `_registry_dev_extract_runtime`'s
+#      `in_repos = 0` sat as a bare top-level AWK pattern, not inside
+#      `BEGIN {}` — it re-ran on EVERY line (its truth value is always 0,
+#      so it never PRINTED anything, but the ASSIGNMENT side effect fired
+#      every time), always resetting the flag immediately before the very
+#      next line's `in_repos && ...` check could ever see it as 1. The
+#      runtime hook therefore never scrubbed a block-style `repos:` list
+#      item — confirmed the actual dev (9ac9d9e) bug, not introduced by
+#      any later round. Round 10 moved the reset into `BEGIN {}` so it
+#      runs once, but closed `in_repos` ONLY on a line starting at column
+#      0 (`/^[^[:space:]-]/`) — inside an indented `projects:` block every
+#      line has leading whitespace, so the list never actually closed at
+#      a sibling key, and every LATER dash item in the same entry (and
+#      every later entry), such as `roles:`/`tags:` lists, was wrongly
+#      captured as `REPO=`. Fixed the same way item 6 fixes the standard
+#      extraction: record the COLUMN of the `repos` key text (not the
+#      dash) when the list opens, and close it on any `key:`-shaped line
+#      at or left of that column — in the `- name:`, `repo:`, and
+#      `workspace:` rules too, not only the generic fallback, since any
+#      of those can be the very next line after a `repos:` block ends.
+#   5. (gap) An entry whose OWN first field is `repos:` — written
+#      `- repos:\n    - a\n    - b` — never had its `repos:` line
+#      recognised at all: both the block (`repos:$`) and flow (`repos:[`)
+#      detectors require the line to start with "repos:" AFTER
+#      whitespace, and a leading "- " (marking the entry itself) sits
+#      between the whitespace and "repos:" for exactly this shape. Every
+#      item in that list was silently dropped, in BOTH extractions. Fixed
+#      by adding one more rule per extraction, anchored on the dash, for
+#      the block form only (the flow form, `- repos: [a, b]`, is
+#      unchanged — narrower than dev, not wider, and no fixture in this
+#      suite exercises it as the entry's first field).
+#   6. (gap) A `repos:` block-list item written as a multi-key map
+#      (`- primary: acme/x\n    mirror: true`) ended the list one line
+#      too early in `_registry_dev_extract_standard`: the SAME generic
+#      "any `key:`-shaped line closes the list" rule that correctly
+#      closes it on a genuine sibling field of the entry ALSO fired on
+#      the map item's own second key (`mirror: true`), which is a
+#      CONTINUATION of the list item, not a new field of the entry —
+#      every `repos:` item after it was then lost. Fixed by recording the
+#      `repos:` key's own indentation when the list opens, and only
+#      treating a later `key:`-shaped line as closing the list when its
+#      indentation is AT OR SHALLOWER than that — a deeper one is a
+#      continuation of the current item and leaves the list open.
+#
+# Items 1, 4, 5, and 6 are additive to what `dev` finds (more tokens
+# captured, never fewer) or narrow a closing condition to match a column,
+# never widen it into blindly trusting content. Item 3 in the same ticket
+# ("a public entry's own slug, written as a `- repo:` map item inside its
+# `repos:` list, is not exempted") was re-verified against this file's
+# CURRENT (round 9) state before starting this work and no longer
+# reproduces — it described the hand-written "greedy" private scan from
+# PR #1457 rounds 4-6, which round 7 deleted outright in favour of
+# running dev's own extraction; Hakim's original LOW finding predates
+# that deletion. Covered here by regression tests (staged + public-
+# tracker) instead of a code change — see AgDR-0180 for the fuller note.
+#
+# Explicitly out of scope, unchanged from earlier rounds: a nested
+# `- name:` line always stays private (item 2, above), flow-style YAML,
 # and a value-level anchor.
 #
 # Usage:
@@ -210,8 +304,35 @@ _registry_dev_extract_standard() {
       }
       pending_name = ""; current_list = ""; next
     }
-    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
-    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
+    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    # apexyard#1458 item 5 — an entry whose OWN first field is `repos:`
+    # (`- repos:` rather than a later sibling `repos:` line) was never
+    # recognised by the rule above: the "- " sits between the leading
+    # whitespace and the literal "repos:" text the regex anchors on. Its
+    # own list items were silently dropped. This is the same rule as
+    # above, anchored on the dash, for the block form only.
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      # apexyard#1458 item 6 — a `repos:` block-list item written as a
+      # multi-key map (`- primary: x` then a continuation `mirror: true`)
+      # matches this same generic "key:" pattern on its SECOND key. That
+      # continuation line is deeper than the `repos:` key'\''s own recorded
+      # indentation; a genuine sibling field of the entry never is. Only
+      # the latter should close the list.
+      if (current_list == "repos") {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH > repos_indent) { next }
+      }
+      current_list = ""; next
+    }
     /^[[:space:]]*-[[:space:]]+/ {
       if (current_list == "repos") {
         value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
@@ -241,9 +362,44 @@ _registry_dev_extract_runtime() {
         if (item != "") print "REPO=" item "\t" NR
       }
     }
-    in_repos = 0
-    /^[[:space:]]*- name:/ { print "NAME=" unquote($3) "\t" NR; next }
-    /^[[:space:]]*repo:/ { print "REPO=" unquote($2) "\t" NR; next }
+    BEGIN { in_repos = 0; repos_col = -1 }
+    # apexyard#1458 item 4 — the line above used to be a bare top-level
+    # `in_repos = 0` statement, not inside `BEGIN {}`. AWK treats a bare
+    # expression as a pattern with the default `{print}` action gated on
+    # its truth value: it re-ran on EVERY input line (always false, so it
+    # never printed), but the ASSIGNMENT side effect fired every time —
+    # resetting the flag immediately before the very next line'\''s
+    # `in_repos && ...` check could ever see it as 1. The runtime hook
+    # therefore never scrubbed a block-style `repos:` list item at all
+    # (only the flow `repos: [...]` form worked). Moving the reset into
+    # `BEGIN {}` makes it run once, as originally intended.
+    #
+    # apexyard#1458 round 11 (Rex B1) — that fix alone over-blocked: the
+    # only close condition left was a line starting at column 0
+    # (`/^[^[:space:]-]/` below), but every line inside an indented
+    # `projects:` block has leading whitespace, so the list never closed
+    # at a sibling key. A `roles:` or `tags:` list after `repos:`, in
+    # THIS entry or any later one, had every dash item wrongly captured
+    # as `REPO=`. Fixed the same way item 6 fixes the standard
+    # extraction: record the COLUMN of the `repos` key TEXT (not the
+    # dash) when the list opens in `repos_col`, and close `in_repos` on
+    # any `key:`-shaped line at or left of that column (the new generic
+    # rule below) — plus unconditionally in the `- name:`, `repo:`, and
+    # `workspace:` rules, since any of those can be the very next line
+    # after a `repos:` block ends and dev'\''s own standard extraction
+    # closes its list unconditionally on these same three shapes.
+    /^[[:space:]]*- name:/ { in_repos = 0; print "NAME=" unquote($3) "\t" NR; next }
+    /^[[:space:]]*repo:/ { in_repos = 0; print "REPO=" unquote($2) "\t" NR; next }
+    # apexyard#1458 round 11 (Rex B1) — moved up from the bottom of this
+    # program to BEFORE the new generic key:-shaped close rule below.
+    # "workspace:" itself matches that generic pattern
+    # (`[A-Za-z_][A-Za-z0-9_-]*:`); left in its original position it would
+    # never be reached, because the generic rule would consume every
+    # workspace: line first and `next` away before this specific rule
+    # ever ran, silently dropping every WORKSPACE= token. Also now closes
+    # `in_repos` unconditionally, for the same reason `- name:` and
+    # `repo:` do.
+    /^[[:space:]]*workspace:/ { in_repos = 0; print "WORKSPACE=" unquote($2) "\t" NR; next }
     /^[[:space:]]*repos:[[:space:]]*\[/ {
       value = $0
       sub(/^[^:]*:[[:space:]]*/, "", value)
@@ -251,7 +407,39 @@ _registry_dev_extract_runtime() {
       in_repos = 0
       next
     }
-    /^[[:space:]]*repos:[[:space:]]*$/ { in_repos = 1; next }
+    /^[[:space:]]*repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*/); repos_col = RLENGTH
+      next
+    }
+    # apexyard#1458 item 5 — the runtime-style companion to the standard
+    # extraction'\''s same fix above: an entry whose own first field is
+    # `repos:` (`- repos:` rather than a later sibling `repos:` line)
+    # never matched the rule above, because the "- " sits between the
+    # leading whitespace and the literal "repos:" text it anchors on.
+    # `repos_col` is recorded as the column of the "repos" TEXT here too
+    # (after the dash and its following whitespace), not the dash'\''s own
+    # column, matching Rex'\''s B1 fix instruction.
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*-[[:space:]]+/); repos_col = RLENGTH
+      next
+    }
+    # apexyard#1458 round 11 (Rex B1) — the generic close condition item
+    # 6 already gives the standard extraction, ported here: ANY other
+    # `key:`-shaped line (`roles:`, `tags:`, or any sibling field) closes
+    # the list only when its own column is AT OR LEFT of `repos_col` — a
+    # line deeper than that is nested inside the current repos: item
+    # (unreachable in practice for THIS extraction, since it has no
+    # multi-key map-item concept, but the same rule keeps both
+    # extractions consistent) and must not close the list early.
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      if (in_repos) {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH <= repos_col) in_repos = 0
+      }
+      next
+    }
     in_repos && /^[[:space:]]*-[[:space:]]+/ {
       value = $0
       sub(/^[[:space:]]*-[[:space:]]*/, "", value)
@@ -259,7 +447,6 @@ _registry_dev_extract_runtime() {
       next
     }
     /^[^[:space:]-]/ { in_repos = 0 }
-    /^[[:space:]]*workspace:/ { print "WORKSPACE=" unquote($2) "\t" NR; next }
   ' "$registry"
 }
 
@@ -514,7 +701,17 @@ _registry_correlate() {
       n = 0
       out[++n] = v
       stripped = v
-      sub(/[[:space:]]+#.*$/, "", stripped)
+      # apexyard#1458 item 1 — a comment-ONLY repos: block-list item
+      # (`- # note`) is one dev token whose value IS the comment, with no
+      # real content before it, so there is no WHITESPACE before the "#"
+      # for this strip to anchor on: the old pattern
+      # (`[[:space:]]+#.*$`) never matched it. It split on whitespace
+      # instead, producing "#" and "note" as their own standalone private
+      # words — "#" then blocked every Markdown heading. Anchoring on
+      # line-start too (`(^|[[:space:]]+)#.*$`) strips it the same way
+      # round 9'\''s fix already strips a TRAILING comment on real content;
+      # out[1] (the untouched whole value) is unaffected either way.
+      sub(/(^|[[:space:]]+)#.*$/, "", stripped)
       m = split(stripped, parts, /[ \t]+/)
       for (i = 1; i <= m; i++) {
         w = parts[i]

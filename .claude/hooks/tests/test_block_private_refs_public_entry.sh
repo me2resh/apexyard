@@ -584,6 +584,101 @@ run_case "B8: the real slug (acme-org/dd-one) still blocks" \
   2 "project repo: acme-org/dd-one" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/dd-one as well'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1458 items 1-3 — follow-up to #1457. Each is verified to fail
+# against the PRE-fix library before the corresponding fix landed (see
+# the differential-test probes and PR description). All names/slugs
+# SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+# Item 1 — a comment-only repos: block-list item ("- # note") is one dev
+# token whose value IS the comment, with no whitespace before the "#" for
+# the old split_words() strip to anchor on. It split into "#" and "note"
+# as their own standalone tokens; "#" then blocked every Markdown
+# heading.
+write_registry 'projects:
+  - name: ee-priv-it1
+    repos:
+      - acme-org/it1-target
+      - # note
+'
+run_case "IT1: a Markdown heading (# ...) is not blocked by a comment-only repos: item" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body '# Release notes'"
+
+run_case "IT1: the comment word (note) is not blocked" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Please note the deadline'"
+
+run_case "IT1: the real slug (acme-org/it1-target) still blocks" \
+  2 "project repo: acme-org/it1-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/it1-target as well'"
+
+# Item 2 — DROPPED (round 11, Hakim HIGH-1). The GARBAGE classification
+# round 10 added here (exempting a nested "- name:" line whenever it sat
+# deeper than the entry's own dash column) could not tell a genuinely
+# nested sub-item from a real project entry that legitimately sits
+# deeper than the FIRST entry's column. GA1/GA2/GA5 below are the three
+# valid YAML shapes Hakim found where that column test wrongly exempted
+# a REAL private project name. dev over-blocks a nested "- name:" (item
+# 2's original report); that stays an accepted usability gap, not a
+# leak — see AgDR-0180. These three cases must still BLOCK.
+
+# GA1 — grouped projects: a "- group:" entry (not "- name:") holding a
+# nested "projects:" list with a real project entry inside it.
+write_registry 'projects:
+  - group: team-a
+    projects:
+      - name: priv-ga1
+        repo: acme-org/priv-ga1-repo
+        workspace: workspace/priv-ga1
+'
+run_case "GA1: a real project name nested under a - group: entry still blocks" \
+  2 "project name: priv-ga1" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga1 today'"
+
+# GA2 — projects: as a map of lists, with "archived:" indented MORE
+# deeply than "active:". The uneven indentation makes the deeper entry
+# look nested inside the shallower one to a column-only reader.
+write_registry 'projects:
+  active:
+    - name: priv-ga2a
+      repo: acme-org/priv-ga2a-repo
+  archived:
+      - name: priv-ga2b
+        repo: acme-org/priv-ga2b-repo
+'
+run_case "GA2: a real project name in an unevenly-indented archived: list still blocks" \
+  2 "project name: priv-ga2b" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga2b today'"
+
+# GA5 — an entry that is itself a sequence: a bare "-" opens a nested
+# list, and the real project entry is the nested "- name:" inside it.
+write_registry 'projects:
+  -
+    - name: priv-ga5
+      repo: acme-org/priv-ga5-repo
+'
+run_case "GA5: a real project name nested under a bare - sequence entry still blocks" \
+  2 "project name: priv-ga5" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga5 today'"
+
+# Item 3 — re-verified against the current (post-#1457 round 9) library:
+# a public entry's own slug, written as a one-key "- repo:" map item
+# inside its own repos: list, is correctly exempted already (the greedy
+# private scan this was originally reported against, PR #1457 rounds
+# 4-6, was deleted outright in round 7). Regression coverage only, no
+# code change for this item.
+write_registry 'projects:
+  - name: gg-pub-it3
+    public: true
+    repos:
+      - repo: acme-org/it3-pub-repo
+'
+run_case "IT3: a public entry own slug via a - repo: map item does not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'docs' --body 'see acme-org/it3-pub-repo for source'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]

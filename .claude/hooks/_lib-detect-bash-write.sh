@@ -547,19 +547,118 @@ _bdw_match_wget_output() {
   return 1
 }
 
+# Python write-keyword set, shared by the -c and heredoc matchers below.
+#
+# The `open(` clause matches a quoted MODE token after a comma (#1372). The
+# earlier form `open\([^)]*[wa+]` accepted a w / a / + anywhere inside the
+# parentheses, so it matched the FILENAME: `open('data.txt')` and
+# `open('.claude/x.json')` were read as writes, while `open('b.yml')` was not —
+# the verdict depended on which letters the path happened to contain.
+#
+# Matching a quoted run of mode characters instead means a path cannot be
+# mistaken for a mode: `'data.txt'` contains `.` and so is not a mode token,
+# while `'w'`, `'wb'`, `'x'` and `'r+'` are. `[^)]*` was rejected because it
+# cannot cross a nested `)`, which would have missed `open(str(p), 'w')` —
+# a form `dev` misses too. `dev` catches the `os.path.join(...)` and
+# `pathlib.Path(...)` shapes only by accident, via the `a` in "path"/"Path",
+# so that coverage disappears the moment the variable is renamed.
+#
+# The mode class also gains `x` (exclusive creation), which the previous form
+# missed entirely.
+#
+# `pathlib.Path(p).open('w')` needs its own clause. `Path.open()` takes the
+# MODE as its first positional argument, so the comma the builtin clause
+# requires never appears — `Path('f').open('w')` truncates a real file and
+# would otherwise read as a read. The `\.open\(` form is matched directly
+# against a mode token. A bare `.open()` or `.open('r')` stays a read.
+#
+# `open(*args)` is treated as a write: the mode is unknowable from the call
+# site, and this clause exists to gate writes.
+#
+# A mode held in a VARIABLE (`open(path, mode)`) is matched by its own clause:
+# a second argument that is a bare identifier — no quotes, no `=` — could be
+# any mode, so it is treated as a write. `dev` caught these only because a
+# realistic identifier like `path` contains an `a`; that is an accident, and
+# the accident disappears the moment the variable is renamed.
+#
+# `os.open()` takes integer flags rather than a mode string, so it needs its
+# own clause keyed on the write flags.
+#
+# The leading `.*` is intentionally greedy: over-matching this clause only
+# costs an unnecessary ticket check.
+#
+# The optional `\\?` before each quote absorbs a backslash-escaped quote. A
+# command can reach a hook still carrying its escapes — `python3 -c
+# "open(\"f\", \"w\")"` — so the mode token is delimited by `\"`, not `"`.
+# The optional `([:|]...)` tail carries tarfile's compression suffixes —
+# `'w:gz'`, `'w|bz2'`, `'x:xz'`. Those are write modes whose `:` or `|` would
+# otherwise terminate the token early and read as a read. `'r:gz'` stays a
+# read, because the leading `[wax+]` still has to match.
+_BDW_PY_MODE="\\\\?['\"][rbtU]*[wax+][rwxabt+U]*([:|][a-z0-9*]*)?\\\\?['\"]"
+
+# A call whose arguments after the first comma contain NO quote at all has no
+# literal mode to read, so the mode is unknown and the call counts as a write.
+# That covers a mode in a variable, in a keyword, or behind an attribute or a
+# method call — `open(p, m)`, `open(p, mode=m)`, `open(p, self.mode)`,
+# `open(p, mode.lower())`. A call with a quoted argument is left to the mode
+# clause above, so `open(p, encoding='utf-8')` stays a read.
+#
+# `.*` rather than `[^,)]*` for the first argument: the latter cannot cross a
+# nested `)`, so `open(str(path), mode)` and `open(os.path.join(d,'f'), m)`
+# escaped it. Both are ordinary shapes, and both were caught on `dev` only by
+# the letter `a` in `path` or `args`. That accident is not coverage.
+# `os.open` is deliberately excluded here — its flags are integers and never
+# quoted, so this clause would match every call including a read-only
+# `os.open(p, os.O_RDONLY)`. That is the same false positive on a read-only
+# command that #1372 reports. os.open has its own flag clause below.
+_BDW_PY_VARMODE="(^|[^.])open\(.*,[^'\"]*\)|\b(io|tarfile|gzip|bz2|lzma|shelve)\.open\(.*,[^'\"]*\)"
+
+# The clause above asks whether a quote appears anywhere after the first comma,
+# so any quoted argument hides a variable mode sitting next to it:
+# `open(p, mode, encoding='utf-8')` and `codecs.open(p, mode, 'utf-8')` are
+# writes, but the `'utf-8'` makes them read as reads. This clause looks at the
+# argument itself instead of at the rest of the call.
+#
+# It matches a second positional argument that is a bare name — optionally
+# dotted, optionally called — followed by a `,` or a `)`, whatever comes after
+# it; and separately a `mode=` whose value starts with a letter or underscore
+# rather than a quote. The first argument is `[^,()]` or one nested `(...)`
+# group, so `open(os.path.join(d,'f'), m)` still matches while the leading
+# `open(` is not confused by a comma inside that first argument.
+#
+# `os.open` is excluded from the positional half for the same reason as above.
+# A literal `os.open(p, flags, mode=perm)` can still reach the `mode=` half and
+# read as a write; that direction is safe, and the form is rare.
+_BDW_PY_VARMODE2="((^|[^.A-Za-z0-9_])|\b(io|tarfile|gzip|bz2|lzma|codecs)\.)open\(([^,()]|\([^()]*\))*,[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*(\([^()]*\))?[[:space:]]*[,)]|\bopen\(.*\bmode[[:space:]]*=[[:space:]]*[A-Za-z_]"
+
+# `os.open()` takes integer flags, not a mode string. These are its write
+# flags. `.*` for the same nested-call reason as above.
+_BDW_PY_OSOPEN="\bos\.open\(.*O_(WRONLY|RDWR|CREAT|APPEND|TRUNC)"
+
+# `shelve.open()` has its own mode alphabet: 'c' creates if absent, 'n' always
+# creates new, 'w' opens for writing. Only 'r' is read-only, and none of the
+# write letters appear in the file-mode class above.
+_BDW_PY_SHELVE="\bshelve\.open\(.*\\\\?['\"][cnw]"
+
+# `.extractall(` covers tarfile and zipfile extraction, both of which write
+# files. `dev` caught the tarfile form only because every `.tar` path contains
+# the letter `a`; it never caught the zipfile form at all. Matching the
+# extraction call itself is what the shell-side `tar -x` matcher already does.
+_BDW_PYTHON_WRITE_RE="\.write_text\b|\.write\b|\bopen\(.*,.*${_BDW_PY_MODE}|\.open\(.*${_BDW_PY_MODE}|${_BDW_PY_VARMODE}|${_BDW_PY_VARMODE2}|${_BDW_PY_OSOPEN}|${_BDW_PY_SHELVE}|\bopen\(\*|\.touch\(|\.extractall\(|\bshutil\.(copy|copyfile|copy2|copytree|move)\b|\bos\.rename\b"
+
 # 9. Embedded Python (-c) with write keywords. Extended in #153 to include
 #    pathlib touch, shutil copy*/move, os.rename.
 _bdw_match_python_dash_c() {
   local cmd="$1"
   echo "$cmd" | grep -qE '\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b' || return 1
-  echo "$cmd" | grep -qE '\.write_text\b|\.write\b|\bopen\([^)]*[wa+]|\.touch\(|\bshutil\.(copy|copyfile|copy2|copytree|move)\b|\bos\.rename\b'
+  echo "$cmd" | grep -qE "$_BDW_PYTHON_WRITE_RE"
 }
 
 # 10. Heredoc-fed Python. Extended in #153 for the same keyword list.
 _bdw_match_python_heredoc() {
   local cmd="$1"
   echo "$cmd" | grep -qE '\bpython3?[[:space:]]+(-[[:space:]]+)?<<' || return 1
-  echo "$cmd" | grep -qE '\.write_text\b|\.write\b|\bopen\([^)]*[wa+]|\.touch\(|\bshutil\.(copy|copyfile|copy2|copytree|move)\b|\bos\.rename\b'
+  echo "$cmd" | grep -qE "$_BDW_PYTHON_WRITE_RE"
 }
 
 # 11. Embedded Node (-e) with write keywords.
