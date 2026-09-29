@@ -63,7 +63,9 @@ Recommend `general-purpose` first. Split the list across wizard questions. Use t
 
 If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest `general-purpose`.
 
-**Isolation** — default `worktree` if any agent will write code; `shared` if all agents are read-only research. Infer from the task verb. Ask only when ambiguous.
+**Isolation** — parallel fan-out **always** uses `worktree` when any agent will write code, regardless of the project setting `build.isolation`. Concurrent writers on one checkout collide. Use `shared` only when all agents are read-only research. Infer from the task verb. Ask only when ambiguous.
+
+> Note: `build.isolation` (`worktree` default, or `branch`) applies to **single-task** builds. See `.claude/rules/isolated-builds.md`. `/fan-out` never follows `branch` mode for writers.
 
 **Mode** — default `foreground` (≤ 2-minute estimated runtime); `background` if estimated > 2 minutes. Estimate from task scope (single-file edit ≈ short; cross-cutting refactor ≈ long; full audit ≈ long). Ask only when ambiguous.
 
@@ -185,7 +187,7 @@ Background tasks running: <ids>. They'll surface results when done.
 ## Rules
 
 1. **All `Agent` tool calls for a single fan-out MUST be in the SAME assistant message.** Multi-message loops do not get concurrency — they serialise. This is the most important rule in this skill.
-2. **Use `isolation: worktree` whenever any agent will write code.** Required to prevent file-level races between agents sharing one working directory.
+2. **Use `isolation: worktree` whenever any agent will write code.** Required to prevent file-level races between agents sharing one working directory. This overrides `build.isolation` — even when the project sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
 3. **Refuse fan-out when tasks share file write targets.** Serialise instead — the merge-back conflict cost outweighs any concurrency win.
 4. **Refuse fan-out when tasks have sequential dependencies.** If task B reads task A's output, they cannot run in parallel.
 5. **Cap at 5 concurrent agents per invocation.** If the user wants more, ask them to split into batches. Beyond 5, returns diminish (review fatigue, merge-back queue) and risk grows (rate limits, context dilution).

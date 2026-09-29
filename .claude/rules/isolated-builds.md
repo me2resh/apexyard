@@ -46,14 +46,49 @@ git worktree remove .claude/worktrees/fix-1024-worktree-hygiene
 
 The agent that merges the PR is the one that removes the worktree — the same turn, not a follow-up. This is what keeps `.claude/worktrees/` from accumulating stale checkouts the way the sibling-of-fork-root directories did: nothing prunes those automatically, and `git worktree prune` only clears registry entries whose *directory* is already gone — it does nothing for a worktree that still exists on disk with a long-merged branch. If a squash-merge model is in play, don't use `git branch --merged` / `--is-ancestor` to decide "is this done" — a squashed branch's tip is never an ancestor of the base. Check the PR's actual state (`gh pr view <N> --json state,mergedAt`) instead.
 
+## Build isolation setting (`build.isolation`)
+
+Read `build.isolation` from project config before you create a ticket branch or spawn a build agent:
+
+```bash
+. "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh"
+isolation=$(config_get_or '.build.isolation' 'worktree')
+```
+
+Values:
+
+| Value | When to use it | Behaviour |
+|-------|----------------|-----------|
+| `worktree` (default) | Safe default for single-task builds | Create `.claude/worktrees/<type>-<ticket>-<short-slug>` (or pass `isolation: "worktree"` to the Agent tool). Tell the user the worktree path, the branch, and how to test the change. |
+| `branch` | Team wants changes in the local checkout | Create the ticket branch in the local copy (`git checkout -b …`). Run `git status` first. If the working tree has uncommitted changes, refuse to switch branches and say why. Do not proceed until the tree is clean or the operator chooses a worktree. |
+
+**Parallel always uses worktrees.** `/fan-out` and Workflow stages that run two or more writers at once always use a worktree, regardless of `build.isolation`. Concurrent writers on one checkout collide.
+
+**Other cases that still need a worktree** (even when the setting is `branch`):
+
+- The work is in a different repository from the current one
+- The work uses destructive git where a mistake in the local copy costs too much
+
+Override the default in `.claude/project-config.json`:
+
+```json
+{ "build": { "isolation": "branch" } }
+```
+
+See `docs/project-config.md` and AgDR-0200.
+
 ## Standard for spawned build agents
 
-The `Agent` tool's `isolation: "worktree"` option is the standard for spawned build-class agents (backend-engineer, frontend-engineer, platform-engineer, and similar). It creates a temporary git worktree under `.claude/worktrees/agent-<id>` so the sub-agent works on an isolated copy of the repo — the same location convention and safety property this rule asks for by hand, provided and cleaned up automatically. Prefer `isolation: "worktree"` over asking a sub-agent to `cd` into a manually managed clone whenever the harness supports it.
+Read `build.isolation` as above, then apply it:
+
+- **`worktree` mode (default):** pass `isolation: "worktree"` for spawned build-class agents (backend-engineer, frontend-engineer, platform-engineer, data-engineer, and similar). The harness creates a temporary git worktree under `.claude/worktrees/agent-<id>`. Prefer that over asking a sub-agent to `cd` into a manually managed clone whenever the harness supports it.
+- **`branch` mode:** spawn without worktree isolation for a single task on this repo. Instruct the agent to create the ticket branch in the local checkout, check `git status` first, and refuse when dirty.
+- **Parallel / fan-out / Workflow:** always pass `isolation: "worktree"`, regardless of the setting.
 
 ## When NOT to bother
 
 - **Single read-only inspection** of another repo (`git -C <path> log`, a one-off `git show`) — no build, no destructive git, no isolation needed.
-- **Working directly on the current repo's checkout with no destructive git and no build isolation need** — this rule's failure-mode reasoning is about *other* repos and about any hand-created worktree; the current repo's own branch-naming hygiene is covered by `git-conventions.md`. If a worktree is warranted at all (a build, a sub-agent spawn, a destructive-git step), the `.claude/worktrees/<type>-<ticket>-<short-slug>` location convention above still applies even when the worktree is of this same repo.
+- **Working directly on the current repo's checkout in `branch` mode** — when `build.isolation` is `branch`, a single clean-tree task creates the ticket branch in the local copy. Branch-naming hygiene is still covered by `git-conventions.md`. If a worktree is warranted (parallel work, dirty tree, other repo, destructive git, or `worktree` mode), the `.claude/worktrees/<type>-<ticket>-<short-slug>` location convention above still applies.
 
 ## Self-check before responding
 
@@ -64,7 +99,11 @@ Before running a bash block that changes directory into another repo or clone, s
 [ ] If it's a hand-created worktree, does it live under `.claude/worktrees/<type>-<ticket>-<short-slug>`?
 [ ] Does every `cd <dir>` in this block end in `|| exit 1` (or equivalent)?
 [ ] Before any `git reset --hard` / forced clean / forced checkout, did I confirm `git rev-parse --show-toplevel` names the intended repo?
-[ ] If this is a spawned build agent, did I pass `isolation: "worktree"`?
+[ ] Did I read `build.isolation` (default `worktree`) before choosing branch vs worktree?
+[ ] If `branch` mode, did I run `git status` and refuse when the working tree is dirty?
+[ ] If this is parallel (`/fan-out` / Workflow) or a multi-agent spawn, did I use a worktree regardless of the setting?
+[ ] If this is a spawned build agent in `worktree` mode, did I pass `isolation: "worktree"`?
+[ ] If I created a worktree, did I tell the user the path, the branch, and how to test?
 [ ] Once this ticket's PR merges, did I `git worktree remove` it?
 ```
 

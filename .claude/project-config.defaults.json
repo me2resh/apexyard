@@ -191,6 +191,11 @@
     ]
   },
 
+  "build": {
+    "_comment": "me2resh/apexyard#1381 — where spawned build agents do single-task work. `worktree` (default) keeps the safe-by-default isolation from #784: agents work under `.claude/worktrees/<type>-<ticket>-<slug>`. `branch` creates the ticket branch in the local checkout so the developer can test in place. The agent must still run `git status` first and refuse when the working tree is dirty. Parallel builds (`/fan-out`, Workflows) always use worktrees regardless of this setting, because concurrent writers on one checkout collide. See `.claude/rules/isolated-builds.md` and AgDR-0200.",
+    "isolation": "worktree"
+  },
+
   "pre_push": {
     "commands": [],
     "_comment": "Default is empty — per-fork overrides (see docs/project-config.md) populate this with the commands the project actually runs (lint, typecheck, test, build). An empty list makes bin/run-configured-pre-push-checks.sh a no-op. That script, invoked from .githooks/pre-push, runs this list; .claude/hooks/pre-push-gate.sh no longer reads it (#1366, AgDR-0173)."

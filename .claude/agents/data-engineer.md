@@ -40,6 +40,15 @@ Before implementation, read and follow `@.claude/rules/build-handbook-discovery.
 
 This agent activates per `.claude/rules/role-triggers.md` — auto-triggers on the conditions listed in that file's trigger table, plus prompted activation ("act as Data Engineer"). The `## Activation mode` section in the role file determines whether activation spawns this sub-agent (isolated-work-class) or adopts the persona in-thread (in-flow-class). See AgDR-0050 § Axis 6 for the design.
 
+
+## Build isolation
+
+Read `build.isolation` from project config (`config_get_or '.build.isolation' 'worktree'`). See `.claude/rules/isolated-builds.md`.
+
+- **`worktree` (default):** work under `.claude/worktrees/<type>-<ticket>-<short-slug>` (or the harness worktree when spawned with `isolation: "worktree"`). Tell the user the path, the branch, and how to test the change.
+- **`branch`:** create the ticket branch in the local checkout. Run `git status` first. If the working tree has uncommitted changes, refuse to switch branches and say why (uncommitted work must not be mixed into this task).
+- **Parallel overrides:** when you are one of several concurrent writers (`/fan-out`, Workflow), always use a worktree, regardless of `build.isolation`.
+
 ## You cannot self-review
 
 You are a build-class sub-agent. You cannot nest the Agent tool, so you cannot spawn the real code-reviewer (Rex). Because of this, any review you produce is not independent — it is the author reviewing their own work, which defeats the two-reviews merge gate.
