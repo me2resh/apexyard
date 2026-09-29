@@ -17,10 +17,10 @@ set -u
 export PYTHONDONTWRITEBYTECODE=1
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-HELPER="$SRC_ROOT/golden-paths/pipelines/scripts/dependency-audit.py"
+HELPER="${DEPENDENCY_AUDIT_TEST_HELPER:-$SRC_ROOT/golden-paths/pipelines/scripts/dependency-audit.py}"
 FIXED_SKILL="$SRC_ROOT/.claude/skills/audit-deps/SKILL.md"
 FIXED_AGENT="$SRC_ROOT/.claude/agents/dependency-auditor.md"
-FIXED_PIPELINE="$SRC_ROOT/golden-paths/pipelines/dependency-audit.yml"
+FIXED_PIPELINE="${DEPENDENCY_AUDIT_TEST_PIPELINE:-$SRC_ROOT/golden-paths/pipelines/dependency-audit.yml}"
 FIXTURE_SRC="$SRC_ROOT/.claude/hooks/tests/fixtures/dependency-audit-1359/projects"
 
 PASS=0
@@ -993,6 +993,216 @@ if [ -f "$SRC_ROOT/docs/agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.
   pass "AC-extra-agdr-0184-present"
 else
   fail "AC-extra-agdr-0184-present" "AgDR-0184 missing"
+fi
+
+# R2-1: the preferred scanner is absent and the OSV fallback returns bad JSON.
+mkdir -p "$SB/projects/r2-osv-failure" "$SB/http-r2-bad-json"
+printf 'requests==2.31.0\n' > "$SB/projects/r2-osv-failure/requirements.txt"
+printf '{invalid json\n' > "$SB/http-r2-bad-json/osv_querybatch.json"
+set +e
+python3 -I "$HELPER" "$SB/projects/r2-osv-failure" \
+  --trusted-python "$SB/does-not-exist-python" \
+  --fixture-http "$SB/http-r2-bad-json" \
+  --skip-npm-scan >"$SB/r2-osv-failure.json" 2>"$SB/r2-osv-failure.err"
+r2_osv_rc=$?
+set -e
+if python3 - "$SB/r2-osv-failure.json" "$r2_osv_rc" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+py = next(s for s in data["dependency_sets"] if s["ecosystem"] == "python")
+assert int(sys.argv[2]) == data["exit_code"] == 3
+assert py["coverage"] in ("failed", "incomplete")
+assert py["check_status"] == "failed"
+assert "OSV querybatch failed" in py["coverage_reason"]
+PY
+then
+  pass "R2-1-osv-fallback-failure-fails-closed"
+else
+  fail "R2-1-osv-fallback-failure-fails-closed" "rc=$r2_osv_rc body=$(head -c 350 "$SB/r2-osv-failure.json")"
+fi
+
+# R2-1 also preserves a report when OSV returns valid JSON with the wrong shape.
+printf '[]\n' > "$SB/http-r2-bad-json/osv_querybatch.json"
+set +e
+python3 -I "$HELPER" "$SB/projects/r2-osv-failure" \
+  --trusted-python "$SB/does-not-exist-python" \
+  --fixture-http "$SB/http-r2-bad-json" \
+  --skip-npm-scan >"$SB/r2-osv-shape.json" 2>"$SB/r2-osv-shape.err"
+r2_shape_rc=$?
+set -e
+if python3 - "$SB/r2-osv-shape.json" "$r2_shape_rc" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+py = next(s for s in data["dependency_sets"] if s["ecosystem"] == "python")
+assert int(sys.argv[2]) == data["exit_code"] == 3
+assert py["check_status"] == "failed" and "OSV querybatch" in py["coverage_reason"]
+PY
+then
+  pass "R2-1-osv-fallback-bad-shape-fails-closed"
+else
+  fail "R2-1-osv-fallback-bad-shape-fails-closed" "rc=$r2_shape_rc err=$(head -c 200 "$SB/r2-osv-shape.err")"
+fi
+
+# R2-2: ranges and direct sources cannot become exact PyPI pins.
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("dep_audit_r2_poetry", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+text = '''
+[tool.poetry.dependencies]
+python = ">=3.11"
+requests = { version = ">=2.0", extras = ["socks"] }
+flask = { version = "~2.0" }
+vcs-lib = { git = "https://example.invalid/vcs-lib" }
+local-lib = { path = "../local-lib" }
+remote-lib = { url = "https://example.invalid/remote.whl" }
+demo-lib = { version = "==1.0.0" }
+'''
+pins, incomplete, reason = mod.parse_pyproject_static(text, "pyproject.toml")
+assert incomplete and {p.name for p in pins} == {"demo-lib"}, (pins, reason)
+PY
+then
+  pass "R2-2-poetry-ranges-and-direct-sources-incomplete"
+else
+  fail "R2-2-poetry-ranges-and-direct-sources-incomplete" "range or direct source was treated as a pin"
+fi
+
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("dep_audit_r2_groups", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+text = '''
+[tool.poetry.dependencies]
+demo-lib = "1.0.0"
+[tool.poetry.dev-dependencies]
+pytest = "==7.4.0"
+[tool.poetry.group.docs.dependencies]
+sphinx = ">=7"
+[tool.poetry.group.qa.dependencies]
+ruff = "==0.5.0"
+'''
+pins, incomplete, reason = mod.parse_pyproject_static(text, "pyproject.toml")
+assert incomplete, reason
+assert {p.name for p in pins} == {"demo-lib", "pytest", "ruff"}, pins
+PY
+then
+  pass "R2-2-poetry-dev-and-group-tables-read"
+else
+  fail "R2-2-poetry-dev-and-group-tables-read" "dev/group dependency was ignored"
+fi
+
+# R2-3: both ecosystem helpers record every exit code but fail only without a report.
+if python3 - "$FIXED_PIPELINE" <<'PY'
+from pathlib import Path
+import re, sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+for ecosystem in ("npm", "python"):
+    block = workflow.split(f"- name: Run shared helper ({ecosystem})", 1)[1].split("- name:", 1)[0]
+    assert 'echo "exit_code=$code"' in block
+    assert 'echo "has_report=true"' in block and 'echo "has_report=false"' in block
+    assert 'exit "$code"' not in block
+    assert re.search(r'else\s+echo "has_report=false"[^\n]*\s+exit 1\s+fi', block), block
+assert 'if [ "$FAIL_ON_INCOMPLETE" = "true" ]' in workflow
+assert '::warning::Unknown-severity findings' in workflow
+assert 'int(raw) not in (0, 4)' in workflow
+PY
+then
+  pass "R2-3-helper-exit-4-and-incomplete-opt-out-deferred"
+else
+  fail "R2-3-helper-exit-4-and-incomplete-opt-out-deferred" "workflow helper exits with report code"
+fi
+
+# Advisory: the npm outdated evidence cannot match the combined-report glob.
+if python3 - "$FIXED_PIPELINE" <<'PY'
+from pathlib import Path
+import fnmatch, re, sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+outdated = re.search(r'npm outdated --json > audit-evidence/([^\s]+)', workflow).group(1)
+glob = re.search(r'root\.rglob\("([^\"]+)"\)', workflow).group(1)
+assert not fnmatch.fnmatch(outdated, glob), (outdated, glob)
+PY
+then
+  pass "R2-advisory-outdated-excluded-from-combine"
+else
+  fail "R2-advisory-outdated-excluded-from-combine" "outdated evidence matches report glob"
+fi
+
+if python3 - "$FIXED_PIPELINE" <<'PY'
+from pathlib import Path
+import sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+assert 'GITHUB_STEP_SUMMARY' in workflow
+for label in ("Outdated Packages", "License Compliance"):
+    assert label in workflow, label
+for output in ("outdated.outputs.major", "outdated.outputs.minor", "outdated.outputs.patch",
+               "licenses.outputs.copyleft", "licenses.outputs.unknown"):
+    assert output in workflow, output
+PY
+then
+  pass "R2-advisory-npm-counts-in-step-summary"
+else
+  fail "R2-advisory-npm-counts-in-step-summary" "npm outdated/license counts absent"
+fi
+
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("dep_audit_r2_uv", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+for url in ("https://pypi.org/simple", "https://files.pythonhosted.org/packages"):
+    assert mod.uv_source_is_pypi({"registry": url}), url
+for url in ("https://private.example/pypi.org/simple", "http://pypi.org/simple",
+            "https://mirror.pypi.org/simple", "https://[invalid/simple"):
+    assert not mod.uv_source_is_pypi({"registry": url}), url
+PY
+then
+  pass "R2-advisory-uv-registry-exact-https-host"
+else
+  fail "R2-advisory-uv-registry-exact-https-host" "uv accepted a private or insecure registry"
+fi
+
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("dep_audit_r2_schema", os.environ["HELPER_PATH"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = mod
+spec.loader.exec_module(mod)
+pins, incomplete, reason = mod._parse_uv_lock('version = "broken"\n', "uv.lock")
+assert not pins and incomplete and "version" in reason.lower(), (pins, reason)
+PY
+then
+  pass "R2-advisory-uv-noninteger-schema-incomplete"
+else
+  fail "R2-advisory-uv-noninteger-schema-incomplete" "uv.lock non-integer version crashed"
+fi
+
+# Advisory: a short OSV result list must fail the selected Python set.
+mkdir -p "$SB/projects/r2-short-osv" "$SB/http-r2-short-osv"
+printf 'requests==2.31.0\ndemo-lib==1.0.0\n' > "$SB/projects/r2-short-osv/requirements.txt"
+printf '%s\n' '{"results":[{"vulns":[]}]}' > "$SB/http-r2-short-osv/osv_querybatch.json"
+set +e
+python3 -I "$HELPER" "$SB/projects/r2-short-osv" \
+  --runner=osv --fixture-http "$SB/http-r2-short-osv" \
+  --skip-npm-scan >"$SB/r2-short-osv.json" 2>"$SB/r2-short-osv.err"
+r2_short_rc=$?
+set -e
+if python3 - "$SB/r2-short-osv.json" "$r2_short_rc" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+py = next(s for s in data["dependency_sets"] if s["ecosystem"] == "python")
+assert int(sys.argv[2]) == data["exit_code"] == 3
+assert py["coverage"] in ("failed", "incomplete") and py["check_status"] == "failed"
+assert "OSV" in py["coverage_reason"] and "result" in py["coverage_reason"]
+PY
+then
+  pass "R2-advisory-short-osv-batch-incomplete"
+else
+  fail "R2-advisory-short-osv-batch-incomplete" "rc=$r2_short_rc body=$(head -c 350 "$SB/r2-short-osv.json")"
 fi
 
 echo ""

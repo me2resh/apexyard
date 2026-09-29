@@ -138,11 +138,11 @@ jobs:
         id: outdated
         run: |
           mkdir -p audit-evidence
-          npm outdated --json > audit-evidence/outdated-report.json || true
+          npm outdated --json > audit-evidence/npm-outdated.json || true
 
-          MAJOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) != (.value.current | split(".")[0]))] | length' audit-evidence/outdated-report.json)
-          MINOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) != (.value.current | split(".")[1]))] | length' audit-evidence/outdated-report.json)
-          PATCH=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) == (.value.current | split(".")[1]))] | length' audit-evidence/outdated-report.json)
+          MAJOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) != (.value.current | split(".")[0]))] | length' audit-evidence/npm-outdated.json)
+          MINOR=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) != (.value.current | split(".")[1]))] | length' audit-evidence/npm-outdated.json)
+          PATCH=$(jq '[to_entries[] | select(.value.current != .value.latest and (.value.latest | split(".")[0]) == (.value.current | split(".")[0]) and (.value.latest | split(".")[1]) == (.value.current | split(".")[1]))] | length' audit-evidence/npm-outdated.json)
 
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
           echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
@@ -161,6 +161,25 @@ jobs:
           echo "copyleft=$COPYLEFT" >> "$GITHUB_OUTPUT"
           echo "unknown=$UNKNOWN" >> "$GITHUB_OUTPUT"
 
+      - name: Summarize npm inventory
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Outdated Packages
+
+          | Type | Count |
+          |------|-------|
+          | Major version behind | ${{ steps.outdated.outputs.major }} |
+          | Minor version behind | ${{ steps.outdated.outputs.minor }} |
+          | Patch version behind | ${{ steps.outdated.outputs.patch }} |
+
+          ## License Compliance
+
+          | Issue | Count |
+          |-------|-------|
+          | Copyleft licenses (needs review) | ${{ steps.licenses.outputs.copyleft }} |
+          | Unknown licenses | ${{ steps.licenses.outputs.unknown }} |
+          EOF
+
       - name: Run shared helper (npm)
         id: audit
         run: |
@@ -177,8 +196,8 @@ jobs:
             echo "has_report=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_report=false" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
-          exit "$code"
 
       - name: Upload npm evidence
         if: always()
@@ -234,8 +253,8 @@ jobs:
             echo "has_report=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_report=false" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
-          exit "$code"
 
       - name: Upload Python evidence
         if: always()

@@ -463,11 +463,14 @@ def uv_source_is_pypi(source: Any) -> bool:
         return False
     if "registry" in source:
         reg = str(source.get("registry") or "")
-        # uv default registry is PyPI; empty and well-known hosts are accepted.
-        if not reg or is_pypi_registry_url(reg) or reg.rstrip("/").endswith("pypi.org/simple"):
-            return True
-        # Bare "https://pypi.org/simple" already handled; reject private registries.
-        return False
+        try:
+            parsed = urllib.parse.urlsplit(reg)
+            return parsed.scheme == "https" and (parsed.hostname or "").lower() in (
+                "pypi.org",
+                "files.pythonhosted.org",
+            )
+        except ValueError:
+            return False
     return False
 
 
@@ -480,7 +483,10 @@ def _pyproject_tooling_only(path: Path) -> bool:
             text,
         )
     )
-    has_poetry = "[tool.poetry.dependencies]" in text or "[tool.poetry.group" in text
+    has_poetry = any(
+        section in text
+        for section in ("[tool.poetry.dependencies]", "[tool.poetry.dev-dependencies]", "[tool.poetry.group")
+    )
     has_project = "[project]" in text and "dependencies" in text
     return not (has_deps or has_poetry or has_project)
 
@@ -866,8 +872,9 @@ def _parse_uv_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
     if err or data is None:
         return [], True, err or f"unreadable uv.lock: {rel}"
     ver = data.get("version")
-    if ver is not None and int(ver) > 1:
-        return [], True, f"unsupported uv.lock schema version {ver} in {rel}"
+    if ver is not None:
+        if type(ver) is not int or ver < 1 or ver > 1:
+            return [], True, f"unsupported uv.lock schema version {ver!r} in {rel}"
 
     packages = data.get("package") or []
     if not isinstance(packages, list):
@@ -926,6 +933,7 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
             return [], True, f"dynamic dependencies in {rel} without a lockfile"
 
     candidates: List[str] = []
+    poetry_issues: List[str] = []
     if isinstance(project, dict):
         deps = project.get("dependencies") or []
         if isinstance(deps, list):
@@ -940,19 +948,46 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
     if isinstance(tool, dict):
         poetry = tool.get("poetry") or {}
         if isinstance(poetry, dict):
-            poetry_deps = poetry.get("dependencies") or {}
-            if isinstance(poetry_deps, dict):
-                for name, spec in poetry_deps.items():
+            def add_poetry_dependencies(table: Any, label: str) -> None:
+                if not isinstance(table, dict):
+                    poetry_issues.append(f"invalid {label} table in {rel}")
+                    return
+                for name, spec in table.items():
                     if name == "python":
                         continue
-                    if isinstance(spec, str):
-                        candidates.append(f"{name}{spec}" if spec.startswith("=") else f"{name}=={spec}" if re.fullmatch(r"[\d.]+", spec) else f"{name} {spec}")
-                    elif isinstance(spec, dict) and "version" in spec:
-                        candidates.append(f"{name}=={str(spec['version']).lstrip('=<>!~')}")
+                    if isinstance(spec, dict):
+                        if any(key in spec for key in ("git", "path", "url", "source")):
+                            poetry_issues.append(f"non-PyPI source for {name} in {label}: {rel}")
+                            continue
+                        spec = spec.get("version")
+                    if not isinstance(spec, str):
+                        poetry_issues.append(f"unresolved requirement for {name} in {label}: {rel}")
+                        continue
+                    version = spec[2:] if spec.startswith("==") else spec
+                    if not is_valid_pin_identity(str(name), version):
+                        poetry_issues.append(f"non-exact requirement for {name} in {label}: {rel}")
+                        continue
+                    candidates.append(f"{name}=={version}")
+
+            if "dependencies" in poetry:
+                add_poetry_dependencies(poetry["dependencies"], "tool.poetry.dependencies")
+            if "dev-dependencies" in poetry:
+                add_poetry_dependencies(poetry["dev-dependencies"], "tool.poetry.dev-dependencies")
+            if "group" in poetry:
+                groups = poetry["group"]
+                if not isinstance(groups, dict):
+                    poetry_issues.append(f"invalid tool.poetry.group table in {rel}")
+                else:
+                    for group_name, group in groups.items():
+                        label = f"tool.poetry.group.{group_name}.dependencies"
+                        if not isinstance(group, dict) or "dependencies" not in group:
+                            poetry_issues.append(f"invalid {label} table in {rel}")
+                            continue
+                        add_poetry_dependencies(group["dependencies"], label)
 
     pins: List[PackagePin] = []
-    incomplete = False
-    reasons: List[str] = []
+    incomplete = bool(poetry_issues)
+    reasons: List[str] = list(poetry_issues)
     for raw in candidates:
         line = raw.strip()
         pin_m = EXACT_PIN_RE.match(line)
@@ -979,6 +1014,8 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
         return pins, False, "exact pins from pyproject.toml (declared packages only)"
     if pins and incomplete:
         return pins, True, " | ".join(reasons)
+    if reasons:
+        return [], True, " | ".join(reasons)
     return [], True, f"pyproject.toml has no exact pins and no lockfile: {rel}"
 
 
@@ -1400,9 +1437,18 @@ def query_osv_batch(
             data = http.post_json(OSV_QUERYBATCH, payload)
         except Exception as exc:  # noqa: BLE001 — surface as failed check
             return results, f"OSV querybatch failed: {exc}"
-        batch_results = data.get("results") or []
-        for pin, item in zip(chunk, batch_results):
-            for vuln in item.get("vulns") or []:
+        if not isinstance(data, dict):
+            return results, "OSV querybatch returned a non-object response"
+        batch_results = data.get("results")
+        if not isinstance(batch_results, list) or len(batch_results) != len(chunk):
+            return results, f"OSV querybatch result count mismatch: expected {len(chunk)} results"
+        for pin, item in zip(chunk, batch_results, strict=True):
+            if not isinstance(item, dict):
+                return results, "OSV querybatch returned a non-object result"
+            vulns = item.get("vulns") or []
+            if not isinstance(vulns, list) or any(not isinstance(v, dict) for v in vulns):
+                return results, "OSV querybatch returned malformed vulnerabilities"
+            for vuln in vulns:
                 results.append(
                     {
                         "name": pin.name,
@@ -1433,8 +1479,16 @@ def query_osv_batch(
                     page = http.post_json(OSV_QUERYBATCH, page_payload)
                 except Exception as exc:  # noqa: BLE001
                     return results, f"OSV pagination failed: {exc}"
-                page_item = (page.get("results") or [{}])[0]
-                for vuln in page_item.get("vulns") or []:
+                if not isinstance(page, dict):
+                    return results, "OSV pagination returned a non-object response"
+                page_results = page.get("results")
+                if not isinstance(page_results, list) or len(page_results) != 1 or not isinstance(page_results[0], dict):
+                    return results, "OSV pagination result count or shape mismatch"
+                page_item = page_results[0]
+                page_vulns = page_item.get("vulns") or []
+                if not isinstance(page_vulns, list) or any(not isinstance(v, dict) for v in page_vulns):
+                    return results, "OSV pagination returned malformed vulnerabilities"
+                for vuln in page_vulns:
                     results.append(
                         {
                             "name": pin.name,
@@ -2059,21 +2113,15 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
                         )
                         ds.runner = "osv"
                         vuln_hits, scan_err = query_osv_batch(ds.pins, http, deadline)
-                    elif scan_err:
-                        # Scanner failure remains failed. No silent clean fallback.
-                        ds.coverage = "failed"
-                        ds.coverage_reason = scan_err
-                        ds.check_status = "failed"
-                        report.notes.append(scan_err)
-                        continue
             else:
                 vuln_hits, scan_err = query_osv_batch(ds.pins, http, deadline)
-                if scan_err:
-                    ds.coverage = "failed"
-                    ds.coverage_reason = scan_err
-                    ds.check_status = "failed"
-                    report.notes.append(scan_err)
-                    continue
+            if scan_err:
+                # Scanner failure remains failed, including a failed OSV fallback.
+                ds.coverage = "failed"
+                ds.coverage_reason = scan_err
+                ds.check_status = "failed"
+                report.notes.append(scan_err)
+                continue
 
             findings, enrich_err = enrich_osv_records(vuln_hits, http, deadline)
             for f in findings:
