@@ -1,5 +1,28 @@
 #!/bin/bash
 # _lib-detect-bash-write.sh — detect whether a Bash command writes to a file.
+
+_bdw_lib_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [ -r "$_bdw_lib_dir/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$_bdw_lib_dir/_lib-command-scrub.sh"
+fi
+unset _bdw_lib_dir
+
+_bdw_syntax() {
+  if declare -F scrub_bash_command >/dev/null 2>&1; then
+    scrub_bash_command "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+_bdw_operators() {
+  if declare -F mask_bash_command_operators >/dev/null 2>&1; then
+    mask_bash_command_operators "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
 #
 # Closes the bypass surface where Bash file-writes routed around hooks
 # scoped to Edit|Write|MultiEdit only. See me2resh/apexyard#151.
@@ -249,7 +272,9 @@ _bdw_starts_with_git_subcommand() {
 # extractor, and the per-segment extractor) read these two constants. The
 # pattern used to be copied into each function. #886/#926 round 5 showed
 # that copies drift apart, and a drift is a bypass.
-_BDW_REDIRECT_RE='(&>>?|(^|[^|<&])>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(][^[:space:]&|;]*|(^|[^|<&>])>&[[:space:]]*['"'"'"]?[0-9]*[^0-9[:space:]&|;()<>'"'"'"`\-][^[:space:]&|;]*'
+_BDW_REDIRECT_RE='(&>>?|>>?\|?|[0-9]*<>)[[:space:]]*[^[:space:]&|;(<>][^[:space:]&|;<>]*|(^|[^|<&>])>&[[:space:]]*['"'"'"]?[0-9]*[^0-9[:space:]&|;()<>'"'"'"`\-][^[:space:]&|;<>]*'
+# The ordinary > form has no leading-context byte: grep -o cannot reuse the
+# final byte of a previous target in `>/tmp/x>src/app.ts` (#1439).
 # Strips the operator from a matched redirect, leaving the target. `[^>]*`
 # swallows a leading fd digit, `&`, or `<`. The group then removes the rest
 # of the operator: a second `>`, a `|`, or the `&` of `>&`.
@@ -707,8 +732,10 @@ _bdw_match_script_runner() {
 }
 
 bash_command_appears_to_write() {
-  local cmd="$1"
-  [ -z "$cmd" ] && return 1
+  local raw="$1" cmd operators
+  [ -z "$raw" ] && return 1
+  cmd=$(_bdw_syntax "$raw")
+  operators=$(_bdw_operators "$raw")
 
   # Segment-aware (apexyard#886/#926 round 5) — see
   # _bdw_match_redirection_any_segment for why matching the WHOLE, unsplit
@@ -717,7 +744,7 @@ bash_command_appears_to_write() {
   #
   # Keep this list in step with _bdw_detects_other_write (#1414). A family
   # added here and not there reopens the sed `w` decoy gap for it.
-  _bdw_match_redirection_any_segment "$cmd" && return 0
+  _bdw_match_redirection_any_segment "$operators" && return 0
   _bdw_match_tee             "$cmd" && return 0
   _bdw_match_sed_inplace     "$cmd" && return 0
   _bdw_match_sed_write       "$cmd" && return 0
@@ -736,6 +763,45 @@ bash_command_appears_to_write() {
   _bdw_match_php_dash_r      "$cmd" && return 0
   _bdw_match_script_runner   "$cmd" && return 0
 
+  # sed scripts and inline interpreter programs are executed by their own
+  # tools. Their source is quoted shell data, so inspect it only after the
+  # scrubbed command identifies the actual executable and option.
+  if [ "$cmd" != "$raw" ]; then
+    _bdw_quoted_source_write "$cmd" "$raw" && return 0
+  fi
+
+  return 1
+}
+
+_bdw_quoted_source_write() {
+  local syntax="$1" raw="$2"
+  if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])sed[[:space:]]'; then
+    _bdw_match_sed_write "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b'; then
+    _bdw_match_python_dash_c "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bpython3?[[:space:]]+(-[[:space:]]+)?<<'; then
+    _bdw_match_python_heredoc "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bnode[[:space:]]+(-[^e]*[[:space:]]+)?-e\b'; then
+    _bdw_match_node_dash_e "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bnode[[:space:]]*<<'; then
+    _bdw_match_node_heredoc "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bruby[[:space:]]+(-[^e]*[[:space:]]+)?-e\b'; then
+    _bdw_match_ruby_dash_e "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bruby[[:space:]]*<<'; then
+    _bdw_match_ruby_heredoc "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bperl[[:space:]]+(-[^e]*[[:space:]]+)?-e\b'; then
+    _bdw_match_perl_dash_e "$raw" && return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '\bphp[[:space:]]+(-[^r]*[[:space:]]+)?-r\b'; then
+    _bdw_match_php_dash_r "$raw" && return 0
+  fi
   return 1
 }
 
@@ -753,8 +819,10 @@ bash_command_appears_to_write() {
 # Returns 0 (deletion only), 1 (content-writing detected or not an rm command).
 # ------------------------------------------------------------------------------
 bash_command_is_deletion_only() {
-  local cmd="$1"
-  [ -z "$cmd" ] && return 1
+  local raw="$1" cmd operators
+  [ -z "$raw" ] && return 1
+  cmd=$(_bdw_syntax "$raw")
+  operators=$(_bdw_operators "$raw")
 
   # Must match _bdw_match_file_movers (covers rm / cp / mv / dd / install).
   _bdw_match_file_movers "$cmd" || return 1
@@ -770,7 +838,7 @@ bash_command_is_deletion_only() {
   # here would miss `rm x; false ||> src/app.ts` (a real write hiding
   # behind a `|`/`||`-adjacent redirect), wrongly classifying it as
   # deletion-only and exempting it from the ticket gate.
-  _bdw_match_redirection_any_segment "$cmd" && return 1
+  _bdw_match_redirection_any_segment "$operators" && return 1
   _bdw_match_tee            "$cmd" && return 1
   _bdw_match_sed_inplace    "$cmd" && return 1
   _bdw_match_sed_write      "$cmd" && return 1
@@ -787,6 +855,9 @@ bash_command_is_deletion_only() {
   _bdw_match_perl_dash_e    "$cmd" && return 1
   _bdw_match_php_dash_r     "$cmd" && return 1
   _bdw_match_script_runner  "$cmd" && return 1
+  if [ "$cmd" != "$raw" ]; then
+    _bdw_quoted_source_write "$cmd" "$raw" && return 1
+  fi
 
   # Only rm matched — deletion-only operation.
   return 0
@@ -824,7 +895,7 @@ bash_command_is_deletion_only() {
 #     empty for `diff a >(sort)` rather than fabricating `(sort)`.
 # ------------------------------------------------------------------------------
 bash_extract_write_target() {
-  local cmd="$1"
+  local cmd="$1" syntax="${2:-$1}"
   [ -z "$cmd" ] && return 0
 
   # Output redirection: capture the first target after >, >>, &>, &>>, >|,
@@ -876,7 +947,7 @@ bash_extract_write_target() {
   fi
 
   # tee: capture the first non-flag argument after `tee`.
-  if echo "$cmd" | grep -qE '\btee\b'; then
+  if echo "$syntax" | grep -qE '\btee\b'; then
     target=$(echo "$cmd" | grep -oE '\btee\b[[:space:]]+(-[^[:space:]]+[[:space:]]+)*[^[:space:]&|;]+' \
                   | head -n 1 \
                   | sed -E 's/^tee[[:space:]]+(-[^[:space:]]+[[:space:]]+)*//')
@@ -958,6 +1029,21 @@ _bdw_strip_quotes() {
   printf '%s\n' "$t"
 }
 
+# Recover a cp/mv destination before an output redirect. The ordinary
+# single-target extractor sees the redirect first and would return only its
+# exempt target (#1416). Return empty when the destination is uncertain.
+_bdw_cp_mv_target_before_redirect() {
+  local seg="$1" syntax="$2" prefix target
+  printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])(cp|mv)[[:space:]]' || return 0
+  case "$seg" in *'>'*) ;; *) return 0 ;; esac
+  prefix="${seg%%>*}"
+  prefix="${prefix%&}"
+  prefix=$(printf '%s' "$prefix" | sed -E 's/[[:space:]]+[0-9]+$//')
+  target=$(bash_extract_write_target "$prefix" "$syntax")
+  printf '%s' "$target" | grep -qE '^[A-Za-z0-9./_~-]+$' || return 0
+  printf '%s\n' "$target"
+}
+
 # ------------------------------------------------------------------------------
 # Internal: _bdw_targets_from_segment SEGMENT
 #
@@ -974,7 +1060,7 @@ _bdw_strip_quotes() {
 # match" and "only match" coincide for those families.
 # ------------------------------------------------------------------------------
 _bdw_targets_from_segment() {
-  local seg="$1"
+  local seg="$1" syntax="${2:-$1}"
   local line target tee_tail
 
   # ALL redirection targets in this segment (not just the first) — covers
@@ -1024,6 +1110,8 @@ _bdw_targets_from_segment() {
     [ -n "$target" ] && _bdw_strip_quotes "$target"
   done < <(printf '%s\n' "$seg" | grep -oE "$_BDW_REDIRECT_RE")
 
+  _bdw_cp_mv_target_before_redirect "$seg" "$syntax"
+
   # ALL tee operands in this segment — `tee a b c` names three targets, not
   # one; the original single-target extractor only ever returned "a".
   #
@@ -1035,7 +1123,7 @@ _bdw_targets_from_segment() {
   # GNU-compatible on this point); the strip-the-"tee"-token step below
   # uses plain anchored parameter expansion instead of sed, sidestepping
   # the incompatibility entirely.
-  if printf '%s\n' "$seg" | grep -qE '\btee\b'; then
+  if printf '%s\n' "$syntax" | grep -qE '\btee\b'; then
     tee_tail=$(printf '%s\n' "$seg" | grep -oE '\btee\b[[:space:]].*' | head -n 1)
     tee_tail="${tee_tail#tee}"
     local skip_flags=1
@@ -1064,7 +1152,7 @@ _bdw_targets_from_segment() {
   # a segment is one command, so "first match in the segment" IS "the
   # match". (This may re-emit a redirection/tee target already captured
   # above; bash_extract_write_targets dedupes the combined output.)
-  target=$(bash_extract_write_target "$seg")
+  target=$(bash_extract_write_target "$seg" "$syntax")
   [ -n "$target" ] && printf '%s\n' "$target"
 }
 
@@ -1085,14 +1173,30 @@ _bdw_targets_from_segment() {
 # begin" and can't drift apart again.
 # ------------------------------------------------------------------------------
 bash_extract_write_targets() {
-  local cmd="$1"
-  [ -z "$cmd" ] && return 0
+  local raw="$1" cmd sed_cmd syntax
+  local -a syntax_segments=()
+  [ -z "$raw" ] && return 0
+  bash_command_appears_to_write "$raw" || return 0
+  cmd=$(_bdw_operators "$raw")
+  syntax=$(_bdw_syntax "$raw")
+  sed_cmd="$cmd"
+  if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])sed[[:space:]]'; then
+    sed_cmd="$raw"
+  fi
 
-  local seg seg_targets
+  local seg
+  while IFS= read -r seg; do
+    syntax_segments+=("$seg")
+  done < <(_bdw_split_top_level "$syntax")
+
+  local seg_targets
   seg_targets=$(
+    local index=0
     while IFS= read -r seg; do
+      local syntax_seg="${syntax_segments[index]:-}"
+      index=$((index + 1))
       [ -z "$seg" ] && continue
-      _bdw_targets_from_segment "$seg"
+      _bdw_targets_from_segment "$seg" "$syntax_seg"
     done < <(_bdw_split_top_level "$cmd")
   )
   {
@@ -1115,9 +1219,69 @@ bash_extract_write_targets() {
     # target can only add a reason to block, because the gate requires
     # every target to pass.
     if [ -n "$seg_targets" ] || ! _bdw_detects_other_write "$cmd"; then
-      _bdw_sed_write_targets "$cmd"
+      _bdw_sed_write_targets "$sed_cmd"
     fi
-  } | awk '!seen[$0]++'
+  } | awk '!seen[$0]++' | {
+    if declare -F unmask_bash_command_operators >/dev/null 2>&1; then
+      unmask_bash_command_operators
+    else
+      cat
+    fi
+  }
+}
+
+# Public: report a write family whose destination cannot be named. This is
+# independent of the extracted redirect list: an exempt redirect must not
+# hide a sibling inline edit or interpreter write (#1416).
+bash_command_has_unextractable_write() {
+  local raw="$1" syntax operators sed_target segment index
+  local -a syntax_segments=() operator_segments=()
+  [ -n "$raw" ] || return 1
+  syntax=$(_bdw_syntax "$raw")
+  operators=$(_bdw_operators "$raw")
+
+  _bdw_match_awk_inplace "$syntax" && return 0
+  _bdw_match_tar_extract "$syntax" && return 0
+  _bdw_match_script_runner "$syntax" && return 0
+  # The presence matchers accept these equals forms, but the target
+  # extractors accept only a separate path word.
+  if printf '%s' "$syntax" | grep -qE '\b(curl[[:space:]][^|;&]*--output=|wget[[:space:]][^|;&]*--output-document=)'; then
+    return 0
+  fi
+  if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])(dd|install)[[:space:]]'; then
+    return 0
+  fi
+  while IFS= read -r segment; do
+    syntax_segments+=("$segment")
+  done < <(_bdw_split_top_level "$syntax")
+  while IFS= read -r segment; do
+    operator_segments+=("$segment")
+  done < <(_bdw_split_top_level "$operators")
+  [ "${#syntax_segments[@]}" -eq "${#operator_segments[@]}" ] || return 0
+  for ((index=0; index<${#syntax_segments[@]}; index++)); do
+    if printf '%s' "${syntax_segments[index]}" | grep -qE '(^|[;&|()[:space:]])(cp|mv)[[:space:]]' \
+        && printf '%s' "${operator_segments[index]}" | grep -q '>'; then
+      [ -n "$(_bdw_cp_mv_target_before_redirect "${operator_segments[index]}" "${syntax_segments[index]}")" ] || return 0
+    fi
+    if _bdw_match_sed_inplace "${syntax_segments[index]}"; then
+      # A redirect target or a quoted argument in a sibling command is not
+      # evidence that this sed edit has an extractable file operand.
+      sed_target=$(printf '%s' "${operator_segments[index]}" \
+        | sed -nE "s/.*'[^']*'[[:space:]]+([^[:space:]&|;<>]+).*/\1/p" | head -1)
+      printf '%s' "$sed_target" | grep -qE '^[A-Za-z0-9./_~-]+$' || return 0
+    fi
+  done
+  if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])sed[[:space:]]' \
+      && _bdw_match_sed_write "$raw"; then
+    [ -n "$(_bdw_sed_write_targets "$operators")" ] || return 0
+  fi
+  _bdw_quoted_source_write "$syntax" "$raw" || return 1
+  # sed w with a named target is handled above; the remaining matches are
+  # inline programs and heredoc-fed interpreters with unknown destinations.
+  if printf '%s' "$syntax" | grep -qE '\b(python3?|node|ruby|perl|php)[[:space:]]'; then
+    return 0
+  fi
+  return 1
 }
 
 # ------------------------------------------------------------------------------
