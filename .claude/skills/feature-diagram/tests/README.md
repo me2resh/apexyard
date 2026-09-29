@@ -20,10 +20,10 @@ Builds a synthetic feature inventory under `$TMPDIR` with three features (one fu
 
 ```bash
 # Emit a per-feature diagram to stdout
-bash .claude/skills/feature-diagram/generate.sh path/to/feature-inventory.md create-order curios-dog
+bash .claude/skills/feature-diagram/generate.sh path/to/feature-inventory.md create-order sample-app
 
 # Lint a generated file
-bash .claude/skills/feature-diagram/lint.sh projects/curios-dog/features/create-order.md
+bash .claude/skills/feature-diagram/lint.sh projects/sample-app/features/create-order.md
 ```
 
 The skill itself (run inside Claude Code) builds the per-feature diagram with a richer model — it disambiguates ambiguous matches, follows file references into the project's source for handler / model / job / component names, and presents a candidate review before writing. The smoke test verifies the **grep-fallback** path the helper documents — if `generate.sh` drifts from the inventory format documented in `/extract-features` SKILL.md § "Write the inventory", the smoke test catches it.

@@ -26,7 +26,7 @@ This is the operational tool for the "play devil's advocate" reflex — made a f
 ```
 /challenge add a second database to handle reporting load
 /challenge #345
-/challenge projects/apexbrain/prd.md
+/challenge projects/sample-app/prd.md
 /challenge the plan
 ```
 

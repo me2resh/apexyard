@@ -1,6 +1,6 @@
 # Managed-project release versioning
 
-This is the release-versioning convention for **managed projects** under apexyard governance — the repos registered in `apexyard.projects.yaml` (SharpPick and future apps). It is deliberately *different* from how the apexyard framework itself versions, and the difference is the whole point of this doc.
+This is the release-versioning convention for **managed projects** under apexyard governance — the repos registered in `apexyard.projects.yaml` (DemoSvc and future apps). It is deliberately *different* from how the apexyard framework itself versions, and the difference is the whole point of this doc.
 
 **Read this first if you're about to cut a version on a managed project.** The framework's `dev`/`main` release-cut model is seductive to copy — it's the model you see every day inside this repo — but it solves a problem managed projects don't have. Copying it in is the mistake this doc exists to prevent.
 
@@ -19,7 +19,7 @@ The framework repo (`me2resh/apexyard`) uses a **release-cut** branch model — 
 
 A managed project has **no downstream consumers**. Nobody forks a managed app and pulls its `main` as a dependency. There is no adopter to protect from WIP, so the `dev` buffer buys nothing and costs a branch, a retarget habit, and release ceremony. This is why the framework's own guardrails call it out explicitly — from AgDR-0007's non-consequences: *"Managed projects under apexyard governance do NOT adopt this pattern. They stay trunk-based because they have no downstream consumers (only the framework does)."* — and from [`.claude/rules/git-conventions.md`](../.claude/rules/git-conventions.md) § "Branch model — framework only": *"Managed projects … stay trunk-based — PRs merge to `main` directly … Do NOT cargo-cult the dev/main split into project templates."*
 
-| | Framework (`me2resh/apexyard`) | Managed project (SharpPick, other managed apps) |
+| | Framework (`me2resh/apexyard`) | Managed project (DemoSvc, other managed apps) |
 |---|---|---|
 | Branch model | Release-cut: `dev` → `main` + tags | **Trunk-based**: PRs merge to trunk directly |
 | Reason | Has downstream adopters pulling `upstream/main` | No downstream consumers |
@@ -109,7 +109,7 @@ There is no `dev → main` promotion step and no `/release` skill — `/release`
 
 ## App Store apps: `CFBundleShortVersionString` / `CFBundleVersion`
 
-macOS / iOS apps distributed through the App Store (e.g. **SharpPick**) carry two Apple-mandated version fields in their `Info.plist`, and these are a **separate distribution surface** from the git/`VERSION`/tag convention above:
+macOS / iOS apps distributed through the App Store (e.g. **DemoApp**) carry two Apple-mandated version fields in their `Info.plist`, and these are a **separate distribution surface** from the git/`VERSION`/tag convention above:
 
 | Field | Meaning | Relationship to `VERSION` |
 |-------|---------|---------------------------|

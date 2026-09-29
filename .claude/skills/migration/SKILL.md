@@ -33,7 +33,7 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ```
 /migration                 # prompts for everything, creates ticket + AgDR in the current project
-/migration curios-dog      # explicitly target a registered project
+/migration sample-app      # explicitly target a registered project
 ```
 
 ## When to invoke

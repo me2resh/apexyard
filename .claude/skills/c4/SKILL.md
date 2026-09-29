@@ -33,12 +33,12 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 
 ```
 /c4                                    # current cwd, both levels
-/c4 curios-dog                         # registered project, both levels
-/c4 curios-dog --level=1               # only the L1 system-context diagram
+/c4 sample-app                         # registered project, both levels
+/c4 sample-app --level=1               # only the L1 system-context diagram
 /c4 . --level=2                        # only the L2 container diagram for cwd
-/c4 curios-dog --force                 # overwrite existing diagrams
-/c4 curios-dog --dsl                   # Structurizr DSL escape hatch (L3+), instead of Mermaid
-/c4 curios-dog --dsl --force           # overwrite an existing workspace.dsl
+/c4 sample-app --force                 # overwrite existing diagrams
+/c4 sample-app --dsl                   # Structurizr DSL escape hatch (L3+), instead of Mermaid
+/c4 sample-app --dsl --force           # overwrite an existing workspace.dsl
 ```
 
 ## Output location
@@ -371,7 +371,7 @@ None of these are required by the framework itself — they're the adopter's cho
 | Onboarding a new external repo | Use `/handover` first (it seeds a stub); then `/c4 --force` once you've understood the codebase |
 | A project needs L3 (component) precision or auto-zoom across levels | Yes — `/c4 <project> --dsl` |
 | Drawing a sequence diagram or per-class diagram | No — that's `/dfd` or a hand-authored diagram; `/c4` (Mermaid or `--dsl`) covers L1/L2/L3, not sequence flows |
-| Showing a multi-system view (apexscript + curios-dog on one canvas) | No — one project per invocation. Multi-system diagrams are a separate concern |
+| Showing a multi-system view (demo-svc + sample-app on one canvas) | No — one project per invocation. Multi-system diagrams are a separate concern |
 
 ## Out of scope (v1)
 
