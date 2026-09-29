@@ -92,7 +92,7 @@
 # parser, the same "regex/parameter-expansion only, sufficient for the
 # shapes real callers emit" discipline as `_extract_wrapper_arg` above.
 # It is called ONLY at the four hooks' raw-payload fallback call sites
-# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never from
+# (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never from
 # inside `is_merge_command` itself and never on the normal jq-present
 # path: jq has ALREADY correctly decoded these same escapes for that path
 # (that's what `jq -r` does), so re-normalizing already-decoded text would
@@ -143,6 +143,16 @@ if ! command -v tracker_review_kind >/dev/null 2>&1; then
     . "$_lib_extract_pr_dir/_lib-tracker.sh"
   fi
 fi
+
+# The command scrubber removes quoted arguments and confirmed heredoc bodies
+# only when every command word is on its data-only allowlist. If this optional
+# helper is absent or damaged, keep the raw scan so a real merge cannot hide.
+_merge_scrub_lib="$(dirname "${BASH_SOURCE[0]}")/_lib-command-scrub.sh"
+if [ -r "$_merge_scrub_lib" ]; then
+  # shellcheck source=/dev/null
+  . "$_merge_scrub_lib" 2>/dev/null || unset -f scrub_bash_command
+fi
+unset _merge_scrub_lib
 
 # Echoes the forge kind ('gh' | 'glab') for a repo, via tracker_review_kind.
 # Any non-glab kind (gh / none / jira / linear / unknown / unresolved) → 'gh', so
@@ -233,7 +243,7 @@ _extract_wrapper_arg() {
 # as `_extract_wrapper_arg` above.
 #
 # Callers: ONLY the four merge-gate hooks' raw-payload fallback branches
-# (`is_merge_command "$(_normalize_json_escapes "$INPUT")"`), never
+# (`is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"`), never
 # `is_merge_command` itself and never the normal jq-present path — see the
 # file header (#973) for why mixing this into the jq-present path would be
 # unsafe.
@@ -278,6 +288,21 @@ _normalize_json_escapes() {
 #   - `glab api ... merge_requests/<N>/merge ...`             (#767, GitLab raw-API)
 #   - `tracker_pr_merge <owner/repo> <pr> ...`                (#759, wrapper)
 is_merge_command() {
+  local cmd="$1"
+  # Limit subtraction to commands whose first word produces data. In
+  # particular, keep the conservative cd-then-quoted-API route on raw text.
+  # The scrubber itself returns raw for a later executable merge or for any
+  # command shape it cannot classify safely.
+  if printf '%s\n' "$cmd" | grep -qE '^[[:space:]]*(grep|egrep|fgrep|rg|cat|echo|printf)([[:space:]]|$)' &&
+     declare -F scrub_bash_command >/dev/null 2>&1; then
+    cmd=$(scrub_bash_command "$cmd")
+  fi
+  is_merge_command_raw "$cmd"
+}
+
+# Raw scan for the unparseable JSON fallback. Do not scrub the encoded payload:
+# JSON quotes are transport syntax, not shell argument boundaries.
+is_merge_command_raw() {
   local cmd="$1"
   if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
     return 0

@@ -1,12 +1,14 @@
 #!/bin/bash
 # _lib-command-scrub.sh — separate shell operators from literal command data.
 #
-# Scope (AgDR-0181, AgDR-0192): only these consumers may use the scrubbed view —
+# Scope (AgDR-0181, AgDR-0192, AgDR-0196): these consumers use the scrubbed view —
 #   (a) the write detector (_lib-detect-bash-write.sh) for redirect presence
 #       and target questions asked by the ticket and migration gates
 #   (b) auto-code-review.sh PostToolUse trigger matching
 #   (c) block-ambient-tracker-repo.sh for tracker-command matching
-# Routing, merge detection, and other command matchers read the raw command.
+#   (d) _lib-extract-pr.sh for merge words in data-only commands
+# Merge detection keeps the raw view for executable or unclassified commands.
+# The raw JSON fallback also skips this scrubber.
 #
 # Scrub only when every command word is on the data-only allowlist and the
 # raw text has no executing $( / backtick / <( / >( / <<< outside single
