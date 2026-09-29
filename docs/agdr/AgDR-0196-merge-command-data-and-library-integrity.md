@@ -1,12 +1,14 @@
 # AgDR-0196: Bound merge data scrubbing and verify library functions
 
-> In the context of merge gates that scan Bash text, I chose a bounded data scrub and explicit function checks. This reduces false positives while preserving the raw scan for uncertain commands. It adds a small dependency on the existing scrubber for the improved read-only behavior.
+> Merge gates use an independent, narrow data scrub and explicit function checks. This reduces false positives while preserving the raw scan for uncertain commands.
 
 ## Context
 
 The merge parser matched command words inside `grep` patterns and scratch heredocs. The same parser must still detect CLI merges, API merges, wrapper calls, and shell execution of quoted text. A sourced library can also be empty while `source` returns success. The gates then treat an undefined merge detector as a negative result.
 
 AgDR-0104 identifies shell text matching as a backstop. The forge remains the authoritative merge control. The local gates still need to fail closed when their own logic is missing.
+
+Review found that the general scrubber allowed `gh api`, `git`, `rg`, and `sort`. These programs can execute quoted endpoints or payloads written earlier in the command. A line-based first-word check also matched later lines.
 
 ## Options Considered
 
@@ -18,17 +20,29 @@ AgDR-0104 identifies shell text matching as a backstop. The forge remains the au
 
 ## Decision
 
-Chosen: **scrub bounded data commands and retain a raw fallback**. The parser uses the existing allowlist scrubber when a command starts with a data-producing word. The scrubber returns raw text if it sees a command it cannot classify. The gates scan raw text when JSON parsing fails. Each gate checks its required functions after sourcing each required library. A missing function blocks with a named error.
+Chosen: **scrub only the narrow merge-specific command list and retain a raw fallback**.
+
+- Every segment must start with a literal `grep`, `egrep`, `fgrep`, `cat`, `echo`, `printf`, `head`, `tail`, or `wc` command word.
+- The parser checks each segment across separators and newlines. It never searches whole lines for an apparent first word.
+- Any other command word preserves the entire raw command, including `gh`, `glab`, `git`, `tracker_pr_merge`, `rg`, `sort`, `xargs`, `find`, and shells.
+- Quoted arguments and confirmed heredoc bodies are data only after every command word passes this check.
+- Uncertain syntax, substitutions, incomplete input, and parser failures preserve the raw scan. JSON parsing failures also use the raw scan.
+
+The merge scrubber lives in `_lib-extract-pr.sh`. Merge detection does not source `_lib-command-scrub.sh` or use its general allowlist. Non-merge consumers retain that library and its existing behavior.
+
+Each gate lists `_scrub_merge_command` as a required function. The existing `command -v` and `declare -F` checks remain unchanged. Missing functions block with a named error.
 
 ## Consequences
 
 - `grep` patterns and confirmed heredoc bodies no longer look like merges in the covered read-only shapes.
 - Executable merges and uncertain wrappers retain the raw match path.
 - A missing or truncated required library blocks before the gate reads the command.
-- A missing optional scrubber leaves the conservative raw scan in place.
+- The merge path has no optional scrubber dependency.
+- `rg` patterns and other commands outside the narrow list retain conservative raw matching, even when their arguments appear harmless.
 
 ## Artifacts
 
 - Issue #1489
 - `test_merge_command_data.sh`
 - `test_merge_gate_library_functions.sh`
+- `test_command_scrub_must_block.sh`

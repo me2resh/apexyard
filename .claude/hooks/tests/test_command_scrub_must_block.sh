@@ -12,6 +12,7 @@ HOOKS="${HOOKS_OVERRIDE:-$ROOT/.claude/hooks}"
 SNAP_HOOKS="${SNAP_HOOKS:-/tmp/ay-1459-snap-39c5b95}"
 CONFIG_DEFAULTS="${CONFIG_DEFAULTS_OVERRIDE:-$ROOT/.claude/project-config.defaults.json}"
 TMP=$(mktemp -d)
+export GIT_CEILING_DIRECTORIES="$TMP"
 trap 'rm -rf "$TMP"' EXIT
 pass=0
 fail=0
@@ -432,6 +433,16 @@ if [ -d "$SNAP_HOOKS" ] && [ -f "$SNAP_HOOKS/dispatch-bash.sh" ]; then
     n=$((n + 1))
   done
 fi
+
+# #1489 review regressions. Do not apply these to the historical #1459 proof.
+add_merge 'F1.1 echo then quoted API' "echo checking; gh api -X PUT 'repos/me2resh/apexyard/pulls/1497/merge' -f merge_method=squash"
+add_merge 'F1.2 grep then quoted API' 'grep -q ok status.txt && gh api --method PUT "repos/o/r/pulls/7/merge"'
+add_merge 'F1.3 quoted API then echo line' $'gh api -X PUT "repos/o/r/pulls/7/merge" -f merge_method=squash\necho merged'
+add_merge 'F1.4 cd API then echo line' $'cd /x && gh api -X PUT "repos/o/r/pulls/7/merge"\necho done'
+add_merge 'F2.1 rg preprocessor payload' "echo 'gh pr merge 7 --squash' > m.sh; rg --pre sh . m.sh"
+add_merge 'F2.2 git hook payload' "echo x; echo 'gh pr merge 7 --squash' > .git/hooks/pre-commit; git commit --allow-empty -m x"
+add_merge 'F2.3 git external diff payload' "echo '[diff]' >> .git/config; echo 'external = sh -c \"gh pr merge 7\" #' >> .git/config; git diff"
+add_merge 'sort compressor payload' "echo 'gh pr merge 7' > m.sh; sort --compress-program=./m.sh input.txt"
 
 setup_dispatch_sandbox "$TMP/cur_dispatch" "$HOOKS"
 n=1
