@@ -153,6 +153,11 @@ if "$ROOT/bin/sync-cursor-adapter.sh" --user --user-dir "$USER_DIR" --root "$ROO
   echo "A leftover full generated adapter can fail-closed-block every Shell"
   echo "or Write call. Re-install replaces that copy with the thin overlay."
   echo ""
+  echo "Open the ops fork directory in Cursor, not a parent folder that also"
+  echo "contains the portfolio repo. A parent workspace can list the same"
+  echo "custom skill twice (fork .claude/skills/ plus portfolio custom-skills/)."
+  echo "Cursor's single skill root for this fork is .claude/skills/."
+  echo ""
   echo "cursor-agent (the CLI) is NOT covered by this overlay. It enforces via"
   echo "its own ~/.cursor/cli-config.json permissions model, not hooks.json."
 else
