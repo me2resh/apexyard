@@ -1,6 +1,6 @@
 # Technical Design: Dependency Audit Ecosystem Dispatch
 
-**Status**: In Review
+**Status**: Approved for implementation (PR #1430 design gate). Implemented on #1359.
 **Date**: 2026-09-27
 **Requirements**: issue #1359, including its design-direction comment.
 **Decision record**: [AgDR-0176](../agdr/AgDR-0176-dependency-audit-ecosystem-dispatch.md).
@@ -290,6 +290,12 @@ Use local fake tool and HTTP responses for repeatable tests.
 Do not require live advisories or credentials in regression tests.
 Verify behavior with fixtures, rather than only matching documentation strings.
 
+## Architecture evolution
+
+| Date | Change | Reasoning |
+|------|--------|-----------|
+| 2026-09-29 | Fail-closed scanners (B1–B5). TOML lock parsers via `tomllib`. Manifest size cap. PEP 508/440 pin sanitisation. Symlink containment. Restore npm outdated + licence-checker. Install tools from the pin file. Hash pins deferred in AgDR-0184. | Rex review of PR #1469 found five fail-open paths that reported unscanned sets as clean, regex lock parsers that missed real Poetry/uv source tables, and a pipeline that dropped npm checks from `dev`. |
+
 ## Approvals
 
 Architecture and human approval remain pending.
@@ -308,3 +314,4 @@ This design does not declare the build gate satisfied.
 - [PyPI JSON API](https://docs.pypi.org/api/json/).
 - [Python core metadata](https://packaging.python.org/en/latest/specifications/core-metadata/).
 - [SPDX License List](https://spdx.org/licenses/).
+- [AgDR-0184](../agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.md) — hash-pin follow-up.
