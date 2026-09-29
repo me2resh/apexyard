@@ -7,15 +7,26 @@ INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 [ -n "$COMMAND" ] || exit 0
 
-# This guard covers raw GitHub issue and pull-request commands. Commands that
+# The shared allowlist keeps executable command words visible. If it cannot
+# classify the command, the scanner returns raw text and the gate fails closed.
+HOOK_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || exit 0
+SCAN_COMMAND=$COMMAND
+if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-command-scrub.sh"
+  SCAN_COMMAND=$(scrub_bash_command "$COMMAND")
+fi
+
+# This guard covers GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross
 # repository boundaries.
 # A shell command can prefix, group, or conditionally execute the tracker
 # invocation. Match `gh issue` / `gh pr` after any non-word shell delimiter so
 # wrappers such as `timeout`, `command`, subshells, and `if` cannot bypass the
-# repository check. Fail closed on quoted or commented matches because this is
-# a trust-chain control and false negatives are worse than extra checks.
-if ! printf '%s' "$COMMAND" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+'; then
+# repository check. The raw fallback also catches quoted or escaped tracker
+# words that the syntax view would otherwise blank.
+TRACKER_PATTERN="(^|[^[:alnum:]_])['\"\\\\]*g['\"\\\\]*h['\"\\\\]*[[:space:]]+['\"\\\\]*(issue|pr)['\"\\\\]*[[:space:]]+"
+if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
   exit 0
 fi
 # Check each shell command segment independently. A repository flag in a
@@ -30,15 +41,14 @@ while IFS= read -r segment; do
   # A standalone `--` ends GitHub CLI option parsing. Ignore any repo-like
   # token after it; only flags before that boundary can authorize the call.
   options="$(printf '%s' "$segment" | sed -E 's/[[:space:]]--([[:space:]].*)?$//')"
-  if printf '%s' "$segment" | grep -qE '(^|[^[:alnum:]_])gh[[:space:]]+(issue|pr)[[:space:]]+' \
+  if printf '%s' "$segment" | grep -qE "$TRACKER_PATTERN" \
     && ! printf '%s' "$options" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
     unqualified=1
     break
   fi
-done < <(printf '%s\n' "$COMMAND" | tr ';|&()' '\n')
+done < <(printf '%s\n' "$SCAN_COMMAND" | tr ';|&()' '\n')
 [ "$unqualified" -eq 1 ] || exit 0
 
-HOOK_DIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) || exit 0
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-ops-root.sh"
