@@ -221,16 +221,23 @@ evidence the PR is up to date.
       1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
       2. Wait for green CI on the updated branch.
       3. Get a short Rex re-review of the new merge commit — OR, if the
-         merge is a clean replay of the base with no conflicts (`git show
-         --remerge-diff` on the new HEAD is empty), the merge gate carries
-         the existing Rex approval forward on its own. See
+         merge is a clean replay of the base with no conflicts
+         (`rex_approval_carries_over` returns true: forge-verified
+         two-parent merge whose tree matches an isolated
+         `git merge-tree --write-tree` of the parents), the merge gate
+         carries the existing Rex approval forward on its own. See
          block-unreviewed-merge.sh's rex_approval_carries_over check
-         (me2resh/apexyard#1437) — no marker to write by hand either way.
+         (me2resh/apexyard#1437, hardened in #1456) — no marker to write
+         by hand either way.
       4. Run /approve-merge <pr> again.
     ```
 
-    Ask the user to run step 1, or to approve you running it — do not
-    update the branch yourself. Updating the branch pushes a merge commit
+    Use `AskUserQuestion` to ask who runs step 1. Put `Run it yourself
+    (Recommended)` first. Its description says the operator runs the shown
+    command. Put `Approve me to run it` second. Its description says the
+    agent pushes the branch update. If the harness lacks `AskUserQuestion`,
+    present these two choices as a numbered list. Do not update the branch
+    before the operator chooses. Updating the branch pushes a merge commit
     to the PR's head branch. On a fork PR with maintainer edits that
     branch belongs to the contributor. The update is a separate, visible
     action the user should see happen, not one this skill takes on its

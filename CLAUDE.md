@@ -127,6 +127,7 @@ These one-liners stay here because agents use them on almost every turn. The ful
 - Tests, lint, typecheck, and build must pass before push. Coverage for domain logic stays above 80%.
 - Every merge needs Rex plus an explicit per-PR human nod. A plan-level "go" does not authorize merge.
 - No hardcoded secrets. Use environment variables.
+- Use `AskUserQuestion` for operator choices between options. See `.claude/rules/reporting-style.md`.
 - Code review process: `workflows/code-review.md`.
 - AgDR template: `templates/agdr.md`.
 

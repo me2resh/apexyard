@@ -2,7 +2,7 @@
 name: pdf
 description: Convert markdown/HTML/BPMN to PDF (pandoc/md-to-pdf/wkhtmltopdf/bpmn-to-image), destination-prompted; graceful-degrades.
 argument-hint: "<input-file> [--no-prompt] [--converter=pandoc|md-to-pdf|wkhtmltopdf] [--destination=workspace|projects|keep|<path>] [--project=<name>]"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 ## Writing rule
@@ -58,6 +58,11 @@ Defaults to single-fork (`./projects`, `./workspace`). Don't hardcode literal `p
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 1. Resolve the input file
 
 ```bash
@@ -93,7 +98,8 @@ The destination prompt needs a project name to fill in. Inference order:
 
 ### 4. Show the destination prompt
 
-Always show this prompt unless `--no-prompt` or `--destination=...` was passed.
+Use `AskUserQuestion` for the destination unless `--no-prompt` or `--destination=...` was passed.
+Recommend the path that fits the document's readers. Use the prompt below only when the harness lacks the tool.
 
 ```
 Where should the PDF land?

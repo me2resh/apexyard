@@ -42,15 +42,24 @@ WRONG_SHA="0000000000000000000000000000000000000000"
 make_sandbox() {
   local sb
   sb=$(mktemp -d)
+  # Sandbox blocks creating a path named ".git". Use an explicit gitdir.
+  mkdir -p "$sb/gitdir/objects" "$sb/gitdir/refs/heads"
+  printf 'ref: refs/heads/main\n' > "$sb/gitdir/HEAD"
+  printf '%s\n' \
+    '[core]' \
+    '	repositoryformatversion = 0' \
+    '	filemode = true' \
+    '	bare = false' \
+    '	logallrefupdates = true' > "$sb/gitdir/config"
   (
     cd "$sb" || exit 1
-    git init -q
+    export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
     git config user.email "test@example.com"
     git config user.name "test"
     : > onboarding.yaml
     git add onboarding.yaml
     git commit -q -m "init"
-  )
+  ) || return 1
   mkdir -p "$sb/.claude/hooks" "$sb/.claude/session/reviews" "$sb/bin"
   cp "$HOOK_SRC"    "$sb/.claude/hooks/block-unreviewed-merge.sh"
   cp "$LIB_PR"      "$sb/.claude/hooks/_lib-extract-pr.sh"
@@ -95,6 +104,14 @@ EOF
   chmod +x "$sb/bin/gh"
 
   echo "$sb"
+}
+
+
+# sb_git <sandbox> <git-args...> — git against a make_sandbox checkout (no ".git" path).
+sb_git() {
+  local sb="$1"
+  shift
+  GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" git "$@"
 }
 
 # Default test repo — matches the --repo flag used in run_case().
@@ -173,14 +190,16 @@ EOF
 # Test runner ----------------------------------------------------------
 
 run_case() {
-  local label="$1" want_rc="$2" want_stderr_regex="$3" sb="$4" pr="$5"
-  local cmd="gh pr merge $pr --repo me2resh/apexyard --squash"
+  local label="$1" want_rc="$2" want_stderr_regex="$3" sb="$4" pr="$5" repo="${6:-me2resh/apexyard}"
+  local cmd="gh pr merge $pr --repo $repo --squash"
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
   # APEXYARD_OPS_DISABLE_PIN=1: force walk-up resolution so the sandbox's ops root
   # is used, not the real session pin (avoids marker-home mismatch in CI/worktrees).
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  # Export GIT_DIR/GIT_WORK_TREE so the hook and the gh mock both see the
+  # sandbox repo (no ".git" path — Cursor sandbox blocks that name).
+  got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
 
@@ -268,7 +287,7 @@ run_case "rex sha mismatch → blocks" 2 "Code-reviewer approved commit" "$sb" 2
 # 10. Non-merge command (e.g. gh pr view) → no-op exit 0
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr view 209 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -284,7 +303,7 @@ write_rex_marker "$sb" 210
 # No CEO marker — should still block.
 input=$(jq -nc --arg c "gh api repos/me2resh/apexyard/pulls/210/merge -X PUT" \
   '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "no CEO approval marker"; then
@@ -329,7 +348,7 @@ write_ceo_marker_structured "$sb" 212
 # APEXYARD_OPS_DISABLE_PIN=1 forces walk-up resolution so the sandbox's
 # ops root is used, not the real session pin (mirrors test_require_architecture_review.sh).
 input=$(jq -nc --arg c "gh pr merge 212 --repo me2resh/apexyard" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb/workspace/demo" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash $sb/.claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb/workspace/demo" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash $sb/.claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -347,7 +366,7 @@ run_case_custom_cmd() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
   if [ "$got_rc" != "$want_rc" ]; then
@@ -455,7 +474,7 @@ write_rex_marker "$sb" 300
 write_ceo_marker_structured "$sb" 300
 cmd="gh pr merge 300 --repo me2resh/apexyard --squash --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -Eq "cannot (be squash-merged|use squash or rebase)"; then
@@ -471,7 +490,7 @@ write_rex_marker "$sb" 301
 write_ceo_marker_structured "$sb" 301
 cmd="gh pr merge 301 --repo me2resh/apexyard --merge --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -487,7 +506,7 @@ write_rex_marker "$sb" 302
 write_ceo_marker_structured "$sb" 302
 cmd="gh pr merge 302 --repo me2resh/apexyard --squash --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -504,7 +523,7 @@ write_rex_marker "$sb" 303
 write_ceo_marker_structured "$sb" 303
 cmd="gh api repos/me2resh/apexyard/pulls/303/merge -X PUT -f merge_method=squash"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -Eq "cannot (be squash-merged|use squash or rebase)"; then
@@ -520,7 +539,7 @@ write_rex_marker "$sb" 304
 write_ceo_marker_structured "$sb" 304
 cmd="gh api repos/me2resh/apexyard/pulls/304/merge -X PUT -f merge_method=merge"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -536,7 +555,7 @@ write_rex_marker "$sb" 305
 write_ceo_marker_structured "$sb" 305
 cmd="gh pr merge 305 --repo me2resh/apexyard --squash --delete-branch"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot use squash or rebase"; then
@@ -554,7 +573,7 @@ write_rex_marker "$sb" 306
 write_ceo_marker_structured "$sb" 306
 cmd="tracker_pr_merge me2resh/apexyard 306 squash true '' ''"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -q "cannot use squash or rebase"; then
@@ -596,7 +615,7 @@ write_rex_marker "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-a/project-a"
 # Run the gate for repo-B's PR #100 — it should be BLOCKED (markers are for the wrong repo).
 input=$(jq -nc --arg c "gh pr merge 100 --repo org-b/project-b --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "2" ] && echo "$got_stderr" | grep -qE "no recorded code-reviewer|no CEO approval marker"; then
@@ -612,7 +631,7 @@ sb=$(make_sandbox_for_repo "org-b/project-b")
 write_rex_marker "$sb" 100 "$FIXED_SHA" "org-b/project-b"
 write_ceo_marker_structured "$sb" 100 "$FIXED_SHA" "org-b/project-b"
 input=$(jq -nc --arg c "gh pr merge 100 --repo org-b/project-b --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -661,7 +680,7 @@ run_case_wrapper() {
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
   local got_stderr got_rc
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+  got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   got_rc=$?
   rm -rf "$sb"
 
@@ -811,7 +830,7 @@ run_case_custom_cmd "#965: jq broken, gh pr merge with no markers -> BLOCKS (fai
 sb=$(make_sandbox_broken_jq)
 cmd="npm test"
 input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
 if [ "$got_rc" = "0" ] && [ -z "$got_stderr" ]; then
@@ -861,7 +880,7 @@ run_case_custom_cmd "#973: jq broken, JSON-escaped-tab merge command -> BLOCKS (
 #     only ones that are merge-shaped once the escapes are decoded.
 sb=$(make_sandbox_broken_jq)
 tab_nonmerge_cmd=$'echo\tnot\ta\tmerge\tcommand\tat\tall'
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
   "echo '$(jq -nc --arg c "$tab_nonmerge_cmd" '{tool_name:"Bash", tool_input:{command:$c}}')' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -907,13 +926,13 @@ GHEOF
 
 sb=$(make_sandbox_gh_fails)
 # The sandbox's local HEAD — the value the OLD fallback would have used.
-local_head=$(cd "$sb" && git rev-parse HEAD 2>/dev/null)
+local_head=$(sb_git "$sb" rev-parse HEAD 2>/dev/null)
 # Markers written to MATCH that local HEAD: the setup most favourable to a
 # bypass, where every comparison passes under the old code.
 write_rex_marker "$sb" 99 "$local_head"
 write_ceo_marker_structured "$sb" 99 "$local_head"
 input=$(jq -nc --arg c "gh pr merge 99 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -929,7 +948,7 @@ sb=$(make_sandbox)
 write_rex_marker "$sb" 99
 write_ceo_marker_structured "$sb" 99
 input=$(jq -nc --arg c "gh pr merge 99 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -957,10 +976,10 @@ for lib in _lib-extract-pr.sh _lib-review-markers.sh; do
     rm -f "$sb/.claude/hooks/$lib"
     input=$(jq -nc --arg c "gh pr merge 300 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
     if [ "$mode" = "posix" ]; then
-      got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
         "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
     else
-      got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+      got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
         "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
     fi
     got_rc=$?
@@ -996,10 +1015,10 @@ for mode in default posix; do
   rm -f "$sb/.claude/hooks/_lib-read-config.sh"
   input=$(jq -nc --arg c "gh pr merge 301 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
   if [ "$mode" = "posix" ]; then
-    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+    got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
       "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   else
-    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+    got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
       "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
   fi
   got_rc=$?
@@ -1025,7 +1044,7 @@ write_rex_marker "$sb" 302
 write_ceo_marker_structured "$sb" 302
 rm -f "$sb/.claude/hooks/_lib-merge-behind.sh"
 input=$(jq -nc --arg c "gh pr merge 302 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1044,7 +1063,7 @@ fi
 sb=$(make_sandbox)
 rm -f "$sb/.claude/hooks/_lib-merge-behind.sh"
 input=$(jq -nc --arg c "gh pr merge 303 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=5 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=5 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1076,7 +1095,7 @@ fi
 # (rc=2), and the note names the behind-base branch as a likely reason.
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr merge 1386 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=5 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=5 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1094,7 +1113,7 @@ fi
 # cause).
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr merge 1387 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=0 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=0 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1113,7 +1132,7 @@ fi
 # by the compare API, not by mergeStateStatus.
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr merge 1388 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_MERGE_STATE=CLEAN MOCK_BEHIND_BY=8 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_MERGE_STATE=CLEAN MOCK_BEHIND_BY=8 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1129,7 +1148,7 @@ fi
 # #1406). "Ask the ... to" and "Do not update it yourself" must both appear.
 sb=$(make_sandbox)
 input=$(jq -nc --arg c "gh pr merge 1389 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=3 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=3 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1148,7 +1167,7 @@ fi
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1390 "$WRONG_SHA" "$TEST_REPO"
 input=$(jq -nc --arg c "gh pr merge 1390 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
-got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=4 PATH="$sb/bin:$PATH" bash -c \
+got_stderr=$(cd "$sb" && export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb" && APEXYARD_OPS_DISABLE_PIN=1 MOCK_BEHIND_BY=4 PATH="$sb/bin:$PATH" bash -c \
   "echo '$input' | bash .claude/hooks/block-unreviewed-merge.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
@@ -1182,21 +1201,22 @@ fi
 
 write_gh_mock_head() {
   # Overwrite the sandbox's gh mock so headRefOid, baseRefName, and the
-  # forge commit-lookup calls rex_approval_carries_over makes all reflect
-  # real SHAs built in the sandbox's own git history.
+  # forge commit-lookup / branches-tip calls rex_approval_carries_over
+  # makes all reflect real SHAs built in the sandbox's own git history.
   local sb="$1" head_sha="$2" base_branch="${3:-dev}"
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
 case "\$*" in
   *"pr view"*"headRefOid"*)        echo "$head_sha" ;;
   *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
-  *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"headRepository"*)    echo "acme-org/example" ;;
   *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
   *"pr view"*"baseRefName"*)       echo "$base_branch" ;;
   *"api "*"compare/"*)             echo "\${MOCK_BEHIND_BY:-0}" ;;
-  *"-q .sha"*)
-    ref=\$(printf '%s' "\$*" | sed -E 's#.*commits/([^ ]+).*#\1#')
-    sha=\$(git rev-parse "\$ref" 2>/dev/null)
+  *"/branches/"*)
+    ref=\$(printf '%s' "\$*" | sed -E 's#.*branches/([^ ]+).*#\1#')
+    ref=\$(printf '%s' "\$ref" | sed 's/%2[Ff]/\//g')
+    sha=\$(git rev-parse "refs/heads/\$ref" 2>/dev/null)
     [ -z "\$sha" ] && exit 1
     echo "\$sha"
     ;;
@@ -1228,21 +1248,23 @@ EOF
 # CO1: clean base merge — Rex + CEO markers name the merge's first parent,
 # HEAD is the merge commit, remerge-diff is empty -> merge ALLOWED (exit 0).
 sb=$(make_sandbox)
-BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q -b pr-branch
   echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
 )
-OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q "$BASE_BRANCH"
   echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
   git checkout -q pr-branch
   git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
 )
-NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
 write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 write_rex_marker "$sb" 300 "$OLD_SHA"
 write_ceo_marker_structured "$sb" 300 "$OLD_SHA"
@@ -1251,18 +1273,20 @@ run_case "CO1: clean base merge carries Rex+CEO approval forward -> allows" 0 ""
 # CO2: HEAD moved for an ordinary reason (new commit, not a base merge) —
 # carry-over must NOT apply. Same as the pre-#1437 stale-marker block.
 sb=$(make_sandbox)
-BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q -b pr-branch
   echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
 )
-OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   echo more-pr > pr2.txt; git add pr2.txt; git commit -q -m "more pr work, not a merge"
 )
-NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
 write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 write_rex_marker "$sb" 301 "$OLD_SHA"
 write_ceo_marker_structured "$sb" 301 "$OLD_SHA"
@@ -1272,10 +1296,11 @@ run_case "CO2: ordinary new commit (not a merge) -> no carry-over, still blocks"
 # Rex-approved commit (e.g. base was merged the other way around) ->
 # no carry-over, still blocks.
 sb=$(make_sandbox)
-BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
-UNRELATED_SHA=$(cd "$sb" && git rev-parse HEAD)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
+UNRELATED_SHA=$(sb_git "$sb" rev-parse HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q -b pr-branch
   echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
   git checkout -q "$BASE_BRANCH"
@@ -1283,7 +1308,7 @@ UNRELATED_SHA=$(cd "$sb" && git rev-parse HEAD)
   git checkout -q pr-branch
   git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
 )
-NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
 write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 write_rex_marker "$sb" 302 "$UNRELATED_SHA"
 write_ceo_marker_structured "$sb" 302 "$UNRELATED_SHA"
@@ -1293,16 +1318,18 @@ run_case "CO3: two-parent merge but parent[0] != Rex SHA -> no carry-over, still
 # does not match the forge-reported tree) -> no carry-over, still blocks —
 # this is exactly the case #1437 says must fail closed.
 sb=$(make_sandbox)
-BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   echo base > shared.txt; git add shared.txt; git commit -q -m "shared base"
   git checkout -q -b pr-branch
   echo "pr change" > shared.txt; git add shared.txt; git commit -q -m "pr edits shared.txt"
 )
-OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q "$BASE_BRANCH"
   echo "base change" > shared.txt; git add shared.txt; git commit -q -m "base also edits shared.txt"
   git checkout -q pr-branch
@@ -1311,7 +1338,7 @@ OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
   git add shared.txt
   git commit -q -m "merge base into pr-branch (hand-resolved)"
 )
-NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
 write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 write_rex_marker "$sb" 303 "$OLD_SHA"
 write_ceo_marker_structured "$sb" 303 "$OLD_SHA"
@@ -1320,27 +1347,134 @@ run_case "CO4: hand-resolved conflict (merge-tree mismatch) -> no carry-over, st
 # CO5: the CEO marker independently carries over too (not only Rex) — both
 # markers name the merge's first parent, both should be accepted.
 sb=$(make_sandbox)
-BASE_BRANCH=$(cd "$sb" && git symbolic-ref --short HEAD)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q -b pr-branch
   echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
 )
-OLD_SHA=$(cd "$sb" && git rev-parse HEAD)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
 (
   cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
   git checkout -q "$BASE_BRANCH"
   echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
   git checkout -q pr-branch
   git merge -q --no-ff "$BASE_BRANCH" -m "merge base into pr-branch"
 )
-NEW_SHA=$(cd "$sb" && git rev-parse HEAD)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
 write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
 # Rex marker already matches HEAD (as if Rex re-reviewed) — only the CEO
 # marker is stale and must carry over on its own.
 write_rex_marker "$sb" 304 "$NEW_SHA"
 write_ceo_marker_structured "$sb" 304 "$OLD_SHA"
 run_case "CO5: CEO marker alone carries over across the same clean base merge -> allows" 0 "" "$sb" 304
+
+# CO6 (#1456): second parent is NOT on the base branch — carry-over must
+# refuse. Fail-before: on a parent[0]-only check (#1443 round-1) this would
+# have allowed the merge; round-2 ancestor check already blocks it; this
+# pins the gate-level behaviour the issue asks for.
+sb=$(make_sandbox)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
+BASE_ROOT=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q -b side-branch "$BASE_ROOT"
+  echo side > side.txt; git add side.txt; git commit -q -m "side, never on base"
+  git checkout -q pr-branch
+  git merge -q --no-ff side-branch -m "merge side into pr-branch"
+)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
+write_rex_marker "$sb" 305 "$OLD_SHA" "acme-org/example"
+write_ceo_marker_structured "$sb" 305 "$OLD_SHA" "acme-org/example"
+run_case "CO6: #1456 second parent not on base -> no carry-over, blocks" 2 "New commits were pushed" "$sb" 305 "acme-org/example"
+
+# CO7 (#1456): a grafts entry makes the side parent look like an ancestor of
+# the base tip. Isolated GIT_DIR must ignore grafts -> still blocks.
+# Fail-before: on #1443 code (merge-base in the real GIT_DIR) this would allow.
+sb=$(make_sandbox)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
+BASE_ROOT=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q -b pr-branch
+  echo pr > pr.txt; git add pr.txt; git commit -q -m "pr work"
+)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q "$BASE_BRANCH"
+  echo more > base2.txt; git add base2.txt; git commit -q -m "base moves on"
+  git checkout -q -b side-branch "$BASE_ROOT"
+  echo side > side.txt; git add side.txt; git commit -q -m "side, never on base"
+  SIDE_SHA=$(git rev-parse HEAD)
+  git checkout -q pr-branch
+  git merge -q --no-ff side-branch -m "merge side into pr-branch"
+  MAIN_TIP=$(git rev-parse "$BASE_BRANCH")
+  gd="$sb/gitdir"
+  mkdir -p "$gd/info"
+  echo "$MAIN_TIP $BASE_ROOT $SIDE_SHA" > "$gd/info/grafts"
+)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
+write_rex_marker "$sb" 306 "$OLD_SHA" "acme-org/example"
+write_ceo_marker_structured "$sb" 306 "$OLD_SHA" "acme-org/example"
+run_case "CO7: #1456 grafts cannot force carry-over -> blocks" 2 "New commits were pushed" "$sb" 306 "acme-org/example"
+
+# CO8 (#1456): a local merge driver makes merge-tree reproduce a hand-resolved
+# tree. Isolated GIT_DIR has no driver -> still blocks.
+# Fail-before: on #1443 code (merge-tree against real .git/config) this can allow.
+sb=$(make_sandbox)
+BASE_BRANCH=$(sb_git "$sb" symbolic-ref --short HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  echo base > shared.txt
+  echo "shared.txt merge=poison" > .gitattributes
+  git add shared.txt .gitattributes
+  git commit -q -m "shared base with poison attr"
+  git checkout -q -b pr-branch
+  echo "pr change" > shared.txt; git add shared.txt; git commit -q -m "pr edits shared"
+)
+OLD_SHA=$(sb_git "$sb" rev-parse HEAD)
+(
+  cd "$sb" || exit 1
+  export GIT_DIR="$sb/gitdir" GIT_WORK_TREE="$sb"
+  git checkout -q "$BASE_BRANCH"
+  echo "base change" > shared.txt; git add shared.txt; git commit -q -m "base edits shared"
+  mkdir -p .git-drivers
+  cat > .git-drivers/poison.sh <<'POISON'
+#!/bin/bash
+printf 'hand-resolved\n' > "$2"
+exit 0
+POISON
+  chmod +x .git-drivers/poison.sh
+  git config merge.poison.driver "\"$(pwd)/.git-drivers/poison.sh\" %O %A %B"
+  git checkout -q pr-branch
+  git merge -q --no-ff "$BASE_BRANCH" -m "merge base (driver)" 2>/dev/null || true
+  if [ -n "$(git ls-files -u 2>/dev/null)" ]; then
+    echo "hand-resolved" > shared.txt
+    git add shared.txt
+    git commit -q -m "merge base (hand-resolved)"
+  fi
+)
+NEW_SHA=$(sb_git "$sb" rev-parse HEAD)
+write_gh_mock_head "$sb" "$NEW_SHA" "$BASE_BRANCH"
+write_rex_marker "$sb" 307 "$OLD_SHA" "acme-org/example"
+write_ceo_marker_structured "$sb" 307 "$OLD_SHA" "acme-org/example"
+run_case "CO8: #1456 local merge driver cannot force carry-over -> blocks" 2 "New commits were pushed" "$sb" 307 "acme-org/example"
 
 # --- Summary ----------------------------------------------------------
 
