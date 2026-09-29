@@ -2,7 +2,7 @@
 name: tickets-batch
 description: File 5–20 structured tickets in one flow — shared-context Qs once, 3-Q micro-interview per ticket, then per-ticket `tracker_create` (gh/glab/custom).
 argument-hint: "<optional bulk description>"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 # /tickets-batch — Bulk-File Structured Tickets
@@ -47,6 +47,11 @@ Defaults match today's single-fork layout (`./apexyard.projects.yaml`, `./projec
 The argument is free-form — a description, a markdown file path, or empty. Step 2 below normalises whatever you pass into a list of titles.
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### 1. Resolve the target repo
 
@@ -276,7 +281,7 @@ Show progress per call, using the `${ref}` parsed from each `tracker_create`:
 
 ### 7. Failure handling
 
-On the first `tracker_create` failure (`rc` non-zero **or** empty `result`), **stop the batch immediately**. Do not silently skip. (A `tracker.kind=none` project returns `rc=3` with the rendered body on stdout — treat that as "shape-only, nothing filed" and stop the batch the same way, telling the operator to file the set in their external system.) Show:
+On the first `tracker_create` failure (`rc` non-zero **or** empty `result`), **stop the batch immediately**. Do not silently skip. (A `tracker.kind=none` project returns `rc=3` with the rendered body on stdout — treat that as "shape-only, nothing filed" and stop the batch the same way, telling the operator to file the set in their external system.) Use `AskUserQuestion` for retry, skip, edit, or abort. Recommend retry first for a transient error (network, rate limit, auth timeout). Recommend edit first for a validator error (for example a missing section). Show the menu below only when the harness lacks the tool:
 
 ```
 [5/12] Filing "Migrate user table to new auth schema"… ✗

@@ -3,6 +3,7 @@
 When you report status to the operator in-thread, write like a colleague giving a spoken update — not a machine printing a report. This is the conversational-update sibling of the PR-summary rule in [`pr-quality.md`](pr-quality.md) § "Summary bullets — narrative quality": both say *deliver the substance in human language, don't dump structure*.
 
 This rule is about **how you narrate status back to the operator** — the "here's where we landed" messages after you finish a chunk of work. It is not about code comments, PR bodies (that's `pr-quality.md`), or commit messages (that's `git-conventions.md`).
+The operator choices section also applies when you ask the operator to decide.
 
 ## The rule
 
@@ -24,6 +25,19 @@ Concretely:
 - **The enemy is anything the operator has to *parse*.** A wall of dense prose and a reflexive `| Check | Status |` grid are the same sin — both make them work. The fix is never "prose instead of tables" or "tables instead of prose"; it's "whatever is fastest to read for *this* content."
 - **Cut low-signal noise.** Don't recite marker SHAs, hook filenames, or the full CI check list unless the operator asked or something *failed*. When it's all green, "CI's green and Rex approved" is the whole sentence.
 - **End with a short, plain "what's still open"** — a few bullets in human language, not a formal backlog dump with ticket-state ceremony.
+
+## Operator choices
+
+When the operator must choose between two or more options, use the `AskUserQuestion` tool. Do not present lettered options in prose.
+
+- Put the recommended option first. Add `(Recommended)` to its label.
+- Give every option a one-line description of its effect.
+- Put up to four independent questions in one wizard call. Keep dependent questions in sequence.
+- Keep each question to two to four clickable options. Split larger menus into sequential wizard questions.
+- A single yes/no confirmation inside a skill flow may stay in prose. For example, `Create this ticket?` needs no wizard.
+- If the harness has no `AskUserQuestion` tool, use a numbered list in prose.
+
+Sub-agents return options to the orchestrator as structured text: question, recommended option, and each option's effect. Only the orchestrator asks the operator.
 
 ## Human ≠ vague
 

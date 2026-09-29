@@ -232,8 +232,12 @@ evidence the PR is up to date.
       4. Run /approve-merge <pr> again.
     ```
 
-    Ask the user to run step 1, or to approve you running it — do not
-    update the branch yourself. Updating the branch pushes a merge commit
+    Use `AskUserQuestion` to ask who runs step 1. Put `Run it yourself
+    (Recommended)` first. Its description says the operator runs the shown
+    command. Put `Approve me to run it` second. Its description says the
+    agent pushes the branch update. If the harness lacks `AskUserQuestion`,
+    present these two choices as a numbered list. Do not update the branch
+    before the operator chooses. Updating the branch pushes a merge commit
     to the PR's head branch. On a fork PR with maintainer edits that
     branch belongs to the contributor. The update is a separate, visible
     action the user should see happen, not one this skill takes on its

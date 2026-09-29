@@ -2,7 +2,7 @@
 name: dfd
 description: DFD with trust boundaries + data classifications (Mermaid + optional Threat Dragon JSON). Source-of-truth for /threat-model.
 argument-hint: "[project-name | . | --scope-all] [--format=mermaid|dragon|all]"
-allowed-tools: Bash, Read, Grep, Glob, Write
+allowed-tools: Bash, Read, Grep, Glob, Write, AskUserQuestion
 ---
 
 # /dfd — Data Flow Diagram Extractor
@@ -65,6 +65,11 @@ docs/architecture/system-dfd-source.yaml               ← per-service discovery
 
 ## Process
 
+Use `AskUserQuestion` for every operator option menu in this skill.
+Follow `.claude/rules/reporting-style.md § Operator choices`.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 ### 1. Resolve the target + scope
 
 - If the argument is `.` → use cwd as the target.
@@ -91,6 +96,10 @@ The grep-fallback signatures live in `.claude/skills/dfd/discover.sh` (axes 1–
 For `--scope-all`: run axes 1–6 against each registered project, then in step 3 compose by treating every cross-service flow (detected via `_lib-multi-repo-trace.sh`) as a trust-boundary crossing.
 
 ### 3. Present the candidate model for operator review
+
+Use `AskUserQuestion` for describe, edit, accept, or quit after showing the model.
+Recommend accept first when the model has no known gaps. Otherwise recommend edit first.
+Use the menu below only without the tool.
 
 Render the discovery output in a compact table grouped by axis:
 

@@ -2,7 +2,7 @@
 name: update
 description: Sync the ApexYard fork with upstream — preview, merge-or-rebase on a sync branch, walk per-version migrations.
 argument-hint: "[--dry-run] [--rebase] [--from-version vN.N.N] [--skip-migrations] [--skip-adapter-sync]"
-allowed-tools: Bash, Read, Write, Edit
+allowed-tools: Bash, Read, Write, Edit, AskUserQuestion
 ---
 
 <!--
@@ -75,6 +75,11 @@ remain unchanged, but stale generated adapter files may be refreshed.
 - You want to sync a specific feature branch from upstream. Out of scope — this skill is for default-branch fork sync only.
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### Pre-step: Parse flags + print pre-release banner (when --from-dev)
 
@@ -327,6 +332,8 @@ If `--dry-run` is set, show the preview and exit without touching anything else.
 
 If not already specified by flag:
 
+Use `AskUserQuestion` for merge or rebase. Recommend merge first and describe how each choice changes history. Use the prompt below only without the tool.
+
 ```
 Sync strategy:
   (1) merge   — creates a merge commit. Local history is preserved as-is. Safer for shared branches. DEFAULT.
@@ -383,6 +390,8 @@ Capture stdout/stderr for the conflict-detection step.
 ### 7. Handle conflicts (if any)
 
 If merge/rebase reports conflicts, show the user one file at a time:
+
+Use `AskUserQuestion` for each file. Recommend `Open in editor` first. Use the prompt below only without the tool.
 
 ```
 CONFLICT in .claude/rules/pr-workflow.md
@@ -715,6 +724,8 @@ If `TARGET_VERSION` is empty (no tags reachable — rare but possible on a fresh
 
 If `CURRENT_VERSION="unknown"` AND `--from-version` was NOT passed:
 
+Use `AskUserQuestion` to choose a release, skip migrations, or abort. Split the dynamic release list across wizard questions when needed. Use the menu below only without the tool.
+
 ```
 ApexYard /update: no .claude/framework-version anchor in this fork.
 This is normal on a fork created before framework v1.4.0.
@@ -768,6 +779,8 @@ If `--dry-run` is set, print the chain and exit before any `migration_run` invoc
 #### Per-step prompt
 
 For each pair in the chain, prompt:
+
+Use `AskUserQuestion` for apply, skip, show, or skip all. Recommend apply first. Use the prompt below only without the tool.
 
 ```
 Step N/M — <PAIR>
@@ -869,6 +882,8 @@ done
 If `DRIFTED` is empty → skip this step entirely and continue to step 9.
 
 If non-empty, surface the drift with a y/n/d offer per project — same shape as the deprecated-config offer in step 8:
+
+Use `AskUserQuestion` for the per-project and per-file choices. Recommend keeping each project file first. Use the prompts below only without the tool.
 
 ```
 Topology drift detected — N projects are behind the framework's topology bundle:
