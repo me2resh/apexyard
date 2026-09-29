@@ -2,7 +2,7 @@
 name: codify-rule
 description: Turn a review comment that caught a Rex-miss into a draft handbook entry — Y/N gate, source-PR footer, bucket-routed.
 argument-hint: "[--pr <N>] [--blocking] [<github-pr-comment-url>]"
-allowed-tools: Bash, Read, Write
+allowed-tools: Bash, Read, Write, AskUserQuestion
 ---
 
 ## Writing rule
@@ -39,6 +39,11 @@ private_handbooks_root=$(portfolio_custom_handbooks_dir)
 ```
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### 1. Resolve the source PR
 
@@ -95,7 +100,8 @@ Capture two values:
 
 ### 4. Pick the handbook bucket
 
-Show the four options and ask one question:
+Use `AskUserQuestion` for the four handbook buckets. Recommend the bucket that fits the rule first.
+Show the numbered menu below only when the harness lacks the tool:
 
 ```
 Which handbook bucket does this rule belong in?

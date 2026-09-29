@@ -214,15 +214,21 @@ Columns:
 | New and changed artifacts use the controlled technical writing profile. They use short complete sentences, active voice, one term for one meaning, and clear lists. They retain evidence and uncertainty. | .claude/rules/writing-standard.md, producer instructions, and review skills | reviewer checks + regression cases | partial | Static tests confirm that producers and reviewers load the profile. Reviewers assess sentence structure, meaning, and vocabulary. A checker cannot prove full dictionary compliance. See AgDR-0134 and [#1164][1164]. |
 | Machine text uses one clear instruction in each sentence. Durable artifacts use the same controlled technical writing profile. | .claude/rules/writing-standard.md | reviewer checks | partial | Static checks can find missing wiring. Reviewers assess the text. The framework does not claim certified compliance. |
 
+### 11b. Operator choices
+
+| rule | source | enforced by | mechanizable? | proposed hook / reason advisory |
+|------|--------|-------------|---------------|---------------------------------|
+| Use `AskUserQuestion` for operator choices between options. Sub-agents return options to the orchestrator. | `.claude/rules/reporting-style.md § Operator choices` | prose | no | Advisory agent behavior. No hook. A shell hook cannot observe how a question reaches the operator. |
+
 ## Summary
 
 | bucket | count |
 |--------|-------|
 | mechanized (`yes` — hook / agent enforces it fully) | 29 |
 | partially mechanized (`partial` — hook + prose combination) | 6 |
-| advisory (`no` — stays prose by design) | 39 |
+| advisory (`no` — stays prose by design) | 40 |
 | deferred to a follow-up ticket (`deferred`) | 5 |
-| **total rows** | **79** |
+| **total rows** | **80** |
 | deferred tickets referenced | 6 ([#15][15], [#20][20], [#21][21], [#22][22], [#23][23], [#25][25]) |
 
 The count of deferred *rows* (5) and deferred *tickets* (6) differ because [#15][15] is a meta-chore (resolve `.claude/` duplication between ops-repo and apexyard upstream) that gets one row in the onboarding section, while the commit-related tickets [#20][20] and [#22][22] share a row via `validate-branch-name.sh` + `validate-pr-create.sh`.

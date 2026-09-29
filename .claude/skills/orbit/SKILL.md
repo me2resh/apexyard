@@ -2,7 +2,7 @@
 name: orbit
 description: Run the opt-in ORBIT planning lifecycle for one managed project without replacing ApexYard governance.
 argument-hint: "<plan|snapshot|reconcile|slice|validate|handoff> --project <name> [--no-challenge]"
-allowed-tools: Bash, Read, Write, Grep, Glob
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion
 ---
 
 # /orbit — ORBIT planning adapter
@@ -205,6 +205,11 @@ If a required input is missing, stop at that stage and report the missing eviden
 
 ## Interaction script
 
+Use `AskUserQuestion` for every operator choice between options in this skill.
+Follow `.claude/rules/reporting-style.md § Operator choices`.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose option prompts below are fallbacks only when the harness lacks `AskUserQuestion`.
+
 Ask one question at a time. Show the proposed record before writing it.
 
 After each Plan, Reconciliation, and Execution Slice draft, run `/challenge` with the draft as the target. Naqid must steelman the draft, identify hidden assumptions, failure modes, missing evidence, and cheaper alternatives, then return an advisory verdict. Relay the result without softening it. The operator may revise the draft, accept it, or stop. Naqid never writes records and never blocks an ApexYard gate.
@@ -233,6 +238,9 @@ The snapshot command is read-only against the repository. Do not ask for or expo
 ### Reconciliation interview
 
 For each acceptance criterion, ask:
+
+Use `AskUserQuestion` for the status choice. Recommend `not-verified` first until evidence supports another status.
+The status list below is a prose fallback only when the harness lacks the tool.
 
 1. `What repository evidence supports this criterion?`
 2. `Which status applies: not-verified, partially-verified, achieved, or contradicted?`

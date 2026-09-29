@@ -2,7 +2,7 @@
 name: idea
 description: Capture a new product idea / feature concept / internal tool proposal to the ideas backlog (pre-triage).
 argument-hint: "<short title of the idea>"
-allowed-tools: Bash, Read, Edit, Write
+allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
 ---
 
 # /idea — Submit a New Product Idea
@@ -39,6 +39,11 @@ Every idea lands in `projects/ideas-backlog.md` at the root of your ops repo (yo
 If the file doesn't exist yet, create it with a header and a table.
 
 ## Process
+
+Use `AskUserQuestion` for every operator option menu in this skill. Follow `.claude/rules/reporting-style.md § Operator choices`.
+Preserve multiple selections where the menu permits them. Split menus with more than four options into sequential wizard questions.
+Keep single yes/no and ticket confirmation prompts as written.
+The prose menus below are fallbacks only when the harness lacks `AskUserQuestion`.
 
 ### 0. Write the active-issue-skill marker (REQUIRED — me2resh/apexyard#268)
 
@@ -80,7 +85,8 @@ What's the idea? Give me a short title (1 line).
 
 Ask conversationally (one question at a time, don't batch):
 
-**Category** — must be one of four values. Present numbered options and **re-prompt on invalid input**:
+**Category** — must be one of four values. Use `AskUserQuestion` and recommend the best fit first.
+Give each category a one-line effect. Present the numbered menu below only when the harness lacks the tool. **Re-prompt on invalid input**:
 
 ```
 Category?
