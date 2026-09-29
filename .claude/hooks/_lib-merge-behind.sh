@@ -70,13 +70,15 @@ is_pr_behind_base() {
 #       Echoes one of: true | false | unknown
 #       "true" only when ALL of the following hold, each verified against
 #       the forge (never against local git state alone — me2resh/apexyard#1437
-#       round-2 review, Rex B1 + Hakim A1):
+#       round-2 review, Rex B1 + Hakim A1; hardened further in #1456):
 #         - <new_sha> is a two-parent commit, per the forge's own commit API
 #           (GET /repos/<repo>/commits/<new_sha>), not local `git log`.
 #         - parent[0] is exactly <old_sha> (the Rex-approved commit).
 #         - parent[1] is an ancestor of (or equal to) <base_branch>'s CURRENT
-#           tip, resolved from the forge BY NAME
-#           (GET /repos/<repo>/commits/<base_branch>), never a local ref —
+#           tip, resolved from the forge branches endpoint
+#           (GET /repos/<repo>/branches/<url-encoded-name> → .commit.sha).
+#           The commits/{ref} endpoint is NOT used for the tip: a tag with
+#           the same name can shadow a branch there. Never a local ref —
 #           a local branch/remote-tracking ref can be stale or attacker-set.
 #           This is the fix for the critical bypass an earlier version had:
 #           checking only parent[0] lets an attacker merge in ANY second
@@ -84,12 +86,14 @@ is_pr_behind_base() {
 #           still pass, because nothing verified that second parent was
 #           actually the real base.
 #         - the merge is reproducible: `git merge-tree --write-tree
-#           <parent0> <parent1>` (local git, hardened env — no replace
-#           objects, no system/global config, no custom merge drivers)
-#           produces the SAME tree the forge reports for <new_sha>
-#           (`.commit.tree.sha`). This replaces parsing `--remerge-diff`
-#           text: it is a direct tree-identity comparison, and it never
-#           trusts <new_sha>'s own locally-recorded tree, only the forge's.
+#           <parent0> <parent1>` runs inside a fresh empty GIT_DIR that
+#           reads objects only via GIT_ALTERNATE_OBJECT_DIRECTORIES, with
+#           core.commitGraph=false. The tree ID is read from stdout only.
+#           A local .git/config merge driver, info/grafts entry, replace
+#           ref, or commit-graph cannot change the result (#1456). The
+#           computed tree must equal the forge-reported tree for
+#           <new_sha> (`.commit.tree.sha`). Never trusts <new_sha>'s own
+#           locally-recorded tree.
 #       Every other shape — a missing/unresolvable base tip, a missing
 #       object, a failed fetch, a non-merge commit, an octopus merge, a
 #       parent[1] not on the base branch, or a merge-tree mismatch — is
@@ -115,17 +119,61 @@ is_pr_behind_base() {
 #       This function never returns "skippable" on a result it could not
 #       fully verify.
 
-# _rex_carry_git — every git call this check makes goes through this
+# _rex_carry_git — fetch (and other real-checkout git calls) go through this
 # wrapper (Hakim A1): GIT_NO_REPLACE_OBJECTS=1 defeats a locally-installed
-# replace-object that swaps a commit's apparent content; GIT_CONFIG_NOSYSTEM
-# and GIT_CONFIG_GLOBAL=/dev/null ignore any system/global config, including
-# a custom merge driver or attributes file that could alter the merge-tree
-# result; GIT_TERMINAL_PROMPT=0 makes a fetch fail instead of hanging on a
-# credential prompt. Assignment-prefix form, not `export` — scoped to this
-# one command, never leaks into the caller's shell.
+# replace-object; GIT_CONFIG_NOSYSTEM and GIT_CONFIG_GLOBAL=/dev/null ignore
+# system/global config; GIT_TERMINAL_PROMPT=0 makes a fetch fail instead of
+# hanging on a credential prompt. Assignment-prefix form, not `export` —
+# scoped to this one command, never leaks into the caller's shell.
+# NOTE: this does NOT isolate the local repo's .git/config or info/grafts.
+# merge-base and merge-tree use _rex_carry_git_isolated instead (#1456).
 _rex_carry_git() {
   GIT_NO_REPLACE_OBJECTS=1 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
   GIT_TERMINAL_PROMPT=0 git -c merge.renormalize=false -c core.attributesFile= "$@"
+}
+
+# _rex_carry_git_isolated — run merge-base / merge-tree in a fresh empty
+# GIT_DIR that reads real objects only through GIT_ALTERNATE_OBJECT_DIRECTORIES
+# (me2resh/apexyard#1456). A local merge driver, info/grafts entry, replace
+# ref, or commit-graph in the real clone cannot change the result. The tree
+# ID from merge-tree is on stdout; callers must not merge stderr into it.
+_rex_carry_git_isolated() {
+  local objects_dir empty_git gd rc
+  objects_dir=$(git rev-parse --path-format=absolute --git-path objects 2>/dev/null)
+  if [ -z "$objects_dir" ]; then
+    gd=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 128
+    objects_dir="${gd}/objects"
+  fi
+  if [ ! -d "$objects_dir" ]; then
+    return 128
+  fi
+
+  empty_git=$(mktemp -d 2>/dev/null) || return 128
+  # Minimal empty git dir — no config, no grafts, no replace refs. Avoid
+  # `git init` so nothing writes a config an attacker could race.
+  if ! mkdir -p "${empty_git}/objects" "${empty_git}/refs"; then
+    rm -rf "$empty_git"
+    return 128
+  fi
+  if ! printf 'ref: refs/heads/main\n' > "${empty_git}/HEAD"; then
+    rm -rf "$empty_git"
+    return 128
+  fi
+
+  # Unset GIT_WORK_TREE (do not set it to "") so a caller-set work tree
+  # cannot pull attributes from the real checkout, and so git does not
+  # reject an empty path.
+  env -u GIT_WORK_TREE \
+    GIT_DIR="$empty_git" \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects_dir" \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    GIT_CONFIG_NOSYSTEM=1 \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_TERMINAL_PROMPT=0 \
+    git -c core.commitGraph=false -c merge.renormalize=false -c core.attributesFile= "$@"
+  rc=$?
+  rm -rf "$empty_git"
+  return "$rc"
 }
 
 # _rex_carry_is_sha40 <value> — 40 lowercase hex characters, exactly.
@@ -153,12 +201,16 @@ rex_approval_carries_over() {
     return 0
   fi
 
-  # 1. Resolve the base branch's CURRENT tip from the forge BY NAME. Never
-  # a local ref (`git rev-parse origin/<base>` or similar) — a local ref is
-  # exactly the kind of state an attacker with write access to this clone
-  # could set to whatever they want.
-  local base_tip base_tip_rc
-  base_tip=$(gh api "repos/${repo}/commits/${base_branch}" -q '.sha' 2>/dev/null)
+  # 1. Resolve the base branch's CURRENT tip from the forge branches
+  # endpoint. Never commits/{ref} — a tag with the same name can shadow
+  # the branch there (#1456). Never a local ref either.
+  local base_encoded base_tip base_tip_rc
+  base_encoded=$(jq -nr --arg b "$base_branch" '$b|@uri' 2>/dev/null)
+  if [ -z "$base_encoded" ]; then
+    echo "unknown"
+    return 0
+  fi
+  base_tip=$(gh api "repos/${repo}/branches/${base_encoded}" -q '.commit.sha' 2>/dev/null)
   base_tip_rc=$?
   if [ "$base_tip_rc" -ne 0 ] || ! _rex_carry_is_sha40 "$base_tip"; then
     echo "unknown"
@@ -225,11 +277,13 @@ rex_approval_carries_over() {
   # This is the fix for the critical bypass: without this check, a merge
   # whose second parent is any descendant of <old_sha> — not actually the
   # base branch at all — would otherwise pass on parent[0] alone.
+  # Runs in an isolated empty GIT_DIR (#1456) so a local grafts entry
+  # cannot invent the ancestor relationship.
   # No `!` negation here on purpose: `if ! cmd; then` would make `$?` inside
   # the branch reflect the NEGATION's exit status (always 0), not cmd's own
   # code — and rc 1 (not an ancestor) must be distinguished from rc 128+ (an
   # object couldn't be read / an internal error).
-  _rex_carry_git merge-base --is-ancestor "$forge_parent1" "$base_tip" 2>/dev/null
+  _rex_carry_git_isolated merge-base --is-ancestor "$forge_parent1" "$base_tip" 2>/dev/null
   local anc_rc=$?
   if [ "$anc_rc" -ne 0 ]; then
     if [ "$anc_rc" -eq 1 ]; then
@@ -240,28 +294,34 @@ rex_approval_carries_over() {
     return 0
   fi
 
-  # 5. Recompute the merge locally (hardened env) and compare its TREE
-  # against the forge-reported tree for <new_sha>. This never parses diff
-  # text and never trusts <new_sha>'s own local object (which is never
-  # fetched at all — see step 3).
-  local mt_out mt_rc
-  mt_out=$(_rex_carry_git merge-tree --write-tree "$forge_parent0" "$forge_parent1" 2>&1)
+  # 5. Recompute the merge in an isolated empty GIT_DIR (#1456) and compare
+  # its TREE (stdout only) against the forge-reported tree for <new_sha>.
+  # Never parses diff text, never trusts <new_sha>'s local object, and
+  # never lets a local merge driver alter the recomputation.
+  local mt_tree mt_rc mt_err
+  mt_err=$(mktemp 2>/dev/null) || {
+    echo "unknown"
+    return 0
+  }
+  mt_tree=$(_rex_carry_git_isolated merge-tree --write-tree "$forge_parent0" "$forge_parent1" 2>"$mt_err")
   mt_rc=$?
   if [ "$mt_rc" -ne 0 ]; then
-    if printf '%s' "$mt_out" | grep -qiE 'unknown option|usage: git merge-tree'; then
+    if grep -qiE 'unknown option|usage: git merge-tree' "$mt_err" 2>/dev/null; then
       # This git build doesn't support `merge-tree --write-tree` — cannot
       # verify, not "verified and conflicting".
+      rm -f "$mt_err"
       echo "unknown"
     else
       # A real conflict: the recorded merge required a decision git's own
       # merge could not make on its own — not a mechanical replay.
+      rm -f "$mt_err"
       echo "false"
     fi
     return 0
   fi
+  rm -f "$mt_err"
 
-  local mt_tree
-  mt_tree=$(printf '%s' "$mt_out" | head -1 | tr -d '[:space:]')
+  mt_tree=$(printf '%s' "$mt_tree" | head -1 | tr -d '[:space:]')
   if ! _rex_carry_is_sha40 "$mt_tree"; then
     echo "unknown"
     return 0

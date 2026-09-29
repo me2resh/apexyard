@@ -73,7 +73,7 @@ fixed in this revision. See "Decision" below for the corrected algorithm.
 | Trust `mergeStateStatus` or GitHub's own "up to date" flag to skip the refresh | Zero extra API calls | This is the exact field AgDR-0170 already showed lies on this repo's own ruleset — reusing it here would reopen the bug that record fixed |
 | Carry the Rex marker forward whenever the SHA changed and the PR is still "behind" in the same direction (no structural check) | Simplest code | Cannot tell a clean base merge from a rebase, an amend, or a hand-resolved conflict — exactly the case a stale marker exists to block |
 | Carry the Rex approval forward when the new HEAD is a two-parent merge whose first parent is the approved SHA and `git show --remerge-diff` is empty, verified only against local git state (round-1 version) | Verifies the actual git object, not a claim about it; fails closed on every ambiguous shape | Checked parent[0] only — never verified parent[1] was actually the real base, and never verified against the forge, so a locally-forged or replaced commit object could fool it. Superseded within this same record after Rex + Hakim's round-2 review — see "Round-2 revision" and "Decision" |
-| Carry BOTH the Rex and CEO approval forward only when parent[0] and parent[1] and the resulting tree are ALL verified against the forge commit API, with parent[1] required to be an ancestor of the forge-resolved base tip, and the merge recomputed locally under a hardened git environment (chosen) | Fixes the round-1 bypass (parent[1] was never checked) and the round-1 local-trust gap (Hakim A1); a direct tree comparison replaces diff-text parsing | Three forge reads instead of one; needs the two parent objects and the base tip available locally (fetched on demand); a shallow or partial clone can return `unknown` more often than a full one |
+| Carry BOTH the Rex and CEO approval forward only when parent[0] and parent[1] and the resulting tree are ALL verified against the forge commit API, with parent[1] required to be an ancestor of the forge-resolved base tip (branches endpoint, not commits/{ref}), and the merge recomputed in an isolated empty GIT_DIR via alternates (chosen; #1456 hardens the #1437 round-2 shape) | Fixes the round-1 bypass (parent[1] was never checked), the round-1 local-trust gap (Hakim A1), and the residual local-config/grafts/tag-shadow gaps (#1456) | Three forge reads instead of one; needs the two parent objects and the base tip available locally (fetched on demand); a shallow or partial clone can return `unknown` more often than a full one |
 | Skip the refresh whenever the PR "looks small" (few files changed) | Cheap heuristic | Files changed and files affected are different things; a one-file PR can still be broken by an unrelated one-file base change to a shared library |
 | Skip the refresh only when the base's new commits, since the merge base, touch none of the PR's own files and none of a configurable shared-file set (chosen) | Directly tests the actual overlap condition that makes a refresh matter; the shared set covers hooks and config a change elsewhere can still break; fails closed on a truncated compare (300+ files), an API failure, or an unknown result | Requires two extra forge reads (PR's own file list, base's file list since merge base); a shared-file pattern an adopter forgets to add is a silent gap until the next incident names it |
 
@@ -94,19 +94,24 @@ never against local git state alone:
   an octopus merge).
 - Parent[0] is exactly the SHA the marker names.
 - Parent[1] is an ancestor of (or equal to) the base branch's CURRENT tip,
-  resolved from the forge BY NAME (`GET /repos/<repo>/commits/<base_branch>`)
-  — never a local ref, which a session with write access to the clone could
-  set to anything. **This is the fix for Rex's critical-bypass finding**:
-  the first version checked parent[0] only, so any second parent — not
-  necessarily the real base — passed.
-- A hardened local `git merge-tree --write-tree <parent0> <parent1>`
-  (`GIT_NO_REPLACE_OBJECTS=1`, no system/global git config, no custom merge
-  driver, `GIT_TERMINAL_PROMPT=0` on any fetch) reproduces the EXACT tree
-  the forge reports for `<new_sha>`. **This is the fix for Hakim's
-  hardening finding**: it replaces parsing `--remerge-diff` text with a
-  direct tree-identity comparison, and the local recomputation is anchored
-  to two forge-attested parent SHAs, not to anything read from `<new_sha>`
-  itself.
+  resolved from the forge branches endpoint
+  (`GET /repos/<repo>/branches/<url-encoded-name>` → `.commit.sha`) — never
+  the commits/{ref} endpoint (a tag with the same name can shadow a branch
+  there — me2resh/apexyard#1456), and never a local ref, which a session with
+  write access to the clone could set to anything. **This is the fix for
+  Rex's critical-bypass finding**: the first version checked parent[0] only,
+  so any second parent — not necessarily the real base — passed.
+- A `git merge-tree --write-tree <parent0> <parent1>` run inside a fresh
+  empty `GIT_DIR` that reads objects only through
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`, with `core.commitGraph=false`,
+  reproduces the EXACT tree the forge reports for `<new_sha>`. The tree ID
+  is read from stdout only. **This is the fix for Hakim's hardening finding,
+  extended in #1456**: it replaces parsing `--remerge-diff` text with a
+  direct tree-identity comparison; the local recomputation is anchored to
+  two forge-attested parent SHAs; and a local `.git/config` merge driver,
+  `info/grafts` entry, replace ref, or commit-graph cannot change the
+  result. The same isolated `GIT_DIR` is used for the parent[1]
+  `merge-base --is-ancestor` check.
 
 `<old_sha>` and `<new_sha>` are validated as 40 lowercase hex characters
 before any git or forge call. Any object or API call the check cannot
@@ -175,12 +180,14 @@ case that function cannot fully verify still requires a fresh
   reviewing real changes.
 - `/approve-merge` makes one additional forge read (the PR's own file
   list) on a behind-base PR before deciding whether the refresh is
-  needed. `rex_approval_carries_over` makes three forge reads (base tip by
-  name, the head commit's parents and tree, and — implicitly, via
-  `merge-base`/`merge-tree` — the two parent objects) plus a hardened
-  local git computation, whenever a marker's SHA no longer matches HEAD.
-  This is more forge traffic than the round-1 version, traded deliberately
-  for not trusting local git state alone (Hakim A1).
+  needed. `rex_approval_carries_over` makes three forge reads (base tip via
+  the branches endpoint, the head commit's parents and tree, and —
+  implicitly, via isolated `merge-base`/`merge-tree` — the two parent
+  objects) plus an isolated empty-GIT_DIR git computation, whenever a
+  marker's SHA no longer matches HEAD. This is more forge traffic than the
+  round-1 version, traded deliberately for not trusting local git state
+  (Hakim A1, extended in #1456 against grafts / merge drivers / tag
+  shadowing).
 - Carrying the CEO marker forward, not only Rex's, means a merge can now
   complete without a fresh human message between the original approval and
   this particular merge. This is the CEO's own accepted trade-off (see "CEO
@@ -202,11 +209,11 @@ case that function cannot fully verify still requires a fresh
 
 ## Artifacts
 
-- `.claude/hooks/_lib-merge-behind.sh` — `rex_approval_carries_over`, `merge_refresh_required`, `_merge_behind_path_matches_any`, `_rex_carry_git`, `_rex_carry_is_sha40`
+- `.claude/hooks/_lib-merge-behind.sh` — `rex_approval_carries_over`, `merge_refresh_required`, `_merge_behind_path_matches_any`, `_rex_carry_git`, `_rex_carry_git_isolated`, `_rex_carry_is_sha40`
 - `.claude/hooks/block-unreviewed-merge.sh` — carry-over check ahead of both the Rex-marker and CEO-marker stale-SHA blocks. `BASE_REF_NAME` is resolved once and shared with `print_behind_base_note`
 - `.claude/skills/approve-merge/SKILL.md` — step 3a (the `skippable`/`required` branch) and step 4 (carry-over parity with the gate)
 - `.claude/project-config.defaults.json` — `merge.shared_file_patterns`
 - `.claude/rules/pr-workflow.md` — the "one authorization moment" exception for a forge-verified base-branch replay
 - `.claude/hooks/tests/test_lib_merge_behind.sh`, `.claude/hooks/tests/test_block_unreviewed_merge.sh`
 - AgDR-0170 (the behind-base stop this record narrows, not replaces)
-- apexyard#1437, apexyard#1386
+- apexyard#1437, apexyard#1386, apexyard#1456

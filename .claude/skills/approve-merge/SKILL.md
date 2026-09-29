@@ -221,11 +221,14 @@ evidence the PR is up to date.
       1. Update the branch: gh pr update-branch <pr> --repo <owner/repo>
       2. Wait for green CI on the updated branch.
       3. Get a short Rex re-review of the new merge commit — OR, if the
-         merge is a clean replay of the base with no conflicts (`git show
-         --remerge-diff` on the new HEAD is empty), the merge gate carries
-         the existing Rex approval forward on its own. See
+         merge is a clean replay of the base with no conflicts
+         (`rex_approval_carries_over` returns true: forge-verified
+         two-parent merge whose tree matches an isolated
+         `git merge-tree --write-tree` of the parents), the merge gate
+         carries the existing Rex approval forward on its own. See
          block-unreviewed-merge.sh's rex_approval_carries_over check
-         (me2resh/apexyard#1437) — no marker to write by hand either way.
+         (me2resh/apexyard#1437, hardened in #1456) — no marker to write
+         by hand either way.
       4. Run /approve-merge <pr> again.
     ```
 

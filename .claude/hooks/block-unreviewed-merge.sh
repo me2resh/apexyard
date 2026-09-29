@@ -419,22 +419,24 @@ MSG
 fi
 
 REX_SHA=$(tr -d '[:space:]' < "$REX_APPROVAL")
-# --- Carry the Rex approval across a verified base-branch merge (#1437) ---
+# --- Carry the Rex approval across a verified base-branch merge (#1437, #1456) ---
 # When HEAD moved because the PR was refreshed against its base — not
 # because new work landed — and that refresh is a conflict-free two-parent
 # merge of the Rex-approved commit, the marker's original SHA no longer
 # matches HEAD even though nothing Rex reviewed actually changed.
 # rex_approval_carries_over (_lib-merge-behind.sh) verifies this against the
-# FORGE, not local git state alone: parent[0] must equal REX_SHA per the
-# forge commit API, parent[1] must be an ancestor of the base branch's
-# CURRENT tip (resolved by name from the forge, never a local ref), and a
-# hardened local `git merge-tree --write-tree` of the two parents must
-# reproduce the forge-reported tree for HEAD. Fails closed on any
-# uncertainty — an unresolvable base tip, a missing object, a failed fetch,
-# a non-merge commit, an octopus merge, a second parent not on the base
-# branch, or a merge-tree mismatch all fall through to the ordinary
-# stale-marker block below. No agent writes a marker for this. The gate
-# decides on its own, from state a local file write cannot fabricate.
+# FORGE, not local git state: parent[0] must equal REX_SHA per the forge
+# commit API, parent[1] must be an ancestor of the base branch's CURRENT tip
+# (resolved via the branches endpoint so a tag cannot shadow the name), and
+# a `git merge-tree --write-tree` of the two parents must reproduce the
+# forge-reported tree for HEAD — run in a fresh empty GIT_DIR that reads
+# objects only through alternates, so a local merge driver or grafts entry
+# cannot change the result. Fails closed on any uncertainty — an
+# unresolvable base tip, a missing object, a failed fetch, a non-merge
+# commit, an octopus merge, a second parent not on the base branch, or a
+# merge-tree mismatch all fall through to the ordinary stale-marker block
+# below. No agent writes a marker for this. The gate decides on its own,
+# from state a local file write cannot fabricate.
 _CARRY_OVER="false"
 if [ -n "$REX_SHA" ] && [ -n "$CURRENT_SHA" ] && [ "$REX_SHA" != "$CURRENT_SHA" ] \
    && command -v rex_approval_carries_over >/dev/null 2>&1; then
