@@ -203,6 +203,117 @@ fi
 rm -rf "$SB7"
 
 # ---------------------------------------------------------------------------
+# Case 9 (#1363): override-only keys are live config, not deprecated config.
+#
+# Some supported keys are absent from the defaults file by design — the hook
+# that reads each one holds its built-in default in code and consults config
+# only when an adopter overrides it. Before this, /update offered to delete
+# them, and answering `y` silently disabled the gate they configure.
+# ---------------------------------------------------------------------------
+echo
+echo "Case 9: override-only key allowlist (#1363)"
+
+run_case "#1363: an override-only key is not flagged" \
+'{
+  "_override_only_keys": ["migration_paths"],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"]
+}' \
+''
+
+run_case "#1363: a genuinely removed key is still flagged beside an allowlisted one" \
+'{
+  "_override_only_keys": ["migration_paths"],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"],
+  "voice_prompts": {"on_pause": "ping"}
+}' \
+'voice_prompts'
+
+run_case "#1363: defaults with no allowlist keep the previous behaviour" \
+'{
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"]
+}' \
+'migration_paths'
+
+run_case "#1363: non-string allowlist entries are ignored, not fatal" \
+'{
+  "_override_only_keys": ["migration_paths", 42, null],
+  "ticket": {"prefix_whitelist": ["Feature"]}
+}' \
+'{
+  "migration_paths": ["db/migrations/**"],
+  "voice_prompts": {"on_pause": "ping"}
+}' \
+'voice_prompts'
+
+# Every override-only key a shipped hook reads must be in the SHIPPED
+# defaults file's allowlist. This is the case that fails if someone adds a
+# new override-only key to a hook and forgets to declare it.
+echo
+echo "Case 9b: shipped defaults allowlist covers every shipped override-only key"
+SHIPPED_DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/project-config.defaults.json"
+HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Derive the key set by SCANNING the hooks rather than restating it here. A
+# fixed list can only show that a declared key stays declared; it cannot notice
+# a hook that starts reading a NEW override-only key. That is exactly how
+# `tracker_repo` reached `dev` undeclared while this case kept passing.
+#
+# The signal is a hook reading the OVERRIDE file directly. Two shapes carry it:
+# the file named inline, and the file held in `$PCONFIG`. The filter itself
+# very often contains a pipe — `jq -r '.design_paths // [] | join("|")'` — so
+# the expression between `jq` and the file name must not exclude `|`. An
+# earlier form here did, and matched only the one key whose read has no pipe.
+#
+# Comment lines are dropped first: several hooks document their own keys in a
+# header block, and those mentions are not reads.
+scanned_keys=$(grep -hE "jq .*(project-config\.json|PCONFIG)" "$HOOKS_DIR"/*.sh 2>/dev/null \
+  | grep -v '^[[:space:]]*#' \
+  | grep -oE "'\.[a-zA-Z_][a-zA-Z0-9_]*" | sed "s/'\.//" | sort -u)
+
+# Keys a hook reads ONLY for backward compatibility. They are deliberately not
+# allowlisted, because `/update` SHOULD still offer to remove them — they are
+# dead config that the hook tolerates rather than supported configuration.
+#   commit_types — validate-commit-format.sh:347, the legacy flat key that the
+#                  nested `commit.types` block replaced.
+scan_exceptions=" commit_types "
+
+undeclared=""
+checked_keys=""
+for k in $scanned_keys; do
+  case "$scan_exceptions" in *" $k "*) continue ;; esac
+  checked_keys="$checked_keys $k"
+  in_defaults=$(jq --arg k "$k" 'has($k)' "$SHIPPED_DEFAULTS")
+  in_allowlist=$(jq --arg k "$k" '(._override_only_keys // []) | index($k) != null' "$SHIPPED_DEFAULTS")
+  if [ "$in_defaults" = "false" ] && [ "$in_allowlist" = "false" ]; then
+    undeclared="$undeclared $k"
+  fi
+done
+
+# An empty scan would make this case pass vacuously, so treat it as a failure:
+# it means the read idiom this grep models has changed.
+if [ -z "$scanned_keys" ]; then
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  - Case 9b scan matched no config reads; the grepped idiom has changed"
+  echo "FAIL: scan matched no keys — the grepped read idiom has changed"
+elif [ -z "$undeclared" ]; then
+  PASS=$((PASS + 1))
+  echo "PASS: every override-only key a hook reads is declared —$checked_keys"
+else
+  FAIL=$((FAIL + 1))
+  FAILED_CASES="$FAILED_CASES\n  - hook reads undeclared config key(s):$undeclared"
+  echo "FAIL: hook reads undeclared config key(s):$undeclared"
+fi
+
+# ---------------------------------------------------------------------------
 # Case 8: no jq binding (--arg / --argjson / --slurpfile / --rawfile) in the
 # helper uses a reserved jq keyword as its variable name (regression for
 # me2resh/apexyard#668). `def` et al. are grammar keywords; jq 1.6 rejects

@@ -435,6 +435,8 @@ After the merge / rebase has applied (so the new `.claude/project-config.default
 
 This is **advisory only**. Custom-extension keys an adopter has added (their own hooks, in-house extensions) are also surfaced — the detector cannot tell them apart from upstream-removed keys, and only the operator can. The y/n/s offer below is the human-in-the-loop step that disambiguates.
 
+The helper skips keys listed in the defaults file's `_override_only_keys`. Those are supported keys that a hook reads only when an adopter sets one, so they are absent from defaults by design and are live configuration rather than dead config (me2resh/apexyard#1363). Accepting a deletion offer for one of them would silently disable the gate that reads it.
+
 #### Detection
 
 Source the helper and read the deprecated key list:
