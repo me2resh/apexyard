@@ -30,7 +30,7 @@ When `mcp__apexyard-search__search_docs` is available, make one additive semanti
 
 Semantic discovery is fail-soft: if the tool is unavailable, errors, or returns no handbook chunks, continue silently with the deterministic path-convention set. It must never replace or shrink the required discovery floor.
 
-The `apexyard-search` MCP server is an optional add-on. Check your tool list for `search_docs` before the query. When the tool is absent, skip only this query and load the full path-convention set. Do not cite a semantic query in the build handoff when it did not run.
+The `apexyard-search` MCP server is an optional add-on. Check your tool list for `search_docs` before the query. If `apexyard-search` is not installed, use path-convention discovery and `Read`. Do not skip a selected handbook. When the tool is absent, skip only this query and load the full path-convention set. Do not cite a semantic query in the build handoff when it did not run.
 
 ## Build-time semantics
 

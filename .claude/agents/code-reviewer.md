@@ -103,6 +103,7 @@ It also lowers review token cost (targeted semantic excerpts vs. broad `grep` + 
 
 **Graceful-degrade:** the `apexyard-search` MCP server is an optional add-on.
 Use `grep`, `Glob`, and `Read` when its tools are not in your tool list.
+If `apexyard-search` is not installed, use `grep` and `Read`. Do not skip the step.
 Also use `grep`, `Glob`, and `Read` when a call fails or returns nothing relevant.
 Do the same grounding reads with those tools.
 Do not skip the grounding step.
@@ -456,7 +457,7 @@ This step **supplements** the applicable path-convention set above with handbook
 
 Rules:
 
-1. **Skip silently if MCP is unavailable.** The `mcp__apexyard-search__search_docs` tool is declared in this agent's `tools:` line. If the tool call fails (server not running, scope not indexed, network error, or the tool isn't loaded in this Claude Code installation), catch the error, set `SEMANTIC_SUPPLEMENT_STATUS=unavailable`, and proceed with the path-convention set unchanged. Do NOT emit a user-visible warning — the supplement is opportunistic, not required. Adopters who never installed MCP must see identical Rex behaviour to before this feature shipped.
+1. **Skip silently if MCP is unavailable.** Check your tool list for `mcp__apexyard-search__search_docs` before the call. If the tool is absent or the call fails (server not running, scope not indexed, or network error), set `SEMANTIC_SUPPLEMENT_STATUS=unavailable` and proceed with the path-convention set unchanged. Do NOT emit a user-visible warning — the supplement is opportunistic, not required. Adopters who never installed MCP must see identical Rex behaviour to before this feature shipped.
 2. **Skip silently if the index lacks handbook chunks.** A fresh MCP install that hasn't been reindexed since the framework was forked may return zero handbook results. Treat zero results as a no-op, not an error.
 3. **Query construction.** Build a single `search_docs` query that combines:
    - The PR title (high signal — humans summarise intent here)

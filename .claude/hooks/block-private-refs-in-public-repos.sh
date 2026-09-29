@@ -1271,8 +1271,9 @@ for repo_idx in "${!REPOS[@]}"; do
   [ "${REPOS_PUBLIC[$repo_idx]}" = "1" ] && continue
   if [ "$rp" = "$TARGET_REPO" ]; then continue; fi
   esc=$(printf '%s' "$rp" | sed -E 's/[][\\/.^$*+?(){}|]/\\&/g')
-  # Either bare slug (with word-ish boundary) or slug#<N>.
-  if echo "$HAYSTACK" | grep -qiE "(^|[^A-Za-z0-9_/-])${esc}(#[0-9]+)?([^A-Za-z0-9_/-]|$)"; then
+  # A slash can precede a slug in a URL or follow it in an issue path.
+  # Keep hyphens excluded so a slug within a longer token stays unmatched.
+  if echo "$HAYSTACK" | grep -qiE "(^|[^A-Za-z0-9_-])${esc}(#[0-9]+)?([^A-Za-z0-9_-]|$)"; then
     LEAKS="$LEAKS
   - project repo: $rp"
   fi
