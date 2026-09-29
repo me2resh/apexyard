@@ -6,45 +6,389 @@
 #       and target questions asked by the ticket and migration gates
 #   (b) auto-code-review.sh PostToolUse trigger matching
 # Routing, merge detection, and every other command matcher read the raw
-# command. A raw-command deny gate below returns the raw text unchanged when
-# the input may execute nested code or use syntax the scanner does not model.
+# command.
+#
+# Scrub only when every command word is on the data-only allowlist and the
+# raw text has no executing $( / backtick / <( / >( / <<< outside single
+# quotes and outside quoted heredoc bodies. Otherwise return the raw
+# command. When unsure, return raw.
 
-# Return 0 when the RAW command must not be scrubbed (deny by default).
-# Matching runs on a copy with quotes and backslashes removed so that
-# 'bash', "eval", \eval, and /bin/sh all count as the same command word.
-_command_scrub_raw_deny() {
-  local cmd="${1-}" flat word_re path_re find_re pipe_re
+# Normalize a command word for allowlist comparison: drop quotes and
+# backslashes, then strip a leading path so /bin/cat and \cat become cat.
+# Uses a portable tr class (GNU and BSD) that stays silent on stderr.
+_command_scrub_norm_word() {
+  local flat
+  flat=$(printf '%s' "${1-}" | tr -d "'\"\\\\")
+  flat="${flat##*/}"
+  printf '%s' "$flat"
+}
+
+# Return 0 when scrubbing is safe. Return 1 when the caller must keep raw.
+_command_scrub_allowlist_ok() {
+  local cmd="${1-}" verdict
   [ -n "$cmd" ] || return 1
-  # Strip quotes and backslashes for word matching only.
-  flat=$(printf '%s' "$cmd" | tr -d "'\"\\")
-  # Syntax the scanner treats as data, or cannot model safely.
-  if printf '%s' "$flat" | grep -qE '<<<|\$\(|`|<\(|>\(|\(\('; then
-    return 0
+  if [ "${#cmd}" -gt 120000 ]; then
+    return 1
   fi
-  # Shell / interpreter / wrapper used as a command word. Optional leading
-  # path so /bin/sh and ./bash count. Dot-source is a lone "." word.
-  word_re='bash|sh|zsh|dash|ksh|fish|eval|exec|source|command|builtin|env|xargs|trap|awk|gawk|mawk|python|python3|node|ruby|perl|php|osascript'
-  path_re='(/[^[:space:];&|()<>]*)?'
-  if printf '%s' "$flat" | grep -qE "(^|[;&|()[:space:]])${path_re}(${word_re})([[:space:]]|[;&|()]|$)"; then
-    return 0
+  if ! command -v awk >/dev/null 2>&1; then
+    return 1
   fi
-  if printf '%s' "$flat" | grep -qE '(^|[;&|()[:space:]])\.([[:space:]]|[;&|()]|$)'; then
-    return 0
-  fi
-  # find -exec / -execdir runs arbitrary commands.
-  find_re="(^|[;&|()[:space:]])${path_re}find[[:space:]].*-exec(dir)?([[:space:]]|$)"
-  if printf '%s' "$flat" | grep -qE "$find_re"; then
-    return 0
-  fi
-  # Pipe into any of the same command words.
-  pipe_re="\|[[:space:]]*${path_re}(${word_re})([[:space:]]|[;&|()]|$)"
-  if printf '%s' "$flat" | grep -qE "$pipe_re"; then
-    return 0
-  fi
-  if printf '%s' "$flat" | grep -qE '\|[[:space:]]*\.([[:space:]]|[;&|()]|$)'; then
-    return 0
-  fi
-  return 1
+  verdict=$(COMMAND_SCRUB_INPUT="$cmd" awk '
+    function norm_word(w,    t) {
+      t = w
+      gsub(/["\047\\]/, "", t)
+      sub(/^.*\//, "", t)
+      return t
+    }
+    function is_assign(t) {
+      return t ~ /^[A-Za-z_][A-Za-z0-9_]*=/
+    }
+    function is_reserved(t) {
+      return t == "then" || t == "do" || t == "else" || t == "elif" || \
+             t == "!" || t == "time" || t == "if" || t == "while" || \
+             t == "until" || t == "for" || t == "select" || t == "case" || \
+             t == "coproc" || t == "function" || t == "in" || t == "esac" || \
+             t == "done" || t == "fi"
+    }
+    function is_allow_simple(t) {
+      return t == "echo" || t == "printf" || t == "cat" || t == "grep" || \
+             t == "egrep" || t == "fgrep" || t == "rg" || t == "head" || \
+             t == "tail" || t == "wc" || t == "sort" || t == "uniq" || \
+             t == "cut" || t == "tr" || t == "diff" || t == "cmp" || \
+             t == "ls" || t == "stat" || t == "file" || t == "basename" || \
+             t == "dirname" || t == "realpath" || t == "jq" || t == "yq" || \
+             t == "true" || t == "false" || t == "test" || t == "[" || \
+             t == "cd" || t == "pwd" || t == "mkdir" || t == "touch" || \
+             t == "tee" || t == "cp" || t == "mv" || t == "rm" || \
+             t == "git" || t == "gh"
+    }
+    # read_word may skip ahead through quotes. Reject a consumed word that
+    # still holds executing $( / backticks / process substitution / <<<
+    # outside single quotes.
+    function word_executes(w,    i, wn, c, nx, st) {
+      wn = length(w)
+      st = "plain"
+      for (i = 1; i <= wn; i++) {
+        c = substr(w, i, 1)
+        nx = substr(w, i + 1, 1)
+        if (st == "single") {
+          if (c == "\047") st = "plain"
+          continue
+        }
+        if (st == "double") {
+          if (c == "\"") { st = "plain"; continue }
+          if (c == "\\") { i++; continue }
+          if (c == "`") return 1
+          if (c == "$" && nx == "(") return 1
+          if (c == "<" && nx == "(") return 1
+          if (c == ">" && nx == "(") return 1
+          continue
+        }
+        if (c == "\047") { st = "single"; continue }
+        if (c == "\"") { st = "double"; continue }
+        if (c == "`") return 1
+        if (c == "$" && nx == "(") return 1
+        if (c == "<" && nx == "(") return 1
+        if (c == ">" && nx == "(") return 1
+        if (c == "<" && nx == "<" && substr(w, i + 2, 1) == "<") return 1
+      }
+      return 0
+    }
+    function git_sub_ok(t) {
+      return t == "log" || t == "show" || t == "diff" || t == "status" || \
+             t == "commit" || t == "add" || t == "rev-parse" || \
+             t == "branch" || t == "ls-files" || t == "blame"
+    }
+    function gh_pr_ok(t) {
+      return t == "view" || t == "diff" || t == "create" || t == "edit" || \
+             t == "comment" || t == "review"
+    }
+    function gh_issue_ok(t) {
+      return t == "view" || t == "comment" || t == "create" || t == "edit"
+    }
+    function skip_ws() {
+      while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
+    }
+    # Read one shell word starting at pos. Sets WORD and advances pos.
+    function read_word(    c, q, out, esc) {
+      WORD = ""
+      skip_ws()
+      if (pos > n) return 0
+      c = substr(s, pos, 1)
+      if (c ~ /[;&|(){}]/ || c == "\n") return 0
+      out = ""
+      while (pos <= n) {
+        c = substr(s, pos, 1)
+        if (esc) {
+          out = out c
+          esc = 0
+          pos++
+          continue
+        }
+        if (q == "") {
+          if (c == "\\") { esc = 1; out = out c; pos++; continue }
+          if (c == "\047") { q = "\047"; out = out c; pos++; continue }
+          if (c == "\"") { q = "\""; out = out c; pos++; continue }
+          if (c ~ /[ \t\n;&|(){}]/) break
+          if (c == "<" || c == ">" || c == "#") break
+          out = out c
+          pos++
+          continue
+        }
+        if (q == "\047") {
+          out = out c
+          pos++
+          if (c == "\047") q = ""
+          continue
+        }
+        # double-quoted
+        if (c == "\\" && pos < n) {
+          out = out c substr(s, pos + 1, 1)
+          pos += 2
+          continue
+        }
+        out = out c
+        pos++
+        if (c == "\"") q = ""
+      }
+      WORD = out
+      return (WORD != "")
+    }
+    function peek_two(    a, b) {
+      a = substr(s, pos, 1)
+      b = substr(s, pos + 1, 1)
+      return a b
+    }
+    # After a command word was accepted, ensure git/gh subcommands are safe.
+    # Consumes trailing words of this simple command (stops at separators).
+    function check_git_or_gh(cmdw,    tok, saw_c, subcmd, skip_arg, ntok) {
+      if (cmdw != "git" && cmdw != "gh") return 1
+      saw_c = 0
+      subcmd = ""
+      skip_arg = 0
+      ntok = 0
+      while (read_word()) {
+        if (word_executes(WORD)) return 0
+        tok = norm_word(WORD)
+        if (tok == "") continue
+        if (skip_arg) { skip_arg = 0; continue }
+        if (cmdw == "git") {
+          if (WORD ~ /^-c/ || tok == "-c") { saw_c = 1; break }
+          if (tok == "-C" || tok == "--git-dir" || tok == "--work-tree" || \
+              tok == "--namespace" || tok == "--super-prefix") {
+            skip_arg = 1
+            continue
+          }
+          if (WORD ~ /^--git-dir=/ || WORD ~ /^--work-tree=/ || \
+              WORD ~ /^--namespace=/) continue
+          if (substr(WORD, 1, 1) == "-") continue
+          subcmd = tok
+          break
+        }
+        # gh
+        if (tok == "-R" || tok == "--repo" || tok == "-h" || tok == "--help") {
+          if (tok == "-R" || tok == "--repo") skip_arg = 1
+          continue
+        }
+        if (WORD ~ /^--repo=/) continue
+        if (substr(WORD, 1, 1) == "-") continue
+        ntok++
+        if (ntok == 1) {
+          if (tok == "api") return 1
+          if (tok == "pr" || tok == "issue") { subcmd = tok; continue }
+          return 0
+        }
+        if (ntok == 2) {
+          if (subcmd == "pr") return gh_pr_ok(tok)
+          if (subcmd == "issue") return gh_issue_ok(tok)
+          return 0
+        }
+        break
+      }
+      if (cmdw == "git") {
+        if (saw_c) return 0
+        if (subcmd == "") return 0
+        return git_sub_ok(subcmd)
+      }
+      # gh with only one token that was not api
+      if (subcmd == "pr" || subcmd == "issue") return 0
+      return 0
+    }
+    BEGIN {
+      s = ENVIRON["COMMAND_SCRUB_INPUT"]
+      n = length(s)
+      SQ = sprintf("%c", 39)
+      DQ = sprintf("%c", 34)
+      BS = sprintf("%c", 92)
+      pos = 1
+      state = "plain"
+      cmd_start = 1
+      pending = 0
+      ok = 1
+      while (pos <= n && ok) {
+        c = substr(s, pos, 1)
+        nextc = substr(s, pos + 1, 1)
+        if (state == "single") {
+          if (c == SQ) state = "plain"
+          pos++
+          continue
+        }
+        if (state == "double") {
+          if (c == DQ) { state = "plain"; pos++; continue }
+          if (c == BS && (nextc == DQ || nextc == BS || nextc == "$")) {
+            pos += 2
+            continue
+          }
+          if (c == "$" && nextc == "(") { ok = 0; break }
+          if (c == "`") { ok = 0; break }
+          if (c == "<" && nextc == "(") { ok = 0; break }
+          if (c == ">" && nextc == "(") { ok = 0; break }
+          pos++
+          continue
+        }
+        if (state == "heredoc") {
+          # Consume through the terminator line. Quoted bodies are data.
+          # Unquoted bodies must not hold $( or backticks.
+          line_start = pos
+          while (pos <= n && substr(s, pos, 1) != "\n") pos++
+          line = substr(s, line_start, pos - line_start)
+          check = line
+          if (hd_tabs) sub(/^\t+/, "", check)
+          if (!hd_quoted) {
+            if (index(line, "$(") || index(line, "`")) { ok = 0; break }
+            if (index(line, "<(") || index(line, ">(") || index(line, "<<<")) {
+              ok = 0
+              break
+            }
+          }
+          if (pos <= n && substr(s, pos, 1) == "\n") pos++
+          if (check == hd_delim) {
+            state = "plain"
+            cmd_start = 1
+            pending = 0
+          }
+          continue
+        }
+        # plain
+        if (c == BS) {
+          if (pos == n) { ok = 0; break }
+          # Escaped newline is line continuation — treat as whitespace.
+          if (nextc == "\n") { pos += 2; continue }
+          if (cmd_start) {
+          # Beginning of a word that starts with a backslash.
+          save = pos
+          if (!read_word()) { ok = 0; break }
+          if (word_executes(WORD)) { ok = 0; break }
+          w = norm_word(WORD)
+          if (w == "") { ok = 0; break }
+          # A leading assignment can name a program (GIT_PAGER, EDITOR). Return raw.
+          if (is_assign(WORD)) { ok = 0; break }
+          if (is_reserved(w)) { cmd_start = 1; continue }
+          if (!is_allow_simple(w)) { ok = 0; break }
+          if (!check_git_or_gh(w)) { ok = 0; break }
+          cmd_start = 0
+          continue
+        }
+          pos += 2
+          continue
+        }
+        if (c == SQ) {
+          # At command-start a quote begins a command word, not a data span.
+          if (!cmd_start) { state = "single"; pos++; continue }
+        }
+        if (c == DQ) {
+          if (!cmd_start) { state = "double"; pos++; continue }
+        }
+        if (c == "`") { ok = 0; break }
+        if (c == "$" && nextc == "(") { ok = 0; break }
+        if (c == "<" && nextc == "(") { ok = 0; break }
+        if (c == ">" && nextc == "(") { ok = 0; break }
+        if (c == "<" && nextc == "<") {
+          third = substr(s, pos + 2, 1)
+          if (third == "<") { ok = 0; break }  # <<<
+          # Heredoc opener.
+          j = pos + 2
+          tabs = 0
+          if (substr(s, j, 1) == "-") { tabs = 1; j++ }
+          while (j <= n && substr(s, j, 1) ~ /[ \t]/) j++
+          q = substr(s, j, 1)
+          if (q == SQ || q == DQ) {
+            j++
+            start = j
+            while (j <= n && substr(s, j, 1) != q) j++
+            if (j > n) { ok = 0; break }
+            delim = substr(s, start, j - start)
+            j++
+            quoted = 1
+          } else {
+            start = j
+            while (j <= n && substr(s, j, 1) ~ /[A-Za-z0-9_]/) j++
+            delim = substr(s, start, j - start)
+            quoted = 0
+          }
+          if (delim == "") { ok = 0; break }
+          # Skip to end of this line, then enter heredoc body.
+          while (j <= n && substr(s, j, 1) != "\n") j++
+          if (j <= n) j++
+          pos = j
+          hd_delim = delim
+          hd_quoted = quoted
+          hd_tabs = tabs
+          state = "heredoc"
+          cmd_start = 0
+          continue
+        }
+        if (c == "\n") { cmd_start = 1; pos++; continue }
+        if (c == "#" && (pos == 1 || substr(s, pos - 1, 1) ~ /[[:space:];&|()<>]/)) {
+          while (pos <= n && substr(s, pos, 1) != "\n") pos++
+          continue
+        }
+        two = peek_two()
+        if (two == "&&" || two == "||") { cmd_start = 1; pos += 2; continue }
+        if (c == ";" || c == "|" || c == "&" || c == "(" || c == "{" || c == ")") {
+          cmd_start = 1
+          pos++
+          continue
+        }
+        if (c == "}") { cmd_start = 1; pos++; continue }
+        if (c ~ /[ \t]/) { pos++; continue }
+        if (cmd_start) {
+          if (!read_word()) { ok = 0; break }
+          if (word_executes(WORD)) { ok = 0; break }
+          w = norm_word(WORD)
+          if (w == "") { ok = 0; break }
+          # A leading assignment can name a program (GIT_PAGER, EDITOR). Return raw.
+          if (is_assign(WORD) && WORD !~ /^[A-Za-z_][A-Za-z0-9_]*==/) {
+            ok = 0
+            break
+          }
+          if (is_reserved(w)) {
+            cmd_start = 1
+            continue
+          }
+          if (!is_allow_simple(w)) { ok = 0; break }
+          if (!check_git_or_gh(w)) { ok = 0; break }
+          cmd_start = 0
+          continue
+        }
+        # Not at command start: skip this word / redirection target.
+        if (c == "<" || c == ">") {
+          # Redirection operator — skip optional fd digits already passed.
+          if (nextc == ">" || nextc == "&" || nextc == "|") pos++
+          pos++
+          skip_ws()
+          # Optional target word.
+          if (read_word() && word_executes(WORD)) { ok = 0; break }
+          continue
+        }
+        if (!read_word()) { pos++; continue }
+        if (word_executes(WORD)) { ok = 0; break }
+      }
+      if (state != "plain") ok = 0
+      if (ok) print "yes"; else print "no"
+    }
+  ' 2>/dev/null) || verdict="no"
+  [ "$verdict" = "yes" ]
 }
 
 _command_scrub() {
@@ -56,8 +400,8 @@ _command_scrub() {
     printf '%s' "$cmd"
     return 0
   fi
-  # Deny gate: nested shells, interpreters, and unmodelled syntax stay raw.
-  if _command_scrub_raw_deny "$cmd"; then
+  # Allowlist gate: scrub only data-only command words. Else keep raw.
+  if ! _command_scrub_allowlist_ok "$cmd"; then
     printf '%s' "$cmd"
     return 0
   fi
@@ -84,8 +428,10 @@ _command_scrub() {
       BS=sprintf("%c",92); GT=sprintf("%c",17); LT=sprintf("%c",18)
       PIPE=sprintf("%c",19); AMP=sprintf("%c",20); SEMI=sprintf("%c",21)
       state="plain"; out=""; pending=0; depth=0; bad=0
-      if (s ~ /\$\(\(/ || s ~ /`/ || s ~ /\\\n/ ||
-          s ~ /[\021\022\023\024\025]/) bad=1
+      # Allowlist gate already rejected executing $( / backticks / <<< /
+      # process substitution outside singles and quoted heredocs. Inside
+      # those data regions the characters below are blanked as data.
+      if (s ~ /\\\n/ || s ~ /[\021\022\023\024\025]/) bad=1
       for (i=1; i<=n && !bad; i++) {
         c=substr(s,i,1); nextc=substr(s,i+1,1)
         if (state == "single") {

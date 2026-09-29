@@ -23,7 +23,7 @@ write_result() {
   if bash_command_appears_to_write "$1"; then printf write; else printf read; fi
 }
 check 'quoted redirect' read "$(write_result "git log --format='%h > %s'")"
-# awk is on the raw-deny interpreter list, so the scrubber returns raw and the
+# awk is outside the data-only allowlist, so the scrubber returns raw and the
 # write detector keeps today's conservative raw-text verdict (false write).
 check 'quoted comparison' write "$(write_result "awk '\$1 > 0' data.txt")"
 check 'quoted grep pattern' read "$(write_result "grep -E '^>' data.txt")"
@@ -31,7 +31,7 @@ check 'double-quoted redirect text' read "$(write_result 'echo "> src/app.ts"')"
 check 'quoted command name' read "$(write_result "echo 'sed -i s/a/b/ src/app.ts'")"
 check 'quoted tee command is data' read "$(write_result "echo 'tee src/app.ts'")"
 check 'real redirect' write "$(write_result 'echo x > src/app.ts')"
-# $( forces the raw-deny gate; the redirect inside the substitution still writes.
+# $( outside singles forces raw. The redirect inside the substitution still writes.
 check 'redirect inside command substitution executes' write \
   "$(write_result 'x="$(echo hi > src/app.ts)"')"
 check 'eval of quoted shell code is conservative' write \
@@ -44,7 +44,7 @@ check 'unterminated quote falls back' write "$(write_result "echo 'x > src/app.t
 
 heredoc_cmd=$(printf "cat <<'TEXT'\n> src/app.ts\ngh pr create --title x\nTEXT")
 check 'heredoc body is data' read "$(write_result "$heredoc_cmd")"
-# $( is raw-deny, so the redirect inside the substitution body stays visible.
+# $( outside singles forces raw, so the redirect inside stays visible.
 substitution_heredoc=$(printf 'gh issue create --body "$(cat <<\047TEXT\047\n> src/app.ts\ngh pr create --title x\nTEXT\n)"')
 check 'heredoc inside command substitution falls back to raw' write \
   "$(write_result "$substitution_heredoc")"
@@ -66,12 +66,7 @@ mkdir -p "$TMP/.claude/session"
 : > "$TMP/onboarding.yaml"
 : > "$TMP/apexyard.projects.yaml"
 printf 'repo=acme-org/example\n' > "$TMP/.claude/session/current-ticket"
-GIT_FIXTURE="$ROOT/.claude/hooks/tests/fixtures/empty-gitdir.tar.gz"
-if [ -f "$GIT_FIXTURE" ]; then
-  tar xzf "$GIT_FIXTURE" -C "$TMP"
-else
-  (cd "$TMP" && git init -q)
-fi
+(cd "$TMP" && git init -q --template=)
 export APEXYARD_OPS_DISABLE_PIN=1
 unset CLAUDE_CODE_SESSION_ID || true
 tracker_result() {
@@ -99,8 +94,8 @@ review_result() {
 }
 check 'quoted PR text does not trigger review' 0 "$(review_result "printf '%s' 'gh pr create --title x'")"
 check 'heredoc PR text does not trigger review' 0 "$(review_result "$heredoc_cmd")"
-# $( is raw-deny for the scrubber auto-code-review uses, so the embedded
-# gh pr create stays visible and the review trigger fires.
+# $( outside singles forces raw for the scrubber auto-code-review uses, so the
+# embedded gh pr create stays visible and the review trigger fires.
 check 'substitution heredoc PR text falls back and triggers review' 2 \
   "$(review_result "$substitution_heredoc")"
 check 'real PR command triggers review' 2 "$(review_result 'gh pr create --title x')"
@@ -116,12 +111,7 @@ for file in require-active-ticket.sh _lib-detect-bash-write.sh \
 done
 cp "$ROOT/.claude/project-config.defaults.json" "$TMP/.claude/project-config.defaults.json"
 if [ ! -d "$TMP/.git" ]; then
-  GIT_FIXTURE="$ROOT/.claude/hooks/tests/fixtures/empty-gitdir.tar.gz"
-  if [ -f "$GIT_FIXTURE" ]; then
-    tar xzf "$GIT_FIXTURE" -C "$TMP"
-  else
-    (cd "$TMP" && git init -q)
-  fi
+  (cd "$TMP" && git init -q --template=)
 fi
 ticket_result() {
   local payload rc

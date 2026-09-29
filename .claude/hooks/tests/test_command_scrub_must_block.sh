@@ -1,7 +1,8 @@
 #!/bin/bash
-# Must-block bypass shapes for AgDR-0181 / #1459 security narrowing.
-# Each case must fail at commit 39c5b95 (scrub used for routing / weak deny)
-# and pass against the current hooks (raw routing + raw-deny gate).
+# Must-block bypass shapes for AgDR-0181 / #1459 allowlist scrubbing.
+# Existing cases must fail at commit 39c5b95 (scrub used for routing /
+# weak deny). New allowlist cases must fail at d5e7ce4 (deny-list scrub).
+# Pass-after expects the current hooks to block (ticket gate exit 2).
 #
 # macOS /bin/bash 3.2: no associative arrays, no mapfile, no ${var,,}.
 set -u
@@ -10,7 +11,6 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOKS="${HOOKS_OVERRIDE:-$ROOT/.claude/hooks}"
 SNAP_HOOKS="${SNAP_HOOKS:-/tmp/ay-1459-snap-39c5b95}"
 CONFIG_DEFAULTS="${CONFIG_DEFAULTS_OVERRIDE:-$ROOT/.claude/project-config.defaults.json}"
-GIT_FIXTURE="${GIT_FIXTURE:-$ROOT/.claude/hooks/tests/fixtures/empty-gitdir.tar.gz}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 pass=0
@@ -32,13 +32,11 @@ check() {
   fi
 }
 
+# Isolated empty git dir at run time. Never unpack a binary fixture.
+# Empty template avoids writing .git/hooks (sandbox may deny that path).
 seed_git_repo() {
   local dest="$1"
-  if [ ! -f "$GIT_FIXTURE" ]; then
-    echo "FAIL: missing git fixture $GIT_FIXTURE" >&2
-    exit 1
-  fi
-  tar xzf "$GIT_FIXTURE" -C "$dest"
+  (cd "$dest" && git init -q --template=)
 }
 
 # Isolated temp repo for every git-using fixture. Never touch the worktree.
@@ -116,6 +114,18 @@ dispatch_has_merge() {
   fi
 }
 
+# Extract d5e7ce4 hooks into an isolated tree for fail-before proofs.
+D5_HOOKS="$TMP/d5e7ce4-hooks"
+mkdir -p "$TMP/d5root"
+if git -C "$ROOT" archive d5e7ce4 .claude/hooks >/tmp/ay-1459-d5-hooks.tar 2>/dev/null; then
+  tar -xf /tmp/ay-1459-d5-hooks.tar -C "$TMP/d5root"
+  rm -f /tmp/ay-1459-d5-hooks.tar
+  D5_HOOKS="$TMP/d5root/.claude/hooks"
+else
+  echo "WARN: cannot archive d5e7ce4 hooks — skip d5 fail-before proofs" >&2
+  D5_HOOKS=""
+fi
+
 # Build cases as a label+command list via a directory of files.
 CASES_DIR="$TMP/cases"
 mkdir -p "$CASES_DIR"
@@ -145,8 +155,7 @@ add_case 'awk redirect in BEGIN' "awk 'BEGIN{print 1 > \"src/app.ts\"}'"
 add_case 'awk system write' "awk 'BEGIN{system(\"echo x > src/app.ts\")}'"
 add_case 'unquoted heredoc with command substitution' "$(printf 'cat > /tmp/x <<EOF\n$(echo x > src/app.ts)\nEOF')"
 
-# Deny-gate controls: 39c5b95 already blocked these via raw fallback or a
-# still-visible line-2 redirect. They must keep blocking after the narrowing.
+# Deny/control cases that already blocked under older snaps.
 CTRL_DIR="$TMP/controls"
 mkdir -p "$CTRL_DIR"
 ci=0
@@ -159,26 +168,104 @@ add_ctrl() {
 add_ctrl 'here-string then write' "$(printf 'cat <<<ignored\necho x > src/app.ts')"
 add_ctrl 'arithmetic shift then write' "$(printf '(( y = 1 << true ))\necho x > src/app.ts')"
 add_ctrl 'case pattern in command substitution' 'case x in "$(echo x > src/app.ts)") ;; esac'
+# A leading assignment can name a program that git or gh runs, so it returns raw.
+add_ctrl 'GIT_PAGER assignment before git log' "GIT_PAGER='sh -c \"echo x > src/app.ts\"' git log -1"
+add_ctrl 'PAGER assignment before git log' "PAGER='sh -c \"echo x > src/app.ts\"' git log -1"
+add_ctrl 'GIT_EXTERNAL_DIFF assignment before git diff' "GIT_EXTERNAL_DIFF='sh -c \"echo x > src/app.ts\"' git diff"
+add_ctrl 'GIT_SSH_COMMAND assignment before git fetch' "GIT_SSH_COMMAND='sh -c \"echo x > src/app.ts\"' git fetch origin"
+add_ctrl 'GIT_EDITOR assignment before git commit' "GIT_EDITOR='sh -c \"echo x > src/app.ts\"' git commit"
+add_ctrl 'GIT_SEQUENCE_EDITOR assignment before git commit' "GIT_SEQUENCE_EDITOR='sh -c \"echo x > src/app.ts\"' git commit"
+add_ctrl 'EDITOR assignment before git commit' "EDITOR='sh -c \"echo x > src/app.ts\"' git commit"
+add_ctrl 'GH_PAGER assignment before gh pr view' "GH_PAGER='sh -c \"echo x > src/app.ts\"' gh pr view 1"
+add_ctrl 'BROWSER assignment before gh pr view --web' "BROWSER='sh -c \"echo x > src/app.ts\"' gh pr view 1 --web"
+# git subcommands that take a program to run in an option are not allowlisted.
+add_ctrl 'git grep --open-files-in-pager' "git grep --open-files-in-pager='sh -c \"echo x > src/app.ts\"' foo"
+add_ctrl 'git grep -O' "git grep -O'sh -c \"echo x > src/app.ts\"' foo"
+add_ctrl 'git fetch --upload-pack' "git fetch --upload-pack='sh -c \"echo x > src/app.ts\"' origin"
+add_ctrl 'git push --receive-pack' "git push --receive-pack='sh -c \"echo x > src/app.ts\"' origin"
 
-# Fail-before against 39c5b95 snapshot (expect allow / exit 0 — the bypass).
-if [ -d "$SNAP_HOOKS" ] && [ -f "$SNAP_HOOKS/require-active-ticket.sh" ]; then
-  setup_ticket_sandbox "$TMP/snap_ticket" "$SNAP_HOOKS"
+# New allowlist cases that bypassed at d5e7ce4 (deny-list scrub).
+ALLOW_DIR="$TMP/allow_cases"
+mkdir -p "$ALLOW_DIR"
+ai=0
+add_allow() {
+  local label="$1" cmd="$2"
+  ai=$((ai + 1))
+  printf '%s' "$label" > "$ALLOW_DIR/$ai.label"
+  printf '%s' "$cmd" > "$ALLOW_DIR/$ai.cmd"
+}
+add_allow 'git -c alias write' "git -c alias.w='!echo x > src/app.ts' w"
+add_allow 'git rebase --exec' "git rebase --exec 'echo x > src/app.ts'"
+add_allow 'gnu sed e flag' "sed -n '1e echo x > src/app.ts' in.txt"
+add_allow 'watch quoted write' "watch 'echo x > src/app.ts'"
+add_allow 'script -c' "script -c 'echo x > src/app.ts' /tmp/typescript"
+add_allow 'flock -c' "flock /tmp/lock -c 'echo x > src/app.ts'"
+add_allow 'make recipe heredoc' "$(printf "make -f - <<'EOF'\nall:\n\techo x > src/app.ts\nEOF")"
+add_allow 'ed bang shell' "$(printf "ed <<'EOF'\n!echo x > src/app.ts\nEOF")"
+add_allow 'pwsh -c' "pwsh -c 'echo x > src/app.ts'"
+add_allow 'busybox ash -c' "busybox ash -c 'echo x > src/app.ts'"
+add_allow 'tcsh -c' "tcsh -c 'echo x > src/app.ts'"
+add_allow 'su -c' "su -c 'echo x > src/app.ts'"
+add_allow 'ssh localhost' "ssh localhost 'echo x > src/app.ts'"
+add_allow 'parallel' "parallel 'echo {} > src/app.ts' ::: x"
+add_allow 'sqlite3 shell' "sqlite3 ':memory:' '.shell echo x > src/app.ts'"
+add_allow 'vim -es bang' "vim -es -c '!echo x > src/app.ts' -c q"
+add_allow 'tmux new -d' "tmux new -d 'echo x > src/app.ts'"
+add_allow 'npx -c' "npx -c 'echo x > src/app.ts'"
+add_allow 'git -c pager then log' "git -c core.pager='echo x > src/app.ts' log"
+add_allow 'git alias config write' "git config alias.w '!echo x > src/app.ts'"
+add_allow 'gh extension' "gh synth-ext run -- 'echo x > src/app.ts'"
+
+# Extra must-block shapes. d5e7ce4 already blocked the shell forms via its
+# deny list, so they have no d5 fail-before proof. Pass-after still requires
+# the allowlist to keep blocking them.
+EXTRA_DIR="$TMP/extra_cases"
+mkdir -p "$EXTRA_DIR"
+ei=0
+add_extra() {
+  local label="$1" cmd="$2"
+  ei=$((ei + 1))
+  printf '%s' "$label" > "$EXTRA_DIR/$ei.label"
+  printf '%s' "$cmd" > "$EXTRA_DIR/$ei.cmd"
+}
+add_extra 'assign then bash -c' "FOO=x bash -c 'echo x > src/app.ts'"
+add_extra 'time bash -c' "time bash -c 'echo x > src/app.ts'"
+add_extra 'bang sh -c' "! sh -c 'echo x > src/app.ts'"
+add_extra 'brace group sh -c' "{ sh -c 'echo x > src/app.ts'; }"
+add_extra 'if then sh -c' "if true; then sh -c 'echo x > src/app.ts'; fi"
+add_extra 'double-quoted command substitution write' 'x="$(echo hi > src/app.ts)"'
+
+fail_before_ticket() {
+  local snap="$1" tag="$2" cases_dir="$3"
+  local n label cmd got
+  [ -n "$snap" ] && [ -d "$snap" ] && [ -f "$snap/require-active-ticket.sh" ] || return 0
+  setup_ticket_sandbox "$TMP/snap_ticket_$tag" "$snap"
   n=1
-  while [ -f "$CASES_DIR/$n.label" ]; do
-    label=$(cat "$CASES_DIR/$n.label")
-    cmd=$(cat "$CASES_DIR/$n.cmd")
-    got=$(ticket_rc "$TMP/snap_ticket" "$cmd")
+  while [ -f "$cases_dir/$n.label" ]; do
+    label=$(cat "$cases_dir/$n.label")
+    cmd=$(cat "$cases_dir/$n.cmd")
+    got=$(ticket_rc "$TMP/snap_ticket_$tag" "$cmd")
     if [ "$got" = "0" ]; then
-      echo "FAIL-BEFORE OK [ticket/$label]: 39c5b95 allowed (rc=0)"
+      echo "FAIL-BEFORE OK [ticket-$tag/$label]: allowed (rc=0)"
       fail_before_pass=$((fail_before_pass + 1))
     else
-      echo "FAIL-BEFORE MISS [ticket/$label]: 39c5b95 rc=$got (wanted 0 to prove bypass)" >&2
+      echo "FAIL-BEFORE MISS [ticket-$tag/$label]: rc=$got (wanted 0 to prove bypass)" >&2
       fail_before_fail=$((fail_before_fail + 1))
     fi
     n=$((n + 1))
   done
+}
+
+# Fail-before against 39c5b95 snapshot (expect allow / exit 0 — the bypass).
+if [ -d "$SNAP_HOOKS" ] && [ -f "$SNAP_HOOKS/require-active-ticket.sh" ]; then
+  fail_before_ticket "$SNAP_HOOKS" "39c5b95" "$CASES_DIR"
 else
-  echo "WARN: SNAP_HOOKS missing at $SNAP_HOOKS — skip fail-before proofs" >&2
+  echo "WARN: SNAP_HOOKS missing at $SNAP_HOOKS — skip 39c5b95 fail-before proofs" >&2
+fi
+
+# Fail-before against d5e7ce4 for the new allowlist cases.
+if [ -n "$D5_HOOKS" ]; then
+  fail_before_ticket "$D5_HOOKS" "d5e7ce4" "$ALLOW_DIR"
 fi
 
 # Pass-after against current hooks (expect block / exit 2).
@@ -192,7 +279,25 @@ while [ -f "$CASES_DIR/$n.label" ]; do
   n=$((n + 1))
 done
 
-# Deny-gate controls must still block (no fail-before requirement).
+n=1
+while [ -f "$ALLOW_DIR/$n.label" ]; do
+  label=$(cat "$ALLOW_DIR/$n.label")
+  cmd=$(cat "$ALLOW_DIR/$n.cmd")
+  got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
+  check "ticket-allow/$label" 2 "$got"
+  n=$((n + 1))
+done
+
+n=1
+while [ -f "$EXTRA_DIR/$n.label" ]; do
+  label=$(cat "$EXTRA_DIR/$n.label")
+  cmd=$(cat "$EXTRA_DIR/$n.cmd")
+  got=$(ticket_rc "$TMP/cur_ticket" "$cmd")
+  check "ticket-extra/$label" 2 "$got"
+  n=$((n + 1))
+done
+
+# Controls must still block (no fail-before requirement).
 n=1
 while [ -f "$CTRL_DIR/$n.label" ]; do
   label=$(cat "$CTRL_DIR/$n.label")
@@ -252,8 +357,34 @@ setup_ticket_sandbox "$TMP/fp_ticket" "$HOOKS"
 check 'fp git log format' 0 "$(ticket_rc "$TMP/fp_ticket" "git log --format='%h > %s'")"
 check 'fp grep pattern' 0 "$(ticket_rc "$TMP/fp_ticket" "grep -nE 'a|>|b' file")"
 check 'fp echo quoted redirect text' 0 "$(ticket_rc "$TMP/fp_ticket" "echo '  >> TEXT'")"
+check 'fp printf quoted redirect text' 0 "$(ticket_rc "$TMP/fp_ticket" "printf '%s\n' 'a > b'")"
 check 'fp quoted heredoc scratch write' 0 \
   "$(ticket_rc "$TMP/fp_ticket" "$(printf "cat > /tmp/run.log <<'TEXT'\n> src/app.ts\nTEXT")")"
+check 'fp quoted heredoc with nested markers' 0 \
+  "$(ticket_rc "$TMP/fp_ticket" "$(printf "cat > /tmp/x <<'EOF'\n\`date\`\n\$(echo hi)\nbash\n> src/app.ts\ngh pr merge 1\nEOF")")"
+check 'fp gh pr comment body-file heredoc' 0 \
+  "$(ticket_rc "$TMP/fp_ticket" "$(printf "gh pr comment 1 --body-file - <<'EOF'\nsee \`code\` and > quote\nEOF")")"
+
+# Scrubber must stay silent on stderr (GNU tr portability).
+# shellcheck source=/dev/null
+. "$HOOKS/_lib-command-scrub.sh"
+errf="$TMP/scrub-stderr"
+: > "$errf"
+scrub_bash_command "cat file" >/dev/null 2>"$errf"
+if [ -s "$errf" ]; then
+  echo "FAIL [stderr plain read]: $(tr '\n' ' ' <"$errf")" >&2
+  fail=$((fail + 1))
+else
+  echo "PASS [stderr plain read]"; pass=$((pass + 1))
+fi
+: > "$errf"
+scrub_bash_command 'printf %s \foo' >/dev/null 2>"$errf"
+if [ -s "$errf" ]; then
+  echo "FAIL [stderr backslash cmd]: $(tr '\n' ' ' <"$errf")" >&2
+  fail=$((fail + 1))
+else
+  echo "PASS [stderr backslash cmd]"; pass=$((pass + 1))
+fi
 
 printf 'RESULT: %s passed, %s failed; fail-before proofs %s ok / %s missed\n' \
   "$pass" "$fail" "$fail_before_pass" "$fail_before_fail"
