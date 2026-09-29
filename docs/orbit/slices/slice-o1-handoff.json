@@ -1,0 +1,44 @@
+{
+  "specVersion": "0.1",
+  "id": "slice-plan-apexyard-orbit-build-o1-handoff",
+  "planId": "plan-apexyard-orbit-build",
+  "outcomeId": "o1-slice-to-ticket",
+  "basedOn": {
+    "planRevision": 3,
+    "reconciliationId": "reconciliation-plan-apexyard-orbit-build-r3",
+    "repositories": {
+      "apexyard": "378623ede8c286daeab3c6a726924535f1f87e61"
+    }
+  },
+  "objective": "Add an /orbit handoff operation that turns one validated execution slice into one GitHub issue through the existing orbit sync github adapter, after a dry-run preview, a leak scrub and operator confirmation, and that refuses when the ORBIT CLI is absent or validation fails.",
+  "why": "The saved reconciliation marks ac1-1, ac1-2 and ac1-3 not-verified, ac1-4 partially-verified, and ac1-6 and ac1-12 contradicted by AgDR-0164. The missing handoff operation is the root gap that most O1 criteria depend on.",
+  "contributesTo": [
+    "ac1-1",
+    "ac1-2",
+    "ac1-3",
+    "ac1-4",
+    "ac1-6",
+    "ac1-12"
+  ],
+  "scope": {
+    "include": [
+      "the handoff operation in the /orbit skill",
+      "dry-run preview, then the leak scrub (check-private-refs-runtime.sh), then operator confirmation before any tracker write",
+      "issue body with the slice ID, the Plan ID and revision, the objective, and the included and excluded work",
+      "refusal when an open issue already carries this slice ID",
+      "refusal when orbit validate fails",
+      "refusal with one install note when the ORBIT CLI is absent",
+      "a new AgDR that partly supersedes AgDR-0164 to permit one issue per slice after confirmation, without rewriting the AgDR-0164 decision text",
+      "smoke tests for the handoff and the three refusals"
+    ],
+    "exclude": [
+      "sidecar mapping file and idempotent re-handoff (ac1-7 to ac1-9)",
+      "leak scrub on committed ORBIT records (ac1-10)",
+      "/start-ticket slice ID (ac1-11)",
+      "Slice: reference in PR bodies (ac2-1)",
+      "Rex Excludes-list check (ac2-2)",
+      "epic and sub-issue hierarchy",
+      "changes to any other skill"
+    ]
+  }
+}
