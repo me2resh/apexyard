@@ -60,8 +60,7 @@ check 'unsupported delimiter falls back' write \
 check 'adjacent redirects yield both targets' '/tmp/x,src/app.ts' \
   "$(bash_extract_write_targets 'echo x >/tmp/x>src/app.ts' | paste -sd, -)"
 
-# A quoted tracker mention and a heredoc body fire the ambient-repo gate
-# again because that matcher reads the raw command (AgDR-0181).
+# The ambient-repo gate reads the allowlisted scrubbed view (AgDR-0192).
 mkdir -p "$TMP/.claude/session"
 : > "$TMP/onboarding.yaml"
 : > "$TMP/apexyard.projects.yaml"
@@ -76,9 +75,9 @@ tracker_result() {
   rc=$?
   printf '%s' "$rc"
 }
-check 'quoted tracker text' 2 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
-check 'double-quoted tracker text' 2 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
-check 'heredoc tracker text' 2 "$(tracker_result "$heredoc_cmd")"
+check 'quoted tracker text' 0 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
+check 'double-quoted tracker text' 0 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
+check 'heredoc tracker text' 0 "$(tracker_result "$heredoc_cmd")"
 check 'real tracker command' 2 "$(tracker_result 'gh pr create --title x')"
 check 'malformed quote falls back for tracker' 2 \
   "$(tracker_result "printf 'gh pr create --title x")"
@@ -152,6 +151,23 @@ check 'heredoc prose with scratch write' 0 \
   "$(ticket_result "$(printf "cat > /tmp/run.log <<'TEXT'\n> src/app.ts\nTEXT")")"
 check 'quoted tee beside scratch write is data' 0 \
   "$(ticket_result "echo 'tee src/app.ts' > /tmp/run.log")"
+
+# #1480: allowlisted writers that still write (scrubbed view must detect).
+check 'git log --output= tracked file' 2 \
+  "$(ticket_result 'git log --output=src/app.ts')"
+check 'git log --output space tracked file' 2 \
+  "$(ticket_result 'git log --output src/app.ts')"
+check 'git diff --output= tracked file' 2 \
+  "$(ticket_result 'git diff --output=src/app.ts')"
+check 'sort -o tracked file' 2 \
+  "$(ticket_result 'sort -o src/app.ts input.txt')"
+check 'yq -i tracked file' 2 \
+  "$(ticket_result 'yq -i ".a=1" src/app.ts')"
+check 'python3 -Bc open w tracked file' 2 \
+  "$(ticket_result "python3 -Bc \"open('src/app.ts','w').write('x')\"")"
+# Scrubbed allowlist false-positive neighbour still passes.
+check 'git log format stays allowed' 0 \
+  "$(ticket_result "git log --format='%h > %s'")"
 
 printf 'RESULT: %s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

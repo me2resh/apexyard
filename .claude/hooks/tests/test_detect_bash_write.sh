@@ -824,6 +824,104 @@ chore: subject
 Body prose ending in portfolio.
 MSG" ""
 
+# --- #1480: git log/diff --output, sort -o, yq -i, python3 -Bc -------------
+#
+# Each form wrote a tracked file on dev without the ticket gate seeing it.
+# Detect the write. Extract the path when the flag names it. python3 -Bc
+# stays unextractable and still blocks under the #1416 rule.
+# python3 -cB is gated conservatively even though Python reads it as -c with
+# program text B (not a bundled B flag).
+
+assert_write  "#1480 git log --output=file" \
+  "git log --output=src/app.ts"
+assert_write  "#1480 git log --output file" \
+  "git log --output src/app.ts"
+assert_write  "#1480 git diff --output=file" \
+  "git diff --output=src/app.ts"
+assert_write  "#1480 git diff --output file" \
+  "git diff --output src/app.ts"
+assert_write  "#1480 sort -o file" \
+  "sort -o src/app.ts input.txt"
+assert_write  "#1480 sort --output=file" \
+  "sort --output=src/app.ts input.txt"
+assert_write  "#1480 sort -uo file" \
+  "sort -uo src/app.ts input.txt"
+assert_write  "#1480 sort -oFILE attached" \
+  "sort -osrc/app.ts input.txt"
+assert_write  "#1480 /usr/bin/sort -o file" \
+  "/usr/bin/sort -o src/app.ts input.txt"
+assert_read   "#1480 ps --sort is not the sort command" \
+  "ps --sort -rss -o pid"
+assert_write  "#1480 yq -i file" \
+  'yq -i ".a=1" src/app.ts'
+assert_write  "#1480 yq --inplace file" \
+  'yq --inplace ".a=1" src/app.ts'
+assert_write  "#1480 yq -Pi bundled" \
+  'yq -Pi ".a=1" src/app.ts'
+assert_write  "#1480 python3 -Bc open w" \
+  "python3 -Bc \"open('src/app.ts','w').write('x')\""
+# Conservatively gated: Python treats -cB as -c with program text B.
+assert_write  "#1480 python3 -cB open w (conservative)" \
+  "python3 -cB \"open('src/app.ts','w').write('x')\""
+assert_write  "#1480 python3 -W ignore -c open w" \
+  "python3 -W ignore -c \"open('src/app.ts','w').write('x')\""
+assert_write  "#1480 python3 -X utf8 -c open w" \
+  "python3 -X utf8 -c \"open('src/app.ts','w').write('x')\""
+assert_write  "#1480 python -W error -c open w" \
+  "python -W error -c \"open('src/app.ts','w').write('x')\""
+assert_write  "#1480 python3 -B -W ignore -c open w" \
+  "python3 -B -W ignore -c \"open('src/app.ts','w').write('x')\""
+
+assert_target  "#1480 git log --output= extracts" \
+  "git log --output=src/app.ts" "src/app.ts"
+assert_target  "#1480 git log --output space extracts" \
+  "git log --output src/app.ts" "src/app.ts"
+assert_target  "#1480 git diff --output= extracts" \
+  "git diff --output=src/app.ts" "src/app.ts"
+assert_target  "#1480 sort -o extracts" \
+  "sort -o src/app.ts input.txt" "src/app.ts"
+assert_target  "#1480 sort -uo extracts" \
+  "sort -uo src/app.ts input.txt" "src/app.ts"
+assert_target  "#1480 sort -oFILE extracts" \
+  "sort -osrc/app.ts input.txt" "src/app.ts"
+assert_target  "#1480 yq -i extracts last path" \
+  'yq -i ".a=1" src/app.ts' "src/app.ts"
+assert_target  "#1480 python3 -Bc target stays empty" \
+  "python3 -Bc \"open('src/app.ts','w').write('x')\"" ""
+
+assert_targets "#1480 git log --output= plural" \
+  "git log --output=src/app.ts" "src/app.ts"
+assert_targets "#1480 sort -o plural" \
+  "sort -o src/app.ts input.txt" "src/app.ts"
+assert_targets "#1480 yq -i plural" \
+  'yq -i ".a=1" src/app.ts' "src/app.ts"
+assert_targets "#1480 python3 -Bc plural empty" \
+  "python3 -Bc \"open('src/app.ts','w').write('x')\"" ""
+
+# Read-only neighbours must stay ungated.
+assert_read "#1480 git log --format stays a read" \
+  "git log --format='%h > %s'"
+assert_read "#1480 sort without -o stays a read" \
+  "sort src/app.ts"
+assert_read "#1480 sort -u stays a read" \
+  "sort -u file"
+assert_read "#1480 yq without -i stays a read" \
+  'yq ".a" src/app.ts'
+assert_read "#1480 yq -P stays a read" \
+  "yq -P '.a' file"
+assert_read "#1480 yq filename with -i stays a read" \
+  "yq '.a' my-i.yaml"
+
+# Hold-back parity: new families join _bdw_detects_other_write.
+assert_targets "#1480 w decoy beside git log --output" \
+  "git log --output=src/app.ts; sed -n 'w /tmp/x' in.txt" "src/app.ts,/tmp/x"
+assert_targets "#1480 w decoy beside sort -o" \
+  "sort -o src/app.ts in.txt; sed -n 'w /tmp/x' in.txt" "src/app.ts,/tmp/x"
+assert_targets "#1480 w decoy beside yq -i" \
+  "yq -i '.a=1' src/app.ts; sed -n 'w /tmp/x' in.txt" "src/app.ts,/tmp/x"
+assert_targets "#1480 w decoy beside python3 -Bc (unextracted)" \
+  "python3 -Bc \"open('src/app.ts','w').write('x')\"; sed -n 'w /tmp/x' in.txt" ""
+
 echo ""
 echo "==================================="
 echo "  PASS: $PASS   FAIL: $FAIL"

@@ -51,7 +51,7 @@ Run against a managed project under `workspace/<name>/`, or an explicit project 
 | Ecosystem | Detection |
 |-----------|-----------|
 | npm | `package.json` |
-| Python | `requirements*.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, `uv.lock` |
+| Python | `requirements*.txt`, `dev-requirements.txt`, `pyproject.toml`, `Pipfile`, `Pipfile.lock`, `poetry.lock`, `uv.lock` |
 
 Search the project tree. Skip `node_modules`, `.venv`, `vendor`, `dist`, `build`, `.next`, and `.git`.
 

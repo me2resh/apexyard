@@ -31,14 +31,35 @@ current_repo=$(printf '%s' "$origin_url" | sed -nE 's|.*github\.com[:/]([^/]+/[^
 current_name=${current_repo##*/}
 current_owner=${current_repo%%/*}
 
+# #1477 — known-public slug list for origin-identity proof. Matches the
+# runtime hook: configured public_framework_repos (else the shipped
+# default). Keep newline-separated so iteration never word-splits.
+# Do NOT auto-append upstream here. Upstream is not proof that origin
+# is public (private ops repos commonly point upstream at the public
+# framework; GitHub disallows a private fork of a public repo).
+known_public_repos="me2resh/apexyard"
+origin_verified_public=""
+if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-read-config.sh"
+  configured=$(config_get '.leak_protection.public_framework_repos[]' 2>/dev/null)
+  [ -n "$configured" ] && known_public_repos="$configured"
+  # Recorded by /setup or /update via bin/record-origin-verified-public.sh
+  # after an online gh visibility check (AgDR-0190). Exact slug match only.
+  origin_verified_public=$(config_get_or '.leak_protection.origin_verified_public' '')
+  origin_verified_public=$(printf '%s' "$origin_verified_public" | tr -d '[:space:]')
+fi
+
 # #1431 — an ops fork's `origin` is the fork itself. The
 # public framework lives at the `upstream` remote. A registry commonly lists
 # the framework repo, and an adopter's login often equals a registered
 # project name, so a commit that cites an upstream issue as
 # `<upstream-owner>/<repo>#N` must not read as a leak either. Resolve
 # `upstream` the same way as `origin`. A fork with no `upstream` remote
-# leaves these empty and keeps today's origin-only behaviour.
-# Hakim advisory: every exemption below trusts that `upstream` IS the public framework repo; a misconfigured `upstream` pointed at a private repo gets the same exemption.
+# leaves these empty.
+# #1477 — origin identity exemptions require offline proof that origin is
+# public (see origin_identity_exempt below). Upstream *citation* exemptions
+# still apply when upstream is set. They do not prove origin is public.
 upstream_repo=""
 upstream_url=$(git remote get-url upstream 2>/dev/null || true)
 if [ -n "$upstream_url" ]; then
@@ -49,6 +70,28 @@ upstream_owner=""
 if [ -n "$upstream_repo" ]; then
   upstream_name=${upstream_repo##*/}
   upstream_owner=${upstream_repo%%/*}
+fi
+
+# #1477 — fail closed: no origin slug / bare-name / owner exemption unless
+# origin is in known_public_repos, origin_verified_public equals origin
+# exactly, or a registry public:true entry names origin.
+# Keep in parity with check-private-refs-runtime.sh.
+origin_identity_exempt=0
+if [ -n "$current_repo" ]; then
+  while IFS= read -r known; do
+    [ -n "$known" ] || continue
+    if [ "$current_repo" = "$known" ]; then
+      origin_identity_exempt=1
+      break
+    fi
+  done <<EOF
+$known_public_repos
+EOF
+  if [ "$origin_identity_exempt" -eq 0 ] \
+    && [ -n "$origin_verified_public" ] \
+    && [ "$current_repo" = "$origin_verified_public" ]; then
+    origin_identity_exempt=1
+  fi
 fi
 
 if [ -f "$HOOK_DIR/_lib-registry-parser.sh" ]; then
@@ -120,13 +163,24 @@ if [ "${#names[@]}" -eq 0 ] && [ "${#repos[@]}" -eq 0 ] && [ "${#workspaces[@]}"
   exit 0
 fi
 
+# #1477 — a registry public:true entry whose repo equals origin also proves
+# origin is public (offline, no network).
+if [ "$origin_identity_exempt" -eq 0 ] && [ -n "$current_repo" ]; then
+  for idx in "${!repos[@]}"; do
+    if [ "${repos_public[$idx]}" = "1" ] && [ "${repos[$idx]}" = "$current_repo" ]; then
+      origin_identity_exempt=1
+      break
+    fi
+  done
+fi
+
 # #1431 round 2 (Hakim MEDIUM) — a registered project's `name` can
 # coincidentally equal `upstream`'s bare repo name without that entry
 # actually BEING upstream (a different, private repo happens to share the
 # same bare name). Only exempt the name outright when the SAME registry
 # entry's own `repo` field equals `upstream_repo` — a real association, not
-# a name-string coincidence. This does not apply to `origin`'s pre-existing
-# bare-name exemption, which this PR does not change.
+# a name-string coincidence. Origin bare-name exemption is gated by
+# origin_identity_exempt (#1477).
 registry_name_repo_matches() {
   local target_name="$1" target_repo="$2" pair
   [ "${#name_repo_pairs[@]}" -gt 0 ] || return 1
@@ -224,13 +278,16 @@ while IFS= read -r -d '' path; do
     name="${names[$idx]}"
     [ -n "$name" ] || continue
     [ "${names_public[$idx]}" = "1" ] && continue
-    [ "$name" = "$current_name" ] && continue
+    if [ "$origin_identity_exempt" -eq 1 ] && [ "$name" = "$current_name" ]; then
+      continue
+    fi
     if [ -n "$upstream_name" ] && [ "$name" = "$upstream_name" ] \
       && registry_name_repo_matches "$name" "$upstream_repo"; then
       continue
     fi
 
-    if [ "$name" = "$current_owner" ] || { [ -n "$upstream_owner" ] && [ "$name" = "$upstream_owner" ]; }; then
+    if { [ "$origin_identity_exempt" -eq 1 ] && [ "$name" = "$current_owner" ]; } \
+      || { [ -n "$upstream_owner" ] && [ "$name" = "$upstream_owner" ]; }; then
       owner_bare_mention_remains "$path" "$name" || continue
     fi
 
@@ -242,10 +299,16 @@ while IFS= read -r -d '' path; do
     repo="${repos[$idx]}"
     [ -n "$repo" ] || continue
     [ "${repos_public[$idx]}" = "1" ] && continue
-    [ "$repo" = "$current_repo" ] && continue
+    if [ "$origin_identity_exempt" -eq 1 ] && [ "$repo" = "$current_repo" ]; then
+      continue
+    fi
     [ -n "$upstream_repo" ] && [ "$repo" = "$upstream_repo" ] && continue
     escaped=$(escape_regex "$repo")
-    staged_blob_matches "$path" "(^|[^A-Za-z0-9_/-])${escaped}(#[0-9]+)?([^A-Za-z0-9_/-]|$)" && block "$path"
+    # #1477 / #1407 — a slash may precede a slug in a URL or follow it in
+    # an issue path. Treat `/` as a boundary (parity with the runtime and
+    # public-repo hooks). Keep hyphens excluded so a slug inside a longer
+    # token stays unmatched.
+    staged_blob_matches "$path" "(^|[^A-Za-z0-9_-])${escaped}(#[0-9]+)?([^A-Za-z0-9_-]|$)" && block "$path"
   done
 
   for idx in "${!workspaces[@]}"; do

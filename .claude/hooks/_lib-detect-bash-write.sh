@@ -108,8 +108,15 @@ _bdw_operators() {
 #     - curl -o / --output
 #     - wget -O / --output-document
 #
+#   Tool output / in-place writers (#1480)
+#     - git log|diff --output / --output=
+#     - sort -o / -uo / -oFILE / --output
+#     - yq -i / -Pi / --inplace
+#
 #   Embedded interpreters with inline source (-c / -e / -r)
-#     - python -c '…' with write/open/touch/copy/rename keywords
+#     - python -c / -Bc '…' with write/open/touch/copy/rename keywords
+#       (also conservatively gates -cB, which Python reads as -c with
+#       program text B — not as -c plus a bundled B flag)
 #     - python <<EOF / python - <<EOF (heredoc-fed)
 #     - node -e '…' with writeFile/appendFile/write keywords
 #     - node <<EOF (heredoc-fed, #153)
@@ -547,6 +554,40 @@ _bdw_match_wget_output() {
   return 1
 }
 
+# 8b. git log|diff --output / --output= (#1480).
+#     git archive -o is gated elsewhere. Only log and diff are named here.
+#     Avoid --output-directory and other --output-* long options by requiring
+#     `--output` to end the flag token before `=` or whitespace.
+_bdw_match_git_log_diff_output() {
+  local cmd="$1"
+  echo "$cmd" | grep -qE '\bgit[[:space:]]' || return 1
+  echo "$cmd" | grep -qE '\bgit[[:space:]]+([^|;&]*[[:space:]])?(log|diff)[[:space:]][^|;&]*--output(=|[[:space:]]|$)'
+}
+
+# 8c. sort -o FILE / sort --output=FILE (#1480).
+#     GNU and BSD sort write the result to -o/--output. Also catch `sort -uo`
+#     (o bundled with other shorts) and `sort -oFILE` (attached argument).
+#     Do not match a bare `-o` glued into an unrelated long option: require a
+#     following path token, an attached path, or an equals form. `sort -u file`
+#     stays a read. `sort` must be a command word, so the `--sort` option of
+#     another tool (`ps --sort -rss -o pid`) stays a read.
+_bdw_match_sort_output() {
+  local cmd="$1"
+  echo "$cmd" | grep -qE '\bsort\b' || return 1
+  echo "$cmd" | grep -qE '(^|[^-[:alnum:]_.])sort[[:space:]][^|;&]*(-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+|-o[^[:space:]=][^[:space:]]*|--output(=|[[:space:]]+))'
+}
+
+# 8d. yq -i / yq --inplace (#1480).
+#     In-place edit of a YAML/JSON file. Same role as sed -i / awk -i inplace.
+#     Also catch `yq -Pi` / `yq -iP` (i bundled with other shorts). The short
+#     flag must be its own token so `yq '.a' my-i.yaml` and `yq -P '.a' file`
+#     stay reads.
+_bdw_match_yq_inplace() {
+  local cmd="$1"
+  echo "$cmd" | grep -qE '\byq\b' || return 1
+  echo "$cmd" | grep -qE '\byq[[:space:]]+([^|;&]*[[:space:]])?(-[A-Za-z0-9]*i[A-Za-z0-9]*\b|--inplace\b)'
+}
+
 # Python write-keyword set, shared by the -c and heredoc matchers below.
 #
 # The `open(` clause matches a quoted MODE token after a comma (#1372). The
@@ -595,6 +636,28 @@ _bdw_match_wget_output() {
 # otherwise terminate the token early and read as a read. `'r:gz'` stays a
 # read, because the leading `[wax+]` still has to match.
 _BDW_PY_MODE="\\\\?['\"][rbtU]*[wax+][rwxabt+U]*([:|][a-z0-9*]*)?\\\\?['\"]"
+
+# python -c presence (#1480 + review fix).
+#
+# Legacy (dev) form: `(-[^c]*[[:space:]]+)?-c\b` after python. `[^c]*` may span
+# spaces, so an option argument such as `ignore` in `python3 -W ignore -c`
+# still reaches `-c`. Keep this form so the new detector is never looser than
+# dev for any input.
+_BDW_PYTHON_DASH_C_LEGACY_RE='\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b'
+
+# Bundled shorts (#1480): a lone `-c`, bundled shorts that include `c` (`-Bc`),
+# and preceding short flags that do not contain `c` (`-B -c`, `-OO -c`). Each
+# skipped token must start with `-`, so this form alone misses
+# `python3 -W ignore -c`. Long options such as `--check` do not match: a
+# second leading dash fails the short-option class.
+#
+# `-cB` is also matched here. Python reads that as `-c` with program text `B`
+# (not as `-c` plus a bundled `B` flag). Detection stays conservative and
+# continues to gate it.
+_BDW_PYTHON_DASH_C_BUNDLED_RE='\bpython3?[[:space:]]+(-[^c[:space:]]*[[:space:]]+)*-[A-Za-z0-9]*c[A-Za-z0-9]*\b'
+
+# Match when EITHER form matches. Apply at every presence check.
+_BDW_PYTHON_DASH_C_RE="(${_BDW_PYTHON_DASH_C_LEGACY_RE}|${_BDW_PYTHON_DASH_C_BUNDLED_RE})"
 
 # A call whose arguments after the first comma contain NO quote at all has no
 # literal mode to read, so the mode is unknown and the call counts as a write.
@@ -650,7 +713,7 @@ _BDW_PYTHON_WRITE_RE="\.write_text\b|\.write\b|\bopen\(.*,.*${_BDW_PY_MODE}|\.op
 #    pathlib touch, shutil copy*/move, os.rename.
 _bdw_match_python_dash_c() {
   local cmd="$1"
-  echo "$cmd" | grep -qE '\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b' || return 1
+  echo "$cmd" | grep -qE "$_BDW_PYTHON_DASH_C_RE" || return 1
   echo "$cmd" | grep -qE "$_BDW_PYTHON_WRITE_RE"
 }
 
@@ -753,6 +816,9 @@ bash_command_appears_to_write() {
   _bdw_match_tar_extract     "$cmd" && return 0
   _bdw_match_curl_output     "$cmd" && return 0
   _bdw_match_wget_output     "$cmd" && return 0
+  _bdw_match_git_log_diff_output "$cmd" && return 0
+  _bdw_match_sort_output     "$cmd" && return 0
+  _bdw_match_yq_inplace      "$cmd" && return 0
   _bdw_match_python_dash_c   "$cmd" && return 0
   _bdw_match_python_heredoc  "$cmd" && return 0
   _bdw_match_node_dash_e     "$cmd" && return 0
@@ -778,7 +844,7 @@ _bdw_quoted_source_write() {
   if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])sed[[:space:]]'; then
     _bdw_match_sed_write "$raw" && return 0
   fi
-  if printf '%s' "$syntax" | grep -qE '\bpython3?[[:space:]]+(-[^c]*[[:space:]]+)?-c\b'; then
+  if printf '%s' "$syntax" | grep -qE "$_BDW_PYTHON_DASH_C_RE"; then
     _bdw_match_python_dash_c "$raw" && return 0
   fi
   if printf '%s' "$syntax" | grep -qE '\bpython3?[[:space:]]+(-[[:space:]]+)?<<'; then
@@ -846,6 +912,9 @@ bash_command_is_deletion_only() {
   _bdw_match_tar_extract    "$cmd" && return 1
   _bdw_match_curl_output    "$cmd" && return 1
   _bdw_match_wget_output    "$cmd" && return 1
+  _bdw_match_git_log_diff_output "$cmd" && return 1
+  _bdw_match_sort_output    "$cmd" && return 1
+  _bdw_match_yq_inplace     "$cmd" && return 1
   _bdw_match_python_dash_c  "$cmd" && return 1
   _bdw_match_python_heredoc "$cmd" && return 1
   _bdw_match_node_dash_e    "$cmd" && return 1
@@ -993,6 +1062,49 @@ bash_extract_write_target() {
       target="${target%\'}"; target="${target#\'}"
       echo "$target"
       return 0
+    fi
+  fi
+
+  # git log|diff --output / --output= (#1480).
+  # Pass the pattern with -e so BSD grep does not eat `--output=…` as a flag.
+  if _bdw_match_git_log_diff_output "$cmd"; then
+    target=$(echo "$cmd" | grep -oE -e '--output=[^[:space:]&|;]+' -e '--output[[:space:]]+[^[:space:]&|;]+' \
+                  | head -n 1 \
+                  | sed -E 's/^--output(=|[[:space:]]+)//')
+    if [ -n "$target" ]; then
+      target=$(_bdw_strip_quotes "$target")
+      echo "$target"
+      return 0
+    fi
+  fi
+
+  # sort -o / -uo / -oFILE / --output (#1480).
+  if _bdw_match_sort_output "$cmd"; then
+    target=$(echo "$cmd" | grep -oE \
+                  -e '-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+[^[:space:]&|;]+' \
+                  -e '-o[^[:space:]=][^[:space:]&|;]*' \
+                  -e '--output=[^[:space:]&|;]+' \
+                  -e '--output[[:space:]]+[^[:space:]&|;]+' \
+                  | head -n 1 \
+                  | sed -E 's/^(-[A-Za-z0-9]*o[A-Za-z0-9]*[[:space:]]+|-o|--output(=|[[:space:]]+))//')
+    if [ -n "$target" ]; then
+      target=$(_bdw_strip_quotes "$target")
+      echo "$target"
+      return 0
+    fi
+  fi
+
+  # yq -i / --inplace: last path-like positional (#1480).
+  if _bdw_match_yq_inplace "$cmd"; then
+    local seg
+    seg=$(echo "$cmd" | sed -E 's/[[:space:]]*[|;&].*$//')
+    target=$(echo "$seg" | awk '{print $NF}')
+    if [ -n "$target" ] && ! echo "$target" | grep -qE '^-'; then
+      target=$(_bdw_strip_quotes "$target")
+      if echo "$target" | grep -qE '^[A-Za-z0-9./_~-]+$'; then
+        echo "$target"
+        return 0
+      fi
     fi
   fi
 
@@ -1234,7 +1346,7 @@ bash_extract_write_targets() {
 # independent of the extracted redirect list: an exempt redirect must not
 # hide a sibling inline edit or interpreter write (#1416).
 bash_command_has_unextractable_write() {
-  local raw="$1" syntax operators sed_target segment index
+  local raw="$1" syntax operators sed_target yq_target segment index
   local -a syntax_segments=() operator_segments=()
   [ -n "$raw" ] || return 1
   syntax=$(_bdw_syntax "$raw")
@@ -1250,6 +1362,11 @@ bash_command_has_unextractable_write() {
   fi
   if printf '%s' "$syntax" | grep -qE '(^|[;&|()[:space:]])(dd|install)[[:space:]]'; then
     return 0
+  fi
+  # yq -i with no extractable file path is unextractable (#1480).
+  if _bdw_match_yq_inplace "$syntax"; then
+    yq_target=$(bash_extract_write_target "$syntax")
+    printf '%s' "$yq_target" | grep -qE '^[A-Za-z0-9./_~-]+$' || return 0
   fi
   while IFS= read -r segment; do
     syntax_segments+=("$segment")
@@ -1307,6 +1424,9 @@ _bdw_detects_other_write() {
   _bdw_match_tar_extract     "$c" && return 0
   _bdw_match_curl_output     "$c" && return 0
   _bdw_match_wget_output     "$c" && return 0
+  _bdw_match_git_log_diff_output "$c" && return 0
+  _bdw_match_sort_output     "$c" && return 0
+  _bdw_match_yq_inplace      "$c" && return 0
   _bdw_match_python_dash_c   "$c" && return 0
   _bdw_match_python_heredoc  "$c" && return 0
   _bdw_match_node_dash_e     "$c" && return 0

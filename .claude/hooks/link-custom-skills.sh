@@ -20,8 +20,10 @@
 #     contains SKILL.md, ensure a symlink exists at .claude/skills/<name>.
 #       * If a framework skill of the same name exists at .claude/skills/<name>
 #         AS A REAL DIRECTORY (not a symlink we created previously), the custom
-#         skill WINS — we replace it with the symlink and emit a one-line
-#         visible warning naming the override.
+#         skill WINS — we move the framework copy to
+#         .claude/skill-framework-bak/<name>/ (outside the skill root Cursor
+#         and Claude Code scan) and emit a one-line warning naming the override.
+#         Legacy `.claude/skills/<name>.framework.bak/` dirs are migrated.
 #       * If the existing entry is already a symlink to the same target, no-op.
 #       * If the existing entry is a symlink to a different target, replace
 #         it (operator may have changed the private dir).
@@ -108,7 +110,32 @@ if [ "$IS_WINDOWS" -eq 1 ]; then
 fi
 
 skills_target_dir="$ops_root/.claude/skills"
-mkdir -p "$skills_target_dir"
+skills_bak_dir="$ops_root/.claude/skill-framework-bak"
+mkdir -p "$skills_target_dir" "$skills_bak_dir"
+
+# Move a framework bak out of the skill discovery root. Cursor keys skills
+# by frontmatter `name`. A bak that still holds SKILL.md under
+# .claude/skills/ lists as a duplicate of the override (#1377 / AgDR-0187).
+# When both legacy and new bak exist and differ, keep both (rename legacy
+# with a suffix) — never delete without comparing. Restore is manual
+# (AgDR-0187); /update does not restore a bak.
+migrate_or_stash_framework_bak() {
+  local name="$1"
+  local legacy="$skills_target_dir/${name}.framework.bak"
+  local backup="$skills_bak_dir/$name"
+  local keep
+  if [ -e "$legacy" ]; then
+    if [ ! -e "$backup" ]; then
+      mv "$legacy" "$backup"
+    elif diff -qr "$legacy" "$backup" >/dev/null 2>&1; then
+      rm -rf "$legacy"
+    else
+      keep="${backup}.legacy-$(date +%Y%m%d%H%M%S)"
+      mv "$legacy" "$keep"
+      echo "WARNING: legacy bak and .claude/skill-framework-bak/$name both exist and differ; kept legacy at $keep" >&2
+    fi
+  fi
+}
 
 # Iterate every direct child of custom_skills_dir that is itself a directory
 # AND contains SKILL.md (skip README.md / accidental files).
@@ -125,6 +152,8 @@ for src in "$custom_skills_dir"/*/; do
   [ -f "$src/SKILL.md" ] || continue
 
   target="$skills_target_dir/$name"
+  backup="$skills_bak_dir/$name"
+  migrate_or_stash_framework_bak "$name"
 
   # If target is already a symlink, check where it points. Idempotent path:
   # already pointing at this src → nothing to do.
@@ -153,11 +182,11 @@ for src in "$custom_skills_dir"/*/; do
 
   # If a real directory exists at the target → name collision with a
   # framework skill (or a previously-installed adopter copy). Custom wins;
-  # warn visibly.
+  # warn visibly. Keep the bak outside .claude/skills so Cursor does not
+  # list the framework copy under the same frontmatter name (#1377).
   if [ -d "$target" ]; then
     # Move the existing dir aside as a backup so we don't lose it. The
     # backup name is deterministic (no timestamp) so re-runs converge.
-    backup="${target}.framework.bak"
     if [ ! -e "$backup" ]; then
       mv "$target" "$backup"
     else
@@ -166,13 +195,21 @@ for src in "$custom_skills_dir"/*/; do
     fi
     ln -s "$src" "$target"
     linked_count=$((linked_count + 1))
-    collision_warnings="${collision_warnings}  - $name (custom override; framework version moved to $(basename "$backup"))\n"
+    collision_warnings="${collision_warnings}  - $name (custom override; framework version moved to .claude/skill-framework-bak/$name)\n"
     continue
   fi
 
   # Nothing at the target — create the symlink.
   ln -s "$src" "$target"
   linked_count=$((linked_count + 1))
+done
+
+# Migrate any leftover in-skills bak dirs that no longer have a matching
+# custom skill entry (operator removed the override but left the bak).
+for legacy in "$skills_target_dir"/*.framework.bak; do
+  [ -d "$legacy" ] || continue
+  name=$(basename "$legacy" .framework.bak)
+  migrate_or_stash_framework_bak "$name"
 done
 
 # Surface a one-line summary if we did anything, plus any collision

@@ -28,7 +28,7 @@ try:
 except ImportError:  # pragma: no cover — CI uses 3.12+
     tomllib = None  # type: ignore[assignment]
 
-HELPER_REVISION = "2"
+HELPER_REVISION = "3"
 HELPER_ID = "apexyard-dependency-audit"
 
 REQUIRED_PIP_AUDIT = "2.10.0"
@@ -92,7 +92,7 @@ PYTHON_MANIFEST_NAMES = {
     "poetry.lock",
     "uv.lock",
 }
-REQUIREMENTS_RE = re.compile(r"^requirements.*\.txt$", re.IGNORECASE)
+REQUIREMENTS_RE = re.compile(r"^(?:requirements.*|dev-requirements)\.txt$", re.IGNORECASE)
 EXACT_PIN_RE = re.compile(
     r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*==\s*([^\s\\;]+)"
 )
@@ -488,7 +488,8 @@ def _pyproject_tooling_only(path: Path) -> bool:
         for section in ("[tool.poetry.dependencies]", "[tool.poetry.dev-dependencies]", "[tool.poetry.group")
     )
     has_project = "[project]" in text and "dependencies" in text
-    return not (has_deps or has_poetry or has_project)
+    has_groups = "[dependency-groups]" in text
+    return not (has_deps or has_poetry or has_project or has_groups)
 
 
 # ---------------------------------------------------------------------------
@@ -514,7 +515,26 @@ def collect_python_inventory(root: Path, dep_set: DependencySet) -> None:
                 dep_set.coverage = "incomplete"
                 dep_set.coverage_reason = read_err or "unreadable lock"
                 return
-            pins, incomplete, reason = parse_python_lock(text, _rel(root, lock_path), lock_name)
+            project_name = None
+            project_issue = ""
+            if lock_name == "uv.lock":
+                pyproject = directory / "pyproject.toml"
+                if pyproject.is_file() or pyproject.is_symlink():
+                    project_text, project_issue = read_manifest_bytes(pyproject, root)
+                    if project_text is not None:
+                        project_data, project_issue = load_toml_text(
+                            project_text, _rel(root, pyproject)
+                        )
+                        if project_data is not None:
+                            project = project_data.get("project") or {}
+                            if isinstance(project, dict) and isinstance(project.get("name"), str):
+                                project_name = project["name"]
+            pins, incomplete, reason = parse_python_lock(
+                text, _rel(root, lock_path), lock_name, project_name
+            )
+            if project_issue:
+                incomplete = True
+                reason = (reason + " | " if reason else "") + project_issue
             # Drop any pin that fails identity validation (never send to OSV/PyPI).
             safe_pins: List[PackagePin] = []
             for pin in pins:
@@ -741,14 +761,14 @@ def _load_packaging() -> Any:
 
 
 def parse_python_lock(
-    text: str, rel: str, lock_name: str
+    text: str, rel: str, lock_name: str, project_name: Optional[str] = None
 ) -> Tuple[List[PackagePin], bool, str]:
     if lock_name == "Pipfile.lock":
         return _parse_pipfile_lock(text, rel)
     if lock_name == "poetry.lock":
         return _parse_poetry_lock(text, rel)
     if lock_name == "uv.lock":
-        return _parse_uv_lock(text, rel)
+        return _parse_uv_lock(text, rel, project_name)
     return [], True, f"unsupported lock file: {rel}"
 
 
@@ -867,7 +887,9 @@ def _parse_poetry_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str
     return pins, incomplete, " | ".join(reasons)
 
 
-def _parse_uv_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
+def _parse_uv_lock(
+    text: str, rel: str, project_name: Optional[str] = None
+) -> Tuple[List[PackagePin], bool, str]:
     data, err = load_toml_text(text, rel)
     if err or data is None:
         return [], True, err or f"unreadable uv.lock: {rel}"
@@ -891,10 +913,22 @@ def _parse_uv_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
         name = pkg.get("name")
         version = pkg.get("version")
         source = pkg.get("source")
-        # Virtual / workspace root packages may omit version; mark incomplete.
         if not name:
             incomplete = True
             reasons.append(f"package missing name in {rel}")
+            continue
+        # Only the declared project itself may have an editable or virtual root.
+        if (
+            isinstance(source, dict)
+            and len(source) == 1
+            and (source.get("editable") == "." or source.get("virtual") == ".")
+            and isinstance(name, str)
+            and isinstance(project_name, str)
+            and PEP508_NAME_RE.fullmatch(name)
+            and PEP508_NAME_RE.fullmatch(project_name)
+            and re.sub(r"[-_.]+", "-", name).lower()
+            == re.sub(r"[-_.]+", "-", project_name).lower()
+        ):
             continue
         if not uv_source_is_pypi(source):
             incomplete = True
@@ -934,6 +968,7 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
 
     candidates: List[str] = []
     poetry_issues: List[str] = []
+    declaration_issues: List[str] = []
     if isinstance(project, dict):
         deps = project.get("dependencies") or []
         if isinstance(deps, list):
@@ -944,8 +979,35 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
                 if isinstance(group, list):
                     candidates.extend(str(x) for x in group)
 
+    groups = data.get("dependency-groups", {})
+    if not isinstance(groups, dict):
+        declaration_issues.append(f"invalid dependency-groups table in {rel}")
+    else:
+        for group_name, group in groups.items():
+            if not isinstance(group, list):
+                declaration_issues.append(f"invalid dependency group {group_name} in {rel}")
+                continue
+            for entry in group:
+                if isinstance(entry, str):
+                    candidates.append(entry)
+                else:
+                    declaration_issues.append(f"unresolved dependency group entry in {group_name}: {rel}")
+
     tool = data.get("tool") or {}
     if isinstance(tool, dict):
+        uv = tool.get("uv", {})
+        if not isinstance(uv, dict):
+            declaration_issues.append(f"invalid tool.uv table in {rel}")
+        elif "dev-dependencies" in uv:
+            dev = uv["dev-dependencies"]
+            if isinstance(dev, list):
+                for entry in dev:
+                    if isinstance(entry, str):
+                        candidates.append(entry)
+                    else:
+                        declaration_issues.append(f"invalid tool.uv dev dependency in {rel}")
+            else:
+                declaration_issues.append(f"invalid tool.uv dev-dependencies in {rel}")
         poetry = tool.get("poetry") or {}
         if isinstance(poetry, dict):
             def add_poetry_dependencies(table: Any, label: str) -> None:
@@ -986,8 +1048,8 @@ def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool,
                         add_poetry_dependencies(group["dependencies"], label)
 
     pins: List[PackagePin] = []
-    incomplete = bool(poetry_issues)
-    reasons: List[str] = list(poetry_issues)
+    incomplete = bool(poetry_issues or declaration_issues)
+    reasons: List[str] = poetry_issues + declaration_issues
     for raw in candidates:
         line = raw.strip()
         pin_m = EXACT_PIN_RE.match(line)
@@ -1442,7 +1504,7 @@ def query_osv_batch(
         batch_results = data.get("results")
         if not isinstance(batch_results, list) or len(batch_results) != len(chunk):
             return results, f"OSV querybatch result count mismatch: expected {len(chunk)} results"
-        for pin, item in zip(chunk, batch_results, strict=True):
+        for pin, item in zip(chunk, batch_results):
             if not isinstance(item, dict):
                 return results, "OSV querybatch returned a non-object result"
             vulns = item.get("vulns") or []

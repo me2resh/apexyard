@@ -213,8 +213,31 @@ fi
 # Defaults cover the common tool / convention set. Patterns use shell
 # glob semantics (`*` crosses `/` inside case). Add to this list sparingly
 # — false positives on non-migration files block productive edits.
+#
+# _rmt_path_for_migration_match PATH (#1483)
+# Match-only form of a write target. Default patterns are `*/`-anchored
+# (`*/migrations/*`), so a relative `migrations/001.sql` misses every arm
+# while `./migrations/001.sql` matches. Prefix a bare relative path with
+# `./` so both spellings hit the same arms. Absolute and `~/` paths stay
+# unchanged. Do NOT collapse `.` / `..` here: collapsing would drop the
+# `migrations` segment from spellings like `migrations/../1.sql` and
+# loosen a write that blocks today (AgDR-0193).
+_rmt_path_for_migration_match() {
+  case "$1" in
+    /*|~*|./*) printf '%s' "$1" ;;
+    *) printf './%s' "$1" ;;
+  esac
+}
+
 is_migration_path() {
   local path="$1"
+  local match bare
+
+  match=$(_rmt_path_for_migration_match "$path")
+  bare="$path"
+  case "$bare" in
+    ./*) bare="${bare#./}" ;;
+  esac
 
   # Project-configured patterns take precedence if any
   if [ -n "$CUSTOM_PATHS" ]; then
@@ -226,16 +249,22 @@ is_migration_path() {
       case "$path" in
         $pat) return 0 ;;
       esac
+      # Also try the ./ -stripped relative form so an adopter pattern like
+      # `src/db/**` still matches a harness that supplies `./src/db/...`.
+      # shellcheck disable=SC2254
+      case "$bare" in
+        $pat) return 0 ;;
+      esac
     done <<< "$CUSTOM_PATHS"
     # When custom patterns are set, don't fall through to defaults —
     # projects that override are saying "only these paths"
     return 1
   fi
 
-  # Default patterns.
+  # Default patterns — compare the match form (#1483).
   # Note: shell case `*` crosses `/`, so `*/migrations/*.sql` already covers
   # nested paths like `*/migrations/<sub>/file.sql` — no separate arm needed.
-  case "$path" in
+  case "$match" in
     # SQL migrations anywhere under a `migrations/` directory
     */migrations/*.sql) return 0 ;;
     # `migrate-*.ts` / `.js` / `.py` / `.sql` anywhere

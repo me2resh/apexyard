@@ -21,6 +21,9 @@ HELPER="${DEPENDENCY_AUDIT_TEST_HELPER:-$SRC_ROOT/golden-paths/pipelines/scripts
 FIXED_SKILL="$SRC_ROOT/.claude/skills/audit-deps/SKILL.md"
 FIXED_AGENT="$SRC_ROOT/.claude/agents/dependency-auditor.md"
 FIXED_PIPELINE="${DEPENDENCY_AUDIT_TEST_PIPELINE:-$SRC_ROOT/golden-paths/pipelines/dependency-audit.yml}"
+FIXED_REQUIREMENTS="${DEPENDENCY_AUDIT_TEST_REQUIREMENTS:-$SRC_ROOT/golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt}"
+FIXED_AGDR="${DEPENDENCY_AUDIT_TEST_AGDR:-$SRC_ROOT/docs/agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.md}"
+FIXED_DESIGN="${DEPENDENCY_AUDIT_TEST_DESIGN:-$SRC_ROOT/docs/designs/dependency-audit-ecosystems-technical-design.md}"
 FIXTURE_SRC="$SRC_ROOT/.claude/hooks/tests/fixtures/dependency-audit-1359/projects"
 
 PASS=0
@@ -417,7 +420,7 @@ else
   fail "AC7-fixed-pipeline-npm-outdated-and-licences" "npm outdated / license-checker missing"
 fi
 
-# Install from pin file (AgDR-0184); hashes deferred by comment
+# Install from pin file (AgDR-0184)
 if grep -qF 'dependency-audit-tools.requirements.txt' "$FIXED_PIPELINE" \
   && grep -qF 'AgDR-0184' "$FIXED_PIPELINE"; then
   pass "AC7-fixed-pipeline-installs-from-pin-file"
@@ -1108,7 +1111,7 @@ for ecosystem in ("npm", "python"):
     assert re.search(r'else\s+echo "has_report=false"[^\n]*\s+exit 1\s+fi', block), block
 assert 'if [ "$FAIL_ON_INCOMPLETE" = "true" ]' in workflow
 assert '::warning::Unknown-severity findings' in workflow
-assert 'int(raw) not in (0, 4)' in workflow
+assert 'int(raw) not in (0, 4)' in workflow or 'elif code not in (0, 4)' in workflow
 PY
 then
   pass "R2-3-helper-exit-4-and-incomplete-opt-out-deferred"
@@ -1203,6 +1206,294 @@ then
   pass "R2-advisory-short-osv-batch-incomplete"
 else
   fail "R2-advisory-short-osv-batch-incomplete" "rc=$r2_short_rc body=$(head -c 350 "$SB/r2-short-osv.json")"
+fi
+
+# ---------------------------------------------------------------------------
+# #1478 follow-ups. Baseline sources can be selected via DEPENDENCY_AUDIT_TEST_*.
+# ---------------------------------------------------------------------------
+
+if python3 - "$FIXED_PIPELINE" "$FIXED_REQUIREMENTS" "$FIXED_AGDR" <<'PY'
+from pathlib import Path
+import sys
+workflow, requirements, agdr = (Path(path).read_text(encoding="utf-8") for path in sys.argv[1:])
+assert "pip install --require-hashes -r .github/scripts/dependency-audit-tools.requirements.txt" in workflow
+assert "#1478" in agdr
+lines = requirements.splitlines()
+i = 0
+req_count = 0
+while i < len(lines):
+    raw = lines[i]
+    stripped = raw.strip()
+    i += 1
+    if not stripped or stripped.startswith("#"):
+        continue
+    assert "==" in stripped, f"requirement line missing == pin: {raw!r}"
+    hash_count = 0
+    while i < len(lines):
+        nxt = lines[i].strip()
+        if nxt.startswith("--hash=sha256"):
+            hash_count += 1
+            i += 1
+            continue
+        if not nxt or nxt.startswith("#"):
+            i += 1
+            continue
+        break
+    assert hash_count >= 1, f"no --hash=sha256 after {stripped!r}"
+    req_count += 1
+assert req_count >= 1, "pin file has no requirement lines"
+PY
+then
+  pass "F1478-hash-install-and-agdr-link"
+else
+  fail "F1478-hash-install-and-agdr-link" "require-hashes install, hashed pins, or AgDR-0184 #1478 link missing"
+fi
+
+mkdir -p "$SB/projects/uv-self" "$SB/http-1478"
+cat > "$SB/projects/uv-self/pyproject.toml" <<'EOF'
+[project]
+name = "demo-project"
+version = "0.1.0"
+dependencies = ["safe-pkg==1.0.0"]
+EOF
+cat > "$SB/projects/uv-self/uv.lock" <<'EOF'
+version = 1
+[[package]]
+name = "demo-project"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [{ name = "safe-pkg" }]
+[[package]]
+name = "safe-pkg"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+EOF
+printf '%s\n' '{"results":[{"vulns":[]}]}' > "$SB/http-1478/osv_querybatch.json"
+cp "$SB/http/pypi_safe-pkg_1.0.0.json" "$SB/http-1478/"
+cp "$SB/http/pypi_safe-pkg.json" "$SB/http-1478/"
+set +e
+python3 -I "$HELPER" "$SB/projects/uv-self" --runner=osv \
+  --fixture-http "$SB/http-1478" --skip-npm-scan > "$SB/uv-self.json" 2> "$SB/uv-self.err"
+uv_self_rc=$?
+set -e
+if python3 - "$SB/uv-self.json" "$uv_self_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+s = next(x for x in d["dependency_sets"] if x["ecosystem"] == "python")
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert s["coverage"] == s["check_status"] == "complete"
+assert {p["name"] for p in s["packages"]} == {"safe-pkg"}
+PY
+then
+  pass "F1478-uv-self-entry-complete"
+else
+  fail "F1478-uv-self-entry-complete" "rc=$uv_self_rc body=$(head -c 350 "$SB/uv-self.json")"
+fi
+
+mkdir -p "$SB/projects/uv-virtual"
+cp "$SB/projects/uv-self/pyproject.toml" "$SB/projects/uv-virtual/pyproject.toml"
+cat > "$SB/projects/uv-virtual/uv.lock" <<'EOF'
+version = 1
+[[package]]
+name = "demo-project"
+source = { virtual = "." }
+dependencies = [{ name = "safe-pkg" }]
+[[package]]
+name = "safe-pkg"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/uv-virtual" --runner=osv \
+  --fixture-http "$SB/http-1478" --skip-npm-scan > "$SB/uv-virtual.json" 2> "$SB/uv-virtual.err"
+uv_virtual_rc=$?
+set -e
+if python3 - "$SB/uv-virtual.json" "$uv_virtual_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+s = next(x for x in d["dependency_sets"] if x["ecosystem"] == "python")
+assert int(sys.argv[2]) == d["exit_code"] == 0
+assert s["coverage"] == s["check_status"] == "complete"
+assert {p["name"] for p in s["packages"]} == {"safe-pkg"}
+PY
+then
+  pass "F1478-uv-virtual-self-entry-complete"
+else
+  fail "F1478-uv-virtual-self-entry-complete" "rc=$uv_virtual_rc body=$(head -c 350 "$SB/uv-virtual.json")"
+fi
+
+printf '%s\n' '[]' > "$SB/empty-1478-stub.json"
+for dev_source in pep735 tool-uv dev-requirements; do
+  project="$SB/projects/dev-$dev_source"
+  mkdir -p "$project"
+  case "$dev_source" in
+    pep735)
+      cat > "$project/pyproject.toml" <<'EOF'
+[project]
+name = "demo-project"
+dependencies = ["safe-pkg==1.0.0"]
+[dependency-groups]
+dev = ["demo-dev>=2"]
+EOF
+      ;;
+    tool-uv)
+      cat > "$project/pyproject.toml" <<'EOF'
+[project]
+name = "demo-project"
+dependencies = ["safe-pkg==1.0.0"]
+[tool.uv]
+dev-dependencies = ["demo-dev>=2"]
+EOF
+      ;;
+    dev-requirements)
+      printf '%s\n' 'safe-pkg==1.0.0' > "$project/requirements.txt"
+      printf '%s\n' 'demo-dev>=2' > "$project/dev-requirements.txt"
+      ;;
+  esac
+  set +e
+  python3 -I "$HELPER" "$project" --pip-audit-stub "$SB/empty-1478-stub.json" \
+    --fixture-http "$SB/http-1478" --skip-npm-scan > "$SB/dev-$dev_source.json" 2> "$SB/dev-$dev_source.err"
+  dev_rc=$?
+  set -e
+  if python3 - "$SB/dev-$dev_source.json" "$dev_rc" "$dev_source" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+s = next(x for x in d["dependency_sets"] if x["ecosystem"] == "python")
+assert int(sys.argv[2]) == d["exit_code"] == 3
+assert s["coverage"] == s["check_status"] == "incomplete"
+assert "demo-dev" in s["coverage_reason"]
+assert {p["name"] for p in s["packages"]} == {"safe-pkg"}
+if sys.argv[3] == "dev-requirements":
+    assert "dev-requirements.txt" in s["manifests"]
+PY
+  then
+    pass "F1478-$dev_source-unpinned-incomplete"
+  else
+    fail "F1478-$dev_source-unpinned-incomplete" "rc=$dev_rc body=$(head -c 350 "$SB/dev-$dev_source.json")"
+  fi
+done
+
+if python3 - "$FIXED_PIPELINE" <<'PY'
+from pathlib import Path
+import sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+assert workflow.count("- 'dev-requirements.txt'") == 2
+assert workflow.count("- '**/dev-requirements.txt'") == 2
+assert "-name 'dev-requirements.txt'" in workflow
+PY
+then
+  pass "F1478-dev-requirements-triggers-python-job"
+else
+  fail "F1478-dev-requirements-triggers-python-job" "workflow does not detect standalone dev requirements"
+fi
+
+py39=""
+for candidate in /usr/bin/python3 python3.9; do
+  if command -v "$candidate" >/dev/null 2>&1 \
+    && "$candidate" --version 2>&1 | grep -qE '^Python 3\.9\.'; then
+    py39="$candidate"
+    break
+  fi
+done
+if [ -z "$py39" ]; then
+  py39=python3
+fi
+set +e
+"$py39" -I "$HELPER" "$SB/projects/hostile" --runner=osv \
+  --fixture-http "$SB/http-1478" --skip-npm-scan > "$SB/python39.json" 2> "$SB/python39.err"
+python39_rc=$?
+set -e
+if ! grep -qF 'zip(chunk, batch_results, strict=True)' "$HELPER" \
+  && python3 - "$SB/python39.json" "$python39_rc" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert int(sys.argv[2]) == d["exit_code"]
+assert d["exit_code"] in (0, 3, 4)
+if d["exit_code"] == 3:
+    assert any(s["coverage"] in ("failed", "incomplete") for s in d["dependency_sets"])
+PY
+then
+  pass "F1478-python39-osv-no-crash"
+else
+  fail "F1478-python39-osv-no-crash" "interpreter=$py39 rc=$python39_rc err=$(head -c 200 "$SB/python39.err")"
+fi
+
+if python3 - "$FIXED_PIPELINE" "$SB/combine-1478.py" <<'PY'
+from pathlib import Path
+import sys, textwrap
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+body = workflow.split("run: |\n          python3 <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+Path(sys.argv[2]).write_text(textwrap.dedent(body) + "\n", encoding="utf-8")
+PY
+then
+  for scenario in unknown-exit critical-without-finding; do
+    case_dir="$SB/combine-$scenario"
+    mkdir -p "$case_dir/audit-evidence/npm"
+    if [ "$scenario" = unknown-exit ]; then
+      helper_exit=9
+      report_exit=9
+    else
+      helper_exit=1
+      report_exit=1
+    fi
+    printf '{"severity_totals":{"Critical":0},"dependency_sets":[{"ecosystem":"npm","coverage":"complete","check_status":"complete"}],"exit_code":%s,"findings":[]}\n' "$report_exit" \
+      > "$case_dir/audit-evidence/npm/npm-report.json"
+    : > "$case_dir/outputs"
+    : > "$case_dir/summary"
+    set +e
+    (cd "$case_dir" && HAS_NPM=true HAS_PYTHON=false NPM_RESULT=success PYTHON_RESULT=skipped \
+      NPM_HAS_REPORT=true PYTHON_HAS_REPORT=false NPM_EXIT="$helper_exit" \
+      GITHUB_OUTPUT="$case_dir/outputs" GITHUB_STEP_SUMMARY="$case_dir/summary" \
+      python3 "$SB/combine-1478.py") > "$case_dir/out" 2> "$case_dir/err"
+    combine_rc=$?
+    set -e
+    if [ "$combine_rc" -eq 0 ] && grep -q '^incomplete=true$' "$case_dir/outputs"; then
+      pass "F1478-summarize-$scenario-incomplete"
+    else
+      fail "F1478-summarize-$scenario-incomplete" "rc=$combine_rc outputs=$(cat "$case_dir/outputs")"
+    fi
+  done
+else
+  fail "F1478-summarize-unknown-exit-incomplete" "cannot extract combine step"
+  fail "F1478-summarize-critical-without-finding-incomplete" "cannot extract combine step"
+fi
+
+if python3 - "$FIXED_PIPELINE" "$SB" <<'PY'
+from pathlib import Path
+import subprocess, sys
+workflow = Path(sys.argv[1]).read_text(encoding="utf-8")
+for ecosystem in ("npm", "python"):
+    block = workflow.split(f"- name: Run shared helper ({ecosystem})", 1)[1].split("- name:", 1)[0]
+    assert "rm -f audit-evidence/*-report.json" in block
+    assert block.index("rm -f audit-evidence/*-report.json") < block.index("dependency-audit.py")
+    directory = Path(sys.argv[2]) / f"stale-{ecosystem}"
+    evidence = directory / "audit-evidence"
+    evidence.mkdir(parents=True)
+    (evidence / "old-report.json").write_text("stale", encoding="utf-8")
+    (evidence / "npm-outdated.json").write_text("keep", encoding="utf-8")
+    subprocess.run(["/bin/bash", "-c", "rm -f audit-evidence/*-report.json"], cwd=directory, check=True)
+    assert not (evidence / "old-report.json").exists()
+    assert (evidence / "npm-outdated.json").exists()
+assert workflow.index("- name: Clear checkout audit reports") < workflow.index("- name: Download evidence")
+PY
+then
+  pass "F1478-stale-reports-cleared-before-scan-and-combine"
+else
+  fail "F1478-stale-reports-cleared-before-scan-and-combine" "checkout reports can contaminate evidence"
+fi
+
+if python3 - "$FIXED_DESIGN" <<'PY'
+from pathlib import Path
+import sys
+design = Path(sys.argv[1]).read_text(encoding="utf-8")
+approvals = design.split("## Approvals\n", 1)[1].split("\n## ", 1)[0]
+assert "approval remain pending" not in approvals
+assert "PR #1430" in approvals
+PY
+then
+  pass "F1478-design-approval-state-corrected"
+else
+  fail "F1478-design-approval-state-corrected" "approval section still claims pending"
 fi
 
 echo ""
