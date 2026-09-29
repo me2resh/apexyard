@@ -292,10 +292,10 @@ fi
 rm -f "$pre_fix_hook"
 rm -rf "$sandbox"
 
-# 9. Origin-owner-only case — the owner-login exemption must work on its
-#    own for `origin`, with no `upstream` remote configured at all. This
-#    isolates the ORIGIN half of the owner branch from the upstream half
-#    case 2/5/6 already cover.
+# 9. #1477 — a private, non-fork origin must NOT exempt its owner login.
+#    Without upstream (and without origin in public_framework_repos), the
+#    owner/repo form of origin's owner is a private reference and blocks.
+#    A bare mention of that owner still blocks either way.
 ORIGIN_OWNER_REGISTRY_YAML='projects:
   - name: atlas-fork
     repo: acme-org/atlas-fork-tool
@@ -307,13 +307,23 @@ ORIGIN_OWNER_REGISTRY_YAML='projects:
 sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
 printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_hook "origin-owner-only: owner/repo form of ORIGIN's own owner does not block (no upstream)" "$sandbox" 0 "" ""
+assert_hook "origin-owner-only: private origin owner/repo form blocks (no public proof)" "$sandbox" 2 "File: notes.md" "atlas-fork"
 rm -rf "$sandbox"
 
 sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL")
 printf 'The atlas-fork account needs review.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
 assert_hook "origin-owner-only: a bare mention of ORIGIN's owner still blocks (no upstream)" "$sandbox" 2 "File: notes.md" "atlas-fork"
+rm -rf "$sandbox"
+
+# 9b. #1477 — when upstream is a configured public framework repo, origin
+#     is a proven fork of a public repo and the origin-owner exemption
+#     still applies for the safe owner/repo form.
+PUBLIC_UPSTREAM_URL="https://github.com/me2resh/apexyard.git"
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner with public upstream: owner/repo form does not block" "$sandbox" 0 "" ""
 rm -rf "$sandbox"
 
 # 10. Upstream-slug-only case — the repo-slug exemption must work on its
