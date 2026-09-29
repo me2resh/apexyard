@@ -56,6 +56,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   if [ -f "$LIB_CFG" ]; then cp "$LIB_CFG" "$sb/.claude/hooks/_lib-read-config.sh"; fi
   if [ -f "$LIB_TRACKER" ]; then cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"; fi
   if [ -f "$LIB_PR_REPO" ]; then cp "$LIB_PR_REPO" "$sb/.claude/hooks/_lib-pr-repo.sh"; fi
@@ -74,7 +75,9 @@ test
 ## Glossary
 | Term | Definition |
 |------|------------|
-| GH-194 | the bug we're fixing |"
+| GH-194 | the bug we're fixing |
+
+Refs #194"
 
 run_case() {
   local label="$1" cmd_extra_flags="$2" want_rc="$3" want_stderr_regex="$4"

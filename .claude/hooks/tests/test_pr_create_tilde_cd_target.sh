@@ -65,7 +65,9 @@ test
 ## Glossary
 | Term | Definition |
 |------|------------|
-| tilde | home-directory shorthand |"
+| tilde | home-directory shorthand |
+
+Refs #194"
 
 # make_host_sandbox [local_branch]
 #   Host sandbox with the hook + libs installed, on an intentionally
@@ -87,6 +89,7 @@ make_host_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   [ -f "$LIB_CFG" ]     && cp "$LIB_CFG"     "$sb/.claude/hooks/_lib-read-config.sh"
   [ -f "$LIB_TRACKER" ] && cp "$LIB_TRACKER" "$sb/.claude/hooks/_lib-tracker.sh"

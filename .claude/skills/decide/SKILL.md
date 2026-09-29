@@ -58,6 +58,8 @@ State the chosen option with justification.
 
 Create file at `{project-root}/docs/agdr/AgDR-{NNNN}-{slug}.md`.
 
+After writing the file, source `.claude/hooks/_lib-review-markers.sh` from the ops fork and run `review_validate_body agdr <path-to-new-AgDR>`. Repair any missing title or required section before reporting the decision. This local check does not approve the decision or write a review marker.
+
 **Important**: AgDRs live in the **current project's repository**, not centralised. Each project has its own `docs/agdr/` folder and its own ID sequence.
 
 Resolve the AgDR template via the portfolio helper so adopter overrides win when present:

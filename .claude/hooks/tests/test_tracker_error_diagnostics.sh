@@ -61,7 +61,7 @@ make_sandbox() {
   chmod +x "$sb/.claude/hooks/$hook"
   for lib in _lib-read-config.sh _lib-tracker.sh _lib-extract-pr.sh _lib-pr-repo.sh \
              _lib-active-ticket.sh _lib-ops-root.sh _lib-detect-bash-write.sh \
-             _lib-portfolio-paths.sh; do
+             _lib-portfolio-paths.sh _lib-review-markers.sh; do
     if [ -f "$SRC_ROOT/.claude/hooks/$lib" ]; then
       cp "$SRC_ROOT/.claude/hooks/$lib" "$sb/.claude/hooks/$lib"
     fi
@@ -152,7 +152,8 @@ BODY=$'## Summary\nx\n\n## Testing\ny\n\n## Glossary\n| t | d |'
 # Both lookups fail with stderr → the block path must quote the last one.
 sb=$(make_sandbox "validate-pr-create.sh")
 install_failing_gh "$sb"
-printf '%s' "$BODY" > "$sb/body.md"
+# #1343: a PR body must carry a Closes or Refs line.
+printf '%s\n\nRefs #4242\n' "$BODY" > "$sb/body.md"
 run_hook "$sb" "validate-pr-create.sh" \
   "gh pr create --title \"fix(#4242): diag\" --body-file $sb/body.md --head fix/#1336-diag-test"
 got="$OUT_LAST"
@@ -163,7 +164,8 @@ rm -rf "$sb"
 # this is the case the maintainer explicitly did not want to be noisy.
 sb=$(make_sandbox "validate-pr-create.sh")
 install_failing_gh "$sb" "me2resh/apexyard"
-printf '%s' "$BODY" > "$sb/body.md"
+# #1343: a PR body must carry a Closes or Refs line.
+printf '%s\n\nRefs #150\n' "$BODY" > "$sb/body.md"
 run_hook "$sb" "validate-pr-create.sh" \
   "gh pr create --title \"fix(#150): upstream only\" --body-file $sb/body.md --head fix/#1336-diag-test"
 got="$OUT_LAST"

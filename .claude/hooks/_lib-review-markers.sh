@@ -34,6 +34,10 @@
 #       Exit 0 when the Rex review body has the required Output Format
 #       headings. Exit 1 otherwise. Does not write a marker.
 #
+#   review_validate_body <rex|tariq|pr|agdr> <body_file> [pr_sections]
+#       Check the selected artifact profile. On failure,
+#       REVIEW_VALIDATION_MISSING lists missing PR requirements.
+#
 #   review_write_rex_approved <body_file> <sha> <marker_path>
 #       Validate the body, require a **APPROVED** verdict line and a
 #       matching Reviewed commit footer SHA, then write the bare SHA
@@ -366,39 +370,112 @@ _REVIEW_REX_BODY_HEADINGS='## Code Review
 ### Validation
 ### Verdict'
 
+_REVIEW_TARIQ_BODY_HEADINGS='## Design Review
+### Summary
+### Review Lens Results
+### Blocking Findings
+### Suggestions
+### Verdict'
+
+_REVIEW_AGDR_HEADINGS='## Context
+## Options Considered
+## Decision
+## Consequences
+## Artifacts'
+
+# review_validate_body <profile> <body_file> [pr_sections]
+# The same local, read-only validator serves review, PR, and AgDR bodies.
+# It checks required structure and reference evidence, not prose quality.
+review_validate_body() {
+  local profile="${1:-}" body_file="${2:-}" pr_sections="${3:-}"
+  local headings="" heading section section_re
+  REVIEW_VALIDATION_MISSING=""
+  REVIEW_VALIDATION_RESULT="incomplete"
+
+  case "$profile" in
+    rex) headings="$_REVIEW_REX_BODY_HEADINGS" ;;
+    tariq) headings="$_REVIEW_TARIQ_BODY_HEADINGS" ;;
+    agdr) headings="$_REVIEW_AGDR_HEADINGS" ;;
+    pr) ;;
+    *) echo "review_validate_body: unknown profile: $profile" >&2; return 1 ;;
+  esac
+  if [ -z "$body_file" ] || [ ! -f "$body_file" ]; then
+    echo "review_validate_body: body file missing" >&2
+    return 1
+  fi
+  if [ ! -s "$body_file" ]; then
+    if [ "$profile" = pr ]; then
+      REVIEW_VALIDATION_MISSING="Summary
+Testing
+Glossary
+Closes or Refs line
+"
+    fi
+    echo "review_validate_body: body is empty" >&2
+    return 1
+  fi
+
+  if [ "$profile" = pr ]; then
+    # Config may add sections. These four requirements are fixed for PRs.
+    while IFS= read -r section; do
+      [ -z "$section" ] && continue
+      case "
+$REVIEW_VALIDATION_MISSING
+" in *"
+$section
+"*) continue ;; esac
+      section_re=$(printf '%s' "$section" | sed 's/[][\.^$*+?(){}|]/\\&/g')
+      if ! grep -qiE "^##[[:space:]]+${section_re}([[:space:]]|$)" "$body_file"; then
+        REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}${section}
+"
+      fi
+    done <<EOF
+${pr_sections}
+Summary
+Testing
+Glossary
+EOF
+    if ! grep -qiE '^[[:space:]]*(Closes|Refs)[[:space:]]+([A-Za-z0-9._-]+/)?(#[0-9]+|[A-Z]{2,10}-[0-9]+)([[:space:][:punct:]]|$)' "$body_file"; then
+      REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}Closes or Refs line
+"
+    fi
+    if [ -n "$REVIEW_VALIDATION_MISSING" ]; then
+      echo "review_validate_body: incomplete PR body" >&2
+      return 1
+    fi
+  else
+    while IFS= read -r heading; do
+      [ -z "$heading" ] && continue
+      if ! grep -qE "^${heading}([[:space:]:]|$)" "$body_file"; then
+        echo "review_validate_body: missing heading: ${heading}" >&2
+        return 1
+      fi
+    done <<EOF
+${headings}
+EOF
+    if [ "$profile" = agdr ]; then
+      if ! grep -qE '^# [^[:space:]]' "$body_file"; then
+        echo "review_validate_body: missing AgDR title" >&2
+        return 1
+      fi
+    elif ! grep -q 'Reviewed commit' "$body_file"; then
+      echo "review_validate_body: missing Reviewed commit footer" >&2
+      return 1
+    fi
+  fi
+  # The sourcing caller reads this result after the function returns.
+  # shellcheck disable=SC2034
+  REVIEW_VALIDATION_RESULT="complete"
+  return 0
+}
+
 # review_validate_rex_body <body_file>
 #
 # Exit 0 when the file is non-empty and contains every required heading
 # plus a Reviewed commit footer. Exit 1 with a stderr reason otherwise.
 # Does not inspect the host review. Does not write a marker.
 review_validate_rex_body() {
-  local body_file="${1:-}"
-  if [ -z "$body_file" ] || [ ! -f "$body_file" ]; then
-    echo "review_validate_rex_body: body file missing" >&2
-    return 1
-  fi
-  if [ ! -s "$body_file" ]; then
-    echo "review_validate_rex_body: body is empty" >&2
-    return 1
-  fi
-
-  local heading
-  while IFS= read -r heading; do
-    [ -z "$heading" ] && continue
-    # Headings are literal prefixes. They contain no regex metacharacters.
-    if ! grep -qE "^${heading}" "$body_file"; then
-      echo "review_validate_rex_body: missing heading: ${heading}" >&2
-      return 1
-    fi
-  done <<EOF
-${_REVIEW_REX_BODY_HEADINGS}
-EOF
-
-  if ! grep -q 'Reviewed commit' "$body_file"; then
-    echo "review_validate_rex_body: missing Reviewed commit footer" >&2
-    return 1
-  fi
-  return 0
+  review_validate_body rex "${1:-}"
 }
 
 # _review_rex_verdict_block <body_file>

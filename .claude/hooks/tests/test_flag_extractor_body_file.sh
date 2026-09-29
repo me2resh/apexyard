@@ -193,6 +193,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$PRC_HOOK" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$PRC_HOOK")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   cp "$SRC_ROOT/.claude/hooks/_lib-read-config.sh" "$sb/.claude/hooks/_lib-read-config.sh"
   [ -f "$SRC_ROOT/.claude/hooks/_lib-tracker.sh" ] && \
@@ -240,6 +241,8 @@ FULL_BODY='## Summary
 | Term | Definition |
 |------|------------|
 | thing | a thing |
+
+Refs #1041
 '
 
 THIN_BODY='## Summary

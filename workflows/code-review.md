@@ -38,7 +38,7 @@ Rex and the Security Auditor split scope and do not repeat each other's checks. 
 ## Testing
 1. How to verify this works
 
-Fixes #[ticket-id]
+Closes #[ticket-id]
 
 ---
 

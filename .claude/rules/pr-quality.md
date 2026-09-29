@@ -35,6 +35,8 @@ the `## Testing` section instead of leaving it empty.
 
 ## Glossary (MANDATORY)
 
+The PR body also needs `## Summary`, `## Testing`, and a `Closes #N` or `Refs #N` line. The PR creation hook checks these requirements for a supplied body.
+
 Every PR description **must** include a Glossary section:
 
 ```markdown

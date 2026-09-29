@@ -7,7 +7,7 @@
 # `validate-pr-create.sh`) previously resolved the session-pinned ops-fork
 # for both their git diff and tracker lookups, regardless of what repo the
 # `gh pr create` command was actually targeting. This produced false-positive
-# blocks for PRs that targeted a sibling repo (e.g. me2resh/apexyard-premium):
+# blocks for PRs that targeted a sibling repo (e.g. example-org/private-app):
 #
 #  1. require-agdr-for-arch-pr.sh — diffed the ops-fork tree, which includes
 #     framework paths (.claude/hooks/, topologies/, handbooks/domain/) that are
@@ -15,7 +15,7 @@
 #
 #  2. validate-pr-create.sh — consulted me2resh/apexyard (the ops-fork's
 #     upstream remote) as an additional ticket-existence fallback even when the
-#     PR was for me2resh/apexyard-premium. A premium ticket could collide with a
+#     PR was for example-org/private-app. A premium ticket could collide with a
 #     closed/missing framework issue and get blocked.
 #
 # STRUCTURE
@@ -197,6 +197,7 @@ make_validate_sandbox() {
   # Copy hook + libs into the sandbox so it can run self-contained.
   mkdir -p "$sb/.claude/hooks"
   cp "$VALIDATE_HOOK" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$VALIDATE_HOOK")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   for lib in \
     _lib-read-config.sh \
@@ -220,7 +221,9 @@ unit tests pass
 ## Glossary
 | Term | Definition |
 |------|------------|
-| cross-repo | PR targets a different repo than the session cwd |"
+| cross-repo | PR targets a different repo than the session cwd |
+
+Refs #464"
 
 # ---------------------------------------------------------------------------
 # Section A — require-agdr-for-arch-pr.sh cross-repo guard
@@ -229,11 +232,11 @@ unit tests pass
 echo "--- Section A: require-agdr-for-arch-pr.sh ---"
 
 # A1: --repo targets sibling repo, arch paths present in ops-fork diff → PASS
-# The guard fires because CMD_REPO (me2resh/apexyard-premium) ≠ origin
+# The guard fires because CMD_REPO (example-org/private-app) ≠ origin
 # (fork-org/apexyard). The hook exits 0 without evaluating the diff.
 DIR=$(make_agdr_sandbox "fork-org/apexyard")
 STDERR=$( cd "$DIR" && \
-  printf '{"tool_input":{"command":"gh pr create --repo me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  printf '{"tool_input":{"command":"gh pr create --repo example-org/private-app --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
   | "$AGDR_HOOK" 2>&1 >/dev/null )
 RC=$?
 rm -rf "$DIR"
@@ -276,7 +279,7 @@ assert_case "A4: no --repo flag (implicit origin), no AgDR → BLOCK (regression
 # produce a false-positive block.  After the fix the guard fires correctly.
 DIR=$(make_agdr_sandbox "fork-org/apexyard")
 STDERR=$( cd "$DIR" && \
-  printf '{"tool_input":{"command":"gh pr create --repo=me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  printf '{"tool_input":{"command":"gh pr create --repo=example-org/private-app --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
   | "$AGDR_HOOK" 2>&1 >/dev/null )
 RC=$?
 rm -rf "$DIR"
@@ -285,7 +288,7 @@ assert_case "A5: --repo=VALUE (equals form), sibling → PASS (cross-repo guard,
 # A6: -R VALUE (short alias, space), sibling → PASS
 DIR=$(make_agdr_sandbox "fork-org/apexyard")
 STDERR=$( cd "$DIR" && \
-  printf '{"tool_input":{"command":"gh pr create -R me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  printf '{"tool_input":{"command":"gh pr create -R example-org/private-app --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
   | "$AGDR_HOOK" 2>&1 >/dev/null )
 RC=$?
 rm -rf "$DIR"
@@ -294,7 +297,7 @@ assert_case "A6: -R VALUE (short alias, space), sibling → PASS (cross-repo gua
 # A7: -R=VALUE (short alias, equals), sibling → PASS
 DIR=$(make_agdr_sandbox "fork-org/apexyard")
 STDERR=$( cd "$DIR" && \
-  printf '{"tool_input":{"command":"gh pr create -R=me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
+  printf '{"tool_input":{"command":"gh pr create -R=example-org/private-app --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'Just a change, no AgDR'"'"'"}}' \
   | "$AGDR_HOOK" 2>&1 >/dev/null )
 RC=$?
 rm -rf "$DIR"
@@ -311,13 +314,13 @@ echo "--- Section B: validate-pr-create.sh ---"
 # fallback for the sibling repo. The ticket exists only in the sibling.
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-cross-repo")
 mock_gh_install "$SB"
-# Issue #99 exists in apexyard-premium (sibling) but NOT in apexyard (upstream).
-mock_gh_set_repo_existence "$SB" 99 me2resh/apexyard-premium yes
+# Issue #99 exists in private-app (sibling) but NOT in apexyard (upstream).
+mock_gh_set_repo_existence "$SB" 99 example-org/private-app yes
 mock_gh_set_repo_existence "$SB" 99 me2resh/apexyard no
 mock_gh_set_repo_existence "$SB" 99 fork-org/apexyard no
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create --repo me2resh/apexyard-premium --base main --title 'fix(#99): sibling ticket' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
+CMD="gh pr create --repo example-org/private-app --base main --title 'fix(#99): sibling ticket' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -328,12 +331,12 @@ assert_case "B1: --repo=sibling, ticket in sibling → PASS (no upstream bleed)"
 # Tracker lookup must reach the sibling and return the real state.
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-cross-repo")
 mock_gh_install "$SB"
-mock_gh_set_repo_existence "$SB" 77 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 77 example-org/private-app yes
 mock_gh_set_repo_existence "$SB" 77 fork-org/apexyard no
 mock_gh_set_state "$SB" 77 CLOSED
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create --repo me2resh/apexyard-premium --base main --title 'fix(#77): closed sibling ticket' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
+CMD="gh pr create --repo example-org/private-app --base main --title 'fix(#77): closed sibling ticket' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -347,11 +350,11 @@ SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-cr
 mock_gh_install "$SB"
 # Issue #55 exists in me2resh/apexyard (framework) but NOT in the sibling.
 mock_gh_set_repo_existence "$SB" 55 me2resh/apexyard yes
-mock_gh_set_repo_existence "$SB" 55 me2resh/apexyard-premium no
+mock_gh_set_repo_existence "$SB" 55 example-org/private-app no
 mock_gh_set_repo_existence "$SB" 55 fork-org/apexyard no
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create --repo me2resh/apexyard-premium --base main --title 'fix(#55): framework ticket in wrong tracker' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
+CMD="gh pr create --repo example-org/private-app --base main --title 'fix(#55): framework ticket in wrong tracker' --body-file $BODY_FILE --head fix/GH-464-cross-repo"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -427,15 +430,15 @@ assert_case "B6: --repo=origin, ticket in upstream only → PASS (new guard allo
 # B7: --repo=VALUE (equals form), sibling, ticket in sibling → PASS
 # F1: the previous CMD_REPO parser missed the equals form, so CMD_REPO was
 # empty → TRACKER_REPO fell back to the ops-fork origin → wrong tracker
-# queried.  After the fix, CMD_REPO=me2resh/apexyard-premium → correct.
+# queried.  After the fix, CMD_REPO=example-org/private-app → correct.
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b7")
 mock_gh_install "$SB"
-mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 example-org/private-app yes
 mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
 mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create --repo=me2resh/apexyard-premium --base main --title 'fix(#88): equals form ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b7"
+CMD="gh pr create --repo=example-org/private-app --base main --title 'fix(#88): equals form ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b7"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -445,12 +448,12 @@ assert_case "B7: --repo=VALUE (equals form), ticket in sibling → PASS (F1)" "$
 # B8: -R VALUE (short alias, space), sibling, ticket in sibling → PASS
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b8")
 mock_gh_install "$SB"
-mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 example-org/private-app yes
 mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
 mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create -R me2resh/apexyard-premium --base main --title 'fix(#88): short alias ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b8"
+CMD="gh pr create -R example-org/private-app --base main --title 'fix(#88): short alias ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b8"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -460,12 +463,12 @@ assert_case "B8: -R VALUE (short alias, space), ticket in sibling → PASS (F1)"
 # B9: -R=VALUE (short alias, equals), sibling, ticket in sibling → PASS
 SB=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-f1-b9")
 mock_gh_install "$SB"
-mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB" 88 example-org/private-app yes
 mock_gh_set_repo_existence "$SB" 88 me2resh/apexyard no
 mock_gh_set_repo_existence "$SB" 88 fork-org/apexyard no
 BODY_FILE="$SB/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE"
-CMD="gh pr create -R=me2resh/apexyard-premium --base main --title 'fix(#88): short-alias-equals ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b9"
+CMD="gh pr create -R=example-org/private-app --base main --title 'fix(#88): short-alias-equals ticket' --body-file $BODY_FILE --head fix/GH-464-f1-b9"
 INPUT=$(jq -nc --arg c "$CMD" '{tool_input:{command:$c}}')
 STDERR=$(cd "$SB" && echo "$INPUT" | bash .claude/hooks/validate-pr-create.sh 2>&1 >/dev/null)
 RC=$?
@@ -509,7 +512,7 @@ done
 rm -f "$SB_C1/.claude/hooks/_lib-pr-repo.sh"
 AGDR_HOOK_C1="$SB_C1/.claude/hooks/require-agdr-for-arch-pr.sh"
 STDERR_C1=$( cd "$DIR_C1" && \
-  printf '{"tool_input":{"command":"gh pr create --repo me2resh/apexyard-premium --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'No AgDR, cross-repo'"'"'"}}' \
+  printf '{"tool_input":{"command":"gh pr create --repo example-org/private-app --base main --title '"'"'feat(#1): premium thing'"'"' --body '"'"'No AgDR, cross-repo'"'"'"}}' \
   | "$AGDR_HOOK_C1" 2>&1 >/dev/null )
 RC_C1=$?
 rm -rf "$DIR_C1" "$SB_C1"
@@ -520,12 +523,12 @@ assert_case "C1: agdr hook, lib missing, --repo=sibling → WARN + BLOCK (degrad
 SB_C2=$(make_validate_sandbox "fork-org/apexyard" "me2resh/apexyard" "fix/GH-464-c2")
 mock_gh_install "$SB_C2"
 # Issue #99 exists in sibling, not upstream/origin.
-mock_gh_set_repo_existence "$SB_C2" 99 me2resh/apexyard-premium yes
+mock_gh_set_repo_existence "$SB_C2" 99 example-org/private-app yes
 mock_gh_set_repo_existence "$SB_C2" 99 me2resh/apexyard no
 mock_gh_set_repo_existence "$SB_C2" 99 fork-org/apexyard no
 BODY_FILE_C2="$SB_C2/body.md"
 printf '%s' "$VALID_BODY" > "$BODY_FILE_C2"
-CMD_C2="gh pr create --repo me2resh/apexyard-premium --base main --title 'fix(#99): sibling' --body-file $BODY_FILE_C2 --head fix/GH-464-c2"
+CMD_C2="gh pr create --repo example-org/private-app --base main --title 'fix(#99): sibling' --body-file $BODY_FILE_C2 --head fix/GH-464-c2"
 INPUT_C2=$(jq -nc --arg c "$CMD_C2" '{tool_input:{command:$c}}')
 # Remove the lib from the sandbox copy.
 rm -f "$SB_C2/.claude/hooks/_lib-pr-repo.sh"

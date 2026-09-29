@@ -244,12 +244,15 @@ REVIEW_BODY_FILE=$(mktemp)
 cat > "$REVIEW_BODY_FILE" <<'REVIEW'
 <your full design review — verdict (APPROVED / CHANGES REQUESTED / COMMENT) and commit SHA stated in the body>
 REVIEW
+review_validate_body tariq "$REVIEW_BODY_FILE" || exit 1
 tracker_review_submit "$PR_HOST_REPO" {number} comment "$REVIEW_BODY_FILE"; submit_rc=$?
 # submit_rc: 0 = posted · 3 = kind=none (echo the body in your report) · other =
 # host CLI failed (warn + include the body). See the HARD STOP above.
 ```
 
 ## ⛔ Sign-off marker — EXACT FORMAT REQUIRED
+
+Validate the local review body before posting it or writing a marker. If validation fails, repair the body and retry. The validator reports only completeness. It never writes a marker or decides the verdict.
 
 When your verdict is APPROVED, and ONLY then, write the architecture-review approval marker so the `require-architecture-review.sh` gate lets the design PR merge through.
 

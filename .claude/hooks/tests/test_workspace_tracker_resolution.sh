@@ -40,6 +40,9 @@
 
 set -u
 
+# Fixture resolution must not use a pin from the runner's live session.
+export APEXYARD_OPS_DISABLE_PIN=1
+
 HOOK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TRACKER_LIB="$HOOK_DIR/_lib-tracker.sh"
 CONFIG_LIB="$HOOK_DIR/_lib-read-config.sh"
@@ -117,6 +120,7 @@ YAML
     cp "$CONFIG_LIB"         .claude/hooks/_lib-read-config.sh
     cp "$OPS_ROOT_LIB"       .claude/hooks/_lib-ops-root.sh
     cp "$PR_CREATE_HOOK"     .claude/hooks/validate-pr-create.sh
+    cp "$(dirname "$PR_CREATE_HOOK")/_lib-review-markers.sh" .claude/hooks/
     cp "$COMMIT_REFS_HOOK"   .claude/hooks/verify-commit-refs.sh
     cp "$SKILL_GATE_HOOK"    .claude/hooks/require-skill-for-issue-create.sh
     [ -f "$EXTRACT_PUSH_REF" ]   && cp "$EXTRACT_PUSH_REF"   .claude/hooks/
@@ -337,6 +341,9 @@ case_4() {
   # so the branch-name check on the hook passes too.
   local cmd
   cmd='gh pr create --title "feat(PROJ-42): add jira-shaped ticket flow" --body "
+## Summary
+Add a sample ticket flow.
+
 ## Testing
 verify against staging
 
@@ -344,6 +351,8 @@ verify against staging
 | Term | Definition |
 |------|------------|
 | PROJ | example tracker prefix |
+
+Refs PROJ-42
 " --head feature/PROJ-42-jira-shape'
   local input
   input=$(jq -nc --arg cmd "$cmd" '{tool_input:{command:$cmd}}')

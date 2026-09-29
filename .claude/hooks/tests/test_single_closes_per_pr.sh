@@ -31,6 +31,7 @@ make_sandbox() {
   )
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/validate-pr-create.sh"
+  cp "$(dirname "$HOOK_SRC")/_lib-review-markers.sh" "$sb/.claude/hooks/"
   chmod +x "$sb/.claude/hooks/validate-pr-create.sh"
   local src_root
   src_root=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -48,7 +49,7 @@ run_case() {
   mock_gh_install "$sb"
   # Body must satisfy the required-sections check so we're only testing the close-count logic.
   local body_file="$sb/body.md"
-  printf '%s\n\n## Testing\nfoo\n\n## Glossary\n| t | d |\n' "$body_content" > "$body_file"
+  printf '%s\n\n## Testing\nfoo\n\n## Glossary\n| t | d |\n\nRefs #114\n' "$body_content" > "$body_file"
   if [ -n "$extra_config" ]; then
     echo "$extra_config" > "$sb/.claude/project-config.json"
   fi

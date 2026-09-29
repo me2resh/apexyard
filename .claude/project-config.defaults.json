@@ -150,7 +150,6 @@
       "Testing",
       "Glossary"
     ],
-    "skip_marker": "<!-- pr-sections: skip -->",
     "allow_multiple_closes": false,
     "multi_close_skip_marker": "<!-- multi-close: approved -->"
   },
