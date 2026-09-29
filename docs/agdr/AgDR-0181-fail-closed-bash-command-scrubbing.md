@@ -74,9 +74,7 @@ These shapes still false-block:
 - tracker or PR-create words inside quotes or heredoc bodies, for every matcher except `auto-code-review.sh`
 - unquoted heredoc bodies that hold `$(` or a backtick, because the scrubber returns raw and the body text stays visible
 
-The detector does not see these writes on `dev` either:
-
-- `git log --output`, `sort -o`, `yq -i`, and `git diff --output`
+The #1480 forms (`git log --output`, `git diff --output`, `sort -o`, `yq -i`, and `python3 -Bc`) are detected as of AgDR-0191. They are no longer residue.
 
 Any program outside the allowlist gets the raw view.
 
