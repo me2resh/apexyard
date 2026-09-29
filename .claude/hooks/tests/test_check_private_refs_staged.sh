@@ -316,14 +316,29 @@ git -C "$sandbox" add notes.md
 assert_hook "origin-owner-only: a bare mention of ORIGIN's owner still blocks (no upstream)" "$sandbox" 2 "File: notes.md" "atlas-fork"
 rm -rf "$sandbox"
 
-# 9b. #1477 — when upstream is a configured public framework repo, origin
-#     is a proven fork of a public repo and the origin-owner exemption
-#     still applies for the safe owner/repo form.
+# 9b. #1477 — a public upstream alone does NOT prove origin public.
+#     Private ops repos commonly set upstream to the public framework.
+#     Without origin_verified_public (or origin in public_framework_repos /
+#     registry public:true), the origin-owner exemption must not fire.
 PUBLIC_UPSTREAM_URL="https://github.com/me2resh/apexyard.git"
 sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
 printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_hook "origin-owner with public upstream: owner/repo form does not block" "$sandbox" 0 "" ""
+assert_hook "origin-owner with public upstream only: owner/repo form still blocks" "$sandbox" 2 "File: notes.md" "atlas-fork"
+rm -rf "$sandbox"
+
+# 9c. #1477 — recorded origin_verified_public matching origin restores the
+#     narrow owner/repo exemption (skills write this after an online check).
+#     Defaults must exist: _config_load skips overrides when they are absent.
+sandbox=$(make_sandbox_with_remotes "$ORIGIN_OWNER_REGISTRY_YAML" "$FORK_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+cp "$ROOT/.claude/hooks/_lib-read-config.sh" "$sandbox/.claude/hooks/_lib-read-config.sh"
+printf '%s\n' '{"leak_protection":{}}' \
+  > "$sandbox/.claude/project-config.defaults.json"
+printf '%s\n' '{"leak_protection":{"origin_verified_public":"atlas-fork/ops-fork"}}' \
+  > "$sandbox/.claude/project-config.json"
+printf 'Filed against atlas-fork/ops-fork directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "origin-owner with matching origin_verified_public: owner/repo form does not block" "$sandbox" 0 "" ""
 rm -rf "$sandbox"
 
 # 10. Upstream-slug-only case — the repo-slug exemption must work on its

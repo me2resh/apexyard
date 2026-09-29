@@ -33,14 +33,21 @@ current_owner=${current_repo%%/*}
 
 # #1477 — known-public slug list for origin-identity proof. Matches the
 # runtime hook: configured public_framework_repos (else the shipped
-# default). Do NOT auto-append upstream here. That would circularly prove
-# any upstream public.
+# default). Keep newline-separated so iteration never word-splits.
+# Do NOT auto-append upstream here. Upstream is not proof that origin
+# is public (private ops repos commonly point upstream at the public
+# framework; GitHub disallows a private fork of a public repo).
 known_public_repos="me2resh/apexyard"
+origin_verified_public=""
 if [ -f "$HOOK_DIR/_lib-read-config.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-read-config.sh"
-  configured=$(config_get '.leak_protection.public_framework_repos[]' 2>/dev/null | tr '\n' ' ')
+  configured=$(config_get '.leak_protection.public_framework_repos[]' 2>/dev/null)
   [ -n "$configured" ] && known_public_repos="$configured"
+  # Recorded by /setup or /update via bin/record-origin-verified-public.sh
+  # after an online gh visibility check (AgDR-0190). Exact slug match only.
+  origin_verified_public=$(config_get_or '.leak_protection.origin_verified_public' '')
+  origin_verified_public=$(printf '%s' "$origin_verified_public" | tr -d '[:space:]')
 fi
 
 # #1431 — an ops fork's `origin` is the fork itself. The
@@ -51,9 +58,8 @@ fi
 # `upstream` the same way as `origin`. A fork with no `upstream` remote
 # leaves these empty.
 # #1477 — origin identity exemptions require offline proof that origin is
-# public or a fork of a public repo (see origin_identity_exempt below).
-# Upstream *citation* exemptions still apply when upstream is set. They do
-# not by themselves prove origin is a public fork.
+# public (see origin_identity_exempt below). Upstream *citation* exemptions
+# still apply when upstream is set. They do not prove origin is public.
 upstream_repo=""
 upstream_url=$(git remote get-url upstream 2>/dev/null || true)
 if [ -n "$upstream_url" ]; then
@@ -67,24 +73,24 @@ if [ -n "$upstream_repo" ]; then
 fi
 
 # #1477 — fail closed: no origin slug / bare-name / owner exemption unless
-# origin is in known_public_repos, upstream is in that list (fork of a
-# known public repo), or a registry public:true entry names origin.
+# origin is in known_public_repos, origin_verified_public equals origin
+# exactly, or a registry public:true entry names origin.
 # Keep in parity with check-private-refs-runtime.sh.
 origin_identity_exempt=0
 if [ -n "$current_repo" ]; then
-  for known in $known_public_repos; do
+  while IFS= read -r known; do
+    [ -n "$known" ] || continue
     if [ "$current_repo" = "$known" ]; then
       origin_identity_exempt=1
       break
     fi
-  done
-  if [ "$origin_identity_exempt" -eq 0 ] && [ -n "$upstream_repo" ]; then
-    for known in $known_public_repos; do
-      if [ "$upstream_repo" = "$known" ]; then
-        origin_identity_exempt=1
-        break
-      fi
-    done
+  done <<EOF
+$known_public_repos
+EOF
+  if [ "$origin_identity_exempt" -eq 0 ] \
+    && [ -n "$origin_verified_public" ] \
+    && [ "$current_repo" = "$origin_verified_public" ]; then
+    origin_identity_exempt=1
   fi
 fi
 

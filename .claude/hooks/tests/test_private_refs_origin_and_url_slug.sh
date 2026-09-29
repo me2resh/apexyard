@@ -19,12 +19,36 @@ ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 STAGED_HOOK_SOURCE=${STAGED_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-staged.sh}
 RUNTIME_HOOK_SOURCE=${RUNTIME_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-runtime.sh}
 PARSER_SOURCE="$ROOT/.claude/hooks/_lib-registry-parser.sh"
+CONFIG_SOURCE="$ROOT/.claude/hooks/_lib-read-config.sh"
 
 PASS=0
 FAIL=0
 
 pass() { printf '  ok   %s\n' "$1"; PASS=$((PASS + 1)); }
 fail() { printf '  FAIL %s: %s\n' "$1" "$2" >&2; FAIL=$((FAIL + 1)); }
+
+# Copy the real config library so public_framework_repos and
+# origin_verified_public paths exercise config_get (A1 / #1477).
+# _config_load returns {} and skips overrides when defaults are absent,
+# so ensure a defaults file exists (minimal leak_protection object).
+install_config_lib() {
+  local sandbox="$1"
+  cp "$CONFIG_SOURCE" "$sandbox/.claude/hooks/_lib-read-config.sh"
+  if [ ! -f "$sandbox/.claude/project-config.defaults.json" ]; then
+    printf '%s\n' '{"leak_protection":{}}' \
+      > "$sandbox/.claude/project-config.defaults.json"
+  fi
+}
+
+write_defaults() {
+  local sandbox="$1" json="$2"
+  printf '%s\n' "$json" > "$sandbox/.claude/project-config.defaults.json"
+}
+
+write_override() {
+  local sandbox="$1" json="$2"
+  printf '%s\n' "$json" > "$sandbox/.claude/project-config.json"
+}
 
 make_sandbox() {
   local registry_yaml="$1" origin_url="$2" upstream_url="${3:-}"
@@ -141,22 +165,24 @@ assert_runtime 'runtime: private origin owner/repo form blocks' "$sandbox" "$PUB
   'Filed against private-org/ops-private directly.' 2
 rm -rf "$sandbox"
 
-echo '== #1477 proven public fork keeps origin identity exemptions =='
+echo '== #1477 public upstream alone does NOT prove origin public =='
 
 sandbox=$(make_sandbox "$SLUG_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
 printf 'See private-org/ops-private#9.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_staged 'staged: origin slug exempt when upstream is known public' "$sandbox" 0 '' ''
-assert_runtime 'runtime: origin slug exempt when upstream is known public' "$sandbox" "$PUBLIC_TARGET" \
-  'See private-org/ops-private#9.' 0
+assert_staged 'staged: private origin slug blocks despite public upstream' \
+  "$sandbox" 2 'File: notes.md' 'private-org/ops-private'
+assert_runtime 'runtime: private origin slug blocks despite public upstream' \
+  "$sandbox" "$PUBLIC_TARGET" 'See private-org/ops-private#9.' 2
 rm -rf "$sandbox"
 
 sandbox=$(make_sandbox "$ORIGIN_OWNER_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
 printf 'Filed against private-org/ops-private directly.\n' > "$sandbox/notes.md"
 git -C "$sandbox" add notes.md
-assert_staged 'staged: origin owner/repo exempt when upstream is known public' "$sandbox" 0 '' ''
-assert_runtime 'runtime: origin owner/repo exempt when upstream is known public' \
-  "$sandbox" "$PUBLIC_TARGET" 'Filed against private-org/ops-private directly.' 0
+assert_staged 'staged: private origin owner/repo blocks despite public upstream' \
+  "$sandbox" 2 'File: notes.md' 'private-org'
+assert_runtime 'runtime: private origin owner/repo blocks despite public upstream' \
+  "$sandbox" "$PUBLIC_TARGET" 'Filed against private-org/ops-private directly.' 2
 rm -rf "$sandbox"
 
 sandbox=$(make_sandbox "$SLUG_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
@@ -166,6 +192,79 @@ assert_staged 'staged: unrelated private slug still blocks under public upstream
   "$sandbox" 2 'File: notes.md' 'shadow-ops'
 assert_runtime 'runtime: unrelated private slug still blocks under public upstream' \
   "$sandbox" "$PUBLIC_TARGET" 'See private-org/shadow-ops#2.' 2
+rm -rf "$sandbox"
+
+echo '== #1477 origin_verified_public exact match is offline proof =='
+
+sandbox=$(make_sandbox "$SLUG_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+install_config_lib "$sandbox"
+write_override "$sandbox" \
+  '{"leak_protection":{"origin_verified_public":"private-org/ops-private"}}'
+printf 'See private-org/ops-private#9.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_staged 'staged: origin slug exempt when verified-public key matches' \
+  "$sandbox" 0 '' ''
+assert_runtime 'runtime: origin slug exempt when verified-public key matches' \
+  "$sandbox" "$PUBLIC_TARGET" 'See private-org/ops-private#9.' 0
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox "$ORIGIN_OWNER_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+install_config_lib "$sandbox"
+write_override "$sandbox" \
+  '{"leak_protection":{"origin_verified_public":"private-org/ops-private"}}'
+printf 'Filed against private-org/ops-private directly.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_staged 'staged: origin owner/repo exempt when verified-public key matches' \
+  "$sandbox" 0 '' ''
+assert_runtime 'runtime: origin owner/repo exempt when verified-public key matches' \
+  "$sandbox" "$PUBLIC_TARGET" 'Filed against private-org/ops-private directly.' 0
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox "$SLUG_REGISTRY" "$PRIVATE_ORIGIN_URL" "$PUBLIC_UPSTREAM_URL")
+install_config_lib "$sandbox"
+write_override "$sandbox" \
+  '{"leak_protection":{"origin_verified_public":"other-org/other-ops"}}'
+printf 'See private-org/ops-private#9.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_staged 'staged: mismatched verified-public key does not exempt origin' \
+  "$sandbox" 2 'File: notes.md' 'private-org/ops-private'
+assert_runtime 'runtime: mismatched verified-public key does not exempt origin' \
+  "$sandbox" "$PUBLIC_TARGET" 'See private-org/ops-private#9.' 2
+rm -rf "$sandbox"
+
+echo '== #1477 A1: real config library + custom public_framework_repos =='
+
+CUSTOM_ORIGIN_URL='https://github.com/acme/public-ops.git'
+CUSTOM_REGISTRY='projects:
+  - name: public-ops
+    repo: acme/public-ops
+    workspace: workspace/public-ops
+  - name: shadow-ops
+    repo: private-org/shadow-ops
+    workspace: workspace/shadow-ops
+'
+sandbox=$(make_sandbox "$CUSTOM_REGISTRY" "$CUSTOM_ORIGIN_URL")
+install_config_lib "$sandbox"
+write_defaults "$sandbox" \
+  '{"leak_protection":{"public_framework_repos":["acme/public-ops"]}}'
+printf 'See acme/public-ops#4.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_staged 'staged: origin exempt via custom public_framework_repos (real config_get)' \
+  "$sandbox" 0 '' ''
+assert_runtime 'runtime: origin exempt via custom public_framework_repos (real config_get)' \
+  "$sandbox" 'acme/public-ops' 'See acme/public-ops#4.' 0
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox "$CUSTOM_REGISTRY" "$CUSTOM_ORIGIN_URL")
+install_config_lib "$sandbox"
+write_defaults "$sandbox" \
+  '{"leak_protection":{"public_framework_repos":["acme/public-ops"]}}'
+printf 'See private-org/shadow-ops#2.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_staged 'staged: custom public list still blocks unrelated private slug' \
+  "$sandbox" 2 'File: notes.md' 'shadow-ops'
+assert_runtime 'runtime: custom public list still blocks unrelated private slug' \
+  "$sandbox" 'acme/public-ops' 'See private-org/shadow-ops#2.' 2
 rm -rf "$sandbox"
 
 echo '== #1477 staged hook blocks private slugs inside URL forms =='
