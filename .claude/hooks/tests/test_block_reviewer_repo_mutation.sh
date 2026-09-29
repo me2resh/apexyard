@@ -203,6 +203,25 @@ else
   exit 1
 fi
 
+# (7) me2resh/apexyard#1408 — the #1400 advisory must not print on every Bash
+# call. A read-only command such as `ls` stays silent even when a legacy shared
+# marker file is still on disk.
+input=$(jq -cn --arg command 'ls' '{tool_input:{command:$command}}')
+output=$(
+  cd "$SESS_TMP" || exit 1
+  export CLAUDE_CODE_SESSION_ID="sess-E"
+  printf '%s' "$input" | "$SESS_TMP/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1
+)
+rc=$?
+if [ "$rc" -eq 0 ] && ! printf '%s' "$output" | grep -q 'ADVISORY:'; then
+  echo "PASS: #1408: legacy shared-path marker + session id + read-only ls -> silent (no advisory spam)"
+else
+  echo "FAIL: #1408: legacy shared-path marker + session id + read-only ls -> silent (rc=$rc output=$output)" >&2
+  trap - EXIT
+  rm -rf "$TMP" "$SESS_TMP"
+  exit 1
+fi
+
 rm -f "$SESS_TMP/.claude/session/active-reviewer"
 
 rm -rf "$SESS_TMP"
