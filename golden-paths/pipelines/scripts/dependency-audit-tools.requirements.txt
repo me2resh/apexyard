@@ -1,0 +1,11 @@
+# Trusted audit tools for golden-paths/pipelines/scripts/dependency-audit.py
+# Install in an isolated environment outside the audited checkout.
+#
+# Version pins only. Hash pins (--require-hashes) are a follow-up tracked in
+# AgDR-0184. Do not treat this file as a hashed lock until that follow-up lands.
+# Adopters may regenerate with:
+#   pip-compile --generate-hashes
+# and then install with: pip install --require-hashes -r ...
+pip-audit==2.10.0
+packaging==25.0
+# cvss==3.6  # LGPLv3+ — enable only after restricted-licence approval

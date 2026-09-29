@@ -1,0 +1,31 @@
+{
+  "description": "Trusted audit-tool pins for dependency-audit.py (AgDR-0176 / issue #1359). Install outside the audited checkout. Prefer pip install --require-hashes -r dependency-audit-tools.requirements.txt when hash lines are present.",
+  "helper_id": "apexyard-dependency-audit",
+  "helper_revision": "2",
+  "hash_pins": "deferred — see AgDR-0184",
+  "packages": [
+    {
+      "name": "pip-audit",
+      "version": "2.10.0",
+      "purpose": "Preferred Python vulnerability scanner with -s osv --no-deps --disable-pip"
+    },
+    {
+      "name": "packaging",
+      "version": "25.0",
+      "purpose": "Requirements, markers, versions, and Python compatibility"
+    },
+    {
+      "name": "cvss",
+      "version": "3.6",
+      "purpose": "CVSS vector parsing",
+      "licence": "LGPL-3.0-or-later",
+      "status": "pending_restricted_licence_approval",
+      "note": "Until approved, dependency-audit.py leaves vector-only severity as Unknown"
+    }
+  ],
+  "install": {
+    "isolated_env": true,
+    "interpreter_flag": "-I",
+    "never_from_checkout": true
+  }
+}
