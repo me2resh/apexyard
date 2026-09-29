@@ -180,10 +180,11 @@ case that function cannot fully verify still requires a fresh
   reviewing real changes.
 - `/approve-merge` makes one additional forge read (the PR's own file
   list) on a behind-base PR before deciding whether the refresh is
-  needed. `rex_approval_carries_over` makes three forge reads (base tip via
-  the branches endpoint, the head commit's parents and tree, and —
-  implicitly, via isolated `merge-base`/`merge-tree` — the two parent
-  objects) plus an isolated empty-GIT_DIR git computation, whenever a
+  needed. `rex_approval_carries_over` makes up to three forge reads (the
+  base tip via the branches endpoint, the head commit's parents and tree,
+  and an on-demand fetch of any parent object that is not already local)
+  plus a local, isolated empty-GIT_DIR `merge-base`/`merge-tree`
+  computation, whenever a
   marker's SHA no longer matches HEAD. This is more forge traffic than the
   round-1 version, traded deliberately for not trusting local git state
   (Hakim A1, extended in #1456 against grafts / merge drivers / tag

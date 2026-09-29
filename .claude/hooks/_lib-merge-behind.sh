@@ -160,10 +160,16 @@ _rex_carry_git_isolated() {
     return 128
   fi
 
-  # Unset GIT_WORK_TREE (do not set it to "") so a caller-set work tree
-  # cannot pull attributes from the real checkout, and so git does not
-  # reject an empty path.
-  env -u GIT_WORK_TREE \
+  # Start from an empty environment (env -i). An inherited GIT_* variable
+  # such as GIT_GRAFT_FILE, GIT_OBJECT_DIRECTORY, GIT_REPLACE_REF_BASE or
+  # GIT_CONFIG_PARAMETERS / GIT_CONFIG_COUNT could otherwise re-introduce
+  # the local state this wrapper exists to exclude (#1456, Hakim MEDIUM-1).
+  # Keep only PATH (to find git), HOME and TMPDIR, then set every GIT_*
+  # variable this call needs explicitly. GIT_WORK_TREE stays unset.
+  env -i \
+    PATH="${PATH:-/usr/bin:/bin}" \
+    HOME="${HOME:-/}" \
+    TMPDIR="${TMPDIR:-/tmp}" \
     GIT_DIR="$empty_git" \
     GIT_ALTERNATE_OBJECT_DIRECTORIES="$objects_dir" \
     GIT_NO_REPLACE_OBJECTS=1 \

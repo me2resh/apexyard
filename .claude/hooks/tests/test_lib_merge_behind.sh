@@ -539,6 +539,44 @@ if command -v git >/dev/null 2>&1; then
   fi
 
   # -------------------------------------------------------------------------
+  # Case D2 (#1456, Hakim MEDIUM-1): the same fake ancestry, delivered through
+  # an inherited GIT_GRAFT_FILE environment variable instead of info/grafts.
+  # The isolated wrapper starts from `env -i`, so the variable must not reach
+  # the isolated git -> false.
+  # Fail-before: with the earlier `env -u GIT_WORK_TREE` wrapper this case
+  # returns true.
+  # -------------------------------------------------------------------------
+  repo=$(make_git_repo)
+  echo base > "$repo/base.txt"; g "$repo" add base.txt; g "$repo" commit -q -m base
+  BASE_ROOT=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q -b pr-branch
+  echo pr > "$repo/pr.txt"; g "$repo" add pr.txt; g "$repo" commit -q -m "pr work"
+  OLD_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q main
+  echo more-main > "$repo/main2.txt"; g "$repo" add main2.txt; g "$repo" commit -q -m "main moves on"
+  MAIN_TIP=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q -b side-branch "$BASE_ROOT"
+  echo side > "$repo/side.txt"; g "$repo" add side.txt; g "$repo" commit -q -m "side, never on main"
+  SIDE_SHA=$(g "$repo" rev-parse HEAD)
+  g "$repo" checkout -q pr-branch
+  g "$repo" merge -q --no-ff side-branch -m "merge side into pr"
+  NEW_SHA=$(g "$repo" rev-parse HEAD)
+  graft_file="$repo/outside-grafts"
+  echo "$MAIN_TIP $BASE_ROOT $SIDE_SHA" > "$graft_file"
+  # Confirm the env graft WOULD poison a non-isolated merge-base.
+  if GIT_GRAFT_FILE="$graft_file" g "$repo" merge-base --is-ancestor "$SIDE_SHA" "$MAIN_TIP" 2>/dev/null; then
+    sb=$(mktemp -d)
+    make_rex_carry_gh_mock "$sb" "$repo"
+    got=$(GIT_GRAFT_FILE="$graft_file" carry_over_in "$repo" "$OLD_SHA" "$NEW_SHA" "main" "$sb/bin")
+    rm -rf "$repo" "$sb"
+    [ "$got" = "false" ] && mark_pass "#1456 inherited GIT_GRAFT_FILE cannot force carry-over -> false" \
+                          || mark_fail "#1456 GIT_GRAFT_FILE isolation" "got '$got' (want false — an inherited graft file must not invent ancestry)"
+  else
+    rm -rf "$repo"
+    mark_fail "#1456 GIT_GRAFT_FILE setup" "the env graft file did not make side an ancestor of main (test setup broken)"
+  fi
+
+  # -------------------------------------------------------------------------
   # Case E (#1456): a local merge driver makes merge-tree reproduce a
   # hand-resolved tree. Pre-#1456 merge-tree ran against the real
   # .git/config and would return true; isolated GIT_DIR has no driver ->
