@@ -250,7 +250,9 @@ EOF
         esac
       done
     fi
-  done < <(_mrt_parse_registry)
+  done <<MRT_REGISTRY
+$(_mrt_parse_registry)
+MRT_REGISTRY
 
   IFS="$IFS_save"
   return 1
@@ -294,7 +296,9 @@ mrt_workspace_for() {
       fi
       return 1
     fi
-  done < <(_mrt_parse_registry)
+  done <<MRT_REGISTRY
+$(_mrt_parse_registry)
+MRT_REGISTRY
 
   return 1
 }
@@ -390,7 +394,9 @@ mrt_offer_clone() {
       echo "git clone https://github.com/$repo $candidate"
       return 0
     fi
-  done < <(_mrt_parse_registry)
+  done <<MRT_REGISTRY
+$(_mrt_parse_registry)
+MRT_REGISTRY
   return 1
 }
 
@@ -416,7 +422,9 @@ mrt_primary_repo_for() {
       echo "$repo"
       return 0
     fi
-  done < <(_mrt_parse_registry)
+  done <<MRT_REGISTRY
+$(_mrt_parse_registry)
+MRT_REGISTRY
   return 1
 }
 
@@ -438,6 +446,8 @@ mrt_repos_for() {
       printf '%s\n' "$all_repos" | tr ',' '\n'
       return 0
     fi
-  done < <(_mrt_parse_registry)
+  done <<MRT_REGISTRY
+$(_mrt_parse_registry)
+MRT_REGISTRY
   return 1
 }

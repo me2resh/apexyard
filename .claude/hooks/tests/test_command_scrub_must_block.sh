@@ -9,7 +9,7 @@ set -u
 
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOKS="${HOOKS_OVERRIDE:-$ROOT/.claude/hooks}"
-SNAP_HOOKS="${SNAP_HOOKS:-/tmp/ay-1459-snap-39c5b95}"
+SNAP_HOOKS="${SNAP_HOOKS:-}"
 CONFIG_DEFAULTS="${CONFIG_DEFAULTS_OVERRIDE:-$ROOT/.claude/project-config.defaults.json}"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -114,32 +114,67 @@ dispatch_has_merge() {
   fi
 }
 
-# Copy commit snapshots from a temporary local repository. Test Git commands
-# run there or in the fixture repositories, never in the source worktree.
-SOURCE_REPO="$TMP/source"
-(cd "$TMP" && git clone -q --no-checkout --no-hardlinks "$ROOT" "$SOURCE_REPO")
-
-# Extract d5e7ce4 hooks into an isolated tree for fail-before proofs.
-D5_HOOKS="$TMP/d5e7ce4-hooks"
-mkdir -p "$TMP/d5root"
-if git -C "$SOURCE_REPO" archive d5e7ce4 .claude/hooks >"$TMP/d5-hooks.tar" 2>/dev/null; then
-  tar -xf "$TMP/d5-hooks.tar" -C "$TMP/d5root"
-  D5_HOOKS="$TMP/d5root/.claude/hooks"
-else
-  echo "WARN: cannot archive d5e7ce4 hooks — skip d5 fail-before proofs" >&2
-  D5_HOOKS=""
+# CI supplies a temporary repository containing the pinned PR snapshots.
+# Clone it into this test's own temporary directory before running git archive.
+# Local runs may omit it and retain visible, non-failing snapshot warnings.
+SOURCE_REPO=""
+if [ -n "${APEXYARD_SNAPSHOT_REPO:-}" ]; then
+  SOURCE_REPO="$TMP/source"
+  if ! git clone -q --no-checkout --no-hardlinks "$APEXYARD_SNAPSHOT_REPO" "$SOURCE_REPO" 2>/dev/null; then
+    SOURCE_REPO=""
+  fi
 fi
 
-# The PR-branch snapshots (39c5b95, d5e7ce4, 1fea730) do not exist after the
-# squash merge to dev. Skip their fail-before proofs when the commit is absent.
-HEAD_HOOKS="$TMP/1fea730-hooks"
-mkdir -p "$HEAD_HOOKS"
-if git -C "$SOURCE_REPO" archive 1fea730 .claude/hooks >"$TMP/1fea730-hooks.tar" 2>/dev/null; then
-  tar -xf "$TMP/1fea730-hooks.tar" -C "$HEAD_HOOKS"
-  HEAD_HOOKS="$HEAD_HOOKS/.claude/hooks"
+missing_snapshot() {
+  if [ "${REQUIRE_SNAPSHOTS:-0}" = "1" ]; then
+    echo "FAIL: required fail-before snapshot $1 is missing" >&2
+    fail=$((fail + 1))
+  else
+    echo "WARN: fail-before snapshot $1 is missing; local proof skipped"
+  fi
+}
+
+archive_snapshot() {
+  local sha="$1" dest="$2"
+  [ -n "$SOURCE_REPO" ] || return 1
+  mkdir -p "$dest"
+  if git -C "$SOURCE_REPO" archive "$sha" .claude/hooks >"$TMP/$sha.tar" 2>/dev/null; then
+    tar -xf "$TMP/$sha.tar" -C "$dest" || return 1
+    [ -f "$dest/.claude/hooks/require-active-ticket.sh" ] || return 1
+    return 0
+  fi
+  return 1
+}
+
+SNAP_ARCHIVE="$TMP/39c5b95"
+D5_ARCHIVE="$TMP/d5e7ce4"
+HEAD_ARCHIVE="$TMP/1fea730"
+if [ "${REQUIRE_SNAPSHOTS:-0}" != "1" ] && [ -n "$SNAP_HOOKS" ] \
+    && [ -f "$SNAP_HOOKS/require-active-ticket.sh" ]; then
+  :
+elif archive_snapshot 39c5b95 "$SNAP_ARCHIVE"; then
+  SNAP_HOOKS="$SNAP_ARCHIVE/.claude/hooks"
 else
-  echo "WARN: cannot archive 1fea730 hooks — skip 1fea730 fail-before proofs" >&2
+  SNAP_HOOKS=""
+  missing_snapshot 39c5b95
+fi
+if archive_snapshot d5e7ce4 "$D5_ARCHIVE"; then
+  D5_HOOKS="$D5_ARCHIVE/.claude/hooks"
+else
+  D5_HOOKS=""
+  missing_snapshot d5e7ce4
+fi
+if archive_snapshot 1fea730 "$HEAD_ARCHIVE"; then
+  HEAD_HOOKS="$HEAD_ARCHIVE/.claude/hooks"
+else
   HEAD_HOOKS=""
+  missing_snapshot 1fea730
+fi
+
+if [ "${SNAPSHOT_PREFLIGHT_ONLY:-0}" = "1" ]; then
+  printf 'Snapshot preflight: %s failed\n' "$fail"
+  [ "$fail" -eq 0 ]
+  exit $?
 fi
 
 # Build cases as a label+command list via a directory of files.
@@ -317,8 +352,6 @@ fail_before_ticket() {
 # Fail-before against 39c5b95 snapshot (expect allow / exit 0 — the bypass).
 if [ -d "$SNAP_HOOKS" ] && [ -f "$SNAP_HOOKS/require-active-ticket.sh" ]; then
   fail_before_ticket "$SNAP_HOOKS" "39c5b95" "$CASES_DIR"
-else
-  echo "WARN: SNAP_HOOKS missing at $SNAP_HOOKS — skip 39c5b95 fail-before proofs" >&2
 fi
 
 # Fail-before against d5e7ce4 for the new allowlist cases.
