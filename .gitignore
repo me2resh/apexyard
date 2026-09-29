@@ -66,8 +66,11 @@ workspace/*
 
 # Backups of framework skills that were overridden by an adopter's
 # private custom skill (link-custom-skills.sh moves the framework version
-# aside as <skill-name>.framework.bak so the symlink can take its place).
+# to .claude/skill-framework-bak/<name>/ so it stays outside Cursor's
+# .claude/skills/ discovery root — AgDR-0187 / #1377). Legacy in-skills
+# *.framework.bak dirs are migrated on the next SessionStart.
 # These are per-machine artefacts; never committed.
+.claude/skill-framework-bak/
 .claude/skills/*.framework.bak/
 
 # Symlinks at .claude/skills/<name>/ created by link-custom-skills.sh

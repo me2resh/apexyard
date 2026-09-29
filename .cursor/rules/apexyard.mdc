@@ -32,6 +32,10 @@ Load-bearing rules before you start:
 - Report status like a colleague (`.claude/rules/reporting-style.md`)
 - Use the controlled technical writing profile for durable artifacts (`.claude/rules/writing-standard.md`)
 
+Open this ops fork directory in Cursor. Do not open a parent folder that
+also contains the portfolio repo. A parent workspace can list the same
+skill twice. Cursor's skill root here is `.claude/skills/` (AgDR-0187).
+
 Regenerate this overlay after any change to
 `.claude/hooks/cursor-session-pin.sh`: `bin/sync-cursor-adapter.sh`.
 Drift check: `bin/sync-cursor-adapter.sh --check`.

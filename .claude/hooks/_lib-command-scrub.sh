@@ -1,12 +1,12 @@
 #!/bin/bash
 # _lib-command-scrub.sh — separate shell operators from literal command data.
 #
-# Scope (AgDR-0181): only two consumers may use the scrubbed view —
+# Scope (AgDR-0181, AgDR-0192): only these consumers may use the scrubbed view —
 #   (a) the write detector (_lib-detect-bash-write.sh) for redirect presence
 #       and target questions asked by the ticket and migration gates
 #   (b) auto-code-review.sh PostToolUse trigger matching
-# Routing, merge detection, and every other command matcher read the raw
-# command.
+#   (c) block-ambient-tracker-repo.sh for tracker-command matching
+# Routing, merge detection, and other command matchers read the raw command.
 #
 # Scrub only when every command word is on the data-only allowlist and the
 # raw text has no executing $( / backtick / <( / >( / <<< outside single
@@ -195,7 +195,13 @@ _command_scrub_allowlist_ok() {
         ntok++
         if (ntok == 1) {
           if (tok == "api") return 1
-          if (tok == "pr" || tok == "issue") { subcmd = tok; continue }
+          if (tok == "pr" || tok == "issue") {
+            # The syntax view blanks quoted words. Keep raw so a quoted
+            # tracker subcommand cannot disappear from the tracker gate.
+            if (WORD ~ /["\047\\]/) return 0
+            subcmd = tok
+            continue
+          }
           return 0
         }
         if (ntok == 2) {
@@ -287,6 +293,7 @@ _command_scrub_allowlist_ok() {
           # A leading assignment can name a program (GIT_PAGER, EDITOR). Return raw.
           if (is_assign(WORD)) { ok = 0; break }
           if (is_reserved(w)) { cmd_start = 1; continue }
+          if (w == "gh" && WORD ~ /["\047\\]/) { ok = 0; break }
           if (!is_allow_simple(w)) { ok = 0; break }
           if (!check_git_or_gh(w)) { ok = 0; break }
           cmd_start = 0
@@ -374,6 +381,8 @@ _command_scrub_allowlist_ok() {
             cmd_start = 1
             continue
           }
+          # The tracker gate must see gh when its command word is quoted.
+          if (w == "gh" && WORD ~ /["\047\\]/) { ok = 0; break }
           if (!is_allow_simple(w)) { ok = 0; break }
           if (!check_git_or_gh(w)) { ok = 0; break }
           cmd_start = 0

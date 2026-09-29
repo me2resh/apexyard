@@ -60,8 +60,7 @@ check 'unsupported delimiter falls back' write \
 check 'adjacent redirects yield both targets' '/tmp/x,src/app.ts' \
   "$(bash_extract_write_targets 'echo x >/tmp/x>src/app.ts' | paste -sd, -)"
 
-# A quoted tracker mention and a heredoc body fire the ambient-repo gate
-# again because that matcher reads the raw command (AgDR-0181).
+# The ambient-repo gate reads the allowlisted scrubbed view (AgDR-0192).
 mkdir -p "$TMP/.claude/session"
 : > "$TMP/onboarding.yaml"
 : > "$TMP/apexyard.projects.yaml"
@@ -76,9 +75,9 @@ tracker_result() {
   rc=$?
   printf '%s' "$rc"
 }
-check 'quoted tracker text' 2 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
-check 'double-quoted tracker text' 2 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
-check 'heredoc tracker text' 2 "$(tracker_result "$heredoc_cmd")"
+check 'quoted tracker text' 0 "$(tracker_result "printf '%s' 'gh pr create --title x'")"
+check 'double-quoted tracker text' 0 "$(tracker_result 'printf "%s" "gh pr create --title x"')"
+check 'heredoc tracker text' 0 "$(tracker_result "$heredoc_cmd")"
 check 'real tracker command' 2 "$(tracker_result 'gh pr create --title x')"
 check 'malformed quote falls back for tracker' 2 \
   "$(tracker_result "printf 'gh pr create --title x")"

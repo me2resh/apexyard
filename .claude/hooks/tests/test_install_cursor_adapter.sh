@@ -10,8 +10,12 @@ SCRIPT="$ROOT/bin/install-cursor-adapter.sh"
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 
+# Cursor agent environments may block creating `.cursor/` paths under
+# $TMPDIR. Count that as a visible SKIP (exit 0). Exit non-zero only on
+# real assertion failures. Do not assert sandbox behaviour.
 PASS=0
 FAIL=0
+SKIP=0
 FAILED=""
 
 mark_pass() { green "  ok   $1"; PASS=$((PASS+1)); }
@@ -20,6 +24,7 @@ mark_fail() {
   FAIL=$((FAIL+1))
   FAILED="$FAILED $1"
 }
+mark_skip() { echo "SKIP: $1"; SKIP=$((SKIP+1)); }
 
 assert_file() {
   local path="$1" label="$2"
@@ -30,6 +35,22 @@ unset CLAUDE_CODE_SESSION_ID
 
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/install-cursor-adapter-test.XXXXXX")
 trap 'rm -rf "$TMPROOT"' EXIT
+
+if ! mkdir -p "$TMPROOT/.cursor/rules" 2>/dev/null; then
+  mark_skip "mkdir .cursor blocked in this environment (write path not exercised)"
+  echo
+  echo "===== test_install_cursor_adapter.sh ====="
+  echo "Passed: $PASS"
+  echo "Failed: $FAIL"
+  echo "Skipped: $SKIP"
+  if [ "$FAIL" -gt 0 ]; then
+    echo "Failed cases:$FAILED"
+    exit 1
+  fi
+  exit 0
+fi
+rmdir "$TMPROOT/.cursor/rules" 2>/dev/null || true
+rmdir "$TMPROOT/.cursor" 2>/dev/null || true
 
 mkdir -p "$TMPROOT/.claude/hooks" "$TMPROOT/bin"
 touch "$TMPROOT/.apexyard-fork"
@@ -137,6 +158,7 @@ echo
 echo "===== test_install_cursor_adapter.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
+echo "Skipped: $SKIP"
 if [ "$FAIL" -gt 0 ]; then
   echo "Failed cases:$FAILED"
   exit 1
