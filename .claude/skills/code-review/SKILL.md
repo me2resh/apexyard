@@ -120,6 +120,65 @@ refusal message — but the cheap fix is upstream of both: don't pass a path.
 6. On JS/TS diffs, run the Fallow static-analysis pass (§ 9 of the agent) — changed-scope, fail-soft, advisory; render a `### Fallow Findings` table + dry-run fix preview
 7. Submit the review through the tracker-agnostic `tracker_review_submit` (gh PR / glab MR / custom host — #758), not a hardcoded `gh pr review`, then clear the active-reviewer marker from step 0
 
+### 8. Offer pre-merge QA after APPROVED
+
+Run this step only after Rex posts an APPROVED verdict and the active-reviewer marker is clear.
+Do not offer QA after CHANGES REQUESTED or COMMENT.
+
+Resolve the ops root again. Shell variables from step 0 do not persist across Bash calls.
+Read the setting through the shared config reader:
+
+```bash
+ops_root=$(git rev-parse --show-toplevel)
+r="$ops_root"
+while [ -n "$r" ] && [ "$r" != "/" ]; do
+  [ -f "$r/.apexyard-fork" ] && { ops_root="$r"; break; }
+  [ -f "$r/onboarding.yaml" ] && [ -f "$r/apexyard.projects.yaml" ] && { ops_root="$r"; break; }
+  r=$(dirname "$r")
+done
+source "$ops_root/.claude/hooks/_lib-read-config.sh"
+qa_offer=$(config_get_or '.qa.pre_merge_offer' 'ask')
+case "$qa_offer" in
+  ask|always|never) ;;
+  *) qa_offer=ask ;;
+esac
+```
+
+- `ask`: Ask: "Rex approved PR #<pr>. Run QA (Salim) against the acceptance criteria before merge? (yes / no)" Replace `<pr>` with the actual PR number.
+  On `yes`, run Salim now. On `no`, leave QA for the existing post-merge `qa` label trigger.
+  If there is no answer, finish the review with the offer pending. Do not infer consent from silence.
+- `always`: Run Salim now without asking.
+- `never`: Skip this offer. Keep the existing post-merge QA flow.
+
+For `yes` or `always`, fetch the PR HEAD SHA from the forge.
+Run Salim against the PR branch at the recorded HEAD SHA.
+Use a scratch checkout or a test deployment built from that SHA.
+Give Salim the linked ticket and comments.
+Salim must verify each acceptance criterion and return evidence for every result.
+If the ticket has no acceptance criteria, report INCOMPLETE.
+If the PR HEAD changes during QA, discard the result and run Rex again before another QA attempt.
+
+Post Salim's result on the PR with `tracker_review_submit <owner/repo> <pr> comment <body_file>`.
+Use the `comment` verdict, never `approve`.
+Include the full PR HEAD SHA, environment, criterion results, and evidence.
+Start the body with `## Pre-merge QA (Salim)` so the post-merge role can identify it.
+For a complete PASS, include this line in the posted body. Replace the SHA placeholder with the full SHA:
+
+```text
+<!-- apexyard-pre-merge-qa: sha=<full-commit-sha> status=PASS -->
+```
+
+Use `status=FAIL` or `status=INCOMPLETE` for failed or unverified criteria.
+Never mark such a report PASS.
+If posting fails, report the failure and do not claim a reusable QA result.
+Stop before requesting human merge approval when any criterion fails or cannot be verified.
+Give the author the findings and let them revise the PR.
+A new commit needs a new Rex verdict and QA run.
+
+This offer is advisory. Never write or relax a merge marker, and never merge from this step.
+Only the human-invoked `/approve-merge` records merge approval and merges.
+A QA PASS does not grant approval. A QA failure stops this review flow but creates no mechanical merge gate.
+
 ## Review Checklist
 
 ### Acceptance Criteria — BLOCKING

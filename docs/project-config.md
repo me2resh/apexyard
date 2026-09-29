@@ -96,6 +96,10 @@ tracks closing this gap for those seven keys.
 
   "pr": {
     "title_type_whitelist": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"]
+  },
+
+  "qa": {
+    "pre_merge_offer": "ask"
   }
 }
 ```
@@ -109,8 +113,24 @@ tracks closing this gap for those seven keys.
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
+| `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
+
+### Pre-merge QA offer
+
+Set `qa.pre_merge_offer` in `.claude/project-config.json` to one of these values:
+
+| Value | After Rex approves |
+| --- | --- |
+| `ask` | Ask whether Salim should verify the PR before merge. This is the default. |
+| `always` | Run Salim on the PR branch before requesting merge approval. |
+| `never` | Skip the offer. Run QA after merge through the existing `qa` label. |
+
+With `ask`, a `no` answer keeps the existing post-merge QA flow. An invalid value falls back to `ask`.
+The offer does not grant merge approval or create a merge gate. Only the human-invoked `/approve-merge` records approval and merges.
+Salim posts a SHA-stamped result on the PR. Post-merge QA reuses a complete PASS only when the merged commit has that exact SHA.
+Squash and merge commits normally have a different SHA, so Salim runs QA again in those cases.
 
 ## Extending the defaults
 
