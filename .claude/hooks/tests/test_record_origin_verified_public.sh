@@ -110,5 +110,41 @@ else
 fi
 rm -rf "$sandbox"
 
+# An origin made private after an earlier PUBLIC proof loses the key.
+sandbox=$(make_repo)
+install_stub_gh "$sandbox" PRIVATE
+mkdir -p "$sandbox/.claude"
+printf '%s\n' '{"tracker":{"kind":"gh"},"leak_protection":{"origin_verified_public":"acme/public-ops","skip_marker":"<!-- x -->"}}' \
+  > "$sandbox/.claude/project-config.json"
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
+rc=$?
+key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
+marker=$(jq -r '.leak_protection.skip_marker' "$sandbox/.claude/project-config.json")
+kind=$(jq -r '.tracker.kind' "$sandbox/.claude/project-config.json")
+if [ "$rc" -eq 1 ] && [ "$key" = "absent" ] && [ "$marker" = "<!-- x -->" ] && [ "$kind" = "gh" ] \
+  && printf '%s' "$out" | grep -qF 'Removed the earlier'; then
+  pass 'removes an earlier key when gh now reports PRIVATE'
+else
+  fail 'removes an earlier key when gh now reports PRIVATE' "rc=$rc key=$key marker=$marker kind=$kind out=$out"
+fi
+rm -rf "$sandbox"
+
+# A failed check keeps an earlier matching key (no evidence it changed).
+sandbox=$(make_repo)
+install_stub_gh "$sandbox" PUBLIC fail
+mkdir -p "$sandbox/.claude"
+printf '%s\n' '{"leak_protection":{"origin_verified_public":"acme/public-ops"}}' \
+  > "$sandbox/.claude/project-config.json"
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
+rc=$?
+key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
+if [ "$rc" -eq 1 ] && [ "$key" = "acme/public-ops" ] \
+  && printf '%s' "$out" | grep -qF 'earlier proof for acme/public-ops stays'; then
+  pass 'keeps an earlier matching key when gh repo view fails'
+else
+  fail 'keeps an earlier matching key when gh repo view fails' "rc=$rc key=$key out=$out"
+fi
+rm -rf "$sandbox"
+
 printf 'Passed: %s  Failed: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

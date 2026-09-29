@@ -977,8 +977,9 @@ bash bin/record-origin-verified-public.sh
 
 The helper reads the origin slug, runs
 `gh repo view <slug> --json visibility,isFork`, and writes the key only when
-visibility is `PUBLIC`. If the repo is private or the check fails, it writes
-nothing and prints that the origin exemption is off and why. Show that output
+visibility is `PUBLIC`. If GitHub reports the repo is not `PUBLIC`, it removes
+an earlier key, because that proof is now wrong. If the check itself fails, it
+keeps an earlier matching key and writes no new one. It prints why in each case. Show that output
 to the operator. Do not stage the config file (#1031). Skip this step on
 `--dry-run`.
 
@@ -1046,7 +1047,7 @@ Skill done. No remote state changed.
 | Tracking issue for the sync doesn't exist | Offer to create one via `gh issue create`, get number, continue |
 | `jq` not installed (deprecated-config detection) | Skip step 8 silently; print one-line warning. The sync itself still completes. |
 | `.claude/project-config.json` missing (no override) | Skip step 8 silently — by definition no deprecated keys to surface. Step 8e may still create the file when origin is PUBLIC. |
-| Origin is private during step 8e | Helper writes nothing, prints that origin exemption is off. Sync still succeeds. |
+| Origin is private during step 8e | Helper removes any earlier key, prints that origin exemption is off. Sync still succeeds. |
 | Operator answered `s` (show) | Print key + value, then re-prompt y/n (no `s` recursion). |
 | `--from-dev` passed but `upstream/dev` doesn't exist on the configured remote | Print: `upstream/dev not found — the configured upstream may not have a dev branch. Verify with: git ls-remote upstream dev`. Exit 1; no banner-suppression, no fallback to main. |
 | `--from-dev` combined with `--dry-run` | Banner prints first, then preview against `upstream/dev`, then exit 0. Same no-state-change semantics as plain `--dry-run`. |

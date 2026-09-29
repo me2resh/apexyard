@@ -35,7 +35,7 @@ Proof is any one of these:
 
 The key name is `leak_protection.origin_verified_public`. It stores one `owner/repo` string. Hooks compare it to the current origin slug with exact equality. A stale value that no longer matches origin grants no exemption.
 
-`/setup` and `/update` record the key through `bin/record-origin-verified-public.sh`. That helper reads the origin slug, runs `gh repo view <slug> --json visibility,isFork`, and writes the key only when visibility is `PUBLIC`. If the repo is private, or the check fails, it writes nothing and tells the operator the origin exemption is off and why.
+`/setup` and `/update` record the key through `bin/record-origin-verified-public.sh`. That helper reads the origin slug, runs `gh repo view <slug> --json visibility,isFork`, and writes the key only when visibility is `PUBLIC`. If GitHub reports that the repo is not `PUBLIC`, the helper removes an earlier key, because that proof is now wrong. This covers a repo that was made private after `/setup`. If the check itself fails, the helper keeps an earlier matching key and writes no new one, because a failed check is no evidence of change. It tells the operator the result and why.
 
 The known-public list does not auto-append the upstream remote for origin proof. Upstream citation exemptions for tracker *targets* still apply. They do not prove origin is public.
 

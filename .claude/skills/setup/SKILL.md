@@ -722,7 +722,8 @@ The helper:
 1. Parses the `origin` remote into an `owner/repo` slug.
 2. Runs `gh repo view <slug> --json visibility,isFork`.
 3. Writes `leak_protection.origin_verified_public` only when visibility is `PUBLIC`.
-4. Writes nothing when the repo is private or the check fails, and prints why the origin exemption is off.
+4. Removes an earlier key when GitHub reports the repo is not `PUBLIC`, for example after the repo was made private. Prints why the origin exemption is off.
+5. Keeps an earlier matching key when the check itself fails (no `gh`, no network, no auth), and says so. Writes no new key in that case.
 
 Show the helper's stdout to the operator. Do not invent a key by hand. Do not stage `.claude/project-config.json` (gitignored; see #1031). A private ops origin is expected and fine; the exemption simply stays off.
 
