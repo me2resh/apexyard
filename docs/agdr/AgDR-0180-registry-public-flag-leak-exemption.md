@@ -244,6 +244,64 @@ hook specifically).
     `IT6-multi-key-map-item-does-not-close-list`) each fail against the
     pre-fix library and pass against the fixed one, confirmed directly
     before landing the fix, not assumed.
+- **Round 11 correction (me2resh/apexyard#1458 PR #1462, Rex B1 +
+  Hakim HIGH-1).** Two independent reviews of round 10's PR each found
+  one of its six fixes fail-open. Both are corrected here; the other
+  four (items 1, 5, 6) and the item-3/item-7 dispositions stand
+  unchanged.
+  - **Item 2, DROPPED (Hakim HIGH-1, blocking).** Round 10's GARBAGE
+    classification exempted a nested `- name:` line whenever it sat
+    deeper than the FIRST project entry's own dash column, on the
+    reasoning that a genuinely nested sub-item always sits deeper than
+    its enclosing entry. That reasoning fails for valid YAML the column
+    test cannot tell apart from a real entry: Hakim found three shapes —
+    **GA1** (a `- group:` entry holding a nested `projects:` list with a
+    real project entry inside it), **GA2** (`projects:` written as a map
+    of lists, with `archived:` indented MORE deeply than `active:`, so
+    the uneven indentation makes a real, later entry look nested inside
+    an earlier one), and **GA5** (an entry that is itself a sequence — a
+    bare `-` opening a nested list, with the real project entry as the
+    nested `- name:` inside it) — where a REAL, registered private
+    project name went from blocked (dev) to silently passed (round 10).
+    Closing this properly needs a real YAML parser that can tell a
+    project-entry map from an arbitrary nested list or map-of-lists
+    layout; a column comparison over raw text cannot. Given the
+    ticket's own instruction to keep every change small and targeted,
+    and that item 2 was only ever a usability fix (a nested `- name:`
+    over-blocks; it does not leak), the GARBAGE mechanism is removed
+    outright rather than patched a third time. dev's own `- name:`
+    capture is unconditionally private again, matching its behavior
+    before this whole ticket. **This is now recorded, alongside item 7,
+    as an accepted out-of-scope over-block**: a nested `- name:` common
+    word (e.g. a deploy environment named `prod`) still blocks every
+    commit and tracker write that mentions it. GA1/GA2/GA5 are now
+    regression tests (staged + public-tracker) asserting these three
+    shapes still block, confirmed to fail against the round-10 library
+    and pass against the one with GARBAGE removed.
+  - **Item 4, CORRECTED (Rex B1, blocking).** Round 10's `BEGIN {}` fix
+    closed the leak gap (the runtime hook now actually reads a
+    block-style `repos:` list) but opened a new over-block: the only
+    remaining close condition for `in_repos` was a line starting at
+    column 0, and every line inside an indented `projects:` block has
+    leading whitespace, so the list never closed at a sibling key. A
+    `roles:` or `tags:` list after a `repos:` block — in that entry or
+    any later one — had every dash item wrongly read as a private repo.
+    The shipped `apexyard.projects.yaml.example` reproduces this
+    directly: a public-tracker write mentioning `tech-lead` or
+    `backend-engineer` started blocking. Fixed the same way item 6
+    fixes the standard extraction: record the COLUMN of the `repos` key
+    TEXT (not the dash) when the list opens, and close `in_repos` on any
+    `key:`-shaped line at or left of that column — plus unconditionally
+    in the `- name:`, `repo:`, and `workspace:` rules, since any of
+    those can be the very next line after a `repos:` block ends. The
+    differential test's frozen runtime reference moved forward again to
+    match. A new fixture, `B1-roles-after-repos`, and a direct
+    hook-level test against the shipped example file are both confirmed
+    to fail against the round-10 library and pass against the fix — the
+    differential test's ordinary superset check cannot catch an
+    over-block (extra tokens still pass "dev's tokens are all present"),
+    so a dedicated negative assertion (no role/tag word in the runtime
+    output) was added alongside it.
 
 ## Artifacts
 

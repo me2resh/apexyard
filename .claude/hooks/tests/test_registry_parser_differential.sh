@@ -142,6 +142,17 @@ dev_extract_standard() {
 # initialises it once; this reference matches. Item 5's `- repos:`
 # companion rule is included too, for the same reason as the standard
 # extraction above.
+#
+# apexyard#1458 round 11 (Rex B1) moves this reference forward again:
+# the item-4 fix alone over-blocked, because `in_repos` closed only on a
+# column-0 line, and every line inside an indented `projects:` block is
+# indented. A `roles:`/`tags:` list after a `repos:` block had every
+# dash item wrongly read as a private repo. `_lib-registry-parser.sh`
+# now records the `repos:` key TEXT column and closes on any
+# `key:`-shaped line at or left of it (plus unconditionally in the
+# `- name:`, `repo:`, and `workspace:` rules); this reference matches,
+# so a fixture exercising that shape does not falsely demand the
+# over-blocked tokens back.
 dev_extract_runtime() {
   awk '
     function unquote(value) { gsub(/^["\x27]|["\x27]$/, "", value); return value }
@@ -155,9 +166,10 @@ dev_extract_runtime() {
         if (item != "") print "REPO=" item
       }
     }
-    BEGIN { in_repos = 0 }
-    /^[[:space:]]*- name:/ { print "NAME=" unquote($3); next }
-    /^[[:space:]]*repo:/ { print "REPO=" unquote($2); next }
+    BEGIN { in_repos = 0; repos_col = -1 }
+    /^[[:space:]]*- name:/ { in_repos = 0; print "NAME=" unquote($3); next }
+    /^[[:space:]]*repo:/ { in_repos = 0; print "REPO=" unquote($2); next }
+    /^[[:space:]]*workspace:/ { in_repos = 0; print "WORKSPACE=" unquote($2); next }
     /^[[:space:]]*repos:[[:space:]]*\[/ {
       value = $0
       sub(/^[^:]*:[[:space:]]*/, "", value)
@@ -165,8 +177,23 @@ dev_extract_runtime() {
       in_repos = 0
       next
     }
-    /^[[:space:]]*repos:[[:space:]]*$/ { in_repos = 1; next }
-    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*$/ { in_repos = 1; next }
+    /^[[:space:]]*repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*/); repos_col = RLENGTH
+      next
+    }
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*$/ {
+      in_repos = 1
+      match($0, /^[[:space:]]*-[[:space:]]+/); repos_col = RLENGTH
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      if (in_repos) {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH <= repos_col) in_repos = 0
+      }
+      next
+    }
     in_repos && /^[[:space:]]*-[[:space:]]+/ {
       value = $0
       sub(/^[[:space:]]*-[[:space:]]*/, "", value)
@@ -174,7 +201,6 @@ dev_extract_runtime() {
       next
     }
     /^[^[:space:]-]/ { in_repos = 0 }
-    /^[[:space:]]*workspace:/ { print "WORKSPACE=" unquote($2); next }
   ' "$1"
 }
 
@@ -463,6 +489,27 @@ run_fixture "IT5-repos-first-entry-own-items-not-lost" 'projects:
     workspace: workspace/it5
 '
 
+# apexyard#1458 round 11 (Rex B1) — the runtime-style companion to item
+# 4: a roles:/tags: block-list AFTER a repos: block, in the runtime
+# style, must not have its own dash items read as private repos. The
+# assert_superset call below only proves the real repo/name are still
+# found (dev'\''s own floor); the negative check further down proves the
+# role/tag words are NOT invented as extra tokens, which a superset
+# check alone cannot catch.
+run_fixture "B1-roles-after-repos" 'projects:
+  - name: aa-app-b1
+    repos:
+      - acme-org/aa-one-b1
+    roles:
+      - tech-lead
+      - sre
+    tags:
+      - internal
+  - name: bb-app-b1
+    tags:
+      - customer-facing
+'
+
 run_fixture "T1-tab-in-indentation" 'projects:
 	- name: uu-tab
 	  repo: acme-org/uu-tab-repo
@@ -551,6 +598,23 @@ if [ -n "$b8_bad_found" ]; then
   fail "B8: the new parser does not invent a bare # or key-shaped value" "found in:$b8_bad_found"
 else
   pass "B8: the new parser does not invent a bare # or key-shaped value"
+fi
+
+echo
+echo "== Differential: the B1 runtime style never invents a role/tag word REPO token"
+# apexyard#1458 round 11 (Rex B1) — assert_superset only checks that
+# dev's own tokens are still found; it cannot catch EXTRA tokens the
+# parser wrongly invents, which is exactly what B1 was: a roles:/tags:
+# list after a repos: block, in the runtime style, had every dash item
+# wrongly read as REPO=. This checks the runtime-style output directly
+# for the specific role/tag words the fixture carries.
+b1_file="$WORKDIR/B1-roles-after-repos.yaml"
+b1_values=$(registry_parse_entries "$b1_file" runtime 2>/dev/null \
+  | grep -E '^(NAME|REPO|WORKSPACE)=' | sed -E 's/^(NAME|REPO|WORKSPACE)=//' | sort -u)
+if printf '%s\n' "$b1_values" | grep -qxE -- 'tech-lead|sre|internal|customer-facing'; then
+  fail "B1: the runtime style does not invent a role/tag word as a token" "$b1_values"
+else
+  pass "B1: the runtime style does not invent a role/tag word as a token"
 fi
 
 echo

@@ -614,22 +614,54 @@ run_case "IT1: the real slug (acme-org/it1-target) still blocks" \
   2 "project repo: acme-org/it1-target" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/it1-target as well'"
 
-# Item 2 — dev's "- name:" rule has no nesting awareness: it fires on any
-# line shaped "- name: X" anywhere in a private entry, including one
-# nested inside a totally unrelated sub-list. A common word (here "prod")
-# became a private token, blocking it everywhere.
-write_registry 'projects:
-  - name: ff-priv-it2
-    deploy:
-      - name: prod
-'
-run_case "IT2: a nested name: key under an unrelated sub-list does not block the common word" \
-  0 "" \
-  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Deploying to prod tonight'"
+# Item 2 — DROPPED (round 11, Hakim HIGH-1). The GARBAGE classification
+# round 10 added here (exempting a nested "- name:" line whenever it sat
+# deeper than the entry's own dash column) could not tell a genuinely
+# nested sub-item from a real project entry that legitimately sits
+# deeper than the FIRST entry's column. GA1/GA2/GA5 below are the three
+# valid YAML shapes Hakim found where that column test wrongly exempted
+# a REAL private project name. dev over-blocks a nested "- name:" (item
+# 2's original report); that stays an accepted usability gap, not a
+# leak — see AgDR-0180. These three cases must still BLOCK.
 
-run_case "IT2: the entry own real name still blocks" \
-  2 "project name: ff-priv-it2" \
-  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during ff-priv-it2 rebuild'"
+# GA1 — grouped projects: a "- group:" entry (not "- name:") holding a
+# nested "projects:" list with a real project entry inside it.
+write_registry 'projects:
+  - group: team-a
+    projects:
+      - name: priv-ga1
+        repo: acme-org/priv-ga1-repo
+        workspace: workspace/priv-ga1
+'
+run_case "GA1: a real project name nested under a - group: entry still blocks" \
+  2 "project name: priv-ga1" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga1 today'"
+
+# GA2 — projects: as a map of lists, with "archived:" indented MORE
+# deeply than "active:". The uneven indentation makes the deeper entry
+# look nested inside the shallower one to a column-only reader.
+write_registry 'projects:
+  active:
+    - name: priv-ga2a
+      repo: acme-org/priv-ga2a-repo
+  archived:
+      - name: priv-ga2b
+        repo: acme-org/priv-ga2b-repo
+'
+run_case "GA2: a real project name in an unevenly-indented archived: list still blocks" \
+  2 "project name: priv-ga2b" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga2b today'"
+
+# GA5 — an entry that is itself a sequence: a bare "-" opens a nested
+# list, and the real project entry is the nested "- name:" inside it.
+write_registry 'projects:
+  -
+    - name: priv-ga5
+      repo: acme-org/priv-ga5-repo
+'
+run_case "GA5: a real project name nested under a bare - sequence entry still blocks" \
+  2 "project name: priv-ga5" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'See priv-ga5 today'"
 
 # Item 3 — re-verified against the current (post-#1457 round 9) library:
 # a public entry's own slug, written as a one-key "- repo:" map item
