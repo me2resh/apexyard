@@ -192,11 +192,64 @@ hook specifically).
   longer turns `#` and the comment's own words into private tokens (B8);
   `registry_parse_entries` also now checks the CR-strip's own exit status
   instead of assuming success.
+- **Round 10 correction (me2resh/apexyard#1458).** A follow-up ticket
+  closed the over-blocking and inherited gaps round 9 accepted or left
+  unexamined. Six targeted fixes, none a rewrite of either dev
+  extraction:
+  - **Item 1 (over-blocking).** A comment-only `repos:` block-list item
+    (`- # note`) has no whitespace before its `#` for `split_words()`'s
+    comment strip to anchor on, so it split into `#` and `note` as their
+    own private words. `#` then blocked every Markdown heading. Fixed by
+    anchoring the strip on line-start too.
+  - **Item 2 (over-blocking).** Dev's `- name:` rule has no nesting
+    awareness — it fires on `- name: X` anywhere in a private entry,
+    including nested inside an unrelated sub-list, turning a common word
+    into a private token. `_registry_public_pass` now flags every such
+    nested line as garbage, unconditionally, and `_registry_correlate`
+    exempts dev's capture on that exact line only — a value that is also
+    a genuine entry's name elsewhere still blocks.
+  - **Item 3.** Re-verified, not reproducible against the current
+    library. It described the hand-written "greedy" private scan from PR
+    #1457 rounds 4-6, which round 7 deleted outright. Hakim's original
+    LOW finding predates that deletion. Regression tests only, no code
+    change.
+  - **Item 4 (gap).** `_registry_dev_extract_runtime`'s `in_repos = 0`
+    sat as a bare top-level AWK pattern, re-running (and resetting the
+    flag) on every line instead of once. The runtime hook never scrubbed
+    a block-style `repos:` list item. Moved into `BEGIN {}`.
+  - **Item 5 (gap).** An entry whose own first field is `repos:`
+    (`- repos:`) never matched either `repos:` detector, in either
+    extraction — the list-opening dash sits between the leading
+    whitespace and the literal text they anchor on. Every item of that
+    entry's own list was lost. Fixed by adding one more rule per
+    extraction, anchored on the dash.
+  - **Item 6 (gap, standard extraction only).** A `repos:` block-list
+    item written as a multi-key map (`- primary: x` / `mirror: true`)
+    ended the list one line early: the generic "any `key:`-shaped line
+    closes the list" rule fired on the map item's own continuation line.
+    Fixed by recording the `repos:` key's indentation and only closing
+    the list on a line at or shallower than it.
+  - **Item 7, out of scope.** Flow-style YAML (`projects: [{...}]`,
+    `- {name: ...}`) and a value-level anchor stay unfixed, as named in
+    the originating ticket. Fixing either needs a YAML-aware parser, not
+    a targeted awk change, and no fixture in this file's history has
+    exercised either shape as a real registry format.
+  - All six fixes are additive to what dev finds — more tokens captured,
+    or exemption granted only on the exact line a structural proof
+    covers — never fewer. `.claude/hooks/tests/test_registry_parser_differential.sh`
+    moved its frozen dev-extraction reference forward to match items 4-6
+    (the ticket's own instruction), still asserting the new parser never
+    finds fewer tokens than that reference. Two new fixtures
+    (`IT5-repos-first-entry-own-items-not-lost`,
+    `IT6-multi-key-map-item-does-not-close-list`) each fail against the
+    pre-fix library and pass against the fixed one, confirmed directly
+    before landing the fix, not assumed.
 
 ## Artifacts
 
 - me2resh/apexyard#1455 (originating issue)
 - me2resh/apexyard#1457 (PR)
+- me2resh/apexyard#1458 (round 10 follow-up issue)
 - `.claude/hooks/_lib-registry-parser.sh` (new)
 - `.claude/hooks/check-private-refs-staged.sh`
 - `.claude/hooks/check-private-refs-runtime.sh`

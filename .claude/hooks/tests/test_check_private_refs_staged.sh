@@ -1376,6 +1376,81 @@ assert_hook "B8: the real slug (acme-org/dd-one) still blocks" "$sandbox" 2 "Fil
 rm -rf "$sandbox"
 
 echo
+echo "== apexyard#1458 items 1-3: follow-up to #1457"
+#
+# Each is verified to fail against the PRE-fix library before the
+# corresponding fix landed (see the differential-test probes and the PR
+# description). All names/slugs SYNTHETIC.
+
+# Item 1 — a comment-only repos: block-list item ("- # note") is one dev
+# token whose value IS the comment, with no whitespace before the "#" for
+# the old split_words() strip to anchor on. It split into "#" and "note"
+# as their own standalone tokens; "#" then blocked every Markdown
+# heading.
+IT1_YAML='projects:
+  - name: ee-priv-it1
+    repos:
+      - acme-org/it1-target
+      - # note
+'
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf '# Release notes\n\nSee the changelog.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: a Markdown heading (# ...) is not blocked by a comment-only repos: item" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Please note the deadline.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: the comment word (note) is not blocked" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$IT1_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Reproduces in acme-org/it1-target as well.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT1: the real slug (acme-org/it1-target) still blocks" "$sandbox" 2 "File: notes.md" "it1-target"
+rm -rf "$sandbox"
+
+# Item 2 — dev's "- name:" rule has no nesting awareness: it fires on any
+# line shaped "- name: X" anywhere in a private entry, including one
+# nested inside a totally unrelated sub-list. A common word (here "prod")
+# became a private token, blocking it everywhere.
+IT2_YAML='projects:
+  - name: ff-priv-it2
+    deploy:
+      - name: prod
+'
+sandbox=$(make_sandbox_with_remotes "$IT2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Deploying to prod tonight.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT2: a nested name: key under an unrelated sub-list does not block the common word" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+sandbox=$(make_sandbox_with_remotes "$IT2_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'Private reference: ff-priv-it2\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT2: the entry own real name still blocks" "$sandbox" 2 "File: notes.md" "ff-priv-it2"
+rm -rf "$sandbox"
+
+# Item 3 — re-verified against the current (post-#1457 round 9) library:
+# a public entry's own slug, written as a one-key "- repo:" map item
+# inside its own repos: list, is correctly exempted already (the greedy
+# private scan this was originally reported against, PR #1457 rounds
+# 4-6, was deleted outright in round 7). Regression coverage only, no
+# code change for this item.
+IT3_YAML='projects:
+  - name: gg-pub-it3
+    public: true
+    repos:
+      - repo: acme-org/it3-pub-repo
+'
+sandbox=$(make_sandbox_with_remotes "$IT3_YAML" "$NEUTRAL_ORIGIN_URL")
+printf 'See acme-org/it3-pub-repo for source.\n' > "$sandbox/notes.md"
+git -C "$sandbox" add notes.md
+assert_hook "IT3: a public entry own slug via a - repo: map item does not block" "$sandbox" 0 "" ""
+rm -rf "$sandbox"
+
+echo
 echo "===== test_check_private_refs_staged.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

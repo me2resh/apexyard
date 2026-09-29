@@ -91,6 +91,86 @@
 #     status instead of assuming success, so a failed CR-strip (not just
 #     a failed `mktemp`) fails the whole call closed too.
 #
+# apexyard#1458 — six targeted fixes on top of round 9, none of which
+# rewrite either dev extraction wholesale (per that ticket's explicit
+# instruction, after PR #1457's 9-round history of exactly that mistake):
+#
+#   1. (over-blocking) A comment-only `repos:` block-list item (`- # note`)
+#      split into the standalone words "#" and "note" in `split_words()`,
+#      because its trailing-comment strip required WHITESPACE before the
+#      "#" (`[[:space:]]+#.*$`), which a comment starting at position 0 of
+#      the value never has. "#" then blocked every Markdown heading. Fixed
+#      by anchoring the strip on line-start too (`(^|[[:space:]]+)#.*$`).
+#      The untouched whole value (out[1]) is still always kept, so this
+#      cannot drop a token dev's extraction found — only the SPURIOUS
+#      extra split words it never should have produced.
+#   2. (over-blocking) dev's `- name:` rule has no nesting awareness at
+#      all — it fires on ANY line shaped `- name: X`, anywhere in a
+#      project entry, not only at the entry's own top-level dash. A
+#      `repos:` (or any other) nested list item shaped `- name: X` was
+#      therefore captured as if declaring a brand-new project named X,
+#      turning a common word into a private token blocking every commit
+#      and tracker write. `_registry_public_pass` now flags every such
+#      nested `- name:` line as GARBAGE (regardless of the entry's own
+#      public/private status — it is never a real declaration either
+#      way), and `_registry_correlate` treats a GARBAGE line the same way
+#      it treats a proven-public line: it can satisfy the "every line
+#      this value occurred on" test, but only for THAT line — a value
+#      that is ALSO a genuine private entry's name elsewhere still blocks.
+#      dev's own token is untouched and still present in the output; only
+#      its exemption eligibility changes.
+#   4. (gap) `_registry_dev_extract_runtime`'s `in_repos = 0` sat as a
+#      bare top-level AWK pattern, not inside `BEGIN {}` — it re-ran on
+#      EVERY line (its truth value is always 0, so it never PRINTED
+#      anything, but the ASSIGNMENT side effect fired every time), always
+#      resetting the flag immediately before the very next line's
+#      `in_repos && /^[[:space:]]*-[[:space:]]+/` check could ever see it
+#      as 1. The runtime hook therefore never scrubbed a block-style
+#      `repos:` list item — confirmed the actual dev (9ac9d9e) bug, not
+#      introduced by any later round. Moved into `BEGIN {}` so it runs
+#      once. This can only ADD tokens the runtime style previously missed
+#      entirely; it cannot remove any.
+#   5. (gap) An entry whose OWN first field is `repos:` — written
+#      `- repos:\n    - a\n    - b` — never had its `repos:` line
+#      recognised at all: both the block (`repos:$`) and flow (`repos:[`)
+#      detectors require the line to start with "repos:" AFTER
+#      whitespace, and a leading "- " (marking the entry itself) sits
+#      between the whitespace and "repos:" for exactly this shape. Every
+#      item in that list was silently dropped, in BOTH extractions. Fixed
+#      by adding one more rule per extraction, anchored on the dash, for
+#      the block form only (the flow form, `- repos: [a, b]`, is
+#      unchanged — narrower than dev, not wider, and no fixture in this
+#      suite exercises it as the entry's first field).
+#   6. (gap) A `repos:` block-list item written as a multi-key map
+#      (`- primary: acme/x\n    mirror: true`) ended the list one line
+#      too early in `_registry_dev_extract_standard`: the SAME generic
+#      "any `key:`-shaped line closes the list" rule that correctly
+#      closes it on a genuine sibling field of the entry ALSO fired on
+#      the map item's own second key (`mirror: true`), which is a
+#      CONTINUATION of the list item, not a new field of the entry —
+#      every `repos:` item after it was then lost. Fixed by recording the
+#      `repos:` key's own indentation when the list opens, and only
+#      treating a later `key:`-shaped line as closing the list when its
+#      indentation is AT OR SHALLOWER than that — a deeper one is a
+#      continuation of the current item and leaves the list open. This
+#      applies to the standard extraction only; the runtime extraction
+#      already closes `repos:` on a much narrower condition (a line whose
+#      FIRST character is neither whitespace nor a dash) that a
+#      continuation line — which always has leading whitespace — never
+#      satisfies, so it never had this gap.
+#
+# All six are additive to what `dev` finds (more tokens captured, or more
+# exemption granted only on the exact line a structural GARBAGE/public
+# proof covers) — never fewer. Item 3 in the same ticket ("a public
+# entry's own slug, written as a `- repo:` map item inside its `repos:`
+# list, is not exempted") was re-verified against this file's CURRENT
+# (round 9) state before starting this work and no longer reproduces —
+# it described the hand-written "greedy" private scan from PR #1457
+# rounds 4-6, which round 7 deleted outright in favour of running dev's
+# own extraction; Hakim's original LOW finding predates that deletion.
+# Covered here by regression tests (staged + public-tracker) instead of
+# a code change — see AgDR-0180 for the fuller note.
+#
 # Explicitly out of scope, unchanged from earlier rounds: flow-style YAML
 # and a value-level anchor.
 #
@@ -210,8 +290,35 @@ _registry_dev_extract_standard() {
       }
       pending_name = ""; current_list = ""; next
     }
-    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ { pending_name = ""; current_list = "repos"; next }
-    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ { current_list = ""; next }
+    /^[[:space:]]*repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    # apexyard#1458 item 5 — an entry whose OWN first field is `repos:`
+    # (`- repos:` rather than a later sibling `repos:` line) was never
+    # recognised by the rule above: the "- " sits between the leading
+    # whitespace and the literal "repos:" text the regex anchors on. Its
+    # own list items were silently dropped. This is the same rule as
+    # above, anchored on the dash, for the block form only.
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*(#.*)?$/ {
+      pending_name = ""; current_list = "repos"
+      match($0, /^[[:space:]]*/); repos_indent = RLENGTH
+      next
+    }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*:/ {
+      # apexyard#1458 item 6 — a `repos:` block-list item written as a
+      # multi-key map (`- primary: x` then a continuation `mirror: true`)
+      # matches this same generic "key:" pattern on its SECOND key. That
+      # continuation line is deeper than the `repos:` key'\''s own recorded
+      # indentation; a genuine sibling field of the entry never is. Only
+      # the latter should close the list.
+      if (current_list == "repos") {
+        match($0, /^[[:space:]]*/)
+        if (RLENGTH > repos_indent) { next }
+      }
+      current_list = ""; next
+    }
     /^[[:space:]]*-[[:space:]]+/ {
       if (current_list == "repos") {
         value = $0; sub(/^[[:space:]]*-[[:space:]]+/, "", value)
@@ -241,7 +348,18 @@ _registry_dev_extract_runtime() {
         if (item != "") print "REPO=" item "\t" NR
       }
     }
-    in_repos = 0
+    BEGIN { in_repos = 0 }
+    # apexyard#1458 item 4 — the line above used to be a bare top-level
+    # `in_repos = 0` statement, not inside `BEGIN {}`. AWK treats a bare
+    # expression as a pattern with the default `{print}` action gated on
+    # its truth value: it re-ran on EVERY input line (always false, so it
+    # never printed), but the ASSIGNMENT side effect fired every time —
+    # resetting the flag immediately before the very next line'\''s
+    # `in_repos && ...` check could ever see it as 1. The runtime hook
+    # therefore never scrubbed a block-style `repos:` list item at all
+    # (only the flow `repos: [...]` form worked). Moving the reset into
+    # `BEGIN {}` makes it run once, as originally intended, and can only
+    # ADD tokens this extraction previously missed — never remove any.
     /^[[:space:]]*- name:/ { print "NAME=" unquote($3) "\t" NR; next }
     /^[[:space:]]*repo:/ { print "REPO=" unquote($2) "\t" NR; next }
     /^[[:space:]]*repos:[[:space:]]*\[/ {
@@ -252,6 +370,12 @@ _registry_dev_extract_runtime() {
       next
     }
     /^[[:space:]]*repos:[[:space:]]*$/ { in_repos = 1; next }
+    # apexyard#1458 item 5 — the runtime-style companion to the standard
+    # extraction'\''s same fix above: an entry whose own first field is
+    # `repos:` (`- repos:` rather than a later sibling `repos:` line)
+    # never matched the rule above, because the "- " sits between the
+    # leading whitespace and the literal "repos:" text it anchors on.
+    /^[[:space:]]*-[[:space:]]+repos:[[:space:]]*$/ { in_repos = 1; next }
     in_repos && /^[[:space:]]*-[[:space:]]+/ {
       value = $0
       sub(/^[[:space:]]*-[[:space:]]*/, "", value)
@@ -285,7 +409,7 @@ _registry_public_pass() {
       p_name_key_count = 0; p_repo_key_count = 0; p_workspace_key_count = 0
       p_repos_key_count = 0
       p_in_block = 0
-      n_pub = 0; n_pair = 0
+      n_pub = 0; n_pair = 0; n_garbage = 0
     }
 
     function unquote(s) { gsub(/^["\x27]|["\x27]$/, "", s); return s }
@@ -413,11 +537,25 @@ _registry_public_pass() {
               } else if (p_indent < p_entry_indent) {
                 p_flush()
                 if (p_indent <= p_top_col) p_state = "after"
-              } else if (p_have_entry && p_current_list == "repos") {
+              } else if (p_have_entry) {
                 p_item = p_content
                 sub(/^-[[:space:]]+/, "", p_item)
                 gsub(/[[:space:]]+$/, "", p_item)
-                if (p_item != "") { p_nrepo++; p_erepos[p_nrepo] = unquote(p_item); p_erepo_lines[p_nrepo] = NR }
+                # apexyard#1458 item 2 — dev'\''s `- name:` rule has no
+                # nesting awareness: it fires on ANY line shaped
+                # `- name: X`, including one nested inside THIS entry'\''s
+                # own `repos:` (or any other) list, where it is never
+                # really declaring a new project. Flag every such line
+                # as GARBAGE regardless of `p_current_list`, so
+                # `_registry_correlate` can exempt dev'\''s spurious NAME=
+                # capture on that exact line — unconditionally, not only
+                # when the enclosing entry happens to be public. A value
+                # that is ALSO a genuine entry'\''s name on a DIFFERENT line
+                # still blocks; only this one line'\''s occurrence clears.
+                if (p_item ~ /^name:/) { n_garbage++; GarbageOut[n_garbage] = NR }
+                if (p_current_list == "repos" && p_item != "") {
+                  p_nrepo++; p_erepos[p_nrepo] = unquote(p_item); p_erepo_lines[p_nrepo] = NR
+                }
               }
             } else if (p_indent <= p_top_col) {
               p_flush()
@@ -451,6 +589,12 @@ _registry_public_pass() {
       } else {
         for (i = 1; i <= n_pub; i++) print PubOut[i]
         for (i = 1; i <= n_pair; i++) print PairOut[i]
+        # apexyard#1458 item 2 — suppressed under the same ambiguity gate
+        # as the public set: the GARBAGE lines above rely on the same
+        # structural walk (entry/field-column tracking) that the public
+        # set does, so an ambiguous file must not exempt via this path
+        # either.
+        for (i = 1; i <= n_garbage; i++) print "GARBAGE=" GarbageOut[i]
       }
     }
   ' "$registry"
@@ -514,7 +658,17 @@ _registry_correlate() {
       n = 0
       out[++n] = v
       stripped = v
-      sub(/[[:space:]]+#.*$/, "", stripped)
+      # apexyard#1458 item 1 — a comment-ONLY repos: block-list item
+      # (`- # note`) is one dev token whose value IS the comment, with no
+      # real content before it, so there is no WHITESPACE before the "#"
+      # for this strip to anchor on: the old pattern
+      # (`[[:space:]]+#.*$`) never matched it. It split on whitespace
+      # instead, producing "#" and "note" as their own standalone private
+      # words — "#" then blocked every Markdown heading. Anchoring on
+      # line-start too (`(^|[[:space:]]+)#.*$`) strips it the same way
+      # round 9'\''s fix already strips a TRAILING comment on real content;
+      # out[1] (the untouched whole value) is unaffected either way.
+      sub(/(^|[[:space:]]+)#.*$/, "", stripped)
       m = split(stripped, parts, /[ \t]+/)
       for (i = 1; i <= m; i++) {
         w = parts[i]
@@ -529,6 +683,14 @@ _registry_correlate() {
     function load_public(    tabpos, pkv, pln, v, warr, nw, wi) {
       while ((getline pline < pubfile) > 0) {
         if (pline ~ /^PAIR=/) { n_pair++; PairOut[n_pair] = substr(pline, 6); continue }
+        # apexyard#1458 item 2 — a GARBAGE line names a line number where
+        # the structural pass proved dev'\''s `- name:` capture is not a
+        # real entry declaration (nested inside some field'\''s own list),
+        # regardless of that entry'\''s public/private status. Recorded by
+        # LINE NUMBER alone, not by value — the whole point is that dev'\''s
+        # captured value at that exact line should never count against
+        # it, no matter what the value is.
+        if (pline ~ /^GARBAGE=/) { GarbageLn[substr(pline, 9) + 0] = 1; continue }
         tabpos = last_tab_pos(pline)
         if (tabpos == 0) continue
         pkv = substr(pline, 1, tabpos - 1)
@@ -564,7 +726,15 @@ _registry_correlate() {
         nw = split_words(v, warr)
         for (wi = 1; wi <= nw; wi++) {
           wv = warr[wi]; key = wv SUBSEP ln
-          if (!(key in SeenN)) { SeenN[key] = 1; totalN[wv]++; if (key in PubN) matchedN[wv]++ }
+          if (!(key in SeenN)) {
+            SeenN[key] = 1; totalN[wv]++
+            # apexyard#1458 item 2 — a GARBAGE line exempts THIS
+            # occurrence unconditionally (no PubN[] entry required); a
+            # value that is ALSO a real entry'\''s name on a different,
+            # non-garbage line still needs that line proven public (or
+            # also garbage) to be exempt overall.
+            if ((key in PubN) || (ln in GarbageLn)) matchedN[wv]++
+          }
         }
       } else if (kv ~ /^REPO=/) {
         v = substr(kv, 6)

@@ -584,6 +584,69 @@ run_case "B8: the real slug (acme-org/dd-one) still blocks" \
   2 "project repo: acme-org/dd-one" \
   "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/dd-one as well'"
 
+# ---------------------------------------------------------------------------
+# apexyard#1458 items 1-3 — follow-up to #1457. Each is verified to fail
+# against the PRE-fix library before the corresponding fix landed (see
+# the differential-test probes and PR description). All names/slugs
+# SYNTHETIC.
+# ---------------------------------------------------------------------------
+
+# Item 1 — a comment-only repos: block-list item ("- # note") is one dev
+# token whose value IS the comment, with no whitespace before the "#" for
+# the old split_words() strip to anchor on. It split into "#" and "note"
+# as their own standalone tokens; "#" then blocked every Markdown
+# heading.
+write_registry 'projects:
+  - name: ee-priv-it1
+    repos:
+      - acme-org/it1-target
+      - # note
+'
+run_case "IT1: a Markdown heading (# ...) is not blocked by a comment-only repos: item" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body '# Release notes'"
+
+run_case "IT1: the comment word (note) is not blocked" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Please note the deadline'"
+
+run_case "IT1: the real slug (acme-org/it1-target) still blocks" \
+  2 "project repo: acme-org/it1-target" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Reproduces in acme-org/it1-target as well'"
+
+# Item 2 — dev's "- name:" rule has no nesting awareness: it fires on any
+# line shaped "- name: X" anywhere in a private entry, including one
+# nested inside a totally unrelated sub-list. A common word (here "prod")
+# became a private token, blocking it everywhere.
+write_registry 'projects:
+  - name: ff-priv-it2
+    deploy:
+      - name: prod
+'
+run_case "IT2: a nested name: key under an unrelated sub-list does not block the common word" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'Deploying to prod tonight'"
+
+run_case "IT2: the entry own real name still blocks" \
+  2 "project name: ff-priv-it2" \
+  "gh issue create --repo me2resh/apexyard --title 'bug' --body 'discovered during ff-priv-it2 rebuild'"
+
+# Item 3 — re-verified against the current (post-#1457 round 9) library:
+# a public entry's own slug, written as a one-key "- repo:" map item
+# inside its own repos: list, is correctly exempted already (the greedy
+# private scan this was originally reported against, PR #1457 rounds
+# 4-6, was deleted outright in round 7). Regression coverage only, no
+# code change for this item.
+write_registry 'projects:
+  - name: gg-pub-it3
+    public: true
+    repos:
+      - repo: acme-org/it3-pub-repo
+'
+run_case "IT3: a public entry own slug via a - repo: map item does not block" \
+  0 "" \
+  "gh issue create --repo me2resh/apexyard --title 'docs' --body 'see acme-org/it3-pub-repo for source'"
+
 echo
 echo "Passed: $PASS  Failed: $FAIL"
 [ "$FAIL" -eq 0 ]
