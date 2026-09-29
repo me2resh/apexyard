@@ -111,7 +111,11 @@ cp ~/apexyard/golden-paths/pipelines/ci.yml .github/workflows/
 mkdir -p .github/workflows .github/scripts
 cp golden-paths/pipelines/dependency-audit.yml .github/workflows/
 cp golden-paths/pipelines/scripts/dependency-audit.py .github/scripts/
+cp golden-paths/pipelines/scripts/dependency-audit-tools.requirements.txt .github/scripts/
+# Optional metadata companion (not required by the workflow install step):
+# cp golden-paths/pipelines/scripts/dependency-audit-tools.lock.json .github/scripts/
 # Compare helper_revision in the JSON report when refreshing after a framework upgrade.
+# Tool hashes are deferred — AgDR-0184.
 ```
 
 **Automated actions**:

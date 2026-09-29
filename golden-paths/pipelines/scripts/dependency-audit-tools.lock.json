@@ -1,7 +1,8 @@
 {
   "description": "Trusted audit-tool pins for dependency-audit.py (AgDR-0176 / issue #1359). Install outside the audited checkout. Prefer pip install --require-hashes -r dependency-audit-tools.requirements.txt when hash lines are present.",
   "helper_id": "apexyard-dependency-audit",
-  "helper_revision": "1",
+  "helper_revision": "2",
+  "hash_pins": "deferred — see AgDR-0184",
   "packages": [
     {
       "name": "pip-audit",

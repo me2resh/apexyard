@@ -16,13 +16,19 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
-HELPER_REVISION = "1"
+try:
+    import tomllib  # Python 3.11+
+except ImportError:  # pragma: no cover — CI uses 3.12+
+    tomllib = None  # type: ignore[assignment]
+
+HELPER_REVISION = "2"
 HELPER_ID = "apexyard-dependency-audit"
 
 REQUIRED_PIP_AUDIT = "2.10.0"
@@ -33,8 +39,9 @@ CVSS_APPROVED = False
 
 OSV_QUERYBATCH = "https://api.osv.dev/v1/querybatch"
 OSV_VULN = "https://api.osv.dev/v1/vulns/{id}"
-PYPI_JSON = "https://pypi.org/pypi/{name}/{version}/json"
-PYPI_PROJECT = "https://pypi.org/pypi/{name}/json"
+# Name and version segments are percent-encoded via pypi_json_url / pypi_project_url.
+PYPI_JSON_TMPL = "https://pypi.org/pypi/{name}/{version}/json"
+PYPI_PROJECT_TMPL = "https://pypi.org/pypi/{name}/json"
 
 HTTP_TIMEOUT_SEC = 30
 HTTP_RETRIES = 2
@@ -42,6 +49,25 @@ HTTP_RETRY_DELAYS = (1, 2)
 OSV_BATCH_SIZE = 100
 SUBPROCESS_TIMEOUT_SEC = 300
 OVERALL_DEADLINE_SEC = 20 * 60
+# Cap each manifest / lock read. Larger inputs mark coverage incomplete (fail closed).
+MAX_MANIFEST_BYTES = 10 * 1024 * 1024
+
+# PEP 508 package name grammar (normalized form allowed in pins / URLs).
+PEP508_NAME_RE = re.compile(
+    r"^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$"
+)
+# Exact pin versions only: reject whitespace, newlines, wildcards, and ranges.
+PEP440_EXACT_VERSION_RE = re.compile(
+    r"^[A-Za-z0-9]+(?:[._+\-][A-Za-z0-9]+)*$"
+)
+
+PYPI_REGISTRY_HOSTS = frozenset(
+    {
+        "pypi.org",
+        "pypi.python.org",
+        "files.pythonhosted.org",
+    }
+)
 
 SKIP_DIR_NAMES = {
     "node_modules",
@@ -70,8 +96,15 @@ REQUIREMENTS_RE = re.compile(r"^requirements.*\.txt$", re.IGNORECASE)
 EXACT_PIN_RE = re.compile(
     r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*==\s*([^\s\\;]+)"
 )
-REQ_INCLUDE_RE = re.compile(r"^\s*-r\s+(\S+)")
+# Match both `-r path` and `--requirement path` / `--requirement=path`.
+REQ_INCLUDE_RE = re.compile(
+    r"^\s*(?:-r|--requirement)(?:\s*=\s*|\s+)(\S+)"
+)
 ENV_MARKER_RE = re.compile(r";\s*(.+)$")
+# Pip options that imply a non-default or private index / include path.
+PRIVATE_OR_INDEX_OPT_RE = re.compile(
+    r"(?:--index-url|--extra-index-url|--find-links|-i\b|-f\b)"
+)
 
 ALLOWED_LICENCES = frozenset(
     {
@@ -312,6 +345,132 @@ def _rel(root: Path, path: Path) -> str:
         return str(path)
 
 
+def pypi_json_url(name: str, version: str) -> str:
+    return PYPI_JSON_TMPL.format(
+        name=urllib.parse.quote(name, safe=""),
+        version=urllib.parse.quote(version, safe=""),
+    )
+
+
+def pypi_project_url(name: str) -> str:
+    return PYPI_PROJECT_TMPL.format(name=urllib.parse.quote(name, safe=""))
+
+
+def is_valid_pin_identity(name: str, version: str) -> bool:
+    """Reject multi-line / hostile names and non-exact versions before pins or URLs."""
+    if not name or not version:
+        return False
+    if "\n" in name or "\r" in name or "\n" in version or "\r" in version:
+        return False
+    if any(ch.isspace() for ch in name) or any(ch.isspace() for ch in version):
+        return False
+    if "*" in version or version.endswith(".*") or "," in version:
+        return False
+    if not PEP508_NAME_RE.match(name):
+        return False
+    if not PEP440_EXACT_VERSION_RE.match(version):
+        return False
+    return True
+
+
+def ensure_inside_root(root: Path, path: Path) -> Optional[str]:
+    """Return an error if path resolves outside root. Refuses external symlinks."""
+    root_res = root.resolve()
+    try:
+        resolved = path.resolve()
+        resolved.relative_to(root_res)
+    except (ValueError, OSError):
+        return f"path escapes project root: {path}"
+    if path.is_symlink():
+        try:
+            path.resolve().relative_to(root_res)
+        except (ValueError, OSError):
+            return f"symlink target escapes project root: {path}"
+    return None
+
+
+def read_manifest_bytes(path: Path, root: Path) -> Tuple[Optional[str], Optional[str]]:
+    """Read a manifest under size and containment checks. Fail closed on violation."""
+    err = ensure_inside_root(root, path)
+    if err:
+        return None, err
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        return None, f"cannot stat {path}: {exc}"
+    if size > MAX_MANIFEST_BYTES:
+        return None, (
+            f"manifest exceeds {MAX_MANIFEST_BYTES} byte cap: {_rel(root, path)} ({size} bytes)"
+        )
+    try:
+        return path.read_text(encoding="utf-8", errors="replace"), None
+    except OSError as exc:
+        return None, f"cannot read {path}: {exc}"
+
+
+def load_toml_text(text: str, rel: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if tomllib is None:
+        return None, f"tomllib unavailable; cannot parse {rel}"
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        return None, f"malformed TOML in {rel}: {exc}"
+    if not isinstance(data, dict):
+        return None, f"TOML root is not a table in {rel}"
+    return data, None
+
+
+def is_pypi_registry_url(url: str) -> bool:
+    if not url or not isinstance(url, str):
+        return False
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lower()
+    if host in PYPI_REGISTRY_HOSTS:
+        return True
+    # Common simple-index paths on pypi.org
+    if host.endswith(".pypi.org"):
+        return True
+    return False
+
+
+def poetry_source_is_pypi(source: Any) -> bool:
+    if source is None:
+        return True
+    if isinstance(source, str):
+        return source.lower() in ("pypi", "")
+    if not isinstance(source, dict):
+        return False
+    stype = str(source.get("type") or "").lower()
+    if stype in ("", "pypi"):
+        return True
+    if stype in ("git", "directory", "file", "url", "legacy", "path"):
+        return False
+    url = str(source.get("url") or "")
+    if stype == "legacy" or url:
+        return is_pypi_registry_url(url)
+    return False
+
+
+def uv_source_is_pypi(source: Any) -> bool:
+    if source is None:
+        return True
+    if not isinstance(source, dict):
+        return False
+    if any(k in source for k in ("editable", "git", "path", "url", "workspace", "virtual")):
+        return False
+    if "registry" in source:
+        reg = str(source.get("registry") or "")
+        # uv default registry is PyPI; empty and well-known hosts are accepted.
+        if not reg or is_pypi_registry_url(reg) or reg.rstrip("/").endswith("pypi.org/simple"):
+            return True
+        # Bare "https://pypi.org/simple" already handled; reject private registries.
+        return False
+    return False
+
+
 def _pyproject_tooling_only(path: Path) -> bool:
     text = path.read_text(encoding="utf-8", errors="replace")
     # Data-only TOML scan without executing the file.
@@ -336,9 +495,31 @@ def collect_python_inventory(root: Path, dep_set: DependencySet) -> None:
     lock_order = ("poetry.lock", "uv.lock", "Pipfile.lock")
     for lock_name in lock_order:
         lock_path = directory / lock_name
-        if lock_path.is_file():
-            pins, incomplete, reason = parse_python_lock(lock_path, _rel(root, lock_path))
-            dep_set.pins = pins
+        if lock_path.is_file() or lock_path.is_symlink():
+            err = ensure_inside_root(root, lock_path)
+            if err:
+                dep_set.pins = []
+                dep_set.coverage = "incomplete"
+                dep_set.coverage_reason = err
+                return
+            text, read_err = read_manifest_bytes(lock_path, root)
+            if read_err or text is None:
+                dep_set.pins = []
+                dep_set.coverage = "incomplete"
+                dep_set.coverage_reason = read_err or "unreadable lock"
+                return
+            pins, incomplete, reason = parse_python_lock(text, _rel(root, lock_path), lock_name)
+            # Drop any pin that fails identity validation (never send to OSV/PyPI).
+            safe_pins: List[PackagePin] = []
+            for pin in pins:
+                if is_valid_pin_identity(pin.name, pin.version):
+                    safe_pins.append(pin)
+                else:
+                    incomplete = True
+                    reason = (reason + " | " if reason else "") + (
+                        f"rejected unsafe pin identity in {_rel(root, lock_path)}"
+                    )
+            dep_set.pins = safe_pins
             if incomplete:
                 dep_set.coverage = "incomplete"
                 dep_set.coverage_reason = reason
@@ -370,7 +551,9 @@ def collect_python_inventory(root: Path, dep_set: DependencySet) -> None:
         dep_set.pins = _dedupe_pins(pins)
         if not dep_set.pins:
             dep_set.coverage = "incomplete"
-            dep_set.coverage_reason = "requirements file contains no exact pins"
+            dep_set.coverage_reason = (
+                " | ".join(reasons) if reasons else "requirements file contains no exact pins"
+            )
         elif incomplete:
             dep_set.coverage = "incomplete"
             dep_set.coverage_reason = " | ".join(reasons)
@@ -380,13 +563,30 @@ def collect_python_inventory(root: Path, dep_set: DependencySet) -> None:
         return
 
     pyproject = directory / "pyproject.toml"
-    if pyproject.is_file():
-        pins, incomplete, reason = parse_pyproject_static(pyproject, _rel(root, pyproject))
-        dep_set.pins = pins
-        dep_set.coverage = "incomplete" if incomplete or not pins else "complete"
-        dep_set.coverage_reason = reason
-        if not pins and incomplete:
+    if pyproject.is_file() or pyproject.is_symlink():
+        err = ensure_inside_root(root, pyproject)
+        if err:
+            dep_set.pins = []
             dep_set.coverage = "incomplete"
+            dep_set.coverage_reason = err
+            return
+        text, read_err = read_manifest_bytes(pyproject, root)
+        if read_err or text is None:
+            dep_set.pins = []
+            dep_set.coverage = "incomplete"
+            dep_set.coverage_reason = read_err or "unreadable pyproject.toml"
+            return
+        pins, incomplete, reason = parse_pyproject_static(text, _rel(root, pyproject))
+        safe_pins = []
+        for pin in pins:
+            if is_valid_pin_identity(pin.name, pin.version):
+                safe_pins.append(pin)
+            else:
+                incomplete = True
+                reason = (reason + " | " if reason else "") + "rejected unsafe pin identity"
+        dep_set.pins = safe_pins
+        dep_set.coverage = "incomplete" if incomplete or not safe_pins else "complete"
+        dep_set.coverage_reason = reason
         return
 
     pipfile = directory / "Pipfile"
@@ -416,19 +616,21 @@ def parse_requirements_file(
 ) -> Tuple[List[PackagePin], bool, str]:
     if seen is None:
         seen = set()
+    contain_err = ensure_inside_root(root, path)
+    if contain_err:
+        return [], True, contain_err
     path = path.resolve()
     if path in seen:
         return [], True, f"circular requirements include at {path}"
     seen.add(path)
-    try:
-        path.relative_to(root.resolve())
-    except ValueError:
-        return [], True, f"requirements include escapes project root: {path}"
+
+    text, read_err = read_manifest_bytes(path, root)
+    if read_err or text is None:
+        return [], True, read_err or f"unreadable requirements: {path}"
 
     pins: List[PackagePin] = []
     incomplete = False
     reasons: List[str] = []
-    text = path.read_text(encoding="utf-8", errors="replace")
     rel = _rel(root, path)
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -455,7 +657,12 @@ def parse_requirements_file(
             continue
         if line.startswith("-"):
             # Other pip options (index-url, editable, etc.).
-            if "--index-url" in line or "-i " in line or "git+" in line or line.startswith("-e "):
+            if (
+                PRIVATE_OR_INDEX_OPT_RE.search(line)
+                or "git+" in line
+                or line.startswith("-e ")
+                or line.startswith("--editable")
+            ):
                 incomplete = True
                 reasons.append(f"unsupported or private requirement line in {rel}")
             continue
@@ -481,6 +688,10 @@ def parse_requirements_file(
             base, rest = name.split("[", 1)
             name = base
             extras = tuple(x.strip() for x in rest[:-1].split(",") if x.strip())
+        if not is_valid_pin_identity(name, version):
+            incomplete = True
+            reasons.append(f"non-exact or unsafe pin in {rel}: {name}=={version}")
+            continue
         pins.append(
             PackagePin(
                 name=name,
@@ -523,14 +734,14 @@ def _load_packaging() -> Any:
         return None
 
 
-def parse_python_lock(path: Path, rel: str) -> Tuple[List[PackagePin], bool, str]:
-    name = path.name
-    text = path.read_text(encoding="utf-8", errors="replace")
-    if name == "Pipfile.lock":
+def parse_python_lock(
+    text: str, rel: str, lock_name: str
+) -> Tuple[List[PackagePin], bool, str]:
+    if lock_name == "Pipfile.lock":
         return _parse_pipfile_lock(text, rel)
-    if name == "poetry.lock":
+    if lock_name == "poetry.lock":
         return _parse_poetry_lock(text, rel)
-    if name == "uv.lock":
+    if lock_name == "uv.lock":
         return _parse_uv_lock(text, rel)
     return [], True, f"unsupported lock file: {rel}"
 
@@ -540,122 +751,234 @@ def _parse_pipfile_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, st
         data = json.loads(text)
     except json.JSONDecodeError:
         return [], True, f"malformed Pipfile.lock: {rel}"
-    meta = data.get("_meta", {})
-    # Pipfile.lock has no single schema version field in all eras. Treat missing
-    # default packages as incomplete.
+    if not isinstance(data, dict):
+        return [], True, f"Pipfile.lock root must be an object: {rel}"
+    meta = data.get("_meta")
+    if meta is not None and not isinstance(meta, dict):
+        return [], True, f"invalid _meta in Pipfile.lock: {rel}"
+    # pipfile-spec is optional historically; when present require an integer schema we know.
+    if isinstance(meta, dict) and "pipfile-spec" in meta:
+        spec = meta.get("pipfile-spec")
+        if not isinstance(spec, int) or spec < 0:
+            return [], True, f"unsupported pipfile-spec in {rel}"
     pins: List[PackagePin] = []
+    incomplete = False
+    reasons: List[str] = []
     for section in ("default", "develop"):
-        packages = data.get(section) or {}
-        if not isinstance(packages, dict):
+        packages = data.get(section)
+        if packages is None:
             continue
+        if not isinstance(packages, dict):
+            return [], True, f"Pipfile.lock section {section!r} is not an object: {rel}"
         for pkg, meta_pkg in packages.items():
             if not isinstance(meta_pkg, dict):
+                incomplete = True
+                reasons.append(f"non-object entry for {pkg} in {rel}")
+                continue
+            # VCS / path / editable entries lack a plain version pin.
+            if any(k in meta_pkg for k in ("git", "path", "file", "editable", "ref", "svn", "hg")):
+                incomplete = True
+                reasons.append(f"non-PyPI source for {pkg} in {rel}")
                 continue
             version = str(meta_pkg.get("version", "")).lstrip("=")
             if not version:
+                incomplete = True
+                reasons.append(f"unresolved entry without version for {pkg} in {rel}")
                 continue
-            if meta_pkg.get("index") and meta_pkg.get("index") not in ("pypi", "PyPI", None):
-                return pins, True, f"private-index dependency in {rel}"
+            idx = meta_pkg.get("index")
+            if idx not in (None, "pypi", "PyPI"):
+                incomplete = True
+                reasons.append(f"private-index dependency {pkg} in {rel}")
+                continue
+            if not is_valid_pin_identity(str(pkg), version):
+                incomplete = True
+                reasons.append(f"unsafe pin identity for {pkg} in {rel}")
+                continue
             pins.append(
                 PackagePin(
-                    name=pkg,
+                    name=str(pkg),
                     version=version,
                     ecosystem="PyPI",
                     manifest=rel,
                     source="Pipfile.lock",
                 )
             )
-    if not pins and not data.get("default"):
+    if not pins and not isinstance(data.get("default"), dict):
         return [], True, f"empty or unsupported Pipfile.lock: {rel}"
-    _ = meta  # keep for future schema checks
-    return pins, False, ""
+    reason = " | ".join(reasons)
+    return pins, incomplete, reason
 
 
 def _parse_poetry_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
-    # Validate known metadata version without executing Poetry.
-    meta_ver = None
-    m = re.search(r"(?m)^\[metadata\]\s*$([\s\S]*?)(?=^\[|\Z)", text)
-    if m:
-        vm = re.search(r'(?m)^lock-version\s*=\s*"([^"]+)"', m.group(1))
-        if vm:
-            meta_ver = vm.group(1)
-        else:
-            vm = re.search(r'(?m)^metadata_content_hash', m.group(1))
-            # Older poetry.lock files use metadata without lock-version.
-            if not vm:
-                pass
-    # Poetry 1.x/2.x lock-version values we accept.
-    if meta_ver is not None and meta_ver.split(".")[0] not in ("1", "2"):
+    data, err = load_toml_text(text, rel)
+    if err or data is None:
+        return [], True, err or f"unreadable poetry.lock: {rel}"
+    meta = data.get("metadata") or {}
+    if not isinstance(meta, dict):
+        return [], True, f"invalid metadata in poetry.lock: {rel}"
+    meta_ver = meta.get("lock-version")
+    if meta_ver is not None and str(meta_ver).split(".")[0] not in ("1", "2"):
         return [], True, f"unsupported poetry.lock schema version {meta_ver} in {rel}"
 
+    packages = data.get("package") or []
+    if not isinstance(packages, list):
+        return [], True, f"poetry.lock package table is not a list: {rel}"
+
     pins: List[PackagePin] = []
-    for block in re.finditer(r"(?m)^\[\[package\]\]\s*$([\s\S]*?)(?=^\[\[|\Z)", text):
-        body = block.group(1)
-        nm = re.search(r'(?m)^name\s*=\s*"([^"]+)"', body)
-        vm = re.search(r'(?m)^version\s*=\s*"([^"]+)"', body)
-        if not nm or not vm:
+    incomplete = False
+    reasons: List[str] = []
+    for pkg in packages:
+        if not isinstance(pkg, dict):
+            incomplete = True
+            reasons.append(f"non-table package entry in {rel}")
             continue
-        src = re.search(r'(?m)^source\s*=\s*"([^"]+)"', body)
-        if src and src.group(1) not in ("pypi", "PyPI", ""):
-            return pins, True, f"non-PyPI source in poetry.lock: {rel}"
+        name = pkg.get("name")
+        version = pkg.get("version")
+        if not name or not version:
+            incomplete = True
+            reasons.append(f"package missing name/version in {rel}")
+            continue
+        source = pkg.get("source")
+        if not poetry_source_is_pypi(source):
+            incomplete = True
+            reasons.append(f"non-PyPI source for {name} in poetry.lock: {rel}")
+            continue
+        if not is_valid_pin_identity(str(name), str(version)):
+            incomplete = True
+            reasons.append(f"unsafe pin identity for {name} in {rel}")
+            continue
         pins.append(
             PackagePin(
-                name=nm.group(1),
-                version=vm.group(1),
+                name=str(name),
+                version=str(version),
                 ecosystem="PyPI",
                 manifest=rel,
                 source="poetry.lock",
             )
         )
-    if not pins:
+    if not pins and not incomplete:
         return [], True, f"no packages parsed from poetry.lock: {rel}"
-    return pins, False, ""
+    return pins, incomplete, " | ".join(reasons)
 
 
 def _parse_uv_lock(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
-    ver_m = re.search(r"(?m)^version\s*=\s*(\d+)", text)
-    if ver_m and int(ver_m.group(1)) > 1:
-        # uv.lock version 1 is the current documented schema.
-        return [], True, f"unsupported uv.lock schema version {ver_m.group(1)} in {rel}"
+    data, err = load_toml_text(text, rel)
+    if err or data is None:
+        return [], True, err or f"unreadable uv.lock: {rel}"
+    ver = data.get("version")
+    if ver is not None and int(ver) > 1:
+        return [], True, f"unsupported uv.lock schema version {ver} in {rel}"
+
+    packages = data.get("package") or []
+    if not isinstance(packages, list):
+        return [], True, f"uv.lock package table is not a list: {rel}"
+
     pins: List[PackagePin] = []
-    for block in re.finditer(r"(?m)^\[\[package\]\]\s*$([\s\S]*?)(?=^\[\[|\Z)", text):
-        body = block.group(1)
-        nm = re.search(r'(?m)^name\s*=\s*"([^"]+)"', body)
-        vm = re.search(r'(?m)^version\s*=\s*"([^"]+)"', body)
-        if not nm or not vm:
+    incomplete = False
+    reasons: List[str] = []
+    for pkg in packages:
+        if not isinstance(pkg, dict):
+            incomplete = True
+            reasons.append(f"non-table package entry in {rel}")
+            continue
+        name = pkg.get("name")
+        version = pkg.get("version")
+        source = pkg.get("source")
+        # Virtual / workspace root packages may omit version; mark incomplete.
+        if not name:
+            incomplete = True
+            reasons.append(f"package missing name in {rel}")
+            continue
+        if not uv_source_is_pypi(source):
+            incomplete = True
+            reasons.append(f"non-PyPI source for {name} in uv.lock: {rel}")
+            continue
+        if not version:
+            incomplete = True
+            reasons.append(f"unresolved entry without version for {name} in {rel}")
+            continue
+        if not is_valid_pin_identity(str(name), str(version)):
+            incomplete = True
+            reasons.append(f"unsafe pin identity for {name} in {rel}")
             continue
         pins.append(
             PackagePin(
-                name=nm.group(1),
-                version=vm.group(1),
+                name=str(name),
+                version=str(version),
                 ecosystem="PyPI",
                 manifest=rel,
                 source="uv.lock",
             )
         )
-    if not pins:
+    if not pins and not incomplete:
         return [], True, f"no packages parsed from uv.lock: {rel}"
-    return pins, False, ""
+    return pins, incomplete, " | ".join(reasons)
 
 
-def parse_pyproject_static(path: Path, rel: str) -> Tuple[List[PackagePin], bool, str]:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    if "dynamic" in text and re.search(r"dynamic\s*=\s*\[[^\]]*dependencies", text):
-        return [], True, f"dynamic dependencies in {rel} without a lockfile"
+def parse_pyproject_static(text: str, rel: str) -> Tuple[List[PackagePin], bool, str]:
+    data, err = load_toml_text(text, rel)
+    if err or data is None:
+        return [], True, err or f"unreadable pyproject.toml: {rel}"
+    project = data.get("project") or {}
+    if isinstance(project, dict):
+        dynamic = project.get("dynamic") or []
+        if isinstance(dynamic, list) and "dependencies" in dynamic:
+            return [], True, f"dynamic dependencies in {rel} without a lockfile"
+
+    candidates: List[str] = []
+    if isinstance(project, dict):
+        deps = project.get("dependencies") or []
+        if isinstance(deps, list):
+            candidates.extend(str(x) for x in deps)
+        opt = project.get("optional-dependencies") or {}
+        if isinstance(opt, dict):
+            for group in opt.values():
+                if isinstance(group, list):
+                    candidates.extend(str(x) for x in group)
+
+    tool = data.get("tool") or {}
+    if isinstance(tool, dict):
+        poetry = tool.get("poetry") or {}
+        if isinstance(poetry, dict):
+            poetry_deps = poetry.get("dependencies") or {}
+            if isinstance(poetry_deps, dict):
+                for name, spec in poetry_deps.items():
+                    if name == "python":
+                        continue
+                    if isinstance(spec, str):
+                        candidates.append(f"{name}{spec}" if spec.startswith("=") else f"{name}=={spec}" if re.fullmatch(r"[\d.]+", spec) else f"{name} {spec}")
+                    elif isinstance(spec, dict) and "version" in spec:
+                        candidates.append(f"{name}=={str(spec['version']).lstrip('=<>!~')}")
+
     pins: List[PackagePin] = []
-    # Only accept exact == pins inside a dependencies array. Ranges are incomplete.
-    for m in re.finditer(r'"([A-Za-z0-9][A-Za-z0-9._-]*)\s*==\s*([^"]+)"', text):
+    incomplete = False
+    reasons: List[str] = []
+    for raw in candidates:
+        line = raw.strip()
+        pin_m = EXACT_PIN_RE.match(line)
+        if not pin_m:
+            # Ranges, markers-only, or bare names → incomplete. Never audit them.
+            incomplete = True
+            reasons.append(f"unpinned or non-exact requirement in {rel}: {line.split()[0] if line else '?'}")
+            continue
+        name, version = pin_m.group(1), pin_m.group(2).strip()
+        if not is_valid_pin_identity(name, version):
+            incomplete = True
+            reasons.append(f"non-exact or unsafe pin in {rel}: {name}=={version}")
+            continue
         pins.append(
             PackagePin(
-                name=m.group(1),
-                version=m.group(2).strip(),
+                name=name,
+                version=version,
                 ecosystem="PyPI",
                 manifest=rel,
                 source="pyproject.toml",
             )
         )
-    if pins:
+    if pins and not incomplete:
         return pins, False, "exact pins from pyproject.toml (declared packages only)"
+    if pins and incomplete:
+        return pins, True, " | ".join(reasons)
     return [], True, f"pyproject.toml has no exact pins and no lockfile: {rel}"
 
 
@@ -910,21 +1233,59 @@ class HttpClient:
         raise last_err
 
 
+def _pip_audit_module_status(trusted_python: str, deadline: Deadline) -> Optional[str]:
+    """Return None when pip_audit imports; otherwise an error string.
+
+    Distinguishes missing module (OSV fallback eligible) from other import failures.
+    """
+    try:
+        proc = subprocess.run(
+            [trusted_python, "-I", "-c", "import pip_audit"],
+            capture_output=True,
+            text=True,
+            timeout=min(60, max(1, int(deadline.remaining()))),
+            env=_trusted_env(),
+            check=False,
+        )
+    except FileNotFoundError:
+        return "pip-audit not found"
+    except subprocess.TimeoutExpired:
+        return "pip-audit import check timed out"
+    if proc.returncode == 0:
+        return None
+    err = (proc.stderr or proc.stdout or "").strip()
+    if "No module named" in err or "ModuleNotFoundError" in err:
+        return "pip-audit module not found"
+    return f"pip-audit import failed: {err or f'exit {proc.returncode}'}"
+
+
 def run_pip_audit(
     pins: Sequence[PackagePin],
     trusted_python: str,
     deadline: Deadline,
     pip_audit_cmd: Optional[Sequence[str]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Run trusted pip-audit on synthesized exact pins. Returns (vulns, error)."""
+    """Run trusted pip-audit on synthesized exact pins. Returns (vulns, error).
+
+    Fail closed: only a parsed JSON object with a ``dependencies`` key is a
+    successful scan. Exit code alone does not distinguish vulns from tool failure.
+    """
     if not pins:
         return [], None
+
+    if not pip_audit_cmd:
+        mod_err = _pip_audit_module_status(trusted_python, deadline)
+        if mod_err:
+            return [], mod_err
+
     with tempfile.TemporaryDirectory(prefix="dep-audit-") as tmp:
         req_path = Path(tmp) / "pins.txt"
-        req_path.write_text(
-            "\n".join(f"{p.name}=={p.version}" for p in pins) + "\n",
-            encoding="utf-8",
-        )
+        pin_lines: List[str] = []
+        for p in pins:
+            if not is_valid_pin_identity(p.name, p.version):
+                return [], f"refusing unsafe pin identity: {p.name!r}=={p.version!r}"
+            pin_lines.append(f"{p.name}=={p.version}")
+        req_path.write_text("\n".join(pin_lines) + "\n", encoding="utf-8")
         if pip_audit_cmd:
             cmd = list(pip_audit_cmd) + ["-r", str(req_path)]
         else:
@@ -958,30 +1319,52 @@ def run_pip_audit(
             return [], "pip-audit not found"
         except subprocess.TimeoutExpired:
             return [], "pip-audit timed out"
-        if proc.returncode not in (0, 1):
-            # pip-audit uses 1 when vulns found. Other codes are failures.
-            err = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
-            return [], f"pip-audit failed: {err}"
+
+        raw = (proc.stdout or "").strip()
+        if not raw:
+            err = (proc.stderr or "").strip() or f"exit {proc.returncode}"
+            # Empty stdout with non-zero: tool failed (including ModuleNotFound via -m).
+            if proc.returncode != 0:
+                if "No module named" in err or "ModuleNotFoundError" in err:
+                    return [], "pip-audit module not found"
+                return [], f"pip-audit failed: {err}"
+            return [], "pip-audit returned empty stdout"
+
         try:
-            data = json.loads(proc.stdout or "[]")
+            data = json.loads(raw)
         except json.JSONDecodeError:
             return [], "pip-audit returned malformed JSON"
-        if isinstance(data, dict) and "dependencies" in data:
-            vulns = []
-            for dep in data.get("dependencies") or []:
-                for v in dep.get("vulns") or []:
-                    vulns.append(
-                        {
-                            "name": dep.get("name"),
-                            "version": dep.get("version"),
-                            "id": v.get("id"),
-                            "aliases": v.get("aliases") or [],
-                        }
-                    )
-            return vulns, None
-        if isinstance(data, list):
-            return data, None
-        return [], "unrecognised pip-audit JSON shape"
+
+        # Only a dict with dependencies is a successful scan result.
+        if not isinstance(data, dict) or "dependencies" not in data:
+            if proc.returncode != 0:
+                err = (proc.stderr or "").strip() or f"exit {proc.returncode}"
+                if "No module named" in err or "ModuleNotFoundError" in err:
+                    return [], "pip-audit module not found"
+                return [], f"pip-audit failed: {err}"
+            return [], "unrecognised pip-audit JSON shape (missing dependencies key)"
+
+        vulns: List[Dict[str, Any]] = []
+        for dep in data.get("dependencies") or []:
+            if not isinstance(dep, dict):
+                continue
+            # skip_reason means the package was not fully audited.
+            if dep.get("skip_reason"):
+                return [], f"pip-audit skipped a dependency: {dep.get('name')}: {dep.get('skip_reason')}"
+            for v in dep.get("vulns") or []:
+                vulns.append(
+                    {
+                        "name": dep.get("name"),
+                        "version": dep.get("version"),
+                        "id": v.get("id"),
+                        "aliases": v.get("aliases") or [],
+                    }
+                )
+        # Exit codes other than 0 (clean) / 1 (vulns found) are failures even with JSON.
+        if proc.returncode not in (0, 1):
+            err = (proc.stderr or "").strip() or f"exit {proc.returncode}"
+            return [], f"pip-audit failed: {err}"
+        return vulns, None
 
 
 def _trusted_env() -> Dict[str, str]:
@@ -1170,6 +1553,23 @@ def run_npm_audit(
         data = json.loads(raw) if raw.strip() else {}
     except json.JSONDecodeError:
         return [], "npm audit returned malformed JSON"
+    if not isinstance(data, dict):
+        return [], "npm audit JSON root is not an object"
+    # npm error envelope (ENOLOCK, registry outage, etc.) — never treat as clean.
+    if "error" in data:
+        err = data.get("error")
+        if isinstance(err, dict):
+            code = err.get("code") or err.get("summary") or "error"
+            return [], f"npm audit error: {code}"
+        return [], f"npm audit error: {err}"
+    if "vulnerabilities" not in data or "metadata" not in data:
+        # Unexpected shape. Fail closed rather than reporting clean.
+        if proc.returncode not in (0, 1):
+            return [], f"npm audit failed: exit {proc.returncode}"
+        return [], "npm audit JSON missing vulnerabilities or metadata"
+    # npm uses 0 (clean) / 1 (vulns). Other codes with a partial body are failures.
+    if proc.returncode not in (0, 1):
+        return [], f"npm audit failed: exit {proc.returncode}"
     findings: List[Finding] = []
     vulns = data.get("vulnerabilities") or {}
     if isinstance(vulns, dict):
@@ -1230,7 +1630,7 @@ def python_licence_and_outdated(
             err = "deadline during PyPI metadata"
             break
         try:
-            meta = http.get_json(PYPI_JSON.format(name=pin.name, version=pin.version))
+            meta = http.get_json(pypi_json_url(pin.name, pin.version))
         except Exception as exc:  # noqa: BLE001
             err = f"PyPI metadata failed for {pin.name}=={pin.version}: {exc}"
             licences.append(
@@ -1259,7 +1659,7 @@ def python_licence_and_outdated(
             )
         )
         try:
-            project = http.get_json(PYPI_PROJECT.format(name=pin.name))
+            project = http.get_json(pypi_project_url(pin.name))
             latest = ((project.get("info") or {}).get("version")) or ""
             if latest and latest != pin.version:
                 kind = "unknown"
@@ -1305,7 +1705,13 @@ def choose_exit_code(report: AuditReport) -> int:
         if ds.coverage not in ("excluded", "not_applicable")
     ]
     for ds in selected:
-        if ds.coverage in ("incomplete", "failed") or ds.check_status == "failed":
+        # Skipped ecosystems that still have manifests are not complete.
+        if ds.coverage in ("incomplete", "failed") or ds.check_status in (
+            "failed",
+            "incomplete",
+            "skipped",
+            "pending",
+        ):
             return 3
     if totals.get("Unknown", 0) > 0:
         return 4
@@ -1603,6 +2009,11 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
             collect_python_inventory(root, ds)
             if args.skip_python_scan:
                 ds.check_status = "skipped"
+                if ds.coverage == "complete":
+                    ds.coverage = "incomplete"
+                    ds.coverage_reason = (
+                        ds.coverage_reason + " | " if ds.coverage_reason else ""
+                    ) + "python scan skipped"
                 continue
             if ds.coverage == "incomplete" and not ds.pins:
                 ds.check_status = "failed"
@@ -1622,10 +2033,20 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
                     vuln_hits, scan_err = run_pip_audit(
                         ds.pins, args.trusted_python, deadline
                     )
-                    if scan_err and "not found" in scan_err:
+                    missing = bool(
+                        scan_err
+                        and (
+                            scan_err in (
+                                "pip-audit module not found",
+                                "pip-audit not found",
+                            )
+                            or "module not found" in scan_err.lower()
+                        )
+                    )
+                    if missing:
                         if args.runner == "pip-audit":
                             ds.coverage = "failed"
-                            ds.coverage_reason = scan_err
+                            ds.coverage_reason = scan_err or "pip-audit missing"
                             ds.check_status = "failed"
                             report.notes.append(
                                 "pip-audit missing. Install pip-audit==2.10.0 in a trusted "
@@ -1674,6 +2095,14 @@ def run_audit(args: argparse.Namespace) -> Tuple[AuditReport, int]:
         elif ds.ecosystem == "npm":
             if args.skip_npm_scan or args.runner in ("pip-audit", "osv"):
                 ds.check_status = "skipped"
+                ds.coverage = "incomplete"
+                if args.runner in ("pip-audit", "osv"):
+                    ds.coverage_reason = (
+                        f"npm scan skipped because --runner={args.runner} "
+                        "does not cover npm; filter with --ecosystem=python or omit --runner"
+                    )
+                else:
+                    ds.coverage_reason = "npm scan skipped"
                 continue
             directory = root if ds.directory == "." else root / ds.directory
             findings, npm_err = run_npm_audit(directory, deadline)

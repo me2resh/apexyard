@@ -395,7 +395,7 @@ fi
 if grep -qF 'pyproject.toml' "$FIXED_PIPELINE" \
   && grep -qF 'poetry.lock' "$FIXED_PIPELINE" \
   && grep -qF 'python-audit' "$FIXED_PIPELINE" \
-  && grep -qF 'pip-audit==2.10.0' "$FIXED_PIPELINE" \
+  && grep -qF 'dependency-audit-tools.requirements.txt' "$FIXED_PIPELINE" \
   && grep -qF 'dependency-audit.py' "$FIXED_PIPELINE"; then
   pass "AC7-fixed-pipeline-python-job-and-paths"
 else
@@ -407,6 +407,31 @@ if grep -qF 'npm-audit' "$FIXED_PIPELINE" && grep -qF 'setup-node' "$FIXED_PIPEL
   pass "AC7-fixed-pipeline-keeps-npm"
 else
   fail "AC7-fixed-pipeline-keeps-npm" "npm path removed"
+fi
+
+# AC7: npm outdated + licence-checker restored (parity with dev)
+if grep -qF 'npm outdated' "$FIXED_PIPELINE" \
+  && grep -qF 'license-checker' "$FIXED_PIPELINE"; then
+  pass "AC7-fixed-pipeline-npm-outdated-and-licences"
+else
+  fail "AC7-fixed-pipeline-npm-outdated-and-licences" "npm outdated / license-checker missing"
+fi
+
+# Install from pin file (AgDR-0184); hashes deferred by comment
+if grep -qF 'dependency-audit-tools.requirements.txt' "$FIXED_PIPELINE" \
+  && grep -qF 'AgDR-0184' "$FIXED_PIPELINE"; then
+  pass "AC7-fixed-pipeline-installs-from-pin-file"
+else
+  fail "AC7-fixed-pipeline-installs-from-pin-file" "pin file install / AgDR-0184 missing"
+fi
+
+# Summarize fails closed on helper/job failure (no continue-on-error on helper)
+if ! grep -A2 'Run shared helper' "$FIXED_PIPELINE" | grep -q 'continue-on-error: true' \
+  && grep -qF 'NPM_RESULT' "$FIXED_PIPELINE" \
+  && grep -qF 'has_report' "$FIXED_PIPELINE"; then
+  pass "AC7-fixed-pipeline-summarize-fail-closed"
+else
+  fail "AC7-fixed-pipeline-summarize-fail-closed" "helper continue-on-error or summarize gates missing"
 fi
 
 # Pinned action SHAs (no floating tags alone)
@@ -460,6 +485,514 @@ if [ -f "$SRC_ROOT/golden-paths/pipelines/scripts/dependency-audit-tools.lock.js
   pass "AC-extra-tools-lock-present"
 else
   fail "AC-extra-tools-lock-present" "missing tooling lock"
+fi
+
+# ---------------------------------------------------------------------------
+# Rex review regressions (B1–B5 + advisories) — stubbed scanners, no network
+# ---------------------------------------------------------------------------
+
+assert_incomplete_nonzero() {
+  local label="$1"
+  local json_path="$2"
+  local rc="$3"
+  if python3 -c '
+import json, sys
+d=json.load(open(sys.argv[1]))
+sets=d.get("dependency_sets") or []
+incomplete=any(
+  s.get("coverage") in ("incomplete","failed")
+  or s.get("check_status") in ("failed","incomplete","skipped")
+  for s in sets
+)
+code=int(d.get("exit_code", 0))
+ok = incomplete and code != 0 and int(sys.argv[2]) != 0
+raise SystemExit(0 if ok else 1)
+' "$json_path" "$rc"; then
+    pass "$label"
+  else
+    fail "$label" "rc=$rc body=$(cat "$json_path" 2>/dev/null | head -c 400)"
+  fi
+}
+
+# B1a: real interpreter missing pip_audit module → OSV fallback note, not silent clean
+# (with fixture HTTP so OSV path can complete). Without fixtures this still must not
+# report complete+exit 0 when the scanner path fails closed before fallback data.
+mkdir -p "$SB/projects/b1-missing-module" "$SB/http-b1"
+printf 'requests==2.31.0\n' > "$SB/projects/b1-missing-module/requirements.txt"
+printf '%s\n' '{"results":[{"vulns":[{"id":"PYSEC-DEMO-1","aliases":["GHSA-demo-0001"]}]}]}' \
+  > "$SB/http-b1/osv_querybatch.json"
+cp "$SB/http/osv_vuln_PYSEC-DEMO-1.json" "$SB/http-b1/" 2>/dev/null || true
+cp "$SB/http/"*.json "$SB/http-b1/" 2>/dev/null || true
+set +e
+python3 -I "$HELPER" "$SB/projects/b1-missing-module" \
+  --fixture-http "$SB/http-b1" \
+  --skip-npm-scan >"$SB/b1-missing.json" 2>"$SB/b1-missing.err"
+b1_rc=$?
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b1-missing.json"'"))
+notes=" ".join(d.get("notes") or [])
+sets=d.get("dependency_sets") or []
+# Either OSV fallback ran (complete with note) OR failed closed — never silent clean
+# without attempting a scanner.
+ok = ("Falling back to direct OSV" in notes) or any(
+  s.get("coverage") in ("incomplete","failed") for s in sets
+)
+# Must not be: complete + exit 0 + empty notes (the B1 bug)
+silent_clean = (
+  d.get("exit_code", 0) == 0
+  and all(s.get("coverage")=="complete" for s in sets)
+  and "Falling back" not in notes
+  and not (d.get("findings") or [])
+  and "pip-audit" not in notes.lower()
+)
+raise SystemExit(0 if ok and not silent_clean else 1)
+'; then
+  pass "B1-fixed-missing-pip-audit-module-not-silent-clean"
+else
+  fail "B1-fixed-missing-pip-audit-module-not-silent-clean" "rc=$b1_rc $(cat "$SB/b1-missing.json" | head -c 500)"
+fi
+
+# B1b: pip-audit fatal exit (module present, empty/non-JSON stdout, exit 1) → failed
+mkdir -p "$SB/projects/b1-fatal"
+printf 'requests==2.31.0\n' > "$SB/projects/b1-fatal/requirements.txt"
+cat > "$SB/fake-pip-audit-fatal" <<'EOF'
+#!/bin/bash
+if [[ "$*" == *"-c"* ]]; then exit 0; fi
+echo "OSV backend unavailable" >&2
+exit 1
+EOF
+chmod +x "$SB/fake-pip-audit-fatal"
+set +e
+python3 -I "$HELPER" "$SB/projects/b1-fatal" \
+  --trusted-python "$SB/fake-pip-audit-fatal" \
+  --fixture-http "$SB/http" \
+  --skip-npm-scan >"$SB/b1-fatal.json" 2>/dev/null
+b1f_rc=$?
+set -e
+assert_incomplete_nonzero "B1-fixed-pip-audit-fatal-exit-failed" "$SB/b1-fatal.json" "$b1f_rc"
+
+# B1c: --runner=osv on mixed repo marks npm incomplete / non-zero exit
+set +e
+python3 -I "$HELPER" "$SB/projects/mixed" \
+  --runner=osv \
+  --fixture-http "$SB/http" \
+  --pip-audit-stub "$SB/projects/python-only/pip-audit-stub.json" \
+  >"$SB/b1-osv-mixed.json" 2>/dev/null
+b1m_rc=$?
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b1-osv-mixed.json"'"))
+sets=d.get("dependency_sets") or []
+npm=next(s for s in sets if s.get("ecosystem")=="npm")
+ok = npm.get("coverage")=="incomplete" and d.get("exit_code",0) != 0
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B1-fixed-runner-osv-mixed-npm-incomplete"
+else
+  fail "B1-fixed-runner-osv-mixed-npm-incomplete" "rc=$b1m_rc $(cat "$SB/b1-osv-mixed.json" | head -c 400)"
+fi
+
+# B2: npm ENOLOCK error JSON → failed / incomplete, not clean
+mkdir -p "$SB/projects/b2-enolock"
+printf '%s\n' '{"name":"no-lock","version":"1.0.0"}' > "$SB/projects/b2-enolock/package.json"
+cat > "$SB/fake-npm-enolock" <<'EOF'
+#!/bin/bash
+printf '%s\n' '{"error":{"code":"ENOLOCK","summary":"This command requires an existing lockfile.","detail":"Try creating one first with npm i --package-lock-only"}}'
+exit 1
+EOF
+chmod +x "$SB/fake-npm-enolock"
+# Inject via DEPENDENCY_AUDIT — helper has no npm stub flag; wrap PATH
+mkdir -p "$SB/bin"
+cat > "$SB/bin/npm" <<EOF
+#!/bin/bash
+exec "$SB/fake-npm-enolock" "\$@"
+EOF
+chmod +x "$SB/bin/npm"
+set +e
+PATH="$SB/bin:$PATH" python3 -I "$HELPER" "$SB/projects/b2-enolock" \
+  --ecosystem=npm \
+  --skip-python-scan >"$SB/b2-enolock.json" 2>/dev/null
+b2_rc=$?
+set -e
+assert_incomplete_nonzero "B2-fixed-npm-enolock-failed" "$SB/b2-enolock.json" "$b2_rc"
+
+# B3 i1: mixed pyproject pins + ranges → incomplete; only exact pins inventoried
+mkdir -p "$SB/projects/b3-pyproject"
+cat > "$SB/projects/b3-pyproject/pyproject.toml" <<'EOF'
+[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["flask==2.0.0", "requests>=2", "django"]
+
+[build-system]
+requires = ["setuptools==68.0.0"]
+build-backend = "setuptools.build_meta"
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/b3-pyproject" \
+  --skip-python-scan --skip-npm-scan >"$SB/b3-pyproject.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b3-pyproject.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+names={p["name"] for p in s.get("packages") or []}
+# flask exact pin kept; ranges incomplete; setuptools from build-system must NOT appear
+ok = (
+  s.get("coverage")=="incomplete"
+  and "flask" in names
+  and "setuptools" not in names
+  and "django" not in names
+)
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B3-fixed-pyproject-ranges-incomplete-no-build-system"
+else
+  fail "B3-fixed-pyproject-ranges-incomplete-no-build-system" "$(cat "$SB/b3-pyproject.json" | head -c 500)"
+fi
+
+# B3 i2: poetry.lock legacy + git sources → incomplete, not sent as PyPI
+mkdir -p "$SB/projects/b3-poetry-src"
+cat > "$SB/projects/b3-poetry-src/poetry.lock" <<'EOF'
+[[package]]
+name = "internal-lib"
+version = "1.0.0"
+description = ""
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.source]
+type = "legacy"
+url = "https://pypi.internal.example/simple"
+reference = "internal"
+
+[[package]]
+name = "vcs-lib"
+version = "2.0.0"
+description = ""
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.source]
+type = "git"
+url = "https://github.com/example/vcs-lib.git"
+reference = "main"
+
+[[package]]
+name = "demo-lib"
+version = "1.0.0"
+description = ""
+category = "main"
+optional = false
+python-versions = "*"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.11"
+content-hash = "synthetic"
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/b3-poetry-src" \
+  --skip-python-scan --skip-npm-scan >"$SB/b3-poetry.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b3-poetry.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+names={p["name"] for p in s.get("packages") or []}
+ok = s.get("coverage")=="incomplete" and "internal-lib" not in names and "vcs-lib" not in names and "demo-lib" in names
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B3-fixed-poetry-legacy-git-incomplete"
+else
+  fail "B3-fixed-poetry-legacy-git-incomplete" "$(cat "$SB/b3-poetry.json" | head -c 500)"
+fi
+
+# B3 i3: uv.lock editable / git / private registry → incomplete
+mkdir -p "$SB/projects/b3-uv"
+cat > "$SB/projects/b3-uv/uv.lock" <<'EOF'
+version = 1
+revision = 1
+
+[[package]]
+name = "b3-uv"
+version = "0.1.0"
+source = { editable = "." }
+
+[[package]]
+name = "vcs-pkg"
+version = "1.0.0"
+source = { git = "https://github.com/example/vcs-pkg" }
+
+[[package]]
+name = "private-pkg"
+version = "1.0.0"
+source = { registry = "https://pypi.private.example/simple" }
+
+[[package]]
+name = "demo-lib"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/b3-uv" \
+  --skip-python-scan --skip-npm-scan >"$SB/b3-uv.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b3-uv.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+names={p["name"] for p in s.get("packages") or []}
+ok = (
+  s.get("coverage")=="incomplete"
+  and "demo-lib" in names
+  and "b3-uv" not in names
+  and "vcs-pkg" not in names
+  and "private-pkg" not in names
+)
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B3-fixed-uv-non-pypi-sources-incomplete"
+else
+  fail "B3-fixed-uv-non-pypi-sources-incomplete" "$(cat "$SB/b3-uv.json" | head -c 500)"
+fi
+
+# B3 i4: Pipfile.lock git/editable without version → incomplete
+mkdir -p "$SB/projects/b3-pipfile"
+cat > "$SB/projects/b3-pipfile/Pipfile.lock" <<'EOF'
+{
+  "_meta": {"hash": {"sha256": "x"}, "pipfile-spec": 6, "requires": {}, "sources": [{"name": "pypi", "url": "https://pypi.org/simple", "verify_ssl": true}]},
+  "default": {
+    "requests": {"hashes": [], "version": "==2.31.0"},
+    "vcs-tool": {"git": "https://github.com/example/vcs-tool.git", "ref": "main"},
+    "local-tool": {"path": ".", "editable": true}
+  },
+  "develop": {}
+}
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/b3-pipfile" \
+  --skip-python-scan --skip-npm-scan >"$SB/b3-pipfile.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b3-pipfile.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+names={p["name"] for p in s.get("packages") or []}
+ok = s.get("coverage")=="incomplete" and "requests" in names and "vcs-tool" not in names
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B3-fixed-pipfile-git-editable-incomplete"
+else
+  fail "B3-fixed-pipfile-git-editable-incomplete" "$(cat "$SB/b3-pipfile.json" | head -c 500)"
+fi
+
+# B3 i5: --extra-index-url, --requirement include, ==2.* wildcard
+mkdir -p "$SB/projects/b3-req"
+printf 'demo-lib==1.0.0\n' > "$SB/projects/b3-req/base.txt"
+cat > "$SB/projects/b3-req/requirements.txt" <<'EOF'
+--extra-index-url https://pypi.internal.example/simple
+--requirement base.txt
+requests==2.*
+EOF
+set +e
+python3 -I "$HELPER" "$SB/projects/b3-req" \
+  --skip-python-scan --skip-npm-scan >"$SB/b3-req.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/b3-req.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+names={p["name"] for p in s.get("packages") or []}
+ok = (
+  s.get("coverage")=="incomplete"
+  and "demo-lib" in names
+  and "requests" not in names
+)
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B3-fixed-extra-index-requirement-wildcard"
+else
+  fail "B3-fixed-extra-index-requirement-wildcard" "$(cat "$SB/b3-req.json" | head -c 500)"
+fi
+
+# B4: Pipfile.lock holding [] must not crash; incomplete / non-zero
+mkdir -p "$SB/projects/b4-pipfile-list"
+printf '[]\n' > "$SB/projects/b4-pipfile-list/Pipfile.lock"
+set +e
+python3 -I "$HELPER" "$SB/projects/b4-pipfile-list" \
+  --skip-python-scan --skip-npm-scan >"$SB/b4.json" 2>"$SB/b4.err"
+b4_rc=$?
+set -e
+if [ -s "$SB/b4.json" ] && python3 -c '
+import json
+d=json.load(open("'"$SB/b4.json"'"))
+sets=d.get("dependency_sets") or []
+ok = any(s.get("coverage") in ("incomplete","failed") for s in sets) and d.get("exit_code",0) != 0
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "B4-fixed-pipfile-lock-list-no-crash"
+else
+  fail "B4-fixed-pipfile-lock-list-no-crash" "rc=$b4_rc err=$(cat "$SB/b4.err") out=$(cat "$SB/b4.json" 2>/dev/null | head -c 300)"
+fi
+
+# B4 pipeline: summarize treats missing report / failed need as incomplete
+if grep -qF 'npm report missing' "$FIXED_PIPELINE" \
+  || grep -qF 'NPM_HAS_REPORT' "$FIXED_PIPELINE"; then
+  pass "B4-fixed-pipeline-missing-report-incomplete"
+else
+  fail "B4-fixed-pipeline-missing-report-incomplete" "summarize missing-report gate absent"
+fi
+
+# B5 covered by AC7-fixed-pipeline-npm-outdated-and-licences above
+pass "B5-fixed-npm-outdated-licence-restored-see-AC7"
+
+# A1: multi-line / hostile package name rejected (never written to pins / URLs)
+mkdir -p "$SB/projects/hostile-names"
+# Realistic poetry-style multi-line capture bait (must not become pin lines)
+cat > "$SB/projects/hostile-names/poetry.lock" <<'EOF'
+[[package]]
+name = """safe-pkg
+--index-url https://attacker.example/simple
+-r /etc/hosts"""
+version = "1.0.0"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "*"
+content-hash = "synthetic"
+EOF
+# Also keep a requirements fixture that the committed hostile-names path used
+printf 'safe-pkg==1.0.0\n' > "$FIXTURE_SRC/hostile-names/requirements.txt"
+set +e
+python3 -I "$HELPER" "$SB/projects/hostile-names" \
+  --skip-python-scan --skip-npm-scan >"$SB/a1.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/a1.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+pkgs=s.get("packages") or []
+# Hostile multi-line name must not appear as a package pin
+ok = s.get("coverage")=="incomplete" and all("\n" not in p.get("name","") for p in pkgs) and len(pkgs)==0
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "A1-fixed-multiline-package-name-rejected"
+else
+  fail "A1-fixed-multiline-package-name-rejected" "$(cat "$SB/a1.json" | head -c 500)"
+fi
+
+# Use hostile-names fixture directory (was unused)
+if [ -f "$FIXTURE_SRC/hostile-names/requirements.txt" ]; then
+  set +e
+  python3 -I "$HELPER" "$FIXTURE_SRC/hostile-names" \
+    --skip-python-scan --skip-npm-scan >"$SB/hostile-fixture.json" 2>/dev/null
+  set -e
+  if python3 -c '
+import json
+d=json.load(open("'"$SB/hostile-fixture.json"'"))
+ok=any(s.get("ecosystem")=="python" for s in d.get("dependency_sets") or [])
+raise SystemExit(0 if ok else 1)
+'; then
+    pass "A1-fixed-hostile-names-fixture-used"
+  else
+    fail "A1-fixed-hostile-names-fixture-used" "fixture not read"
+  fi
+else
+  fail "A1-fixed-hostile-names-fixture-used" "fixture missing"
+fi
+
+# A2: symlinked lock outside checkout refused
+mkdir -p "$SB/projects/a2-symlink" "$SB/outside-lock"
+cat > "$SB/outside-lock/poetry.lock" <<'EOF'
+[[package]]
+name = "demo-lib"
+version = "1.0.0"
+[metadata]
+lock-version = "1.1"
+python-versions = "*"
+content-hash = "x"
+EOF
+ln -s "$SB/outside-lock/poetry.lock" "$SB/projects/a2-symlink/poetry.lock"
+set +e
+python3 -I "$HELPER" "$SB/projects/a2-symlink" \
+  --skip-python-scan --skip-npm-scan >"$SB/a2.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/a2.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+ok = s.get("coverage")=="incomplete" and "escape" in (s.get("coverage_reason") or "").lower()
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "A2-fixed-symlink-lock-outside-refused"
+else
+  fail "A2-fixed-symlink-lock-outside-refused" "$(cat "$SB/a2.json" | head -c 400)"
+fi
+
+# A3: size cap — oversized requirements → incomplete
+mkdir -p "$SB/projects/a3-huge"
+python3 - <<PY
+from pathlib import Path
+p = Path("$SB/projects/a3-huge/requirements.txt")
+# Just over 10 MiB of comment lines (no network, fast enough)
+p.write_bytes(b"# " + (b"x" * (10 * 1024 * 1024)) + b"\nrequests==2.31.0\n")
+PY
+set +e
+python3 -I "$HELPER" "$SB/projects/a3-huge" \
+  --skip-python-scan --skip-npm-scan >"$SB/a3.json" 2>/dev/null
+set -e
+if python3 -c '
+import json
+d=json.load(open("'"$SB/a3.json"'"))
+sets=d.get("dependency_sets") or []
+s=sets[0]
+ok = s.get("coverage")=="incomplete" and "cap" in (s.get("coverage_reason") or "").lower()
+raise SystemExit(0 if ok else 1)
+'; then
+  pass "A3-fixed-manifest-size-cap"
+else
+  fail "A3-fixed-manifest-size-cap" "$(cat "$SB/a3.json" | head -c 400)"
+fi
+
+# Unescaped names in PyPI URLs — unit check on pypi_json_url
+if HELPER_PATH="$HELPER" python3 - <<'PY'
+import importlib.util, os, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("dep_audit", Path(os.environ["HELPER_PATH"]))
+mod = importlib.util.module_from_spec(spec)
+sys.modules["dep_audit"] = mod
+spec.loader.exec_module(mod)
+url = mod.pypi_json_url("pkg name", "1.0+local")
+assert " " not in url
+assert "%20" in url or "%2B" in url or "+" not in url.split("/pypi/")[-1]
+# Plus in version must be encoded
+assert "1.0+local" not in url
+raise SystemExit(0)
+PY
+then
+  pass "A-fixed-pypi-url-encodes-name-version"
+else
+  fail "A-fixed-pypi-url-encodes-name-version" "URL encoding check failed"
+fi
+
+# AgDR-0184 present
+if [ -f "$SRC_ROOT/docs/agdr/AgDR-0184-dependency-audit-tool-hash-pins-deferred.md" ]; then
+  pass "AC-extra-agdr-0184-present"
+else
+  fail "AC-extra-agdr-0184-present" "AgDR-0184 missing"
 fi
 
 echo ""
