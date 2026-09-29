@@ -246,7 +246,7 @@ hook specifically).
     before landing the fix, not assumed.
 - **Round 11 correction (me2resh/apexyard#1458 PR #1462, Rex B1 +
   Hakim HIGH-1).** Two independent reviews of round 10's PR each found
-  one of its six fixes fail-open. Both are corrected here; the other
+  one of its six fixes fail-open. Both are corrected here. The other
   four (items 1, 5, 6) and the item-3/item-7 dispositions stand
   unchanged.
   - **Item 2, DROPPED (Hakim HIGH-1, blocking).** Round 10's GARBAGE
@@ -265,11 +265,12 @@ hook specifically).
     project name went from blocked (dev) to silently passed (round 10).
     Closing this properly needs a real YAML parser that can tell a
     project-entry map from an arbitrary nested list or map-of-lists
-    layout; a column comparison over raw text cannot. Given the
-    ticket's own instruction to keep every change small and targeted,
-    and that item 2 was only ever a usability fix (a nested `- name:`
-    over-blocks; it does not leak), the GARBAGE mechanism is removed
-    outright rather than patched a third time. dev's own `- name:`
+    layout. A column comparison over raw text cannot make that
+    distinction. Given the ticket's own instruction to keep every
+    change small and targeted, and that item 2 was only ever a
+    usability fix (a nested `- name:` over-blocks and does not leak),
+    the GARBAGE mechanism is removed outright rather than patched a
+    third time. dev's own `- name:`
     capture is unconditionally private again, matching its behavior
     before this whole ticket. **This is now recorded, alongside item 7,
     as an accepted out-of-scope over-block**: a nested `- name:` common
