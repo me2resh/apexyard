@@ -63,19 +63,6 @@ fi
 # above and below remains the only thing that blocks.
 LEGACY_ACTIVE="$ROOT/.claude/session/active-reviewer"
 SID="${CLAUDE_CODE_SESSION_ID:-}"
-if [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
-  echo "ADVISORY: a legacy shared active-reviewer marker exists at $LEGACY_ACTIVE, but this session ($SID) reads only $ACTIVE. A writer that used the bare legacy path arms no mutation lock for this session. Resolve the marker path through active_reviewer_marker_path instead of the literal string." >&2
-fi
-
-[ -f "$ACTIVE" ] || exit 0
-
-if [ -z "$COMMAND" ]; then
-  if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then
-    echo "BLOCKED: review-class agent cannot mutate the repository while an active review is in flight; use read-only git commands and report findings." >&2
-    exit 2
-  fi
-  exit 0
-fi
 
 # Remove confirmed heredoc bodies before inspecting command text. Review prose
 # often mentions git verbs; only the command portion should be classified.
@@ -90,6 +77,36 @@ fi
 # as `echo 'git commit is forbidden'`. Options such as `git -C repo commit` are
 # accepted by the middle token span.
 MUTATING='add|commit|push|restore|reset|stash|clean|checkout|checkout-index|switch|mv|rm|rebase|cherry-pick|merge|tag|update-ref|fetch|apply|revert|am|bisect|replace|filter-branch|gc|init|repack|prune|fast-import|pull|read-tree|write-tree|commit-tree|update-index|hash-object|index-pack|pack-refs|mktag|mktree|clone|init-db|stage|subtree|replay'
+
+# ADVISORY ONLY (me2resh/apexyard#1400, narrowed in #1408): when this session
+# resolves a scoped marker path but only a legacy shared file exists on disk,
+# mutations are not blocked. Name that fail-open state on stderr, but only when
+# the Bash payload is a git mutation — read-only commands such as `ls` must
+# stay silent (the legacy file is irrelevant to them).
+if [ ! -f "$ACTIVE" ] && [ -n "$SID" ] && [ "$ACTIVE" != "$LEGACY_ACTIVE" ] && [ -f "$LEGACY_ACTIVE" ]; then
+  _legacy_advise=0
+  if [ -z "$COMMAND" ]; then
+    if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then
+      _legacy_advise=1
+    fi
+  elif printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?(${MUTATING})([[:space:];|&]|$)"; then
+    _legacy_advise=1
+  fi
+  if [ "$_legacy_advise" -eq 1 ]; then
+    echo "ADVISORY: a legacy shared active-reviewer marker exists at $LEGACY_ACTIVE, but this session ($SID) reads only $ACTIVE. A writer that used the bare legacy path arms no mutation lock for this session. Resolve the marker path through active_reviewer_marker_path instead of the literal string." >&2
+  fi
+  exit 0
+fi
+
+[ -f "$ACTIVE" ] || exit 0
+
+if [ -z "$COMMAND" ]; then
+  if printf '%s' "$INPUT" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^;&|]*[[:space:]])?(add|commit|push|restore|reset|stash|clean|checkout|switch|mv|rm|rebase|cherry-pick|merge|tag|branch)([[:space:];|&]|$)'; then
+    echo "BLOCKED: review-class agent cannot mutate the repository while an active review is in flight; use read-only git commands and report findings." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 # `git remote get-url` and `git remote -v` are read-only operations used to
 # resolve the review host. Block only remote subcommands that change remotes.
