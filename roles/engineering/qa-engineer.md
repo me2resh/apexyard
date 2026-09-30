@@ -216,13 +216,24 @@ Do not approve a code merge, write a merge marker, or merge.
 
 The `qa` label still activates Salim after merge.
 Find the linked merged PR and its latest posted pre-merge QA report.
-Read GitHub PR review bodies or GitLab MR notes, according to the review host.
+Read GitHub PR review bodies and comments, or GitLab MR notes, with their author metadata.
 The tracker adapter posts GitHub `comment` verdicts as PR reviews and GitLab verdicts as MR notes.
-Compare the report's SHA with the exact merged commit SHA from the forge.
-Reuse a complete PASS only when the latest report has matching SHAs and evidence for every criterion.
+Read the merged PR's final head SHA from the forge.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+
+Verify author identity and access from forge metadata, not claims inside the report.
+On GitLab, verify equivalent repository access or the Rex account match.
+If author trust or the final head SHA cannot be verified, run QA again.
+Require evidence for every acceptance criterion before reuse.
+
 In the post-merge QA sign-off, record the reused result, its PR comment, and both SHAs.
 Run QA again when the SHA differs, the report is missing, or any criterion was not verified.
-A squash or merge commit usually has a different SHA, so it needs a new QA run.
 Never use the Rex verdict or a local merge marker as QA evidence.
 
 ### Browser Evidence (rendered surfaces only)

@@ -11,6 +11,7 @@ ROLE="$SOURCE_ROOT/roles/engineering/qa-engineer.md"
 DEFAULTS="$SOURCE_ROOT/.claude/project-config.defaults.json"
 CONFIG_DOC="$SOURCE_ROOT/docs/project-config.md"
 SDLC="$SOURCE_ROOT/workflows/sdlc.md"
+AGDR="$SOURCE_ROOT/docs/agdr/AgDR-0201-sha-bound-pre-merge-qa-reuse.md"
 
 PASS=0
 FAIL=0
@@ -72,18 +73,87 @@ else
   fail 'config-modes-default-ask' 'the default, modes, or skill lookup is missing'
 fi
 
-# 6. Reuse requires a posted PASS for the exact merged commit SHA.
-if has "$SKILL" 'apexyard-pre-merge-qa: sha=<full-commit-sha> status=PASS' \
-  && has "$AGENT" 'exact merged commit SHA' \
-  && has "$ROLE" 'exact merged commit SHA' \
-  && has "$ROLE" 'Read GitHub PR review bodies or GitLab MR notes' \
+# 6. All reuse instructions bind PASS to the final head and a trusted author.
+reuse_rule_present=true
+for doc in "$SKILL" "$AGENT" "$ROLE" "$SDLC" "$CONFIG_DOC" "$AGDR"; do
+  while IFS= read -r requirement; do
+    if ! has "$doc" "$requirement"; then
+      reuse_rule_present=false
+      printf 'Missing reuse requirement in %s: %s\n' "$doc" "$requirement"
+    fi
+  done <<'RULE'
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+RULE
+done
+
+if [ "$reuse_rule_present" = true ] \
+  && has "$SKILL" 'apexyard-pre-merge-qa: sha=<full-commit-sha> status=PASS' \
+  && has "$ROLE" 'Read GitHub PR review bodies and comments, or GitLab MR notes, with their author metadata.' \
   && has "$ROLE" 'latest posted pre-merge QA report' \
+  && has "$ROLE" 'Verify author identity and access from forge metadata, not claims inside the report.' \
+  && has "$ROLE" 'If author trust or the final head SHA cannot be verified, run QA again.' \
+  && has "$ROLE" 'Require evidence for every acceptance criterion before reuse.' \
   && has "$ROLE" 'record the reused result' \
-  && has "$ROLE" 'Run QA again' \
-  && has "$SDLC" 'same commit SHA'; then
-  pass 'reuse-only-same-sha'
+  && has "$ROLE" 'Run QA again'; then
+  pass 'reuse-only-final-head-and-trusted-author'
 else
-  fail 'reuse-only-same-sha' 'the SHA-bound reuse or mismatch path is missing'
+  fail 'reuse-only-final-head-and-trusted-author' 'the final-head binding, trusted-author rule, or rerun path is missing'
+fi
+
+# 7. Run the actual step-8 config block with local Git and config stubs.
+# No tracker calls, real config reads, or review/approval steps are executed.
+TEST_TMP=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-qa-offer.XXXXXX") || exit 1
+cleanup() {
+  rm -- "$TEST_TMP/ops/.apexyard-fork" "$TEST_TMP/ops/.claude/hooks/_lib-read-config.sh" "$TEST_TMP/run-config.sh"
+  rmdir -- "$TEST_TMP/ops/.claude/hooks" "$TEST_TMP/ops/.claude" "$TEST_TMP/ops" "$TEST_TMP"
+}
+trap cleanup EXIT
+mkdir -p "$TEST_TMP/ops/.claude/hooks"
+touch "$TEST_TMP/ops/.apexyard-fork"
+cat > "$TEST_TMP/ops/.claude/hooks/_lib-read-config.sh" <<'STUB'
+config_get_or() {
+  [ "$1" = '.qa.pre_merge_offer' ] || return 1
+  printf '%s\n' "${QA_TEST_CONFIG_VALUE:-$2}"
+}
+STUB
+cat > "$TEST_TMP/run-config.sh" <<'STUB'
+set -eu
+git() {
+  [ "$*" = 'rev-parse --show-toplevel' ] || return 1
+  printf '%s\n' "$QA_TEST_OPS_ROOT"
+}
+STUB
+
+if awk '
+  $0 == "### 8. Offer pre-merge QA after APPROVED" { step = 1; next }
+  step && /^## / { exit }
+  step && $0 == "```bash" { block = 1; next }
+  block && $0 == "```" { closed = 1; exit }
+  block { print }
+  END { if (!closed) exit 1 }
+' "$SKILL" >> "$TEST_TMP/run-config.sh"; then
+  cat >> "$TEST_TMP/run-config.sh" <<'STUB'
+printf '%s\n' "$qa_offer"
+STUB
+  for config_value in bogus ask always never ''; do
+    expected="$config_value"
+    case "$config_value" in
+      bogus|'') expected=ask ;;
+    esac
+    if actual=$(QA_TEST_CONFIG_VALUE="$config_value" QA_TEST_OPS_ROOT="$TEST_TMP/ops" bash "$TEST_TMP/run-config.sh") \
+      && [ "$actual" = "$expected" ]; then
+      pass "step-8-config-${config_value:-missing}"
+    else
+      fail "step-8-config-${config_value:-missing}" "expected $expected, got $actual"
+    fi
+  done
+else
+  fail 'step-8-config-extraction' 'could not extract a complete step-8 Bash block'
 fi
 
 printf 'passed: %s   failed: %s\n' "$PASS" "$FAIL"

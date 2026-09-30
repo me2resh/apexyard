@@ -162,11 +162,18 @@ Post Salim's result on the PR with `tracker_review_submit <owner/repo> <pr> comm
 Use the `comment` verdict, never `approve`.
 Include the full PR HEAD SHA, environment, criterion results, and evidence.
 Start the body with `## Pre-merge QA (Salim)` so the post-merge role can identify it.
-For a complete PASS, include this line in the posted body. Replace the SHA placeholder with the full SHA:
+For a complete PASS, include this line in the posted body. Replace the SHA placeholder with the full PR HEAD SHA tested:
 
 ```text
 <!-- apexyard-pre-merge-qa: sha=<full-commit-sha> status=PASS -->
 ```
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
 
 Use `status=FAIL` or `status=INCOMPLETE` for failed or unverified criteria.
 Never mark such a report PASS.

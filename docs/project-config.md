@@ -128,9 +128,18 @@ Set `qa.pre_merge_offer` in `.claude/project-config.json` to one of these values
 | `never` | Skip the offer. Run QA after merge through the existing `qa` label. |
 
 With `ask`, a `no` answer keeps the existing post-merge QA flow. An invalid value falls back to `ask`.
+With `always`, a ticket with no acceptance criteria produces INCOMPLETE and stops before merge approval.
+A Rex re-review after a branch update offers QA again according to this setting.
+
 The offer does not grant merge approval or create a merge gate. Only the human-invoked `/approve-merge` records approval and merges.
-Salim posts a SHA-stamped result on the PR. Post-merge QA reuses a complete PASS only when the merged commit has that exact SHA.
-Squash and merge commits normally have a different SHA, so Salim runs QA again in those cases.
+Salim posts a SHA-stamped result on the PR with evidence for every acceptance criterion.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
 
 ## Extending the defaults
 

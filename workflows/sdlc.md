@@ -305,8 +305,15 @@ In Progress --> In Review --> QA --> Done
 | Sign-off | QA Engineer | Approval to close |
 
 When the `qa` label activates Salim, check for a complete pre-merge QA PASS on the linked PR.
-If its SHA is the same commit SHA as the merged commit, record that result in the post-merge sign-off.
-Do not run QA again for that exact match. If the SHA differs or evidence is incomplete, run QA now.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+
+Record the reused result in the post-merge sign-off. If evidence is incomplete, run QA now.
 
 ### If QA Finds Issues
 

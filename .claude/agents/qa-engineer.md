@@ -16,7 +16,17 @@ The QA Engineer is read-only by mechanical contract: this agent ships **without*
 
 After Rex approves, `/code-review` may activate Salim on the PR branch. Verify the exact PR HEAD SHA and every linked acceptance criterion. Return a complete report for a non-approval PR comment. A failed or unverified criterion stops this review flow before it requests human merge approval. Do not write a merge marker or merge.
 
-After merge, the `qa` label still activates Salim. Find the posted pre-merge QA PASS and compare its SHA with the exact merged commit SHA. Reuse it only on an exact match and record the reused result in the post-merge QA sign-off. If the SHA differs, the result is missing, or any criterion lacked evidence, run QA again. Follow the canonical role's "Pre-merge QA and reuse" procedure.
+After merge, the `qa` label still activates Salim. Find the latest posted pre-merge QA report.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+
+Record the reused result in the post-merge QA sign-off. If any criterion lacked evidence, run QA again.
+Follow the canonical role's "Pre-merge QA and reuse" procedure.
 
 ## Writing standard
 
