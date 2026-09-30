@@ -210,5 +210,25 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# Rex, review of PR #1517: the shell removes quotes, so a partly quoted
+# option name still reaches grep as --filter=. Each must keep the raw scan.
+must_detect 'S3p --"filter"=' "grep --\"filter\"='gh pr merge 7' notes.txt"
+must_detect "S3p --fil'ter'=" "grep --fil'ter'='gh pr merge 7' notes.txt"
+must_detect 'S3p ""--filter=' "grep \"\"--filter='gh pr merge 7' notes.txt"
+must_detect "S3p ''--filter=" "grep ''--filter='gh pr merge 7' notes.txt"
+must_detect 'S3p -"-filter"=' "grep -\"-filter\"='gh pr merge 7' notes.txt"
+# The same long dash word must not slow the grep-option branch either.
+start_s=$(date +%s)
+check 'long dash word, then grep --filter, still detects' yes \
+  "grep a${dashes} --filter='gh pr merge 7' notes.txt"
+elapsed=$(( $(date +%s) - start_s ))
+if [ "$elapsed" -lt 10 ]; then
+  printf 'PASS [long dash word, then grep --filter, scans in %ss (limit 10s)]\n' "$elapsed"
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL [long dash word, then grep --filter, took %ss (limit 10s)]\n' "$elapsed" >&2
+  FAIL=$((FAIL + 1))
+fi
+
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

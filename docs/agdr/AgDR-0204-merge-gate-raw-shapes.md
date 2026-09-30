@@ -25,7 +25,7 @@ Chosen: **add bounded raw fallbacks**, because each check can only give the exis
 - Add the raw command for output redirects to shell startup names or paths under `.git/hooks/`.
 - Inspect quoted and concatenated literal redirect targets without evaluating them.
 - Add the raw command for `grep`, `egrep`, and `fgrep` options named `--filter`, `--pager`, `--view`, or `--format-open`.
-- Recognize separate values, `=` values, and quoted option names.
+- Recognize separate values, `=` values, and option names that are fully or partly quoted (`--"filter"=`, `""--filter=`). The shell removes the quotes, so grep receives `--filter=`. The check reads a fixed window at each word start and drops quote characters from it.
 - Treat these option names conservatively even when an earlier argument could make them data.
 - Preserve the existing fallback for expansions, escapes, unknown commands, and incomplete syntax.
 

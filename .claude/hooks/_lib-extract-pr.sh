@@ -309,6 +309,15 @@ _scrub_merge_command() {
       return t == "--filter" || t == "--pager" || t == "--view" || \
              t == "--format-open"
     }
+    # Check a grep option that starts at position p. Read a fixed window,
+    # drop quote characters (the shell removes them, so --"filter"= and
+    # ""--filter= reach grep as --filter=), and test the option name. The
+    # window keeps the cost fixed per word start.
+    function grep_opt_at(p,    w) {
+      w = flat_word(substr(s, p, 48))
+      if (match(w, /^-[-A-Za-z]*/)) return dangerous_grep_opt(substr(w, 1, RLENGTH))
+      return 0
+    }
     function startup_base(b) {
       return b == ".zshenv" || b == "zshenv" || \
              b == ".zshrc" || b == "zshrc" || \
@@ -419,8 +428,10 @@ _scrub_merge_command() {
           if (bad || pos > n) { bad = 1; break }
           pos++
           word = substr(s, start, pos - start)
-          # Quoted grep option names still select an execution feature.
-          if (is_grep_family(cmdword) && dangerous_grep_opt(word)) newbad = 1
+          # Quoted grep option names still select an execution feature. A
+          # quoted span that starts a word can also begin an option name.
+          if (is_grep_family(cmdword) && (dangerous_grep_opt(word) || \
+              ((start == 1 || substr(s, start - 1, 1) ~ /[ \t\n;|&<>(]/) && grep_opt_at(start)))) newbad = 1
           out = out blank(word); continue
         }
         # Reject shell execution/expansion syntax and comments conservatively.
@@ -459,15 +470,14 @@ _scrub_merge_command() {
           pos = start
         }
         # Grep-family options that can run a program on some hosts add the
-        # raw text. Quoted option names are handled in the quote branch above.
+        # raw text. A word that starts with a quote is handled in the quote branch.
         # Check only a dash that starts a word, and read a fixed window with
-        # one substr: reading each dash to the end of a long word made the
+        # grep_opt_at: reading each dash to the end of a long word made the
         # scan super-linear, and a timed-out gate does not block (Hakim,
         # review of PR #1517).
         if (is_grep_family(cmdword) && c == "-" && \
             (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>(]/)) {
-          peek = substr(s, pos, 24)
-          if (match(peek, /^[-A-Za-z]+/) && dangerous_grep_opt(substr(peek, 1, RLENGTH))) newbad = 1
+          if (grep_opt_at(pos)) newbad = 1
         }
         out = out c; pos++
       }
