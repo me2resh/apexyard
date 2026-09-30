@@ -87,6 +87,13 @@ must_detect 'S3 grep --pager separate' "grep --pager sh 'gh pr merge 7' notes.tx
 must_detect 'S3 grep quoted --view' "grep '--view' sh 'gh pr merge 7' notes.txt"
 must_detect 'S3 egrep --format-open=' "egrep --format-open='gh pr merge 7' notes.txt"
 must_detect 'S3 fgrep --filter=' "fgrep --filter=./run.sh 'gh pr merge 7' notes.txt"
+# Review of PR #1517: a merge phrase split by quotes must still be seen in
+# the three shapes. dev scrubbed each quoted span to spaces, which joins the
+# words; the raw text alone keeps the quotes between them.
+must_detect 'S1q quote-split phrase with zsh ~[' "echo gh' 'pr' 'merge' '7 ~[demo]"
+must_detect 'S2q quote-split phrase to zshenv' "echo gh' 'pr' 'merge' '7 > ~/.zshenv"
+must_detect 'S2q quote-split phrase to git hooks' "echo gh' 'pr' 'merge' '7 > .git/hooks/pre-commit"
+must_detect 'S3q quote-split phrase with grep --filter' "grep --filter=sh gh' 'pr' 'merge' '7 notes.txt"
 
 # Only the narrow command list can suppress merge text, regardless of the
 # general scrubber policy. Unknown words and shell syntax retain the raw view.

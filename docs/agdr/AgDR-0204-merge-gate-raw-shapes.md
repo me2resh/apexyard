@@ -18,12 +18,13 @@ All four merge gates share this parser.
 
 ## Decision
 
-Chosen: **add bounded raw fallbacks**, because each check can only retain more text for the existing detector.
+Chosen: **add bounded raw fallbacks**, because each check can only give the existing detector more text to match.
 
-- Keep the entire raw command when unquoted `~[` appears outside a heredoc body.
-- Keep raw text for output redirects to shell startup names or paths under `.git/hooks/`.
+- For each shape, return the raw command and the `dev` scrubbed text, on separate lines. The detector then matches everything `dev` matched, plus the raw text.
+- Add the raw command when unquoted `~[` appears outside a heredoc body.
+- Add the raw command for output redirects to shell startup names or paths under `.git/hooks/`.
 - Inspect quoted and concatenated literal redirect targets without evaluating them.
-- Keep raw text for `grep`, `egrep`, and `fgrep` options named `--filter`, `--pager`, `--view`, or `--format-open`.
+- Add the raw command for `grep`, `egrep`, and `fgrep` options named `--filter`, `--pager`, `--view`, or `--format-open`.
 - Recognize separate values, `=` values, and quoted option names.
 - Treat these option names conservatively even when an earlier argument could make them data.
 - Preserve the existing fallback for expansions, escapes, unknown commands, and incomplete syntax.
@@ -34,7 +35,7 @@ The path check recognizes literal names, not symlinks or arbitrary custom startu
 
 ## Consequences
 
-- The parser retains all previous raw matches.
+- The detector matches every command that `dev` matched. A first version returned only the raw text, which lost a merge phrase split by quotes, because `dev` scrubbed each quoted span to spaces and so joined the words (review of PR #1517). Returning both views fixes that.
 - Ordinary `grep`, `cat`, and `echo` data cases still pass.
 - Each new execution shape must reach all four merge gates.
 - AgDR-0196 records split merge phrases and separate write-then-run calls as known limits.
@@ -44,7 +45,7 @@ The path check recognizes literal names, not symlinks or arbitrary custom startu
 
 ### Bounded raw fallbacks for #1507
 
-The narrow scrub from AgDR-0196 blanked quoted merge text inside allowlisted commands. Three shapes can still execute that text: zsh `~[`, redirects into startup or hook paths, and grep options that run a program. Keeping raw text for those shapes is stricter than `dev` was after #1497. It does not loosen any prior match. Known limits stay documented on AgDR-0196 rather than closed here.
+The narrow scrub from AgDR-0196 blanked quoted merge text inside allowlisted commands. Three shapes can still execute that text: zsh `~[`, redirects into startup or hook paths, and grep options that run a program. Adding the raw text for those shapes, next to the `dev` scrubbed text, is stricter than `dev` was after #1497, and does not loosen any prior match. Known limits stay documented on AgDR-0196 rather than closed here.
 
 ## Artifacts
 

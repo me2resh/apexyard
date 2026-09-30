@@ -364,7 +364,7 @@ _scrub_merge_command() {
     }
     BEGIN {
       s = ENVIRON["MERGE_SCRUB_INPUT"]
-      n = length(s); pos = 1; first = 1; out = ""; bad = 0; pending = 0
+      n = length(s); pos = 1; first = 1; out = ""; bad = 0; newbad = 0; pending = 0
       cmdword = ""
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
       while (pos <= n && !bad) {
@@ -407,7 +407,8 @@ _scrub_merge_command() {
           out = out word; first = 0; cmdword = word; continue
         }
         # Unquoted zsh dynamic named directory (~[...]) can run code.
-        if (c == "~" && nx == "[") { bad = 1; break }
+        # newbad keeps the dev scrub and adds the raw text (see the end).
+        if (c == "~" && nx == "[") newbad = 1
         if (c == sq || c == dq) {
           q = c; start = pos++
           while (pos <= n && substr(s, pos, 1) != q) {
@@ -419,9 +420,7 @@ _scrub_merge_command() {
           pos++
           word = substr(s, start, pos - start)
           # Quoted grep option names still select an execution feature.
-          if (is_grep_family(cmdword) && dangerous_grep_opt(word)) {
-            bad = 1; break
-          }
+          if (is_grep_family(cmdword) && dangerous_grep_opt(word)) newbad = 1
           out = out blank(word); continue
         }
         # Reject shell execution/expansion syntax and comments conservatively.
@@ -449,29 +448,33 @@ _scrub_merge_command() {
         if ((c == ">" || c == "<") && nx == "&") {
           out = out c nx; pos += 2; continue
         }
-        # Output redirects to shell startup files or .git/hooks keep raw.
+        # Output redirects to shell startup files or .git/hooks add the raw
+        # text. Look ahead only: pos returns to the operator, so the scrub
+        # below stays the same as on dev.
         if (c == ">") {
           start = pos
           pos++
           if (substr(s, pos, 1) == ">" || substr(s, pos, 1) == "|") pos++
-          if (!read_merge_word()) { bad = 1; break }
-          if (is_startup_or_hook(WORD)) { bad = 1; break }
-          # Target was not sensitive. Emit the operator and target text.
-          out = out substr(s, start, pos - start)
-          continue
+          if (read_merge_word() && is_startup_or_hook(WORD)) newbad = 1
+          pos = start
         }
-        # Grep-family options that can run a program on some hosts.
-        # Quoted option names are handled in the quote branch above.
+        # Grep-family options that can run a program on some hosts add the
+        # raw text. Quoted option names are handled in the quote branch above.
         if (is_grep_family(cmdword) && c == "-") {
-          if (!read_merge_word()) { bad = 1; break }
-          if (dangerous_grep_opt(WORD)) { bad = 1; break }
-          out = out WORD
-          continue
+          start = pos
+          if (read_merge_word() && dangerous_grep_opt(WORD)) newbad = 1
+          pos = start
         }
         out = out c; pos++
       }
       if (pending) bad = 1
-      if (bad) printf "%s", s; else printf "%s", out
+      # A newbad shape can execute the data, so the gates must see the raw
+      # text. They must also still see the dev scrubbed text, where a merge
+      # phrase split by quotes reads as separate words (review of PR #1517).
+      # Print both, on separate lines.
+      if (bad) printf "%s", s
+      else if (newbad) printf "%s\n%s", s, out
+      else printf "%s", out
     }
   ' 2>/dev/null) || result="$cmd"
   printf '%s' "${result:-$cmd}"
