@@ -150,29 +150,31 @@ archive_snapshot() {
   return 1
 }
 
-SNAP_ARCHIVE="$TMP/39c5b95"
-D5_ARCHIVE="$TMP/d5e7ce4"
-HEAD_ARCHIVE="$TMP/1fea730"
+# Full 40-character SHAs for the reviewed PR #1466 snapshots (AgDR-0207).
+# Short prefixes can become ambiguous as history grows.
+SNAP_ARCHIVE="$TMP/39c5b959f0544785c643c6945b487ec579b4a035"
+D5_ARCHIVE="$TMP/d5e7ce4d50e07bd0bd026230e1fb78714e809a27"
+HEAD_ARCHIVE="$TMP/1fea7308d0a6de4412198b1bc645ada8a47a8f05"
 if [ "${REQUIRE_SNAPSHOTS:-0}" != "1" ] && [ -n "$SNAP_HOOKS" ] \
     && [ -f "$SNAP_HOOKS/require-active-ticket.sh" ]; then
   :
-elif archive_snapshot 39c5b95 "$SNAP_ARCHIVE"; then
+elif archive_snapshot 39c5b959f0544785c643c6945b487ec579b4a035 "$SNAP_ARCHIVE"; then
   SNAP_HOOKS="$SNAP_ARCHIVE/.claude/hooks"
 else
   SNAP_HOOKS=""
-  missing_snapshot 39c5b95
+  missing_snapshot 39c5b959f0544785c643c6945b487ec579b4a035
 fi
-if archive_snapshot d5e7ce4 "$D5_ARCHIVE"; then
+if archive_snapshot d5e7ce4d50e07bd0bd026230e1fb78714e809a27 "$D5_ARCHIVE"; then
   D5_HOOKS="$D5_ARCHIVE/.claude/hooks"
 else
   D5_HOOKS=""
-  missing_snapshot d5e7ce4
+  missing_snapshot d5e7ce4d50e07bd0bd026230e1fb78714e809a27
 fi
-if archive_snapshot 1fea730 "$HEAD_ARCHIVE"; then
+if archive_snapshot 1fea7308d0a6de4412198b1bc645ada8a47a8f05 "$HEAD_ARCHIVE"; then
   HEAD_HOOKS="$HEAD_ARCHIVE/.claude/hooks"
 else
   HEAD_HOOKS=""
-  missing_snapshot 1fea730
+  missing_snapshot 1fea7308d0a6de4412198b1bc645ada8a47a8f05
 fi
 
 if [ "${SNAPSHOT_PREFLIGHT_ONLY:-0}" = "1" ]; then

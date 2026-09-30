@@ -24,11 +24,12 @@ fi
 # The join models only plain words, quotes and backslashes. It leaves a
 # command unjoined when it holds syntax that changes where a line ends:
 # a comment (`#`), a heredoc (`<<`), command substitution (`$(` or a
-# backtick), or ANSI-C quoting (`$'`). A backslash in a comment, for
+# backtick), parameter expansion (`${`, whose nested quotes the join does
+# not model, #1503), or ANSI-C quoting (`$'`). A backslash in a comment, for
 # example, is not a continuation, so a join there would pull the next
 # command into the comment. It also skips a command over 2048 bytes, so
-# the per-character loop stays fast. Unjoined lines split into separate
-# segments below, which can only block more.
+# the per-character loop stays fast. A command the join does not model gets
+# no flag-based allowance below (#1503).
 _batr_join_continuations() {
   local s="$1" out="" c quote="" bs=0 i n
   n=${#s}
@@ -55,12 +56,21 @@ _batr_join_continuations() {
   done
   printf '%s' "$out"
 }
-if [ "${#SCAN_COMMAND}" -le 2048 ]; then
-  case "$SCAN_COMMAND" in
-    *'#'* | *'<<'* | *'$('* | *'`'* | *"\$'"*) ;;
-    *$'\\\n'*) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
-  esac
-fi
+# JOIN_UNMODELLED=1 when the command keeps a backslash-newline that the join
+# did not model: it was skipped for one of the tokens above, or for size.
+JOIN_UNMODELLED=0
+case "$SCAN_COMMAND" in
+  *$'\\\n'*)
+    if [ "${#SCAN_COMMAND}" -gt 2048 ]; then
+      JOIN_UNMODELLED=1
+    else
+      case "$SCAN_COMMAND" in
+        *'#'* | *'<<'* | *'$('* | *'${'* | *'`'* | *"\$'"*) JOIN_UNMODELLED=1 ;;
+        *) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
+      esac
+    fi
+    ;;
+esac
 
 # This guard covers GitHub issue and pull-request commands. Commands that
 # already name --repo/-R are explicit by definition and may intentionally cross
@@ -72,7 +82,20 @@ fi
 # words that the syntax view would otherwise blank.
 TRACKER_PATTERN="(^|[^[:alnum:]_])['\"\\\\]*g['\"\\\\]*h['\"\\\\]*[[:space:]]+['\"\\\\]*(issue|pr)['\"\\\\]*[[:space:]]+"
 if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
-  exit 0
+  # An unmodelled continuation can split a tracker command across lines
+  # (`x=${y} gh \<newline> issue view 42`), so also look with every
+  # backslash-newline removed before deciding there is no tracker command.
+  # Join with awk, not ${var//pattern/}: under bash 3.2 that substitution
+  # grows super-linearly with the number of continuations, and a large
+  # command could stall this dispatcher and every gate after it (Hakim, PR
+  # #1511). The awk join is linear. LC_ALL=C keeps awk from aborting on a
+  # byte that is not valid UTF-8, which would print nothing and hide a match.
+  if [ "$JOIN_UNMODELLED" -eq 0 ] \
+    || ! printf '%s\n' "$SCAN_COMMAND" \
+      | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' \
+      | grep -qE "$TRACKER_PATTERN"; then
+    exit 0
+  fi
 fi
 # Check each shell command segment independently. A repository flag in a
 # comment or a separate command must not authorize an unqualified tracker
@@ -80,18 +103,28 @@ fi
 # conservative. A segment that cannot be classified remains blocked.
 # A segment with an explicit repository is safe. If every tracker segment had
 # one, no unqualified segment remains to check.
+#
+# When JOIN_UNMODELLED=1, the gate cannot tell which lines Bash joins: a join
+# can add a tracker command, remove one, or move a quoted `--repo` into a
+# segment. No flag can be trusted there, so any tracker command counts as
+# unqualified (#1503, review of PR #1511). Put such a command on one line,
+# or remove the skip token, to pass with an explicit repository.
 unqualified=0
-while IFS= read -r segment; do
-  segment="${segment%%#*}"
-  # A standalone `--` ends GitHub CLI option parsing. Ignore any repo-like
-  # token after it; only flags before that boundary can authorize the call.
-  options="$(printf '%s' "$segment" | sed -E 's/[[:space:]]--([[:space:]].*)?$//')"
-  if printf '%s' "$segment" | grep -qE "$TRACKER_PATTERN" \
-    && ! printf '%s' "$options" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
-    unqualified=1
-    break
-  fi
-done < <(printf '%s\n' "$SCAN_COMMAND" | tr ';|&()' '\n')
+if [ "$JOIN_UNMODELLED" -eq 1 ]; then
+  unqualified=1
+else
+  while IFS= read -r segment; do
+    segment="${segment%%#*}"
+    # A standalone `--` ends GitHub CLI option parsing. Ignore any repo-like
+    # token after it; only flags before that boundary can authorize the call.
+    options="$(printf '%s' "$segment" | sed -E 's/[[:space:]]--([[:space:]].*)?$//')"
+    if printf '%s' "$segment" | grep -qE "$TRACKER_PATTERN" \
+      && ! printf '%s' "$options" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
+      unqualified=1
+      break
+    fi
+  done < <(printf '%s\n' "$SCAN_COMMAND" | tr ';|&()' '\n')
+fi
 [ "$unqualified" -eq 1 ] || exit 0
 
 if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
