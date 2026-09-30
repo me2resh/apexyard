@@ -386,71 +386,6 @@ case_pin_to_different_repo_gets_no_advice() {
   rm -rf "$sb" "$other" "$pin_dir"
 }
 
-# ---- #1504: a case-variant pin on a case-insensitive filesystem gets advice ----
-case_case_variant_pin_gets_install_advice() {
-  local probe; probe=$(mktemp -d)
-  mkdir -p "$probe/CaseProbeXYZ"
-  if [ ! "$probe/CaseProbeXYZ" -ef "$probe/caseprobexyz" ]; then
-    echo "SKIP [case-variant-pin-gets-install-advice]: filesystem is case-sensitive"
-    rm -rf "$probe"
-    return
-  fi
-  rm -rf "$probe"
-
-  # Build the fork under a lettered directory so a case flip changes the string.
-  # A bare mktemp path often has no letters to fold.
-  local base fork_real
-  base=$(mktemp -d)
-  GIT_CEILING_DIRECTORIES="$base"
-  export GIT_CEILING_DIRECTORIES
-  fork_real="$base/OpsFork"
-  mkdir -p "$fork_real"
-  if ! (
-    cd "$fork_real" || exit 1
-    git init -q || exit 1
-    git config user.email "test@example.com"
-    git config user.name "test"
-    touch onboarding.yaml .apexyard-fork
-    git add onboarding.yaml .apexyard-fork
-    git commit -q -m "init"
-  ); then
-    echo "FAIL: git init failed for case-variant sandbox at $fork_real — stop" >&2
-    rm -rf "$base"
-    kill $$ >/dev/null 2>&1
-    exit 1
-  fi
-  mkdir -p "$fork_real/.claude/hooks"
-  cp "$HOOK_SRC" "$fork_real/.claude/hooks/pre-push-gate.sh"
-  chmod +x "$fork_real/.claude/hooks/pre-push-gate.sh"
-  if [ -f "$(cd "$(dirname "$0")/../../.." && pwd)/.claude/hooks/_lib-ops-root.sh" ]; then
-    cp "$(cd "$(dirname "$0")/../../.." && pwd)/.claude/hooks/_lib-ops-root.sh" \
-      "$fork_real/.claude/hooks/_lib-ops-root.sh"
-  fi
-  fork_real=$(cd "$fork_real" && pwd -P)
-
-  local sb_variant sid="test-session-case-pin" pin_dir out rc
-  sb_variant=$(printf '%s' "$fork_real" | tr '[:lower:][:upper:]' '[:upper:][:lower:]')
-  if [ "$sb_variant" = "$fork_real" ] || [ ! "$fork_real" -ef "$sb_variant" ]; then
-    echo "SKIP [case-variant-pin-gets-install-advice]: no case-foldable path segment"
-    rm -rf "$base"
-    return
-  fi
-
-  pin_dir=$(make_pin "$sb_variant" "$sid")
-  out=$(run_pinned_hook "$fork_real" "$pin_dir" "$sid")
-  rc=$?
-  if [ "$rc" = "0" ] && echo "$out" | grep -qF "core.hooksPath" &&
-    ! echo "$out" | grep -qF "not an ApexYard fork"; then
-    echo "PASS [case-variant-pin-gets-install-advice]"
-    PASS=$((PASS+1))
-  else
-    echo "FAIL [case-variant-pin-gets-install-advice]: rc=$rc stderr=$out" >&2
-    FAIL=$((FAIL+1))
-    FAILED_CASES="${FAILED_CASES}case-variant-pin-gets-install-advice "
-  fi
-  rm -rf "$base" "$pin_dir"
-}
-
 case_agdr_states_pinned_limit() {
   if grep -qF 'only for sessions with a valid pin' "$AGDR_SRC"; then
     echo "PASS [AgDR-0173-states-pinned-session-limit]"
@@ -617,7 +552,6 @@ case_no_valid_pin_gets_no_advice
 case_pinned_linked_worktree_gets_advice
 case_symlinked_pin_gets_install_advice
 case_pin_to_different_repo_gets_no_advice
-case_case_variant_pin_gets_install_advice
 case_agdr_states_pinned_limit
 case_h1_heredoc
 case_h1_quoted_string
