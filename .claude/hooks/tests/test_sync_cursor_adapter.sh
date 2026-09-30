@@ -9,12 +9,8 @@ SCRIPT="$ROOT/bin/sync-cursor-adapter.sh"
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 
-# Cursor agent environments may block creating `.cursor/` paths under
-# $TMPDIR. Count that as a visible SKIP (exit 0). Exit non-zero only on
-# real assertion failures. Do not assert sandbox behaviour.
 PASS=0
 FAIL=0
-SKIP=0
 FAILED=""
 
 mark_pass() { green "  ok   $1"; PASS=$((PASS+1)); }
@@ -23,7 +19,6 @@ mark_fail() {
   FAIL=$((FAIL+1))
   FAILED="$FAILED $1"
 }
-mark_skip() { echo "SKIP: $1"; SKIP=$((SKIP+1)); }
 
 assert_file() {
   local path="$1" label="$2"
@@ -45,42 +40,38 @@ assert_not_contains() {
 }
 
 unset CLAUDE_CODE_SESSION_ID
+TMPBASE=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-test.XXXXXX") || exit 1
+export TMPDIR="$TMPBASE"
+TMPROOT="$TMPBASE/fork"
+mkdir -p "$TMPROOT"
+trap 'rm -rf "$TMPBASE"' EXIT
+
+committed_overlay_check() {
+  local root="$1" output="$2"
+  if [ ! -f "$root/.cursorignore" ]; then
+    printf 'missing %s/.cursorignore\n' "$root" > "$output"
+    return 1
+  fi
+  bash "$SCRIPT" --root "$root" --check > "$output" 2>&1
+}
 
 echo "== committed overlay --check (no write)"
 
-if [ ! -f "$ROOT/.cursorignore" ]; then
-  # Prefer materializing a staged managed file when the worktree write was blocked.
-  git -C "$ROOT" checkout-index -f -- .cursorignore 2>/dev/null || true
-fi
-if [ -f "$ROOT/.cursorignore" ]; then
-  if bash "$SCRIPT" --check >/tmp/_cursor_adapter_committed_check.out 2>&1; then
-    mark_pass "committed files pass bin/sync-cursor-adapter.sh --check"
-  else
-    mark_fail "committed files pass bin/sync-cursor-adapter.sh --check" \
-      "$(cat /tmp/_cursor_adapter_committed_check.out)"
+COMMITTED_ROOT="${COMMITTED_ROOT_OVERRIDE:-$ROOT}"
+if committed_overlay_check "$COMMITTED_ROOT" "$TMPROOT/committed_check.out"; then
+  mark_pass "committed files pass bin/sync-cursor-adapter.sh --check"
+  if [ "${COMMITTED_CHECK_ONLY:-0}" = "1" ]; then
+    echo 'COMMITTED_CHECK: PASS'
+    exit 0
   fi
 else
-  mark_skip ".cursorignore missing on disk (write blocked here); expect orchestrator to materialize staged index entry"
-fi
-
-TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-test.XXXXXX")
-trap 'rm -rf "$TMPROOT"' EXIT
-
-if ! mkdir -p "$TMPROOT/.cursor/rules" 2>/dev/null; then
-  mark_skip "mkdir .cursor blocked in this environment (write path not exercised)"
-  echo
-  echo "===== test_sync_cursor_adapter.sh ====="
-  echo "Passed: $PASS"
-  echo "Failed: $FAIL"
-  echo "Skipped: $SKIP"
-  if [ "$FAIL" -gt 0 ]; then
-    echo "Failed cases:$FAILED"
+  mark_fail "committed files pass bin/sync-cursor-adapter.sh --check" \
+    "$(cat "$TMPROOT/committed_check.out")"
+  if [ "${COMMITTED_CHECK_ONLY:-0}" = "1" ]; then
+    echo 'COMMITTED_CHECK: FAIL missing or drifted overlay'
     exit 1
   fi
-  exit 0
 fi
-rmdir "$TMPROOT/.cursor/rules" 2>/dev/null || true
-rmdir "$TMPROOT/.cursor" 2>/dev/null || true
 
 mkdir -p "$TMPROOT/.claude/hooks"
 touch "$TMPROOT/.apexyard-fork"
@@ -113,10 +104,10 @@ JSON
 
 echo "== Cursor overlay sync smoke"
 
-if bash "$SCRIPT" --root "$TMPROOT" >/tmp/_cursor_adapter_sync.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" >"$TMPROOT/sync.out" 2>&1; then
   mark_pass "generator writes overlay output"
 else
-  mark_fail "generator writes overlay output" "$(cat /tmp/_cursor_adapter_sync.out)"
+  mark_fail "generator writes overlay output" "$(cat "$TMPROOT/sync.out")"
 fi
 
 assert_file "$TMPROOT/.cursor/hooks.json" "hooks.json exists"
@@ -175,24 +166,32 @@ assert_contains "$TMPROOT/.cursorignore" ".claude/skill-framework-bak/" ".cursor
 assert_contains "$TMPROOT/.cursorignore" ".claude/skills/*.framework.bak/" ".cursorignore ignores legacy framework.bak"
 assert_not_contains "$TMPROOT/.cursorignore" "custom-skills/" ".cursorignore does not ignore custom-skills"
 
-if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_cursor_adapter_check.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --check >"$TMPROOT/check.out" 2>&1; then
   mark_pass "--check passes when generated output is current"
 else
-  mark_fail "--check passes when generated output is current" "$(cat /tmp/_cursor_adapter_check.out)"
+  mark_fail "--check passes when generated output is current" "$(cat "$TMPROOT/check.out")"
 fi
+
+mv "$TMPROOT/.cursorignore" "$TMPROOT/cursorignore.saved"
+if committed_overlay_check "$TMPROOT" "$TMPROOT/missing_cursorignore.out"; then
+  mark_fail "committed overlay check fails when .cursorignore is missing" "expected non-zero exit"
+else
+  mark_pass "committed overlay check fails when .cursorignore is missing"
+fi
+mv "$TMPROOT/cursorignore.saved" "$TMPROOT/.cursorignore"
 
 jq '.hooks.sessionStart += [{"command": "manual-tamper"}]' "$TMPROOT/.cursor/hooks.json" > "$TMPROOT/.cursor/hooks.json.tmp"
 mv "$TMPROOT/.cursor/hooks.json.tmp" "$TMPROOT/.cursor/hooks.json"
-if bash "$SCRIPT" --root "$TMPROOT" --check >/tmp/_cursor_adapter_check_drift.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --check >"$TMPROOT/check_drift.out" 2>&1; then
   mark_fail "--check detects drift" "expected non-zero exit"
 else
   mark_pass "--check detects drift"
 fi
 
-if bash "$SCRIPT" --root "$TMPROOT" --clean >/tmp/_cursor_adapter_clean.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --clean >"$TMPROOT/clean.out" 2>&1; then
   mark_pass "--clean regenerates .cursor"
 else
-  mark_fail "--clean regenerates .cursor" "$(cat /tmp/_cursor_adapter_clean.out)"
+  mark_fail "--clean regenerates .cursor" "$(cat "$TMPROOT/clean.out")"
 fi
 assert_file "$TMPROOT/.cursor/hooks.json" "hooks.json exists after --clean"
 if jq -e '.hooks.sessionStart | length == 1' "$TMPROOT/.cursor/hooks.json" >/dev/null 2>&1; then
@@ -224,18 +223,18 @@ cat > "$USERDIR/hooks.json" <<'JSON'
 }
 JSON
 
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >/tmp/_cursor_adapter_user.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >"$TMPROOT/user.out" 2>&1; then
   mark_pass "--user merges into the user-level hooks.json"
 else
-  mark_fail "--user merges into the user-level hooks.json" "$(cat /tmp/_cursor_adapter_user.out)"
+  mark_fail "--user merges into the user-level hooks.json" "$(cat "$TMPROOT/user.out")"
 fi
 
 assert_file "$USERDIR/hooks.json" "user hooks.json exists after --user"
 
-if grep -F "full generated apexyard adapter" /tmp/_cursor_adapter_user.out >/dev/null 2>&1; then
+if grep -F "full generated apexyard adapter" "$TMPROOT/user.out" >/dev/null 2>&1; then
   mark_pass "--user warns when a leftover full adapter is present"
 else
-  mark_fail "--user warns when a leftover full adapter is present" "$(cat /tmp/_cursor_adapter_user.out)"
+  mark_fail "--user warns when a leftover full adapter is present" "$(cat "$TMPROOT/user.out")"
 fi
 
 if jq -e '[.hooks.beforeShellExecution[] | select(.command == "some-other-tool --check")] | length == 1' "$USERDIR/hooks.json" >/dev/null 2>&1; then
@@ -283,10 +282,10 @@ fi
 assert_file "$TMPROOT/.cursor/rules/apexyard.mdc" "--user still refreshes the project-level rules bridge"
 
 before_count=$(jq '[.hooks.sessionStart[]] | length' "$USERDIR/hooks.json")
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >/tmp/_cursor_adapter_user2.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" >"$TMPROOT/user2.out" 2>&1; then
   mark_pass "--user re-run succeeds"
 else
-  mark_fail "--user re-run succeeds" "$(cat /tmp/_cursor_adapter_user2.out)"
+  mark_fail "--user re-run succeeds" "$(cat "$TMPROOT/user2.out")"
 fi
 after_count=$(jq '[.hooks.sessionStart[]] | length' "$USERDIR/hooks.json")
 if [ "$before_count" = "$after_count" ]; then
@@ -295,33 +294,33 @@ else
   mark_fail "--user re-run is idempotent (no duplicate entries)" "count went from $before_count to $after_count"
 fi
 
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >"$TMPROOT/user_check.out" 2>&1; then
   mark_pass "--user --check passes when the user config is current"
 else
-  mark_fail "--user --check passes when the user config is current" "$(cat /tmp/_cursor_adapter_user_check.out)"
+  mark_fail "--user --check passes when the user config is current" "$(cat "$TMPROOT/user_check.out")"
 fi
 
 jq '.hooks.beforeShellExecution += [{"command": "manual-tamper"}]' "$USERDIR/hooks.json" > "$USERDIR/hooks.json.tmp"
 mv "$USERDIR/hooks.json.tmp" "$USERDIR/hooks.json"
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check2.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >"$TMPROOT/user_check2.out" 2>&1; then
   mark_pass "--user --check still passes when only a non-apexyard entry was added"
 else
-  mark_fail "--user --check still passes when only a non-apexyard entry was added" "$(cat /tmp/_cursor_adapter_user_check2.out)"
+  mark_fail "--user --check still passes when only a non-apexyard entry was added" "$(cat "$TMPROOT/user_check2.out")"
 fi
 
 jq '.hooks.sessionStart |= map(select((.command | contains("cursor-session-pin.sh")) | not))' "$USERDIR/hooks.json" > "$USERDIR/hooks.json.tmp"
 mv "$USERDIR/hooks.json.tmp" "$USERDIR/hooks.json"
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >/tmp/_cursor_adapter_user_check3.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$USERDIR" --check >"$TMPROOT/user_check3.out" 2>&1; then
   mark_fail "--user --check detects drift when the overlay is removed" "expected non-zero exit"
 else
   mark_pass "--user --check detects drift when the overlay is removed"
 fi
 
 FRESH_USERDIR="$TMPROOT/fake-home-fresh/.cursor"
-if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$FRESH_USERDIR" >/tmp/_cursor_adapter_user_fresh.out 2>&1; then
+if bash "$SCRIPT" --root "$TMPROOT" --user --user-dir "$FRESH_USERDIR" >"$TMPROOT/user_fresh.out" 2>&1; then
   mark_pass "--user creates the user config from scratch when absent"
 else
-  mark_fail "--user creates the user config from scratch when absent" "$(cat /tmp/_cursor_adapter_user_fresh.out)"
+  mark_fail "--user creates the user config from scratch when absent" "$(cat "$TMPROOT/user_fresh.out")"
 fi
 assert_file "$FRESH_USERDIR/hooks.json" "fresh user hooks.json exists"
 if jq -e '[.hooks.sessionStart[] | select(.command | contains("cursor-session-pin.sh"))] | length == 1' "$FRESH_USERDIR/hooks.json" >/dev/null 2>&1; then
@@ -333,9 +332,10 @@ fi
 echo "== user-level overlay command execution"
 
 user_cmd=$(jq -r '.hooks.sessionStart[0].command' "$FRESH_USERDIR/hooks.json")
-PLAIN=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-plain.XXXXXX")
-YAMLONLY=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-yaml.XXXXXX")
-PINDIR=$(mktemp -d "${TMPDIR:-/tmp}/cursor-adapter-pin.XXXXXX")
+PLAIN="$TMPBASE/plain"
+YAMLONLY="$TMPBASE/yaml"
+PINDIR="$TMPBASE/pin"
+mkdir -p "$PLAIN" "$YAMLONLY" "$PINDIR"
 mkdir -p "$YAMLONLY/.claude/hooks"
 touch "$YAMLONLY/onboarding.yaml"
 
@@ -379,7 +379,6 @@ echo
 echo "===== test_sync_cursor_adapter.sh ====="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"
-echo "Skipped: $SKIP"
 if [ "$FAIL" -gt 0 ]; then
   echo "Failed cases:$FAILED"
   exit 1

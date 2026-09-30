@@ -96,7 +96,8 @@ INPUT=$(cat)
 # status, not on approval markers — so only _lib-extract-pr.sh is guarded
 # here.
 _require_lib() {
-  local lib="$1"
+  local lib="$1" fn
+  shift
   if [ ! -r "$lib" ]; then
     echo "BLOCKED: merge gate cannot load a required library." >&2
     echo "Missing or unreadable: $lib" >&2
@@ -112,6 +113,12 @@ _require_lib() {
     echo "instead of skipping the check. Fix the file and retry." >&2
     exit 2
   fi
+  for fn in "$@"; do
+    if ! command -v "$fn" >/dev/null 2>&1 || ! declare -F "$fn" >/dev/null 2>&1; then
+      printf 'BLOCKED: merge gate missing required function %s after sourcing %s. Restore the library and retry.\n' "$fn" "$lib" >&2
+      exit 2
+    fi
+  done
 }
 
 # Shared merge-shape detector + PR-number parser (see _lib-extract-pr.sh).
@@ -121,7 +128,10 @@ _require_lib() {
 # original position after the parse) so is_merge_command is available as
 # the jq-independent fallback detector when the parse can't be trusted —
 # see #965.
-_require_lib "$(dirname "$0")/_lib-extract-pr.sh"
+_require_lib "$(dirname "$0")/_lib-extract-pr.sh" \
+  is_merge_command is_merge_command_raw _scrub_merge_command _normalize_json_escapes \
+  merge_command_uses_variable extract_pr_number resolve_merge_repo \
+  resolve_ci_status_glab
 # Leading cd-target recovery for shared merge-repo resolution (#687/#1151).
 # Optional only for standalone hook-test sandboxes that copy a minimal lib set.
 if [ -f "$(dirname "$0")/_lib-pr-repo.sh" ]; then
@@ -271,7 +281,7 @@ if [ -z "$COMMAND" ]; then
   # hook sees. A payload that DOES look merge-shaped but that we can't
   # safely parse/verify fails CLOSED (exit 2) instead of silently letting
   # an ungated merge through with an unverified CI status.
-  if is_merge_command "$(_normalize_json_escapes "$INPUT")"; then
+  if is_merge_command_raw "$(_normalize_json_escapes "$INPUT")"; then
     echo "BLOCKED: CI gate cannot evaluate this command — jq is unavailable or .tool_input.command could not be parsed, but the raw input looks merge-related. Refusing to merge until CI status can be verified. Restore jq (see .claude/hooks/check-jq-installed.sh) and retry." >&2
     exit 2
   fi
