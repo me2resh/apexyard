@@ -26,6 +26,7 @@ Chosen: **Require a valid pin and compare main worktrees**.
 The hook validates the pin with the shared ops-root library.
 It finds the checked repository's main worktree through Git's common directory.
 It suggests installation only when those roots match.
+It compares the two roots by file identity, not by path text (AgDR-0206, #1504).
 It stays silent when the pin is missing, disabled, or invalid.
 
 ## Consequences
@@ -38,6 +39,7 @@ It stays silent when the pin is missing, disabled, or invalid.
 ## Artifacts
 
 - Issue #1491
+- Issue #1504 and AgDR-0206
 - `.claude/hooks/pre-push-gate.sh`
 - `.claude/hooks/tests/test_pre_push_gate.sh`
 - `docs/agdr/AgDR-0173-git-native-pre-push-command-execution.md`
