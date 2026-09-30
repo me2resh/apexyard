@@ -146,6 +146,17 @@ run_case 'split CLI word with a flag after an escaped backslash stays blocked' 2
   "$(printf 'x=${y} gh \\\n issue view 42 \\\\\n --repo owner/project-a')" "$multiple"
 run_case 'qualified command then a split CLI word with a quoted flag stays blocked' 2 \
   "$(printf 'gh pr list --repo owner/project-a; x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+# Review round 3 of PR #1511: a join can also REMOVE a tracker match (a
+# letter glued onto the CLI word), so match counts cannot decide. A command
+# whose continuations the join does not model gets no flag-based allowance.
+run_case 'join that removes one match and adds another stays blocked (double quotes)' 2 \
+  "$(printf 'x=${y} echo a\\\ngh issue view 1 --repo owner/project-a; x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+run_case 'join that removes one match and adds another stays blocked (single quotes)' 2 \
+  "$(printf "x=\${y} echo a\\\\\ngh issue view 1 --repo owner/project-a; x=\${y} gh \\\\\n issue view 42 'a \\\\\n --repo owner/project-a'")" "$multiple"
+run_case 'join that removes one match and adds another stays blocked (escaped backslash)' 2 \
+  "$(printf 'x=${y} echo a\\\ngh issue view 1 --repo owner/project-a; x=${y} gh \\\n issue view 42 \\\\\n --repo owner/project-a')" "$multiple"
+run_case 'one-line command with a skip token and a repository flag is explicit' 0 \
+  'x=${y} gh issue view 42 --repo owner/project-a' "$multiple"
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
