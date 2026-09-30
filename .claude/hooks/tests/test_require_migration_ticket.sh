@@ -1639,6 +1639,23 @@ do
   rm -rf "$SB"
 done
 
+# --- #1502 (review of PR #1516): a sed `w` migration file next to an
+# interpreter write must still reach this gate. The extractor held such a
+# target back, and this gate exits 0 on an empty list. No ticket: block.
+SB=$(make_fork)
+for c in \
+  "python3.12 -c \"open('x','w').write('y')\" ; sed -n 'w migrations/001_add_table.sql' in.txt" \
+  "python3 -W error::ResourceWarning -c \"open('x','w').write('y')\" ; sed -n 'w migrations/001_add_table.sql' in.txt" \
+  "python3 -c \"open('x','w').write('y')\" && sed -n 'w migrations/001_add_table.sql' in.txt" \
+  "python3 -c \"open('x','w').write('y')\" ; sed -n 'w migrations/001_add_table.sql' in.txt"; do
+  if run_hook_bash "$SB" "$c" 2; then
+    record_pass "#1502 sed w migration target next to an interpreter write blocks: $c"
+  else
+    record_fail "#1502 sed w migration target next to an interpreter write blocks: $c"
+  fi
+done
+rm -rf "$SB"
+
 # =============================================================================
 # Summary
 # =============================================================================

@@ -1305,7 +1305,10 @@ BDW_REDIRECTS
 # begin" and can't drift apart again.
 # ------------------------------------------------------------------------------
 bash_extract_write_targets() {
-  local raw="$1" cmd sed_cmd syntax
+  # $2 = "all": always emit sed `w` targets, never hold them back. The
+  # migration gate passes it, because it exits 0 on an empty list and so
+  # needs every named target (#1502, review of PR #1516).
+  local raw="$1" mode="${2:-}" cmd sed_cmd syntax
   local -a syntax_segments=()
   [ -z "$raw" ] && return 0
   bash_command_appears_to_write "$raw" || return 0
@@ -1320,16 +1323,16 @@ bash_extract_write_targets() {
   while IFS= read -r seg; do
     _bdw_syn_read=1
     syntax_segments+=("$seg")
+  # 2>/dev/null silences only the here-doc setup error on this loop; the
+  # loop body only appends to an array and writes nothing to stderr.
   done 2>/dev/null <<BDW_SYNTAX_SEGMENTS
 $(_bdw_split_top_level "$syntax")
 BDW_SYNTAX_SEGMENTS
-  # Here-doc failed: cannot name targets. Emit nothing so callers that
-  # already saw a write (bash_command_appears_to_write) fail closed on an
-  # empty list (#1502).
-  [ "$_bdw_syn_read" -eq 0 ] && return 0
-
-  local seg_targets
-  seg_targets=$(
+  # Here-doc failed: the segment pass cannot name targets. Skip it, but
+  # still reach the sed `w` block below, which reads no here-doc. A caller
+  # that already saw a write fails closed on the list it gets (#1502).
+  local seg_targets=""
+  [ "$_bdw_syn_read" -eq 1 ] && seg_targets=$(
     local index=0
     while IFS= read -r seg; do
       local syntax_seg="${syntax_segments[index]:-}"
@@ -1350,8 +1353,8 @@ BDW_COMMAND_SEGMENTS
     # and another write family fired. Then require-active-ticket.sh sees
     # an empty list and fails closed, as it did before #1414. A lone `w`
     # target such as `/dev/stdout` is exempt, and it would turn that closed
-    # gate into a pass. require-migration-ticket.sh exits 0 on an empty
-    # list, so it does not judge a held-back `w` file, as on dev. Examples
+    # gate into a pass. require-migration-ticket.sh passes "all", so it
+    # always judges the `w` files (#1502). Examples
     # that stay blocked by the ticket gate this way:
     #   sed -i "s/a/b/w /dev/stdout" src/app.ts
     #   awk -i inplace 1 src/app.ts; sed -n 'w /tmp/x' in.txt
@@ -1359,7 +1362,7 @@ BDW_COMMAND_SEGMENTS
     # When the list is not empty, the `w` targets are added. An extra
     # target can only add a reason to block, because the gate requires
     # every target to pass.
-    if [ -n "$seg_targets" ] || ! _bdw_detects_other_write "$cmd"; then
+    if [ "$mode" = all ] || [ -n "$seg_targets" ] || ! _bdw_detects_other_write "$cmd"; then
       _bdw_sed_write_targets "$sed_cmd"
     fi
   } | awk '!seen[$0]++' | {

@@ -1,6 +1,6 @@
 # AgDR-0203: Close write-detector gaps for versioned Python and here-doc failure
 
-> In the context of the bash write detector, facing three fail-open gaps on versioned interpreters, option arguments that contain `c`, and unwritable here-doc temp files, I decided to broaden the Python `-c` presence match and fail closed when a segment here-doc cannot be read. This keeps the ticket and migration gates aligned with real writes.
+> In the context of the bash write detector, facing three fail-open gaps on versioned interpreters, option arguments that contain `c`, and unwritable here-doc temp files, I decided to broaden the Python `-c` presence match and fail closed when a segment here-doc cannot be read. The migration gate also receives every `sed w` target, so a broader match cannot hide a migration file from it.
 
 ## Context
 
@@ -32,7 +32,9 @@ Match `python[0-9]*(\.[0-9]+)*` as the interpreter, and add a form that allows a
 - Versioned `pythonX.Y -c` writes reach the ticket and migration gates.
 - Option arguments that contain `c` no longer hide `-c`.
 - A failed segment here-doc blocks instead of allowing the write.
-- Prior #1480 shapes (`-W ignore -c`, `-Bc`, `-B -c`) remain matched because the new form is a strict superset.
+- Prior #1480 shapes (`-W ignore -c`, `-Bc`, `-B -c`) remain matched, because the two #1480 forms stay in the alternation unchanged.
+- A broader interpreter match makes the extractor hold back `sed w` targets more often. The ticket gate then fails closed on the empty list. The migration gate exits 0 on an empty list, so it calls the extractor in `all` mode and always receives the `sed w` targets (review of PR #1516). This also closes the same gap for plain `python3 -c`, which `dev` has.
+- When a segment here-doc fails, only the segment pass is skipped. The `sed w` block still runs, because it reads no here-doc.
 
 ## Artifacts
 
