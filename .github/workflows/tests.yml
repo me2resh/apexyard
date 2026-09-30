@@ -44,5 +44,18 @@ jobs:
           git -C "$snapshot_repo" fetch -q --no-tags \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
             refs/pull/1466/head:refs/heads/reviewed-snapshots
+          # Pin full 40-character SHAs for the reviewed command-scrub snapshots
+          # (PR #1466). Short SHAs can become ambiguous as history grows.
+          # Verify each commit after the fetch so a missing object fails clearly.
+          for sha in \
+            39c5b959f0544785c643c6945b487ec579b4a035 \
+            d5e7ce4d50e07bd0bd026230e1fb78714e809a27 \
+            1fea7308d0a6de4412198b1bc645ada8a47a8f05
+          do
+            if ! git -C "$snapshot_repo" cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              echo "CI snapshot proof failed: commit ${sha} is not present after fetching refs/pull/1466/head" >&2
+              exit 1
+            fi
+          done
           APEXYARD_SNAPSHOT_REPO="$snapshot_repo" REQUIRE_SNAPSHOTS=1 \
             bash bin/run-hook-tests.sh

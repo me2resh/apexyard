@@ -68,21 +68,30 @@ if [ -z "$slug" ]; then
   exit 1
 fi
 
+# Read any earlier proof before the gh/jq gates. A matching key stays when
+# those tools are missing (#1508). jq is optional for this read only.
+config_path=".claude/project-config.json"
+recorded=""
+if [ -f "$config_path" ] && command -v jq >/dev/null 2>&1; then
+  recorded=$(jq -r '.leak_protection.origin_verified_public // empty' "$config_path" 2>/dev/null)
+fi
+
 if ! command -v gh >/dev/null 2>&1; then
-  echo "Origin exemption is OFF for $slug: gh is not on PATH, so visibility could not be checked."
-  echo "Install GitHub CLI, then re-run /setup or /update (or this script) while online."
+  if [ -n "$recorded" ] && [ "$recorded" = "$slug" ]; then
+    echo "Could not check $slug: gh is not on PATH, so visibility could not be checked."
+    echo "The earlier proof for $slug stays in place. Install GitHub CLI, then re-run /setup or /update."
+  else
+    echo "Origin exemption is OFF for $slug: gh is not on PATH, so visibility could not be checked."
+    echo "Install GitHub CLI, then re-run /setup or /update (or this script) while online."
+  fi
   exit 1
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
+  # Without jq the earlier key cannot be read here. The file is left
+  # untouched. Message stays the pre-#1508 OFF text (no matching-key path).
   echo "Origin exemption is OFF for $slug: jq is required to write .claude/project-config.json."
   exit 1
-fi
-
-config_path=".claude/project-config.json"
-recorded=""
-if [ -f "$config_path" ]; then
-  recorded=$(jq -r '.leak_protection.origin_verified_public // empty' "$config_path" 2>/dev/null)
 fi
 
 view_json=$(gh repo view "$slug" --json visibility,isFork 2>/dev/null) || {
