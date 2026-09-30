@@ -121,6 +121,20 @@ run_case 'command substitution is not joined' 2 \
 # continued `--repo` in quoted text, so a command with `${` stays unjoined.
 run_case 'parameter expansion with nested quotes is not joined' 2 \
   "$(printf 'gh pr list --search "${x:-"a \\\n --repo owner/project-a"}"')" "$multiple"
+# Review of PR #1511: a skipped (unjoined) command can split the CLI word
+# from its subcommand. Bash still joins the lines, so the gate must block.
+run_case 'parameter expansion before a split CLI word stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n  issue view 42')" "$multiple"
+run_case 'command substitution before a split CLI word stays blocked' 2 \
+  "$(printf 'x=$(true) gh \\\n  issue view 42')" "$multiple"
+run_case 'backtick before a split CLI word stays blocked' 2 \
+  "$(printf 'x=`true` gh \\\n  issue view 42')" "$multiple"
+run_case 'ANSI-C quoting before a split CLI word stays blocked' 2 \
+  "$(printf "x=\$'a' gh \\\\\n  issue view 42")" "$multiple"
+run_case 'trailing comment after a split CLI word stays blocked' 2 \
+  "$(printf 'gh \\\n  issue view 42 # note')" "$multiple"
+run_case 'split CLI word with a repository flag after a skip token is explicit' 0 \
+  "$(printf 'x=${y} gh \\\n  issue view 42 --repo owner/project-a')" "$multiple"
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
