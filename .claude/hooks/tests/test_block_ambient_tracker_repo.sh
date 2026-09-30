@@ -117,8 +117,67 @@ run_case 'heredoc delimiter ending in a backslash does not hide the next command
   "$(printf "cat <<'E\\\\'\nbody\nE\\\\\ngh pr list")" "$multiple"
 run_case 'command substitution is not joined' 2 \
   "$(printf 'x="$(printf a)" gh pr list \\\n --title "b --repo owner/project-a"')" "$multiple"
+# #1503: nested double quotes inside a parameter expansion can hide a
+# continued `--repo` in quoted text, so a command with `${` stays unjoined.
+run_case 'parameter expansion with nested quotes is not joined' 2 \
+  "$(printf 'gh pr list --search "${x:-"a \\\n --repo owner/project-a"}"')" "$multiple"
+# Review of PR #1511: a skipped (unjoined) command can split the CLI word
+# from its subcommand. Bash still joins the lines, so the gate must block.
+run_case 'parameter expansion before a split CLI word stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n  issue view 42')" "$multiple"
+run_case 'command substitution before a split CLI word stays blocked' 2 \
+  "$(printf 'x=$(true) gh \\\n  issue view 42')" "$multiple"
+run_case 'backtick before a split CLI word stays blocked' 2 \
+  "$(printf 'x=`true` gh \\\n  issue view 42')" "$multiple"
+run_case 'ANSI-C quoting before a split CLI word stays blocked' 2 \
+  "$(printf "x=\$'a' gh \\\\\n  issue view 42")" "$multiple"
+run_case 'trailing comment after a split CLI word stays blocked' 2 \
+  "$(printf 'gh \\\n  issue view 42 # note')" "$multiple"
+# A tracker command that only the joined view can see always blocks, even
+# with a flag: the joined view may join inside quotes, where Bash does not.
+# This is a conservative false positive (review round 2 of PR #1511).
+run_case 'split CLI word after a skip token blocks even with a repository flag' 2 \
+  "$(printf 'x=${y} gh \\\n  issue view 42 --repo owner/project-a')" "$multiple"
+run_case 'split CLI word with a flag inside double quotes stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+run_case 'split CLI word with a flag inside single quotes stays blocked' 2 \
+  "$(printf "x=\${y} gh \\\\\n issue view 42 'a \\\\\n --repo owner/project-a'")" "$multiple"
+run_case 'split CLI word with a flag after an escaped backslash stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n issue view 42 \\\\\n --repo owner/project-a')" "$multiple"
+run_case 'qualified command then a split CLI word with a quoted flag stays blocked' 2 \
+  "$(printf 'gh pr list --repo owner/project-a; x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+# Review round 3 of PR #1511: a join can also REMOVE a tracker match (a
+# letter glued onto the CLI word), so match counts cannot decide. A command
+# whose continuations the join does not model gets no flag-based allowance.
+run_case 'join that removes one match and adds another stays blocked (double quotes)' 2 \
+  "$(printf 'x=${y} echo a\\\ngh issue view 1 --repo owner/project-a; x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+run_case 'join that removes one match and adds another stays blocked (single quotes)' 2 \
+  "$(printf "x=\${y} echo a\\\\\ngh issue view 1 --repo owner/project-a; x=\${y} gh \\\\\n issue view 42 'a \\\\\n --repo owner/project-a'")" "$multiple"
+run_case 'join that removes one match and adds another stays blocked (escaped backslash)' 2 \
+  "$(printf 'x=${y} echo a\\\ngh issue view 1 --repo owner/project-a; x=${y} gh \\\n issue view 42 \\\\\n --repo owner/project-a')" "$multiple"
+run_case 'one-line command with a skip token and a repository flag is explicit' 0 \
+  'x=${y} gh issue view 42 --repo owner/project-a' "$multiple"
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
+
+# Hakim, PR #1511: a command with many continuations and a skip token must
+# not stall the gate. 20000 continued lines must finish in under 5 seconds.
+big="$TMP/big-command"
+{
+  printf 'cat <<E\nbody\nE\necho start'
+  i=0
+  while [ "$i" -lt 20000 ]; do printf ' \\\n -f x=1'; i=$((i + 1)); done
+} > "$big"
+start=$(date +%s)
+run_case 'many continuations with a skip token and no tracker command pass' 0 "$(cat "$big")" "$multiple"
+elapsed=$(( $(date +%s) - start ))
+if [ "$elapsed" -lt 5 ]; then
+  echo "PASS: many continuations finish in ${elapsed}s (limit 5s)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: many continuations took ${elapsed}s (limit 5s)" >&2
+  FAIL=$((FAIL + 1))
+fi
 
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

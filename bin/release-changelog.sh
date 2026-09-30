@@ -55,13 +55,16 @@
 #   "Closes #1492" but its squash body has no closing keyword).
 #
 #   For each scoped commit whose subject ends in `(#<PR>)`, the script
-#   runs:
+#   runs one bounded `$RELEASE_GH pr view` call (default 10s via
+#   `PR_LOOKUP_TIMEOUT`; prefers GNU `timeout`, then macOS `gtimeout`):
 #     $RELEASE_GH pr view <PR> --repo <repo> --json body --jq .body
 #   (`RELEASE_GH` defaults to `gh`; tests inject a stub). Emit a close
-#   for #N only when that PR body closes #N. If the fetch fails, keep the
-#   pre-#1490 / `dev` behaviour for THAT commit (scoped title closes) and
-#   print a warning naming the PR — never silently drop a close because
-#   the forge was briefly unreachable.
+#   for #N only when that PR body closes #N. If the fetch fails (gh
+#   error, rate limit, or timeout), keep the pre-#1490 / `dev` behaviour
+#   for THAT commit (scoped title closes) and print a warning naming the
+#   PR — never silently drop a close because the forge was briefly
+#   unreachable. Cost: one API call per scoped commit with a trailing
+#   `(#<PR>)` (AgDR-0197 / #1506).
 #
 #   A title / scope alone is NOT enough when the PR body is readable
 #   (#1490). A PR titled `feat(#N)` whose body says only `Refs #N` must
@@ -71,7 +74,9 @@
 #   Everything else emits NO Closes line at all:
 #     - a SCOPED subject whose PR body only Refs / mentions #N (#1490)
 #     - a SCOPED subject with no trailing `(#<PR>)` — nothing to fetch,
-#       prefer missing over guessing from the squash body
+#       prefer missing over guessing from the squash body, and print a
+#       warning that names the commit so a direct-push author sees the
+#       missing close (#1506)
 #     - an UNSCOPED subject (`docs: ... (#1045)`) — the only "(#N)" present
 #       is GitHub's squash-appended trailing PR number, which is not an
 #       issue (#1076). Body text alone never opens a close either — scope
@@ -88,11 +93,15 @@
 #       has no scope — same unscoped rule as above
 #
 # Optional env:
-#   RELEASE_GH     — gh binary / stub (default: gh). Injectable for tests.
-#   REPO_REMOTE    — remote whose URL yields the --repo target (default:
-#                    derived from HEAD_REF's remote prefix, else "upstream")
-#   PR_LOOKUP_REPO — owner/repo for `gh pr view --repo` (default: derived
-#                    from REPO_REMOTE's URL)
+#   RELEASE_GH         — gh binary / stub (default: gh). Injectable for tests.
+#   REPO_REMOTE        — remote whose URL yields the --repo target (default:
+#                        derived from HEAD_REF's remote prefix, else "upstream")
+#   PR_LOOKUP_REPO     — owner/repo for `gh pr view --repo` (default: derived
+#                        from REPO_REMOTE's URL)
+#   PR_LOOKUP_TIMEOUT  — seconds to bound each `gh pr view` call (default: 10).
+#                        Prefers GNU `timeout`, then macOS `gtimeout`. If
+#                        neither is on PATH the call is unbounded and a
+#                        one-time stderr warning is printed (#1078 / #1506).
 #
 # Exit codes:
 #   0 — success (even if the commit list is empty; that is a valid patch release)
@@ -134,6 +143,23 @@ _derive_pr_lookup_repo() {
 
 if [ -z "${PR_LOOKUP_REPO:-}" ]; then
   PR_LOOKUP_REPO=$(_derive_pr_lookup_repo)
+fi
+
+# ── Resolve the gh-call timeout wrapper once (#1078 / #1506) ─────────────────
+# Computed once here — NOT per-call inside fetch_pr_body — so the "no timeout
+# binary" warning fires at most once per release cut. Only bother when a
+# lookup could happen (a repo was resolved); otherwise fetch_pr_body
+# short-circuits before any gh call.
+PR_LOOKUP_TIMEOUT="${PR_LOOKUP_TIMEOUT:-10}"
+PR_LOOKUP_TO=""
+if [ -n "${PR_LOOKUP_REPO:-}" ]; then
+  if command -v timeout >/dev/null 2>&1; then
+    PR_LOOKUP_TO="timeout -k 2 ${PR_LOOKUP_TIMEOUT}"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    PR_LOOKUP_TO="gtimeout -k 2 ${PR_LOOKUP_TIMEOUT}"
+  else
+    echo "WARN: neither 'timeout' nor 'gtimeout' found on PATH — gh pr view calls in fetch_pr_body() are UNBOUNDED; a hung forge could stall this release cut indefinitely (#1078 / #1506). On macOS: brew install coreutils for gtimeout." >&2
+  fi
 fi
 
 # ── Build the git log range ──────────────────────────────────────────────────
@@ -271,15 +297,18 @@ extract_trailing_pr_num() {
 }
 
 # Fetch the real PR body via $RELEASE_GH. Prints body on stdout and returns
-# 0 on success; returns 1 on any failure (missing repo, gh error, empty).
-# Never aborts the release — callers decide the fallback.
+# 0 on success (including an empty body); returns 1 on any failure (missing
+# repo, gh error, rate limit, or timeout). Never aborts the release —
+# callers decide the fallback.
 fetch_pr_body() {
   local pr_num="$1"  # numeric, no leading '#'
   local body
   if [ -z "${PR_LOOKUP_REPO:-}" ]; then
     return 1
   fi
-  if ! body=$("$RELEASE_GH" pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body --jq .body 2>/dev/null); then
+  # PR_LOOKUP_TO is "timeout -k 2 N" or empty — intentional word-split.
+  # shellcheck disable=SC2086
+  if ! body=$($PR_LOOKUP_TO "$RELEASE_GH" pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body --jq .body 2>/dev/null); then
     return 1
   fi
   printf '%s' "$body"
@@ -402,9 +431,12 @@ while IFS= read -r line; do
               echo "WARN: could not fetch PR #${pr_only} body via ${RELEASE_GH}; falling back to scoped-title close for #${issue_num}" >&2
               closes_nums+=("$issue_num")
             fi
+          else
+            # No trailing (#PR) → nothing to fetch; prefer missing over reading
+            # the squash body (which is not the PR description). Warn so a
+            # direct-push author sees the missing close (#1506).
+            echo "WARN: scoped commit ${short_sha} has no trailing (#PR) in its subject; skipping close check for #${issue_num}" >&2
           fi
-          # No trailing (#PR) → nothing to fetch; prefer missing over reading
-          # the squash body (which is not the PR description).
           ;;
       esac
     fi

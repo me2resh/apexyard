@@ -147,7 +147,10 @@ fi
 REPO_COMMON_DIR=$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
 REPO_MAIN_ROOT=$(dirname "$REPO_COMMON_DIR")
 
-if [ "$PINNED_ROOT" != "$REPO_MAIN_ROOT" ]; then
+# Compare by file identity, not by path text. A pin written through a
+# symlink, or with a different letter case on a case-insensitive filesystem,
+# still names the real fork (me2resh/apexyard#1504, AgDR-0206).
+if [ ! "$PINNED_ROOT" -ef "$REPO_MAIN_ROOT" ]; then
   echo "NOTE: this session's working-directory repo ($REPO_ROOT) is not an ApexYard fork. This check covers only that repo. ApexYard runs no local pre-push checks here — this repo's own CI is the backstop." >&2
   exit 0
 fi

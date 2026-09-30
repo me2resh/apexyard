@@ -207,7 +207,7 @@ PREV_TAG=v3.2.0 HEAD_REF=upstream/dev VERSION=v3.3.0 DATE=$(date +%F) \
 ```
 
 Input: `PREV_TAG`, `HEAD_REF`, `VERSION`, `DATE` env vars.
-Optional: `RELEASE_GH` (default `gh`), `REPO_REMOTE`, `PR_LOOKUP_REPO` for the PR-body close check (AgDR-0197).
+Optional: `RELEASE_GH` (default `gh`), `REPO_REMOTE`, `PR_LOOKUP_REPO`, `PR_LOOKUP_TIMEOUT` (default 10) for the PR-body close check (AgDR-0197 / AgDR-0208).
 Output: markdown CHANGELOG section to stdout.
 Never writes files; callers decide where to write the output.
 Tests: `.claude/hooks/tests/test_release_changelog.sh`.
