@@ -460,10 +460,14 @@ _scrub_merge_command() {
         }
         # Grep-family options that can run a program on some hosts add the
         # raw text. Quoted option names are handled in the quote branch above.
-        if (is_grep_family(cmdword) && c == "-") {
-          start = pos
-          if (read_merge_word() && dangerous_grep_opt(WORD)) newbad = 1
-          pos = start
+        # Check only a dash that starts a word, and read a fixed window with
+        # one substr: reading each dash to the end of a long word made the
+        # scan super-linear, and a timed-out gate does not block (Hakim,
+        # review of PR #1517).
+        if (is_grep_family(cmdword) && c == "-" && \
+            (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>(]/)) {
+          peek = substr(s, pos, 24)
+          if (match(peek, /^[-A-Za-z]+/) && dangerous_grep_opt(substr(peek, 1, RLENGTH))) newbad = 1
         }
         out = out c; pos++
       }

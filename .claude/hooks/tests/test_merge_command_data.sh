@@ -193,5 +193,22 @@ for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architect
   fi
 done
 
+# Hakim, review of PR #1517: a long word of dashes after grep made the
+# grep-option lookahead super-linear, and a gate that times out does not
+# block. A command at the 120000-character cap must still be scanned, and
+# fast. The merge phrase is split by quotes so only the raw view can hide it.
+dashes=$(head -c 110000 /dev/zero | tr '\0' '-')
+start_s=$(date +%s)
+check 'long dash word after grep still detects the merge phrase' yes \
+  "grep a${dashes} x; echo gh' 'pr' 'merge' '7 > ~/.zshenv"
+elapsed=$(( $(date +%s) - start_s ))
+if [ "$elapsed" -lt 10 ]; then
+  printf 'PASS [long dash word after grep scans in %ss (limit 10s)]\n' "$elapsed"
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL [long dash word after grep took %ss (limit 10s)]\n' "$elapsed" >&2
+  FAIL=$((FAIL + 1))
+fi
+
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

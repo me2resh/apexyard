@@ -30,6 +30,7 @@ Chosen: **add bounded raw fallbacks**, because each check can only give the exis
 - Preserve the existing fallback for expansions, escapes, unknown commands, and incomplete syntax.
 
 The checks do not execute command text or consult the host filesystem.
+Each check stays linear in the length of the command. The grep-option check reads a fixed 24-character window, and only at a dash that starts a word. A gate that times out does not block, so a slow check would open the gates (Hakim, review of PR #1517).
 Startup names include shell dotfiles and their common system variants.
 The path check recognizes literal names, not symlinks or arbitrary custom startup locations.
 
