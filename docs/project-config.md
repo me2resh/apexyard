@@ -109,8 +109,39 @@ tracks closing this gap for those seven keys.
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
+| `external_contributions` | `validate-pr-create.sh` | Repositories you contribute to but do **not** govern. See below. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
+
+### `external_contributions` — repos you contribute to but don't govern
+
+An upstream open-source project you send PRs to has its own `CONTRIBUTING.md`
+and its own tracker. Applying this framework's PR-title convention to a PR
+aimed at it refuses a PR that is correct for its destination, and before
+me2resh/apexyard#1448 there was no way to say so.
+
+List those repositories as `owner/name` slugs:
+
+```json
+{
+  "external_contributions": ["openfga/vscode-ext", "openfga/sdk-generator"]
+}
+```
+
+For a listed repository, `validate-pr-create.sh` does not apply the
+`type(TICKET): description` title convention, and prints a one-line note
+saying why.
+
+Three properties worth knowing:
+
+- **Empty by default.** The exemption is opt-in. A fork that never sets the key
+  behaves exactly as it did before.
+- **The registry wins.** If a listed repository is also a managed project, the
+  exemption does not apply. Otherwise adding a governed repo to this list would
+  quietly disable title validation for work the framework is meant to govern.
+- **Convention only.** This relaxes a *convention* check. Leak protection,
+  secret scanning, and every security control are unaffected — they arguably
+  matter more here, since these repositories are usually public.
 
 ## Extending the defaults
 

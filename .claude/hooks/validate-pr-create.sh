@@ -267,8 +267,107 @@ if [ -z "$PR_TYPES" ]; then
   PR_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release|spike|sync"
 fi
 
+# External contributions (#1448): a PR aimed at a repository the adopter
+# contributes to but does NOT govern. Such a repository has its own
+# CONTRIBUTING.md and its own tracker, so imposing this framework's title
+# convention on it refuses a PR that is correct for its destination.
+#
+# Opt-in and repo-scoped: `.external_contributions[]` in project-config, the
+# same shape leak-protection uses for its public-framework-repo list.
+#
+# The registry WINS. If the target is a managed project, the exemption does
+# not apply however the list is written — otherwise adding a governed repo to
+# this list would quietly disable title validation for work the framework is
+# supposed to be governing, which is a gate relaxation dressed up as config.
+EXTERNAL_TARGET=""
+if [ -n "$CMD_REPO" ] && command -v config_get >/dev/null 2>&1; then
+  _vpc_repo_lc=$(printf '%s' "$CMD_REPO" | tr '[:upper:]' '[:lower:]')
+
+  # FAIL CLOSED on an ambiguous target (#1451 B1). `CMD_REPO` comes from a
+  # quote-blind parser: it reads a `--repo` token anywhere in the command,
+  # including inside the quoted --title or --body value. Before this
+  # exemption existed a wrong CMD_REPO only mis-aimed the ticket lookup;
+  # here it would REMOVE the title check from a PR whose real target is the
+  # governed cwd repo. A PR body that quotes an upstream command makes that
+  # shape likely, and a body is an injection surface besides.
+  #
+  # So the exemption requires an unambiguous parse: exactly one --repo/-R
+  # token in the whole command, and the parsed slug must not also appear in
+  # the title or body text, where it could be the thing that was parsed.
+  # Blank out every quoted span, so what remains is the command's real flags.
+  # A --repo that survives this is a flag; one that disappears was text inside
+  # --title or --body. Escaped quotes make this imperfect, which is why the
+  # result is only ever used to REFUSE an exemption, never to grant one on its
+  # own.
+  _vpc_unquoted=$(printf '%s' "$COMMAND" | sed -E 's/"[^"]*"/""/g; s/'"'"'[^'"'"']*'"'"'/'"''"'/g')
+
+  _vpc_ambiguous=""
+  # Exactly one --repo/-R flag, counted outside quoted text.
+  _vpc_repo_tokens=$(printf '%s\n' "$_vpc_unquoted" \
+    | grep -oE '(^|[[:space:]])(--repo|-R)([[:space:]]+|=)' | wc -l | tr -d ' ')
+  [ "${_vpc_repo_tokens:-0}" = "1" ] || _vpc_ambiguous="1"
+  # And the parsed slug must be the value of that flag, still outside quotes.
+  # This is what catches the probe in #1451 B1: a title reading
+  # `fix: port --repo <listed-slug> flag` has one --repo token and one slug
+  # occurrence, but both vanish with the quoted span, so the real target is
+  # the cwd repo and the exemption must not apply.
+  if [ -z "$_vpc_ambiguous" ]; then
+    printf '%s\n' "$_vpc_unquoted" \
+      | grep -qiE "(^|[[:space:]])(--repo|-R)([[:space:]]+|=)[\"']?([a-z0-9.-]+\.[a-z]{2,}/)?${_vpc_repo_lc}([[:space:]]|\$|[\"'])" \
+      || _vpc_ambiguous="1"
+  fi
+
+  if [ -z "$_vpc_ambiguous" ]; then
+    # The registry WINS, and the check must cover every registry shape the
+    # framework supports: `repo: x`, a block `repos:` list, an inline
+    # `repos: [a, b]`, and any of those with a trailing comment (#1451 B2).
+    # A hand-rolled grep missed the inline and commented forms, so reuse the
+    # registry parser instead — its field 6 lists every repo for an entry.
+    _vpc_governed=""
+    if [ -f "$HOOK_DIR/_lib-portfolio-paths.sh" ]; then
+      # shellcheck disable=SC1090,SC1091
+      . "$HOOK_DIR/_lib-portfolio-paths.sh"
+    fi
+    if [ -f "$HOOK_DIR/_lib-multi-repo-trace.sh" ]; then
+      # shellcheck disable=SC1090,SC1091
+      . "$HOOK_DIR/_lib-multi-repo-trace.sh"
+    fi
+    if command -v _mrt_parse_registry >/dev/null 2>&1; then
+      _vpc_all_repos=$(_mrt_parse_registry 2>/dev/null | cut -d'|' -f6 | tr ',' '\n' \
+        | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+      case "
+$_vpc_all_repos
+" in
+        *"
+$_vpc_repo_lc
+"*) _vpc_governed="1" ;;
+      esac
+    else
+      # No parser available: fail closed rather than exempt on a registry we
+      # could not read (#1451 B2, suggested). An unreadable registry must not
+      # be indistinguishable from an empty one.
+      _vpc_governed="1"
+    fi
+
+    if [ -z "$_vpc_governed" ]; then
+      while IFS= read -r _vpc_listed; do
+        [ -n "$_vpc_listed" ] || continue
+        _vpc_listed=$(printf '%s' "$_vpc_listed" | tr '[:upper:]' '[:lower:]')
+        if [ "$_vpc_listed" = "$_vpc_repo_lc" ]; then
+          EXTERNAL_TARGET="1"
+          break
+        fi
+      done <<EOF
+$(config_get '.external_contributions[]' 2>/dev/null)
+EOF
+    fi
+  fi
+fi
+
 TICKET_REF=""
-if [ -n "$TITLE" ]; then
+if [ -n "$EXTERNAL_TARGET" ]; then
+  echo "NOTE: validate-pr-create.sh: ${CMD_REPO} is listed in .external_contributions — this framework's PR-title convention is not applied. Follow that project's own CONTRIBUTING.md." >&2
+elif [ -n "$TITLE" ]; then
   if ! echo "$TITLE" | grep -qE "^(${PR_TYPES})\(([A-Z]{2,10}-[0-9]+|#[0-9]+)\)!?:"; then
     ERRORS="${ERRORS}PR title '$TITLE' doesn't match format: type(TICKET-ID): description\n"
     ERRORS="${ERRORS}Accepted types (from .claude/project-config.*.json → .pr.title_type_whitelist): ${PR_TYPES//|/, }\n"
@@ -774,6 +873,10 @@ if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "main" ] && [ "$CURRENT_BR
   # `sync(#N):`, which the title check above validates.
   if echo "$CURRENT_BRANCH" | grep -qE '^release/v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$|^sync/main-to-dev-after-v[0-9]+\.[0-9]+\.[0-9]+$'; then
     :  # release-cut or release-sync branch, exempt — fall through to the rest of the validator
+  elif [ -n "$EXTERNAL_TARGET" ]; then
+    :  # External contribution (#1448/#1451 B3): the branch belongs to the
+       # contributor's own fork and the destination project has its own
+       # naming conventions, so a framework ticket ID is not required here.
   elif ! echo "$CURRENT_BRANCH" | grep -qE '[A-Z]{2,10}-[0-9]+|GH-[0-9]+|#[0-9]+'; then
     ERRORS="${ERRORS}Branch '$CURRENT_BRANCH' missing ticket ID.\n"
   fi

@@ -160,6 +160,9 @@
     "gate_mode": false
   },
 
+  "_comment_external_contributions": "Repositories you contribute to but do NOT govern — an upstream OSS project you send PRs to (me2resh/apexyard#1448). For a repo listed here, validate-pr-create.sh does not apply this framework's PR-title convention, because that project has its own CONTRIBUTING.md and its own tracker. Empty by default: the exemption is opt-in and repo-scoped. The registry wins — if a listed repo is also a managed project the exemption does not apply, so adding a governed repo here cannot quietly disable title validation for work the framework governs. This relaxes a CONVENTION check only; leak protection, secret scanning and every security control are unaffected. Format: owner/name slugs, e.g. [\"openfga/vscode-ext\"].",
+  "external_contributions": [],
+
   "leak_protection": {
     "public_framework_repos": [
       "me2resh/apexyard"
