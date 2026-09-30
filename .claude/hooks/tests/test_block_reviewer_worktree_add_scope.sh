@@ -35,11 +35,11 @@ PASS=0
 FAIL=0
 
 run_case() {
-  local name="$1" command="$2" expected="$3"
+  local name="$1" command="$2" expected="$3" cwd="${4:-$ops}"
   local input output rc
   input=$(jq -cn --arg command "$command" '{tool_input:{command:$command}}')
   output=$(
-    cd "$ops" || exit 1
+    cd "$cwd" || exit 1
     printf '%s' "$input" | env -u CLAUDE_CODE_SESSION_ID APEXYARD_REVIEW_OPS_ROOT="$ops" \
       /bin/bash "$ops/.claude/hooks/block-reviewer-repo-mutation.sh" 2>&1
   )
@@ -127,9 +127,9 @@ run_case '#1509 block: worktree add then |& git config' \
 run_case '#1509 block: worktree add then & git reflog expire' \
   "git worktree add $outside abcdef1234567890 & git reflog expire --all" blocked
 run_case '#1509 block: relative path after pushd' \
-  "pushd $ops && git worktree add inner abcdef1234567890" blocked
+  "pushd $ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
 run_case '#1509 block: relative path after builtin cd' \
-  "builtin cd $ops && git worktree add inner abcdef1234567890" blocked
+  "builtin cd $ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
 run_case '#1509 block: relative path after a plain cd' \
   "cd $TMP/scratch && git worktree add inner abcdef1234567890" blocked
 run_case '#1509 allow: relative path against an absolute git -C' \
@@ -138,9 +138,23 @@ run_case '#1509 allow: worktree add then & a read-only git config' \
   "git worktree add $outside abcdef1234567890 & git config --get user.name" allowed
 
 run_case '#1509 block: relative path inside a brace group after cd' \
-  "{ cd $ops; git worktree add inner abcdef1234567890; }" blocked
+  "{ cd $ops; git worktree add inner abcdef1234567890; }" blocked "$TMP/scratch"
 run_case '#1509 block: relative path after CDPATH cd' \
-  "CDPATH=$TMP cd ops && git worktree add inner abcdef1234567890" blocked
+  "CDPATH=$TMP cd ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
+
+# Review round 3 of PR #1518: a quoted, escaped or indirect cd could hide
+# the directory change. These run from a scratch dir outside the ops fork,
+# so only the hook's rule, not the test's working directory, blocks them.
+run_case '#1509 block: escaped \\cd before a relative path' \
+  "\\cd $ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 block: quoted "cd" before a relative path' \
+  "\"cd\" $ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 block: eval cd before a relative path' \
+  "eval \"cd $ops\"; git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 block: cd through a variable before a relative path' \
+  "x=cd; \$x $ops && git worktree add inner abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 allow: relative path in the first segment from a scratch dir' \
+  "git worktree add inner abcdef1234567890" allowed "$TMP/scratch"
 
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

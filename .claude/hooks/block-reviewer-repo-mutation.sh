@@ -165,12 +165,11 @@ _brrm_scope_worktree_adds() {
       return 2
       ;;
   esac
-  # A relative path resolves against the working directory only when the
-  # command changes directory nowhere. The hook does not follow cd, pushd,
-  # builtin or command cd, CDPATH or a brace group, so with any of them the
-  # base is unknown and a relative path is blocked (review of PR #1518).
-  local dirchange_re='(^|[;&|({[:space:]])(cd|pushd|popd|builtin|command)([[:space:];&|)}]|$)|CDPATH=|(^|[;&|[:space:]])\{([[:space:]]|$)'
-  [[ $cmd =~ $dirchange_re ]] && base=""
+  # A relative path resolves against the working directory only in the
+  # first segment, where no earlier command on the line can have changed
+  # directory. After that the base is unknown, so a relative path is blocked.
+  # A list of directory-changing words could not see \cd, "cd", eval or a
+  # variable (review of PR #1518).
   rest="$cmd"
   while :; do
     if [[ $rest =~ $split_re ]]; then
@@ -189,6 +188,7 @@ _brrm_scope_worktree_adds() {
     # Rebuild with ` ; ` between segments. The later checks recognise `;`
     # before git, but not a lone `&` (background), so keeping `&` would hide
     # the next segment from them (review of PR #1518).
+    base=""
     if [ -n "$sep" ]; then out="$out$seg ; "; else out="$out$seg"; break; fi
   done
   printf '%s' "$out"
