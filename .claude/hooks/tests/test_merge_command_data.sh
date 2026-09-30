@@ -78,6 +78,22 @@ must_detect 'B3.1 printf -v array subscript' "printf -v 'a[\$(gh pr merge 7 --ad
 must_detect 'B3.2 printf %d array subscript' "printf -v 'a[1]' x; printf '%d' 'a[\$(gh pr merge 7)]'"
 must_detect 'B3.3 zsh printf %d with no -v' "printf '%d\n' 'path[\$(gh pr merge 1497)]'"
 must_detect 'B3.4 printf subscript with gh api' "echo start; printf -v 'y[\$(gh api -X PUT repos/o/r/pulls/7/merge)]' %s 1 | wc -c"
+# #1507: three more execution shapes must keep the raw merge scan.
+must_detect 'S1 unquoted zsh ~[' "echo 'gh pr merge 7' ~[demo]"
+must_detect 'S2 redirect to zshenv' "echo 'gh pr merge 7' > ~/.zshenv"
+must_detect 'S2 redirect to git hooks' "echo 'gh pr merge 7' > .git/hooks/pre-commit"
+must_detect 'S3 grep --filter=' "grep --filter='gh pr merge 7' notes.txt"
+must_detect 'S3 grep --pager separate' "grep --pager sh 'gh pr merge 7' notes.txt"
+must_detect 'S3 grep quoted --view' "grep '--view' sh 'gh pr merge 7' notes.txt"
+must_detect 'S3 egrep --format-open=' "egrep --format-open='gh pr merge 7' notes.txt"
+must_detect 'S3 fgrep --filter=' "fgrep --filter=./run.sh 'gh pr merge 7' notes.txt"
+# Review of PR #1517: a merge phrase split by quotes must still be seen in
+# the three shapes. dev scrubbed each quoted span to spaces, which joins the
+# words; the raw text alone keeps the quotes between them.
+must_detect 'S1q quote-split phrase with zsh ~[' "echo gh' 'pr' 'merge' '7 ~[demo]"
+must_detect 'S2q quote-split phrase to zshenv' "echo gh' 'pr' 'merge' '7 > ~/.zshenv"
+must_detect 'S2q quote-split phrase to git hooks' "echo gh' 'pr' 'merge' '7 > .git/hooks/pre-commit"
+must_detect 'S3q quote-split phrase with grep --filter' "grep --filter=sh gh' 'pr' 'merge' '7 notes.txt"
 
 # Only the narrow command list can suppress merge text, regardless of the
 # general scrubber policy. Unknown words and shell syntax retain the raw view.
@@ -176,6 +192,43 @@ for gate in block-unreviewed-merge.sh block-merge-on-red-ci.sh require-architect
     FAIL=$((FAIL + 1))
   fi
 done
+
+# Hakim, review of PR #1517: a long word of dashes after grep made the
+# grep-option lookahead super-linear, and a gate that times out does not
+# block. A command at the 120000-character cap must still be scanned, and
+# fast. The merge phrase is split by quotes so only the raw view can hide it.
+dashes=$(head -c 110000 /dev/zero | tr '\0' '-')
+start_s=$(date +%s)
+check 'long dash word after grep still detects the merge phrase' yes \
+  "grep a${dashes} x; echo gh' 'pr' 'merge' '7 > ~/.zshenv"
+elapsed=$(( $(date +%s) - start_s ))
+if [ "$elapsed" -lt 10 ]; then
+  printf 'PASS [long dash word after grep scans in %ss (limit 10s)]\n' "$elapsed"
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL [long dash word after grep took %ss (limit 10s)]\n' "$elapsed" >&2
+  FAIL=$((FAIL + 1))
+fi
+
+# Rex, review of PR #1517: the shell removes quotes, so a partly quoted
+# option name still reaches grep as --filter=. Each must keep the raw scan.
+must_detect 'S3p --"filter"=' "grep --\"filter\"='gh pr merge 7' notes.txt"
+must_detect "S3p --fil'ter'=" "grep --fil'ter'='gh pr merge 7' notes.txt"
+must_detect 'S3p ""--filter=' "grep \"\"--filter='gh pr merge 7' notes.txt"
+must_detect "S3p ''--filter=" "grep ''--filter='gh pr merge 7' notes.txt"
+must_detect 'S3p -"-filter"=' "grep -\"-filter\"='gh pr merge 7' notes.txt"
+# The same long dash word must not slow the grep-option branch either.
+start_s=$(date +%s)
+check 'long dash word, then grep --filter, still detects' yes \
+  "grep a${dashes} --filter='gh pr merge 7' notes.txt"
+elapsed=$(( $(date +%s) - start_s ))
+if [ "$elapsed" -lt 10 ]; then
+  printf 'PASS [long dash word, then grep --filter, scans in %ss (limit 10s)]\n' "$elapsed"
+  PASS=$((PASS + 1))
+else
+  printf 'FAIL [long dash word, then grep --filter, took %ss (limit 10s)]\n' "$elapsed" >&2
+  FAIL=$((FAIL + 1))
+fi
 
 printf 'RESULT: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

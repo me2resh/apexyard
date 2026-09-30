@@ -48,6 +48,7 @@ QUARANTINE=(
   # skips from other suites.
   ".claude/hooks/tests/test_lib_self_location_cwd_anchor.sh :: requires a non-standard working-directory layout"
   ".claude/hooks/tests/test_portfolio_paths_case_insensitive_fs.sh :: requires a case-insensitive filesystem"
+  ".claude/hooks/tests/test_pre_push_gate_case_insensitive_fs.sh :: requires a case-insensitive filesystem"
   ".claude/hooks/tests/test_tracker_zsh_self_location.sh :: requires zsh"
   ".claude/skills/pdf/tests/test_md_to_pdf_fallback.sh :: requires opt-in PDF end-to-end dependencies"
 )

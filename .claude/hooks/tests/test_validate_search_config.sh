@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tests for validate-search-config.sh (apexyard-premium#514).
+# Tests for validate-search-config.sh (private-app#514).
 #
 # The hook validates (read-only, LOUD-warn by default) the apexyard-search
 # MCP config at SessionStart. The load-bearing acceptance criterion is the
