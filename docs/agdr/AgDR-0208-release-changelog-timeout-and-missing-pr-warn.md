@@ -35,5 +35,4 @@ Chosen: **B**.
 - `bin/release-changelog.sh`
 - `docs/agdr/AgDR-0197-release-closes-from-body-and-list-removed-lines.md`
 - `.claude/hooks/tests/test_release_changelog.sh`
-- `.claude/hooks/tests/test_agdr_0197_release_polish.sh`
 - Issue #1506
