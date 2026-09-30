@@ -78,6 +78,15 @@ must_detect 'B3.1 printf -v array subscript' "printf -v 'a[\$(gh pr merge 7 --ad
 must_detect 'B3.2 printf %d array subscript' "printf -v 'a[1]' x; printf '%d' 'a[\$(gh pr merge 7)]'"
 must_detect 'B3.3 zsh printf %d with no -v' "printf '%d\n' 'path[\$(gh pr merge 1497)]'"
 must_detect 'B3.4 printf subscript with gh api' "echo start; printf -v 'y[\$(gh api -X PUT repos/o/r/pulls/7/merge)]' %s 1 | wc -c"
+# #1507: three more execution shapes must keep the raw merge scan.
+must_detect 'S1 unquoted zsh ~[' "echo 'gh pr merge 7' ~[demo]"
+must_detect 'S2 redirect to zshenv' "echo 'gh pr merge 7' > ~/.zshenv"
+must_detect 'S2 redirect to git hooks' "echo 'gh pr merge 7' > .git/hooks/pre-commit"
+must_detect 'S3 grep --filter=' "grep --filter='gh pr merge 7' notes.txt"
+must_detect 'S3 grep --pager separate' "grep --pager sh 'gh pr merge 7' notes.txt"
+must_detect 'S3 grep quoted --view' "grep '--view' sh 'gh pr merge 7' notes.txt"
+must_detect 'S3 egrep --format-open=' "egrep --format-open='gh pr merge 7' notes.txt"
+must_detect 'S3 fgrep --filter=' "fgrep --filter=./run.sh 'gh pr merge 7' notes.txt"
 
 # Only the narrow command list can suppress merge text, regardless of the
 # general scrubber policy. Unknown words and shell syntax retain the raw view.

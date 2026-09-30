@@ -32,6 +32,8 @@ The merge scrubber lives in `_lib-extract-pr.sh`. Merge detection does not sourc
 
 Each gate lists `_scrub_merge_command` as a required function. The existing `command -v` and `declare -F` checks remain unchanged. Missing functions block with a named error.
 
+AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` redirects, and grep-family execution options.
+
 ## Consequences
 
 - `grep` patterns and confirmed heredoc bodies no longer look like merges in the covered read-only shapes.
@@ -40,9 +42,25 @@ Each gate lists `_scrub_merge_command` as a required function. The existing `com
 - The merge path has no optional scrubber dependency.
 - `rg` patterns and other commands outside the narrow list retain conservative raw matching, even when their arguments appear harmless.
 
+## Known limits
+
+- A merge phrase split with quotes can evade the contiguous text match after scrubbing blanks each quoted span.
+- A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
+
+Forge controls remain authoritative for both limits.
+
+## Architecture evolution
+
+### #1507 raw fallbacks for three execution shapes
+
+PR #1497 reviews named three shapes inside the narrow list that can still execute data. The scrubber now keeps the entire raw command for unquoted `~[`, output redirects to shell startup names or `.git/hooks/`, and grep-family `--filter` / `--pager` / `--view` / `--format-open`. Ordinary `grep`, `cat`, and `echo` data cases stay scrubbed. See AgDR-0204.
+
 ## Artifacts
 
 - Issue #1489
+- Issue #1507
 - `test_merge_command_data.sh`
 - `test_merge_gate_library_functions.sh`
+- `test_merge_known_limits.sh`
 - `test_command_scrub_must_block.sh`
+- AgDR-0204
