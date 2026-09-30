@@ -1,8 +1,9 @@
 #!/bin/bash
 # CLASS: CONTROL — blocks repository-mutating git commands while a sanctioned
 # review-class agent is active (me2resh/apexyard#1233, AgDR-0145). Worktree
-# creation remains available so the orchestrator can provision an isolated
-# review checkout after the active-reviewer marker is set (AgDR-0147).
+# creation remains available for a path outside the ops fork and managed
+# workspace so a reviewer can provision an isolated checkout after the
+# active-reviewer marker is set (AgDR-0147, AgDR-0205 / #1509).
 #
 # The active-reviewer marker is written by the review skill immediately before
 # Rex, Hakim, or Tariq is spawned. It is a narrow session signal: when present,
@@ -27,6 +28,161 @@ if [ -f "$HOOK_DIR/_lib-review-markers.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOOK_DIR/_lib-review-markers.sh"
 fi
+if [ -f "$HOOK_DIR/_lib-path-resolve.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$HOOK_DIR/_lib-path-resolve.sh"
+fi
+
+# True when PATH is exactly BASE or a file under BASE.
+_brrm_path_under() {
+  local path="$1" base="$2"
+  [ -n "$path" ] && [ -n "$base" ] || return 1
+  case "$path" in
+    "$base"|"$base"/*) return 0 ;;
+  esac
+  return 1
+}
+
+# First non-option path argument of one `git worktree add` segment. Empty on
+# failure. Only -b, -B and --reason take a separate value.
+_brrm_worktree_add_path_arg() {
+  local seg="$1" rest skip=0
+  rest=$(printf '%s' "$seg" | sed -E 's/^.*[[:space:]]worktree[[:space:]]+add([[:space:]]+|$)//')
+  # The strict segment shape below allows no quotes or globbing characters.
+  # shellcheck disable=SC2086
+  set -f; set -- $rest; set +f
+  while [ "$#" -gt 0 ]; do
+    if [ "$skip" -eq 1 ]; then skip=0; shift; continue; fi
+    case "$1" in
+      -b|-B|--reason) skip=1 ;;
+      -*) ;;
+      *) printf '%s' "$1"; return 0 ;;
+    esac
+    shift
+  done
+  return 1
+}
+
+# Physical path for ABS, whose tail may not exist yet. Empty on failure.
+_brrm_real_path() {
+  local abs="$1" dir tail="" parent
+  if command -v _resolve_real_path >/dev/null 2>&1; then
+    _resolve_real_path "$abs"
+    return
+  fi
+  dir="$abs"
+  while [ -n "$dir" ] && [ "$dir" != / ] && [ ! -d "$dir" ]; do
+    if [ -z "$tail" ]; then tail=$(basename "$dir"); else tail=$(basename "$dir")/$tail; fi
+    dir=$(dirname "$dir")
+  done
+  parent=$(cd "$dir" 2>/dev/null && pwd -P) || return 0
+  if [ "$parent" = / ]; then printf '/%s' "$tail"; else printf '%s/%s' "$parent" "${tail:+$tail}"; fi
+}
+
+# Governed trees a review worktree must not land in: the ops fork, its
+# workspace/, and the configured portfolio workspace (split-portfolio mode).
+_brrm_governed_roots() {
+  local root="$1" ws
+  (cd "$root" 2>/dev/null && pwd -P) || printf '%s\n' "$root"
+  printf '%s\n' "$root/workspace"
+  ws=$(
+    cd "$root" 2>/dev/null || exit 0
+    # shellcheck source=/dev/null
+    . "$root/.claude/hooks/_lib-read-config.sh" 2>/dev/null || exit 0
+    # shellcheck source=/dev/null
+    . "$root/.claude/hooks/_lib-portfolio-paths.sh" 2>/dev/null || exit 0
+    portfolio_workspace_dir 2>/dev/null
+  )
+  [ -n "$ws" ] && printf '%s\n' "$ws"
+}
+
+# Check one `git worktree add` segment. BASE is the directory a relative path
+# resolves against (empty when unknown). Return 0 when the new path is outside
+# every governed tree; print the reason and return 2 otherwise.
+_brrm_check_worktree_add_segment() {
+  local seg="$1" root="$2" base="$3" path cdir abs resolved gov gov_real
+  path=$(_brrm_worktree_add_path_arg "$seg") || path=""
+  if [ -z "$path" ]; then
+    echo "BLOCKED: review-class agent cannot alter worktrees during an active review (no literal worktree path found)." >&2
+    return 2
+  fi
+  cdir=$(printf '%s' "$seg" | sed -nE 's/^[[:space:]]*git[[:space:]]+-C[[:space:]]+([^[:space:]]+)[[:space:]].*/\1/p')
+  if [ -n "$cdir" ]; then
+    case "$cdir" in /*) base="$cdir" ;; *) [ -n "$base" ] && base="$base/$cdir" ;; esac
+  fi
+  case "$path" in
+    /*) abs="$path" ;;
+    *)
+      if [ -z "$base" ]; then
+        echo "BLOCKED: review-class agent cannot resolve this worktree path during an active review. Use an absolute path." >&2
+        return 2
+      fi
+      abs="$base/$path"
+      ;;
+  esac
+  resolved=$(_brrm_real_path "$abs")
+  if [ -z "$resolved" ]; then
+    echo "BLOCKED: review-class agent cannot resolve this worktree path during an active review." >&2
+    return 2
+  fi
+  while IFS= read -r gov; do
+    [ -n "$gov" ] || continue
+    gov_real=$(_brrm_real_path "$gov")
+    for g in "$gov" "$gov_real"; do
+      [ -n "$g" ] || continue
+      if _brrm_path_under "$resolved" "$g" || { case "$abs" in *..*) false ;; *) _brrm_path_under "$abs" "$g" ;; esac; }; then
+        echo "BLOCKED: review-class agent cannot create a worktree inside the ops fork or a managed workspace during an active review." >&2
+        return 2
+      fi
+    done
+  done < <(_brrm_governed_roots "$root")
+  return 0
+}
+
+# Validate every `git worktree add` segment in CMD. Print CMD with each of
+# those segments replaced by `true`, so the checks after this still read every
+# other segment. Return 2 after a message on any doubt (me2resh/apexyard#1509,
+# AgDR-0205). A segment must be a literal, single-line `git [-C dir] worktree
+# add ...` with no quotes, expansions, environment prefix or other git global
+# option: `-c core.hooksPath=...` or a GIT_CONFIG_* prefix can run code on
+# checkout.
+_brrm_scope_worktree_adds() {
+  local cmd="$1" root="$2" rest seg sep out="" base="$PWD" target
+  local split_re='^([^;&|]*)(&&|\|\||;|\||&)(.*)$'
+  local wt_re='(^|[[:space:]])worktree[[:space:]]+add([[:space:]]|$)'
+  local shape_re='^[[:space:]]*git([[:space:]]+-C[[:space:]]+[A-Za-z0-9_./@:+-]+)?[[:space:]]+worktree[[:space:]]+add([[:space:]]+[A-Za-z0-9_./@:^+=-]+)*[[:space:]]*$'
+  local cd_re='^[[:space:]]*cd[[:space:]]+([A-Za-z0-9_./@:+-]+)[[:space:]]*$'
+  case "$cmd" in
+    *$'\n'*)
+      echo "BLOCKED: review-class agent must run git worktree add as a single-line command during an active review." >&2
+      return 2
+      ;;
+  esac
+  rest="$cmd"
+  while :; do
+    if [[ $rest =~ $split_re ]]; then
+      seg=${BASH_REMATCH[1]} sep=${BASH_REMATCH[2]} rest=${BASH_REMATCH[3]}
+    else
+      seg=$rest sep="" rest=""
+    fi
+    if [[ $seg =~ $wt_re ]]; then
+      if ! [[ $seg =~ $shape_re ]]; then
+        echo "BLOCKED: review-class agent may run only a literal 'git [-C dir] worktree add <path> <commit>' during an active review." >&2
+        return 2
+      fi
+      _brrm_check_worktree_add_segment "$seg" "$root" "$base" || return 2
+      seg=" true "
+    elif [[ $seg =~ $cd_re ]]; then
+      target=${BASH_REMATCH[1]}
+      case "$target" in /*) base="$target" ;; *) [ -n "$base" ] && base="$base/$target" ;; esac
+    elif [[ $seg =~ ^[[:space:]]*cd([[:space:]]|$) ]]; then
+      base=""
+    fi
+    out="$out$seg$sep"
+    [ -n "$sep" ] || break
+  done
+  printf '%s' "$out"
+}
 
 # If the hook cannot parse the tool payload, do not invent a block when there
 # is no active review. With an active marker, fail closed for payloads that
@@ -135,12 +291,14 @@ if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]
   echo "BLOCKED: review-class agent cannot alter Git notes during an active review." >&2
   exit 2
 fi
-# `git worktree add` creates the isolated checkout that the orchestrator gives
-# to the reviewer. It does not alter the reviewed worktree or its index, so it
-# stays available during the review window. Lock, move, prune, remove, repair,
-# and unlock remain blocked because they alter existing worktree state.
-if printf '%s' "$COMMAND" | grep -qE '^[[:space:]]*(cd[[:space:]]+[^;&|]+[[:space:]]+&&[[:space:]]*)?git[[:space:]]+([^;&|]*[[:space:]])?worktree[[:space:]]+add([[:space:]][^;&|]*)?[[:space:]]*$'; then
-  exit 0
+# `git worktree add` may provision an isolated checkout outside the ops fork
+# and managed workspace (AgDR-0147, AgDR-0205 / #1509). The MUTATING list below
+# would otherwise treat `worktree add` as `git add`, so this branch must handle
+# every worktree-add form before that catch-all. Paths inside ROOT or
+# ROOT/workspace stay blocked. Lock, move, prune, remove, repair, and unlock
+# remain blocked because they alter existing worktree state.
+if printf '%s' "$COMMAND" | grep -qE '(^|&&|\|\||;|\|)[[:space:]]*([[:alnum:]_]+=[^[:space:];|&]+[[:space:]]+)*git[[:space:]]+([^;&|]*[[:space:]])?worktree[[:space:]]+add([[:space:];|&]|$)'; then
+  COMMAND=$(_brrm_scope_worktree_adds "$COMMAND" "$ROOT") || exit 2
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?worktree([[:space:]]|$)([^;&|]*[[:space:]])?(lock|move|prune|remove|repair|unlock)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter worktrees during an active review." >&2
