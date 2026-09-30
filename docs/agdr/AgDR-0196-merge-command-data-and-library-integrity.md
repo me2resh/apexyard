@@ -46,8 +46,10 @@ AgDR-0204 extends the raw fallback for unquoted `~[`, startup and `.git/hooks/` 
 
 - A merge phrase split with quotes can evade the contiguous text match after scrubbing blanks each quoted span.
 - A two-step write-then-run can hide a merge: one turn writes merge text to an ordinary file, and a later turn runs that file.
+- A grep option name padded with more than 48 characters of empty quote pairs, before or inside the name, is not recognised (AgDR-0204 reads a fixed window so the check stays linear).
+- A glob such as `?-filter=` expands to an option name only when a matching file exists. The check does not read the file system, so it does not see this.
 
-Forge controls remain authoritative for both limits.
+Forge controls remain authoritative for these limits.
 
 ## Architecture evolution
 
