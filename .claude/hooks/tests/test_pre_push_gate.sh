@@ -51,15 +51,25 @@ make_sandbox() {
   local fork_shape="${2:-managed}"
   local sb
   sb=$(mktemp -d)
-  (
+  # Keep git from walking into the surrounding worktree under test.
+  GIT_CEILING_DIRECTORIES="$sb"
+  export GIT_CEILING_DIRECTORIES
+  if ! (
     cd "$sb" || exit 1
-    git init -q
+    git init -q || exit 1
     git config user.email "test@example.com"
     git config user.name "test"
     touch onboarding.yaml
     git add onboarding.yaml
     git commit -q -m "init"
-  )
+  ); then
+    echo "FAIL: git init failed for sandbox at $sb — stop" >&2
+    rm -rf "$sb"
+    # make_sandbox is often called inside $(...). A plain exit only ends that
+    # subshell and leaves callers with an empty path. Kill the test shell.
+    kill $$ >/dev/null 2>&1
+    exit 1
+  fi
   mkdir -p "$sb/.claude/hooks"
   cp "$HOOK_SRC" "$sb/.claude/hooks/pre-push-gate.sh"
   chmod +x "$sb/.claude/hooks/pre-push-gate.sh"
@@ -300,6 +310,8 @@ case_no_valid_pin_gets_no_advice() {
 case_pinned_linked_worktree_gets_advice() {
   local sb; sb=$(make_sandbox 0 fork)
   local linked; linked=$(mktemp -d)
+  GIT_CEILING_DIRECTORIES="$sb:$linked"
+  export GIT_CEILING_DIRECTORIES
   if ! git -C "$sb" worktree add -q -b linked "$linked"; then
     echo "FAIL [pinned-linked-worktree-setup]" >&2
     FAIL=$((FAIL+1))
@@ -322,6 +334,56 @@ case_pinned_linked_worktree_gets_advice() {
     FAILED_CASES="${FAILED_CASES}pinned-linked-worktree-gets-advice-without-false-note "
   fi
   rm -rf "$sb" "$linked" "$pin_dir"
+}
+
+# ---- #1504: a pin written through a symlink to the real fork gets advice ----
+case_symlinked_pin_gets_install_advice() {
+  local sb; sb=$(make_sandbox 0 fork)
+  local link_parent linked sid="test-session-symlink-pin" pin_dir out rc
+  link_parent=$(mktemp -d)
+  linked="$link_parent/fork-link"
+  ln -s "$sb" "$linked"
+
+  pin_dir=$(make_pin "$linked" "$sid")
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "core.hooksPath" &&
+    ! echo "$out" | grep -qF "not an ApexYard fork"; then
+    echo "PASS [symlinked-pin-gets-install-advice]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [symlinked-pin-gets-install-advice]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}symlinked-pin-gets-install-advice "
+  fi
+  rm -rf "$sb" "$link_parent" "$pin_dir"
+}
+
+# ---- #1504: a pin to a different repository still gets no install advice ----
+case_pin_to_different_repo_gets_no_advice() {
+  local sb; sb=$(make_sandbox 0 managed)
+  local other; other=$(make_sandbox 0 fork)
+  local sid="test-session-other-pin" pin_dir out rc
+  pin_dir=$(make_pin "$other" "$sid")
+  out=$(run_pinned_hook "$sb" "$pin_dir" "$sid")
+  rc=$?
+  if [ "$rc" = "0" ] && ! echo "$out" | grep -qF "core.hooksPath"; then
+    echo "PASS [pin-to-different-repo-gets-no-install-advice]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [pin-to-different-repo-gets-no-install-advice]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}pin-to-different-repo-gets-no-install-advice "
+  fi
+  if [ "$rc" = "0" ] && echo "$out" | grep -qF "not an ApexYard fork"; then
+    echo "PASS [pin-to-different-repo-gets-scope-note]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [pin-to-different-repo-gets-scope-note]: rc=$rc stderr=$out" >&2
+    FAIL=$((FAIL+1))
+    FAILED_CASES="${FAILED_CASES}pin-to-different-repo-gets-scope-note "
+  fi
+  rm -rf "$sb" "$other" "$pin_dir"
 }
 
 case_agdr_states_pinned_limit() {
@@ -488,6 +550,8 @@ case3
 case4
 case_no_valid_pin_gets_no_advice
 case_pinned_linked_worktree_gets_advice
+case_symlinked_pin_gets_install_advice
+case_pin_to_different_repo_gets_no_advice
 case_agdr_states_pinned_limit
 case_h1_heredoc
 case_h1_quoted_string

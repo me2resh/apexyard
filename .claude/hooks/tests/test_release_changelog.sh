@@ -800,6 +800,57 @@ out=$(run_test '
 contains "Fixes keyword closes" "Closes #3101" "$out"
 contains "Resolves keyword closes" "Closes #3102" "$out"
 
+# ── #1506 — scoped commit with no trailing (#PR) warns and names the commit ─
+# A direct-push scoped subject like `feat(#3401): ...` has no squash-appended
+# `(#PR)`. Prefer missing close, but warn so the release author sees it.
+# The warning must name the short SHA of that commit.
+echo "--- #1506 scoped commit with no trailing (#PR) warns naming the commit ---"
+out=$(run_test '
+  mc "chore: initial"
+  git tag v34.0.0
+  mc "feat(#3401): direct push with no trailing PR marker"
+  SHA=$(git log -1 --pretty=format:%h)
+  echo "EXPECT_SHA=$SHA"
+  git remote add upstream https://github.com/testowner/testrepo.git
+  fakebin="$PWD/fakebin"
+  make_stub_gh "$fakebin"
+  RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+    STUB_GH_BODY="Closes #3401" \
+    PREV_TAG="v34.0.0" HEAD_REF="HEAD" VERSION="v34.1.0" DATE="2026-09-30" \
+    bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+')
+expect_sha=$(echo "$out" | grep -oE 'EXPECT_SHA=[0-9a-f]+' | cut -d= -f2)
+contains "warning names the commit short SHA" "scoped commit ${expect_sha}" "$out"
+contains "warning mentions missing trailing (#PR)" "no trailing (#PR)" "$out"
+not_contains "no Closes when there is nothing to fetch" "Closes #3401" "$out"
+not_contains "no Closes section for the direct-push scoped commit" "### Closes" "$out"
+
+# ── #1506 — gh timeout counts as a failed read with warning + fallback ─────
+# A stub that sleeps past PR_LOOKUP_TIMEOUT must be killed. Treat that like
+# any other fetch failure: warn and fall back to scoped-title close.
+echo "--- #1506 gh timeout is a failed read with warning and scoped-title fallback ---"
+if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
+  out=$(run_test '
+    mc "chore: initial"
+    git tag v35.0.0
+    mc "feat(#3501): work whose PR body fetch hangs (#3501)"
+    git remote add upstream https://github.com/testowner/testrepo.git
+    fakebin="$PWD/fakebin"
+    make_stub_gh "$fakebin"
+    RELEASE_GH="$fakebin/gh" PR_LOOKUP_REPO="testowner/testrepo" \
+      PR_LOOKUP_TIMEOUT=1 STUB_GH_SLEEP=5 STUB_GH_BODY="Refs #3501" \
+      PREV_TAG="v35.0.0" HEAD_REF="HEAD" VERSION="v35.1.0" DATE="2026-09-30" \
+      bash "'"$CHANGELOG_SCRIPT"'" 2>&1
+    echo "EXIT_CODE=$?"
+  ')
+  contains "timeout falls back to scoped-title close" "Closes #3501" "$out"
+  contains "timeout warning names the PR" "PR #3501" "$out"
+  contains "timeout warning mentions falling back" "falling back" "$out"
+  contains "script still exits cleanly after timeout" "EXIT_CODE=0" "$out"
+else
+  echo "  SKIP: neither timeout nor gtimeout on PATH — orchestrator must re-run outside this environment"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
 echo ""

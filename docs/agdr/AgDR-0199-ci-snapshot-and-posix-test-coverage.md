@@ -19,9 +19,13 @@ The squash merge removed three reviewed commits from the branch history. Local t
 
 CI fetches the reviewed PR ref into a temporary repository. The must-block test archives each pinned commit from its own temporary clone. CI fails if any snapshot is missing. Local runs keep visible skip warnings. The static test scans all hook libraries. The three libraries with process substitution use here-doc input for their loops.
 
+The three snapshot commits are pinned by full 40-character SHAs in the workflow and in the must-block test. After the fetch, CI runs `git cat-file -e` on each SHA. A missing object fails the job with a clear message. See AgDR-0207.
+
 ## Consequences
 
 - CI depends on the reviewed PR ref remaining fetchable.
+- A short SHA can no longer resolve to the wrong commit as history grows.
+- A missing snapshot commit fails CI before the hook suite runs.
 - The static check covers future hook-library additions without a list update.
 - The loop changes keep variables and early returns in the current shell.
 
@@ -30,3 +34,4 @@ CI fetches the reviewed PR ref into a temporary repository. The must-block test 
 - `.github/workflows/tests.yml`
 - `.claude/hooks/tests/test_ci_snapshot_proofs.sh`
 - `.claude/hooks/tests/test_posix_sourced_libs.sh`
+- AgDR-0207
