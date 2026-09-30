@@ -14,51 +14,21 @@ FAIL=0
 pass() { printf '  ok   %s\n' "$1"; PASS=$((PASS + 1)); }
 fail() { printf '  FAIL %s: %s\n' "$1" "$2" >&2; FAIL=$((FAIL + 1)); }
 
-# Temp repo outside the worktree. Named GIT_DIR avoids sandboxes that block
-# a literal `.git` directory. GIT_CEILING_DIRECTORIES stops a failed init
-# from walking into a parent repo. Stop the suite if init fails.
 make_repo() {
   local sandbox origin_url
   sandbox=$(mktemp -d) || exit 1
   origin_url=${1:-https://github.com/acme/public-ops.git}
   (
-    export GIT_CEILING_DIRECTORIES="$sandbox"
     cd "$sandbox" || exit 1
-    export GIT_DIR="$sandbox/gitdir"
-    export GIT_WORK_TREE="$sandbox"
-    mkdir -p "$GIT_DIR"
-    if ! git init -q; then
-      printf 'make_repo: git init failed in %s\n' "$sandbox" >&2
-      exit 1
-    fi
-    if [ ! -d "$GIT_DIR" ]; then
-      printf 'make_repo: git init produced no gitdir in %s\n' "$sandbox" >&2
-      exit 1
-    fi
+    git init -q
     git config user.email test@example.com
     git config user.name Test
     printf 'x\n' > README.md
     git add README.md
     git commit -q -m baseline
     git remote add origin "$origin_url"
-  ) || {
-    rm -rf "$sandbox"
-    exit 1
-  }
-  printf '%s\n' "$sandbox"
-}
-
-# Run the helper with GIT_DIR/GIT_WORK_TREE so the named gitdir is visible.
-run_helper() {
-  local sandbox="$1"
-  shift
-  (
-    export GIT_CEILING_DIRECTORIES="$sandbox"
-    export GIT_DIR="$sandbox/gitdir"
-    export GIT_WORK_TREE="$sandbox"
-    cd "$sandbox" || exit 1
-    bash "$SCRIPT" --repo-dir "$sandbox" "$@"
   )
+  printf '%s\n' "$sandbox"
 }
 
 install_stub_gh() {
@@ -80,28 +50,31 @@ SH
   chmod +x "$sandbox/bin/gh"
 }
 
-# PATH with jq and git, but no gh (for #1508 missing-gh cases).
+# A PATH with no gh at all (#1508). CI runners install gh in /usr/bin, so
+# the test cannot reuse /usr/bin or /bin. Link every other command from
+# those directories, plus jq and git, into one temporary directory.
 path_without_gh() {
-  local bindir git_bin jq_bin
+  local bindir dir tool name
   bindir=$(mktemp -d) || exit 1
-  jq_bin=$(command -v jq) || {
-    printf 'path_without_gh: jq is required on the host PATH\n' >&2
-    exit 1
-  }
-  git_bin=$(command -v git) || {
-    printf 'path_without_gh: git is required on the host PATH\n' >&2
-    exit 1
-  }
-  ln -s "$jq_bin" "$bindir/jq"
-  ln -s "$git_bin" "$bindir/git"
-  printf '%s\n' "$bindir:/usr/bin:/bin"
+  for tool in "$(command -v jq)" "$(command -v git)"; do
+    [ -n "$tool" ] || { printf 'path_without_gh: jq and git are required\n' >&2; exit 1; }
+    ln -s "$tool" "$bindir/${tool##*/}"
+  done
+  for dir in /usr/bin /bin; do
+    for tool in "$dir"/*; do
+      name=${tool##*/}
+      [ "$name" = gh ] && continue
+      [ -x "$tool" ] && [ ! -e "$bindir/$name" ] && ln -s "$tool" "$bindir/$name"
+    done
+  done
+  printf '%s\n' "$bindir"
 }
 
 echo '== record-origin-verified-public.sh =='
 
 sandbox=$(make_repo)
 install_stub_gh "$sandbox" PUBLIC
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 if [ "$rc" -eq 0 ] \
   && printf '%s' "$out" | grep -qF 'origin_verified_public=acme/public-ops' \
@@ -114,7 +87,7 @@ rm -rf "$sandbox"
 
 sandbox=$(make_repo)
 install_stub_gh "$sandbox" PRIVATE
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 if [ "$rc" -eq 1 ] \
   && printf '%s' "$out" | grep -qF 'Origin exemption is OFF' \
@@ -127,7 +100,7 @@ rm -rf "$sandbox"
 
 sandbox=$(make_repo)
 install_stub_gh "$sandbox" PUBLIC fail
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 if [ "$rc" -eq 1 ] \
   && printf '%s' "$out" | grep -qF 'Origin exemption is OFF' \
@@ -144,7 +117,7 @@ install_stub_gh "$sandbox" PUBLIC
 mkdir -p "$sandbox/.claude"
 printf '%s\n' '{"tracker":{"kind":"gh"},"leak_protection":{"skip_marker":"<!-- x -->"}}' \
   > "$sandbox/.claude/project-config.json"
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 kind=$(jq -r '.tracker.kind' "$sandbox/.claude/project-config.json")
 marker=$(jq -r '.leak_protection.skip_marker' "$sandbox/.claude/project-config.json")
@@ -164,7 +137,7 @@ install_stub_gh "$sandbox" PRIVATE
 mkdir -p "$sandbox/.claude"
 printf '%s\n' '{"tracker":{"kind":"gh"},"leak_protection":{"origin_verified_public":"acme/public-ops","skip_marker":"<!-- x -->"}}' \
   > "$sandbox/.claude/project-config.json"
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
 marker=$(jq -r '.leak_protection.skip_marker' "$sandbox/.claude/project-config.json")
@@ -183,7 +156,7 @@ install_stub_gh "$sandbox" PUBLIC fail
 mkdir -p "$sandbox/.claude"
 printf '%s\n' '{"leak_protection":{"origin_verified_public":"acme/public-ops"}}' \
   > "$sandbox/.claude/project-config.json"
-out=$(PATH="$sandbox/bin:$PATH" run_helper "$sandbox" 2>&1)
+out=$(cd "$sandbox" && PATH="$sandbox/bin:$PATH" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
 rc=$?
 key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
 if [ "$rc" -eq 1 ] && [ "$key" = "acme/public-ops" ] \
@@ -194,41 +167,47 @@ else
 fi
 rm -rf "$sandbox"
 
-# #1508 — no gh, matching earlier key: keep key and say the earlier proof stays.
+# #1508: no gh, matching earlier key. Keep the key and say the proof stays.
 sandbox=$(make_repo)
 mkdir -p "$sandbox/.claude"
 printf '%s\n' '{"leak_protection":{"origin_verified_public":"acme/public-ops"}}' \
   > "$sandbox/.claude/project-config.json"
-no_gh_path=$(path_without_gh)
-out=$(PATH="$no_gh_path" run_helper "$sandbox" 2>&1)
-rc=$?
-key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
-no_gh_bindir=${no_gh_path%%:*}
-if [ "$rc" -eq 1 ] && [ "$key" = "acme/public-ops" ] \
-  && printf '%s' "$out" | grep -qF 'earlier proof for acme/public-ops stays' \
-  && ! printf '%s' "$out" | grep -qF 'Origin exemption is OFF'; then
-  pass 'keeps matching key and says earlier proof stays when gh is missing'
+no_gh=$(path_without_gh)
+if PATH="$no_gh" command -v gh >/dev/null 2>&1; then
+  fail 'keeps matching key and says earlier proof stays when gh is missing' 'gh is still on the test PATH'
 else
-  fail 'keeps matching key and says earlier proof stays when gh is missing' \
-    "rc=$rc key=$key out=$out"
+  out=$(cd "$sandbox" && PATH="$no_gh" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
+  rc=$?
+  key=$(jq -r '.leak_protection.origin_verified_public // "absent"' "$sandbox/.claude/project-config.json")
+  if [ "$rc" -eq 1 ] && [ "$key" = "acme/public-ops" ] \
+    && printf '%s' "$out" | grep -qF 'gh is not on PATH' \
+    && printf '%s' "$out" | grep -qF 'earlier proof for acme/public-ops stays' \
+    && ! printf '%s' "$out" | grep -qF 'Origin exemption is OFF'; then
+    pass 'keeps matching key and says earlier proof stays when gh is missing'
+  else
+    fail 'keeps matching key and says earlier proof stays when gh is missing' "rc=$rc key=$key out=$out"
+  fi
 fi
-rm -rf "$sandbox" "$no_gh_bindir"
+rm -rf "$sandbox" "$no_gh"
 
-# #1508 — no gh, no key: OFF message unchanged.
+# #1508: no gh, no key. The OFF message does not change.
 sandbox=$(make_repo)
-no_gh_path=$(path_without_gh)
-out=$(PATH="$no_gh_path" run_helper "$sandbox" 2>&1)
-rc=$?
-no_gh_bindir=${no_gh_path%%:*}
-if [ "$rc" -eq 1 ] \
-  && printf '%s' "$out" | grep -qF 'Origin exemption is OFF for acme/public-ops: gh is not on PATH' \
-  && ! printf '%s' "$out" | grep -qF 'earlier proof' \
-  && [ ! -f "$sandbox/.claude/project-config.json" ]; then
-  pass 'unchanged OFF message when gh is missing and no key exists'
+no_gh=$(path_without_gh)
+if PATH="$no_gh" command -v gh >/dev/null 2>&1; then
+  fail 'unchanged OFF message when gh is missing and no key exists' 'gh is still on the test PATH'
 else
-  fail 'unchanged OFF message when gh is missing and no key exists' "rc=$rc out=$out"
+  out=$(cd "$sandbox" && PATH="$no_gh" bash "$SCRIPT" --repo-dir "$sandbox" 2>&1)
+  rc=$?
+  if [ "$rc" -eq 1 ] \
+    && printf '%s' "$out" | grep -qF 'Origin exemption is OFF for acme/public-ops: gh is not on PATH' \
+    && ! printf '%s' "$out" | grep -qF 'earlier proof' \
+    && [ ! -f "$sandbox/.claude/project-config.json" ]; then
+    pass 'unchanged OFF message when gh is missing and no key exists'
+  else
+    fail 'unchanged OFF message when gh is missing and no key exists' "rc=$rc out=$out"
+  fi
 fi
-rm -rf "$sandbox" "$no_gh_bindir"
+rm -rf "$sandbox" "$no_gh"
 
 printf 'Passed: %s  Failed: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
