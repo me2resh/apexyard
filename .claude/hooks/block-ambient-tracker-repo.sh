@@ -88,10 +88,11 @@ if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
   # Join with awk, not ${var//pattern/}: under bash 3.2 that substitution
   # grows super-linearly with the number of continuations, and a large
   # command could stall this dispatcher and every gate after it (Hakim, PR
-  # #1511). The awk join is linear.
+  # #1511). The awk join is linear. LC_ALL=C keeps awk from aborting on a
+  # byte that is not valid UTF-8, which would print nothing and hide a match.
   if [ "$JOIN_UNMODELLED" -eq 0 ] \
     || ! printf '%s\n' "$SCAN_COMMAND" \
-      | awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' \
+      | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' \
       | grep -qE "$TRACKER_PATTERN"; then
     exit 0
   fi
