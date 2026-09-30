@@ -270,12 +270,14 @@ _normalize_json_escapes() {
   printf '%s' "$text"
 }
 
-# Merge-only scrub decision (AgDR-0196). The general command scrubber permits
-# programs such as git, gh, rg and sort that can execute arguments or files.
-# Do not use that allowlist here: a later program could execute earlier data.
-# Accept only literal command words from the narrow list, in EVERY segment.
-# Unknown syntax, substitutions, incomplete heredocs, or parser failures keep
-# the entire raw command. This function never executes the command text.
+# Merge-only scrub decision (AgDR-0196, AgDR-0204). The general command
+# scrubber permits programs such as git, gh, rg and sort that can execute
+# arguments or files. Do not use that allowlist here: a later program could
+# execute earlier data. Accept only literal command words from the narrow
+# list, in EVERY segment. Unknown syntax, substitutions, incomplete heredocs,
+# zsh `~[`, startup/hook redirects, grep execution options, or parser
+# failures keep the entire raw command. This function never executes the
+# command text.
 _scrub_merge_command() {
   local cmd="$1" result
   if [ "${#cmd}" -gt 120000 ] || ! command -v awk >/dev/null 2>&1; then
@@ -291,15 +293,94 @@ _scrub_merge_command() {
              word == "cat" || word == "echo" || \
              word == "head" || word == "tail" || word == "wc"
     }
+    function is_grep_family(word) {
+      return word == "grep" || word == "egrep" || word == "fgrep"
+    }
+    # Strip quotes only. Do not evaluate paths or expand tildes.
+    function flat_word(w,    t) {
+      t = w
+      gsub(/["\047]/, "", t)
+      return t
+    }
+    function dangerous_grep_opt(w,    t, eq) {
+      t = flat_word(w)
+      eq = index(t, "=")
+      if (eq > 1) t = substr(t, 1, eq - 1)
+      return t == "--filter" || t == "--pager" || t == "--view" || \
+             t == "--format-open"
+    }
+    # Check a grep option that starts at position p. Read a fixed window,
+    # drop quote characters (the shell removes them, so --"filter"= and
+    # ""--filter= reach grep as --filter=), and test the option name. The
+    # window keeps the cost fixed per word start.
+    function grep_opt_at(p,    w) {
+      w = flat_word(substr(s, p, 48))
+      if (match(w, /^-[-A-Za-z]*/)) return dangerous_grep_opt(substr(w, 1, RLENGTH))
+      return 0
+    }
+    function startup_base(b) {
+      return b == ".zshenv" || b == "zshenv" || \
+             b == ".zshrc" || b == "zshrc" || \
+             b == ".zprofile" || b == "zprofile" || \
+             b == ".zlogin" || b == "zlogin" || \
+             b == ".zlogout" || b == "zlogout" || \
+             b == ".bashrc" || b == "bashrc" || \
+             b == ".bash_profile" || b == "bash_profile" || \
+             b == ".bash_login" || b == "bash_login" || \
+             b == ".profile" || b == "profile" || \
+             b == "bash.bashrc" || b == "config.fish"
+    }
+    function is_startup_or_hook(w,    t, n, base) {
+      t = flat_word(w)
+      if (t == "") return 0
+      if (index(t, ".git/hooks/") > 0) return 1
+      n = split(t, parts, "/")
+      base = parts[n]
+      if (startup_base(base)) return 1
+      # Catch ~/name and bare name forms the split may leave as one field.
+      if (startup_base(t)) return 1
+      if (substr(t, 1, 2) == "~/" && startup_base(substr(t, 3))) return 1
+      return 0
+    }
+    # Read one shell word with concatenated quoted spans. Leaves pos after
+    # the word. Sets WORD. Returns 0 on incomplete quotes or empty input.
+    function read_merge_word(    c, q, out) {
+      WORD = ""
+      while (pos <= n && substr(s, pos, 1) ~ /[ \t]/) pos++
+      if (pos > n) return 0
+      c = substr(s, pos, 1)
+      if (c ~ /[\n;|&<>(){}]/ || c == "#") return 0
+      out = ""
+      while (pos <= n) {
+        c = substr(s, pos, 1)
+        if (c == sq || c == dq) {
+          q = c; out = out c; pos++
+          while (pos <= n && substr(s, pos, 1) != q) {
+            c = substr(s, pos, 1)
+            if (q == dq && (c == "$" || c == "`" || c == bs)) return 0
+            out = out c; pos++
+          }
+          if (pos > n) return 0
+          out = out q; pos++
+          continue
+        }
+        if (c ~ /[ \t\n;|&<>(){}]/ || c == "#") break
+        if (c == bs || c == "$" || c == "`") return 0
+        out = out c; pos++
+      }
+      WORD = out
+      return (WORD != "")
+    }
     BEGIN {
       s = ENVIRON["MERGE_SCRUB_INPUT"]
-      n = length(s); pos = 1; first = 1; out = ""; bad = 0; pending = 0
+      n = length(s); pos = 1; first = 1; out = ""; bad = 0; newbad = 0; pending = 0
+      cmdword = ""
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
       while (pos <= n && !bad) {
         c = substr(s, pos, 1); nx = substr(s, pos + 1, 1)
         if (c == " " || c == "\t") { out = out c; pos++; continue }
         if (c == "\n") {
-          out = out c; pos++; first = 1
+          out = out c; pos++; first = 1; cmdword = ""
           # Bodies start after the opener line, in delimiter order. Inspect
           # every command on the opener line before discarding any body.
           for (h = 1; h <= pending && !bad; h++) {
@@ -321,7 +402,7 @@ _scrub_merge_command() {
           pending = 0
           continue
         }
-        if (c ~ /[;|&]/) { out = out c; pos++; first = 1; continue }
+        if (c ~ /[;|&]/) { out = out c; pos++; first = 1; cmdword = ""; continue }
         # No normalization of command words: quoted, escaped, assigned,
         # expanded, reserved and path-qualified words all retain raw text.
         if (first) {
@@ -332,8 +413,11 @@ _scrub_merge_command() {
           if (!allowed(word) || (after != "" && after !~ /[ \t\n;|&<>]/)) {
             bad = 1; break
           }
-          out = out word; first = 0; continue
+          out = out word; first = 0; cmdword = word; continue
         }
+        # Unquoted zsh dynamic named directory (~[...]) can run code.
+        # newbad keeps the dev scrub and adds the raw text (see the end).
+        if (c == "~" && nx == "[") newbad = 1
         if (c == sq || c == dq) {
           q = c; start = pos++
           while (pos <= n && substr(s, pos, 1) != q) {
@@ -342,7 +426,13 @@ _scrub_merge_command() {
             pos++
           }
           if (bad || pos > n) { bad = 1; break }
-          pos++; out = out blank(substr(s, start, pos - start)); continue
+          pos++
+          word = substr(s, start, pos - start)
+          # Quoted grep option names still select an execution feature. A
+          # quoted span that starts a word can also begin an option name.
+          if (is_grep_family(cmdword) && (dangerous_grep_opt(word) || \
+              ((start == 1 || substr(s, start - 1, 1) ~ /[ \t\n;|&<>(]/) && grep_opt_at(start)))) newbad = 1
+          out = out blank(word); continue
         }
         # Reject shell execution/expansion syntax and comments conservatively.
         if (c == bs || c == "$" || c == "`" || c == "#" || c ~ /[(){}]/) {
@@ -369,10 +459,36 @@ _scrub_merge_command() {
         if ((c == ">" || c == "<") && nx == "&") {
           out = out c nx; pos += 2; continue
         }
+        # Output redirects to shell startup files or .git/hooks add the raw
+        # text. Look ahead only: pos returns to the operator, so the scrub
+        # below stays the same as on dev.
+        if (c == ">") {
+          start = pos
+          pos++
+          if (substr(s, pos, 1) == ">" || substr(s, pos, 1) == "|") pos++
+          if (read_merge_word() && is_startup_or_hook(WORD)) newbad = 1
+          pos = start
+        }
+        # Grep-family options that can run a program on some hosts add the
+        # raw text. A word that starts with a quote is handled in the quote branch.
+        # Check only a dash that starts a word, and read a fixed window with
+        # grep_opt_at: reading each dash to the end of a long word made the
+        # scan super-linear, and a timed-out gate does not block (Hakim,
+        # review of PR #1517).
+        if (is_grep_family(cmdword) && c == "-" && \
+            (pos == 1 || substr(s, pos - 1, 1) ~ /[ \t\n;|&<>(]/)) {
+          if (grep_opt_at(pos)) newbad = 1
+        }
         out = out c; pos++
       }
       if (pending) bad = 1
-      if (bad) printf "%s", s; else printf "%s", out
+      # A newbad shape can execute the data, so the gates must see the raw
+      # text. They must also still see the dev scrubbed text, where a merge
+      # phrase split by quotes reads as separate words (review of PR #1517).
+      # Print both, on separate lines.
+      if (bad) printf "%s", s
+      else if (newbad) printf "%s\n%s", s, out
+      else printf "%s", out
     }
   ' 2>/dev/null) || result="$cmd"
   printf '%s' "${result:-$cmd}"
