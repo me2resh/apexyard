@@ -116,5 +116,31 @@ run_case '#1509 allow: listed option -f' \
 run_case '#1509 allow: listed option --detach' \
   "git worktree add --detach $outside abcdef1234567890" allowed
 
+# Review round 2 of PR #1518: the early checks also read the rewritten
+# command, and a relative path never trusts a tracked directory change.
+run_case '#1509 block: worktree add then & git branch -f' \
+  "git worktree add $outside abcdef1234567890 & git branch -f main HEAD" blocked
+run_case '#1509 block: worktree add then & git config' \
+  "git worktree add $outside abcdef1234567890 & git config core.hooksPath /tmp/h" blocked
+run_case '#1509 block: worktree add then |& git config' \
+  "git worktree add $outside abcdef1234567890 |& git config core.hooksPath /tmp/h" blocked
+run_case '#1509 block: worktree add then & git reflog expire' \
+  "git worktree add $outside abcdef1234567890 & git reflog expire --all" blocked
+run_case '#1509 block: relative path after pushd' \
+  "pushd $ops && git worktree add inner abcdef1234567890" blocked
+run_case '#1509 block: relative path after builtin cd' \
+  "builtin cd $ops && git worktree add inner abcdef1234567890" blocked
+run_case '#1509 block: relative path after a plain cd' \
+  "cd $TMP/scratch && git worktree add inner abcdef1234567890" blocked
+run_case '#1509 allow: relative path against an absolute git -C' \
+  "git -C $TMP/scratch worktree add inner abcdef1234567890" allowed
+run_case '#1509 allow: worktree add then & a read-only git config' \
+  "git worktree add $outside abcdef1234567890 & git config --get user.name" allowed
+
+run_case '#1509 block: relative path inside a brace group after cd' \
+  "{ cd $ops; git worktree add inner abcdef1234567890; }" blocked
+run_case '#1509 block: relative path after CDPATH cd' \
+  "CDPATH=$TMP cd ops && git worktree add inner abcdef1234567890" blocked
+
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

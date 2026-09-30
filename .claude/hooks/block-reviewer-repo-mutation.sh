@@ -155,17 +155,22 @@ _brrm_check_worktree_add_segment() {
 # option: `-c core.hooksPath=...` or a GIT_CONFIG_* prefix can run code on
 # checkout.
 _brrm_scope_worktree_adds() {
-  local cmd="$1" root="$2" rest seg sep out="" base="$PWD" target
+  local cmd="$1" root="$2" rest seg sep out="" base="$PWD"
   local split_re='^([^;&|]*)(&&|\|\||;|\||&)(.*)$'
   local wt_re='(^|[[:space:]])worktree[[:space:]]+add([[:space:]]|$)'
   local shape_re='^[[:space:]]*git([[:space:]]+-C[[:space:]]+[A-Za-z0-9_./@:+-]+)?[[:space:]]+worktree[[:space:]]+add([[:space:]]+[A-Za-z0-9_./@:^+=-]+)*[[:space:]]*$'
-  local cd_re='^[[:space:]]*cd[[:space:]]+([A-Za-z0-9_./@:+-]+)[[:space:]]*$'
   case "$cmd" in
     *$'\n'*)
       echo "BLOCKED: review-class agent must run git worktree add as a single-line command during an active review." >&2
       return 2
       ;;
   esac
+  # A relative path resolves against the working directory only when the
+  # command changes directory nowhere. The hook does not follow cd, pushd,
+  # builtin or command cd, CDPATH or a brace group, so with any of them the
+  # base is unknown and a relative path is blocked (review of PR #1518).
+  local dirchange_re='(^|[;&|({[:space:]])(cd|pushd|popd|builtin|command)([[:space:];&|)}]|$)|CDPATH=|(^|[;&|[:space:]])\{([[:space:]]|$)'
+  [[ $cmd =~ $dirchange_re ]] && base=""
   rest="$cmd"
   while :; do
     if [[ $rest =~ $split_re ]]; then
@@ -180,13 +185,6 @@ _brrm_scope_worktree_adds() {
       fi
       _brrm_check_worktree_add_segment "$seg" "$root" "$base" || return 2
       seg=" true "
-    elif [[ $seg =~ $cd_re ]]; then
-      target=${BASH_REMATCH[1]}
-      # `cd -` returns to the previous directory, which this parser does not
-      # track, so the base becomes unknown (review of PR #1518).
-      case "$target" in -*) base="" ;; /*) base="$target" ;; *) [ -n "$base" ] && base="$base/$target" ;; esac
-    elif [[ $seg =~ ^[[:space:]]*cd([[:space:]]|$) ]]; then
-      base=""
     fi
     # Rebuild with ` ; ` between segments. The later checks recognise `;`
     # before git, but not a lone `&` (background), so keeping `&` would hide
@@ -276,6 +274,17 @@ if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
+# `git worktree add` may provision an isolated checkout outside the ops fork
+# and managed workspace (AgDR-0147, AgDR-0205 / #1509). The MUTATING list below
+# would otherwise treat `worktree add` as `git add`, so this branch must handle
+# every worktree-add form before that catch-all. Paths inside ROOT or
+# ROOT/workspace stay blocked. Lock, move, prune, remove, repair, and unlock
+# remain blocked because they alter existing worktree state.
+# This runs before every other check, so that each one reads the rewritten
+# command, where segments are joined by ` ; ` (review of PR #1518).
+if printf '%s' "$COMMAND" | grep -qE '(^|&&|\|\||;|\|)[[:space:]]*([[:alnum:]_]+=[^[:space:];|&]+[[:space:]]+)*git[[:space:]]+([^;&|]*[[:space:]])?worktree[[:space:]]+add([[:space:];|&]|$)'; then
+  COMMAND=$(_brrm_scope_worktree_adds "$COMMAND" "$ROOT") || exit 2
+fi
 # `git remote get-url` and `git remote -v` are read-only operations used to
 # resolve the review host. Block only remote subcommands that change remotes.
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?remote[[:space:]]+(add|remove|set-url|rename|prune|update|set-branches|set-head)([[:space:];|&]|$)"; then
@@ -302,15 +311,6 @@ fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?notes([[:space:]]|$)([^;&|]*[[:space:]])?(add|append|copy|edit|merge|prune|remove|rewrite|strip)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter Git notes during an active review." >&2
   exit 2
-fi
-# `git worktree add` may provision an isolated checkout outside the ops fork
-# and managed workspace (AgDR-0147, AgDR-0205 / #1509). The MUTATING list below
-# would otherwise treat `worktree add` as `git add`, so this branch must handle
-# every worktree-add form before that catch-all. Paths inside ROOT or
-# ROOT/workspace stay blocked. Lock, move, prune, remove, repair, and unlock
-# remain blocked because they alter existing worktree state.
-if printf '%s' "$COMMAND" | grep -qE '(^|&&|\|\||;|\|)[[:space:]]*([[:alnum:]_]+=[^[:space:];|&]+[[:space:]]+)*git[[:space:]]+([^;&|]*[[:space:]])?worktree[[:space:]]+add([[:space:];|&]|$)'; then
-  COMMAND=$(_brrm_scope_worktree_adds "$COMMAND" "$ROOT") || exit 2
 fi
 if printf '%s' "$COMMAND" | grep -qE "(^|&&|\|\||;|\|)[[:space:]]*git[[:space:]]+([^;&|]*[[:space:]])?worktree([[:space:]]|$)([^;&|]*[[:space:]])?(lock|move|prune|remove|repair|unlock)([[:space:];|&]|$)"; then
   echo "BLOCKED: review-class agent cannot alter worktrees during an active review." >&2
