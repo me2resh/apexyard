@@ -24,7 +24,8 @@ fi
 # The join models only plain words, quotes and backslashes. It leaves a
 # command unjoined when it holds syntax that changes where a line ends:
 # a comment (`#`), a heredoc (`<<`), command substitution (`$(` or a
-# backtick), or ANSI-C quoting (`$'`). A backslash in a comment, for
+# backtick), parameter expansion (`${`, whose nested quotes the join does
+# not model, #1503), or ANSI-C quoting (`$'`). A backslash in a comment, for
 # example, is not a continuation, so a join there would pull the next
 # command into the comment. It also skips a command over 2048 bytes, so
 # the per-character loop stays fast. Unjoined lines split into separate
@@ -57,7 +58,7 @@ _batr_join_continuations() {
 }
 if [ "${#SCAN_COMMAND}" -le 2048 ]; then
   case "$SCAN_COMMAND" in
-    *'#'* | *'<<'* | *'$('* | *'`'* | *"\$'"*) ;;
+    *'#'* | *'<<'* | *'$('* | *'${'* | *'`'* | *"\$'"*) ;;
     *$'\\\n'*) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
   esac
 fi

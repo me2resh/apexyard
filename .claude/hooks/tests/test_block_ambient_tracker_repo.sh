@@ -117,6 +117,10 @@ run_case 'heredoc delimiter ending in a backslash does not hide the next command
   "$(printf "cat <<'E\\\\'\nbody\nE\\\\\ngh pr list")" "$multiple"
 run_case 'command substitution is not joined' 2 \
   "$(printf 'x="$(printf a)" gh pr list \\\n --title "b --repo owner/project-a"')" "$multiple"
+# #1503: nested double quotes inside a parameter expansion can hide a
+# continued `--repo` in quoted text, so a command with `${` stays unjoined.
+run_case 'parameter expansion with nested quotes is not joined' 2 \
+  "$(printf 'gh pr list --search "${x:-"a \\\n --repo owner/project-a"}"')" "$multiple"
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
