@@ -24,10 +24,10 @@ Chosen: **check each worktree-add segment and keep all other checks**.
 
 - The hook splits the command on `&&`, `||`, `;`, `|` and `&`. A multi-line command with a worktree add is blocked.
 - Each worktree-add segment must be a literal `git [-C <dir>] worktree add <options> <path> [<commit>]`, with no quotes, `$`, backticks, environment prefix or other git global option. Any other shape is blocked.
-- The path is the first argument that is not an option. Only `-b`, `-B` and `--reason` take a value.
-- A relative path resolves against `-C`, then the last literal `cd` in the command, then the working directory. A non-literal `cd` makes the base unknown, and a relative path is then blocked.
+- The path is the first argument that is not an option. Only fully spelled options from a fixed list are accepted, and only `-b`, `-B` and `--reason` take a value. Git also reads grouped short options (`-fb`) and long-option prefixes (`--reas`), which would make the parser read the wrong word, so any other option blocks the command.
+- A relative path resolves against `-C`, then the last literal `cd` in the command, then the working directory. A non-literal `cd`, or `cd -`, makes the base unknown, and a relative path is then blocked.
 - The resolved path must be outside the ops fork, `<ops>/workspace`, and the configured portfolio workspace (`portfolio_workspace_dir`, split-portfolio mode).
-- The hook replaces each checked segment with `true`. All later checks, including the mutation list, read the rest of the command.
+- The hook replaces each checked segment with `true` and rebuilds the command with ` ; ` between segments. The later checks recognise `;` before `git`, but not a lone `&`, so keeping `&` would hide the next segment (review of PR #1518). All later checks, including the mutation list, read the rest of the command.
 
 ## Consequences
 

@@ -99,5 +99,22 @@ run_case '#1509 allow: git -C scratch worktree add outside path' \
 run_case '#1509 allow: worktree add then run tests in it' \
   "cd $TMP/scratch && git worktree add $outside abcdef1234567890 && cd $outside && bash run.sh" allowed
 
+# Review of PR #1518: a lone `&` hid the next command from later checks,
+# and the path parser could read the wrong word.
+run_case '#1509 block: outside worktree add then & git push' \
+  "git worktree add $outside abcdef1234567890 & git push origin x" blocked
+run_case '#1509 block: outside worktree add then |& git push' \
+  "git worktree add $outside abcdef1234567890 |& git push origin x" blocked
+run_case '#1509 block: grouped short options -fb' \
+  "cd $TMP/scratch && git worktree add -fb x $ops/inner abcdef1234567890" blocked
+run_case '#1509 block: abbreviated long option --reas' \
+  "git worktree add --lock --reas $TMP/ok $ops/inner abcdef1234567890" blocked
+run_case '#1509 block: relative path after cd -' \
+  "cd $ops && cd $TMP/scratch && cd - && git worktree add inner abcdef1234567890" blocked
+run_case '#1509 allow: listed option -f' \
+  "git worktree add -f $outside abcdef1234567890" allowed
+run_case '#1509 allow: listed option --detach' \
+  "git worktree add --detach $outside abcdef1234567890" allowed
+
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

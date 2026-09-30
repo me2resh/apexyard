@@ -44,7 +44,10 @@ _brrm_path_under() {
 }
 
 # First non-option path argument of one `git worktree add` segment. Empty on
-# failure. Only -b, -B and --reason take a separate value.
+# failure. Only fully spelled options from a fixed list are accepted. Git
+# also reads grouped short options (-fb) and long-option prefixes (--reas),
+# which would make this parser read the wrong word, so any other option
+# fails the check (review of PR #1518).
 _brrm_worktree_add_path_arg() {
   local seg="$1" rest skip=0
   rest=$(printf '%s' "$seg" | sed -E 's/^.*[[:space:]]worktree[[:space:]]+add([[:space:]]+|$)//')
@@ -52,10 +55,15 @@ _brrm_worktree_add_path_arg() {
   # shellcheck disable=SC2086
   set -f; set -- $rest; set +f
   while [ "$#" -gt 0 ]; do
-    if [ "$skip" -eq 1 ]; then skip=0; shift; continue; fi
+    if [ "$skip" -eq 1 ]; then
+      # An option value that looks like an option is ambiguous: fail.
+      case "$1" in -*) return 1 ;; esac
+      skip=0; shift; continue
+    fi
     case "$1" in
       -b|-B|--reason) skip=1 ;;
-      -*) ;;
+      -f|--force|--detach|--checkout|--no-checkout|--lock|-q|--quiet|--track|--no-track|--guess-remote|--no-guess-remote|--orphan) ;;
+      -*) return 1 ;;
       *) printf '%s' "$1"; return 0 ;;
     esac
     shift
@@ -174,12 +182,16 @@ _brrm_scope_worktree_adds() {
       seg=" true "
     elif [[ $seg =~ $cd_re ]]; then
       target=${BASH_REMATCH[1]}
-      case "$target" in /*) base="$target" ;; *) [ -n "$base" ] && base="$base/$target" ;; esac
+      # `cd -` returns to the previous directory, which this parser does not
+      # track, so the base becomes unknown (review of PR #1518).
+      case "$target" in -*) base="" ;; /*) base="$target" ;; *) [ -n "$base" ] && base="$base/$target" ;; esac
     elif [[ $seg =~ ^[[:space:]]*cd([[:space:]]|$) ]]; then
       base=""
     fi
-    out="$out$seg$sep"
-    [ -n "$sep" ] || break
+    # Rebuild with ` ; ` between segments. The later checks recognise `;`
+    # before git, but not a lone `&` (background), so keeping `&` would hide
+    # the next segment from them (review of PR #1518).
+    if [ -n "$sep" ]; then out="$out$seg ; "; else out="$out$seg"; break; fi
   done
   printf '%s' "$out"
 }
