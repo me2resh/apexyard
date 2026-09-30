@@ -85,10 +85,14 @@ if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
   # An unmodelled continuation can split a tracker command across lines
   # (`x=${y} gh \<newline> issue view 42`), so also look with every
   # backslash-newline removed before deciding there is no tracker command.
-  # Unquoted on purpose: Bash does not expand $'...' inside double quotes.
-  JOINED_VIEW=${SCAN_COMMAND//$'\\\n'/}
+  # Join with awk, not ${var//pattern/}: under bash 3.2 that substitution
+  # grows super-linearly with the number of continuations, and a large
+  # command could stall this dispatcher and every gate after it (Hakim, PR
+  # #1511). The awk join is linear.
   if [ "$JOIN_UNMODELLED" -eq 0 ] \
-    || ! printf '%s' "$JOINED_VIEW" | grep -qE "$TRACKER_PATTERN"; then
+    || ! printf '%s\n' "$SCAN_COMMAND" \
+      | awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' \
+      | grep -qE "$TRACKER_PATTERN"; then
     exit 0
   fi
 fi

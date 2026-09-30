@@ -160,5 +160,24 @@ run_case 'one-line command with a skip token and a repository flag is explicit' 
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
+# Hakim, PR #1511: a command with many continuations and a skip token must
+# not stall the gate. 20000 continued lines must finish in under 5 seconds.
+big="$TMP/big-command"
+{
+  printf 'cat <<E\nbody\nE\necho start'
+  i=0
+  while [ "$i" -lt 20000 ]; do printf ' \\\n -f x=1'; i=$((i + 1)); done
+} > "$big"
+start=$(date +%s)
+run_case 'many continuations with a skip token and no tracker command pass' 0 "$(cat "$big")" "$multiple"
+elapsed=$(( $(date +%s) - start ))
+if [ "$elapsed" -lt 5 ]; then
+  echo "PASS: many continuations finish in ${elapsed}s (limit 5s)"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: many continuations took ${elapsed}s (limit 5s)" >&2
+  FAIL=$((FAIL + 1))
+fi
+
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
