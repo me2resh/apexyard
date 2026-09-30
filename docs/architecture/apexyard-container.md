@@ -92,6 +92,8 @@ Skill-count / hook-count / role-count drift goes in the relevant summary docs (C
 
 ## Evolution
 
+**2026-09-30 — Write detector closes versioned Python and here-doc fail-open (AgDR-0203, me2resh/apexyard#1502).** `_lib-detect-bash-write.sh` missed `python3.12 -c` writes, hid `-c` behind option arguments that contain the letter `c`, and reported no write when a bash 3.2 segment here-doc could not create its temp file. Fix: match versioned `pythonX.Y` tokens, allow intervening option text before a short flag that contains `c`, and fail closed when a segment here-doc `read` never runs. Reasoning: the ticket and migration gates must see the write or refuse to claim a read. The C4 containers stay the same. The change is inside the hooks container.
+
 **2026-09-29 — Cursor skill one-root / override wins (AgDR-0187, me2resh/apexyard#1377).** Cursor keyed skills by frontmatter `name`. A custom override left the framework copy under `.claude/skills/<name>.framework.bak/` with the same name. Cursor listed two entries. Fix: keep `.claude/skills/` as the only Cursor skill root. Move bak copies to `.claude/skill-framework-bak/`. Adapter sync writes a managed `.cursorignore` block for bak paths inside the fork (not in-fork custom skill sources). Install and docs warn operators not to open a parent portfolio workspace. Bak restore is manual; `/update` does not restore it. `bin/list-cursor-skills.sh` checks uniqueness without launching Cursor.
 
 The skills container stays the same path. The bak copy is no longer inside that container.
