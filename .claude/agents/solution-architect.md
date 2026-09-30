@@ -270,9 +270,10 @@ ARCH_MARKER=$(review_marker_path "$PR_HOST_REPO" {number} architecture "$MARKER_
 ### The command
 
 ```bash
-# Option B (preferred) — the PR's HEAD on GitHub. Pass --repo so the SHA is the
-# portfolio PR's HEAD, not an ops-fork PR with the same number (#687).
-gh pr view {number} ${REPO:+--repo "$REPO"} --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
+# Option B (preferred) — the PR's HEAD on GitHub (#687).
+# Replace <owner/repo> with the literal base repository resolved in $PR_HOST_REPO.
+# Always pass --repo so the SHA belongs to the portfolio PR.
+gh pr view {number} --repo <owner/repo> --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
 ```
 
 ### Content — MUST be bare SHA + newline

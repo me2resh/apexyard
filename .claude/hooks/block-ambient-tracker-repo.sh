@@ -18,8 +18,9 @@ if [ -r "$HOOK_DIR/_lib-command-scrub.sh" ]; then
 fi
 # Bash removes a backslash-newline continuation before it parses words and
 # flags, so `gh pr list \<newline> --repo x` names its repository (#1492).
-# Join a continuation only where Bash does: outside quotes, and only when the
-# backslash is not itself escaped. `\\<newline>` is a literal backslash and a
+# Model continuations outside quotes only when the backslash is not escaped.
+# Bash also joins inside double quotes. Treat that case as unmodelled so
+# quoted text cannot supply a repository flag. `\\<newline>` is a backslash and a
 # real newline, so the next line is a new command and must stay separate.
 # The join models only plain words, quotes and backslashes. It leaves a
 # command unjoined when it holds syntax that changes where a line ends:
@@ -36,6 +37,9 @@ _batr_join_continuations() {
   for ((i = 0; i < n; i++)); do
     c="${s:i:1}"
     if [ -n "$quote" ]; then
+      if [ "$quote" = '"' ] && [ "$c" = $'\n' ] && [ $((bs % 2)) -eq 1 ]; then
+        return 1
+      fi
       [ "$c" = "$quote" ] && [ $((bs % 2)) -eq 0 ] && quote=""
       if [ "$quote" = '"' ] && [ "$c" = '\' ]; then bs=$((bs + 1)); else bs=0; fi
       out="$out$c"
@@ -57,7 +61,7 @@ _batr_join_continuations() {
   printf '%s' "$out"
 }
 # JOIN_UNMODELLED=1 when the command keeps a backslash-newline that the join
-# did not model: it was skipped for one of the tokens above, or for size.
+# did not model: a double-quoted continuation, a skip token above, or size.
 JOIN_UNMODELLED=0
 case "$SCAN_COMMAND" in
   *$'\\\n'*)
@@ -66,7 +70,13 @@ case "$SCAN_COMMAND" in
     else
       case "$SCAN_COMMAND" in
         *'#'* | *'<<'* | *'$('* | *'${'* | *'`'* | *"\$'"*) JOIN_UNMODELLED=1 ;;
-        *) SCAN_COMMAND=$(_batr_join_continuations "$SCAN_COMMAND") ;;
+        *)
+          if joined=$(_batr_join_continuations "$SCAN_COMMAND"); then
+            SCAN_COMMAND=$joined
+          else
+            JOIN_UNMODELLED=1
+          fi
+          ;;
       esac
     fi
     ;;
@@ -81,7 +91,7 @@ esac
 # repository check. The raw fallback also catches quoted or escaped tracker
 # words that the syntax view would otherwise blank.
 TRACKER_PATTERN="(^|[^[:alnum:]_])['\"\\\\]*g['\"\\\\]*h['\"\\\\]*[[:space:]]+['\"\\\\]*(issue|pr)['\"\\\\]*[[:space:]]+"
-if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
+if ! printf '%s' "$SCAN_COMMAND" | LC_ALL=C grep -qE "$TRACKER_PATTERN"; then
   # An unmodelled continuation can split a tracker command across lines
   # (`x=${y} gh \<newline> issue view 42`), so also look with every
   # backslash-newline removed before deciding there is no tracker command.
@@ -90,10 +100,17 @@ if ! printf '%s' "$SCAN_COMMAND" | grep -qE "$TRACKER_PATTERN"; then
   # command could stall this dispatcher and every gate after it (Hakim, PR
   # #1511). The awk join is linear. LC_ALL=C keeps awk from aborting on a
   # byte that is not valid UTF-8, which would print nothing and hide a match.
+  # Use the same byte locale for every tracker-pattern grep.
+  # Also preserve line endings after possible comments (#1521). Joining
+  # `# note x\<newline>g\<newline>h issue` hides the tracker behind x.
+  # Keep both views: a # inside quotes might not start a comment.
   if [ "$JOIN_UNMODELLED" -eq 0 ] \
-    || ! printf '%s\n' "$SCAN_COMMAND" \
+    || { ! printf '%s\n' "$SCAN_COMMAND" \
       | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s", $0; else print }' \
-      | grep -qE "$TRACKER_PATTERN"; then
+      | LC_ALL=C grep -qE "$TRACKER_PATTERN" \
+      && ! printf '%s\n' "$SCAN_COMMAND" \
+        | LC_ALL=C awk '/#/ { print; next } { if (sub(/\\$/, "")) printf "%s", $0; else print }' \
+        | LC_ALL=C grep -qE "$TRACKER_PATTERN"; }; then
     exit 0
   fi
 fi
@@ -118,7 +135,7 @@ else
     # A standalone `--` ends GitHub CLI option parsing. Ignore any repo-like
     # token after it; only flags before that boundary can authorize the call.
     options="$(printf '%s' "$segment" | sed -E 's/[[:space:]]--([[:space:]].*)?$//')"
-    if printf '%s' "$segment" | grep -qE "$TRACKER_PATTERN" \
+    if printf '%s' "$segment" | LC_ALL=C grep -qE "$TRACKER_PATTERN" \
       && ! printf '%s' "$options" | grep -qE '(^|[[:space:]])(--repo|-R)(=|[[:space:]])'; then
       unqualified=1
       break
