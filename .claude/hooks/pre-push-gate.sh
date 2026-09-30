@@ -47,24 +47,20 @@
 #
 # So this hook checks two things about ONLY the session's own
 # working-directory repo, never the command text:
-#   1. Is this repo THE ops root — the actual ApexYard fork, not merely
-#      a repo that ships fork-shaped files? Resolved via the pin-first
-#      `resolve_ops_root` from `_lib-ops-root.sh`, the same resolver the
-#      rest of the framework trusts for this question. A managed repo
-#      can ship its own `.apexyard-fork` marker, or a copy of
+#   1. Does a valid session pin name this repo's main worktree as the ops
+#      root? A managed repo can ship its own `.apexyard-fork` marker, or a copy of
 #      `.githooks/pre-push` plus `bin/install-git-hooks.sh` — none of
 #      that makes it the fork (Hakim finding A5, Rex finding S1, PR
 #      #1428 review). Trusting a candidate's own files here would let a
 #      managed repo talk this hook into recommending `core.hooksPath`
 #      for itself, exactly the AgDR-0115 violation this hook exists to
-#      avoid. If `resolve_ops_root` cannot resolve anything, this hook
-#      treats the repo as NOT the ops root — it never suggests the
-#      install advice on an unresolved guess.
+#      avoid. The resolver's walk-up fallback cannot prove fork identity
+#      when no valid pin exists, so this hook gives no advice then.
 #   2. If it is the ops root, has it installed the git-native hook?
 #
-# It reads nothing but that repo's own files, `git config`, and the pin
-# / walk-up `resolve_ops_root` already uses — never the command text —
-# so it has nothing left to get wrong about "which repo." Before this
+# It reads Git metadata, the repo's hook configuration, and the validated
+# session pin to decide fork identity. It never derives that identity
+# from command text. Before this
 # redesign, the Claude-layer gate ran a repository's commands itself,
 # sometimes against the wrong repo (#1366). After it, only the fork's
 # git-native hook runs them, and only inside the real fork.
@@ -121,28 +117,37 @@ if [ -n "$HOOKS_PATH" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Is this repo THE resolved ops root — the actual ApexYard fork? Only
-# that repo gets the install advice. Every other repo, including one
-# that ships fork-shaped files of its own, gets a short scope note
-# instead — never the `core.hooksPath` suggestion AgDR-0115 forbids for
-# that case (Hakim A5, Rex S1). Resolution is pin-first, via the same
-# `resolve_ops_root` the rest of the framework trusts for this question,
-# not a self-reported marker file this repo could ship on its own.
+# A valid session pin must name this repo's main worktree. Without that
+# pin, the resolver's walk-up can accept a marker from the checked repo
+# itself, so give no install advice. A different pinned ops root gets a
+# short scope note, never the `core.hooksPath` suggestion AgDR-0115
+# forbids for managed clones (Hakim A5, Rex S1).
 # ---------------------------------------------------------------------------
 
-IS_APEXYARD_FORK=0
-if [ -f "$HOOK_DIR/_lib-ops-root.sh" ]; then
-  # shellcheck disable=SC1090,SC1091
-  . "$HOOK_DIR/_lib-ops-root.sh"
-  if command -v resolve_ops_root >/dev/null 2>&1; then
-    OPS_ROOT=$(resolve_ops_root "$REPO_ROOT")
-    if [ -n "$OPS_ROOT" ] && [ "$OPS_ROOT" = "$REPO_ROOT" ]; then
-      IS_APEXYARD_FORK=1
-    fi
-  fi
+if [ ! -f "$HOOK_DIR/_lib-ops-root.sh" ] ||
+   [ -n "${APEXYARD_OPS_DISABLE_PIN:-}" ] ||
+   [ -z "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+  exit 0
+fi
+# shellcheck disable=SC1090,SC1091
+. "$HOOK_DIR/_lib-ops-root.sh"
+
+PIN_DIR="${APEXYARD_OPS_PIN_DIR:-$HOME/.claude/apexyard}"
+PIN_FILE="$PIN_DIR/ops-root-${CLAUDE_CODE_SESSION_ID}"
+if [ ! -f "$PIN_FILE" ]; then
+  exit 0
+fi
+PINNED_ROOT=""
+IFS= read -r PINNED_ROOT < "$PIN_FILE" || PINNED_ROOT=""
+PINNED_ROOT=$(_ops_root_main_worktree "$PINNED_ROOT")
+if [ -z "$PINNED_ROOT" ] || ! _ops_root_pin_valid "$PINNED_ROOT"; then
+  exit 0
 fi
 
-if [ "$IS_APEXYARD_FORK" != "1" ]; then
+REPO_COMMON_DIR=$(git -C "$REPO_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || exit 0
+REPO_MAIN_ROOT=$(dirname "$REPO_COMMON_DIR")
+
+if [ "$PINNED_ROOT" != "$REPO_MAIN_ROOT" ]; then
   echo "NOTE: this session's working-directory repo ($REPO_ROOT) is not an ApexYard fork. This check covers only that repo. ApexYard runs no local pre-push checks here — this repo's own CI is the backstop." >&2
   exit 0
 fi

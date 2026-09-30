@@ -34,25 +34,49 @@
 #   - Closes #M
 #   ...
 #
-# Closes resolution (#1056, #1076):
+# Closes resolution (#1056, #1076, #1490):
 #   GitHub's `Closes` keyword only auto-closes the reference IMMEDIATELY
 #   FOLLOWING it — a single "Closes #A, #B, #C" line only ever closes #A, so
 #   the section above emits one "- Closes #N" bullet per reference instead.
 #
-#   Governing rule (#1076): PREFER A MISSING CLOSE OVER A WRONG CLOSE. A
-#   `- Closes #N` bullet is emitted ONLY when the commit subject carries a
-#   recognised, SAME-REPO conventional-commit SCOPE holding the issue number
-#   — `fix(#1042): ...` — by apexyard convention the scope IS the issue
-#   number, used directly, no lookup needed.
+#   Governing rule (#1076 + #1490): PREFER A MISSING CLOSE OVER A WRONG
+#   CLOSE. A `- Closes #N` bullet is emitted ONLY when BOTH are true:
+#     1. the commit subject carries a recognised, SAME-REPO conventional-
+#        commit SCOPE holding the issue number — `fix(#1042): ...`
+#     2. the real PR body (fetched via `gh pr view`, NOT the squash commit
+#        body) contains a GitHub closing keyword for that same number —
+#        `Closes #1042`, `Fixes #1042`, or `Resolves #1042` (and their
+#        tense variants)
+#
+#   Why gh, not `git log %b`: this repo squash-merges with
+#   `squash_merge_commit_message=COMMIT_MESSAGES`, so the squash commit
+#   body is the branch's commit messages, not the PR description. Reading
+#   `%b` silently drops real closes (e.g. PR #1493's body says
+#   "Closes #1492" but its squash body has no closing keyword).
+#
+#   For each scoped commit whose subject ends in `(#<PR>)`, the script
+#   runs:
+#     $RELEASE_GH pr view <PR> --repo <repo> --json body --jq .body
+#   (`RELEASE_GH` defaults to `gh`; tests inject a stub). Emit a close
+#   for #N only when that PR body closes #N. If the fetch fails, keep the
+#   pre-#1490 / `dev` behaviour for THAT commit (scoped title closes) and
+#   print a warning naming the PR — never silently drop a close because
+#   the forge was briefly unreachable.
+#
+#   A title / scope alone is NOT enough when the PR body is readable
+#   (#1490). A PR titled `feat(#N)` whose body says only `Refs #N` must
+#   NOT produce a close line. That nearly closed partially-fixed issues
+#   in v5.7.0.
 #
 #   Everything else emits NO Closes line at all:
+#     - a SCOPED subject whose PR body only Refs / mentions #N (#1490)
+#     - a SCOPED subject with no trailing `(#<PR>)` — nothing to fetch,
+#       prefer missing over guessing from the squash body
 #     - an UNSCOPED subject (`docs: ... (#1045)`) — the only "(#N)" present
 #       is GitHub's squash-appended trailing PR number, which is not an
-#       issue and is never resolved into one (#1076; previously resolved via
-#       a best-effort `gh pr view` lookup of the PR's own body — removed
-#       because that lookup could itself resolve to a WRONG close: a PR body
-#       that merely *mentions* a closing keyword in prose, e.g. discussing
-#       but not fixing #N, would still match)
+#       issue (#1076). Body text alone never opens a close either — scope
+#       is still required, so prose like "We used to say Fixes #999" cannot
+#       invent a close
 #     - a CROSS-REPO scope (`docs(owner/repo#148): ...`) — the scope names an
 #       issue in a DIFFERENT repo; a bare "Closes #148" would auto-close the
 #       WRONG repo's issue #148 if this repo happens to have one too (the
@@ -63,11 +87,20 @@
 #     - a "Merge pull request #NN from ..." merge commit whose OWN subject
 #       has no scope — same unscoped rule as above
 #
+# Optional env:
+#   RELEASE_GH     — gh binary / stub (default: gh). Injectable for tests.
+#   REPO_REMOTE    — remote whose URL yields the --repo target (default:
+#                    derived from HEAD_REF's remote prefix, else "upstream")
+#   PR_LOOKUP_REPO — owner/repo for `gh pr view --repo` (default: derived
+#                    from REPO_REMOTE's URL)
+#
 # Exit codes:
 #   0 — success (even if the commit list is empty; that is a valid patch release)
 #   1 — missing required env var or git command failure
 
 set -euo pipefail
+
+RELEASE_GH="${RELEASE_GH:-gh}"
 
 # ── Validate required env vars ──────────────────────────────────────────────
 
@@ -78,6 +111,30 @@ for var in PREV_TAG HEAD_REF VERSION DATE; do
     exit 1
   fi
 done
+
+# ── Resolve which remote / repo PR bodies are fetched from (#1077 / #1490) ──
+# An explicit REPO_REMOTE always wins. Otherwise derive it from HEAD_REF's
+# own remote prefix WHEN that prefix names a remote that actually exists.
+# Bare HEAD_REF falls back to "upstream". PR_LOOKUP_REPO then comes from
+# that remote's URL unless the caller set it explicitly.
+if [ -z "${REPO_REMOTE:-}" ]; then
+  _head_ref_remote="${HEAD_REF%%/*}"
+  if [ "$_head_ref_remote" != "$HEAD_REF" ] && git remote get-url "$_head_ref_remote" >/dev/null 2>&1; then
+    REPO_REMOTE="$_head_ref_remote"
+  else
+    REPO_REMOTE="upstream"
+  fi
+fi
+
+_derive_pr_lookup_repo() {
+  local url
+  url=$(git remote get-url "$REPO_REMOTE" 2>/dev/null) || return 0
+  echo "$url" | sed -nE 's|.*[:/]([^/:]+/[^/]+)\.git$|\1|p; s|.*[:/]([^/:]+/[^/]+)$|\1|p' | head -1
+}
+
+if [ -z "${PR_LOOKUP_REPO:-}" ]; then
+  PR_LOOKUP_REPO=$(_derive_pr_lookup_repo)
+fi
 
 # ── Build the git log range ──────────────────────────────────────────────────
 
@@ -145,7 +202,7 @@ echo "RELEASE_CHANGELOG_RANGE=${LOG_RANGE}" >&2
 
 # ── Extract commits ──────────────────────────────────────────────────────────
 # Format: <short-sha> <subject>
-# We use %h (abbreviated sha) and %s (subject) so merge commits are included.
+# Closes reads the PR body via gh (#1490), not the squash commit body.
 
 COMMITS=$(git log "$LOG_RANGE" --pretty=format:'%h %s' 2>/dev/null || true)
 
@@ -157,8 +214,10 @@ changed_lines=()
 breaking_lines=()
 closes_nums=()
 
-# Extract the conventional-commit SCOPE's issue ref, if any — the ONLY
-# source a Closes bullet is ever derived from (#1076):
+# Extract the conventional-commit SCOPE's issue ref, if any — a Closes
+# CANDIDATE under #1076 / #1490 (never sufficient alone when the PR body
+# is readable; the PR body must also carry a closing keyword for the same
+# number):
 #   "fix(#1042): ..."                    -> "#1042"
 #   "docs(me2resh/apexyard#148): ..."    -> "me2resh/apexyard#148"
 #   anything without a `type(...):` scope at the very start -> "" (empty)
@@ -180,6 +239,51 @@ extract_scope_ref() {
     | grep -oE '\(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+\)' \
     | sed -E 's/^\(//; s/\)$//' \
     || true
+}
+
+# True when $1 (a PR / commit body) contains a GitHub auto-closing keyword
+# targeting issue #$2. Mirrors validate-pr-create.sh's keyword set:
+# close[sd]?, fix(e[sd])?, resolve[sd]?. `Refs #N` is intentionally NOT a
+# match — that is the #1490 failure mode. Cross-repo qualifiers
+# (`owner/repo#N`) are ignored here: callers only ask about a same-repo
+# scope number, and a foreign-qualified close must not count as local.
+#
+# Portable word-boundary: (^|[^A-Za-z0-9_]) instead of \b, so macOS
+# /bin/bash 3.2 + BSD grep and GNU grep on Linux CI agree.
+body_closes_issue() {
+  local body="$1"
+  local num="$2"
+  printf '%s\n' "$body" \
+    | grep -qiE "(^|[^A-Za-z0-9_])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${num}([^0-9]|$)"
+}
+
+# Trailing `(#N)` at the very END of the subject — GitHub's squash-merge
+# append position. This is the PR number used to fetch the real PR body
+# (#1490). Distinct from extract_pr_num, which may fall back to the scope
+# for DISPLAY when there is no trailing squash number.
+extract_trailing_pr_num() {
+  local subject="$1"
+  if echo "$subject" | grep -qE '\(#[0-9]+\)$'; then
+    echo "$subject" | grep -oE '\(#[0-9]+\)$' | grep -oE '#[0-9]+'
+    return
+  fi
+  echo ""
+}
+
+# Fetch the real PR body via $RELEASE_GH. Prints body on stdout and returns
+# 0 on success; returns 1 on any failure (missing repo, gh error, empty).
+# Never aborts the release — callers decide the fallback.
+fetch_pr_body() {
+  local pr_num="$1"  # numeric, no leading '#'
+  local body
+  if [ -z "${PR_LOOKUP_REPO:-}" ]; then
+    return 1
+  fi
+  if ! body=$("$RELEASE_GH" pr view "$pr_num" --repo "$PR_LOOKUP_REPO" --json body --jq .body 2>/dev/null); then
+    return 1
+  fi
+  printf '%s' "$body"
+  return 0
 }
 
 # Extract the DISPLAY ref shown in "($N) <subject>" — anchored, never "the
@@ -266,10 +370,17 @@ while IFS= read -r line; do
     entry="- $display_subject — $short_sha"
   fi
 
-  # #1076 — Closes decision. Governing rule: prefer a MISSING close over a
-  # WRONG close. A Closes bullet is emitted ONLY when the subject carries a
-  # recognised, SAME-REPO conventional-commit scope. Every other case —
-  # unscoped, cross-repo scoped, or a revert — emits nothing.
+  # #1076 + #1490 — Closes decision. Governing rule: prefer a MISSING close
+  # over a WRONG close. A Closes bullet requires a same-repo conventional-
+  # commit scope AND (when the PR body is readable) a closing keyword for
+  # that number in the real PR body fetched via gh. The squash commit body
+  # is NOT consulted — COMMIT_MESSAGES squash strategy stores branch commit
+  # messages there, not the PR description. Title / scope alone is not
+  # enough when the fetch succeeds — that is how `feat(#N)` + `Refs #N`
+  # nearly closed partially fixed issues in v5.7.0. If gh fails for a PR,
+  # fall back to the pre-#1490 / `dev` behaviour (scoped title closes) and
+  # warn — never silently drop a close because of a fetch failure.
+  # Unscoped, cross-repo, and revert commits emit nothing.
   if [ "$is_revert" -eq 0 ]; then
     scope_ref=$(extract_scope_ref "$subject")
     if [ -n "$scope_ref" ]; then
@@ -279,13 +390,27 @@ while IFS= read -r line; do
           # from a foreign-repo reference (#207 lesson, reintroduced).
           ;;
         *)
-          closes_nums+=("${scope_ref#\#}")
+          issue_num="${scope_ref#\#}"
+          trailing_pr=$(extract_trailing_pr_num "$subject")
+          if [ -n "$trailing_pr" ]; then
+            pr_only="${trailing_pr#\#}"
+            if pr_body=$(fetch_pr_body "$pr_only"); then
+              if body_closes_issue "$pr_body" "$issue_num"; then
+                closes_nums+=("$issue_num")
+              fi
+            else
+              echo "WARN: could not fetch PR #${pr_only} body via ${RELEASE_GH}; falling back to scoped-title close for #${issue_num}" >&2
+              closes_nums+=("$issue_num")
+            fi
+          fi
+          # No trailing (#PR) → nothing to fetch; prefer missing over reading
+          # the squash body (which is not the PR description).
           ;;
       esac
     fi
     # No scope at all -> no Closes line, regardless of any trailing "(#N)"
-    # squash-merge PR number — that number is a PR, not an issue, and is
-    # never resolved into one anymore (#1076).
+    # squash-merge PR number and regardless of closing keywords in any body
+    # (#1076 + #1490: both gates required).
   fi
 
   # Classify by conventional-commit type

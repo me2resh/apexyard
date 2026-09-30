@@ -16,7 +16,7 @@
 #      source before `config_get` is defined.
 #
 # Cases:
-#   1. Every listed POSIX-sourced library is free of non-comment `< <(`.
+#   1. Every hook library is free of non-comment `< <(`.
 #   2. The checker rejects a synthetic fixture that plants `< <(`.
 #   3. `_lib-read-config.sh` top-level BASH_SOURCE expansion is behind a
 #      BASH_VERSION guard (static pin for the dash fix).
@@ -25,14 +25,13 @@
 set -u
 
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-HOOKS="$SRC_ROOT/.claude/hooks"
+HOOKS="${HOOKS_OVERRIDE:-$SRC_ROOT/.claude/hooks}"
 LIB_READ_CONFIG="$HOOKS/_lib-read-config.sh"
 
-# Libraries that hooks and skills source and that must parse under bash
-# POSIX mode (and, for `_lib-read-config.sh`, under dash). Keep this list
-# tight. Do not add a library that intentionally uses bash-only redirects
-# (for example `_lib-detect-bash-write.sh`).
-POSIX_SOURCED_LIBS="_lib-read-config.sh"
+# Check the full hook-library set. This includes every library that a hook
+# can source in bash POSIX mode, including the write detector, push-ref
+# extractor, and multi-repo trace helper. The superset avoids a manual list
+# drifting when a hook starts sourcing another library.
 
 PASS=0
 FAIL=0
@@ -63,10 +62,10 @@ if [ ! -f "$LIB_READ_CONFIG" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 1. Every POSIX-sourced library is free of non-comment `< <(`.
+# 1. Every hook library is free of non-comment `< <(`.
 # ---------------------------------------------------------------------------
-for lib in $POSIX_SOURCED_LIBS; do
-  path="$HOOKS/$lib"
+for path in "$HOOKS"/_lib-*.sh; do
+  lib=${path##*/}
   if [ ! -f "$path" ]; then
     record_fail "1: $lib exists for the POSIX-sourced list" "missing $path"
     continue
