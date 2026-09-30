@@ -1,8 +1,9 @@
 #!/bin/bash
-# Regression test for the build.isolation config key (apexyard#1381).
+# Regression test for the build.isolation config key (apexyard#1381 / AgDR-0210).
 #
-# Pins the shipped default and the docs/agents that must describe both modes.
-# This test FAILS on a pre-#1381 tree that has no "build" key.
+# Pins the shipped default and the docs/agents that must describe both modes,
+# the concurrency rule, the fallback sentence, the dirty definition, and the
+# HEAD-before-commit check.
 #
 # Optional: APEXYARD_TEST_SRC_ROOT points at an alternate tree (fail-before
 # copies). Defaults to the repo root that contains this test file.
@@ -23,8 +24,32 @@ DEFAULTS="$SRC_ROOT/.claude/project-config.defaults.json"
 RULE="$SRC_ROOT/.claude/rules/isolated-builds.md"
 FANOUT="$SRC_ROOT/.claude/skills/fan-out/SKILL.md"
 DOCS="$SRC_ROOT/docs/project-config.md"
+AGDR="$SRC_ROOT/docs/agdr/AgDR-0210-build-isolation-setting.md"
 # Hook libs always come from the live repo (not from fail-before copies).
 LIVE_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+
+FALLBACK_SENTENCE='Any value other than `branch`, including an empty result, means `worktree`.'
+CONFIG_READ="config_get_or '.build.isolation' 'worktree'"
+DIRTY_DEF='Dirty means tracked files with uncommitted changes or staged changes. Untracked files do not count.'
+HEAD_CHECK='Before each commit in `branch` mode, check that HEAD is still your ticket branch with `git branch --show-current`.'
+
+# Concurrency rule lines (checked one-by-one; multiline grep -F is unreliable).
+CONC_L1='`branch` mode applies only to a foreground build spawn when no other writer is active on that checkout.'
+CONC_L2='A background build spawn always uses a worktree, regardless of `build.isolation`.'
+CONC_L3='Any build spawn while another writer is active on that checkout uses a worktree, regardless of `build.isolation`.'
+CONC_L4='Parallel means overlapping writers, including a build agent still working from an earlier spawn.'
+CONC_L5='The orchestrator decides the mode at spawn time and tells the agent which mode to use.'
+
+BUILD_AGENTS="backend-engineer frontend-engineer platform-engineer data-engineer product-manager ui-designer ux-designer"
+
+has_concurrency_rule() {
+  local f="$1"
+  grep -qF "$CONC_L1" "$f" 2>/dev/null \
+    && grep -qF "$CONC_L2" "$f" 2>/dev/null \
+    && grep -qF "$CONC_L3" "$f" 2>/dev/null \
+    && grep -qF "$CONC_L4" "$f" 2>/dev/null \
+    && grep -qF "$CONC_L5" "$f" 2>/dev/null
+}
 
 # ---------------------------------------------------------------------------
 # Case 1: shipped defaults file has build.isolation == worktree (no fallback).
@@ -84,77 +109,126 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Case 4: defaults JSON stays valid.
+# Case 4: defaults JSON stays valid and names AgDR-0210.
 # ---------------------------------------------------------------------------
 if jq empty "$DEFAULTS" >/dev/null 2>&1; then
   mark_pass "project-config.defaults.json is valid JSON"
 else
   mark_fail "project-config.defaults.json JSON validity" "jq empty failed"
 fi
+comment=$(jq -r '.build._comment // empty' "$DEFAULTS" 2>/dev/null)
+if printf '%s' "$comment" | grep -qF 'AgDR-0210'; then
+  mark_pass "defaults _comment names AgDR-0210"
+else
+  mark_fail "defaults AgDR-0210" "build._comment missing AgDR-0210"
+fi
 
 # ---------------------------------------------------------------------------
-# Case 5: isolated-builds.md documents both modes and the setting key.
+# Case 5: AgDR-0210 file exists with the correct heading.
+# ---------------------------------------------------------------------------
+if [ -f "$AGDR" ] && grep -qE '^# AgDR-0210:' "$AGDR" 2>/dev/null; then
+  mark_pass "AgDR-0210 file exists with AgDR-0210: heading"
+else
+  mark_fail "AgDR-0210 file" "missing file or heading at $AGDR"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 6: isolated-builds.md documents both modes, the setting, and AgDR-0210.
 # ---------------------------------------------------------------------------
 if grep -qF 'build.isolation' "$RULE" 2>/dev/null \
   && grep -qF 'worktree' "$RULE" 2>/dev/null \
-  && grep -qE '"branch"|`branch`' "$RULE" 2>/dev/null; then
-  mark_pass "isolated-builds.md documents build.isolation and both modes"
+  && grep -qE '"branch"|`branch`' "$RULE" 2>/dev/null \
+  && grep -qF 'AgDR-0210' "$RULE" 2>/dev/null; then
+  mark_pass "isolated-builds.md documents build.isolation, both modes, AgDR-0210"
 else
-  mark_fail "isolated-builds.md modes" "missing build.isolation and/or both modes"
+  mark_fail "isolated-builds.md modes" "missing build.isolation / modes / AgDR-0210"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 6: branch mode refuses a dirty working tree.
+# Case 7: concurrency rule text in isolated-builds.md and fan-out.
 # ---------------------------------------------------------------------------
-if grep -qiE 'uncommitted|dirty' "$RULE" 2>/dev/null \
-  && grep -qiE 'refuse|do not switch|must not switch' "$RULE" 2>/dev/null; then
-  mark_pass "isolated-builds.md: branch mode refuses dirty tree"
+if has_concurrency_rule "$RULE"; then
+  mark_pass "isolated-builds.md: concurrency rule text"
 else
-  mark_fail "dirty-tree refuse" "rule lacks dirty-tree refuse language"
+  mark_fail "concurrency rule" "isolated-builds.md lacks the concurrency block"
+fi
+if has_concurrency_rule "$FANOUT"; then
+  mark_pass "fan-out: concurrency rule text"
+else
+  mark_fail "concurrency fan-out" "fan-out SKILL.md lacks the concurrency block"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 7: parallel builds always use worktrees.
+# Case 8: fallback sentence in the rule and docs.
 # ---------------------------------------------------------------------------
-if grep -qiE 'fan-out|parallel' "$RULE" 2>/dev/null \
-  && grep -qiE 'always use (a )?worktree|always use worktrees|regardless of' "$RULE" 2>/dev/null; then
-  mark_pass "isolated-builds.md: parallel always uses worktrees"
+if grep -qF "$FALLBACK_SENTENCE" "$RULE" 2>/dev/null; then
+  mark_pass "isolated-builds.md: fallback sentence"
 else
-  mark_fail "parallel override" "rule lacks parallel-always-worktree language"
+  mark_fail "fallback rule" "isolated-builds.md lacks the fallback sentence"
+fi
+if grep -qF "$FALLBACK_SENTENCE" "$DOCS" 2>/dev/null; then
+  mark_pass "docs/project-config.md: fallback sentence"
+else
+  mark_fail "fallback docs" "docs/project-config.md lacks the fallback sentence"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 8: /fan-out documents the setting and parallel override.
+# Case 9: dirty definition (tracked/staged only; untracked do not count).
 # ---------------------------------------------------------------------------
-if grep -qF 'build.isolation' "$FANOUT" 2>/dev/null \
-  && grep -qiE 'always|regardless' "$FANOUT" 2>/dev/null \
-  && grep -qi 'worktree' "$FANOUT" 2>/dev/null; then
-  mark_pass "fan-out skill documents build.isolation and parallel worktrees"
+if grep -qF "$DIRTY_DEF" "$RULE" 2>/dev/null; then
+  mark_pass "isolated-builds.md: dirty definition"
 else
-  mark_fail "fan-out skill" "missing build.isolation / parallel worktree guidance"
+  mark_fail "dirty definition" "isolated-builds.md lacks the dirty definition"
 fi
 
 # ---------------------------------------------------------------------------
-# Case 9: each build-class agent documents both modes.
+# Case 10: HEAD check before each commit in branch mode.
 # ---------------------------------------------------------------------------
-for agent in backend-engineer frontend-engineer platform-engineer data-engineer; do
+if grep -qF "$HEAD_CHECK" "$RULE" 2>/dev/null; then
+  mark_pass "isolated-builds.md: HEAD check before commit"
+else
+  mark_fail "HEAD check" "isolated-builds.md lacks the HEAD-before-commit check"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 11: docs/project-config.md documents the key and AgDR-0210.
+# ---------------------------------------------------------------------------
+if grep -qF 'build.isolation' "$DOCS" 2>/dev/null \
+  && grep -qF 'AgDR-0210' "$DOCS" 2>/dev/null; then
+  mark_pass "docs/project-config.md documents build.isolation and AgDR-0210"
+else
+  mark_fail "docs/project-config.md" "missing build.isolation / AgDR-0210"
+fi
+
+# ---------------------------------------------------------------------------
+# Case 12: all seven build-class agents share config read + fallback sentence.
+# ---------------------------------------------------------------------------
+for agent in $BUILD_AGENTS; do
   f="$SRC_ROOT/.claude/agents/${agent}.md"
-  if grep -qF 'build.isolation' "$f" 2>/dev/null \
-    && grep -qE 'worktree|branch' "$f" 2>/dev/null \
-    && grep -qiE 'uncommitted|dirty' "$f" 2>/dev/null; then
-    mark_pass "agent $agent documents build.isolation + dirty refuse"
+  if [ ! -f "$f" ]; then
+    mark_fail "agent $agent" "file missing"
+    continue
+  fi
+  if grep -qF "$CONFIG_READ" "$f" 2>/dev/null \
+    && grep -qF "$FALLBACK_SENTENCE" "$f" 2>/dev/null \
+    && grep -qF 'AgDR-0210' "$f" 2>/dev/null \
+    && grep -qF "$DIRTY_DEF" "$f" 2>/dev/null \
+    && grep -qF "$HEAD_CHECK" "$f" 2>/dev/null \
+    && grep -qiE 'another repository|different repository' "$f" 2>/dev/null \
+    && grep -qiE 'destructive git' "$f" 2>/dev/null; then
+    mark_pass "agent $agent: config read, fallback, dirty, HEAD, other worktree cases"
   else
-    mark_fail "agent $agent" "missing build.isolation / dirty-tree guidance"
+    mark_fail "agent $agent" "missing shared build-isolation contract"
   fi
 done
 
 # ---------------------------------------------------------------------------
-# Case 10: docs/project-config.md documents the key.
+# Case 13: worktree-mode spawn bullet (stale "always isolate" wording gone).
 # ---------------------------------------------------------------------------
-if grep -qF 'build.isolation' "$DOCS" 2>/dev/null; then
-  mark_pass "docs/project-config.md documents build.isolation"
+if grep -qF 'Spawning a build-class sub-agent in `worktree` mode' "$RULE" 2>/dev/null; then
+  mark_pass "isolated-builds.md: spawn isolation scoped to worktree mode"
 else
-  mark_fail "docs/project-config.md" "missing build.isolation"
+  mark_fail "worktree-mode spawn bullet" "rule lacks worktree-mode spawn scoping"
 fi
 
 echo

@@ -192,7 +192,7 @@
   },
 
   "build": {
-    "_comment": "me2resh/apexyard#1381 — where spawned build agents do single-task work. `worktree` (default) keeps the safe-by-default isolation from #784: agents work under `.claude/worktrees/<type>-<ticket>-<slug>`. `branch` creates the ticket branch in the local checkout so the developer can test in place. The agent must still run `git status` first and refuse when the working tree is dirty. Parallel builds (`/fan-out`, Workflows) always use worktrees regardless of this setting, because concurrent writers on one checkout collide. See `.claude/rules/isolated-builds.md` and AgDR-0200.",
+    "_comment": "me2resh/apexyard#1381 — build isolation for the whole ops fork, not per project. `worktree` remains the default from #784. `branch` applies only to a foreground build spawn with no other active writer on that checkout. The orchestrator chooses the mode at spawn time and tells the agent. Background or concurrent build spawns always use worktrees. Any value other than `branch`, including an empty result, means `worktree`. In branch mode, refuse to switch with tracked uncommitted or staged changes; untracked files do not count. Check HEAD is still the ticket branch before each commit and stop if not. See `.claude/rules/isolated-builds.md` and AgDR-0210.",
     "isolation": "worktree"
   },
 
