@@ -250,6 +250,12 @@ See `.claude/rules/workflow-gates.md` § "Migration Gate (3a)" for the mechanica
 | Design review | Design (if UI) | Approval |
 | Approve PR | Reviewer | Merge ready |
 
+After Rex posts APPROVED, `/code-review` follows `qa.pre_merge_offer` (`ask`, `always`, or `never`).
+With `ask`, it offers Salim's acceptance-criteria check before merge. Choosing `no` keeps the post-merge QA flow.
+With `always`, Salim checks the PR branch. With `never`, the offer is skipped.
+Salim posts a SHA-stamped result on the PR. A failed criterion stops the review handoff before human merge approval.
+Pre-merge QA is not a merge gate. Only the human-invoked `/approve-merge` approves and merges.
+
 ### Review Checklist
 
 - [ ] Follows architecture principles
@@ -297,6 +303,17 @@ In Progress --> In Review --> QA --> Done
 | Test edge cases | QA Engineer | Bug reports (if any) |
 | Regression check | QA Engineer | No regressions |
 | Sign-off | QA Engineer | Approval to close |
+
+When the `qa` label activates Salim, check for a complete pre-merge QA PASS on the linked PR.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
+
+Record the reused result in the post-merge sign-off. If evidence is incomplete, run QA now.
 
 ### If QA Finds Issues
 

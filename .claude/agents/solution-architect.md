@@ -61,7 +61,7 @@ Some reviews need to run tests or attack probes against the PR head, outside thi
 1. `git clone <fork-url> <literal-scratch-path>` — a plain clone at a physical, symlink-free path under a temporary directory. Use a literal path, not a shell variable. The ticket gate resolves a literal path. It cannot resolve a variable. A session with an active Rex, Security, or Architecture review marker can write test fixtures in a standalone clone with an origin remote without a ticket. Symlinked targets remain gated. A `git worktree add` checkout is a linked worktree, and writes inside it still need an active ticket.
 2. `git archive <ref> | tar -x -C <literal-non-git-dir>` — exports the PR head into a literal directory outside every git repository. The gate cannot read the tar extraction's own target. It treats that step as an unextractable write. That step needs an active session ticket (me2resh/apexyard#1396). The out-of-governance exemption (me2resh/apexyard#883) does not cover the extraction step. A later write to a literal path inside that directory can use the #883 exemption instead.
 
-While the active-reviewer marker exists, `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout`. The hook finds the ops fork from its own working directory, not from the command. The orchestrator prepares the scratch clone before it arms the marker. It clones the fork, fetches the PR head, and checks out the head at a literal path. Then it gives that path to the reviewer. Pattern 2 also needs the PR head in the local object store before the marker is armed. During the review, `git worktree add <literal-path> <sha>` stays available to the reviewer, but the linked checkout does not receive the scratch-clone ticket exemption (me2resh/apexyard#1275).
+While the active-reviewer marker exists, `block-reviewer-repo-mutation.sh` blocks `git clone`, `git fetch`, and `git checkout`. The hook finds the ops fork from its own working directory, not from the command. The orchestrator prepares the scratch clone before it arms the marker. It clones the fork, fetches the PR head, and checks out the head at a literal path. Then it gives that path to the reviewer. Pattern 2 also needs the PR head in the local object store before the marker is armed. During the review, `git worktree add <literal-path> <sha>` stays available as a literal, single-line `git [-C <dir>] worktree add <path> <commit>` when the path sits outside the ops fork and the managed workspace (me2resh/apexyard#1275, #1509). The rest of that command is still checked. The linked checkout does not receive the scratch-clone ticket exemption.
 
 If a hook blocks a command in the scratch clone or export, stop that step. Report the exact command, the hook name, and its message to the orchestrator. Never rephrase, split, encode, or disguise a command to get past a hook — see `.claude/rules/pr-workflow.md`'s least-privilege rule.
 
@@ -270,9 +270,10 @@ ARCH_MARKER=$(review_marker_path "$PR_HOST_REPO" {number} architecture "$MARKER_
 ### The command
 
 ```bash
-# Option B (preferred) — the PR's HEAD on GitHub. Pass --repo so the SHA is the
-# portfolio PR's HEAD, not an ops-fork PR with the same number (#687).
-gh pr view {number} ${REPO:+--repo "$REPO"} --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
+# Option B (preferred) — the PR's HEAD on GitHub (#687).
+# Replace <owner/repo> with the literal base repository resolved in $PR_HOST_REPO.
+# Always pass --repo so the SHA belongs to the portfolio PR.
+gh pr view {number} --repo <owner/repo> --json headRefOid --jq .headRefOid > "$ARCH_MARKER"
 ```
 
 ### Content — MUST be bare SHA + newline

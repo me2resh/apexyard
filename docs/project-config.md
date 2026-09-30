@@ -96,6 +96,10 @@ tracks closing this gap for those seven keys.
 
   "pr": {
     "title_type_whitelist": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"]
+  },
+
+  "qa": {
+    "pre_merge_offer": "ask"
   }
 }
 ```
@@ -110,8 +114,33 @@ tracks closing this gap for those seven keys.
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
 | `build.isolation` | `.claude/rules/isolated-builds.md`, `/fan-out`, build agents | Selects build isolation for the whole ops fork. Default: `worktree`. See [Build isolation](#build-isolation-buildisolation) and [AgDR-0210](agdr/AgDR-0210-build-isolation-setting.md). |
+| `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
+
+### Pre-merge QA offer
+
+Set `qa.pre_merge_offer` in `.claude/project-config.json` to one of these values:
+
+| Value | After Rex approves |
+| --- | --- |
+| `ask` | Ask whether Salim should verify the PR before merge. This is the default. |
+| `always` | Run Salim on the PR branch before requesting merge approval. |
+| `never` | Skip the offer. Run QA after merge through the existing `qa` label. |
+
+With `ask`, a `no` answer keeps the existing post-merge QA flow. An invalid value falls back to `ask`.
+With `always`, a ticket with no acceptance criteria produces INCOMPLETE and stops before merge approval.
+A Rex re-review after a branch update offers QA again according to this setting.
+
+The offer does not grant merge approval or create a merge gate. Only the human-invoked `/approve-merge` records approval and merges.
+Salim posts a SHA-stamped result on the PR with evidence for every acceptance criterion.
+
+Reuse a complete pre-merge QA PASS only when its stamped SHA matches the merged PR's final head SHA.
+This is the PR head commit when it merged (the MR head SHA on GitLab).
+A PASS stamped with an earlier head does not count.
+Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
+On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
+Otherwise, run post-merge QA as usual.
 
 ## Build isolation (`build.isolation`)
 

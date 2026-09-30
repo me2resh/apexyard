@@ -99,7 +99,9 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     if ! bash_command_appears_to_write "$COMMAND"; then
       exit 0
     fi
-    BASH_TARGETS=$(bash_extract_write_targets "$COMMAND")
+    # "all": never hold back a sed `w` target. This gate exits 0 on an
+    # empty list, so a held-back migration file would pass (#1502).
+    BASH_TARGETS=$(bash_extract_write_targets "$COMMAND" all)
   else
     # Library missing — fall back to no-op rather than bricking the hook.
     exit 0

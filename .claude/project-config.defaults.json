@@ -84,6 +84,10 @@
     ]
   },
 
+  "qa": {
+    "pre_merge_offer": "ask"
+  },
+
   "branch": {
     "type_whitelist": [
       "feature",

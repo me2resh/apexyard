@@ -11,7 +11,7 @@ ApexYard ships **20 role definitions** in `roles/{department}/`. They are not al
 | **Solution Architect** | `roles/architecture/solution-architect.md` | A technical design / migration AgDR / feature spec is ready for review (before Build) · `/design-review` invoked · a PR carries a design artifact |
 | **Backend Engineer** | `roles/engineering/backend-engineer.md` | Implementation phase on backend code (domain / application / infrastructure layers) · API work · database schema changes |
 | **Frontend Engineer** | `roles/engineering/frontend-engineer.md` | Implementation phase on UI code · component work · design-system integration · accessibility review |
-| **QA Engineer** | `roles/engineering/qa-engineer.md` | **Ticket enters QA state after merge** · acceptance-criteria verification · bug triage · regression testing |
+| **QA Engineer** | `roles/engineering/qa-engineer.md` | **Ticket enters QA state after merge** · optional `/code-review` pre-merge handoff after Rex approves · acceptance-criteria verification · bug triage · regression testing |
 | **Platform Engineer** | `roles/engineering/platform-engineer.md` | CI/CD pipeline changes · developer tooling · infrastructure-as-code work · golden-path templates |
 | **SRE** | `roles/engineering/sre.md` | Production incident · SLO breach · monitoring / alerting work · on-call rotation |
 | **Head of Product** | `roles/product/head-of-product.md` | Roadmap prioritization · feasibility call · strategic product decision · resource allocation across products |

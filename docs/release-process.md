@@ -48,12 +48,13 @@ The skill:
 
 1. Pre-flights the repo (clean tree, dev branch, non-empty delta)
 2. Auto-detects the semver bump from conventional commits (or accepts explicit version)
-3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper)
-4. Shows the draft for review / editing
-5. Writes `CHANGELOG.md` (prepends the new section)
-6. Creates the release branch `release/vX.Y.Z` from dev, commits, and pushes
-7. Opens the release PR (dev→main) with the CHANGELOG section as body
-8. Stops at PR creation — CEO approval gate remains the sole human gate
+3. Calls `bin/release-changelog.sh` to generate the CHANGELOG section (independently testable helper). A `Closes #N` line appears only when the real PR body (fetched via `gh pr view`) closes `#N`; on a fetch failure the script falls back to a scoped-title close and warns (AgDR-0197 / #1490)
+4. Lists every line the release tip removes from `main` via `bin/release-list-removed-lines.sh`, and asks before continuing when the list is non-empty (#1490)
+5. Shows the draft for review / editing
+6. Writes `CHANGELOG.md` (prepends the new section)
+7. Creates the release branch `release/vX.Y.Z` from dev, commits, and pushes
+8. Opens the release PR (dev→main) with the CHANGELOG section as body
+9. Stops at PR creation — CEO approval gate remains the sole human gate
 
 After the PR merges, the `auto-tag-on-release-pr-merge.yml` CI workflow fires and:
 
@@ -190,7 +191,7 @@ The `.github/workflows/auto-tag-on-release-pr-merge.yml` workflow fires when any
 - Uses `github.sha` (the squash commit SHA) — always the correct commit, never the release-branch HEAD (which was discarded by the squash)
 - Runs `git merge-base --is-ancestor <sha> main` before tagging
 - Tags and pushes with `git push origin --tags` (not the bare tag name — avoids the branch-name validator hook misfiring)
-- Creates a GitHub Release entry in the same job (a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow — confirmed in apexyard-premium#326)
+- Creates a GitHub Release entry in the same job (a tag pushed via GITHUB_TOKEN does not trigger a secondary release workflow — confirmed in a private downstream project)
 
 This closes the v2.3.0 incident where the tag was placed on the release-branch HEAD rather than the squash commit.
 
@@ -206,6 +207,7 @@ PREV_TAG=v3.2.0 HEAD_REF=upstream/dev VERSION=v3.3.0 DATE=$(date +%F) \
 ```
 
 Input: `PREV_TAG`, `HEAD_REF`, `VERSION`, `DATE` env vars.
+Optional: `RELEASE_GH` (default `gh`), `REPO_REMOTE`, `PR_LOOKUP_REPO`, `PR_LOOKUP_TIMEOUT` (default 10) for the PR-body close check (AgDR-0197 / AgDR-0208).
 Output: markdown CHANGELOG section to stdout.
 Never writes files; callers decide where to write the output.
 Tests: `.claude/hooks/tests/test_release_changelog.sh`.
@@ -246,8 +248,10 @@ Branch protection on `dev` matches the prior `main` setup — required reviews +
 - `AgDR-0007` — the original release-cut branch model decision record
 - `AgDR-0076` — the release-automation design record
 - `AgDR-0170` — the decision to replace `-X ours` with a plain merge that stops and asks on every conflict in `/release-sync`, and to add a behind-base check to `/approve-merge`
+- `AgDR-0197` — close changelog issues only from the PR body via `gh pr view` (scoped-title fallback + warning on fetch failure), and list lines a release removes from main (#1490)
 - `.claude/skills/release/SKILL.md` — the automated flow (this doc is the manual fallback)
 - `bin/release-changelog.sh` — the changelog generation helper
+- `bin/release-list-removed-lines.sh` — lists lines the release tip deletes from main
 - `.github/workflows/auto-tag-on-release-pr-merge.yml` — the auto-tag CI workflow
 - `golden-paths/pipelines/auto-tag-on-release-pr-merge.yml` — the reusable golden-path copy
 - `.claude/skills/update/SKILL.md` — the inverse skill, for adopters pulling new releases
