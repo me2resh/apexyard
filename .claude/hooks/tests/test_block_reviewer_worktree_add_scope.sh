@@ -156,5 +156,18 @@ run_case '#1509 block: cd through a variable before a relative path' \
 run_case '#1509 allow: relative path in the first segment from a scratch dir' \
   "git worktree add inner abcdef1234567890" allowed "$TMP/scratch"
 
+# Hakim, review of PR #1518: git resolves `..` after a missing directory,
+# so a path string can climb into a governed tree. A long command that holds
+# a worktree add is refused, because the splitter is not linear.
+run_case '#1509 block: .. after a missing directory into the ops fork' \
+  "git worktree add $TMP/nonexist/../ops/x abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 block: .. after a missing directory into workspace' \
+  "git worktree add $TMP/nonexist/../ops/workspace/y abcdef1234567890" blocked "$TMP/scratch"
+run_case '#1509 allow: new nested directories outside governed trees' \
+  "git worktree add $TMP/newdir/sub abcdef1234567890" allowed "$TMP/scratch"
+long_pad=$(head -c 9000 /dev/zero | tr '\0' 'a')
+run_case '#1509 block: a worktree add in a command over 8192 characters' \
+  "echo $long_pad; git worktree add $outside abcdef1234567890" blocked "$TMP/scratch"
+
 printf 'PASS=%s FAIL=%s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

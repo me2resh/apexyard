@@ -133,6 +133,14 @@ _brrm_check_worktree_add_segment() {
     echo "BLOCKED: review-class agent cannot resolve this worktree path during an active review." >&2
     return 2
   fi
+  # The resolver appends the missing tail literally. Git creates the missing
+  # directories, so a . or .. in that tail can climb into a governed tree.
+  case "/$resolved/" in
+    */../*|*/./*)
+      echo "BLOCKED: review-class agent cannot use . or .. after a missing directory in a worktree path during an active review." >&2
+      return 2
+      ;;
+  esac
   while IFS= read -r gov; do
     [ -n "$gov" ] || continue
     gov_real=$(_brrm_real_path "$gov")
@@ -144,6 +152,25 @@ _brrm_check_worktree_add_segment() {
       fi
     done
   done < <(_brrm_governed_roots "$root")
+  # Compare by file identity too, so a case variant on a case-insensitive
+  # file system cannot name a governed directory by another spelling.
+  # Read the governed roots once, not once per ancestor.
+  # Walk from the resolved physical path. The raw path can hold `..`, and
+  # dirname on it would climb lexically into the wrong directory.
+  local anc="$resolved" govs
+  govs=$(_brrm_governed_roots "$root")
+  while [ -n "$anc" ] && [ "$anc" != / ] && [ ! -e "$anc" ]; do anc=$(dirname "$anc"); done
+  while [ -n "$anc" ]; do
+    while IFS= read -r gov; do
+      [ -n "$gov" ] && [ -e "$gov" ] || continue
+      if [ "$anc" -ef "$gov" ]; then
+        echo "BLOCKED: review-class agent cannot create a worktree inside the ops fork or a managed workspace during an active review." >&2
+        return 2
+      fi
+    done <<<"$govs"
+    [ "$anc" = / ] && break
+    anc=$(dirname "$anc")
+  done
   return 0
 }
 
@@ -159,6 +186,14 @@ _brrm_scope_worktree_adds() {
   local split_re='^([^;&|]*)(&&|\|\||;|\||&)(.*)$'
   local wt_re='(^|[[:space:]])worktree[[:space:]]+add([[:space:]]|$)'
   local shape_re='^[[:space:]]*git([[:space:]]+-C[[:space:]]+[A-Za-z0-9_./@:+-]+)?[[:space:]]+worktree[[:space:]]+add([[:space:]]+[A-Za-z0-9_./@:^+=-]+)*[[:space:]]*$'
+  # The splitter below is not linear in the command length. This hook runs in
+  # the same dispatcher as the merge gates, and a gate that times out does
+  # not block, so refuse a long command that holds a worktree add (Hakim,
+  # review of PR #1518). Reviewers use short, literal commands.
+  if [ "${#cmd}" -gt 8192 ]; then
+    echo "BLOCKED: review-class agent may run git worktree add only in a command of 8192 characters or fewer during an active review." >&2
+    return 2
+  fi
   case "$cmd" in
     *$'\n'*)
       echo "BLOCKED: review-class agent must run git worktree add as a single-line command during an active review." >&2
