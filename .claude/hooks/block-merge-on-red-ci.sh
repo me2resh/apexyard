@@ -30,7 +30,10 @@
 #
 # The hook allows:
 #   - exit 0 (all green)
-#   - exit 8 if the repo has no CI (gh pr checks returns "no checks" — allow)
+#   - non-zero exit whose entire trimmed stdout/stderr is exactly
+#     `no checks reported on the '<branch>' branch` (repo has no CI —
+#     allow). Substring match is NOT enough: check names can contain
+#     that phrase (#1523).
 # Blocks:
 #   - exit 1 (red CI)
 #   - any check with state FAILURE | CANCELLED | TIMED_OUT
@@ -414,16 +417,21 @@ MSG
 fi
 
 # --- GitHub path (unchanged, byte-identical to pre-#790 behaviour) ---
-# Query checks. gh pr checks returns text output; we check both the exit code
-# and a "no checks reported" substring — the latter is how gh reports the
-# genuinely-unchecked case regardless of exit code version.
+# Query checks. gh pr checks returns text output; we check both the exit
+# code and whether the whole trimmed output is the CLI's exact no-checks
+# message (#1523 — a substring match wrongly allowed a check NAME that
+# contained "no checks reported").
 CHECKS_OUTPUT=$(gh pr checks "$PR_NUMBER" $REPO_FLAG 2>&1)
 CHECKS_RC=$?
 
-# "no checks reported on the 'X' branch" — legitimate no-CI state. Allow.
-# Projects without CI (or branches without the expected workflow wiring)
-# hit this path. Log a single-line note so the user knows the gate was a no-op.
-if echo "$CHECKS_OUTPUT" | grep -q "no checks reported"; then
+# "no checks reported on the 'X' branch" — legitimate no-CI state. Allow
+# only when BOTH: checks exited non-zero, AND the entire trimmed output
+# matches that exact CLI message. Projects without CI hit this path.
+# Log a single-line note so the user knows the gate was a no-op.
+_checks_trimmed="${CHECKS_OUTPUT#"${CHECKS_OUTPUT%%[![:space:]]*}"}"
+_checks_trimmed="${_checks_trimmed%"${_checks_trimmed##*[![:space:]]}"}"
+_no_checks_re="^no checks reported on the '.*' branch$"
+if [ "$CHECKS_RC" -ne 0 ] && [[ "$_checks_trimmed" =~ $_no_checks_re ]]; then
   echo "NOTE: PR #${PR_NUMBER} has no CI checks configured. Merge-on-red-CI gate is a no-op for this PR." >&2
   exit 0
 fi
