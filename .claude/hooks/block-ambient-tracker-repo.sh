@@ -76,10 +76,12 @@ TRACKER_PATTERN="(^|[^[:alnum:]_])['\"\\\\]*g['\"\\\\]*h['\"\\\\]*[[:space:]]+['
 # A command the join above skipped, or a continuation the join left in
 # place, can split a tracker command across lines (`x=${y} gh \<newline>
 # issue view 42`). Neither line matches alone, but Bash runs the joined
-# command. Check a second view with every backslash-newline removed, and
-# block when EITHER view has an unqualified tracker segment (#1503). The
-# first view still catches a repository flag that only appears in quoted
-# text; the second view cannot authorize a segment the first view blocks.
+# command. Check a second view with every backslash-newline removed. That
+# view also joins inside quotes and after an escaped backslash, where Bash
+# does not, so it can make quoted text look like a repository flag. It may
+# therefore only ADD blocks: block when either view has an unqualified
+# tracker segment, and block when the second view finds more tracker
+# commands than the first, because the first view cannot see those (#1503).
 JOINED_VIEW=${SCAN_COMMAND//$'\\\n'/}
 if ! printf '%s\n%s' "$SCAN_COMMAND" "$JOINED_VIEW" | grep -qE "$TRACKER_PATTERN"; then
   exit 0
@@ -105,7 +107,10 @@ _batr_has_unqualified() {
   return 1
 }
 unqualified=0
-if _batr_has_unqualified "$SCAN_COMMAND" || _batr_has_unqualified "$JOINED_VIEW"; then
+first_count=$(printf '%s\n' "$SCAN_COMMAND" | grep -oE "$TRACKER_PATTERN" | wc -l | tr -d ' ')
+joined_count=$(printf '%s\n' "$JOINED_VIEW" | grep -oE "$TRACKER_PATTERN" | wc -l | tr -d ' ')
+if [ "$joined_count" -gt "$first_count" ] \
+  || _batr_has_unqualified "$SCAN_COMMAND" || _batr_has_unqualified "$JOINED_VIEW"; then
   unqualified=1
 fi
 [ "$unqualified" -eq 1 ] || exit 0

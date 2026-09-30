@@ -133,8 +133,19 @@ run_case 'ANSI-C quoting before a split CLI word stays blocked' 2 \
   "$(printf "x=\$'a' gh \\\\\n  issue view 42")" "$multiple"
 run_case 'trailing comment after a split CLI word stays blocked' 2 \
   "$(printf 'gh \\\n  issue view 42 # note')" "$multiple"
-run_case 'split CLI word with a repository flag after a skip token is explicit' 0 \
+# A tracker command that only the joined view can see always blocks, even
+# with a flag: the joined view may join inside quotes, where Bash does not.
+# This is a conservative false positive (review round 2 of PR #1511).
+run_case 'split CLI word after a skip token blocks even with a repository flag' 2 \
   "$(printf 'x=${y} gh \\\n  issue view 42 --repo owner/project-a')" "$multiple"
+run_case 'split CLI word with a flag inside double quotes stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
+run_case 'split CLI word with a flag inside single quotes stays blocked' 2 \
+  "$(printf "x=\${y} gh \\\\\n issue view 42 'a \\\\\n --repo owner/project-a'")" "$multiple"
+run_case 'split CLI word with a flag after an escaped backslash stays blocked' 2 \
+  "$(printf 'x=${y} gh \\\n issue view 42 \\\\\n --repo owner/project-a')" "$multiple"
+run_case 'qualified command then a split CLI word with a quoted flag stays blocked' 2 \
+  "$(printf 'gh pr list --repo owner/project-a; x=${y} gh \\\n issue view 42 "a \\\n --repo owner/project-a"')" "$multiple"
 run_case 'a command over the size cap is not joined' 2 \
   "$(printf 'gh pr list --title "%s" \\\n  --repo owner/project-a' "$(printf '%02100d' 0)")" "$multiple"
 
