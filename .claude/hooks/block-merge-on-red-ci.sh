@@ -25,8 +25,9 @@
 # Uses `gh pr checks <pr>` which returns one line per check with status.
 # Exit codes:
 #   0 = all checks passed (and none required are missing)
-#   1 = at least one check failed, was cancelled, or skipped
-#   8 = no checks at all
+#   1 = at least one check failed, was cancelled, or skipped; also the
+#       no-checks case ("no checks reported on the '<branch>' branch")
+#   8 = at least one check is pending
 #
 # The hook allows:
 #   - exit 0 (all green)
@@ -430,7 +431,10 @@ CHECKS_RC=$?
 # Log a single-line note so the user knows the gate was a no-op.
 _checks_trimmed="${CHECKS_OUTPUT#"${CHECKS_OUTPUT%%[![:space:]]*}"}"
 _checks_trimmed="${_checks_trimmed%"${_checks_trimmed##*[![:space:]]}"}"
-_no_checks_re="^no checks reported on the '.*' branch$"
+# [^[:cntrl:]] and not .: in bash =~, . also matches a newline, so a
+# multi-line check list that starts and ends with the right text would
+# match. Branch names cannot contain control characters.
+_no_checks_re="^no checks reported on the '[^[:cntrl:]]*' branch$"
 if [ "$CHECKS_RC" -ne 0 ] && [[ "$_checks_trimmed" =~ $_no_checks_re ]]; then
   echo "NOTE: PR #${PR_NUMBER} has no CI checks configured. Merge-on-red-CI gate is a no-op for this PR." >&2
   exit 0

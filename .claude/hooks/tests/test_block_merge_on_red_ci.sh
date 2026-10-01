@@ -43,7 +43,7 @@ TEST_REPO="me2resh/apexyard"
 
 # make_sandbox <gh_mode> <glab_mode>
 #   gh_mode:   green | red | none | none_exit0 | red_named_phrase |
-#              full_msg_name_red | full_msg_name_green | "" 
+#              full_msg_name_red | full_msg_name_green | multiline_wrap | ""
 #              (mock `gh pr checks` behaviour; #1523 modes cover the
 #              "no checks reported" false-allow)
 #   glab_mode: success | pending | failure | none | unresolvable |
@@ -75,7 +75,7 @@ case "\$*" in
     case "$gh_mode" in
       green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;
       red)   printf 'build\tfail\t1m\thttps://x\n'; exit 1 ;;
-      none)  echo "no checks reported on the 'feature' branch"; exit 8 ;;
+      none)  echo "no checks reported on the 'feature' branch"; exit 1 ;;
       # #1523: exact CLI message but exit 0 — must NOT take the no-checks allow arm
       none_exit0) echo "no checks reported on the 'feature' branch"; exit 0 ;;
       # #1523: failing check + passing check named like the substring phrase
@@ -93,6 +93,14 @@ case "\$*" in
       full_msg_name_green)
         printf '%s\tpass\t1m\thttps://x\n' "no checks reported on the 'feature' branch"
         exit 0
+        ;;
+      # Multi-line list that starts with the message prefix and ends with
+      # "' branch" (the last check's description), with a failure between.
+      multiline_wrap)
+        printf "no checks reported on the 'x\tpass\t1m\thttps://x\t\n"
+        printf 'CodeQL\tfail\t1m\thttps://x\t\n'
+        printf "deploy\tpass\t1m\thttps://x\tpreview for ' branch\n"
+        exit 1
         ;;
       *)     exit 0 ;;
     esac
@@ -185,24 +193,28 @@ run_case "gh: no checks configured -> allows (no-op note)" 0 "" "$sb" \
 
 sb=$(make_sandbox red_named_phrase "")
 run_case "#1523: failing check + passing check named 'no checks reported' -> blocks" 2 "red CI" "$sb" \
-  "gh pr merge 310 --repo $TEST_REPO --squash"
+  "gh pr merge 1531 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox full_msg_name_red "")
 run_case "#1523: check name is full CLI no-checks message, exit 1 -> blocks (normal eval)" 2 "red CI" "$sb" \
-  "gh pr merge 311 --repo $TEST_REPO --squash"
+  "gh pr merge 1532 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox full_msg_name_green "")
 run_case "#1523: check name contains full CLI no-checks message, exit 0 -> allows (normal green)" 0 "" "$sb" \
-  "gh pr merge 312 --repo $TEST_REPO --squash"
+  "gh pr merge 1533 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox none "")
 run_case "#1523: real no-checks message + non-zero exit -> allows (no-op)" 0 "" "$sb" \
-  "gh pr merge 313 --repo $TEST_REPO --squash"
+  "gh pr merge 1534 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox multiline_wrap "")
+run_case "#1523: multi-line list wrapped in the no-checks text, with a failure -> blocks" 2 "red CI" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
 
 # Exact message + exit 0 must NOT take the no-checks arm (no NOTE).
 sb=$(make_sandbox none_exit0 "")
 label="#1523: real no-checks message text but exit 0 -> not treated as no-checks"
-input=$(jq -nc --arg c "gh pr merge 314 --repo $TEST_REPO --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
+input=$(jq -nc --arg c "gh pr merge 1535 --repo $TEST_REPO --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
 got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
 got_rc=$?
 rm -rf "$sb"
