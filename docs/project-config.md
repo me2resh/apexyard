@@ -113,6 +113,7 @@ tracks closing this gap for those seven keys.
 | `branch.type_whitelist` | `validate-branch-name.sh` | Acceptable branch-name prefixes (`feature/`, `fix/`, …). |
 | `commit.type_whitelist` | `validate-commit-format.sh` | Conventional-commit types for commit subjects. |
 | `pr.title_type_whitelist` | `validate-pr-create.sh`, `pr-title-check.yml` (CI) | Conventional-commit types for PR titles. |
+| `build.isolation` | `.claude/rules/isolated-builds.md`, `/fan-out`, build agents | Selects build isolation for the whole ops fork. Default: `worktree`. See [Build isolation](#build-isolation-buildisolation) and [AgDR-0210](agdr/AgDR-0210-build-isolation-setting.md). |
 | `qa.pre_merge_offer` | `/code-review` | Controls the advisory pre-merge QA offer after Rex approves. Default: `ask`. |
 | `leak_protection.public_framework_repos` | `check-private-refs-*.sh`, `block-private-refs-in-public-repos.sh` | Known-public `owner/repo` slugs. Origin identity is exempt when origin matches an entry. |
 | `leak_protection.origin_verified_public` | `check-private-refs-staged.sh`, `check-private-refs-runtime.sh` | Exact origin `owner/repo` slug recorded by `/setup` or `/update` after `gh` confirms visibility is PUBLIC. Hooks stay offline and fail closed when this key is missing or does not match origin. See AgDR-0190. |
@@ -140,6 +141,31 @@ A PASS stamped with an earlier head does not count.
 Accept reports only from the repository owner, a member or a collaborator, or the account that posted the Rex review.
 On GitHub, verify `author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, or the Rex account match.
 Otherwise, run post-merge QA as usual.
+
+## Build isolation (`build.isolation`)
+
+The setting applies to the whole ops fork, not per project.
+`worktree` creates `.claude/worktrees/<type>-<ticket>-<short-slug>` or uses the harness worktree.
+`branch` creates a ticket branch in the local copy.
+A managed project's `workspace/<name>` clone counts as the local copy for that project.
+
+Any value other than `branch`, including an empty result, means `worktree`.
+An empty result can occur when the config library cannot load from inside a `workspace/<name>` clone.
+
+`branch` mode applies only to a foreground build spawn when no other writer is active on that checkout.
+A background build spawn always uses a worktree, regardless of `build.isolation`.
+Any build spawn while another writer is active on that checkout uses a worktree, regardless of `build.isolation`.
+Parallel means overlapping writers, including a build agent still working from an earlier spawn.
+The orchestrator decides the mode at spawn time and tells the agent which mode to use.
+Work in another repository and risky destructive git also require a worktree.
+
+In `branch` mode, run `git status --porcelain --untracked-files=no` before switching branches.
+Dirty means tracked files with uncommitted changes or staged changes. Untracked files do not count.
+Refuse to switch branches when dirty and say why.
+Before each commit in `branch` mode, check that HEAD is still your ticket branch with `git branch --show-current`.
+Stop if HEAD is no longer your ticket branch.
+After merge in `branch` mode, return to the base branch and delete the local ticket branch.
+Always tell the user the branch name.
 
 ## Extending the defaults
 

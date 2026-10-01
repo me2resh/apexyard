@@ -63,7 +63,18 @@ Recommend `general-purpose` first. Split the list across wizard questions. Use t
 
 If a task obviously needs editing (verbs like *implement*, *add*, *fix*, *refactor*, *migrate*, *write*), reject any read-only agent type and suggest `general-purpose`.
 
-**Isolation** — default `worktree` if any agent will write code; `shared` if all agents are read-only research. Infer from the task verb. Ask only when ambiguous.
+**Isolation** — fan-out writers always use `worktree`, regardless of the ops-fork setting `build.isolation`.
+Use `shared` only when all agents are read-only research.
+Infer from the task verb.
+Ask only when ambiguous.
+
+`branch` mode applies only to a foreground build spawn when no other writer is active on that checkout.
+A background build spawn always uses a worktree, regardless of `build.isolation`.
+Any build spawn while another writer is active on that checkout uses a worktree, regardless of `build.isolation`.
+Parallel means overlapping writers, including a build agent still working from an earlier spawn.
+The orchestrator decides the mode at spawn time and tells the agent which mode to use.
+`/fan-out` never follows `branch` mode for writers.
+See `.claude/rules/isolated-builds.md` and AgDR-0210.
 
 **Mode** — default `foreground` (≤ 2-minute estimated runtime); `background` if estimated > 2 minutes. Estimate from task scope (single-file edit ≈ short; cross-cutting refactor ≈ long; full audit ≈ long). Ask only when ambiguous.
 
@@ -131,6 +142,7 @@ Each agent's prompt must be **self-contained** — sub-agents do not inherit the
 - The task description verbatim
 - Any reference paths the agent needs to read
 - The expected output format (what to return to the parent)
+- The isolation mode selected by the orchestrator at spawn time
 - Constraints inherited from the parent (e.g. "don't push", "use specific git add")
 
 For tasks with `isolation: worktree`, pass `isolation: worktree` in the Agent call. For long-running tasks with `mode: background`, pass `run_in_background: true`.
@@ -143,7 +155,7 @@ For each returned result, capture:
 
 - Task ID
 - Status (success / failure / partial)
-- Branch name (if worktree was used)
+- Branch name for every writer
 - Summary of what the agent did
 - Any follow-ups the agent flagged
 
@@ -185,7 +197,7 @@ Background tasks running: <ids>. They'll surface results when done.
 ## Rules
 
 1. **All `Agent` tool calls for a single fan-out MUST be in the SAME assistant message.** Multi-message loops do not get concurrency — they serialise. This is the most important rule in this skill.
-2. **Use `isolation: worktree` whenever any agent will write code.** Required to prevent file-level races between agents sharing one working directory.
+2. **Use `isolation: worktree` whenever any agent will write files.** Required to prevent file-level races between agents sharing one working directory. This overrides `build.isolation` — even when the ops fork sets `"build": {"isolation": "branch"}`, fan-out writers still get worktrees.
 3. **Refuse fan-out when tasks share file write targets.** Serialise instead — the merge-back conflict cost outweighs any concurrency win.
 4. **Refuse fan-out when tasks have sequential dependencies.** If task B reads task A's output, they cannot run in parallel.
 5. **Cap at 5 concurrent agents per invocation.** If the user wants more, ask them to split into batches. Beyond 5, returns diminish (review fatigue, merge-back queue) and risk grows (rate limits, context dilution).
