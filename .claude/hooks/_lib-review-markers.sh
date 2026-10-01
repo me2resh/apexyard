@@ -425,7 +425,8 @@ $REVIEW_VALIDATION_MISSING
 $section
 "*) continue ;; esac
       section_re=$(printf '%s' "$section" | sed 's/[][\.^$*+?(){}|]/\\&/g')
-      if ! grep -qiE "^##[[:space:]]+${section_re}([[:space:]]|$)" "$body_file"; then
+      # Optional trailing colon: "## Testing:" is the same heading as "## Testing".
+      if ! grep -qiE "^##[[:space:]]+${section_re}:?([[:space:]]|$)" "$body_file"; then
         REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}${section}
 "
       fi
@@ -435,7 +436,11 @@ Summary
 Testing
 Glossary
 EOF
-    if ! grep -qiE '^[[:space:]]*(Closes|Refs)[[:space:]]+([A-Za-z0-9._-]+/)?(#[0-9]+|[A-Z]{2,10}-[0-9]+)([[:space:][:punct:]]|$)' "$body_file"; then
+    # Hash refs accept optional owner/repo (each [A-Za-z0-9._-]+) before #N.
+    # Tracker keys (ABC-12) stay unscoped. Only Closes and Refs count — not
+    # Fixes/Resolves — so the required line is the explicit ticket link, not
+    # every GitHub auto-close keyword.
+    if ! grep -qiE '^[[:space:]]*(Closes|Refs)[[:space:]]+(([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+|[A-Z]{2,10}-[0-9]+)([[:space:][:punct:]]|$)' "$body_file"; then
       REVIEW_VALIDATION_MISSING="${REVIEW_VALIDATION_MISSING}Closes or Refs line
 "
     fi

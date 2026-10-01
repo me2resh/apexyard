@@ -525,11 +525,54 @@ BODY_CONTENT=""
 # file it had just warned it could not read — sending the author to edit a
 # body that was never the problem. Set when a --body-file was named but its
 # content could not be recovered; consumed at the section check below.
+#
+# Hakim / PR #1500: never read --body-file / -F from inside an inline or
+# heredoc --body/-b value. A body that merely mentions `grep -F pattern` or
+# `--body-file notes.md` used to set BODY_FILE to a fake path and fail with
+# "PR body file could not be read". Strip body payloads first, then extract.
 BODY_FILE_UNREADABLE=0
-BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+_cmd_for_bodyfile=$(printf '%s' "$COMMAND" | awk -v SQ="'" '
+  { buf = (NR == 1 ? $0 : buf "\n" $0) }
+  END {
+    s = buf
+    # Heredoc body consumes the rest of the command text.
+    if (match(s, /(^|[[:space:]])(--body|-b)[[:space:]]+("\$\(cat|'\''\$\(cat|\$\(cat)[[:space:]]*<</)) {
+      s = substr(s, 1, RSTART - 1)
+      print s
+      exit
+    }
+    # Double-quoted --body / -b value (first closing quote).
+    if (match(s, /(^|[[:space:]])(--body|-b)[[:space:]]+"/)) {
+      prefix = substr(s, 1, RSTART - 1)
+      rest = substr(s, RSTART + RLENGTH)
+      if (match(rest, /"/)) {
+        s = prefix substr(rest, RSTART + 1)
+      } else {
+        s = prefix
+      }
+    }
+    # Single-quoted --body / -b value.
+    if (match(s, "(^|[[:space:]])(--body|-b)[[:space:]]+" SQ)) {
+      prefix = substr(s, 1, RSTART - 1)
+      rest = substr(s, RSTART + RLENGTH)
+      if (match(rest, SQ)) {
+        s = prefix substr(rest, RSTART + 1)
+      } else {
+        s = prefix
+      }
+    }
+    # Unquoted single-token --body / -b value.
+    if (match(s, /(^|[[:space:]])(--body|-b)[[:space:]]+[^[:space:]]+/)) {
+      s = substr(s, 1, RSTART - 1) substr(s, RSTART + RLENGTH)
+    }
+    print s
+  }
+')
+BODY_FILE=$(printf '%s' "$_cmd_for_bodyfile" | sed -nE 's/.*--body-file[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
 if [ -z "$BODY_FILE" ]; then
-  BODY_FILE=$(printf '%s' "$COMMAND" | sed -nE 's/.*[[:space:]]-F[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
+  BODY_FILE=$(printf '%s' "$_cmd_for_bodyfile" | sed -nE 's/.*[[:space:]]-F[[:space:]]+([^[:space:]]+).*/\1/p' | head -1)
 fi
+unset _cmd_for_bodyfile
 # #1038 — strip ONE matched surrounding quote pair.
 #
 # The `[^[:space:]]+` token grab above is quote-blind, so `--body-file
@@ -603,7 +646,8 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
     if [ -n "$BODY_FILE" ]; then
       review_validate_body pr "$BODY_FILE" "$REQUIRED_SECTIONS" 2>/dev/null
     else
-      # A process-substitution fd is not a regular file on Linux.
+      # review_validate_body requires a regular file (-f). A process-substitution
+      # fd is not a regular file on Linux, so materialise HAYSTACK via mktemp.
       _pr_body_temp=$(mktemp) || {
         echo "validate-pr-create.sh: could not create body check file" >&2
         exit 2
@@ -613,16 +657,20 @@ if echo "$COMMAND" | grep -qE '\-\-body(-file)?\b|[[:space:]]-F[[:space:]]'; the
       rm -f "$_pr_body_temp"
     fi
     if [ "$REVIEW_VALIDATION_RESULT" != complete ]; then
-      while IFS= read -r section; do
-        [ -z "$section" ] && continue
-        if [ "$section" = 'Closes or Refs line' ]; then
-          ERRORS="${ERRORS}PR body missing required Closes or Refs line.\n"
-        else
-          ERRORS="${ERRORS}PR body missing required '## ${section}' section.\n"
-        fi
-      done <<EOF
+      if [ -z "$REVIEW_VALIDATION_MISSING" ]; then
+        ERRORS="${ERRORS}PR body failed completeness validation.\n"
+      else
+        while IFS= read -r section; do
+          [ -z "$section" ] && continue
+          if [ "$section" = 'Closes or Refs line' ]; then
+            ERRORS="${ERRORS}PR body missing required Closes or Refs line.\n"
+          else
+            ERRORS="${ERRORS}PR body missing required '## ${section}' section.\n"
+          fi
+        done <<EOF
 ${REVIEW_VALIDATION_MISSING}
 EOF
+      fi
     fi
   fi
 

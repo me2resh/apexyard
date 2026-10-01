@@ -92,6 +92,8 @@ Skill-count / hook-count / role-count drift goes in the relevant summary docs (C
 
 ## Evolution
 
+**2026-09-30 — Artifact completeness shared validator (AgDR-0202, me2resh/apexyard#1343).** The AgDR-0161 local validator now profiles Rex, Tariq, PR, and AgDR bodies. PR creation calls it for supplied bodies. The PR-section skip marker and `.pr.skip_marker` are removed. Review triage from #1343 stays dropped after spike #1341 was closed as not planned. Reasoning: one structure check beats drifting per-producer rules; skip markers hid incomplete evidence. The C4 containers stay the same. The change is inside the hooks container.
+
 **2026-09-29 — Cursor skill one-root / override wins (AgDR-0187, me2resh/apexyard#1377).** Cursor keyed skills by frontmatter `name`. A custom override left the framework copy under `.claude/skills/<name>.framework.bak/` with the same name. Cursor listed two entries. Fix: keep `.claude/skills/` as the only Cursor skill root. Move bak copies to `.claude/skill-framework-bak/`. Adapter sync writes a managed `.cursorignore` block for bak paths inside the fork (not in-fork custom skill sources). Install and docs warn operators not to open a parent portfolio workspace. Bak restore is manual; `/update` does not restore it. `bin/list-cursor-skills.sh` checks uniqueness without launching Cursor.
 
 The skills container stays the same path. The bak copy is no longer inside that container.
