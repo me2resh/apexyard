@@ -295,5 +295,44 @@ else
   fail 'heredoc body mentioning body-file text passes' "$(cat "$TMP/pr-error.txt")"
 fi
 
+# Rex (b1355f6): shapes that pass on dev must not report an unreadable file.
+# A body from stdin (--body-file -) fed by a heredoc.
+stdin_cmd="${_gh} pr create --repo sample-org/sample-repo --title 'feat(#7): sample' --body-file - <<'EOF'
+${COMPLETE_BODY_TEXT}
+EOF"
+if run_pr_cmd "$stdin_cmd" && [ ! -s "$TMP/pr-error.txt" ]; then
+  pass 'stdin body (--body-file -) passes'
+else
+  fail 'stdin body (--body-file -) passes' "$(cat "$TMP/pr-error.txt")"
+fi
+
+# An inline body with an escaped quote before the body-file text.
+escaped_cmd="${_gh} pr create --repo sample-org/sample-repo --title 'feat(#7): sample' --body \"Say \\\"hi\\\".
+${COMPLETE_BODY_TEXT}\""
+if run_pr_cmd "$escaped_cmd" && [ ! -s "$TMP/pr-error.txt" ]; then
+  pass 'inline body with an escaped quote passes'
+else
+  fail 'inline body with an escaped quote passes' "$(cat "$TMP/pr-error.txt")"
+fi
+
+# The --body= equals form.
+equals_cmd="${_gh} pr create --repo sample-org/sample-repo --title 'feat(#7): sample' --body=\"
+${COMPLETE_BODY_TEXT}\""
+if run_pr_cmd "$equals_cmd" && [ ! -s "$TMP/pr-error.txt" ]; then
+  pass 'inline --body= form passes'
+else
+  fail 'inline --body= form passes' "$(cat "$TMP/pr-error.txt")"
+fi
+
+# A real missing body file with no inline body still reports it.
+missing_cmd="${_gh} pr create --repo sample-org/sample-repo --title 'feat(#7): sample' --body-file /nonexistent/body.md"
+if run_pr_cmd "$missing_cmd"; then
+  fail 'missing body file with no inline body still blocks' 'hook allowed it'
+elif grep -q 'could not be read' "$TMP/pr-error.txt"; then
+  pass 'missing body file with no inline body still blocks'
+else
+  fail 'missing body file with no inline body still blocks' "$(cat "$TMP/pr-error.txt")"
+fi
+
 printf 'Passed: %s\nFailed: %s\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

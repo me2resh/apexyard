@@ -590,6 +590,21 @@ case "$BODY_FILE" in
   '"'*'"') BODY_FILE=${BODY_FILE#\"}; BODY_FILE=${BODY_FILE%\"} ;;
   "'"*"'") BODY_FILE=${BODY_FILE#\'}; BODY_FILE=${BODY_FILE%\'} ;;
 esac
+# `--body-file -` reads the body from stdin (usually a heredoc in the same
+# command). There is no file to read: check the command text instead.
+[ "$BODY_FILE" = "-" ] && BODY_FILE=""
+# An inline body flag after `pr create` (--body, --body=, -b). The body-file
+# extraction above cannot parse every quoting shape (escaped quotes, the
+# --body= form), so a fake path can come out of an inline body. The CLI
+# refuses --body together with --body-file, so when an inline body is
+# present and the named file cannot be read, check the command text as
+# `dev` did instead of reporting an unreadable file.
+_pr_create_tail=$(printf '%s' "$COMMAND" | sed -n '/pr[[:space:]][[:space:]]*create/,$p' | sed '1s/.*pr[[:space:]][[:space:]]*create//')
+HAS_INLINE_BODY=0
+if printf '%s' "$_pr_create_tail" | grep -qE '(^|[[:space:]])(--body(=|[[:space:]])|-b[[:space:]])'; then
+  HAS_INLINE_BODY=1
+fi
+unset _pr_create_tail
 if [ -n "$BODY_FILE" ]; then
   # Resolve relative paths against the command's cd-target (if any), so
   # 'cd /project && gh pr create --body-file body.md' finds the file at
@@ -605,6 +620,10 @@ if [ -n "$BODY_FILE" ]; then
     if [ -z "$BODY_CONTENT" ] && [ -s "$BODY_FILE" ]; then
       BODY_FILE_UNREADABLE=1
     fi
+  elif [ "$HAS_INLINE_BODY" -eq 1 ]; then
+    # Not a real body file: the path came out of an inline body. Check the
+    # command text, which holds the inline body.
+    BODY_FILE=""
   else
     echo "WARN: validate-pr-create.sh: --body-file '${BODY_FILE}' not readable from hook context; section check may miss content." >&2
     BODY_FILE_UNREADABLE=1
