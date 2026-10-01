@@ -84,6 +84,10 @@
     ]
   },
 
+  "qa": {
+    "pre_merge_offer": "ask"
+  },
+
   "branch": {
     "type_whitelist": [
       "feature",
@@ -188,6 +192,11 @@
       "dev",
       "develop"
     ]
+  },
+
+  "build": {
+    "_comment": "me2resh/apexyard#1381 — build isolation for the whole ops fork, not per project. `worktree` remains the default from #784. `branch` applies only to a foreground build spawn with no other active writer on that checkout. The orchestrator chooses the mode at spawn time and tells the agent. Background or concurrent build spawns always use worktrees. Any value other than `branch`, including an empty result, means `worktree`. In branch mode, refuse to switch with tracked uncommitted or staged changes; untracked files do not count. Check HEAD is still the ticket branch before each commit and stop if not. See `.claude/rules/isolated-builds.md` and AgDR-0210.",
+    "isolation": "worktree"
   },
 
   "pre_push": {

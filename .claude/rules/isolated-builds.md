@@ -13,7 +13,7 @@ Heuristic: reach for an isolated build whenever the task is **any** of these:
 
 - **Building or testing a sibling/managed repo** while the current cwd is the ops fork or a different project
 - **Running destructive git** (`reset --hard`, `clean -fd`, force operations) as part of a build/verify cycle, where a wrong-repo execution would be costly
-- **Spawning a build-class sub-agent** via the `Agent` tool for implementation work (backend/frontend/platform engineer, etc.) — see "Standard for spawned build agents" below
+- **Spawning a build-class sub-agent in `worktree` mode** via the `Agent` tool for implementation work (backend/frontend/platform engineer, etc.) — see "Standard for spawned build agents" below
 
 ## The safe pattern
 
@@ -34,7 +34,9 @@ cd .claude/worktrees/fix-1024-worktree-hygiene || exit 1
 git reset --hard origin/main
 ```
 
-For a genuinely separate repo (not this one) that still needs a persistent, non-`/tmp` home — a sibling managed project, a premium component — clone it once to a durable path you control (e.g. `workspace/<name>/`, per the portfolio model) and worktree off *that* clone using the same `.claude/worktrees/<type>-<ticket>-<short-slug>` convention inside it.
+For a genuinely separate repo (not this one) that still needs a persistent, non-`/tmp` home — a sibling managed project, a premium component — clone it once to a durable path you control (e.g. `workspace/<name>/`, per the portfolio model) and create required worktrees from that clone under `.claude/worktrees/<type>-<ticket>-<short-slug>`.
+A managed project's `workspace/<name>` clone counts as "the local copy" for that project.
+`branch` mode can apply when that clone is the current repository and the conditions below hold.
 
 ## Lifecycle — remove the worktree once its PR merges
 
@@ -46,14 +48,77 @@ git worktree remove .claude/worktrees/fix-1024-worktree-hygiene
 
 The agent that merges the PR is the one that removes the worktree — the same turn, not a follow-up. This is what keeps `.claude/worktrees/` from accumulating stale checkouts the way the sibling-of-fork-root directories did: nothing prunes those automatically, and `git worktree prune` only clears registry entries whose *directory* is already gone — it does nothing for a worktree that still exists on disk with a long-merged branch. If a squash-merge model is in play, don't use `git branch --merged` / `--is-ancestor` to decide "is this done" — a squashed branch's tip is never an ancestor of the base. Check the PR's actual state (`gh pr view <N> --json state,mergedAt`) instead.
 
+## Build isolation setting (`build.isolation`)
+
+The setting applies to the whole ops fork, not per project.
+Read `build.isolation` before creating a ticket branch or spawning a build agent:
+
+```bash
+isolation=$(
+  . "$(git rev-parse --show-toplevel)/.claude/hooks/_lib-read-config.sh" &&
+    config_get_or '.build.isolation' 'worktree'
+) || isolation=worktree
+[ "$isolation" = branch ] || isolation=worktree
+```
+
+Any value other than `branch`, including an empty result, means `worktree`.
+An empty result can occur when the config library cannot load from inside a `workspace/<name>` clone.
+
+| Value | When to use it | Behaviour |
+|-------|----------------|-----------|
+| `worktree` (default) | Default for build spawns | Create `.claude/worktrees/<type>-<ticket>-<short-slug>` or pass `isolation: "worktree"` to the Agent tool. Tell the user the worktree path and how to test the change. |
+| `branch` | Foreground build spawn with no other active writer on the local copy | Create the ticket branch in the local copy (`git checkout -b …`). Apply the checks below. |
+
+`branch` mode applies only to a foreground build spawn when no other writer is active on that checkout.
+A background build spawn always uses a worktree, regardless of `build.isolation`.
+Any build spawn while another writer is active on that checkout uses a worktree, regardless of `build.isolation`.
+Parallel means overlapping writers, including a build agent still working from an earlier spawn.
+The orchestrator decides the mode at spawn time and tells the agent which mode to use.
+This includes concurrent `/fan-out` and Workflow writers.
+The setting does not prevent a collision the orchestrator did not detect.
+
+**Branch checks and lifecycle:**
+
+- Run `git status --porcelain --untracked-files=no` before switching branches.
+  Dirty means tracked files with uncommitted changes or staged changes. Untracked files do not count.
+- Refuse to switch branches when dirty and say why.
+  Wait until tracked changes are resolved or the operator chooses a worktree.
+- Before each commit in `branch` mode, check that HEAD is still your ticket branch with `git branch --show-current`.
+  Stop if HEAD is no longer your ticket branch.
+- After merge in `branch` mode, return to the base branch and delete the local ticket branch.
+- Always tell the user the branch name, in either mode.
+
+**Other cases that still need a worktree** (even when the setting is `branch`):
+
+- The work is in a different repository from the current one
+- The work uses destructive git where a mistake in the local copy costs too much
+
+Override the default in `.claude/project-config.json`:
+
+```json
+{ "build": { "isolation": "branch" } }
+```
+
+See `docs/project-config.md` and AgDR-0210.
+
 ## Standard for spawned build agents
 
-The `Agent` tool's `isolation: "worktree"` option is the standard for spawned build-class agents (backend-engineer, frontend-engineer, platform-engineer, and similar). It creates a temporary git worktree under `.claude/worktrees/agent-<id>` so the sub-agent works on an isolated copy of the repo — the same location convention and safety property this rule asks for by hand, provided and cleaned up automatically. Prefer `isolation: "worktree"` over asking a sub-agent to `cd` into a manually managed clone whenever the harness supports it.
+The orchestrator reads `build.isolation` and checks concurrency before each spawn.
+The spawn prompt must name the selected mode.
+
+- **`worktree` mode (default):** pass `isolation: "worktree"` for spawned build-class agents.
+  This covers backend, frontend, platform, and data engineers, product managers, UI designers, and UX designers.
+  The harness creates a worktree under `.claude/worktrees/agent-<id>`.
+- **`branch` mode:** spawn in the foreground without worktree isolation only when no other writer is active on that checkout.
+  Instruct the agent to follow the branch checks and lifecycle above.
+- **Background or concurrent writers:** always pass `isolation: "worktree"`, regardless of the setting.
+  Check for build agents still working from earlier spawns, including those outside `/fan-out` or Workflows.
+- **Agent second guard:** if you are told or can see that another writer is active, use a worktree.
 
 ## When NOT to bother
 
 - **Single read-only inspection** of another repo (`git -C <path> log`, a one-off `git show`) — no build, no destructive git, no isolation needed.
-- **Working directly on the current repo's checkout with no destructive git and no build isolation need** — this rule's failure-mode reasoning is about *other* repos and about any hand-created worktree; the current repo's own branch-naming hygiene is covered by `git-conventions.md`. If a worktree is warranted at all (a build, a sub-agent spawn, a destructive-git step), the `.claude/worktrees/<type>-<ticket>-<short-slug>` location convention above still applies even when the worktree is of this same repo.
+- **Working directly on the current repo's checkout in `branch` mode** — when `build.isolation` is `branch`, a foreground build with no other active writer creates the ticket branch in the local copy. Tracked files must have no uncommitted or staged changes. Branch-naming hygiene is still covered by `git-conventions.md`. If a worktree is warranted (parallel work, dirty tree, other repo, destructive git, or `worktree` mode), the `.claude/worktrees/<type>-<ticket>-<short-slug>` location convention above still applies.
 
 ## Self-check before responding
 
@@ -64,8 +129,16 @@ Before running a bash block that changes directory into another repo or clone, s
 [ ] If it's a hand-created worktree, does it live under `.claude/worktrees/<type>-<ticket>-<short-slug>`?
 [ ] Does every `cd <dir>` in this block end in `|| exit 1` (or equivalent)?
 [ ] Before any `git reset --hard` / forced clean / forced checkout, did I confirm `git rev-parse --show-toplevel` names the intended repo?
-[ ] If this is a spawned build agent, did I pass `isolation: "worktree"`?
-[ ] Once this ticket's PR merges, did I `git worktree remove` it?
+[ ] Did I read `build.isolation` (default `worktree`) before choosing branch vs worktree?
+[ ] If `branch` mode, did I check tracked changes with `git status --porcelain --untracked-files=no` and refuse when dirty?
+[ ] Before each commit in `branch` mode, did I check that HEAD is still my ticket branch?
+[ ] Did the orchestrator choose the mode at spawn time and tell the agent?
+[ ] If the build spawn is background or another writer is active on that checkout, did I use a worktree?
+[ ] If this is a spawned build agent in `worktree` mode, did I pass `isolation: "worktree"`?
+[ ] Did I always tell the user the branch name?
+[ ] If I created a worktree, did I tell the user the path and how to test?
+[ ] After merge in `worktree` mode, did I `git worktree remove` it?
+[ ] After merge in `branch` mode, did I return to the base branch and delete the local ticket branch?
 ```
 
 If any box is unchecked and the block runs destructive git or a build, fix it before running — not after.
