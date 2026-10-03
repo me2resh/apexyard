@@ -111,11 +111,78 @@ JSON
 # The publisher clones "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
 # — point REPO resolution at our local bare repo via a git insteadOf rewrite
 # so no network call happens and no real GH_TOKEN is needed.
-export HOME="$TMPDIR/home"
-mkdir -p "$HOME"
+#
+# Snapshot BOTH real global-config candidates BEFORE overwriting HOME
+# (me2resh/apexyard#1526). When XDG_CONFIG_HOME is set and ~/.gitconfig is
+# absent, `git config --global` writes to $XDG_CONFIG_HOME/git/config — so
+# HOME alone does not sandbox the developer identity.
+REAL_DOT_GITCONFIG="$HOME/.gitconfig"
+if [ -n "${XDG_CONFIG_HOME:-}" ]; then
+  REAL_XDG_GITCONFIG="$XDG_CONFIG_HOME/git/config"
+else
+  REAL_XDG_GITCONFIG="$HOME/.config/git/config"
+fi
+# Resolve to absolute paths while HOME / XDG_CONFIG_HOME still point at the
+# real locations (after `export HOME=...` relative expansion would be wrong).
+case "$REAL_DOT_GITCONFIG" in
+  /*) ;;
+  *) REAL_DOT_GITCONFIG="$(pwd)/$REAL_DOT_GITCONFIG" ;;
+esac
+case "$REAL_XDG_GITCONFIG" in
+  /*) ;;
+  *) REAL_XDG_GITCONFIG="$(pwd)/$REAL_XDG_GITCONFIG" ;;
+esac
+if [ -f "$REAL_DOT_GITCONFIG" ]; then
+  REAL_DOT_GITCONFIG_EXISTED=1
+  REAL_DOT_GITCONFIG_CKSUM="$(cksum < "$REAL_DOT_GITCONFIG")"
+else
+  REAL_DOT_GITCONFIG_EXISTED=0
+  REAL_DOT_GITCONFIG_CKSUM=""
+fi
+if [ -f "$REAL_XDG_GITCONFIG" ]; then
+  REAL_XDG_GITCONFIG_EXISTED=1
+  REAL_XDG_GITCONFIG_CKSUM="$(cksum < "$REAL_XDG_GITCONFIG")"
+else
+  REAL_XDG_GITCONFIG_EXISTED=0
+  REAL_XDG_GITCONFIG_CKSUM=""
+fi
+
+# Explicit sandbox: HOME + unset XDG_CONFIG_HOME + GIT_CONFIG_GLOBAL so
+# `git config --global` cannot land in the developer's XDG config. The
+# regression case below calls this same function, so it tests this code.
+sandbox_git_global() {
+  export HOME="$1"
+  unset XDG_CONFIG_HOME
+  export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
+  export GIT_CONFIG_NOSYSTEM=1
+  mkdir -p "$HOME"
+}
+sandbox_git_global "$TMPDIR/home"
 git config --global "url.$REMOTE.insteadOf" "https://x-access-token:test-token@github.com/apexyard-test/conformance-fixture.git"
 git config --global user.email "conformance-ci@apexyard.test"
 git config --global user.name "apexyard-conformance-ci"
+
+# Regression (#1526): prove the guard keeps a seeded XDG git/config intact.
+# If sandbox_git_global only set HOME (the pre-#1526 behaviour), the seeded
+# user.email would be overwritten and this case fails. Checked by reducing the
+# function body to `export HOME="$1"; mkdir -p "$HOME"`.
+REG_XDG="$(mktemp -d)"
+mkdir -p "$REG_XDG/git"
+cat > "$REG_XDG/git/config" <<'SEED'
+[user]
+	email = seeded-xdg@apexyard.test
+SEED
+REG_XDG_CKSUM_BEFORE="$(cksum < "$REG_XDG/git/config")"
+(
+  export XDG_CONFIG_HOME="$REG_XDG"
+  sandbox_git_global "$TMPDIR/home-xdg-regression"
+  git config --global user.email "conformance-ci@apexyard.test"
+  git config --global user.name "apexyard-conformance-ci"
+)
+REG_XDG_CKSUM_AFTER="$(cksum < "$REG_XDG/git/config")"
+assert_eq "regression(#1526): seeded XDG git/config byte-identical after sandboxed git config --global" \
+  "$REG_XDG_CKSUM_BEFORE" "$REG_XDG_CKSUM_AFTER"
+rm -rf "$REG_XDG"
 
 run_publisher() {
   local run_id="$1" o="$2" p="$3" c="$4" event="${5:-schedule}"
@@ -218,6 +285,32 @@ git clone --quiet "$REMOTE" "$CHECKOUT" 2>/dev/null
   fi
 ) > "$TMPDIR/orphan-result.txt"
 assert_eq "conformance-badge branch has no shared history with main (orphan)" "ORPHAN" "$(cat "$TMPDIR/orphan-result.txt")"
+
+# --- Real global git-config integrity (#1526) -------------------------------
+# Always run these (assert_* never exits) so an earlier failure cannot mask
+# clobbering of the developer's ~/.gitconfig or XDG git/config.
+if [ "$REAL_DOT_GITCONFIG_EXISTED" -eq 1 ]; then
+  assert_eq "real ~/.gitconfig cksum unchanged" \
+    "$REAL_DOT_GITCONFIG_CKSUM" "$(cksum < "$REAL_DOT_GITCONFIG")"
+else
+  if [ -f "$REAL_DOT_GITCONFIG" ]; then
+    FAIL=$((FAIL + 1))
+    FAILED_CASES="$FAILED_CASES\n  - real ~/.gitconfig must still be absent (was created by this test)"
+  else
+    PASS=$((PASS + 1))
+  fi
+fi
+if [ "$REAL_XDG_GITCONFIG_EXISTED" -eq 1 ]; then
+  assert_eq "real XDG git/config cksum unchanged" \
+    "$REAL_XDG_GITCONFIG_CKSUM" "$(cksum < "$REAL_XDG_GITCONFIG")"
+else
+  if [ -f "$REAL_XDG_GITCONFIG" ]; then
+    FAIL=$((FAIL + 1))
+    FAILED_CASES="$FAILED_CASES\n  - real XDG git/config must still be absent (was created by this test)"
+  else
+    PASS=$((PASS + 1))
+  fi
+fi
 
 echo ""
 echo "test_conformance_publish_badge.sh: $PASS passed, $FAIL failed"
