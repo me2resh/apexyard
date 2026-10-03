@@ -16,7 +16,7 @@ Claude Code is ApexYard's reference harness. Nothing is translated: `CLAUDE.md` 
 
 **Mechanically enforced (blocking):** the two-marker merge gate (Rex + CEO), red-CI merge block, ticket-first edits, migration-ticket-first edits, design-review gate for UI PRs, architecture-review gate for design-artifact PRs, secrets scanning, private-ref leak protection, branch-name and PR-title validation, and AgDR-for-architecture-change prompts.
 
-**Advisory (non-blocking reminders):** role-trigger banners (`detect-role-trigger.sh`), upstream-drift notices, MCP-reindex-after-clone/-pull nudges, and the self-discipline rules (plan mode, parallel-work/fan-out offers, loop mode, reporting style).
+**Advisory (non-blocking reminders):** role-trigger banners (`detect-role-trigger.sh`), upstream-drift notices, and the self-discipline rules (plan mode, parallel-work/fan-out offers, loop mode, reporting style).
 
 ## How it works (transport)
 

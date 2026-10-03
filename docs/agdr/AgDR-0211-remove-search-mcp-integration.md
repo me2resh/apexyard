@@ -35,6 +35,7 @@ Remove the integration. Agents, rules and skills use `grep` and `Read`. The adap
 - Six hooks, their tests, and the `mcp_search` config keys are gone.
 - Rex and Tariq discover handbooks by path convention only.
 - This decision supersedes AgDR-0056, AgDR-0058, AgDR-0070 and AgDR-0186.
+- AgDR-0138 used `reindex-on-session-start.sh` as its worked example. That hook is gone. The shared optional-hook harness that AgDR-0138 records remains.
 
 ## Artifacts
 
