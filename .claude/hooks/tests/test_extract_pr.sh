@@ -36,7 +36,11 @@ fi
 SHIM_DIR=$(mktemp -d)
 cat > "$SHIM_DIR/gh" <<'GHEOF'
 #!/bin/bash
-# Shim: return empty for all calls — test only cares about string parsing.
+# Controlled branch PR/repo fallback. Defaults to empty for parsing tests.
+case "$*" in
+  *"--json number"*)         printf '%s\n' "${MOCK_BRANCH_PR:-}" ;;
+  *"--json headRepository"*) printf '%s\n' "${MOCK_BRANCH_REPO:-}" ;;
+esac
 exit 0
 GHEOF
 chmod +x "$SHIM_DIR/gh"
@@ -238,6 +242,43 @@ assert_merge "gh api quoted argv path" \
   "python3 -c \"import subprocess; subprocess.run(['gh','api','repos/o/r/pulls/1500/merge'])\"" "yes"
 assert_merge "gh api quoted argv path after -X PUT" \
   "python3 -c \"import subprocess; subprocess.run(['gh','api','-X','PUT','repos/o/r/pulls/1500/merge'])\"" "yes"
+assert_merge "gh api quoted argv path with query" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','repos/o/r/pulls/5/merge?x=1'])\"" "yes"
+
+# B1: branch discovery has a real answer, but neither an argv-only merge's
+# PR nor its repo may inherit it. An API argv path still gives literal values.
+export MOCK_BRANCH_PR=1546 MOCK_BRANCH_REPO=branch/repo
+assert_pr "plain CLI retains branch PR fallback" "gh pr merge --squash" "1546"
+plain_repo=$(extract_repo_from_command "gh pr merge 5 --squash")
+if [ "$plain_repo" = branch/repo ]; then
+  echo "PASS [plain CLI retains branch repo fallback]"; PASS=$((PASS+1))
+else
+  echo "FAIL [plain CLI retains branch repo fallback]: got=[$plain_repo]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}plain-repo-fallback "
+fi
+assert_pr "argv literal does not inherit branch PR" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','pr','merge','5'])\"" ""
+assert_pr "argv runtime value does not inherit branch PR" \
+  "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',os.environ['PR']])\"" ""
+# A parseable CLI form beside an argv merge must not lend its PR to the gate:
+# the echoed text names one PR while the argv list merges another.
+mixed_cmd="echo 'gh pr merge 1544 --repo o/r'; python3 -c \"import subprocess; subprocess.run(['gh','pr','merge','6'])\""
+if merge_command_uses_variable "$mixed_cmd"; then
+  echo "PASS [mixed CLI text + argv merge is an opaque target]"; PASS=$((PASS+1))
+else
+  echo "FAIL [mixed CLI text + argv merge is an opaque target]"; FAIL=$((FAIL+1))
+fi
+
+argv_repo=$(extract_repo_from_command "python3 -c \"import subprocess; subprocess.run(['gh','pr','merge','5'])\"")
+if [ -z "$argv_repo" ]; then
+  echo "PASS [argv merge does not inherit branch repo]"; PASS=$((PASS+1))
+else
+  echo "FAIL [argv merge does not inherit branch repo]: got=[$argv_repo]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}argv-repo-fallback "
+fi
+assert_pr "API argv query keeps explicit PR" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','repos/o/r/pulls/5/merge?x=1'])\"" "5"
+unset MOCK_BRANCH_PR MOCK_BRANCH_REPO
 
 assert_merge "quoted argv in cat data heredoc" $'cat > f <<\'EOF\'\nExample: [\'gh\',\'pr\',\'merge\',\'12\']\nEOF' "no"
 assert_merge "gh pr view argv" "['gh','pr','view','12']" "no"

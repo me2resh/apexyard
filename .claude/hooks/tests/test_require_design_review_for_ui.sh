@@ -157,6 +157,9 @@ case "\$args" in
   *"pr view"*headRepository*)
     printf '%s\n' "$repo"
     ;;
+  *"pr view"*"--json number"*)
+    printf '%s\n' 77
+    ;;
   *) exit 0 ;;
 esac
 EOF
@@ -193,6 +196,17 @@ run_gate_sandboxed() {
 }
 
 SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+# B1: the branch PR has a matching design approval. The argv command targets
+# a different PR or a runtime value, so branch approval cannot authorize it.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox)
+  install_mock_gh "$sb" '"src/components/Button.tsx"' "$SHA"
+  printf '%s\n' "$SHA" > "$(review_marker_path "o/r" 77 design "$sb")"
+  code=$(run_gate "$sb" "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\"")
+  assert_eq "argv merge target $argv_target does not use approved branch PR" "2" "$code"
+  rm -rf "$sb"
+done
 
 echo ""
 echo "B) UI PR + NO marker -> BLOCK (exit 2)"

@@ -22,7 +22,9 @@ AgDR-0181 and AgDR-0196 permit data scrubbing only when every command word passe
 
 Chosen: **Reuse the bounded merge scrub**, because its raw fallback keeps executable and uncertain calls visible. The variable helper now uses the same scrubbed view as merge detection.
 
-The raw detector also recognizes consecutive quoted `gh`, `pr`, and `merge` argument elements, independent of the interpreter or function name. It accepts single or double quotes, optional backslash-escaped quotes, and multi-line lists. It also recognizes quoted `gh`, `api`, and a `.../pulls/<N>/merge` path as separate elements. These forms contain no contiguous CLI phrase. The approval gate blocks when it cannot resolve the target.
+The raw detector also recognizes consecutive quoted `gh`, `pr`, and `merge` argument elements, independent of the interpreter or function name. It accepts single or double quotes, optional backslash-escaped quotes, and multi-line lists. It also recognizes quoted `gh`, `api`, and a `.../pulls/<N>/merge` path as separate elements. These forms contain no contiguous CLI phrase. An argv-only merge never uses the current branch's PR or repo as a fallback. The shared unresolved-target check blocks it in all four gates before their PR extraction step.
+
+Any argv merge makes the target opaque, even when the same command also holds a parseable CLI form. In a mixed command, the extractors would read the CLI form's PR, which can be text that is only echoed, while the argv list merges a different PR. Agents must run a merge as a plain CLI command with a literal PR and repo.
 
 ## Consequences
 
@@ -34,6 +36,13 @@ The raw detector also recognizes consecutive quoted `gh`, `pr`, and `merge` argu
 - A representative `claude -p` build-agent command triggers the tracker gate's raw fallback. The ticket does not include the exact build-agent command word.
 - The raw argument match covers literal Python, Node, and Ruby calls with consecutive quoted elements, including JSON-escaped quotes. The bounded scrub still removes quoted data-only heredocs before detection.
 - Tokens built at runtime, passed through variables, or hidden in base64 remain outside this text detector's guarantee.
+
+## Follow-ups
+
+- Recognize a leading space or full path inside the quoted `gh` element, such as `' gh'` or `'/usr/bin/gh'`.
+- Recognize global flags between elements, such as `'gh','-R','o/r','pr','merge'`.
+- Recognize quoted `glab`, `mr`, and `merge` argv elements.
+- Recognize an API argv list with a comma inside another element, such as `'-f','m=a,b'`.
 
 ## Artifacts
 

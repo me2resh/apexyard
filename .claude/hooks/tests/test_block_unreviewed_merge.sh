@@ -90,6 +90,7 @@ case "\$*" in
   *"pr view"*"headRefOid"*)        echo "$FIXED_SHA" ;;
   *"pr view"*"headRefName"*)       echo "feature/GH-99-test" ;;
   *"pr view"*"headRepository"*)    echo "me2resh/apexyard" ;;
+  *"pr view"*"--json number"*)      echo "1546" ;;
   *"pr view"*"mergeStateStatus"*)  echo "\${MOCK_MERGE_STATE:-CLEAN}" ;;
   *"pr view"*"baseRefName"*)       echo "\${MOCK_BASE_BRANCH:-dev}" ;;
   # #1386: is_pr_behind_base reads behind_by from the compare API, not
@@ -380,6 +381,17 @@ run_case_custom_cmd() {
   echo "PASS [$label]"
   PASS=$((PASS+1))
 }
+
+# B1: the branch PR is fully approved. An argv merge targets another PR, so
+# using the branch PR's approvals would authorize the wrong merge.
+for argv_target in "'5'" "os.environ['PR']"; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  run_case_custom_cmd "argv merge target $argv_target does not use branch PR" 2 \
+    "cannot resolve" "$sb" \
+    "python3 -c \"import subprocess, os; subprocess.run(['gh','pr','merge',$argv_target])\""
+done
 
 # #1525: quoted data passes. Executable heredocs and a real merge still block.
 data_cmd=$(cat <<'CMD'
