@@ -504,8 +504,9 @@ elif ! printf '%s' "$RUNS_JSON" | jq -e '
     (.run_number | type == "number") and
     (.created_at | type == "string") and
     (.id | type == "number") and
-    (.name | type == "string") and
+    (.name == null or (.name | type == "string")) and
     (.status | type == "string") and
+    has("conclusion") and
     (.conclusion == null or (.conclusion | type == "string")))
 ' >/dev/null 2>&1; then
   RUNS_ERROR="run response was incomplete or invalid"
@@ -524,7 +525,8 @@ else
     map(max_by([.run_number, .created_at, .id]))[] |
     select(.conclusion == "action_required" or .status != "completed" or
       (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")) |
-    "\(.name) — status=\(.status), conclusion=\(.conclusion // "none")"
+    (.name // ("workflow " + (.workflow_id | tostring))) as $run_name |
+    "\($run_name) — status=\(.status), conclusion=\(.conclusion // "none")"
   ')
   if [ -n "$BLOCKING_RUNS" ]; then
     cat >&2 <<MSG

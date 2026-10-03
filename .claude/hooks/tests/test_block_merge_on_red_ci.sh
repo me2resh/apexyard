@@ -43,7 +43,7 @@ TEST_REPO="me2resh/apexyard"
 TEST_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
 # make_sandbox <gh_mode> <glab_mode>
-#   gh_mode:   green | red | none | none_exit0 | red_named_phrase |
+#   gh_mode:   green | red | pending | none | none_exit0 | red_named_phrase |
 #              full_msg_name_red | full_msg_name_green | multiline_wrap | ""
 #              (mock `gh pr checks` behaviour; #1523 modes cover the
 #              "no checks reported" false-allow)
@@ -88,6 +88,7 @@ case "\$*" in
     case "$gh_mode" in
       green) printf 'build\tpass\t1m\thttps://x\n'; exit 0 ;;
       red)   printf 'build\tfail\t1m\thttps://x\n'; exit 1 ;;
+      pending) printf 'build\tpending\t1m\thttps://x\n'; exit 8 ;;
       none)  echo "no checks reported on the 'feature' branch"; exit 1 ;;
       # #1523: exact CLI message but exit 0 — must NOT take the no-checks allow arm
       none_exit0) echo "no checks reported on the 'feature' branch"; exit 0 ;;
@@ -140,6 +141,7 @@ case "\$*" in
       in_progress) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"in_progress","conclusion":null}]}' ;;
       startup_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"startup_failure"}]}' ;;
       failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      null_name_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":null,"status":"completed","conclusion":"failure"}]}' ;;
       cancelled) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"}]}' ;;
       good_runs) echo '{"total_count":3,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Docs","status":"completed","conclusion":"neutral"},{"workflow_id":3,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Optional","status":"completed","conclusion":"skipped"}]}' ;;
       old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
@@ -150,6 +152,7 @@ case "\$*" in
       different_workflows_one_failed) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":201,"name":"Docs","status":"completed","conclusion":"failure"}]}' ;;
       missing_workflow_id) echo '{"total_count":1,"workflow_runs":[{"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
       missing_run_number) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      missing_conclusion) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed"}]}' ;;
       runs_fail) echo 'API rate limit' >&2; exit 1 ;;
       runs_non_number) echo '{"total_count":"unknown","workflow_runs":[]}' ;;
       runs_non_json) echo '<html>rate limit</html>' ;;
@@ -320,6 +323,10 @@ sb=$(make_sandbox green "" good_runs)
 run_case "#1536: success, neutral, skipped runs -> allows" 0 "" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
 
+sb=$(make_sandbox green "" null_name_failure)
+run_case "#1536: failed run with null name -> blocks with workflow ID" 2 "workflow 1.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
 # A workflow can run again on the same head after a PR edit. Only its latest
 # run decides the gate; a separate workflow still has its own latest run.
 sb=$(make_sandbox green "" old_failure_new_success)
@@ -346,7 +353,7 @@ sb=$(make_sandbox green "" different_workflows_one_failed)
 run_case "#1536: different workflow latest failure -> blocks" 2 "Docs.*failure" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
 
-for missing_field in missing_workflow_id missing_run_number; do
+for missing_field in missing_workflow_id missing_run_number missing_conclusion; do
   sb=$(make_sandbox green "" "$missing_field")
   run_case "#1536: $missing_field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
     "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
@@ -359,6 +366,20 @@ run_case "#1536: no runs and no checks -> allows as no CI" 0 "has no CI checks c
 sb=$(make_sandbox green "" runs_fail)
 run_case "#1536: runs API failure -> allows with honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
+
+# An Actions fault cannot override red or pending PR checks. These cases
+# catch an unconditional exit 0 in the RUNS_ERROR branch.
+sb=$(make_sandbox red "" runs_fail)
+run_case "#1536: red checks + runs API failure -> blocks" 2 "red CI" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox pending "" runs_fail)
+run_case "#1536: pending checks + runs API failure -> blocks" 2 "pending checks" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox pending "" good_runs)
+run_case "#1536: pending checks + green head runs -> blocks" 2 "pending checks" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox none "" runs_fail)
 run_case "#1536 N1: workflows succeed, runs fail -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
