@@ -1,9 +1,8 @@
 version: 2
 updates:
-  # The framework has no package manifests (no package.json / requirements.txt /
-  # go.mod) — its only declared dependency surface is the GitHub Actions pinned
-  # in .github/workflows/**. Keep those patched. If a manifest is added later,
-  # add its ecosystem here. #518. (site/ moved to me2resh/apexyard-site, #663)
+  # Dependency surfaces: GitHub Actions in .github/workflows/** and npm manifests
+  # in harness-adapters/pi and harness-adapters/opencode. #518.
+  # (site/ moved to me2resh/apexyard-site, #663)
   - package-ecosystem: "github-actions"
     directory: "/"
     # Follow the release-cut model — open bump PRs against dev, not the default
@@ -21,6 +20,31 @@ updates:
       codeql-action:
         patterns:
           - "github/codeql-action*"
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+  # Track both harness adapter npm manifests. #1540.
+  - package-ecosystem: "npm"
+    directory: "/harness-adapters/pi"
+    # Target dev for release cuts (AgDR-0007 / #588).
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+  - package-ecosystem: "npm"
+    directory: "/harness-adapters/opencode"
+    # Target dev for release cuts (AgDR-0007 / #588).
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
     commit-message:
       prefix: "chore"
     labels:
