@@ -203,6 +203,31 @@
         "was_justified": true
       },
       "notes": "Found while growing the corpus for me2resh/apexyard#861; matches Spike #825 row R19 (GOOD_CLEAN, 'isolated-builds rule; wiring guard passes; correct'), not previously promoted into the JSON corpus. One non-blocking nit noted (narrower destructive-git regex coverage, explicitly out of scope), consistent with the empty ground_truth_defects set."
+    },
+    {
+      "id": "rex-1289-9382269f",
+      "pr": 1289,
+      "repo": "me2resh/apexyard",
+      "commit": "9382269f",
+      "diff_range": "bd78903e..9382269f",
+      "oracle": {
+        "source": "independent_review",
+        "established_by": "Hakim reported this HIGH first at ee509d3b and again on the identical commit 9382269f, one minute after Rex's approval, recording Gate & Trust-Chain Integrity as Fail and reproducing the defect at the reviewed commit. The fix landed in the next commit (e5a8182e), where both agents then approved.",
+        "reference": "me2resh/apexyard#1289"
+      },
+      "ground_truth_defects": [
+        {
+          "id": "D1",
+          "description": "This PR's new all-four adapter default (added in d707249b, moved into the registry query in ee509d3b) makes an omitted `adapters` key mean codex, pi, opencode and cursor. In install mode the cursor branch calls `install-cursor-adapter.sh --root \"$project_root\"`, but that installer treats `--root` as the ApexYard framework root and executes `$ROOT/bin/sync-cursor-adapter.sh` from it. A managed project workspace shipping its own `bin/sync-cursor-adapter.sh` therefore has that script executed by the portfolio manager: project-controlled code runs as framework code, breaking the trust chain. The activating default is in this diff; the installer's `--root` semantics are pre-existing and outside it, so the defect is not visible in the changed lines alone.",
+          "severity": "HIGH",
+          "location": "bin/manage-portfolio-adapters.sh"
+        }
+      ],
+      "recorded_verdict": {
+        "verdict": "APPROVED",
+        "was_justified": false
+      },
+      "notes": "Rex approved at 23:13 with 'next action: merge only after the normal human merge approval'; Hakim reported the HIGH on the identical commit at 23:14. Rex's review recorded Scope: Full, so diff_range is the PR-level range bd78903e..9382269f (2 files, 7 insertions, 3 deletions) rather than the single commit — the single-commit diff is only the 2-line opt-out guard and contains neither the activating default nor the cursor call, so an agent correctly approving it would be scored a MISS. Three properties make this entry useful. Hakim reproduced the defect rather than inferring it, reporting that a workspace carrying its own bin/sync-cursor-adapter.sh printed 'project sync-cursor-adapter executed' from install mode. Hakim had already reported the same HIGH at the previous commit ee509d3b, so Rex approved while an earlier HIGH was still open. And the defect spans the diff boundary — the activating default is inside it, the installer's --root handling is not — so the entry tests whether an agent reasons past the changed lines into the code path they activate. 9382269f is not reachable from dev, because #1289 was squash-merged as e4665423; fetch the PR #1289 head ref before resolving the range locally. Surfaced while adjudicating candidates for me2resh/apexyard#1440."
     }
   ]
 }
