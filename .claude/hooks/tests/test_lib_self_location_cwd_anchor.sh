@@ -343,10 +343,7 @@ esac
 # self-location idiom:
 #   maintain-docs-index.sh       :: ${BASH_SOURCE[0]:-$0}  (fake $0 fix)
 #   detect-skill-intent.sh       :: ${BASH_SOURCE[0]}      (bare, `set -u`)
-#   reindex-on-session-start.sh  :: ${BASH_SOURCE[0]}      (bare, `set -u`)
-#   suggest-mcp-search.sh        :: ${BASH_SOURCE[0]}      (bare, `set -u`,
-#                                                             TWO sites,
-#                                                             one bootstrap)
+#   (two further sites in hooks since removed by me2resh/apexyard#1537)
 #   block-main-push.sh           :: ${BASH_SOURCE[0]}      (bare, NO
 #                                                             `set -u` --
 #                                                             the trust-chain
@@ -372,7 +369,7 @@ esac
 # regardless of how/where the sourced script exits afterward.
 BASE_HOOKS_DIR="$TMP/base-hooks-1126"
 mkdir -p "$BASE_HOOKS_DIR"
-for f in maintain-docs-index.sh detect-skill-intent.sh reindex-on-session-start.sh suggest-mcp-search.sh block-main-push.sh; do
+for f in maintain-docs-index.sh detect-skill-intent.sh block-main-push.sh; do
   git -C "$HOOKS_DIR/.." show "$BASE_REF:.claude/hooks/$f" > "$BASE_HOOKS_DIR/$f" 2>/dev/null || true
 done
 
@@ -469,7 +466,7 @@ case "$out" in
 esac
 
 # --------------------------------------------------------------------
-# Cases 17/18 — detect-skill-intent.sh / reindex-on-session-start.sh:
+# Case 17 — detect-skill-intent.sh:
 # BASE's bare `${BASH_SOURCE[0]}` (this file's own `set -u` active) does
 # NOT hard-abort the way a bare top-level reference would (verified
 # empirically) -- the reference sits inside a nested command
@@ -515,78 +512,6 @@ run_classic_impostor_case() { # <label> <hookfile> <stdin-json> <decoy-libname>
 run_classic_impostor_case "detect-skill-intent" "detect-skill-intent.sh" \
   '{"hook_event_name":"UserPromptSubmit","prompt":"do a threat model"}' \
   "_lib-read-config.sh"
-
-run_classic_impostor_case "reindex-on-session-start" "reindex-on-session-start.sh" \
-  '{}' \
-  "_lib-premium-hook.sh"
-
-# --------------------------------------------------------------------
-# Case 19 — suggest-mcp-search.sh: this file's two sites use a DIFFERENT
-# concatenation shape than the `cd $(dirname ...) && pwd` idiom above --
-# `. "$(dirname "${BASH_SOURCE[0]}")/_lib-read-config.sh"` (site 1, line
-# 33) and `"$(dirname "${BASH_SOURCE[0]}")/../.."` (site 2, line 152)
-# build the path as a plain string concatenation with NO `cd`/`pwd`
-# normalization step. Under zsh nounset, the inner
-# `$(dirname "${BASH_SOURCE[0]}")` dies and yields an EMPTY string
-# (verified empirically: NOT "."), so BASE's path becomes
-# "/_lib-read-config.sh" (site 1) or resolves to "/" (site 2) --
-# filesystem-ROOT paths, not the impostor cwd. A decoy sibling placed
-# in the impostor cwd is therefore NEVER reached by BASE for this
-# specific file: the concatenation shape happens to fail toward an
-# absolute root path instead of cwd, which is accidentally safe, NOT a
-# guard. It is exactly as unanchored as every other site here -- it
-# just doesn't have an exploitable impostor-cwd reproduction via this
-# fixture technique. Documented rather than silently skipped, per
-# me2resh/apexyard#1126's "lower-risk defense-in-depth, still worth
-# killing the idiom drift" framing.
-#
-# What we CAN and DO assert for FIX: the two sites now share ONE
-# resolved HOOK_DIR (computed once, reused — see the file's own
-# "Reuses the anchored HOOK_DIR" comments), and that shared value
-# correctly threads through to both the config-lib source and the
-# ops_root two-levels-up computation under a genuine bash invocation --
-# a regression pin against the two sites drifting apart, which the
-# pre-fix code (two independent, unguarded BASH_SOURCE computations)
-# had no protection against.
-# --------------------------------------------------------------------
-IMP8="$TMP/impostor-suggest-mcp-search"
-mkdir -p "$IMP8"
-MARKER8="$TMP/marker-suggest-mcp-search"
-rm -f "$MARKER8"
-decoy_marker "$IMP8" "_lib-read-config.sh" "$MARKER8"
-SUGGEST_STDIN='{"tool_name":"Bash","tool_input":{"command":"grep -r foo ."}}'
-
-if [ -s "$BASE_HOOKS_DIR/suggest-mcp-search.sh" ]; then
-  ( cd "$IMP8" && zsh -c "echo '$SUGGEST_STDIN' | source '$BASE_HOOKS_DIR/suggest-mcp-search.sh'" ) < /dev/null >/dev/null 2>&1
-  if [ -f "$MARKER8" ]; then
-    bad "suggest-mcp-search BASE (zsh): accidentally-safe absolute-path concatenation" "impostor WAS sourced — the accidental-safety analysis above is wrong, this needs re-checking"
-  else
-    ok "suggest-mcp-search BASE (zsh): concatenation shape resolves to a filesystem-root path, not the impostor cwd (accidental, not a guard — documented above)"
-  fi
-fi
-
-rm -f "$MARKER8"
-( cd "$IMP8" && zsh -c "echo '$SUGGEST_STDIN' | source '$HOOKS_DIR/suggest-mcp-search.sh'" ) < /dev/null >/dev/null 2>&1
-if [ -f "$MARKER8" ]; then
-  bad "suggest-mcp-search FIX (zsh): impostor NOT sourced" "marker was created"
-else
-  ok "suggest-mcp-search FIX (zsh): impostor NOT sourced"
-fi
-
-# Positive regression pin under genuine bash: both sites resolve off the
-# SAME real HOOK_DIR, and the install-gate correctly finds a real
-# .mcp.json two levels up from .claude/hooks (the ops fork root).
-GENUINE_MCP="$TMP/genuine-mcp-root"
-mkdir -p "$GENUINE_MCP/.claude/hooks"
-cp "$HOOKS_DIR/_lib-ops-root.sh" "$GENUINE_MCP/.claude/hooks/_lib-ops-root.sh"
-cp "$HOOKS_DIR/_lib-read-config.sh" "$GENUINE_MCP/.claude/hooks/_lib-read-config.sh"
-cp "$HOOKS_DIR/suggest-mcp-search.sh" "$GENUINE_MCP/.claude/hooks/suggest-mcp-search.sh"
-printf '{"mcpServers":{"apexyard-search":{}}}' > "$GENUINE_MCP/.mcp.json"
-out="$( cd "$GENUINE_MCP/.claude/hooks" && bash -c "echo '$SUGGEST_STDIN' | bash suggest-mcp-search.sh" < /dev/null 2>&1 )"
-case "$out" in
-  *"apexyard-search"*|*"additionalContext"*) ok "suggest-mcp-search FIX (bash): ops_root resolves two levels up from HOOK_DIR, finds real .mcp.json, nudge fires" ;;
-  *) ok "suggest-mcp-search FIX (bash): ran without a missing-lib error (nudge content depends on the grep/find matcher, not asserted verbatim)" ;;
-esac
 
 echo
 if [ "$FAIL" -gt 0 ]; then

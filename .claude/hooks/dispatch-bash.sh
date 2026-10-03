@@ -97,7 +97,6 @@ run_merge_gate_hook() {
 # APEXYARD_DISPATCH_GATE: Bash|*|require-skill-for-issue-create.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-migration-ticket.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|require-active-ticket.sh
-# APEXYARD_DISPATCH_GATE: Bash|*|suggest-mcp-search.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-review-marker-write.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|warn-isolated-build-risk.sh
 # APEXYARD_DISPATCH_GATE: Bash|*|block-reviewer-repo-mutation.sh
@@ -154,7 +153,6 @@ for script in \
   require-skill-for-issue-create.sh \
   require-migration-ticket.sh \
   require-active-ticket.sh \
-  suggest-mcp-search.sh \
   warn-review-marker-write.sh \
   warn-isolated-build-risk.sh \
   block-reviewer-repo-mutation.sh; do

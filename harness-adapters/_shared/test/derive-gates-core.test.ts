@@ -121,7 +121,7 @@ function fixtureSettings(): RawSettings {
         },
         {
           matcher: "Read|Glob|Grep",
-          hooks: [{ type: "command", command: "bash -c '.../.claude/hooks/suggest-mcp-search.sh'" }],
+          hooks: [{ type: "command", command: "bash -c '.../.claude/hooks/example-advisory.sh'" }],
         },
       ],
     },
@@ -152,10 +152,10 @@ test("deriveGatesFromSettings marks a hook unconditional for a matcher when its 
 
 test("deriveGatesFromSettings only applies commandGlob to the Bash matcher — non-Bash rows never carry an `if` in this framework's own wiring", () => {
   const gates = deriveGatesFromSettings(fixtureSettings());
-  const mcpGate = gates.find((g) => g.name === "suggest-mcp-search")!;
-  assert.ok(mcpGate.wires.every((w) => w.commandGlob === null));
+  const readGate = gates.find((g) => g.name === "example-advisory")!;
+  assert.ok(readGate.wires.every((w) => w.commandGlob === null));
   assert.deepEqual(
-    mcpGate.wires.map((w) => w.claudeMatcher).sort(),
+    readGate.wires.map((w) => w.claudeMatcher).sort(),
     ["Glob", "Grep", "Read"],
   );
 });
@@ -237,7 +237,6 @@ test("deriveGatesFromSettings plus deriveGatesFromDispatcher, run against this r
     "require-active-ticket",
     "require-migration-ticket",
     "block-private-refs-in-public-repos",
-    "suggest-mcp-search",
   ]) {
     assert.ok(names.includes(expected), `expected "${expected}" to be derived from settings.json or dispatch-bash.sh`);
   }

@@ -17,10 +17,7 @@ INPUT=$(cat)
 # APEXYARD_SESSION_START_HOOK: clear-issue-skill-marker.sh
 # APEXYARD_SESSION_START_HOOK: link-custom-skills.sh
 # APEXYARD_SESSION_START_HOOK: apply-agent-routing.sh
-# APEXYARD_SESSION_START_HOOK: remind-mcp-tools.sh
-# APEXYARD_SESSION_START_HOOK: validate-search-config.sh
 # APEXYARD_SESSION_START_HOOK: print-portfolio-primer.sh
-# APEXYARD_SESSION_START_HOOK: reindex-on-session-start.sh
 # APEXYARD_SESSION_START_HOOK: warn-unqualified-review-marker.sh
 
 run_direct() {
@@ -48,10 +45,7 @@ scripts=(
   clear-issue-skill-marker.sh
   link-custom-skills.sh
   apply-agent-routing.sh
-  remind-mcp-tools.sh
-  validate-search-config.sh
   print-portfolio-primer.sh
-  reindex-on-session-start.sh
   warn-unqualified-review-marker.sh
 )
 
@@ -69,7 +63,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 # SessionStart hooks are advisory or housekeeping. Run the complete list even
 # when one hook fails so a slow or unavailable check cannot suppress marker
-# cleanup, routing, or the search refresh.
+# cleanup or routing.
 run_hook() {
   local script="$1" slot="$2" rc=0
   if "$HOOK_DIR/$script" <<<"$INPUT" >"$TMP_DIR/$slot.out" 2>"$TMP_DIR/$slot.err"; then :; else rc=$?; fi

@@ -257,7 +257,7 @@ function captureStderr(fn: () => void): string {
 test("registerGateDispatcher warns to stderr when a gate is wired to a tool with no stdin builder (read/glob/grep)", () => {
   const { exec } = mockExec({});
   const unsupportedGate: GateDefinition = {
-    name: "suggest-mcp-search",
+    name: "example-advisory",
     hookRelativePath: THIS_FILE_AS_HOOK,
     wires: [{ tool: "read", commandGlob: null }],
   };
@@ -270,7 +270,7 @@ test("registerGateDispatcher warns to stderr when a gate is wired to a tool with
   });
 
   assert.match(combined, /WARNING/);
-  assert.match(combined, /suggest-mcp-search/);
+  assert.match(combined, /example-advisory/);
   assert.match(combined, /"read"/);
 });
 

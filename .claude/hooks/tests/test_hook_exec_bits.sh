@@ -1,7 +1,7 @@
 #!/bin/bash
 # Guard against #1008 — a directly-invoked hook committed non-executable.
 #
-# Bug shape: .claude/hooks/reindex-on-session-start.sh was committed with
+# Bug shape: a SessionStart hook (since removed, #1537) was committed with
 # mode 100644 (non-executable), but its SessionStart wiring in
 # .claude/settings.json invokes it via `exec "$r/.claude/hooks/<name>.sh"`,
 # which requires the execute bit. Every session start on a fresh clone

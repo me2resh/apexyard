@@ -51,10 +51,10 @@
  *
  * NOT GUESSING READ/GREP/FIND/LS STDIN SHAPES
  * -------------------------------------------------
- * Deriving the FULL gate table (not a curated subset) means
- * `suggest-mcp-search.sh` — wired to `Read|Glob|Grep` in
- * `.claude/settings.json` — is now part of pi's derived table too, exactly
- * as it already is for opencode (#840 C2). This module does not attempt to
+ * Deriving the FULL gate table (not a curated subset) means any hook
+ * wired to `Read|Glob|Grep` in `.claude/settings.json` becomes part of
+ * pi's derived table too, exactly as it already is for opencode (#840 C2).
+ * This module does not attempt to
  * build pi stdin for `read`/`grep`/`find`/`ls` tool calls — mirroring
  * opencode's own "don't guess field names, fail loud instead" decision
  * (see `findUnsupportedGateWires` here and in the opencode adapter) rather
@@ -203,8 +203,8 @@ export interface UnsupportedGateWire {
 /**
  * Finds every derived gate wire whose tool this adapter has NO stdin
  * builder for (#840 C2's guard, ported here as part of C5 — deriving the
- * FULL table means `suggest-mcp-search.sh`'s `Read|Glob|Grep` wiring is
- * now part of pi's table too, and this adapter has no verified pi stdin
+ * FULL table means any `Read|Glob|Grep` wiring becomes part of pi's
+ * table too, and this adapter has no verified pi stdin
  * shape for those tool types). Call once at dispatcher registration, not
  * per tool call, to avoid per-call log noise for a hook that was never
  * going to block anything.

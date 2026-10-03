@@ -339,11 +339,11 @@ test("registerGateDispatcher warns to stderr, once, when a derived gate is wired
     join(opsRoot, ".claude", "settings.json"),
     JSON.stringify({
       hooks: {
-        PreToolUse: [{ matcher: "Read|Glob|Grep", hooks: [{ type: "command", command: 'bash -c "exec .claude/hooks/suggest-mcp-search.sh"' }] }],
+        PreToolUse: [{ matcher: "Read|Glob|Grep", hooks: [{ type: "command", command: 'bash -c "exec .claude/hooks/example-advisory.sh"' }] }],
       },
     }),
   );
-  writeFileSync(join(opsRoot, ".claude", "hooks", "suggest-mcp-search.sh"), "#!/bin/bash\nexit 0\n", { mode: 0o755 });
+  writeFileSync(join(opsRoot, ".claude", "hooks", "example-advisory.sh"), "#!/bin/bash\nexit 0\n", { mode: 0o755 });
 
   const { pi, handlers } = makeMockPi();
   registerGateDispatcher(pi as any, { resolveOpsRoot: () => opsRoot });
@@ -355,7 +355,7 @@ test("registerGateDispatcher warns to stderr, once, when a derived gate is wired
     await toolCall({ type: "tool_call", toolCallId: "12b", toolName: "read", input: { path: "README.md" } }, { cwd: opsRoot });
   });
 
-  const warningLines = combined.split("\n").filter((l) => l.includes("suggest-mcp-search") && l.includes("read"));
+  const warningLines = combined.split("\n").filter((l) => l.includes("example-advisory") && l.includes("read"));
   assert.equal(warningLines.length, 1, `expected exactly one deduped warning line, got:\n${combined}`);
 });
 

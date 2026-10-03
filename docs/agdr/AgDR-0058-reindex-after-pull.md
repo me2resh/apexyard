@@ -1,5 +1,7 @@
 # Suggest MCP reindex after a workspace clone is pulled/updated
 
+> **Status:** Superseded by [AgDR-0211](AgDR-0211-remove-search-mcp-integration.md). The framework no longer ships the search MCP integration.
+
 > In the context of the MCP search index going silently stale when a managed-project
 > workspace clone is updated via git, facing the choice of *which event* should fire the
 > reindex reminder, I decided to fire a non-blocking advisory hook on a git HEAD-move

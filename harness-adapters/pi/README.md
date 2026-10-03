@@ -8,7 +8,7 @@ Promoted from spike [me2resh/apexyard#804](https://github.com/me2resh/apexyard/i
 
 **(#840 C5 update)** The dispatcher (`src/gate-dispatcher.ts`) no longer hand-maintains a curated gate list — it derives the FULL gate table from `.claude/settings.json` at the moment of each `tool_call` event, via `src/derive-gates.ts`. Every `PreToolUse` hook wired for the `Bash`/`Edit`/`Write`/`MultiEdit`/`Read`/`Glob`/`Grep` matchers is picked up automatically (`Glob` maps onto pi's `find` tool — pi has no separate `glob` tool; `MultiEdit` collapses onto `edit`, same as opencode's adapter), with zero adapter changes required when a new gate is wired. This converges pi to the exact pattern the opencode adapter established (AgDR-0092), closing the drift risk Tariq's #730 review named and this package's own README used to describe as a "curated subset, not the full list."
 
-Gates wired to `read`/`grep`/`find`/`ls` (today: `suggest-mcp-search.sh`, an advisory-only hook) are derived but **cannot be evaluated** — this adapter has no verified pi stdin shape for those tool types and deliberately does not guess one (see `derive-gates.ts`'s header comment). The dispatcher warns once to stderr, per (ops root, gate, tool), when this happens — see "Known gaps / what's unverified" below.
+Gates wired to `read`/`grep`/`find`/`ls` (none today) are derived but **cannot be evaluated** — this adapter has no verified pi stdin shape for those tool types and deliberately does not guess one (see `derive-gates.ts`'s header comment). The dispatcher warns once to stderr, per (ops root, gate, tool), when this happens — see "Known gaps / what's unverified" below.
 
 See `docs/agdr/AgDR-0082-pi-gate-dispatcher-adapter.md`'s "Update (GH-840)" section for the full decision record.
 

@@ -39,7 +39,7 @@
  * extra JSON parse per call, negligible next to the subprocess spawn(s)
  * that follow. The "unsupported gate wire" warning (mirroring opencode's
  * #840 C2) is deliberately DEDUPED per (opsRoot, gate, tool) rather than
- * re-emitted every call, so a `suggest-mcp-search.sh`-shaped read/find/grep
+ * re-emitted every call, so an advisory read/find/grep
  * gate doesn't print a warning before every single read in a session — see
  * `warnUnsupportedGateWiresOnce` below.
  *
@@ -300,7 +300,7 @@ function warnOnce(key: string, message: string): void {
 /**
  * Warns once per (opsRoot, gate, tool) about any derived gate wired to a
  * pi tool this dispatcher has no stdin builder for (#840 C2, ported here
- * as part of C5 — deriving the FULL table surfaces `suggest-mcp-search.sh`'s
+ * as part of C5 — deriving the FULL table surfaces any
  * `Read|Glob|Grep` wiring, which pi's `read`/`find`/`grep` tools have no
  * verified stdin shape for). Deduped so a hot Read/Glob/Grep-heavy session
  * doesn't print the same warning before every matching tool call.

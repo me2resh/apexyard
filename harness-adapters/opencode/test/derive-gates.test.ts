@@ -196,8 +196,8 @@ test("findUnsupportedGateWires: a gate wired only to bash/edit/write reports not
 test("findUnsupportedGateWires: a gate wired to read/glob/grep is reported, once per tool", () => {
   const gates: GateDefinition[] = [
     {
-      name: "suggest-mcp-search",
-      hookRelativePath: ".claude/hooks/suggest-mcp-search.sh",
+      name: "example-advisory",
+      hookRelativePath: ".claude/hooks/example-advisory.sh",
       wires: [
         { tool: "bash", commandGlob: "grep *" },
         { tool: "read", commandGlob: null },
@@ -211,19 +211,19 @@ test("findUnsupportedGateWires: a gate wired to read/glob/grep is reported, once
     found.map((f) => f.tool).sort(),
     ["glob", "grep", "read"],
   );
-  assert.ok(found.every((f) => f.gateName === "suggest-mcp-search"));
+  assert.ok(found.every((f) => f.gateName === "example-advisory"));
 });
 
-test("findUnsupportedGateWires, run against this repo's real .claude/settings.json, flags suggest-mcp-search.sh's Read/Glob/Grep wiring", () => {
+test("findUnsupportedGateWires, run against this repo's real .claude/settings.json, finds no unsupported wire", () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const settingsPath = join(here, "..", "..", "..", ".claude", "settings.json");
   const raw = JSON.parse(readFileSync(settingsPath, "utf-8")) as RawSettings;
   const dispatcherPath = join(here, "..", "..", "..", ".claude", "hooks", "dispatch-bash.sh");
   const gates = [...deriveGatesFromSettings(raw), ...deriveGatesFromDispatcher(readFileSync(dispatcherPath, "utf-8"))];
-  const found = findUnsupportedGateWires(gates);
-  assert.ok(
-    found.some((f) => f.gateName === "suggest-mcp-search" && f.tool === "read"),
-    "the real settings.json wires suggest-mcp-search.sh to Read|Glob|Grep — this must surface as an unsupported wire, not silently vanish",
+  assert.deepEqual(
+    findUnsupportedGateWires(gates),
+    [],
+    "no hook is wired to Read|Glob|Grep today — a new one must surface here as an unsupported wire",
   );
 });
 

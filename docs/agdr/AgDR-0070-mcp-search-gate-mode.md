@@ -1,5 +1,7 @@
 # Optional mechanical gate mode for suggest-mcp-search.sh
 
+> **Status:** Superseded by [AgDR-0211](AgDR-0211-remove-search-mcp-integration.md). The framework no longer ships the search MCP integration.
+
 > In the context of `suggest-mcp-search.sh` being advisory-only (exit 0), facing agents that routinely ignore the nudge and fall straight to `grep -r`/`find` over indexed paths (burning ~3–5× tokens), I decided to add an **opt-in, config-gated soft-block (exit 2) with a per-call escape hatch** to the existing hook, to achieve mechanical enforcement of the MCP-first path for operators who want it, accepting that the gate is strictly opt-in and only covers the Bash exploratory-search branch (never read→edit).
 
 ## Context

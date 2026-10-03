@@ -33,7 +33,6 @@ This doc is the honest today-vs-not-yet breakdown for running apexyard-governed 
 
 | Gap | Why | Tracked as |
 |-----|-----|-----------|
-| **MCP-backed code/docs search** (`apexyard-search`) | Pi's design omits MCP entirely | No dedicated ticket — falls back to plain `grep`/`Read`, which is slower but functionally equivalent |
 | **Role-trigger advisory banners** | Claude Code's `detect-role-trigger.sh` posts a `PreToolUse` reminder banner when a diff matches a role trigger (e.g. touching `**/auth/**`). Pi has no hook to run that check | Self-check `.claude/rules/role-triggers.md` manually |
 | **Slash-command UX** for skills | Pi has no command-registration mechanism; skills are invoked by reading their `SKILL.md` and following the process by hand | Not tracked — an ergonomics gap, not a governance one |
 | **Plan mode, background bash, permission popups** | Deliberately absent from pi's design, not apexyard-specific gaps | N/A — approximate with an explicit "here's my plan, confirming before I execute" pause where `.claude/rules/plan-mode.md` would otherwise apply |

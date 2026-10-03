@@ -154,5 +154,4 @@ Delete the `endpoint:` line from the agent entry (or comment out the whole agent
 
 ## What this guide is *not*
 
-- Not a guide for routing the apexyard-search MCP server's embedding calls through Ollama. That's a separate concern with separate config; not in scope here.
 - Not a recommendation that you *should* run local models for production agents. The spike memo's conclusion stands: route a bounded sub-task to a local model when (a) you have an offline-or-private-data constraint, or (b) you've measured that the quality is acceptable for that specific sub-task. Don't route everything.

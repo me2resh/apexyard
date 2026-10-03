@@ -1,5 +1,7 @@
 # AgDR-0186: Keep optional search out of unconfigured adapters
 
+> **Status:** Superseded by [AgDR-0211](AgDR-0211-remove-search-mcp-integration.md). The framework no longer ships the search MCP integration.
+
 > In generated Codex guidance, I use the fork's search MCP configuration as a generation hint. Runtime tool availability remains the final check.
 
 ## Context

@@ -32,8 +32,6 @@ for required in \
   'language/<lang>/*.md' \
   'domain/<area>/*.md' \
   'portfolio_custom_handbooks_dir' \
-  'mcp__apexyard-search__search_docs' \
-  'Semantic discovery is fail-soft' \
   'expected or actual implementation'; do
   if grep -qF "$required" "$CONTRACT"; then
     pass "contract pins: $required"

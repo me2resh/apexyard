@@ -7,8 +7,8 @@
 # means both commands used the HOOK PROCESS'S OWN cwd — not the directory
 # the `git commit` is actually executing in. In a split-portfolio /
 # worktree-based sub-agent session, the harness's Bash cwd for that call
-# (the payload `.cwd` field, same field suggest-mcp-reindex-after-pull.sh
-# already reads) can be a managed project's worktree while the hook process
+# (the payload `.cwd` field, which other PostToolUse hooks also read)
+# can be a managed project's worktree while the hook process
 # itself is invoked from the ops fork. The hook then validated `Closes #N`
 # against the OPS FORK's tracker instead of the PROJECT's, false-blocking a
 # legitimate reference.

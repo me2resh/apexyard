@@ -80,7 +80,7 @@ setup_dispatch_sandbox() {
   local script
   for script in block-ambient-tracker-repo.sh block-privileged-escalation.sh \
     require-skill-for-issue-create.sh require-migration-ticket.sh \
-    require-active-ticket.sh suggest-mcp-search.sh warn-review-marker-write.sh \
+    require-active-ticket.sh warn-review-marker-write.sh \
     warn-isolated-build-risk.sh block-reviewer-repo-mutation.sh \
     block-git-add-all.sh block-main-push.sh validate-branch-name.sh \
     pre-push-gate.sh block-agent-routing-drift.sh check-secrets.sh \

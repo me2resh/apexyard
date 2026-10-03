@@ -91,7 +91,6 @@ Pi does not auto-import rule files. `Read` a named file under `.claude/rules/` w
 Being upfront about the gap: this section gives you the rules as *instructions* by default. As of me2resh/apexyard#815, mechanical enforcement is available too — but only if you install it (it isn't auto-loaded the way `AGENTS.md` itself is):
 
 - **Mechanical gate enforcement** — the two-marker merge gate, ticket-first edit blocking, secrets scanning, AgDR-required checks, red-CI merge blocking. `harness-adapters/pi/` shells out to the SAME Claude-Code-specific bash hooks via a pi `tool_call` extension — install it (see `harness-adapters/pi/README.md`) to get real blocking under pi. Until installed, none of it fires. See me2resh/apexyard#804 (the spike that proved this viable) and #815 (the shipped adapter).
-- **MCP-backed code/docs search** (`apexyard-search`) — pi's design omits MCP entirely; fall back to plain `grep`/`Read`.
 - **Role-trigger advisory banners** — Claude Code gets a `PreToolUse` banner nudging "this diff touches `**/auth/**`, consider the Security Auditor"; pi gets no such nudge. Self-check the role-triggers table manually.
 
 See `docs/harnesses/pi.md` for the full today-vs-not-yet breakdown and the install shape.
@@ -115,7 +114,7 @@ The rest of this file is for an agent extending **apexyard itself** — its hook
 ### Project structure
 
 - `.claude/` — framework hooks, agents, rules, skills, settings.json
-  - `.claude/hooks/` — 60 shell scripts (PreToolUse / PostToolUse / SessionStart)
+  - `.claude/hooks/` — 54 shell scripts (PreToolUse / PostToolUse / SessionStart)
   - `.claude/skills/` — 67 slash commands (one dir per skill, each with `SKILL.md`)
   - `.claude/agents/` — 23 sub-agents: 3 utility (Rex code-reviewer, Hakim security-reviewer/auditor, Munir dep-auditor) + 20 dept-aligned agents across engineering / product / design / security / data (the pr-manager + ticket-manager lifecycle agents were retired — AgDR-0105; their lifecycles are owned by the merge gates / `/approve-merge` and the structured ticket skills)
   - `.claude/rules/` — 22 modular rule files. CLAUDE.md indexes them by name. Load a file when the work needs it. Claude Code excludes this tree from auto-load via `claudeMdExcludes` (AgDR-0160 / #1354).

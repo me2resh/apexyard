@@ -3,8 +3,7 @@
 # (me2resh/apexyard#890).
 #
 # THE PROBLEM THIS FIXES: every hook that touches a premium component
-# (apexyard-search reindex, the #514 search self-heal, apexyard-premium's
-# budget enforcer, future premium hooks not yet written) has hand-rolled the
+# (a budget enforcer, future premium hooks not yet written) has hand-rolled the
 # same "safe fallback" shape — gate on install-presence, timeout-guard the
 # slow part, swallow non-zero exit, never block the session. Because it's
 # copy-pasted per hook, every NEW premium hook is a fresh chance to get the
@@ -17,7 +16,7 @@
 # `premium_hook_run` below instead of hand-rolling its own gate/timeout/
 # swallow logic.
 #
-# SAFE SHAPE (mirrors reindex-on-session-start.sh / check-upstream-drift.sh):
+# SAFE SHAPE (mirrors check-upstream-drift.sh):
 # `premium_hook_run` NEVER blocks its caller and ALWAYS returns 0. Every
 # failure mode is a silent no-op:
 #   - the feature is disabled (or unconfigured, depending on the caller's
@@ -34,8 +33,8 @@
 #                    latency (no timeout wrapper spun up, nothing execed).
 #   2. FAIL-SAFE   — the payload runs inside a timeout-guarded child process
 #                    (prefers GNU `timeout`, then macOS `gtimeout`; degrades
-#                    to no wrapper if neither exists, same as
-#                    reindex-on-session-start.sh); its exit code is swallowed.
+#                    to no wrapper if neither exists); its exit code is
+#                    swallowed.
 #   3. ALWAYS 0    — premium_hook_run itself never returns non-zero. There is
 #                    no code path in this file that propagates a failure to
 #                    the caller.
@@ -51,16 +50,16 @@
 #   premium_hook_run <feature_key> <presence_check_cmd> <payload_cmd> [default_enabled]
 #
 #     feature_key       Key looked up as a top-level block in features.yaml,
-#                        e.g. "search" -> looks for:
-#                          search:
+#                        e.g. "example" -> looks for:
+#                          example:
 #                            enabled: true
 #     presence_check_cmd A shell command STRING; exit 0 means "the premium
-#                        component is present" (e.g. "command -v apexyard-search").
+#                        component is present" (e.g. "command -v example-tool").
 #                        Pass "" to skip the presence check entirely (only the
 #                        feature flag gates the payload).
 #     payload_cmd        A shell command STRING — the actual premium work,
 #                        including any redirection it wants (e.g.
-#                        "apexyard-search reindex --incremental >/dev/null 2>&1").
+#                        "example-tool refresh >/dev/null 2>&1").
 #                        Executed via `bash -c` in a NEW child process so the
 #                        timeout wrapper can kill it if it hangs — it does
 #                        NOT inherit this shell's local functions/variables,
@@ -70,22 +69,20 @@
 #                        should return when features.yaml (or the specific key)
 #                        is entirely absent. Existing premium hooks that
 #                        historically gated purely on install-presence (no
-#                        features.yaml check at all, e.g. the pre-#890 shape
-#                        of reindex-on-session-start.sh) should pass "true" so
+#                        features.yaml check at all) should pass "true" so
 #                        retrofitting introduces ZERO behaviour regression for
 #                        adopters who never configured features.yaml. New
 #                        premium hooks that want a stricter explicit-opt-in
 #                        posture should pass "false".
 #
-#   Example (mirrors the reindex-on-session-start.sh retrofit):
-#     premium_hook_run "search" "command -v apexyard-search" \
-#       "apexyard-search reindex --incremental --if-stale=86400 >/dev/null 2>&1" \
+#   Example:
+#     premium_hook_run "example" "command -v example-tool" \
+#       "example-tool refresh >/dev/null 2>&1" \
 #       "true"
 #
 # Tunables (env):
 #   PREMIUM_HOOK_TIMEOUT_SECS   max seconds to spend before killing the
-#                               payload (default 25, matches
-#                               reindex-on-session-start.sh's own default)
+#                               payload (default 25)
 #
 # Also exposes (for callers that just want the gate without running
 # anything, or want to build their own presence check):
@@ -96,7 +93,7 @@
 #   premium_bin_present <bin_name>
 #       Convenience: `command -v <bin_name>` as a one-liner, for building a
 #       presence_check_cmd string, e.g.:
-#         premium_hook_run "search" "premium_bin_present apexyard-search" "..."
+#         premium_hook_run "example" "premium_bin_present example-tool" "..."
 #       (works because presence checks run via `eval` in THIS shell, not a
 #       child process — unlike the payload, they inherit this lib's functions.)
 #
@@ -116,9 +113,7 @@
 #                            "nothing to report on" case premium_hook_run
 #                            treats as a silent no-op.
 #       probe_cmd should be side-effect-free and fast (a liveness check,
-#       not the real premium work) — see reindex-on-session-start.sh for
-#       the worked example (probes `apexyard-search doctor` before nudging
-#       a reindex).
+#       not the real premium work), e.g. `example-tool doctor`.
 #
 # Tunables (env):
 #   PREMIUM_HOOK_PROBE_TIMEOUT_SECS   max seconds a premium_hook_probe call
@@ -140,7 +135,7 @@ set -u
 # ------------------------------------------------------------------------------
 # Internal: resolve this lib's own directory (for sourcing sibling libs),
 # the ops-fork root, and the portfolio root — same resolution order used by
-# validate-search-config.sh / reindex-on-session-start.sh's siblings.
+# the other hooks.
 # Cached per-process.
 # ------------------------------------------------------------------------------
 _PREMIUM_HOOK_DIR_CACHE=""
@@ -236,7 +231,7 @@ _premium_portfolio_root() {
 
 # ------------------------------------------------------------------------------
 # Internal: locate features.yaml, checking the same candidate locations as
-# validate-search-config.sh (portfolio root first, then ops root, then an
+# the portfolio config hooks (portfolio root first, then ops root, then an
 # explicit $APEXYARD_PORTFOLIO_ROOT override). Not cached — cheap stat calls,
 # and callers may run this across a long-lived shell where the file could
 # appear mid-session (e.g. a test fixture writing it after first source).
@@ -336,8 +331,7 @@ premium_hook_run() {
 
   # FAIL-SAFE EXECUTION: timeout-guarded child process. Prefer GNU `timeout`,
   # then macOS `gtimeout`; degrade to no wrapper if neither exists (the
-  # payload still runs, just unbounded — rare, matches
-  # reindex-on-session-start.sh's existing fallback).
+  # payload still runs, just unbounded — rare).
   local timeout_secs to
   timeout_secs="${PREMIUM_HOOK_TIMEOUT_SECS:-25}"
   to=""
