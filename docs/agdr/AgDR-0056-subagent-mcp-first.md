@@ -1,6 +1,6 @@
 # Make sub-agents MCP-first (prompt-level, mirroring the main-loop rule)
 
-> **Status:** Superseded by [AgDR-0211](AgDR-0211-remove-search-mcp-integration.md). The framework no longer ships the search MCP integration.
+**Status:** Superseded by [AgDR-0211](AgDR-0211-remove-search-mcp-integration.md). The framework no longer ships the search MCP integration.
 
 > In the context of the "use MCP search before grep" rule only reaching the main agent loop, facing a confirmed case where the `tech-lead` sub-agent read a managed-project codebase entirely via `grep`/`Read` (zero `search_code` calls in `activity.jsonl`), I decided to make the code-reading sub-agents MCP-first at the prompt + tools level — add `mcp__apexyard-search__search_code` + `search_docs` to their `tools`/`allowed-tools` and a short "MCP-first" instruction block to each agent body — rather than try to extend the `suggest-mcp-search.sh` hook into sub-agent contexts, to achieve consistent MCP-first behaviour across delegated work, accepting that this is self-discipline (prompt-level) rather than mechanical enforcement.
 
