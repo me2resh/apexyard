@@ -34,6 +34,42 @@ The **issue** sources below call `tracker_list` from `_lib-tracker.sh` (per `rep
 # → JSON array [{ref,number,state,title,url,labels,updatedAt}, …]  ([] on empty/unavailable)
 ```
 
+**Check that each read was complete (#1441).** A call that fills its limit may be a short read, and
+a failed call prints `[]`. Use `tracker_list_to`, which returns the verdict on stdout:
+
+```bash
+tmp=$(mktemp) || return 1
+status=$(tracker_list_to "$tmp" "$repo" assignee=@me labels=priority-high limit=50 2>/dev/null); rc=$?
+if [ "$status" = "TRUNCATED" ]; then                 # raise the limit and read again
+  status=$(tracker_list_to "$tmp" "$repo" assignee=@me labels=priority-high limit=200 2>/dev/null); rc=$?
+fi
+case "$status" in
+  UNKNOWN)
+    if [ "$rc" -ne 0 ]; then
+      echo "$repo: could not read issues"            # a failure, never print 0
+    else
+      echo "$repo: read $(jq -r 'length' < "$tmp"), completeness unknown"
+    fi ;;
+  TRUNCATED) echo "$repo: at least $(jq -r 'length' < "$tmp"), still not the end" ;;
+esac
+items=$(cat "$tmp"); rm -f "$tmp"
+```
+
+One retry is enough for a task list. A second `TRUNCATED` means the project has more matching
+issues than any one screen should show, so say "at least N" rather than reading further. A `glab`
+project stops at 100 whatever limit you ask for.
+
+**Split `UNKNOWN` on the exit status.** Non-zero is a failed read. Zero with `UNKNOWN` is a
+successful read this library cannot judge for completeness, which is what a custom adapter returns
+when no `limit` is passed. Reporting that as a failure would be its own false claim.
+
+Pass an explicit `limit` where you can. The rows in the table below pass none, so they take the
+configured default (`tracker.list_default_limit`, 30) on `gh` and `glab`, and they report `UNKNOWN`
+on a custom tracker.
+
+Do not write `items=$(tracker_list …)` and then read `TRACKER_LIST_STATUS`. A subshell cannot pass
+that variable back, so you would read a stale verdict from an earlier project.
+
 > **Scope caveat (forge axis, #711).** The **PR** sources still call `gh pr list` / `gh api …/pulls`. The PR/MR forge abstraction is #711; until it lands, those sources are GitHub-only, so `/tasks` is *issue-axis* tracker-agnostic, not fully tracker-agnostic. Filters GitHub expresses but GitLab can't (`mentions:`, `commenter:`, `assignee=none` on glab) degrade to a gh-only path or empty, noted per source.
 
 ## Usage

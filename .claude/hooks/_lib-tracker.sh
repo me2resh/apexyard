@@ -1082,10 +1082,87 @@ _tracker_normalise_list_custom() {
   printf '%s' "$raw" | jq -c "$jq_expr" 2>/dev/null
 }
 
+# Internal: page cap for an already-resolved kind, so a caller that holds the
+# kind does not pay for a second registry read.
+_tracker_page_cap_for_kind() {
+  case "${1:-}" in
+    glab) printf '100\n' ;;
+    *)    printf '0\n' ;;
+  esac
+}
+
+# Public: tracker_page_cap <owner/repo>
+#   Echoes the adapter's maximum page size, or 0 when the adapter has none.
+#   GitLab caps a page at 100 whatever --per-page asks for, so a 100-item glab
+#   result never proves the end of the set.
+tracker_page_cap() {
+  _tracker_page_cap_for_kind "$(tracker_issue_kind "${1:-}")"
+}
+
+# Public: tracker_fetch_status <rc> <count> <limit> [owner/repo] [kind]
+#   Pass `kind` when you already resolved it. The repo argument is then unused,
+#   and no second registry read happens.
+#   COMPLETE  — the read returned fewer items than the effective limit, which
+#               is the only proof that it reached the end of the set.
+#   TRUNCATED — the read filled the limit (or the adapter's page cap). More
+#               items may exist. Raise the limit and read again.
+#   UNKNOWN   — the call failed or the count is unreadable. Never report this
+#               as zero: a failed fetch is not an empty result.
+tracker_fetch_status() {
+  local rc="${1:-1}" count="${2:-}" limit="${3:-0}" repo="${4:-}" kind="${5:-}" cap effective
+  if [ "$rc" != "0" ]; then printf 'UNKNOWN\n'; return 0; fi
+  case "$count" in ''|*[!0-9]*) printf 'UNKNOWN\n'; return 0 ;; esac
+  case "$limit" in ''|*[!0-9]*) printf 'UNKNOWN\n'; return 0 ;; esac
+  # Digits alone are not a number `[` can compare. A value wider than int64
+  # makes `[` write "integer expected" to stderr, so reject it here instead.
+  if [ "${#count}" -gt 18 ] || [ "${#limit}" -gt 18 ]; then printf 'UNKNOWN\n'; return 0; fi
+  effective="$limit"
+  if [ -n "$kind" ]; then
+    cap=$(_tracker_page_cap_for_kind "$kind")
+  else
+    cap=$(tracker_page_cap "$repo")
+  fi
+  if [ "$cap" -gt 0 ] && [ "$cap" -lt "$effective" ]; then effective="$cap"; fi
+  if [ "$effective" -le 0 ]; then printf 'UNKNOWN\n'; return 0; fi
+  if [ "$count" -lt "$effective" ]; then printf 'COMPLETE\n'; else printf 'TRUNCATED\n'; fi
+}
+
+# Public: tracker_list_to <outfile> <owner/repo> [key=value ...]
+#   Writes the JSON array to <outfile> and echoes this call's completeness
+#   verdict on stdout. Use this from a command substitution:
+#
+#     status=$(tracker_list_to "$tmp" "$repo" state=open assignee=@me limit=50)
+#
+#   `tracker_list` reports its verdict through TRACKER_LIST_STATUS, which a
+#   subshell cannot pass back to its caller. So the natural shape,
+#   `items=$(tracker_list …)`, silently reads a stale verdict or none at all,
+#   which is the short-read-reported-as-complete failure this reporting exists
+#   to prevent. This wrapper moves the verdict onto stdout, where a command
+#   substitution does return it.
+#
+#   Returns tracker_list's own exit status.
+tracker_list_to() {
+  local out="${1:-}" rc
+  shift 2>/dev/null || true
+  if [ -z "$out" ]; then
+    printf 'UNKNOWN\n'
+    return 1
+  fi
+  TRACKER_LIST_STATUS="UNKNOWN"
+  tracker_list "$@" > "$out"
+  rc=$?
+  printf '%s\n' "$TRACKER_LIST_STATUS"
+  return $rc
+}
+
 # Public: tracker_list <owner/repo> [key=value ...]
+#   Sets TRACKER_LIST_STATUS to this call's tracker_fetch_status verdict.
+#   The variable does not survive a command substitution. Call this in the
+#   current shell, or use tracker_list_to above.
 tracker_list() {
   local repo="$1"
   shift 2>/dev/null || true
+  TRACKER_LIST_STATUS="UNKNOWN"
   if [ -z "$repo" ]; then
     printf '[]\n'
     return 1
@@ -1123,6 +1200,40 @@ tracker_list() {
       ;;
   esac
 
+  # Pass an explicit limit even when the caller gave none. gh and glab each
+  # apply their own default (30) otherwise, and a caller cannot compute
+  # completeness against a limit it never chose.
+  #
+  # The custom adapter is deliberately excluded. It passes the value through
+  # TRACKER_LIMIT, which was empty for a no-limit call, and an operator's
+  # list_command may read empty as "no limit". Defaulting it would change the
+  # returned set. A custom adapter with no caller limit reports UNKNOWN below.
+  #
+  # The config read runs in a SUBSHELL, because the load leaks out of this
+  # function otherwise. `_tracker_load_config_lib` sources
+  # `_lib-read-config.sh` into its caller's shell and short-circuits on
+  # `command -v config_get_or`. Sourcing it here would leave that definition in
+  # the CALLER's shell, and in every subshell the caller later spawns. A later
+  # `tracker_issue_kind` then short-circuits its own load and keeps reading
+  # through a config reader anchored to wherever the first load happened, so
+  # the kind can resolve wrongly. test_tracker_list.sh's two stderr-passthrough
+  # cases fail exactly this way. A subshell keeps the definition out.
+  case "$kind" in
+    custom) : ;;
+    *)
+      case "$f_limit" in
+        ''|*[!0-9]*)
+          f_limit=$(
+            _tracker_load_config_lib >/dev/null 2>&1 \
+              && config_get_or '.tracker.list_default_limit' '30' 2>/dev/null
+          )
+          case "$f_limit" in ''|*[!0-9]*) f_limit=30 ;; esac
+          [ "${#f_limit}" -gt 6 ] && f_limit=30
+          ;;
+      esac
+      ;;
+  esac
+
   local raw rc
   case "$kind" in
     gh)     raw=$(_tracker_list_gh     "$repo" "$f_state" "$f_assignee" "$f_author" "$f_labels" "$f_search" "$f_since" "$f_limit"); rc=$? ;;
@@ -1147,6 +1258,18 @@ tracker_list() {
     return 1
   fi
 
+  # Completeness is judged on what the SERVER returned, so it is counted here,
+  # before the client-side `since` filter below drops any row.
+  #
+  # Only a raw JSON array is countable. A custom adapter may emit another
+  # shape, which `.tracker.list_normalise_jq` maps, and that expression is free
+  # to select rows (`.items | map(select(...))`). Counting the normalised array
+  # would then count the operator's selection rather than the server page, and
+  # report a full page as COMPLETE. An empty `served` makes the verdict
+  # UNKNOWN, which is the honest answer for a page this library cannot count.
+  local served
+  served=$(printf '%s' "$raw" | jq -r 'if type == "array" then length else empty end' 2>/dev/null)
+
   # Client-side `since` for adapters that don't apply it server-side (glab /
   # custom). gh already handled it via the search qualifier above. Items with no
   # `updatedAt` are KEPT (not silently dropped) — recency is unknowable for them,
@@ -1157,6 +1280,9 @@ tracker_list() {
       'map(select((.updatedAt // "") == "" or (.updatedAt >= $since)))' 2>/dev/null)
     [ -z "$normalised" ] && normalised='[]'
   fi
+
+  # shellcheck disable=SC2034  # read by callers (/inbox, /tasks), not in this file
+  TRACKER_LIST_STATUS=$(tracker_fetch_status 0 "$served" "$f_limit" "$repo" "$kind")
 
   printf '%s\n' "$normalised"
   return 0
