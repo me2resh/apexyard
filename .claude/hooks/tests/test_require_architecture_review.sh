@@ -145,10 +145,19 @@ EOF
 run_gate() {
   local sb="$1" command="$2"
   local input
-  input=$(printf '{"tool_input":{"command":"%s"}}' "$command")
+  input=$(jq -nc --arg c "$command" '{tool_input:{command:$c}}')
   ( cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash "$HOOK_SRC" >/dev/null 2>&1 <<< "$input" )
   echo $?
 }
+
+# #1525: data-only heredocs pass, but executable bodies still reach the gate.
+sb=$(make_sandbox)
+install_mock_gh "$sb" '"projects/foo/docs/technical-design-x.md"' "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+code=$(run_gate "$sb" $'cat <<\'EOF\'\ngh pr merge 315 --repo $R\nEOF')
+assert_eq "#1525 quoted data heredoc passes" "0" "$code"
+code=$(run_gate "$sb" $'sh <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF')
+assert_eq "#1525 sh heredoc variable blocks" "2" "$code"
+rm -rf "$sb"
 
 SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 

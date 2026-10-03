@@ -518,6 +518,23 @@ is_merge_command_raw() {
   if echo "$cmd" | grep -qE '\bgh\s+pr\s+merge\b'; then
     return 0
   fi
+  # Interpreter calls can pass gh/pr/merge as quoted argv elements without a
+  # contiguous CLI phrase. Flatten newlines so one scan also sees multi-line
+  # lists. The optional `[` after gh covers spawn('gh', ['pr', 'merge', ...]).
+  local flat="${cmd//$'\n'/ }"
+  local quote='[\\]?["'"'"']'
+  local comma='[[:space:]]*,[[:space:]]*'
+  local argv_start='\[?[[:space:]]*'
+  if printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}pr${quote}${comma}${quote}merge${quote}"; then
+    return 0
+  fi
+  # The same argv shape can call the GitHub API merge endpoint directly.
+  local api_path='[^[:space:],"'"'"']*/pulls/[0-9]+/merge([?][^[:space:],"'"'"']]*)?'
+  # Other quoted arguments, such as '-X', 'PUT', may sit between api and the path.
+  local argv_any="(${quote}[^\"',]*${quote}${comma})*"
+  if printf '%s\n' "$flat" | grep -qE "${quote}gh${quote}${comma}${argv_start}${quote}api${quote}${comma}${argv_any}${quote}${api_path}${quote}"; then
+    return 0
+  fi
   # `gh api` with a `/pulls/<N>/merge` path anywhere in the command. The path
   # may be quoted, slash-separated, and may include query params.
   if echo "$cmd" | grep -qE '\bgh\s+api\b.*repos/[^/[:space:]]+/[^/[:space:]]+/pulls/[0-9]+/merge\b'; then
@@ -699,6 +716,9 @@ extract_pr_number() {
 # substitution as a PR/repo token (those aren't valid PR/repo values anyway).
 merge_command_uses_variable() {
   local cmd="$1"
+  # Use the same bounded data view as is_merge_command. Uncertain or
+  # executable commands keep the raw text, so variable targets still block.
+  cmd=$(_scrub_merge_command "$cmd") || cmd="$1"
 
   # PR positional arg: first token after `gh pr merge` (reuse the same span +
   # redirection-stripping discipline as extract_pr_number so `2>&1` etc. don't

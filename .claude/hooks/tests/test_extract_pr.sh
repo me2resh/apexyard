@@ -169,6 +169,80 @@ assert_var "literal + 2>&1 pipe"   'gh pr merge 42 --squash 2>&1 | tail -5'     
 # gh api shape (literal path) → no
 assert_var "gh api literal path"   'gh api repos/o/r/pulls/42/merge -X PUT'           "no"
 
+# #1525: the variable check must use the same bounded data view as detection.
+data_heredoc=$(cat <<'CMD'
+cat > /tmp/brief.md <<'EOF'
+run: gh pr merge 315 --repo $TEST_REPO --squash
+EOF
+CMD
+)
+assert_var "quoted data heredoc variable" "$data_heredoc" "no"
+assert_var "bash heredoc variable" $'bash <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF' "yes"
+assert_var "sh heredoc variable" $'sh <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF' "yes"
+assert_var "zsh heredoc variable" $'zsh <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF' "yes"
+assert_var "eval of cat heredoc variable" $'eval "$(cat <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF\n)"' "yes"
+assert_var "source stdin heredoc variable" $'source /dev/stdin <<\'EOF\'\ngh pr merge $PR --repo $R\nEOF' "yes"
+assert_var "cat heredoc piped to bash" $'cat <<\'EOF\' | bash\ngh pr merge $PR --repo $R\nEOF' "yes"
+assert_var "unquoted heredoc substitution" $'cat <<EOF\n$(gh pr merge $X)\nEOF' "yes"
+assert_var "real variable merge beside data heredoc" "$data_heredoc"$'\ngh pr merge $PR' "yes"
+
+# #1525 follow-up: executable argv lists have no contiguous `gh pr merge`
+# phrase. Keep these on the public detection path so the scrub boundary is
+# exercised as well as the raw scanner.
+assert_merge() {
+  local label="$1" cmd="$2" want="$3" got="no"
+  is_merge_command "$cmd" && got="yes"
+  if [ "$got" = "$want" ]; then
+    echo "PASS [$label]"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL [$label]: cmd=[$cmd]  want=[$want]  got=[$got]" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "
+  fi
+}
+
+assert_merge "Python subprocess.run single quotes" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','pr','merge','1500','--squash'])\"" "yes"
+assert_merge "existing Python double-quoted list" \
+  "python3 -c 'import subprocess; subprocess.run([\"gh\",\"pr\",\"merge\",\"1500\"])'" "yes"
+assert_merge "existing Python JSON-escaped list" \
+  'python3 -c \"import subprocess; subprocess.run([\"gh\",\"pr\",\"merge\",\"1500\"])\"' "yes"
+assert_merge "Python subprocess.check_call" \
+  "python3 -c \"import subprocess; subprocess.check_call(['gh', 'pr', 'merge', '1500'])\"" "yes"
+assert_merge "Python subprocess.Popen" \
+  "python3 -c \"import subprocess; subprocess.Popen(['gh','pr','merge','1500'])\"" "yes"
+assert_merge "Python os.execvp" \
+  "python3 -c \"import os; os.execvp('gh', ['gh','pr','merge','1500'])\"" "yes"
+assert_merge "Node spawnSync" \
+  "node -e \"require('child_process').spawnSync('gh',['pr','merge','1500'])\"" "yes"
+assert_merge "Node execFileSync" \
+  "node -e \"require('child_process').execFileSync('gh',['pr','merge','1500'])\"" "yes"
+assert_merge "Ruby system" \
+  "ruby -e \"system('gh','pr','merge','1500')\"" "yes"
+python_argv_heredoc=$(cat <<'CMD'
+python3 - <<'EOF'
+import subprocess
+subprocess.run([
+    'gh',
+    'pr',
+    'merge',
+    '1500',
+])
+EOF
+CMD
+)
+assert_merge "Python multi-line heredoc argv" "$python_argv_heredoc" "yes"
+assert_merge "JSON-escaped argv quotes" \
+  'node -e \"require(\"child_process\").execFileSync(\"gh\",[\"pr\",\"merge\",\"1500\"])\"' "yes"
+assert_merge "gh api quoted argv path" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','repos/o/r/pulls/1500/merge'])\"" "yes"
+assert_merge "gh api quoted argv path after -X PUT" \
+  "python3 -c \"import subprocess; subprocess.run(['gh','api','-X','PUT','repos/o/r/pulls/1500/merge'])\"" "yes"
+
+assert_merge "quoted argv in cat data heredoc" $'cat > f <<\'EOF\'\nExample: [\'gh\',\'pr\',\'merge\',\'12\']\nEOF' "no"
+assert_merge "gh pr view argv" "['gh','pr','view','12']" "no"
+assert_merge "gh pr merged argv" "['gh','pr','merged']" "no"
+
 # --- Cleanup -------------------------------------------------------------
 rm -rf "$SHIM_DIR"
 
