@@ -244,7 +244,9 @@ esac
 # command, as the merge gates do (AgDR-0162). Any non-word character ends
 # the subcommand, so `git push;`, `git push&&` and `(git push)` also route.
 #
-# The scan only adds routing, so it cannot skip a gate. It does not scrub
+# The scan adds routing when its join succeeds. A failed awk join uses a
+# broader newline join, then the raw command if tr also fails. Neither
+# failure aborts dispatch before later gates. The scan does not scrub
 # quoted data, so text that only mentions a push or commit (a heredoc body,
 # an echo, a commit message) also routes. That over-match can cause a false
 # block from a gate that refuses compound commands. A real compound commit
@@ -256,10 +258,17 @@ esac
 # different lines. Bash 3.2's whole-string substitution is superlinear on
 # thousands of continuations, so use one awk pass. The sentinel preserves
 # trailing newlines through command substitution and a final lone backslash.
+# If awk fails, tr joins every newline for a broader scan. If tr fails too,
+# scan the raw command. Both substitutions are conditional under set -e.
 # The option list accepts `-C`, `-c` and the long options that take a
 # separate-word value, plus any `-x`, `--opt` or `--opt=value`.
-_scan_cmd=$(printf '%sX' "$COMMAND" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }')
-_scan_cmd=${_scan_cmd%X}
+if _scan_cmd=$(printf '%sX' "$COMMAND" | LC_ALL=C awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else printf "%s\n", $0 }'); then
+  _scan_cmd=${_scan_cmd%X}
+elif _scan_cmd=$(printf '%s' "$COMMAND" | tr '\n' ' '); then
+  :
+else
+  _scan_cmd=$COMMAND
+fi
 _git_opt_val='("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)'
 _git_sub_re='(^|[^[:alnum:]_.-])git([[:space:]]+((-[Cc]|--(git-dir|work-tree|namespace|super-prefix|config-env))[[:space:]]+'"${_git_opt_val}"'|--?[A-Za-z][A-Za-z-]*(=[^[:space:];&|]+)?))*[[:space:]]+'
 if grep -qE "${_git_sub_re}push([^[:alnum:]_.-]|\$)" <<<"$_scan_cmd"; then
