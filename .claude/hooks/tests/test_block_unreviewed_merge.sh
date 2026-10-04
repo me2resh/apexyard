@@ -485,6 +485,20 @@ for _q1552_name in comment heredoc ansi unclosed; do
   run_case_custom_cmd "1552 round-3 $_q1552_name blocks" 2 \
     "cannot resolve" "$sb" "$_q1552_cmd"
 done
+# Escaped boundaries before # are shell text, not the start of a comment.
+_q1552_escaped_cont=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\" "#'" "y; $_m1552_gate {}' # it's")
+_q1552_escaped_semi=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\;#'" "y; $_m1552_gate {}' # it's")
+for _q1552_name in escaped_cont escaped_semi; do
+  sb=$(make_sandbox)
+  write_rex_marker "$sb" 1546
+  write_ceo_marker_structured "$sb" 1546
+  case "$_q1552_name" in
+    escaped_cont) _q1552_cmd=$_q1552_escaped_cont ;;
+    escaped_semi) _q1552_cmd=$_q1552_escaped_semi ;;
+  esac
+  run_case_custom_cmd "1552 round-4 $_q1552_name blocks" 2 \
+    "cannot resolve" "$sb" "$_q1552_cmd"
+done
 sb=$(make_sandbox)
 write_rex_marker "$sb" 1546
 write_ceo_marker_structured "$sb" 1546

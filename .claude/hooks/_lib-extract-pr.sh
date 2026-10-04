@@ -593,7 +593,9 @@ _has_opaque_merge_wrapper() {
     fi
     return 1
   fi
-  result=$(OPAQUE_MERGE_CMD="$1" awk '
+  # Bash printf streams the command without an exec argv or environment string.
+  # The final record separator exposes even a separator at the end of input.
+  result=$(printf '%s\034' "$1" | awk '
     function wb_before(t, p) {
       return p <= 1 || substr(t, p - 1, 1) !~ /[A-Za-z0-9_]/
     }
@@ -637,20 +639,24 @@ _has_opaque_merge_wrapper() {
       if (has_qw(t)) return 1
       return 0
     }
-    BEGIN {
-      s = ENVIRON["OPAQUE_MERGE_CMD"]
+    # A separator in caller text creates another record and fails closed.
+    BEGIN { RS = sprintf("%c", 28) }
+    { if (NR == 1) s = $0; else multiple = 1 }
+    END {
+      if (multiple) { print "opaque"; exit }
       n = length(s)
       sq = sprintf("%c", 39); dq = sprintf("%c", 34); bs = sprintf("%c", 92)
-      in_sq = 0; in_dq = 0; opaque = 0; st = 1
+      in_sq = 0; in_dq = 0; opaque = 0; st = 1; escaped_prev = 0
       n = split(s, ch, "")
       for (i = 1; i <= n; i++) {
         c = ch[i]
         nx = (i < n) ? ch[i + 1] : ""
-        if (!in_sq && c == bs && i < n) { i++; continue }
+        was_escaped = escaped_prev; escaped_prev = 0
+        if (!in_sq && c == bs && i < n) { i++; escaped_prev = 1; continue }
         if (!in_dq && c == sq) { in_sq = !in_sq; continue }
         if (!in_sq && c == dq) { in_dq = !in_dq; continue }
         if (!in_sq && !in_dq) {
-          if (c == "#" && (i == 1 || ch[i - 1] ~ /[ \t\n;&|(]/)) {
+          if (c == "#" && !was_escaped && (i == 1 || ch[i - 1] ~ /[ \t\n;&|(]/)) {
             while (i < n && ch[i + 1] != "\n") i++
             continue
           }

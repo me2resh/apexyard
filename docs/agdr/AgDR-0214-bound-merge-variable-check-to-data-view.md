@@ -68,6 +68,8 @@ Rex's LOW advisories. The gates may still resolve the branch PR or miss the merg
 | API argv element with an escaped inner double quote | `"m=say \"hi\""` as an intermediate element | Not detected. The element ends at the inner quote. |
 | Argv `bash -c` that changes directory first, or has more than 200 characters before the merge | `['bash','-c','cd other && … merge …']` or a long `-c` script | Resolves to the branch PR. A plain merge with no PR number after a `cd` has the same gap on `dev`. |
 | Unquoted command substitution or backticks beside `xargs` | An `env $(…)` or backtick argument containing `;` before the merge | The scanner splits at that semicolon and may resolve the branch PR. Tracking nested substitutions is outside this bounded text scan. |
+| Escaped apostrophe inside an ANSI-C string with a trailing comment | An escaped quote inside `$'…'` before `xargs`, followed by `# it's` | The trailing apostrophe balances the scanner's quote count. The target may resolve to the branch PR. `dev` behaves the same way. |
+| Heredoc apostrophe with a trailing comment | A heredoc line containing one apostrophe before `xargs`, followed by `# it's` | The trailing apostrophe balances the scanner's quote count. The target may resolve to the branch PR. `dev` behaves the same way. |
 
 ### Known false positives (fail closed)
 

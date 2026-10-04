@@ -66,6 +66,18 @@ PASS=0
 FAIL=0
 FAILED_CASES=""
 
+# The wrapper scanner must stream the command to awk. Linux rejects one
+# environment or argv string above 128 KB, before awk can scan it.
+wrapper_awk=$(sed -n '/^_has_opaque_merge_wrapper() {/,/^}/p' "$LIB_SRC")
+if printf '%s\n' "$wrapper_awk" | grep -Fq "printf '%s\\034' \"\$1\" | awk" \
+    && ! printf '%s\n' "$wrapper_awk" | grep -Eq 'ENVIRON|OPAQUE_MERGE_CMD|awk[[:space:]]+-v'; then
+  echo "PASS [wrapper awk receives command on stdin]"
+  PASS=$((PASS+1))
+else
+  echo "FAIL [wrapper awk must receive command on stdin without ENVIRON or -v]" >&2
+  FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}wrapper-awk-stdin "
+fi
+
 assert_pr() {
   local label="$1" cmd="$2" want="$3"
   local got
@@ -413,14 +425,24 @@ q_comment=$(printf "true # don't\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552
 q_heredoc=$(printf "cat <<EOT\ndon't\nEOT\necho 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552")
 q_ansi=$(printf "echo 5 | xargs -I{} sh -c \$'a\\'b; %s {}'" "$_m1552")
 q_unclosed=$(printf "echo 'unfinished; echo 5 | xargs -I{} sh -c 'x; %s {}'" "$_m1552")
+q_escaped_cont=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\" "#'" "y; $_m1552 {}' # it's")
+q_escaped_semi=$(printf '%s\n' "echo 5 | xargs -I{} sh -c x\\;#'" "y; $_m1552 {}' # it's")
+q_record_sep=$(printf "echo 5 | xargs -I{} sh -c 'x; %s {}'\034trailing" "$_m1552")
+q_trailing_sep=$(printf "echo 5 | xargs -I{} sh -c 'x; %s {}'\034" "$_m1552")
 assert_opaque "1552 comment apostrophe before xargs is opaque" "$q_comment"
 assert_opaque "1552 heredoc apostrophe before xargs is opaque" "$q_heredoc"
 assert_opaque "1552 escaped quote in ANSI-C string is opaque" "$q_ansi"
 assert_opaque "1552 unclosed quote with merge phrase is opaque" "$q_unclosed"
+assert_opaque "1552 escaped continuation before hash is opaque" "$q_escaped_cont"
+assert_opaque "1552 escaped semicolon before hash is opaque" "$q_escaped_semi"
+assert_opaque "1552 awk record separator in command is opaque" "$q_record_sep"
+assert_opaque "1552 trailing awk record separator is opaque" "$q_trailing_sep"
 assert_pr "1552 comment apostrophe does not inherit branch PR" "$q_comment" ""
 assert_pr "1552 heredoc apostrophe does not inherit branch PR" "$q_heredoc" ""
 assert_pr "1552 ANSI-C escaped quote does not inherit branch PR" "$q_ansi" ""
 assert_pr "1552 unclosed quote does not inherit branch PR" "$q_unclosed" ""
+assert_pr "1552 escaped continuation does not inherit branch PR" "$q_escaped_cont" ""
+assert_pr "1552 escaped semicolon does not inherit branch PR" "$q_escaped_semi" ""
 unset MOCK_BRANCH_PR
 
 # Fail-before evidence: the pre-#1552 lib must miss these shapes. The saved
@@ -536,7 +558,7 @@ if [ -x /bin/bash ]; then
   _run_perf_watchdog() {
     local script="$1" out="$2" limit_s="$3"
     local perf_pid watchdog_pid sleep_pid perf_rc
-    PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash "$script" "$out" &
+    PATH="${APEXYARD_TEST_AWK_DIR:+$APEXYARD_TEST_AWK_DIR:}/usr/bin:/bin:/usr/sbin:/sbin" /bin/bash "$script" "$out" &
     perf_pid=$!
     (
       sleep "$limit_s" &
@@ -597,7 +619,7 @@ if [ -x /bin/bash ]; then
       echo 'printf "%s 5 --repo o/r --body " "$m" > "$cmdfile"'
       echo 'cat "$padfile" >> "$cmdfile"'
       echo 'cmd=$(cat "$cmdfile")'
-      echo 'if merge_command_uses_variable "$cmd"; then exit 1; fi'
+      echo 'if merge_command_uses_variable "$cmd"; then echo "wrong result: merge_command_uses_variable returned 0" >&2; exit 1; fi'
       echo 'echo done > "$1"'
     } > "$perf_dir/run.sh"
     start_s=$(date +%s)
@@ -606,7 +628,8 @@ if [ -x /bin/bash ]; then
       echo "PASS [long statement ${bytes} bytes run ${run}: ${elapsed_s}s]"
       PASS=$((PASS+1))
     else
-      echo "FAIL [long statement ${bytes} bytes run ${run}: >${limit_s}s or wrong result]"
+      elapsed_s=$(($(date +%s) - start_s))
+      echo "FAIL [long statement ${bytes} bytes run ${run}: ${elapsed_s}s, limit ${limit_s}s, awk $(PATH="${APEXYARD_TEST_AWK_DIR:+$APEXYARD_TEST_AWK_DIR:}/usr/bin:/bin" command -v awk) $( (PATH="${APEXYARD_TEST_AWK_DIR:+$APEXYARD_TEST_AWK_DIR:}/usr/bin:/bin" awk -W version 2>/dev/null || PATH="${APEXYARD_TEST_AWK_DIR:+$APEXYARD_TEST_AWK_DIR:}/usr/bin:/bin" awk --version 2>/dev/null) | head -1)]"
       FAIL=$((FAIL+1)); FAILED_CASES="$FAILED_CASES long-statement-$bytes-$run"
     fi
     rm -rf "$perf_dir"
