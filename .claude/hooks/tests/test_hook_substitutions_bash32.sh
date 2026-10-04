@@ -220,30 +220,41 @@ run_timed() {
   fi
 }
 
-split_long=''
-region_long=''
-join_long=''
 for ((i=0; i<5000; i++)); do
-  split_long+=$'echo a && echo b || cat x; echo y | cat z\n'
-  region_long+=$'sed -n "p" f && sed -n "q" f || sed -n "r" f | cat\n'
-  join_long+=$'read only data and quoted "text" \\\n'
-done
-run_timed split pass /bin/bash -c '. "$1"; _bdw_split_top_level "$2"' _ "$LIB" "$split_long"
-run_timed sed-region pass /bin/bash -c '. "$1"; _bdw_sed_regions "$2"' _ "$LIB" "$region_long"
-jq -nc --arg c "$join_long" '{tool_input:{command:$c}}' > "$TMP/payload"
+  printf 'echo a && echo b || cat x; echo y | cat z\n'
+done > "$TMP/split-long"
+for ((i=0; i<5000; i++)); do
+  printf 'sed -n "p" f && sed -n "q" f || sed -n "r" f | cat\n'
+done > "$TMP/region-long"
+for ((i=0; i<5000; i++)); do
+  printf 'read only data and quoted "text" \\\n'
+done > "$TMP/join-long"
+# The sentinel preserves trailing newlines when command substitution reads a file.
+run_timed split pass /bin/bash -c '. "$1"; input=$(cat "$2"; printf "."); _bdw_split_top_level "${input%.}"' _ "$LIB" "$TMP/split-long"
+run_timed sed-region pass /bin/bash -c '. "$1"; input=$(cat "$2"; printf "."); _bdw_sed_regions "${input%.}"' _ "$LIB" "$TMP/region-long"
+jq -Rs '{tool_input:{command:.}}' < "$TMP/join-long" > "$TMP/payload"
 run_timed pr-join pass /bin/bash "$TMP/pr-capture.sh" < "$TMP/payload"
 
 # Optional before-state reproduction. These are the exact old substitutions
 # above, run in separate stock-Bash children under the same watchdog.
 if [ "${1:-}" = --baseline ]; then
-  declare -f old_split old_regions old_join > "$TMP/oracles.sh"
-  run_timed old-split killed /bin/bash -c '. "$1"; old_split "$2"' _ "$TMP/oracles.sh" "$split_long"
-  run_timed old-sed-region killed /bin/bash -c '. "$1"; old_regions "$2"' _ "$TMP/oracles.sh" "$region_long"
-  for ((i=0; i<5000; i++)); do
-    printf 'read only data with quoted text and continuation \\\n' >> "$TMP/old-join-input"
-  done
-  run_timed old-pr-join killed /bin/bash -c '. "$1"; old_join "$(cat "$2")"' _ \
-    "$TMP/oracles.sh" "$TMP/old-join-input"
+  bash_major=$(/bin/bash -c 'echo "${BASH_VERSINFO[0]}"')
+  # Test-only override lets a macOS runner exercise the Bash 5 skip path.
+  if [ -n "${TEST_FORCE_BASH_MAJOR:-}" ]; then bash_major=$TEST_FORCE_BASH_MAJOR; fi
+  if [ "$bash_major" = 3 ]; then
+    declare -f old_split old_regions old_join > "$TMP/oracles.sh"
+    run_timed old-split killed /bin/bash -c '. "$1"; input=$(cat "$2"; printf "."); old_split "${input%.}"' _ "$TMP/oracles.sh" "$TMP/split-long"
+    run_timed old-sed-region killed /bin/bash -c '. "$1"; input=$(cat "$2"; printf "."); old_regions "${input%.}"' _ "$TMP/oracles.sh" "$TMP/region-long"
+    for ((i=0; i<5000; i++)); do
+      printf 'read only data with quoted text and continuation \\\n'
+    done > "$TMP/old-join-input"
+    run_timed old-pr-join killed /bin/bash -c '. "$1"; old_join "$(cat "$2")"' _ \
+      "$TMP/oracles.sh" "$TMP/old-join-input"
+  else
+    for label in old-split old-sed-region old-pr-join; do
+      echo "SKIP [10s-watchdog/$label: /bin/bash major $bash_major]"
+    done
+  fi
 fi
 
 echo "substitution tests: $PASS passed, $FAIL failed"
