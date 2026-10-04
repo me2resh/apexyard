@@ -150,7 +150,7 @@ if [ "$bash_major" -eq 3 ]; then
     fail=$((fail + 1))
   fi
 else
-  printf 'SKIP old implementation timing: /bin/bash major version %s\n' "$bash_major"
+  printf 'NOTE: old implementation timing not asserted: /bin/bash major version %s\n' "$bash_major"
 fi
 
 read -r new_status new_seconds < <(run_timed new "$tmp_dir/new-large")
