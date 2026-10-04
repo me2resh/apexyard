@@ -576,12 +576,12 @@ _has_argv_merge() {
   # so prose like '`gh` `pr` `merge`' does not look like an argv list.
   local glue='([][:space:]"`'"'"']){0,10}[][+*,]([][+*,[:space:]"`'"'"']){0,9}'
   # Binary element: optional path prefix and/or leading pad inside the quotes.
-  local gh_elem='([\\]?"([^/"[:space:]]*/)*[[:space:]]*gh[\\]?"|[\\]?'\''([^/'\''[:space:]]*/)*[[:space:]]*gh[\\]?'\''|[\\]?`([^/`[:space:]]*/)*[[:space:]]*gh[\\]?`)'
-  local glab_elem='([\\]?"([^/"[:space:]]*/)*[[:space:]]*glab[\\]?"|[\\]?'\''([^/'\''[:space:]]*/)*[[:space:]]*glab[\\]?'\''|[\\]?`([^/`[:space:]]*/)*[[:space:]]*glab[\\]?`)'
-  local pr_elem='([\\]?"pr[\\]?"|[\\]?'\''pr[\\]?'\''|[\\]?`pr[\\]?`)'
-  local mr_elem='([\\]?"mr[\\]?"|[\\]?'\''mr[\\]?'\''|[\\]?`mr[\\]?`)'
-  local merge_elem='([\\]?"merge[\\]?"|[\\]?'\''merge[\\]?'\''|[\\]?`merge[\\]?`)'
-  local api_tok='([\\]?"api[\\]?"|[\\]?'\''api[\\]?'\''|[\\]?`api[\\]?`)'
+  local gh_elem='([\]?["'"'"'`]([^/"'"'"'`[:space:]]*/)*[[:space:]]*gh[\]?["'"'"'`])'
+  local glab_elem='([\]?["'"'"'`]([^/"'"'"'`[:space:]]*/)*[[:space:]]*glab[\]?["'"'"'`])'
+  local pr_elem='([\]?["'"'"'`]pr[\]?["'"'"'`])'
+  local mr_elem='([\]?["'"'"'`]mr[\]?["'"'"'`])'
+  local merge_elem='([\]?["'"'"'`]merge[\]?["'"'"'`])'
+  local api_tok='([\]?["'"'"'`]api[\]?["'"'"'`])'
   local open_q='([\\]?"|[\\]?'\''|[\\]?`)'
 
   # Classic comma-separated argv, with optional global flags between tokens.

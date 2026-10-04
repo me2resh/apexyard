@@ -70,6 +70,7 @@ Rex's LOW advisories. The gates may still resolve the branch PR or miss the merg
 | Unquoted command substitution or backticks beside `xargs` | An `env $(…)` or backtick argument containing `;` before the merge | The scanner splits at that semicolon and may resolve the branch PR. Tracking nested substitutions is outside this bounded text scan. |
 | Escaped apostrophe inside an ANSI-C string with a trailing comment | An escaped quote inside `$'…'` before `xargs`, followed by `# it's` | The trailing apostrophe balances the scanner's quote count. The target may resolve to the branch PR. `dev` behaves the same way. |
 | Heredoc apostrophe with a trailing comment | A heredoc line containing one apostrophe before `xargs`, followed by `# it's` | The trailing apostrophe balances the scanner's quote count. The target may resolve to the branch PR. `dev` behaves the same way. |
+| Older `mawk` without interval-expression support | An argv `sh -c` list followed by merge text | The `sh -c` opacity check never triggers because the awk interval expression does not match. The target may resolve to the branch PR. `dev` behaves the same way. |
 
 ### Known false positives (fail closed)
 

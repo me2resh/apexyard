@@ -335,6 +335,17 @@ assert_opaque "1552 global -R between elements" "['gh','-R','o/r','pr','merge','
 assert_opaque "1552 global --repo between elements" "['gh','--repo','o/r','pr','merge','5']"
 assert_opaque "1552 glab argv" "['glab','mr','merge','5']"
 assert_opaque "1552 glab argv with -R" "['glab','-R','o/r','mr','merge','5']"
+# Empty shell quote pairs can straddle a fixed argv word while leaving the
+# interpreter's list unchanged. Build each command from words at runtime.
+fixed_gh=gh fixed_pr=pr fixed_merge=merge
+empty_sq_after_merge="python3 -c 's.run([\"$fixed_gh\",\"$fixed_pr\",\"$fixed_merge''\",\"5\"])'"
+empty_dq_after_merge="python3 -c \"s.run(['$fixed_gh','$fixed_pr','$fixed_merge\"\"','5'])\""
+empty_sq_before_gh="python3 -c 's.run([\"''$fixed_gh\",\"$fixed_pr\",\"$fixed_merge\",\"5\"])'"
+empty_sq_between_gh_pr="python3 -c 's.run([\"$fixed_gh''\",\"$fixed_pr\",\"$fixed_merge\",\"5\"])'"
+assert_opaque "1552 empty single quotes after merge" "$empty_sq_after_merge"
+assert_opaque "1552 empty double quotes after merge" "$empty_dq_after_merge"
+assert_opaque "1552 empty single quotes before gh" "$empty_sq_before_gh"
+assert_opaque "1552 empty single quotes between gh and pr" "$empty_sq_between_gh_pr"
 assert_opaque "1552 api argv with comma in element" \
   "['gh','api','-f','m=a,b','repos/o/r/pulls/5/merge']"
 # Rex #1556: backtick inside a '…' / "…" API element must not end the element.
