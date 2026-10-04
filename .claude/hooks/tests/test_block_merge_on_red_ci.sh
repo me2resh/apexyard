@@ -143,6 +143,8 @@ case "\$*" in
       startup_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"startup_failure"}]}' ;;
       failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
       null_name_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":null,"status":"completed","conclusion":"failure"}]}' ;;
+      empty_name_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"","status":"completed","conclusion":"failure"}]}' ;;
+      named_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"tests","status":"completed","conclusion":"failure"}]}' ;;
       cancelled) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"}]}' ;;
       good_runs) echo '{"total_count":3,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"},{"event":"pull_request","workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Docs","status":"completed","conclusion":"neutral"},{"event":"pull_request","workflow_id":3,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Optional","status":"completed","conclusion":"skipped"}]}' ;;
       old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
@@ -340,6 +342,16 @@ run_case "#1536: success, neutral, skipped runs -> allows" 0 "" "$sb" \
 
 sb=$(make_sandbox green "" null_name_failure)
 run_case "#1536: failed run with null name -> blocks with workflow ID" 2 "workflow 1.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+
+# #1553 review: jq 1.7 and 1.8 bind `A // B as $x | …` differently. Without
+# the outer parentheses, jq 1.7 prints a named run without its status, and an
+# empty-name failing run prints nothing, so the gate allows it.
+sb=$(make_sandbox green "" empty_name_failure)
+run_case "#1551: failed run with empty name -> blocks with workflow ID" 2 "workflow 1.*failure" "$sb" \
+  "gh pr merge 1536 --repo $TEST_REPO --squash"
+sb=$(make_sandbox green "" named_failure)
+run_case "#1551: failed named run -> block names it with its status" 2 "tests .*status=completed, conclusion=failure" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
 
 # A workflow can run again on the same head after a PR edit. Only its latest

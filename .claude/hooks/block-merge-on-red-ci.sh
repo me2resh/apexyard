@@ -536,8 +536,10 @@ BLOCKING_RUNS=$(printf '%s' "$RUNS_JSON" | jq -r '
     (.id | if type == "number" then . else 0 end)]))[] |
   select(.conclusion == "action_required" or .status != "completed" or
     (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")) |
-  (.name | if type == "string" then . else null end) //
-    ("workflow " + (.workflow_id | tostring)) as $run_name |
+  # Keep the outer parentheses: jq 1.7 and 1.8 bind `A // B as $x | …`
+  # differently, and 1.7 would drop the status line for a named run.
+  ((.name | if type == "string" and . != "" then . else null end) //
+    ("workflow " + (.workflow_id | tostring))) as $run_name |
   "\($run_name) — status=\(.status), conclusion=\(.conclusion // "none")"
 ' 2>/dev/null)
 
