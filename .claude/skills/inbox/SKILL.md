@@ -35,6 +35,42 @@ The **issue** sections below (assigned to you, your issues with new comments, bl
 tracker_list "$repo" state=open assignee=@me limit=50 2>/dev/null
 ```
 
+**Check that each read was complete (#1441).** `tracker_list` prints `[]` and returns non-zero on
+failure, and a result that fills the limit may be a short read. Use `tracker_list_to`, which writes
+the array to a file and returns the verdict on stdout:
+
+```bash
+tmp=$(mktemp) || return 1
+status=$(tracker_list_to "$tmp" "$repo" state=open assignee=@me limit=50 2>/dev/null); rc=$?
+if [ "$status" = "TRUNCATED" ]; then
+  status=$(tracker_list_to "$tmp" "$repo" state=open assignee=@me limit=200 2>/dev/null); rc=$?
+fi
+case "$status" in
+  UNKNOWN)
+    if [ "$rc" -ne 0 ]; then
+      echo "$repo: could not read issues"            # a failure, never print 0
+    else
+      echo "$repo: read $(jq -r 'length' < "$tmp"), completeness unknown"
+    fi ;;
+  TRUNCATED) echo "$repo: at least $(jq -r 'length' < "$tmp") issues" ;;  # still not the end
+esac
+items=$(cat "$tmp"); rm -f "$tmp"
+```
+
+**`UNKNOWN` means two different things, and the exit status tells them apart.** A non-zero status
+is a failed read, so report it as unread. A zero status with `UNKNOWN` is a successful read whose
+completeness this library cannot judge: a custom adapter called with no limit, or a payload it
+cannot count. The rows are good. Only the "is that all of them" answer is missing.
+
+**Do not write `items=$(tracker_list …)` and then read `TRACKER_LIST_STATUS`.** Command
+substitution runs the call in a subshell, so the variable never reaches you, and a stale verdict
+from an earlier project reads as this project's. That turns a failed read into a confident zero,
+which is the failure this check exists to prevent. `TRACKER_LIST_STATUS` is correct only for a call
+made in the current shell.
+
+On `UNKNOWN`, say the count is unknown for that project. Do not fold it into a zero. GitLab caps a
+page at 100, so a `glab` project stays `TRUNCATED` there.
+
 > **Scope caveat (forge axis, #711).** The **PR** sections still call `gh pr list` directly. The PR/MR forge abstraction is a separate ticket (#711); until it lands, `/inbox`'s PR sections are GitHub-only. `/inbox` is therefore *issue-axis* tracker-agnostic, not fully tracker-agnostic. Filters GitHub expresses but GitLab can't (`mentions:`, `commenter:`) stay on a gh-only path, documented at the section that uses them.
 
 ## Usage
