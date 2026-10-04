@@ -82,6 +82,7 @@ make_sandbox() {
 
   cat > "$sb/bin/gh" <<EOF
 #!/bin/bash
+printf '%s\n' "\$*" >> "$sb/gh-calls"
 if [ "\$1" = "api" ]; then echo "\$2" >> "$sb/api-calls"; fi
 case "\$*" in
   *"pr checks"*)
@@ -122,7 +123,7 @@ case "\$*" in
   *"actions/workflows"*)
     case "$nocheck_mode" in
       no_ci) echo '{"total_count":0,"workflows":[]}' ;;
-      gated|filtered|runs_fail|runs_non_number)
+      gated|filtered|runs_fail|runs_non_number|old_gated_new_success)
         echo '{"total_count":1,"workflows":[{"state":"active"}]}' ;;
       workflows_missing_field) echo '{"total_count":0}' ;;
       *)              exit 1 ;;
@@ -136,28 +137,35 @@ case "\$*" in
       *) exit 1 ;;
     esac
     case "$nocheck_mode" in
-      gated|action_required|workflow_fail_gated) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"action_required"}]}' ;;
-      queued) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"queued","conclusion":null}]}' ;;
-      in_progress) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"in_progress","conclusion":null}]}' ;;
-      startup_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"startup_failure"}]}' ;;
-      failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
-      null_name_failure) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":null,"status":"completed","conclusion":"failure"}]}' ;;
-      cancelled) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"}]}' ;;
-      good_runs) echo '{"total_count":3,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Docs","status":"completed","conclusion":"neutral"},{"workflow_id":3,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Optional","status":"completed","conclusion":"skipped"}]}' ;;
-      old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      old_success_new_failure) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
-      old_cancelled_new_success) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      tied_number_newer_created) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      tied_number_created_higher_id) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      different_workflows_one_failed) echo '{"total_count":2,"workflow_runs":[{"workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"},{"workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":201,"name":"Docs","status":"completed","conclusion":"failure"}]}' ;;
+      gated|action_required|workflow_fail_gated) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"action_required"}]}' ;;
+      queued) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"queued","conclusion":null}]}' ;;
+      in_progress) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"in_progress","conclusion":null}]}' ;;
+      startup_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"startup_failure"}]}' ;;
+      failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      null_name_failure) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":null,"status":"completed","conclusion":"failure"}]}' ;;
+      cancelled) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"}]}' ;;
+      good_runs) echo '{"total_count":3,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"},{"event":"pull_request","workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Docs","status":"completed","conclusion":"neutral"},{"event":"pull_request","workflow_id":3,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Optional","status":"completed","conclusion":"skipped"}]}' ;;
+      old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      old_success_new_failure) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      old_cancelled_new_success) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"cancelled"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      tied_number_newer_created) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-01T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      tied_number_created_higher_id) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      different_workflows_one_failed) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"},{"event":"pull_request","workflow_id":2,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":201,"name":"Docs","status":"completed","conclusion":"failure"}]}' ;;
+      cross_event_failure) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"push","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build push","status":"completed","conclusion":"success"}]}' ;;
+      old_gated_new_success) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"action_required"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      old_gated_new_success_cross_event_failure) echo '{"total_count":3,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"action_required"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"},{"event":"push","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":103,"name":"Build push","status":"completed","conclusion":"failure"}]}' ;;
+      invalid_latest_failure) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"},{"event":"pull_request","workflow_id":1,"run_number":2,"id":102,"name":"Build PR","status":"completed","conclusion":"failure"}]}' ;;
+      invalid_old_failure_new_success) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"pull_request","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      invalid_cross_event_failure) echo '{"total_count":2,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"id":101,"name":"Build PR","status":"completed","conclusion":"failure"},{"event":"push","workflow_id":1,"run_number":2,"created_at":"2026-10-02T00:00:00Z","id":102,"name":"Build push","status":"completed","conclusion":"success"}]}' ;;
+      invalid_success_only) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
       missing_workflow_id) echo '{"total_count":1,"workflow_runs":[{"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      missing_run_number) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
-      missing_conclusion) echo '{"total_count":1,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed"}]}' ;;
+      missing_run_number) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed","conclusion":"success"}]}' ;;
+      missing_conclusion) echo '{"total_count":1,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build PR","status":"completed"}]}' ;;
       runs_fail) echo 'API rate limit' >&2; exit 1 ;;
       runs_non_number) echo '{"total_count":"unknown","workflow_runs":[]}' ;;
       runs_non_json) echo '<html>rate limit</html>' ;;
       runs_missing_field) echo '{"total_count":0}' ;;
-      partial_page) echo '{"total_count":101,"workflow_runs":[{"workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
+      partial_page) echo '{"total_count":101,"workflow_runs":[{"event":"pull_request","workflow_id":1,"run_number":1,"created_at":"2026-10-01T00:00:00Z","id":101,"name":"Build","status":"completed","conclusion":"success"}]}' ;;
       *) echo '{"total_count":0,"workflow_runs":[]}' ;;
     esac
     ;;
@@ -212,15 +220,18 @@ EOF
 
 run_case() {
   local label="$1" want_rc="$2" want_stderr_regex="$3" sb="$4" cmd="$5"
-  local reject_stderr_regex="${6:-}" want_no_api="${7:-0}" want_runs_calls="${8:-}"
+  local reject_stderr_regex="${6:-}" want_no_api="${7:-0}" want_runs_calls="${8:-}" want_no_gh="${9:-0}"
   local input
   input=$(jq -nc --arg c "$cmd" '{tool_name:"Bash", tool_input:{command:$c}}')
-  local got_stderr got_rc api_calls=0 runs_calls=0
-  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+  local got_stderr got_rc api_calls=0 runs_calls=0 gh_calls=0
+  got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" "$BASH" .claude/hooks/block-merge-on-red-ci.sh <<< "$input" 2>&1 >/dev/null)
   got_rc=$?
   if [ -f "$sb/api-calls" ]; then
     api_calls=$(wc -l < "$sb/api-calls")
     runs_calls=$(grep -c 'actions/runs' "$sb/api-calls")
+  fi
+  if [ -f "$sb/gh-calls" ]; then
+    gh_calls=$(wc -l < "$sb/gh-calls")
   fi
   rm -rf "$sb"
 
@@ -240,6 +251,10 @@ run_case() {
   fi
   if [ "$want_no_api" = "1" ] && [ "$api_calls" -ne 0 ]; then
     echo "FAIL [$label]: expected no gh api calls, got $api_calls" >&2
+    FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
+  fi
+  if [ "$want_no_gh" = "1" ] && [ "$gh_calls" -ne 0 ]; then
+    echo "FAIL [$label]: expected no gh calls, got $gh_calls" >&2
     FAIL=$((FAIL+1)); FAILED_CASES="${FAILED_CASES}${label} "; return
   fi
   if [ -n "$want_runs_calls" ] && [ "$runs_calls" -ne "$want_runs_calls" ]; then
@@ -353,6 +368,18 @@ sb=$(make_sandbox green "" different_workflows_one_failed)
 run_case "#1536: different workflow latest failure -> blocks" 2 "Docs.*failure" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
 
+sb=$(make_sandbox green "" cross_event_failure)
+run_case "#1551 A1: newer push success cannot hide older PR failure" 2 "Build PR.*failure" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox none "" old_gated_new_success)
+run_case "#1551 A3: exact no-checks path ignores superseded gated run" 0 "" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash" "action_required|CI state could not be checked"
+
+sb=$(make_sandbox green "" old_gated_new_success_cross_event_failure)
+run_case "#1551 A1/A3: superseded gate stays ignored while other event failure blocks" 2 "Build push.*failure" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash" "Build PR.*action_required"
+
 for missing_field in missing_workflow_id missing_run_number missing_conclusion; do
   sb=$(make_sandbox green "" "$missing_field")
   run_case "#1536: $missing_field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
@@ -397,13 +424,35 @@ sb=$(make_sandbox green "" runs_missing_field)
 run_case "#1536 A3: missing runs field -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash" "no CI checks configured"
 
+sb=$(make_sandbox green "" invalid_latest_failure)
+run_case "#1551 A5: invalid response with latest parseable failure -> blocks" 2 "partly invalid.*failing run" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" invalid_cross_event_failure)
+run_case "#1551 A1/A5: invalid response retains failure from separate event" 2 "partly invalid.*failing run" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash"
+
+sb=$(make_sandbox green "" invalid_old_failure_new_success)
+run_case "#1551 A5: invalid response ignores superseded parseable failure" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash" "partly invalid.*failing run"
+
+sb=$(make_sandbox green "" invalid_success_only)
+run_case "#1551 A5: invalid response with only successful parseable runs -> honest note" 0 "CI state could not be checked.*Actions API unavailable" "$sb" \
+  "gh pr merge 1551 --repo $TEST_REPO --squash" "failing run"
+
 sb=$(make_sandbox green "" partial_page)
 run_case "#1536: partial runs page cannot prove all passed -> blocks" 2 "101 head workflow runs.*returned only 1" "$sb" \
   "gh pr merge 1536 --repo $TEST_REPO --squash"
 
 sb=$(make_sandbox green "" action_required)
 run_case "#1536 N3: invalid repo -> blocks before API path" 2 "invalid.*owner/repo" "$sb" \
-  "gh pr merge 1536 --repo bad/repo/extra --squash" "" 1
+  "gh pr merge 1536 --repo bad/repo/extra --squash" "" 1 "" 1
+
+for malformed_repo in ./x x/.. ../x; do
+  sb=$(make_sandbox green "" action_required)
+  run_case "#1551 A2/A4: malformed repo $malformed_repo blocks before any gh call" 2 "invalid.*owner/repo" "$sb" \
+    "gh pr merge 1551 --repo $malformed_repo --squash" "" 1 "" 1
+done
 
 sb=$(make_sandbox green "" bad_sha)
 run_case "#1536: invalid head SHA -> blocks" 2 "invalid.*head SHA" "$sb" \
@@ -871,11 +920,9 @@ for mode in default posix; do
   rm -f "$sb/.claude/hooks/_lib-extract-pr.sh"
   input=$(jq -nc --arg c "gh pr merge 400 --repo me2resh/apexyard --squash" '{tool_name:"Bash", tool_input:{command:$c}}')
   if [ "$mode" = "posix" ]; then
-    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
-      "echo '$input' | POSIXLY_CORRECT=1 bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" POSIXLY_CORRECT=1 "$BASH" .claude/hooks/block-merge-on-red-ci.sh <<< "$input" 2>&1 >/dev/null)
   else
-    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" bash -c \
-      "echo '$input' | bash .claude/hooks/block-merge-on-red-ci.sh" 2>&1 >/dev/null)
+    got_stderr=$(cd "$sb" && APEXYARD_OPS_DISABLE_PIN=1 PATH="$sb/bin:$PATH" "$BASH" .claude/hooks/block-merge-on-red-ci.sh <<< "$input" 2>&1 >/dev/null)
   fi
   got_rc=$?
   rm -rf "$sb"
