@@ -3,6 +3,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 PUBLIC_HOOK_SOURCE=${PUBLIC_HOOK_SOURCE:-$ROOT/.claude/hooks/block-private-refs-in-public-repos.sh}
 RUNTIME_HOOK_SOURCE=${RUNTIME_HOOK_SOURCE:-$ROOT/.claude/hooks/check-private-refs-runtime.sh}

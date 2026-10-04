@@ -133,6 +133,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 # Isolation: don't let a live session pin escape this sandbox onto the real
 # ops fork (see bin/run-hook-tests.sh's rationale). No-op when unset/headless.
 export APEXYARD_OPS_DISABLE_PIN=1

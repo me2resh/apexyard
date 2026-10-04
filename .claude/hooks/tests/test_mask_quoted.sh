@@ -15,6 +15,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 LIB_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LIB_MASK="$LIB_DIR/_lib-mask-quoted.sh"
 LIB_WRITE="$LIB_DIR/_lib-detect-bash-write.sh"

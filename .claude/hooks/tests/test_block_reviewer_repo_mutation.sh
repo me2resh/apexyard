@@ -3,6 +3,11 @@
 # active-reviewer marker is present.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 SRC_ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOK="$SRC_ROOT/.claude/hooks/block-reviewer-repo-mutation.sh"
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-review-mutation.XXXXXX")

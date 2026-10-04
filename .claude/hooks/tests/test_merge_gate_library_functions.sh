@@ -3,6 +3,11 @@
 # must check the functions it needs before treating a command as a no-op.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 HOOKS=${HOOKS_OVERRIDE:-$ROOT/.claude/hooks}
 TMP=$(mktemp -d)

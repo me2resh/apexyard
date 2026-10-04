@@ -17,6 +17,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 # Pin isolation: per-project tracker resolution (#670) reads the ops-root
 # session pin to find the registry. Run interactively inside a live apexyard
 # session, the pin resolves PAST each mktemp sandbox to the operator's real

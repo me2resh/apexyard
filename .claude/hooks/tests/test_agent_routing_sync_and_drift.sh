@@ -59,6 +59,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 # Test isolation (#528): apply-agent-routing.sh resolves the ops root via
 # _lib-ops-root.sh, which — inside a real Claude Code session — honours the
 # session pin ($APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID) and

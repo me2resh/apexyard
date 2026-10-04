@@ -2,6 +2,11 @@
 # The committed-overlay test must fail on a missing tracked file and stay isolated.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 TEST_SCRIPT=${TEST_SCRIPT_OVERRIDE:-$ROOT/.claude/hooks/tests/test_sync_cursor_adapter.sh}
 TMP=$(mktemp -d) || exit 1

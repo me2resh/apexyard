@@ -56,6 +56,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 REAL_PRE_PUSH="$ROOT/.githooks/pre-push"
 REAL_PROTECTED_LIB="$ROOT/.claude/hooks/_lib-protected-branches.sh"

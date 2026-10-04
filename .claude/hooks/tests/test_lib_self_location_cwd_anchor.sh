@@ -19,6 +19,11 @@
 # guard is applied uniformly to all nine self-location sites (see the #1062 diff).
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TRACKER_LIB="$HOOKS_DIR/_lib-tracker.sh"
 FRESH_FORK_LIB="$HOOKS_DIR/_lib-fresh-fork.sh"

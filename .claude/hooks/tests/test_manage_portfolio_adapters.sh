@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 MAIN_ROOT="$ROOT"
 if common_git_dir=$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null); then

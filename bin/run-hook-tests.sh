@@ -17,15 +17,20 @@
 
 set -uo pipefail
 
-# Test isolation (#528): many hooks resolve their ops-root via _lib-ops-root.sh,
-# which inside a live Claude Code session honours the session pin
-# ($APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID) and points at the REAL
-# fork — so a sandbox-based test would escape onto the real repo (wrong results,
-# and for writing hooks like apply-agent-routing / link-custom-skills, real-file
-# mutation). Disable the pin for the whole suite so every test resolves by
-# walk-up to its own sandbox. No-op in headless CI (no pin). Tests that
-# specifically exercise the pin (test_resolve_ops_root_pin.sh) set/unset this
-# per-case, so the suite-level default doesn't interfere.
+# Test isolation (#528 + #1549): many hooks resolve their ops-root via
+# _lib-ops-root.sh, which inside a live Claude Code session honours the session
+# pin ($APEXYARD_OPS_PIN_DIR/ops-root-$CLAUDE_CODE_SESSION_ID) and points at the
+# REAL fork — so a sandbox-based test would escape onto the real repo (wrong
+# results, and for writing hooks like apply-agent-routing / link-custom-skills,
+# real-file mutation). Disable the pin for the whole suite so every test
+# resolves by walk-up to its own sandbox. No-op in headless CI (no pin). Tests
+# that specifically exercise the pin (test_resolve_ops_root_pin.sh) set/unset
+# this per-case, so the suite-level default doesn't interfere.
+#
+# #1549: also drop an inherited CLAUDE_CODE_SESSION_ID and redirect
+# APEXYARD_OPS_PIN_DIR to a fresh temp directory. Without that, pin-ops-root.sh
+# and resolve-cache writers overwrite the operator's real
+# ~/.claude/apexyard/ops-root-<session> and resolve-cache-<session>-* files.
 export APEXYARD_OPS_DISABLE_PIN=1
 
 # Same isolation rationale, for the session-scoped resolution cache added in
@@ -36,6 +41,14 @@ export APEXYARD_OPS_DISABLE_PIN=1
 # cache, or pollute it with sandbox values. Tests that specifically exercise
 # the cache (test_resolution_cache.sh) set/unset this per-case.
 export APEXYARD_DISABLE_RESOLUTION_CACHE=1
+
+unset CLAUDE_CODE_SESSION_ID
+SUITE_PIN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/apexyard-hook-suite-pins.XXXXXX") || exit 1
+# Share one pin dir with suites that source _test-session-isolation.sh so a
+# full run does not leave ~N mktemp directories behind; remove on EXIT.
+export _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR"
+export APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR"
+trap 'rm -rf "$SUITE_PIN_DIR"' EXIT
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
@@ -95,8 +108,16 @@ for t in "${TESTS[@]}"; do
     skip=$((skip+1))
     continue
   fi
+  # Force isolation even when a suite forgets to source
+  # _test-session-isolation.sh (me2resh/apexyard#1549).
+  # Pass _APEXYARD_TEST_PIN_DIR so the helper reuses SUITE_PIN_DIR.
   # shellcheck disable=SC2086
-  if $TIMEOUT_BIN bash "$t" </dev/null >/tmp/_hooktest.out 2>&1; then
+  if env -u CLAUDE_CODE_SESSION_ID \
+      APEXYARD_OPS_DISABLE_PIN=1 \
+      APEXYARD_DISABLE_RESOLUTION_CACHE=1 \
+      APEXYARD_OPS_PIN_DIR="$SUITE_PIN_DIR" \
+      _APEXYARD_TEST_PIN_DIR="$SUITE_PIN_DIR" \
+      $TIMEOUT_BIN bash "$t" </dev/null >/tmp/_hooktest.out 2>&1; then
     if grep -q '^SKIP' /tmp/_hooktest.out; then
       printf '  diagnostics from %s:\n' "$t"
       grep '^SKIP' /tmp/_hooktest.out | sed 's/^/    /'

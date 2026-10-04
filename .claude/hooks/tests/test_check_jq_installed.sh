@@ -25,6 +25,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_SRC="$(cd "$(dirname "$0")/.." && pwd)/check-jq-installed.sh"
 LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-ops-root.sh"
 PASS=0

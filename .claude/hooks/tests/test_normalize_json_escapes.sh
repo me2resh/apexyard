@@ -2,6 +2,11 @@
 # Byte-for-byte regression and bash 3.2 timing test for the raw-payload decoder.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 LIB_SRC="$(cd "$(dirname "$0")/.." && pwd)/_lib-extract-pr.sh"
 # shellcheck source=/dev/null
 . "$LIB_SRC"

@@ -3,6 +3,11 @@
 # Pins must be full 40-character SHAs. CI must verify each SHA after the fetch.
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 WORKFLOW=${WORKFLOW_OVERRIDE:-$ROOT/.github/workflows/tests.yml}
 MUST_BLOCK=${MUST_BLOCK_TEST_OVERRIDE:-$ROOT/.claude/hooks/tests/test_command_scrub_must_block.sh}

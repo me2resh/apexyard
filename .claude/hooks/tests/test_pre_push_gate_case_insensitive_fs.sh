@@ -9,6 +9,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 HOOK_SRC="${PRE_PUSH_GATE_HOOK_SRC:-$(cd "$(dirname "$0")/.." && pwd)/pre-push-gate.sh}"
 if [ ! -x "$HOOK_SRC" ]; then
   echo "FAIL: hook not found or not executable at $HOOK_SRC" >&2

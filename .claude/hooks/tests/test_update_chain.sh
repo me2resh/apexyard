@@ -20,6 +20,11 @@
 
 set -u
 
+# Isolate from live Claude Code session pin/cache (me2resh/apexyard#1549).
+# shellcheck disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/_test-session-isolation.sh"
+
+
 SRC_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 LIB_CHAIN="$SRC_ROOT/.claude/hooks/_lib-migration-chain.sh"
 REAL_V1_V2="$SRC_ROOT/.claude/migrations/v1.2.0-to-v1.3.0.sh"
